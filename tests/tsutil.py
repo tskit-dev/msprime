@@ -120,6 +120,19 @@ def insert_branch_sites(ts):
     return tables.tree_sequence()
 
 
+def insert_site(ts):
+    """
+    Returns a copy of the specified tree sequence with a new site
+    and no mutation.
+    """
+    tables = ts.dump_tables()
+    tables.sites.add_row(
+            position=ts.sequence_length/2,
+            ancestral_state="XX")
+    add_provenance(tables.provenances, "insert_site")
+    return tables.tree_sequence()
+
+
 def insert_multichar_mutations(ts, seed=1, max_len=10):
     """
     Returns a copy of the specified tree sequence with multiple chararacter

@@ -54,12 +54,9 @@
 /* Flags for verify */
 #define MSP_VERIFY_BREAKPOINTS  (1 << 1)
 
-/* Alphabets for mutation generator */
-#define MSP_ALPHABET_BINARY     0
-#define MSP_ALPHABET_NUCLEOTIDE 1
-
 /* Flags for mutgen */
 #define MSP_KEEP_SITES  1
+#define MSP_DISCRETE_SITES  2
 
 /* Pedigree states */
 #define MSP_PED_STATE_UNCLIMBED         0
@@ -328,7 +325,13 @@ typedef struct {
 } infinite_sites_mutation_t;
 
 typedef struct {
-    int alphabet;
+    size_t num_alleles;
+    char **alleles;
+    double *root_distribution;
+    double *transition_matrix;
+} mutation_model_t;
+
+typedef struct {
     gsl_rng *rng;
     interval_map_t *rate_map;
     double start_time;
@@ -336,6 +339,7 @@ typedef struct {
     size_t block_size;
     avl_tree_t sites;
     tsk_blkalloc_t allocator;
+    mutation_model_t *model;
 } mutgen_t;
 
 int msp_alloc(msp_t *self,
@@ -474,10 +478,15 @@ double recomb_map_position_to_mass(recomb_map_t *self, double position);
 double recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass);
 double recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start);
 
+int mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
+        char **alleles, double *root_distribution, double *transition_matrix);
+int mutation_model_free(mutation_model_t *self);
+size_t mutation_model_get_num_alleles(mutation_model_t *self);
+void mutation_model_print_state(mutation_model_t *self, FILE *out);
+int mutation_model_factory(mutation_model_t *self, int model);
+
 int mutgen_alloc(mutgen_t *self, gsl_rng *rng, interval_map_t *rate_map,
-        int alphabet, size_t mutation_block_size);
-int mutgen_set_rate(mutgen_t *self, double rate, double sequence_length);
-int mutgen_set_map(mutgen_t *self, size_t size, double *position, double *rate);
+        mutation_model_t *model, size_t mutation_block_size);
 int mutgen_set_time_interval(mutgen_t *self, double start_time, double end_time);
 int mutgen_free(mutgen_t *self);
 int mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags);

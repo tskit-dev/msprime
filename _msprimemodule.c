@@ -63,9 +63,15 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
+    mutation_model_t *mutation_model;
+} MutationModel;
+
+typedef struct {
+    PyObject_HEAD
     mutgen_t *mutgen;
     RandomGenerator *random_generator;
     IntervalMap *rate_map;
+    MutationModel *model;
 } MutationGenerator;
 
 typedef struct {
@@ -100,14 +106,18 @@ handle_input_error(const char *section, int err)
 }
 
 static int
-double_PyArray_converter(PyObject *in, PyObject **out)
+double_PyArray_converter(PyObject *in, PyObject **converted)
 {
-    PyObject *ret = PyArray_FROMANY(in, NPY_FLOAT64, 1, 1, NPY_ARRAY_IN_ARRAY);
-    if (ret == NULL) {
-        return NPY_FAIL;
+    int ret = 0;
+    PyObject *array = PyArray_FROMANY(in, NPY_FLOAT64, 1, 1, NPY_ARRAY_IN_ARRAY);
+
+    if (array == NULL) {
+        goto out;
     }
-    *out = ret;
-    return NPY_SUCCEED;
+    *converted = array;
+    ret = 1;
+out:
+    return ret;;
 }
 
 /*
@@ -1821,7 +1831,7 @@ IntervalMap_init(IntervalMap *self, PyObject *args, PyObject *kwds)
     size = PyObject_Size(py_position);
     if (size != PyObject_Size(py_value)) {
         PyErr_SetString(PyExc_ValueError,
-            "position and  list must be the same length");
+            "position and value must be the same length");
         goto out;
     }
     self->interval_map = PyMem_Malloc(sizeof(interval_map_t));
@@ -1936,6 +1946,254 @@ static PyTypeObject IntervalMapType = {
 
 
 /*===================================================================
+ * Mutation model
+ *===================================================================
+ */
+
+static int
+MutationModel_check_state(MutationModel *self)
+{
+    int ret = 0;
+    if (self->mutation_model == NULL) {
+        PyErr_SetString(PyExc_SystemError, "MutationModel not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+MutationModel_dealloc(MutationModel* self)
+{
+    if (self->mutation_model != NULL) {
+        mutation_model_free(self->mutation_model);
+        PyMem_Free(self->mutation_model);
+        self->mutation_model = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+MutationModel_init(MutationModel *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"alleles", "root_distribution", "transition_matrix", NULL};
+    Py_ssize_t j, num_alleles;
+    PyObject *py_alleles = NULL;
+    PyArrayObject *root_distribution_array = NULL;
+    PyObject *py_transition_matrix = NULL;
+    PyArrayObject *transition_matrix_array = NULL;
+    char **alleles = NULL;
+    PyObject *item;
+    npy_intp *shape;
+
+    self->mutation_model = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O&O", kwlist,
+            &PyList_Type, &py_alleles,
+            double_PyArray_converter, &root_distribution_array,
+            &py_transition_matrix)) {
+        goto out;
+    }
+    num_alleles = PyList_Size(py_alleles);
+    shape = PyArray_DIMS(root_distribution_array);
+    if (num_alleles != shape[0]) {
+        PyErr_SetString(PyExc_ValueError,
+            "root distribution must have num_alleles elements");
+        goto out;
+    }
+    transition_matrix_array = (PyArrayObject *) PyArray_FROMANY(
+            py_transition_matrix, NPY_FLOAT64, 2, 2, NPY_ARRAY_IN_ARRAY);
+    if (transition_matrix_array == NULL) {
+        goto out;
+    }
+    shape = PyArray_DIMS(transition_matrix_array);
+    if (shape[0] != shape[1]) {
+        PyErr_SetString(PyExc_ValueError, "Square matrix required");
+        goto out;
+    }
+    if (shape[0] != num_alleles) {
+        PyErr_SetString(PyExc_ValueError,
+            "transition matrix must be a square matrix with num_alleles rows");
+        goto out;
+    }
+
+    /* Note: it's important we zero out mutation_model here because
+     * we can error before we can mutation_model_alloc, leaving the
+     * object in an uninitialised state */
+    self->mutation_model = PyMem_Calloc(1, sizeof(*self->mutation_model));
+    alleles = PyMem_Malloc(num_alleles * sizeof(*alleles));
+    if (self->mutation_model == NULL || alleles == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    /* This is a shortcut as it depends on using the underlying memory
+     * of the bytes object. Because we don't execute any Python code
+     * before calling mutation_model_alloc and we take a copies of
+     * the allele strings in there, this should be safe. */
+    for (j = 0; j < num_alleles; j++) {
+        item = PyList_GetItem(py_alleles, j);
+        if (!PyBytes_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "alleles must be bytes objects");
+            goto out;
+        }
+        alleles[j] = PyBytes_AsString(item);
+        if (alleles[j] == NULL) {
+            goto out;
+        }
+    }
+    err = mutation_model_alloc(self->mutation_model,
+            num_alleles, alleles,
+            PyArray_DATA(root_distribution_array),
+            PyArray_DATA(transition_matrix_array));
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    PyMem_Free(alleles);
+    Py_XDECREF(root_distribution_array);
+    Py_XDECREF(transition_matrix_array);
+    return ret;
+}
+
+static PyObject *
+MutationModel_get_alleles(MutationModel *self, void *closure)
+{
+    PyObject *ret = NULL;
+    size_t j;
+    size_t size = self->mutation_model->num_alleles;
+    PyObject *item;
+    PyObject *list = PyList_New(size);
+
+    if (list == NULL) {
+        goto out;
+    }
+    for (j = 0; j < size; j++) {
+        item = PyBytes_FromString(self->mutation_model->alleles[j]);
+        if (item == NULL) {
+            goto out;
+        }
+        PyList_SET_ITEM(list, j, item);
+    }
+    ret = list;
+    list = NULL;
+out:
+    Py_XDECREF(list);
+    return ret;
+}
+
+static PyObject *
+MutationModel_get_num_alleles(MutationModel *self)
+{
+    PyObject *ret = NULL;
+    if (MutationModel_check_state(self) != 0) {
+        goto out;
+    }
+        ret = Py_BuildValue("n", (Py_ssize_t) mutation_model_get_num_alleles(self->mutation_model));
+out:
+    return ret;
+}
+
+static PyObject *
+MutationModel_get_root_distribution(MutationModel *self, void *closure)
+{
+    PyObject *ret = NULL;
+    PyArrayObject *array;
+    size_t size = self->mutation_model->num_alleles;
+    npy_intp dims = (npy_intp) size;
+
+    array = (PyArrayObject *) PyArray_EMPTY(1, &dims, NPY_FLOAT64, 0);
+    if (array == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(array), self->mutation_model->root_distribution,
+            size * sizeof(double));
+    ret = (PyObject *) array;
+out:
+    return ret;
+}
+
+static PyObject *
+MutationModel_get_transition_matrix(MutationModel *self, void *closure)
+{
+    PyObject *ret = NULL;
+    PyArrayObject *array;
+    size_t size = self->mutation_model->num_alleles;
+    npy_intp dims[] = {size, size};
+
+    array = (PyArrayObject *) PyArray_EMPTY(2, dims, NPY_FLOAT64, 0);
+    if (array == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(array), self->mutation_model->transition_matrix,
+            size * size * sizeof(double));
+    ret = (PyObject *) array;
+out:
+    return ret;
+}
+
+static PyGetSetDef MutationModel_getsetters[] = {
+    {"alleles", (getter) MutationModel_get_alleles, NULL,
+        "A copy of the alleles list"},
+    {"root_distribution", (getter) MutationModel_get_root_distribution, NULL,
+        "A copy of the root_distribution array"},
+    {"transition_matrix", (getter) MutationModel_get_transition_matrix, NULL,
+        "A copy of the transition_matrix array"},
+    {NULL}  /* Sentinel */
+};
+
+static PyMemberDef MutationModel_members[] = {
+    {NULL}  /* Sentinel */
+};
+
+static PyMethodDef MutationModel_methods[] = {
+    {"get_num_alleles", (PyCFunction) MutationModel_get_num_alleles, METH_NOARGS,
+            "Returns the number of alleles." },
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject MutationModelType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "_msprime.MutationModel",             /* tp_name */
+    sizeof(MutationModel),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)MutationModel_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT
+        | Py_TPFLAGS_BASETYPE,         /* tp_flags */
+    "MutationModel objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    MutationModel_methods,             /* tp_methods */
+    MutationModel_members,             /* tp_members */
+    MutationModel_getsetters,          /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)MutationModel_init,      /* tp_init */
+};
+
+/*===================================================================
  * MutationGenerator
  *===================================================================
  */
@@ -1964,6 +2222,7 @@ MutationGenerator_dealloc(MutationGenerator* self)
     }
     Py_XDECREF(self->random_generator);
     Py_XDECREF(self->rate_map);
+    Py_XDECREF(self->model);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -1972,21 +2231,19 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    int alphabet = 0;
-    static char *kwlist[] = {"random_generator", "rate_map", "alphabet",
-        "start_time", "end_time", NULL};
-    double start_time = -DBL_MAX;
-    double end_time = DBL_MAX;
+    static char *kwlist[] = {"random_generator", "rate_map", "model", NULL};
     RandomGenerator *random_generator = NULL;
     IntervalMap *rate_map = NULL;
+    MutationModel *model = NULL;
 
     self->mutgen = NULL;
     self->random_generator = NULL;
     self->rate_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|idd", kwlist,
+    self->model = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!", kwlist,
             &RandomGeneratorType, &random_generator,
             &IntervalMapType, &rate_map,
-            &alphabet, &start_time, &end_time)) {
+            &MutationModelType, &model)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -1999,8 +2256,9 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
     if (IntervalMap_check_state(self->rate_map) != 0) {
         goto out;
     }
-    if (alphabet != MSP_ALPHABET_BINARY && alphabet != MSP_ALPHABET_NUCLEOTIDE) {
-        PyErr_Format(PyExc_ValueError, "Bad mutation alphabet");
+    self->model = model;
+    Py_INCREF(self->model);
+    if (MutationModel_check_state(self->model) != 0) {
         goto out;
     }
     self->mutgen = PyMem_Malloc(sizeof(mutgen_t));
@@ -2009,12 +2267,7 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = mutgen_alloc(self->mutgen, random_generator->rng,
-            rate_map->interval_map, alphabet, 0);
-    if (err != 0) {
-        handle_library_error(err);
-        goto out;
-    }
-    err = mutgen_set_time_interval(self->mutgen, start_time, end_time);
+            rate_map->interval_map, model->mutation_model, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2032,17 +2285,28 @@ MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kw
     LightweightTableCollection *tables = NULL;
     int flags = 0;
     int keep = 0;
-    static char *kwlist[] = {"tables", "keep", NULL};
+    int discrete = 0;
+    double start_time = -DBL_MAX;
+    double end_time = DBL_MAX;
+    static char *kwlist[] = {"tables", "keep", "start_time", "end_time", "discrete", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|i", kwlist,
-            &LightweightTableCollectionType, &tables, &keep)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|iddi", kwlist,
+            &LightweightTableCollectionType, &tables, &keep, &start_time, &end_time, &discrete)) {
+        goto out;
+    }
+    err = mutgen_set_time_interval(self->mutgen, start_time, end_time);
+    if (err != 0) {
+        handle_library_error(err);
         goto out;
     }
     if (MutationGenerator_check_state(self) != 0) {
         goto out;
     }
     if (keep) {
-        flags = MSP_KEEP_SITES;
+        flags |= MSP_KEEP_SITES;
+    }
+    if (discrete) {
+        flags |= MSP_DISCRETE_SITES;
     }
     err = mutgen_generate(self->mutgen, tables->tables, flags);
     if (err != 0) {
@@ -2054,21 +2318,7 @@ out:
     return ret;
 }
 
-static PyObject *
-MutationGenerator_get_alphabet(MutationGenerator *self, void *closure)
-{
-    PyObject *ret = NULL;
-    if (MutationGenerator_check_state(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("i", self->mutgen->alphabet);
-out:
-    return ret;
-}
-
 static PyGetSetDef MutationGenerator_getsetters[] = {
-    {"alphabet", (getter) MutationGenerator_get_alphabet, NULL,
-        "The alphabet for this generator"},
     {NULL}  /* Sentinel */
 };
 
@@ -4412,14 +4662,14 @@ PyInit__msprime(void)
 {
     PyObject *module = PyModule_Create(&msprimemodule);
     if (module == NULL) {
-        return NULL;;
+        return NULL;
     }
     import_array();
 
     /* LightweightTableCollection type */
     LightweightTableCollectionType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&LightweightTableCollectionType) < 0) {
-        return NULL;;
+        return NULL;
     }
     Py_INCREF(&LightweightTableCollectionType);
     PyModule_AddObject(module, "LightweightTableCollection",
@@ -4428,7 +4678,7 @@ PyInit__msprime(void)
     /* RandomGenerator type */
     RandomGeneratorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&RandomGeneratorType) < 0) {
-        return NULL;;
+        return NULL;
     }
     Py_INCREF(&RandomGeneratorType);
     PyModule_AddObject(module, "RandomGenerator", (PyObject *) &RandomGeneratorType);
@@ -4436,7 +4686,7 @@ PyInit__msprime(void)
     /* MutationGenerator type */
     MutationGeneratorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&MutationGeneratorType) < 0) {
-        return NULL;;
+        return NULL;
     }
     Py_INCREF(&MutationGeneratorType);
     PyModule_AddObject(module, "MutationGenerator", (PyObject *) &MutationGeneratorType);
@@ -4444,7 +4694,7 @@ PyInit__msprime(void)
     /* Simulator type */
     SimulatorType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&SimulatorType) < 0) {
-        return NULL;;
+        return NULL;
     }
     Py_INCREF(&SimulatorType);
     PyModule_AddObject(module, "Simulator", (PyObject *) &SimulatorType);
@@ -4452,7 +4702,7 @@ PyInit__msprime(void)
     /* RecombinationMap type */
     RecombinationMapType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&RecombinationMapType) < 0) {
-        return NULL;;
+        return NULL;
     }
     Py_INCREF(&RecombinationMapType);
     PyModule_AddObject(module, "RecombinationMap", (PyObject *) &RecombinationMapType);
@@ -4460,11 +4710,18 @@ PyInit__msprime(void)
     /* IntervalMap type */
     IntervalMapType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&IntervalMapType) < 0) {
-        return NULL;;
+        return NULL;
     }
     Py_INCREF(&IntervalMapType);
     PyModule_AddObject(module, "IntervalMap", (PyObject *) &IntervalMapType);
 
+    /* MutationModel type */
+    MutationModelType.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&MutationModelType) < 0) {
+        return NULL;
+    }
+    Py_INCREF(&MutationModelType);
+    PyModule_AddObject(module, "MutationModel", (PyObject *) &MutationModelType);
 
     /* Errors and constants */
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);

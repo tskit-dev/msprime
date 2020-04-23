@@ -87,6 +87,11 @@
 #define MSP_ERR_INTERVAL_POSITIONS_UNSORTED                         -49
 #define MSP_ERR_BAD_C                                               -50
 #define MSP_ERR_BAD_PSI                                             -51
+#define MSP_ERR_UNKNOWN_ALLELE                                      -52
+#define MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER                    -53
+#define MSP_ERR_INSUFFICIENT_ALLELES                                -54
+#define MSP_ERR_BAD_ROOT_PROBABILITIES                              -55
+#define MSP_ERR_BAD_TRANSITION_MATRIX                               -56
 
 /* This bit is 0 for any errors originating from tskit */
 #define MSP_TSK_ERR_BIT 13
@@ -99,5 +104,6 @@ void __msp_safe_free(void **ptr);
 #define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
 
 size_t msp_binary_interval_search(double query, const double *values, size_t n_values);
+bool doubles_almost_equal(double a, double b, double eps);
 
 #endif /*__UTIL_H__*/

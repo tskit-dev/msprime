@@ -24,10 +24,8 @@ import json
 import os
 import random
 import shutil
-import sys
 import tempfile
 import unittest
-import multiprocessing
 
 import numpy as np
 
@@ -50,35 +48,6 @@ def get_bottleneck_examples():
             demographic_events=bottlenecks,
             random_seed=n)
         yield ts
-
-
-# TODO Not sure why we need this method in msprime. Remove?
-class TestAlmostEqual(unittest.TestCase):
-    """
-    Simple tests to ensure that the almost_equal() method is sensible.
-    """
-
-    def test_defaults(self):
-        eps = sys.float_info.epsilon
-        equal = [
-            (1, 1), (0, 0), (1 + eps, 1), (1, 1 - eps),
-            (10.000000000001, 10.0)]
-        for a, b in equal:
-            self.assertAlmostEqual(a, b)
-            self.assertTrue(msprime.almost_equal(a, b))
-
-    def test_near_zero(self):
-        eps = sys.float_info.epsilon
-        equal = [(0, 0), (eps, 0), (0, -eps), (-eps, eps)]
-        for a, b in equal:
-            self.assertAlmostEqual(a, b)
-            self.assertTrue(
-                msprime.almost_equal(a, b, abs_tol=1e-9))
-        not_equal = [(0, 0.0000001), (-0.0000001, 0)]
-        for a, b in not_equal:
-            self.assertNotAlmostEqual(a, b)
-            self.assertFalse(
-                msprime.almost_equal(a, b, abs_tol=1e-9))
 
 
 class HighLevelTestCase(tests.MsprimeTestCase):
@@ -824,8 +793,8 @@ class TestSimulateInterface(unittest.TestCase):
 
     def test_mutation_generator_unsupported(self):
         n = 10
-        rate_map = msprime.IntervalMap([0, 1], [1, 0])
-        mutgen = msprime.MutationGenerator(msprime.RandomGenerator(1), rate_map)
+        mutgen = msprime.mutations._simple_mutation_generator(
+                1, 1, msprime.RandomGenerator(1))
         with self.assertRaises(ValueError):
             msprime.simulate(n, mutation_generator=mutgen)
 
@@ -904,53 +873,6 @@ class TestSimulateInterface(unittest.TestCase):
             "the replicate_index specified will be returned.",
             str(cm.exception)
         )
-
-
-# Convenience method for getting seeds in a subprocess.
-def _get_seed(x):
-    return msprime.simulations._get_random_seed()
-
-
-class TestDefaultRandomSeeds(unittest.TestCase):
-    """
-    Tests for the default random seed generator.
-    """
-
-    def test_seed_generator_init(self):
-        msprime.simulations._clear_seed_rng()
-        seed = msprime.simulations._get_random_seed()
-        self.assertGreater(seed, 0)
-        self.assertIsNotNone(msprime.simulations._get_seed_rng())
-
-    def test_unique(self):
-        n = 100
-        msprime.simulations._clear_seed_rng()
-        seeds1 = [msprime.simulations._get_random_seed() for _ in range(n)]
-        self.assertEqual(len(set(seeds1)), n)
-        seeds2 = [msprime.simulations._get_random_seed() for _ in range(n)]
-        self.assertEqual(len(set(seeds2)), n)
-        self.assertEqual(len(set(seeds2)) + len(set(seeds2)), 2 * n)
-
-    def test_unique_multiple_processes_no_init(self):
-        n = 100
-        msprime.simulations._clear_seed_rng()
-        # Would use with block here, but not supported in Py < 3.3.
-        pool = multiprocessing.Pool(5)
-        seeds = pool.map(_get_seed, range(n))
-        self.assertEqual(len(set(seeds)), n)
-        pool.terminate()
-        pool.join()
-
-    def test_unique_multiple_processes_init(self):
-        n = 100
-        msprime.simulations._get_random_seed()
-        self.assertIsNotNone(msprime.simulations._get_seed_rng())
-        # Would use with block here, but not supported in Py < 3.3.
-        pool = multiprocessing.Pool(5)
-        seeds = pool.map(_get_seed, range(n))
-        self.assertEqual(len(set(seeds)), n)
-        pool.terminate()
-        pool.join()
 
 
 class TestRecombinationMap(unittest.TestCase):

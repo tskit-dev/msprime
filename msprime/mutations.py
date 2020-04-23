@@ -24,57 +24,124 @@ import sys
 import tskit
 
 import _msprime
-import msprime.simulations as simulations
-import msprime.provenance as provenance
+from . import utils
+from . import provenance
+
+import numpy as np
 
 
-# Alphabets for mutations.
+class MutationModel(_msprime.MutationModel):
+    """
+    Superclass of mutation models. Allows you to build your own mutation model.
+
+    TODO document properly.
+    """
+    def asdict(self):
+        # This version of asdict makes sure that we have sufficient parameters
+        # to call the contructor and recreate the class. However, this means
+        # that subclasses *must* have an instance variable of the same name.
+        # This is essential for Provenance round-tripping to work.
+        return {
+            key: getattr(self, key) for key in inspect.signature(
+                self.__init__).parameters.keys() if hasattr(self, key)}
+
+    def __str__(self):
+        alleles = " ".join([x.decode() for x in self.alleles])
+        s = "Mutation model with alleles {}\n".format(alleles)
+        s += "  root distribution: {}\n".format(
+                " ".join(map(str, self.root_distribution)))
+        s += "  transition matrix:\n"
+        for row in self.transition_matrix:
+            s += "     {}\n".format(" ".join(map(str, row)))
+        return s
+
+
+class BinaryMutations(MutationModel):
+    """
+    The simplest mutational model with 0/1 states.
+
+    TODO document properly.
+    """
+    def __init__(self):
+        alleles = [b"0", b"1"]
+        root_distribution = [1, 0]
+        transition_matrix = [[0, 1], [1, 0]]
+        alleles = [b"0", b"1"]
+        super().__init__(alleles, root_distribution, transition_matrix)
+
+
+class JukesCantor(MutationModel):
+    """
+    The Jukes-Cantor mutation model.
+
+    .. todo: documentation
+    """
+    def __init__(self):
+        alleles = [b"A", b"C", b"T", b"G"]
+        root_distribution = [0.25, 0.25, 0.25, 0.25]
+        transition_matrix = np.zeros((4, 4))
+        transition_matrix[:] = 1 / 3
+        np.fill_diagonal(transition_matrix, 0)
+        super().__init__(alleles, root_distribution, transition_matrix)
+
+
+# Pre 1.0, we had these constants to define the alphabet for the
+# simple infinite sites mutations. These should be deprecated and removed
+# along with the InfiniteSites class.
 BINARY = 0
 NUCLEOTIDES = 1
 
 
-class InfiniteSites(object):
-    """
-    The "infinitely many sites" mutation model. In this model each mutation
-    corresponds to a unique site, which has a floating-point position chosen
-    uniformly along the sequence. As a result, each site is associated with
-    exactly one mutation.
-
-    By default, the ancestral and derived states in this model are
-    represented by the characters "0" and "1". Thus, the ancestral state
-    at a site is always "0" and the derived state for a mutation is
-    always "1". However, by specifying the ``alphabet=NUCLEOTIDES`` we
-    can generate mutations from the nucleotide characters ACGT. In this
-    case, for each mutation an ancestral state is chosen uniformly from
-    these letters. The derived state is then chosen uniformly from the
-    *remaining* characters so that the ancestral and derived states
-    are always distinct.
-    """
+class InfiniteSites(MutationModel):
+    # This mutation model is defined for backwards compatability, and is a remnant
+    # of an earlier design. The class should be formally deprecated and removed at
+    # some point.
     def __init__(self, alphabet=BINARY):
-        if alphabet not in [BINARY, NUCLEOTIDES]:
-            raise ValueError("Bad alphabet")
         self.alphabet = alphabet
-
-    def asdict(self):
-        """
-        Returns a dict of arguments to recreate this class
-        """
-        return {key: getattr(self, key) for key in inspect.signature(
-            self.__init__).parameters.keys() if hasattr(self, key)}
+        models = {
+            BINARY: BinaryMutations(),
+            NUCLEOTIDES: JukesCantor()
+        }
+        if alphabet not in models:
+            raise ValueError("Bad alphabet")
+        model = models[alphabet]
+        super().__init__(model.alleles, model.root_distribution, model.transition_matrix)
 
 
 class MutationMap(object):
-    """
-    TODO document
-    """
+    # TODO Get rid of this class and use IntervalMap (or maybe IntervalRateMap) instead.
+    # See
+    # https://github.com/tskit-dev/msprime/issues/902
+    # https://github.com/tskit-dev/msprime/issues/920
     def __init__(self, position, rate):
         self.position = position
         self.rate = rate
+        self._ll_map = _msprime.IntervalMap(position=position, value=rate)
+
+    def asdict(self):
+        return {"position": self.position, "rate": self.rate}
+
+
+def _simple_mutation_generator(rate, sequence_length, rng):
+    """
+    Factory function used to create a low-level mutation generator that
+    produces binary infinite sites mutations suitable for use in
+    msprime.simulate() and the mspms CLI.
+    """
+    # Add a ``discrete`` parameter and pass to the MutationGenerator
+    # constructor.
+    if rate is None:
+        return None
+    rate_map = MutationMap(
+        position=[0, sequence_length],
+        rate=[rate, 0]
+    )
+    return _msprime.MutationGenerator(rng, rate_map._ll_map, BinaryMutations())
 
 
 def mutate(
         tree_sequence, rate=None, random_seed=None, model=None, keep=False,
-        start_time=None, end_time=None):
+        start_time=None, end_time=None, discrete=False):
     """
     Simulates mutations on the specified ancestry and returns the resulting
     :class:`tskit.TreeSequence`. Mutations are generated at the specified rate in
@@ -109,18 +176,23 @@ def mutate(
 
     :param tskit.TreeSequence tree_sequence: The tree sequence onto which we
         wish to throw mutations.
-    :param float rate: The rate of mutation per generation. (Default: 0).
+    :param float rate: The rate of mutation per generation, as either a
+        single number (for a uniform rate) or as a
+        :class:`.MutationMap`. (Default: 0).
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
     :param MutationModel model: The mutation model to use when generating
-        mutations. If not specified or None, the :class:`.InfiniteSites`
+        mutations. If not specified or None, the :class:`.BinaryMutations`
         mutation model is used.
     :param bool keep: Whether to keep existing mutations (default: False).
-    :param float start_time: The minimum time at which a mutation can
+    :param float start_time: The minimum time ago at which a mutation can
         occur. (Default: no restriction.)
-    :param float end_time: The maximum time at which a mutation can occur
+    :param float end_time: The maximum time ago at which a mutation can occur
         (Default: no restriction).
+    :param bool discrete: Whether to generate mutations at only integer positions
+        along the genome.  Default is False, which produces infinite-sites
+        mutations at floating-point positions.
     :return: The :class:`tskit.TreeSequence` object  resulting from overlaying
         mutations on the input tree sequence.
     :rtype: :class:`tskit.TreeSequence`
@@ -131,33 +203,38 @@ def mutate(
         raise ValueError("First argument must be a TreeSequence instance.")
     seed = random_seed
     if random_seed is None:
-        seed = simulations._get_random_seed()
-    seed = int(seed)
-    rng = _msprime.RandomGenerator(seed)
+        seed = utils.get_random_seed()
+    else:
+        seed = int(seed)
 
-    if model is None:
-        model = InfiniteSites()
-    try:
-        alphabet = model.alphabet
-    except AttributeError:
-        raise TypeError("model must be an InfiniteSites instance")
     if rate is None:
         rate = 0
-    rate = float(rate)
-    keep = bool(keep)
+    try:
+        rate = float(rate)
+        rate_map = MutationMap(position=[0.0, tree_sequence.sequence_length],
+                               rate=[rate, 0.0])
+    except TypeError:
+        rate_map = rate
+    if not isinstance(rate_map, MutationMap):
+        raise TypeError("rate must be a float or a MutationMap")
 
     if start_time is None:
         start_time = -sys.float_info.max
     else:
         start_time = float(start_time)
-
     if end_time is None:
         end_time = sys.float_info.max
     else:
         end_time = float(end_time)
-
     if start_time > end_time:
         raise ValueError("start_time must be <= end_time")
+    keep = bool(keep)
+    discrete = bool(discrete)
+
+    if model is None:
+        model = BinaryMutations()
+    if not isinstance(model, MutationModel):
+        raise TypeError("model must be a MutationModel")
 
     argspec = inspect.getargvalues(inspect.currentframe())
     parameters = {
@@ -168,15 +245,15 @@ def mutate(
     encoded_provenance = provenance.json_encode_provenance(
         provenance.get_provenance_dict(parameters))
 
-    rate_map = simulations.IntervalMap(
-        position=[0, tree_sequence.sequence_length],
-        value=[rate, 0]
-    )
+    rng = _msprime.RandomGenerator(seed)
     mutation_generator = _msprime.MutationGenerator(
-        rng, rate_map, alphabet=alphabet, start_time=start_time, end_time=end_time)
+        random_generator=rng,
+        rate_map=rate_map._ll_map,
+        model=model)
     lwt = _msprime.LightweightTableCollection()
     lwt.fromdict(tables.asdict())
-    mutation_generator.generate(lwt, keep=keep)
+    mutation_generator.generate(
+        lwt, keep=keep, start_time=start_time, end_time=end_time, discrete=discrete)
 
     tables = tskit.TableCollection.fromdict(lwt.asdict())
     tables.provenances.add_row(encoded_provenance)
