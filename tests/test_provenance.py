@@ -344,7 +344,7 @@ class TestSimulateRoundTrip(TestRoundTrip):
         ts = msprime.simulate(
             population_configurations=pop_configs,
             migration_matrix=[[0, 1], [1, 0]],
-            demographic_events=[msprime.SimulationModelChange(time=lambda t: t + 0.1),],
+            demographic_events=[msprime.SimulationModelChange(time=lambda t: t + 0.1)],
         )
         self.verify(ts)
 

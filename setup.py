@@ -146,7 +146,7 @@ setup(
     author_email="jerome.kelleher@well.ox.ac.uk",
     url="https://pypi.org/project/msprime/",
     entry_points={
-        "console_scripts": ["mspms=msprime.cli:mspms_main", "msp=msprime.cli:msp_main",]
+        "console_scripts": ["mspms=msprime.cli:mspms_main", "msp=msprime.cli:msp_main"]
     },
     include_package_data=True,
     install_requires=[numpy_ver, "tskit"],

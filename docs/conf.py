@@ -14,8 +14,10 @@
 
 import sys
 import os
-import shlex
 import pkg_resources
+from docutils import nodes
+from sphinx.util.docfields import TypedField
+from sphinx import addnodes
 
 # It's easier not to try to build the low-level module for the
 # documentation build on readthedocs, so we mock the module. Follows
@@ -47,13 +49,8 @@ sys.path.insert(0, os.path.abspath(".."))
 # https://stackoverflow.com/questions/31784830/sphinx-ivar-tag-goes-looking-for-cross-references
 #
 
-from docutils import nodes
-from sphinx.util.docfields import TypedField
-from sphinx import addnodes
-
 
 def patched_make_field(self, types, domain, items, env):
-    # type: (List, unicode, Tuple) -> nodes.field
     def handle_item(fieldarg, content):
         par = nodes.paragraph()
         par += addnodes.literal_strong("", fieldarg)  # Patch: this line added
@@ -293,13 +290,13 @@ htmlhelp_basename = "msprimedoc"
 
 latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
-    #'papersize': 'letterpaper',
+    # 'papersize': 'letterpaper',
     # The font size ('10pt', '11pt' or '12pt').
-    #'pointsize': '10pt',
+    # 'pointsize': '10pt',
     # Additional stuff for the LaTeX preamble.
-    #'preamble': '',
+    # 'preamble': '',
     # Latex figure (float) alignment
-    #'figure_align': 'htbp',
+    # 'figure_align': 'htbp',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples

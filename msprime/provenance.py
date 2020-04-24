@@ -53,7 +53,7 @@ def get_provenance_dict(parameters=None):
     """
     document = {
         "schema_version": "1.0.0",
-        "software": {"name": "msprime", "version": __version__,},
+        "software": {"name": "msprime", "version": __version__},
         "parameters": parameters,
         "environment": get_environment(),
     }
@@ -163,7 +163,7 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
                     (),
                 )
             elif "__constant__" in obj:
-                return {"__current_ts__": CURRENT_TREE_SEQUENCE,}[obj["__constant__"]]
+                return {"__current_ts__": CURRENT_TREE_SEQUENCE}[obj["__constant__"]]
             elif "__ndarray__" in obj:
                 return numpy.asarray(obj["__ndarray__"], dtype=obj["dtype"])
             elif "__npgeneric__" in obj:

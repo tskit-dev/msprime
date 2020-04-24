@@ -1787,7 +1787,7 @@ class TestSimulator(LowLevelTestCase):
 
     def test_seed_equality(self):
         simulations = [
-            {"samples": get_samples(10),},
+            {"samples": get_samples(10)},
             {
                 "samples": get_samples(100),
                 "demographic_events": [get_simple_bottleneck_event(0.01, 0, 1.0)],
