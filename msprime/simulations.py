@@ -662,17 +662,11 @@ class Simulator:
 
     @property
     def num_migration_events(self):
-        N = self.num_populations
-        matrix = [[0 for j in range(N)] for k in range(N)]
-        flat = self.ll_sim.get_num_migration_events()
-        for j in range(N):
-            for k in range(N):
-                matrix[j][k] = flat[j * N + k]
-        return matrix
+        return self.ll_sim.get_num_migration_events()
 
     @property
     def total_num_migration_events(self):
-        return sum(self.ll_sim.get_num_migration_events())
+        return np.sum(self.num_migration_events)
 
     @property
     def num_multiple_recombination_events(self):
@@ -681,26 +675,16 @@ class Simulator:
     def set_migration_matrix(self, migration_matrix):
         err = (
             "migration matrix must be a N x N square matrix encoded "
-            "as a list-of-lists, where N is the number of populations "
+            "as a list-of-lists or numpy array, where N is the number of populations "
             "defined in the population_configurations. The diagonal "
             "elements of this matrix must be zero. For example, a "
             "valid matrix for a 3 population system is "
             "[[0, 1, 1], [1, 0, 1], [1, 1, 0]]"
         )
         N = len(self.population_configurations)
-        if not isinstance(migration_matrix, list):
-            try:
-                migration_matrix = [list(row) for row in migration_matrix]
-            except TypeError:
-                raise TypeError(err)
-        if len(migration_matrix) != N:
+        self.migration_matrix = np.array(migration_matrix)
+        if self.migration_matrix.shape != (N, N):
             raise ValueError(err)
-        for row in migration_matrix:
-            if not isinstance(row, list):
-                raise TypeError(err)
-            if len(row) != N:
-                raise ValueError(err)
-        self.migration_matrix = migration_matrix
 
     def set_population_configurations(self, population_configurations):
         _check_population_configurations(population_configurations)
@@ -712,7 +696,7 @@ class Simulator:
                 pop_conf.initial_size = self.model.reference_size
         # Now set the default migration matrix.
         N = len(self.population_configurations)
-        self.migration_matrix = [[0 for j in range(N)] for k in range(N)]
+        self.migration_matrix = np.zeros((N, N))
 
     def set_pedigree(self, pedigree):
         if len(self.samples) % 2 != 0:
@@ -791,11 +775,6 @@ class Simulator:
         ll_simulation_model = self.model.get_ll_representation()
         logger.debug("Setting initial model %s", ll_simulation_model)
         d = len(self.population_configurations)
-        # The migration matrix must be flattened.
-        ll_migration_matrix = [0 for j in range(d ** 2)]
-        for j in range(d):
-            for k in range(d):
-                ll_migration_matrix[j * d + k] = self.migration_matrix[j][k]
         ll_population_configuration = [
             conf.get_ll_representation() for conf in self.population_configurations
         ]
@@ -817,7 +796,7 @@ class Simulator:
             start_time=start_time,
             random_generator=self.random_generator,
             model=ll_simulation_model,
-            migration_matrix=ll_migration_matrix,
+            migration_matrix=self.migration_matrix,
             population_configuration=ll_population_configuration,
             pedigree=self.pedigree,
             demographic_events=ll_demographic_events,
@@ -1631,49 +1610,64 @@ class PopulationParametersChange(DemographicEvent):
 
 class MigrationRateChange(DemographicEvent):
     """
-    Changes the rate of migration to a new value at a specific time.
+    Changes the rate of migration from one deme to another to a new value at a
+    specific time. Migration rates are specified in terms of the rate at which
+    lineages move from population ``source`` to ``dest`` during the progress of
+    the simulation. Note that ``source`` and ``dest`` are from the perspective
+    of the coalescent process; please see the :ref:`sec_api_simulation_model`
+    section for more details on the interpretation of this migration model.
+
+    By default, ``source=-1`` and ``dest=-1``, which results in all
+    non-diagonal elements of the migration matrix being changed to the new
+    rate. If ``source`` and ``dest`` are specified, they must refer to valid
+    population IDs.
 
     :param float time: The time at which this event occurs in generations.
     :param float rate: The new per-generation migration rate.
-    :param tuple matrix_index: A tuple of two population IDs descibing
-        the matrix index of interest. If ``matrix_index`` is None, all
-        non-diagonal entries of the migration matrix are changed
-        simultaneously.
+    :param int source: The ID of the source population.
+    :param int dest: The ID of the destination population.
+    :param int source: The source population ID.
     """
 
-    def __init__(self, time, rate, matrix_index=None):
+    # matrix_index is the old form, and deprecated as of 1.0
+    def __init__(self, time, rate, source=-1, dest=-1, matrix_index=None):
         super().__init__("migration_rate_change", time)
         self.rate = rate
-        self.matrix_index = matrix_index
+        self.source = source
+        self.dest = dest
+        # If the deprecated form is used, it overwrites the values of source
+        # and dest
+        if matrix_index is not None:
+            self.source = matrix_index[0]
+            self.dest = matrix_index[1]
 
     def get_ll_representation(self, num_populations):
-        matrix_index = -1
-        if self.matrix_index is not None:
-            matrix_index = self.matrix_index[0] * num_populations + self.matrix_index[1]
         return {
             "type": self.type,
             "time": self.time,
             "migration_rate": self.rate,
-            "matrix_index": matrix_index,
+            "source": self.source,
+            "dest": self.dest,
         }
 
     def __str__(self):
-        if self.matrix_index is None:
+        if self.source == -1 is self.dest == -1:
             ret = f"Migration rate change to {self.rate} everywhere"
         else:
-            ret = "Migration rate change for {} to {}".format(
-                self.matrix_index, self.rate
-            )
+            matrix_index = (self.source, self.dest)
+            ret = f"Migration rate change for {matrix_index} to {self.rate}"
         return ret
 
 
 class MassMigration(DemographicEvent):
     """
-    A mass migration event in which some fraction of the population in
-    one deme simultaneously move to another deme, viewed backwards in
-    time. Each lineage currently present in the source population
-    moves to the destination population (backwards in time) with
-    probability equal to ``proportion``.
+    A mass migration event in which some fraction of the population in one deme
+    (the ``source``) simultaneously move to another deme (``dest``) during the
+    progress of the simulation. Each lineage currently present in the source
+    population moves to the destination population with probability equal to
+    ``proportion``. Note that ``source`` and ``dest`` are from the perspective
+    of the coalescent process; please see the :ref:`sec_api_simulation_model`
+    section for more details on the interpretation of this migration model.
 
     This event class generalises the population split (``-ej``) and
     admixture (``-es``) events from ``ms``. Note that MassMigrations
@@ -2230,8 +2224,7 @@ class DemographyDebugger:
                 events.append(demographic_events[event_index])
                 event_index += 1
             end_time = ll_sim.debug_demography()
-            m = ll_sim.get_migration_matrix()
-            migration_matrix = [[m[j * N + k] for k in range(N)] for j in range(N)]
+            migration_matrix = ll_sim.get_migration_matrix()
             growth_rates = [
                 conf["growth_rate"] for conf in ll_sim.get_population_configuration()
             ]

@@ -301,7 +301,7 @@ read_demographic_events(msp_t *msp, config_t *config)
     const char *type;
     double time, growth_rate, initial_size, migration_rate, proportion,
            intensity, strength;
-    int num_demographic_events, population_id, matrix_index, source, dest;
+    int num_demographic_events, population_id, source, dest;
     config_setting_t *s, *t;
     config_setting_t *setting = config_lookup(config, "demographic_events");
 
@@ -357,13 +357,18 @@ read_demographic_events(msp_t *msp, config_t *config)
                 fatal_error("migration_rate not specified");
             }
             migration_rate = config_setting_get_float(t);
-            t = config_setting_get_member(s, "matrix_index");
+            t = config_setting_get_member(s, "source");
             if (t == NULL) {
-                fatal_error("matrix_index not specified");
+                fatal_error("source not specified");
             }
-            matrix_index = config_setting_get_int(t);
+            source = config_setting_get_int(t);
+            t = config_setting_get_member(s, "dest");
+            if (t == NULL) {
+                fatal_error("dest not specified");
+            }
+            dest = config_setting_get_int(t);
             ret = msp_add_migration_rate_change(msp, time,
-                    matrix_index, migration_rate);
+                    source, dest, migration_rate);
         } else if (strcmp(type, "mass_migration") == 0) {
             t = config_setting_get_member(s, "proportion");
             if (t == NULL) {

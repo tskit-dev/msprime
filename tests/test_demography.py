@@ -312,7 +312,8 @@ class TestRateConversions(unittest.TestCase):
         ll_event = {
             "type": "migration_rate_change",
             "time": g,
-            "matrix_index": -1,
+            "source": -1,
+            "dest": -1,
             "migration_rate": migration_rate,
         }
         self.assertEqual(event.get_ll_representation(d), ll_event)
@@ -462,7 +463,7 @@ class TestDemographyDebugger(unittest.TestCase):
         self.assertTrue(math.isinf(e.end_time))
         self.assertEqual(len(e.demographic_events), 0)
         self.assertEqual(len(e.populations), 2)
-        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+        np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
         for pop in e.populations:
             self.assertEqual(pop.growth_rate, 0)
             self.assertEqual(pop.start_size, pop.end_size)
@@ -493,7 +494,7 @@ class TestDemographyDebugger(unittest.TestCase):
         self.assertEqual(e.end_time, 10)
         self.assertEqual(len(e.demographic_events), 0)
         self.assertEqual(len(e.populations), 2)
-        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+        np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
         self.assertEqual(e.populations[0].start_size, 10)
         self.assertEqual(e.populations[0].end_size, p0_end_size)
         self.assertEqual(e.populations[1].start_size, 20)
@@ -509,7 +510,7 @@ class TestDemographyDebugger(unittest.TestCase):
         self.assertEqual(d.initial_size, None)
         self.assertEqual(d.population, -1)
         self.assertEqual(len(e.populations), 2)
-        self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+        np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
         for pop in e.populations:
             self.assertEqual(pop.growth_rate, 0)
             self.assertEqual(pop.start_size, pop.end_size)
@@ -533,7 +534,7 @@ class TestDemographyDebugger(unittest.TestCase):
         e = dd.epochs[0]
         self.assertEqual(e.start_time, 0)
         self.assertEqual(e.end_time, 20)
-        self.assertEqual(e.migration_matrix, [[0, 0.25], [0, 0]])
+        np.testing.assert_array_equal(e.migration_matrix, [[0, 0.25], [0, 0]])
         for pop in e.populations:
             self.assertEqual(pop.growth_rate, 0)
             self.assertEqual(pop.start_size, pop.end_size)
@@ -544,11 +545,12 @@ class TestDemographyDebugger(unittest.TestCase):
         self.assertTrue(e.end_time, 22)
         self.assertEqual(len(e.demographic_events), 1)
         d = e.demographic_events[0]
-        self.assertEqual(d.matrix_index, None)
+        self.assertEqual(d.source, -1)
+        self.assertEqual(d.dest, -1)
         self.assertEqual(d.time, 20)
         self.assertEqual(d.rate, 1)
         self.assertEqual(len(e.populations), 2)
-        self.assertEqual(e.migration_matrix, [[0, 1], [1, 0]])
+        np.testing.assert_array_equal(e.migration_matrix, [[0, 1], [1, 0]])
         for pop in e.populations:
             self.assertEqual(pop.growth_rate, 0)
             self.assertEqual(pop.start_size, pop.end_size)
@@ -559,11 +561,12 @@ class TestDemographyDebugger(unittest.TestCase):
         self.assertTrue(math.isinf(e.end_time))
         self.assertEqual(len(e.demographic_events), 1)
         d = e.demographic_events[0]
-        self.assertEqual(d.matrix_index, (0, 1))
+        self.assertEqual(d.source, 0)
+        self.assertEqual(d.dest, 1)
         self.assertEqual(d.time, 22)
         self.assertEqual(d.rate, 1.7)
         self.assertEqual(len(e.populations), 2)
-        self.assertEqual(e.migration_matrix, [[0, 1.7], [1, 0]])
+        np.testing.assert_array_equal(e.migration_matrix, [[0, 1.7], [1, 0]])
         for pop in e.populations:
             self.assertEqual(pop.growth_rate, 0)
             self.assertEqual(pop.start_size, pop.end_size)
@@ -606,7 +609,7 @@ class TestDemographyDebugger(unittest.TestCase):
             self.assertEqual(dd.epoch_times[1], t1)
             self.assertEqual(len(e.demographic_events), 0)
             self.assertEqual(len(e.populations), 2)
-            self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+            np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
             self.assertEqual(e.populations[0].start_size, N0)
             n0 = N0 * math.exp(-alpha * t1)
             self.assertEqual(e.populations[0].end_size, n0)
@@ -618,7 +621,7 @@ class TestDemographyDebugger(unittest.TestCase):
             self.assertEqual(e.end_time, t2)
             self.assertEqual(len(e.demographic_events), 1)
             self.assertEqual(len(e.populations), 2)
-            self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+            np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
             self.assertEqual(e.populations[0].start_size, n0)
             n0 = N0 * math.exp(-alpha * t2)
             self.assertEqual(e.populations[0].end_size, n0)
@@ -631,7 +634,7 @@ class TestDemographyDebugger(unittest.TestCase):
             self.assertEqual(e.end_time, t3)
             self.assertEqual(len(e.demographic_events), 1)
             self.assertEqual(len(e.populations), 2)
-            self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+            np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
             self.assertEqual(e.populations[0].start_size, n0)
             n0 = n0 * math.exp(alpha * (t3 - t2))
             self.assertEqual(e.populations[0].end_size, n0)
@@ -644,7 +647,7 @@ class TestDemographyDebugger(unittest.TestCase):
             self.assertTrue(math.isinf(e.end_time))
             self.assertEqual(len(e.demographic_events), 1)
             self.assertEqual(len(e.populations), 2)
-            self.assertEqual(e.migration_matrix, [[0, 0], [0, 0]])
+            np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
             self.assertEqual(e.populations[0].start_size, n0)
             self.assertEqual(e.populations[0].end_size, n0)
             self.assertEqual(e.populations[1].start_size, n1)
@@ -1505,8 +1508,8 @@ class TestCoalescenceLocations(unittest.TestCase):
         ]
         t = 5
         demographic_events = [
-            msprime.MigrationRateChange(time=t, rate=1, matrix_index=(0, 2)),
-            msprime.MigrationRateChange(time=t, rate=1, matrix_index=(1, 2)),
+            msprime.MigrationRateChange(time=t, rate=1, source=0, dest=2),
+            msprime.MigrationRateChange(time=t, rate=1, source=1, dest=2),
         ]
         ts = msprime.simulate(
             population_configurations=population_configurations,
@@ -1750,6 +1753,10 @@ class MigrationRecordsMixin:
             self.assertEqual(mig.dest, 0)
             self.assertEqual(mig.left, 0)
             self.assertEqual(mig.right, 1)
+        # All lineages should end up in population 1
+        for tree in ts.trees():
+            node = ts.node(tree.root)
+            self.assertEqual(node.population, 0)
 
     def test_two_pops_asymmetric_migrations(self):
         population_configurations = [
@@ -2130,7 +2137,8 @@ class TestLowLevelConversions(unittest.TestCase):
                 "time": g,
                 "type": "migration_rate_change",
                 "migration_rate": 0,
-                "matrix_index": -1,
+                "source": -1,
+                "dest": -1,
             }
             self.assertEqual(d, dp)
 
@@ -2138,14 +2146,22 @@ class TestLowLevelConversions(unittest.TestCase):
         g = 51
         for N in range(1, 5):
             for index in itertools.permutations(range(N), 2):
-                event = msprime.MigrationRateChange(time=g, rate=0, matrix_index=index)
+                event = msprime.MigrationRateChange(
+                    time=g, rate=0, source=index[0], dest=index[1]
+                )
                 d = event.get_ll_representation(N)
                 dp = {
                     "time": g,
                     "type": "migration_rate_change",
                     "migration_rate": 0,
-                    "matrix_index": index[0] * N + index[1],
+                    "source": index[0],
+                    "dest": index[1],
                 }
+                self.assertEqual(d, dp)
+
+                # Check the deprecated form
+                event = msprime.MigrationRateChange(time=g, rate=0, matrix_index=index)
+                d = event.get_ll_representation(N)
                 self.assertEqual(d, dp)
 
     def test_migration_rate_change_rate(self):
@@ -2157,7 +2173,8 @@ class TestLowLevelConversions(unittest.TestCase):
                 "time": g,
                 "type": "migration_rate_change",
                 "migration_rate": rate,
-                "matrix_index": -1,
+                "source": -1,
+                "dest": -1,
             }
             self.assertEqual(d, dp)
 
@@ -2212,7 +2229,7 @@ class TestLowLevelConversions(unittest.TestCase):
             ],
             migration_matrix=m,
         )
-        self.assertEqual(sim.migration_matrix, m)
+        np.testing.assert_array_equal(sim.migration_matrix, m)
 
     def test_instantaneous_bottleneck(self):
         g = 51
@@ -2602,8 +2619,8 @@ class TestEventsBetweenGenerationsWrightFisher(unittest.TestCase):
             msprime.PopulationParametersChange(population=0, time=0.2, initial_size=5),
             msprime.MassMigration(time=1.1, source=0, dest=2),
             msprime.MassMigration(time=1.2, source=1, dest=3),
-            msprime.MigrationRateChange(time=2.1, rate=0.3, matrix_index=(2, 3)),
-            msprime.MigrationRateChange(time=2.2, rate=0.3, matrix_index=(3, 2)),
+            msprime.MigrationRateChange(time=2.1, rate=0.3, source=2, dest=3),
+            msprime.MigrationRateChange(time=2.2, rate=0.3, source=3, dest=2),
         ]
         ts = msprime.simulate(
             migration_matrix=migration_matrix,

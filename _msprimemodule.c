@@ -2829,48 +2829,35 @@ Simulator_parse_migration_matrix(Simulator *self, PyObject *py_migration_matrix)
 {
     int ret = -1;
     int err;
-    size_t num_populations, j, size;
-    PyObject *value;
-    double *migration_matrix = NULL;
+    npy_intp *shape;
+    PyArrayObject *migration_matrix_array = NULL;
+    size_t num_populations = msp_get_num_populations(self->sim);
 
-    size = PyList_Size(py_migration_matrix);
-    migration_matrix = PyMem_Malloc(size * sizeof(double));
-    if (migration_matrix == NULL) {
-        PyErr_NoMemory();
+    migration_matrix_array = (PyArrayObject *) PyArray_FROMANY(
+            py_migration_matrix, NPY_FLOAT64, 2, 2, NPY_ARRAY_IN_ARRAY);
+    if (migration_matrix_array == NULL) {
         goto out;
     }
-    if (Simulator_check_sim(self) != 0) {
+    shape = PyArray_DIMS(migration_matrix_array);
+    if (shape[0] != shape[1]) {
+        PyErr_SetString(PyExc_ValueError, "Square matrix required");
         goto out;
     }
-    num_populations = msp_get_num_populations(self->sim);
-    if (num_populations * num_populations != size) {
-        PyErr_Format(PyExc_ValueError,
-            "Migration matrix must be a flattened "
-            "num_populations*num_populations square array");
+    if (shape[0] != (npy_intp) num_populations) {
+        PyErr_SetString(PyExc_ValueError,
+            "migration matrix must be a square matrix with num_populations rows");
         goto out;
     }
-    for (j = 0; j < size; j++) {
-        value = PyList_GetItem(py_migration_matrix, j);
-        if (!PyNumber_Check(value)) {
-            PyErr_Format(PyExc_TypeError, "Migration rate not a number");
-            goto out;
-        }
-        migration_matrix[j] = PyFloat_AsDouble(value);
-        if (migration_matrix[j] < 0.0) {
-            PyErr_Format(PyExc_ValueError, "Negative values not permitted");
-            goto out;
-        }
-    }
-    err = msp_set_migration_matrix(self->sim, size, migration_matrix);
+    err = msp_set_migration_matrix(self->sim,
+            num_populations * num_populations,
+            PyArray_DATA(migration_matrix_array));
     if (err != 0) {
         handle_input_error("migration matrix", err);
         goto out;
     }
     ret = 0;
 out:
-    if (migration_matrix != NULL) {
-        PyMem_Free(migration_matrix);
-    }
+    Py_XDECREF(migration_matrix_array);
     return ret;
 }
 
@@ -3122,7 +3109,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     Py_ssize_t j;
     double time, initial_size, growth_rate, migration_rate, proportion,
            strength;
-    int err, population_id, matrix_index, source, destination;
+    int err, population_id, source, destination;
     int is_population_parameter_change, is_migration_rate_change, is_mass_migration,
         is_simple_bottleneck, is_instantaneous_bottleneck, is_census_event;
     PyObject *item, *value, *type;
@@ -3257,12 +3244,17 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
                 goto out;
             }
             migration_rate = PyFloat_AsDouble(value);
-            value = get_dict_number(item, "matrix_index");
+            value = get_dict_number(item, "source");
             if (value == NULL) {
                 goto out;
             }
-            matrix_index = (int) PyLong_AsLong(value);
-            err = msp_add_migration_rate_change(self->sim, time, matrix_index,
+            source = (int) PyLong_AsLong(value);
+            value = get_dict_number(item, "dest");
+            if (value == NULL) {
+                goto out;
+            }
+            destination = (int) PyLong_AsLong(value);
+            err = msp_add_migration_rate_change(self->sim, time, source, destination,
                     migration_rate);
         } else if (is_mass_migration) {
             value = get_dict_number(item, "proportion");
@@ -3385,7 +3377,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     self->sim = NULL;
     self->random_generator = NULL;
     self->recombination_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!OO!O!O!nnnidindd", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!OOO!O!nnnidindd", kwlist,
             &PyList_Type, &py_samples,
             &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
@@ -3393,7 +3385,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             /* optional */
             &PyList_Type, &population_configuration,
             &pedigree,
-            &PyList_Type, &migration_matrix,
+            &migration_matrix,
             &PyList_Type, &demographic_events,
             &PyDict_Type, &py_model,
             &avl_node_block_size, &segment_block_size,
@@ -3403,7 +3395,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     self->random_generator = random_generator;
-    /* printf("Random seed: %lu\n", random_generator->seed); */
     self->recombination_map = recombination_map;
     self->tables = tables;
     Py_INCREF(self->random_generator);
@@ -3511,8 +3502,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
                 "population configuration is used.");
             goto out;
         }
-        if (Simulator_parse_migration_matrix(self,
-                migration_matrix) != 0) {
+        if (Simulator_parse_migration_matrix(self, migration_matrix) != 0) {
             goto out;
         }
     } else if (migration_matrix != NULL) {
@@ -3820,14 +3810,14 @@ Simulator_get_num_migration_events(Simulator  *self)
     PyObject *ret = NULL;
     PyObject *arr = NULL;
     int err;
-    npy_intp size;
+    npy_intp size[2];
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    size = msp_get_num_populations(self->sim);
-    size *= size;
-    arr = PyArray_SimpleNew(1, &size, NPY_UINTP);
+    size[0] = msp_get_num_populations(self->sim);
+    size[1] = size[0];
+    arr = PyArray_SimpleNew(2, size, NPY_UINTP);
     if (arr == NULL) {
         goto out;
     }
@@ -4054,16 +4044,15 @@ Simulator_get_migration_matrix(Simulator *self)
 {
     PyObject *ret = NULL;
     PyObject *arr = NULL;
-    npy_intp N2;
+    npy_intp N[2];
     int err;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    N2 = msp_get_num_populations(self->sim);
-    N2 *= N2;
-    // TODO return 2d numpy array and fix the breakage
-    arr = PyArray_SimpleNew(1, &N2, NPY_FLOAT64);
+    N[0] = msp_get_num_populations(self->sim);
+    N[1] = N[0];
+    arr = PyArray_SimpleNew(2, N, NPY_FLOAT64);
     if (arr == NULL) {
         goto out;
     }

@@ -28,6 +28,7 @@ import tempfile
 import unittest
 
 import newick
+import numpy as np
 import tskit
 
 import msprime
@@ -657,37 +658,43 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
 
         sim = self.create_simulator("2 1 -T -I 2 1 1")
         self.assertEqual(sim.sample_configuration, [1, 1])
-        self.assertEqual(sim.migration_matrix, [[0, 0], [0, 0]])
+        np.testing.assert_array_equal(sim.migration_matrix, [[0, 0], [0, 0]])
 
         # Default migration matrix is zeros
         sim = self.create_simulator("2 1 -T -I 2 2 0")
-        self.assertEqual(sim.migration_matrix, [[0, 0], [0, 0]])
+        np.testing.assert_array_equal(sim.migration_matrix, [[0, 0], [0, 0]])
         self.assertEqual(sim.sample_configuration, [2, 0])
 
         sim = self.create_simulator("2 1 -T -I 2 1 1 0.1")
-        self.assertEqual(sim.migration_matrix, [[0, 0.1], [0.1, 0]])
+        np.testing.assert_array_equal(sim.migration_matrix, [[0, 0.1], [0.1, 0]])
         self.assertEqual(sim.sample_configuration, [1, 1])
 
         # Initial migration matrix is M / (num_pops - 1)
         sim = self.create_simulator("3 1 -T -I 3 1 1 1 2")
         self.assertEqual(sim.sample_configuration, [1, 1, 1])
-        self.assertEqual(sim.migration_matrix, [[0, 1, 1], [1, 0, 1], [1, 1, 0]])
+        np.testing.assert_array_equal(
+            sim.migration_matrix, [[0, 1, 1], [1, 0, 1], [1, 1, 0]]
+        )
         sim = self.create_simulator("15 1 -T -I 6 5 4 3 2 1 0")
         self.assertEqual(sim.sample_configuration, [5, 4, 3, 2, 1, 0])
 
     def test_migration_matrix_entry(self):
         sim = self.create_simulator("3 1 -T -I 2 3 0 -m 1 2 1.1 -m 2 1 9.0")
-        self.assertEqual(sim.migration_matrix, [[0, 1.1], [9.0, 0]])
+        np.testing.assert_array_equal(sim.migration_matrix, [[0, 1.1], [9.0, 0]])
         sim = self.create_simulator("3 1 -T -I 3 3 0 0 -m 1 2 1.1 -m 2 1 9.0")
-        self.assertEqual(sim.migration_matrix, [[0, 1.1, 0], [9.0, 0, 0], [0, 0, 0]])
+        np.testing.assert_array_equal(
+            sim.migration_matrix, [[0, 1.1, 0], [9.0, 0, 0], [0, 0, 0]]
+        )
 
     def test_migration_matrix(self):
         sim = self.create_simulator("2 1 -T -I 2 2 0 -ma 0 1 2 3")
-        self.assertEqual(sim.migration_matrix, [[0, 1], [2, 0]])
+        np.testing.assert_array_equal(sim.migration_matrix, [[0, 1], [2, 0]])
         sim = self.create_simulator("2 1 -T -I 2 2 0 -ma x 1 2 x")
-        self.assertEqual(sim.migration_matrix, [[0, 1], [2, 0]])
+        np.testing.assert_array_equal(sim.migration_matrix, [[0, 1], [2, 0]])
         sim = self.create_simulator("3 1 -T -I 3 1 1 1 -ma 1 2 3 4 5 6 7 8 9")
-        self.assertEqual(sim.migration_matrix, [[0, 2, 3], [4, 0, 6], [7, 8, 0]])
+        np.testing.assert_array_equal(
+            sim.migration_matrix, [[0, 2, 3], [4, 0, 6], [7, 8, 0]]
+        )
 
     def test_simultaneous_events(self):
         sim = self.create_simulator("2 1 -T -eN 1 2.0 -eG 1.0 3 -eN 1 4")
@@ -804,10 +811,11 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 self.assertEqual(event.type, "migration_rate_change")
                 self.assertEqual(event.time, result[0])
                 self.assertEqual(event.rate, result[1])
-                self.assertEqual(event.matrix_index, result[2])
+                self.assertEqual(event.source, -1)
+                self.assertEqual(event.dest, -1)
 
-        check("2 1 -T -I 3 2 0 0 -eM 2.2 2", [(2.2, 1, None)])
-        check("2 1 -T -I 3 2 0 0 -eM 2.2 2 -eM 3.3 4", [(2.2, 1, None), (3.3, 2, None)])
+        check("2 1 -T -I 3 2 0 0 -eM 2.2 2", [(2.2, 1)])
+        check("2 1 -T -I 3 2 0 0 -eM 2.2 2 -eM 3.3 4", [(2.2, 1), (3.3, 2)])
 
     def test_migration_matrix_entry_change(self):
         def check(args, results):
@@ -817,14 +825,13 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             for event, result in zip(events, results):
                 self.assertEqual(event.type, "migration_rate_change")
                 self.assertEqual(event.time, result[0])
-                # Need to divide by 4 to correct rates.
                 self.assertEqual(event.rate, result[1])
-                self.assertEqual(event.matrix_index, result[2])
+                self.assertEqual((event.source, event.dest), result[2])
 
         check("2 1 -T -I 3 2 0 0 -em 2.2 1 2 2", [(2.2, 2, (0, 1))])
         check(
             "2 1 -T -I 3 2 0 0 -eM 2.2 2 -em 3.3 3 1 5.5",
-            [(2.2, 1, None), (3.3, 5.5, (2, 0))],
+            [(2.2, 1, (-1, -1)), (3.3, 5.5, (2, 0))],
         )
 
     def test_migration_matrix_change(self):
@@ -840,9 +847,8 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             for event, result in zip(events, results):
                 self.assertEqual(event.type, "migration_rate_change")
                 self.assertEqual(event.time, result[0])
-                # Need to divide by 4 to correct rates.
                 self.assertEqual(event.rate, result[1])
-                self.assertEqual(event.matrix_index, result[2])
+                self.assertEqual((event.source, event.dest), result[2])
 
         check(
             "2 1 -T -I 2 2 0 -ema 2.2 2 x 1 2 x", [(2.2, 1, (0, 1)), (2.2, 2, (1, 0))]
@@ -867,7 +873,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             k = 0
             for result in results:
                 event = events[k]
-                source = event.source
+                new_pop = event.source
                 self.assertEqual(event.type, "mass_migration")
                 self.assertEqual(event.time, result[0])
                 self.assertEqual(event.source, result[1])
@@ -876,12 +882,13 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 # population that didn't exist before now.
                 k += 1
                 for j in range(N):
-                    if j != source:
+                    if j != new_pop:
                         event = events[k]
                         self.assertEqual(event.type, "migration_rate_change")
                         self.assertEqual(event.time, result[0])
                         self.assertEqual(event.rate, 0.0)
-                        self.assertEqual(event.matrix_index, (j, source))
+                        self.assertEqual(event.source, j)
+                        self.assertEqual(event.dest, new_pop)
                         k += 1
 
         check(3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2", [(2.2, 0, 1)])
@@ -899,7 +906,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             self.assertEqual(sim.num_populations, N)
             self.assertEqual(len(events), len(results))
             matrix = [[0 for _ in range(N)] for _ in range(N)]
-            self.assertEqual(sim.migration_matrix, matrix)
+            np.testing.assert_array_equal(sim.migration_matrix, matrix)
             for result, event in zip(results, events):
                 self.assertEqual(event.type, "mass_migration")
                 self.assertEqual(event.time, result[0])

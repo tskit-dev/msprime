@@ -797,11 +797,21 @@ test_demographic_events(void)
         CU_ASSERT_EQUAL(
             msp_add_mass_migration(&msp, 10, 0, 1, -5), MSP_ERR_BAD_PROPORTION);
 
-        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -2, 2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -1, 0, 2.0),
             MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
-        CU_ASSERT_EQUAL(
-            msp_add_migration_rate_change(&msp, 10, -1, -2.0), MSP_ERR_BAD_PARAM_VALUE);
-        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 3, 2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 0, -1, 2.0),
+            MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 0, 2, 2.0),
+            MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 2, 0, 2.0),
+            MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -1, 0, 2.0),
+            MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 0, -1, 2.0),
+            MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -1, -1, -2.0),
+            MSP_ERR_BAD_PARAM_VALUE);
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 0, 0, 2.0),
             MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX);
 
         CU_ASSERT_EQUAL(msp_add_population_parameters_change(&msp, 10, -2, 0, 0),
@@ -832,9 +842,9 @@ test_demographic_events(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_add_migration_rate_change(&msp, 0.2, 1, 2.0);
+        ret = msp_add_migration_rate_change(&msp, 0.2, 0, 1, 2.0);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_add_migration_rate_change(&msp, 0.3, -1, 3.0);
+        ret = msp_add_migration_rate_change(&msp, 0.3, -1, -1, 3.0);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_add_population_parameters_change(&msp, 0.4, 1, 1, GSL_NAN);
         CU_ASSERT_EQUAL(ret, 0);
@@ -858,7 +868,7 @@ test_demographic_events(void)
             /* Need to lower final migration rate for DTWF or else lineages will
              * alternate pops every generation and miss each other - need to let
              * one lineage migrate while the others stay put */
-            ret = msp_add_migration_rate_change(&msp, 1.5, -1, 0.3);
+            ret = msp_add_migration_rate_change(&msp, 1.5, -1, -1, 0.3);
             CU_ASSERT_EQUAL(ret, 0);
             /* Bottleneck events only supported in Hudson model so we add
              * another mass migration to have the same number of events */
@@ -868,7 +878,7 @@ test_demographic_events(void)
 
         CU_ASSERT_EQUAL(msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5),
             MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 0.2, 1, 2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 0.2, 0, 1, 2.0),
             MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
         CU_ASSERT_EQUAL(msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0),
             MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
@@ -1025,7 +1035,7 @@ test_dtwf_events_between_generations(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_population_parameters_change(&msp, 1.2, 1, 10, 0);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_add_migration_rate_change(&msp, 3, -1, 0.3);
+    ret = msp_add_migration_rate_change(&msp, 3, -1, -1, 0.3);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);

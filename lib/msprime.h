@@ -374,7 +374,7 @@ int msp_set_population_configuration(
 int msp_add_population_parameters_change(
     msp_t *self, double time, int population_id, double size, double growth_rate);
 int msp_add_migration_rate_change(
-    msp_t *self, double time, int matrix_index, double migration_rate);
+    msp_t *self, double time, int source_pop, int dest_pop, double migration_rate);
 int msp_add_mass_migration(
     msp_t *self, double time, int source, int dest, double proportion);
 int msp_add_simple_bottleneck(
