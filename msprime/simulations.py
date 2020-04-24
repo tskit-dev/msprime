@@ -59,9 +59,7 @@ _msprime.unset_gsl_error_handler()
 logger = logging.getLogger(__name__)
 
 
-Sample = collections.namedtuple(
-    "Sample",
-    ["population", "time"])
+Sample = collections.namedtuple("Sample", ["population", "time"])
 
 
 def model_factory(model, reference_size=1):
@@ -89,8 +87,11 @@ def model_factory(model, reference_size=1):
     elif isinstance(model, str):
         lower_model = model.lower()
         if lower_model not in model_map:
-            raise ValueError("Model '{}' unknown. Choose from {}".format(
-                model, list(model_map.keys())))
+            raise ValueError(
+                "Model '{}' unknown. Choose from {}".format(
+                    model, list(model_map.keys())
+                )
+            )
         model_instance = model_map[lower_model]
     elif isinstance(model, SimulationModel):
         model_instance = copy.copy(model)
@@ -98,20 +99,23 @@ def model_factory(model, reference_size=1):
             model_instance.reference_size = reference_size
     else:
         raise TypeError(
-            "Simulation model must be a string or an instance of SimulationModel")
+            "Simulation model must be a string or an instance of SimulationModel"
+        )
     return model_instance
 
 
 def _check_population_configurations(population_configurations):
     err = (
-        "Population configurations must be a list of PopulationConfiguration instances")
+        "Population configurations must be a list of PopulationConfiguration instances"
+    )
     for config in population_configurations:
         if not isinstance(config, PopulationConfiguration):
             raise TypeError(err)
 
 
 def _replicate_generator(
-        sim, mutation_generator, num_replicates, provenance_dict, end_time):
+    sim, mutation_generator, num_replicates, provenance_dict, end_time
+):
     """
     Generator function for the many-replicates case of the simulate
     function.
@@ -121,67 +125,71 @@ def _replicate_generator(
     # The JSON is modified for each replicate to insert the replicate number.
     # To avoid repeatedly encoding the same JSON (which can take milliseconds)
     # we insert a replaceable string.
-    placeholder = '@@_MSPRIME_REPLICATE_INDEX_@@'
+    placeholder = "@@_MSPRIME_REPLICATE_INDEX_@@"
     if provenance_dict is not None:
-        provenance_dict['parameters']['replicate_index'] = placeholder
+        provenance_dict["parameters"]["replicate_index"] = placeholder
         encoded_provenance = provenance.json_encode_provenance(
-            provenance_dict, num_replicates)
+            provenance_dict, num_replicates
+        )
 
     for j in range(num_replicates):
         sim.run(end_time)
         replicate_provenance = None
         if encoded_provenance is not None:
-            replicate_provenance = encoded_provenance.replace(f'"{placeholder}"', str(j))
-        tree_sequence = sim.get_tree_sequence(
-            mutation_generator,
-            replicate_provenance)
+            replicate_provenance = encoded_provenance.replace(
+                f'"{placeholder}"', str(j)
+            )
+        tree_sequence = sim.get_tree_sequence(mutation_generator, replicate_provenance)
         yield tree_sequence
         sim.reset()
 
 
 def simulator_factory(
-        sample_size=None,
-        Ne=1,
-        random_generator=None,
-        length=None,
-        recombination_rate=None,
-        recombination_map=None,
-        population_configurations=None,
-        pedigree=None,
-        migration_matrix=None,
-        samples=None,
-        demographic_events=[],
-        model=None,
-        record_migrations=False,
-        from_ts=None,
-        start_time=None,
-        end_time=None,
-        record_full_arg=False,
-        num_labels=None,
-        gene_conversion_rate=None,
-        gene_conversion_track_length=None):
+    sample_size=None,
+    Ne=1,
+    random_generator=None,
+    length=None,
+    recombination_rate=None,
+    recombination_map=None,
+    population_configurations=None,
+    pedigree=None,
+    migration_matrix=None,
+    samples=None,
+    demographic_events=[],
+    model=None,
+    record_migrations=False,
+    from_ts=None,
+    start_time=None,
+    end_time=None,
+    record_full_arg=False,
+    num_labels=None,
+    gene_conversion_rate=None,
+    gene_conversion_track_length=None,
+):
     """
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
     """
     condition = (
-        sample_size is None and
-        population_configurations is None and
-        samples is None and
-        from_ts is None)
+        sample_size is None
+        and population_configurations is None
+        and samples is None
+        and from_ts is None
+    )
     if condition:
         raise ValueError(
             "Either sample_size, population_configurations, samples or from_ts must "
-            "be specified")
+            "be specified"
+        )
     the_samples = None
     if sample_size is not None:
         if samples is not None:
-            raise ValueError(
-                "Cannot specify sample size and samples simultaneously.")
+            raise ValueError("Cannot specify sample size and samples simultaneously.")
         if population_configurations is not None:
             raise ValueError(
                 "Cannot specify sample size and population_configurations "
-                "simultaneously.")
+                "simultaneously."
+            )
         s = Sample(population=0, time=0.0)
         # In pedigrees samples are diploid individuals
         if pedigree is not None:
@@ -192,8 +200,9 @@ def simulator_factory(
     if population_configurations is not None:
         if pedigree is not None:
             raise NotImplementedError(
-                    "Cannot yet specify population configurations "
-                    "and pedigrees simultaneously")
+                "Cannot yet specify population configurations "
+                "and pedigrees simultaneously"
+            )
         _check_population_configurations(population_configurations)
         if samples is None:
             the_samples = []
@@ -205,7 +214,8 @@ def simulator_factory(
                 if conf.sample_size is not None:
                     raise ValueError(
                         "Cannot specify population configuration sample size"
-                        "and samples simultaneously")
+                        "and samples simultaneously"
+                    )
             the_samples = samples
     elif samples is not None:
         the_samples = samples
@@ -222,7 +232,8 @@ def simulator_factory(
         population_mismatch_message = (
             "Mismatch in the number of populations in from_ts and simulation "
             "parameters. The number of populations in the simulation must be "
-            "equal to the number of populations in from_ts")
+            "equal to the number of populations in from_ts"
+        )
         if population_configurations is None:
             if from_ts.num_populations != 1:
                 raise ValueError(population_mismatch_message)
@@ -242,13 +253,13 @@ def simulator_factory(
             raise ValueError("Cannot provide non-positive sequence length")
         if the_rate < 0:
             raise ValueError("Cannot provide negative recombination rate")
-        recomb_map = RecombinationMap.uniform_map(
-                the_length, the_rate, discrete=False)
+        recomb_map = RecombinationMap.uniform_map(the_length, the_rate, discrete=False)
     else:
         if length is not None or recombination_rate is not None:
             raise ValueError(
                 "Cannot specify length/recombination_rate along with "
-                "a recombination map")
+                "a recombination map"
+            )
         recomb_map = recombination_map
 
     # FIXME check the valid inputs for GC. Should we allow it when we
@@ -259,7 +270,8 @@ def simulator_factory(
         if not recomb_map.discrete:
             raise ValueError(
                 "Cannot specify gene_conversion_rate along with "
-                "a nondiscrete recombination map")
+                "a nondiscrete recombination map"
+            )
     if gene_conversion_track_length is None:
         gene_conversion_track_length = 1
 
@@ -267,7 +279,8 @@ def simulator_factory(
         if from_ts.sequence_length != recomb_map.get_length():
             raise ValueError(
                 "The simulated sequence length must be the same as "
-                "from_ts.sequence_length")
+                "from_ts.sequence_length"
+            )
 
     sim = Simulator(the_samples, recomb_map, model, Ne, from_ts)
     sim.store_migrations = record_migrations
@@ -288,39 +301,39 @@ def simulator_factory(
         sim.set_demographic_events(demographic_events)
     if pedigree is not None:
         if not isinstance(sim.model, WrightFisherPedigree):
-            raise NotImplementedError(
-                    "Pedigree can only be specified for wf_ped model")
+            raise NotImplementedError("Pedigree can only be specified for wf_ped model")
         sim.set_pedigree(pedigree)
     return sim
 
 
 def simulate(
-        sample_size=None,
-        Ne=1,
-        length=None,
-        recombination_rate=None,
-        recombination_map=None,
-        mutation_rate=None,
-        population_configurations=None,
-        pedigree=None,
-        migration_matrix=None,
-        demographic_events=[],
-        samples=None,
-        model=None,
-        record_migrations=False,
-        random_seed=None,
-        mutation_generator=None,
-        num_replicates=None,
-        replicate_index=None,
-        from_ts=None,
-        start_time=None,
-        end_time=None,
-        record_full_arg=False,
-        num_labels=None,
-        record_provenance=True,
-        # FIXME add documentation for these.
-        gene_conversion_rate=None,
-        gene_conversion_track_length=None):
+    sample_size=None,
+    Ne=1,
+    length=None,
+    recombination_rate=None,
+    recombination_map=None,
+    mutation_rate=None,
+    population_configurations=None,
+    pedigree=None,
+    migration_matrix=None,
+    demographic_events=[],
+    samples=None,
+    model=None,
+    record_migrations=False,
+    random_seed=None,
+    mutation_generator=None,
+    num_replicates=None,
+    replicate_index=None,
+    from_ts=None,
+    start_time=None,
+    end_time=None,
+    record_full_arg=False,
+    num_labels=None,
+    record_provenance=True,
+    # FIXME add documentation for these.
+    gene_conversion_rate=None,
+    gene_conversion_track_length=None,
+):
     """
     Simulates the coalescent with recombination under the specified model
     parameters and returns the resulting :class:`tskit.TreeSequence`. Note that
@@ -454,10 +467,13 @@ def simulate(
         # replicate index is excluded as it is inserted for each replicate
         parameters = {
             "command": "simulate",
-            **{arg: argspec.locals[arg] for arg in argspec.args
-                if arg not in ["num_replicates", "replicate_index"]}
+            **{
+                arg: argspec.locals[arg]
+                for arg in argspec.args
+                if arg not in ["num_replicates", "replicate_index"]
+            },
         }
-        parameters['random_seed'] = seed
+        parameters["random_seed"] = seed
         provenance_dict = provenance.get_provenance_dict(parameters)
 
     sim = simulator_factory(
@@ -479,13 +495,15 @@ def simulate(
         record_full_arg=record_full_arg,
         num_labels=num_labels,
         gene_conversion_rate=gene_conversion_rate,
-        gene_conversion_track_length=gene_conversion_track_length)
+        gene_conversion_track_length=gene_conversion_track_length,
+    )
 
     if mutation_generator is not None:
         # This error was added in version 0.6.1.
         raise ValueError(
             "mutation_generator is not longer supported. Please use "
-            "msprime.mutate instead")
+            "msprime.mutate instead"
+        )
 
     if mutation_rate is not None:
         # There is ambiguity in how we should throw mutations onto partially
@@ -496,7 +514,8 @@ def simulate(
         if from_ts is not None:
             raise ValueError(
                 "Cannot specify mutation rate combined with from_ts. Please use "
-                "msprime.mutate on the final tree sequence instead")
+                "msprime.mutate on the final tree sequence instead"
+            )
         # There is ambiguity in how the start_time argument should interact with
         # the mutation generator: should we throw mutations down on the whole
         # tree or just the (partial) edges after start_time? To avoid complicating
@@ -506,23 +525,30 @@ def simulate(
             raise ValueError(
                 "Cannot specify mutation rate combined with a non-zero "
                 "start_time. Please use msprime.mutate on the returned "
-                "tree sequence instead")
+                "tree sequence instead"
+            )
     # TODO when the ``discrete`` parameter is added here, pass it through
     # to make it a property of the mutation generator.
     mutation_generator = mutations._simple_mutation_generator(
-        mutation_rate, sim.sequence_length, sim.random_generator)
+        mutation_rate, sim.sequence_length, sim.random_generator
+    )
     if replicate_index is not None and random_seed is None:
-        raise ValueError("Cannot specify replicate_index without random_seed as this "
-                         "has the same effect as not specifying replicate_index i.e. a "
-                         "random tree sequence")
+        raise ValueError(
+            "Cannot specify replicate_index without random_seed as this "
+            "has the same effect as not specifying replicate_index i.e. a "
+            "random tree sequence"
+        )
     if replicate_index is not None and num_replicates is not None:
-        raise ValueError("Cannot specify replicate_index with num_replicates as only "
-                         "the replicate_index specified will be returned.")
+        raise ValueError(
+            "Cannot specify replicate_index with num_replicates as only "
+            "the replicate_index specified will be returned."
+        )
     if num_replicates is None and replicate_index is None:
         replicate_index = 0
     if replicate_index is not None:
         iterator = _replicate_generator(
-            sim, mutation_generator, replicate_index + 1, provenance_dict, end_time)
+            sim, mutation_generator, replicate_index + 1, provenance_dict, end_time
+        )
         # Return the last element of the iterator
         ts = next(iterator)
         for ts in iterator:
@@ -530,16 +556,18 @@ def simulate(
         return ts
     else:
         return _replicate_generator(
-            sim, mutation_generator, num_replicates, provenance_dict, end_time)
+            sim, mutation_generator, num_replicates, provenance_dict, end_time
+        )
 
 
 class Simulator(object):
     """
     Class to simulate trees under a variety of population models.
     """
+
     def __init__(
-            self, samples, recombination_map, model="hudson", Ne=0.25,
-            from_ts=None):
+        self, samples, recombination_map, model="hudson", Ne=0.25, from_ts=None
+    ):
         if from_ts is None:
             if len(samples) < 2:
                 raise ValueError("Sample size must be >= 2")
@@ -557,7 +585,8 @@ class Simulator(object):
         self.start_time = None
         self.random_generator = None
         self.population_configurations = [
-            PopulationConfiguration(initial_size=self.model.reference_size)]
+            PopulationConfiguration(initial_size=self.model.reference_size)
+        ]
         self.pedigree = None
         self.migration_matrix = [[0]]
         self.demographic_events = []
@@ -568,7 +597,8 @@ class Simulator(object):
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
         num_samples = (
-            len(self.samples) if self.samples is not None else from_ts.num_samples)
+            len(self.samples) if self.samples is not None else from_ts.num_samples
+        )
         block_size = 64 * 1024
         self.segment_block_size = max(block_size, num_samples)
         self.avl_node_block_size = block_size
@@ -658,7 +688,8 @@ class Simulator(object):
             "defined in the population_configurations. The diagonal "
             "elements of this matrix must be zero. For example, a "
             "valid matrix for a 3 population system is "
-            "[[0, 1, 1], [1, 0, 1], [1, 1, 0]]")
+            "[[0, 1, 1], [1, 0, 1], [1, 1, 0]]"
+        )
         N = len(self.population_configurations)
         if not isinstance(migration_matrix, list):
             try:
@@ -689,40 +720,46 @@ class Simulator(object):
     def set_pedigree(self, pedigree):
         if len(self.samples) % 2 != 0:
             raise ValueError(
-                    "In (diploid) pedigrees, must specify two "
-                    "lineages per individual.")
+                "In (diploid) pedigrees, must specify two " "lineages per individual."
+            )
 
         if pedigree.is_sample is None:
             pedigree.set_samples(num_samples=len(self.samples) // 2)
 
         if sum(pedigree.is_sample) * 2 != len(self.samples):
             raise ValueError(
-                    "{} sample lineages to be simulated, but {} in pedigree".format(
-                        len(self.samples), pedigree.num_samples * 2))
+                "{} sample lineages to be simulated, but {} in pedigree".format(
+                    len(self.samples), pedigree.num_samples * 2
+                )
+            )
 
         if not isinstance(self.model, WrightFisherPedigree):
             raise ValueError(
                 "Can only specify pedigrees for the "
-                "`msprime.WrightFisherPedigree` simulation model.")
+                "`msprime.WrightFisherPedigree` simulation model."
+            )
 
         pedigree_max_time = np.max(pedigree.time)
         if len(self.demographic_events) > 0:
             de_min_time = min([x.time for x in self.demographic_events])
             if de_min_time <= pedigree_max_time:
                 raise NotImplementedError(
-                    "Demographic events must be older than oldest pedigree founder.")
+                    "Demographic events must be older than oldest pedigree founder."
+                )
         if len(self.model_change_events) > 0:
             mc_min_time = min([x.time for x in self.model_change_events])
             if mc_min_time < pedigree_max_time:
                 raise NotImplementedError(
-                    "Model change events earlier than founders of pedigree unsupported.")
+                    "Model change events earlier than founders of pedigree unsupported."
+                )
 
         self.pedigree = pedigree.get_ll_representation()
 
     def set_demographic_events(self, demographic_events):
         err = (
             "Demographic events must be a list of DemographicEvent instances "
-            "sorted in non-decreasing order of time.")
+            "sorted in non-decreasing order of time."
+        )
         self.demographic_events = []
         self.model_change_events = []
         for event in demographic_events:
@@ -758,17 +795,20 @@ class Simulator(object):
         logger.debug("Setting initial model %s", ll_simulation_model)
         d = len(self.population_configurations)
         # The migration matrix must be flattened.
-        ll_migration_matrix = [0 for j in range(d**2)]
+        ll_migration_matrix = [0 for j in range(d ** 2)]
         for j in range(d):
             for k in range(d):
                 ll_migration_matrix[j * d + k] = self.migration_matrix[j][k]
         ll_population_configuration = [
-            conf.get_ll_representation() for conf in self.population_configurations]
+            conf.get_ll_representation() for conf in self.population_configurations
+        ]
         ll_demographic_events = [
-            event.get_ll_representation(d) for event in self.demographic_events]
+            event.get_ll_representation(d) for event in self.demographic_events
+        ]
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
         self.ll_tables = _msprime.LightweightTableCollection(
-            self.recombination_map.get_sequence_length())
+            self.recombination_map.get_sequence_length()
+        )
         if self.from_ts is not None:
             from_ts_tables = self.from_ts.tables.asdict()
             self.ll_tables.fromdict(from_ts_tables)
@@ -791,7 +831,8 @@ class Simulator(object):
             avl_node_block_size=self.avl_node_block_size,
             node_mapping_block_size=self.node_mapping_block_size,
             gene_conversion_rate=self.gene_conversion_rate,
-            gene_conversion_track_length=self.gene_conversion_track_length)
+            gene_conversion_track_length=self.gene_conversion_track_length,
+        )
         return ll_sim
 
     def run(self, end_time=None):
@@ -815,7 +856,8 @@ class Simulator(object):
             if model_start_time < current_time:
                 raise ValueError(
                     "Model start times out of order or not computed correctly. "
-                    f"current time = {current_time}; start_time = {model_start_time}")
+                    f"current time = {current_time}; start_time = {model_start_time}"
+                )
             logger.debug("Running simulation until maximum: %f", model_start_time)
             self.ll_sim.run(model_start_time)
             ll_new_model = event.model.get_ll_representation()
@@ -885,19 +927,21 @@ class RecombinationMap(object):
         values. To simulate a fixed number of loci, set this parameter to
         ``True`` and scale ``positions`` to span the desired number of loci.
     """
+
     def __init__(self, positions, rates, num_loci=None, discrete=False, map_start=0):
         if num_loci is not None:
             if num_loci == positions[-1]:
-                warnings.warn(
-                        "num_loci is no longer supported and should not be used.")
+                warnings.warn("num_loci is no longer supported and should not be used.")
             else:
                 raise ValueError(
-                        "num_loci does not match sequence length. "
-                        "To set a discrete number of recombination sites, "
-                        "scale positions to span the desired number of loci "
-                        "and set discrete=True")
+                    "num_loci does not match sequence length. "
+                    "To set a discrete number of recombination sites, "
+                    "scale positions to span the desired number of loci "
+                    "and set discrete=True"
+                )
         self._ll_recombination_map = _msprime.RecombinationMap(
-            positions, rates, discrete)
+            positions, rates, discrete
+        )
         self.map_start = map_start
 
     @classmethod
@@ -977,7 +1021,8 @@ class RecombinationMap(object):
                 rates.append(rate * 1e-8)
             if rate != 0:
                 raise ValueError(
-                    "The last rate provided in the recombination map must be zero")
+                    "The last rate provided in the recombination map must be zero"
+                )
         finally:
             f.close()
         return cls(positions, rates, map_start=map_start)
@@ -1020,8 +1065,13 @@ class RecombinationMap(object):
             end = positions[-1]
             j = len(positions)
 
-        if (start < 0 or end < 0 or start > positions[-1] or end > positions[-1]
-           or start > end):
+        if (
+            start < 0
+            or end < 0
+            or start > positions[-1]
+            or end > positions[-1]
+            or start > end
+        ):
             raise IndexError(f"Invalid subset: start={start}, end={end}")
 
         if start != 0:
@@ -1040,7 +1090,7 @@ class RecombinationMap(object):
         else:
             new_rates[-1] = 0
         if trim:
-            new_positions = [pos-start for pos in new_positions]
+            new_positions = [pos - start for pos in new_positions]
         else:
             if new_positions[0] != 0:
                 if new_rates[0] == 0:
@@ -1051,8 +1101,7 @@ class RecombinationMap(object):
             if new_positions[-1] != positions[-1]:
                 new_positions.append(positions[-1])
                 new_rates.append(0)
-        return self.__class__(
-                new_positions, new_rates, discrete=self.discrete)
+        return self.__class__(new_positions, new_rates, discrete=self.discrete)
 
     def __getitem__(self, key):
         """
@@ -1113,10 +1162,10 @@ class RecombinationMap(object):
 
     def asdict(self):
         return {
-            'positions': self.get_positions(),
-            'rates': self.get_rates(),
-            'discrete': self.discrete,
-            'map_start': self.map_start
+            "positions": self.get_positions(),
+            "rates": self.get_rates(),
+            "discrete": self.discrete,
+            "map_start": self.map_start,
         }
 
 
@@ -1139,8 +1188,10 @@ class PopulationConfiguration(object):
         :func:`simulate`, as the population definitions in the tree sequence that
         is used as the starting point take precedence.
     """
+
     def __init__(
-            self, sample_size=None, initial_size=None, growth_rate=0.0, metadata=None):
+        self, sample_size=None, initial_size=None, growth_rate=0.0, metadata=None
+    ):
         if initial_size is not None and initial_size <= 0:
             raise ValueError("Population size must be > 0")
         if sample_size is not None and sample_size < 0:
@@ -1149,7 +1200,7 @@ class PopulationConfiguration(object):
         self.initial_size = initial_size
         self.growth_rate = growth_rate
         self.metadata = metadata
-        self.encoded_metadata = b''
+        self.encoded_metadata = b""
         if self.metadata is not None:
             self.encoded_metadata = json.dumps(self.metadata).encode()
 
@@ -1157,17 +1208,14 @@ class PopulationConfiguration(object):
         """
         Returns the low-level representation of this PopulationConfiguration.
         """
-        return {
-            "initial_size": self.initial_size,
-            "growth_rate": self.growth_rate
-        }
+        return {"initial_size": self.initial_size, "growth_rate": self.growth_rate}
 
     def asdict(self):
         """
         Returns a dict of arguments to recreate this PopulationConfiguration
         """
         ret = dict(self.__dict__)
-        del ret['encoded_metadata']
+        del ret["encoded_metadata"]
         return ret
 
 
@@ -1184,19 +1232,22 @@ class Pedigree(object):
     :param int ploidy: The ploidy of individuals in the pedigree. Currently
         only ploidy of 2 is supported
     """
+
     def __init__(self, individual, parents, time, is_sample=None, sex=None, ploidy=2):
         if ploidy != 2:
-            raise NotImplementedError(
-                    "Ploidy != 2 not currently supported")
+            raise NotImplementedError("Ploidy != 2 not currently supported")
 
         if sex is not None:
             raise NotImplementedError(
-                    "Assigning individual sexes not currently supported")
+                "Assigning individual sexes not currently supported"
+            )
 
         if parents.shape[1] != ploidy:
             raise ValueError(
-                    "Ploidy {} conflicts with number of parents {}".format(
-                        ploidy, parents.shape[1]))
+                "Ploidy {} conflicts with number of parents {}".format(
+                    ploidy, parents.shape[1]
+                )
+            )
 
         if np.min(individual) <= 0:
             raise ValueError("Individual IDs must be > 0")
@@ -1221,7 +1272,7 @@ class Pedigree(object):
         if num_samples is None and sample_IDs is None:
             raise ValueError("Must specify one of num_samples of sample_IDs")
 
-        if (num_samples is not None and sample_IDs is not None):
+        if num_samples is not None and sample_IDs is not None:
             raise ValueError("Cannot specify both samples and num_samples.")
 
         self.is_sample = np.zeros((self.num_individuals), dtype=np.uint32)
@@ -1232,12 +1283,15 @@ class Pedigree(object):
         if num_samples is not None:
             self.num_samples = num_samples
             if self.num_samples > len(proband_indices):
-                raise ValueError((
+                raise ValueError(
+                    (
                         "Cannot specify more samples ({}) than there are "
                         "probands in the pedigree ({}) "
-                        ).format(self.num_samples, len(proband_indices)))
+                    ).format(self.num_samples, len(proband_indices))
+                )
             sample_indices = np.random.choice(
-                list(proband_indices), size=self.num_samples, replace=False)
+                list(proband_indices), size=self.num_samples, replace=False
+            )
 
         elif sample_IDs is not None:
             self.num_samples = len(sample_IDs)
@@ -1251,8 +1305,9 @@ class Pedigree(object):
 
         if len(sample_indices) != self.num_samples:
             raise ValueError(
-                    "Sample size mismatch - duplicate sample IDs or sample ID not "
-                    "in pedigree")
+                "Sample size mismatch - duplicate sample IDs or sample ID not "
+                "in pedigree"
+            )
 
         self.is_sample[sample_indices] = 1
 
@@ -1270,7 +1325,7 @@ class Pedigree(object):
             "individual": self.individual,
             "parents": self.parents,
             "time": self.time,
-            "is_sample": self.is_sample
+            "is_sample": self.is_sample,
         }
 
     @staticmethod
@@ -1280,8 +1335,7 @@ class Pedigree(object):
         all individuals.
         """
         if parents is None and parent_IDs is None:
-            raise ValueError(
-                    "Must specify either parent IDs or parent indices")
+            raise ValueError("Must specify either parent IDs or parent indices")
 
         if parents is None:
             parents = Pedigree.parent_ID_to_index(individual, parent_IDs)
@@ -1318,8 +1372,10 @@ class Pedigree(object):
                     t2 = time[parent_ix]
                     if t1 >= t2:
                         raise ValueError(
-                                "Ind {} has time >= than parent {}".format(
-                                    ind, individual[parent_ix]))
+                            "Ind {} has time >= than parent {}".format(
+                                ind, individual[parent_ix]
+                            )
+                        )
 
     @staticmethod
     def parent_ID_to_index(individual, parent_IDs):
@@ -1329,8 +1385,8 @@ class Pedigree(object):
 
         if 0 in ind_to_index_dict:
             raise ValueError(
-                    "Invalid ID: 0 reserved to denote individual"
-                    "not in the genealogy")
+                "Invalid ID: 0 reserved to denote individual" "not in the genealogy"
+            )
         ind_to_index_dict[0] = -1
 
         for i in range(n_inds):
@@ -1361,7 +1417,8 @@ class Pedigree(object):
             "parents": [1, 2],
             "time": 3,
             "is_sample": None,
-            "sexes": None}
+            "sexes": None,
+        }
 
         return cols
 
@@ -1371,12 +1428,11 @@ class Pedigree(object):
         Creates a Pedigree instance from a text file.
         """
         cols = Pedigree.default_format()
-        cols['time'] = time_col
-        cols['sexes'] = sex_col
+        cols["time"] = time_col
+        cols["sexes"] = sex_col
 
         if sex_col:
-            raise NotImplementedError(
-                    "Specifying sex of individuals not yet supported")
+            raise NotImplementedError("Specifying sex of individuals not yet supported")
 
         usecols = []
         for c in cols.values():
@@ -1386,8 +1442,7 @@ class Pedigree(object):
                 usecols.append(c)
         usecols = sorted(usecols)
 
-        data = np.genfromtxt(pedfile, skip_header=1, usecols=usecols,
-                             dtype=float)
+        data = np.genfromtxt(pedfile, skip_header=1, usecols=usecols, dtype=float)
 
         individual = data[:, cols["individual"]].astype(int)
         parent_IDs = data[:, cols["parents"]].astype(int)
@@ -1413,12 +1468,11 @@ class Pedigree(object):
         pedarray = np.load(pedarray_file)
 
         cols = Pedigree.default_format()
-        if 'cols' in kwargs:
-            cols = kwargs['cols']
+        if "cols" in kwargs:
+            cols = kwargs["cols"]
 
         individual = pedarray[:, cols["individual"]]
-        parents = np.stack(
-                [pedarray[:, i] for i in cols["parents"]], axis=1)
+        parents = np.stack([pedarray[:, i] for i in cols["parents"]], axis=1)
         parents = parents.astype(int)
         time = pedarray[:, cols["time"]]
 
@@ -1440,13 +1494,13 @@ class Pedigree(object):
 
         if max(np.diff(col_nums)) > 1:
             raise ValueError(
-                    "Non-sequential columns in pedigree format: {}".format(
-                        col_nums))
+                "Non-sequential columns in pedigree format: {}".format(col_nums)
+            )
 
         pedarray = np.zeros((self.num_individuals, n_cols))
-        pedarray[:, cols['individual']] = self.individual
-        pedarray[:, cols['parents']] = self.parents
-        pedarray[:, cols['time']] = self.time
+        pedarray[:, cols["individual"]] = self.individual
+        pedarray[:, cols["parents"]] = self.parents
+        pedarray[:, cols["time"]] = self.time
 
         return pedarray
 
@@ -1461,15 +1515,16 @@ class Pedigree(object):
         pedarray = self.build_array()
         cols = self.default_format()
         cols_to_save = [
-                cols["individual"],
-                cols["parents"][0],
-                cols["parents"][1],
-                cols["time"]]
+            cols["individual"],
+            cols["parents"][0],
+            cols["parents"][1],
+            cols["time"],
+        ]
         pedarray = pedarray[cols_to_save]
         parent_IDs = Pedigree.parent_index_to_ID(self.individual, self.parents)
         pedarray[:, cols["parents"]] = parent_IDs
 
-        with open(fname, 'w') as f:
+        with open(fname, "w") as f:
             header = "ind\tfather\tmother\ttime\n"
             f.write(header)
             for row in pedarray:
@@ -1490,14 +1545,18 @@ class Pedigree(object):
         """
         Returns a dict of arguments to recreate this pedigree
         """
-        return {key: getattr(self, key) for key in inspect.signature(
-            self.__init__).parameters.keys() if hasattr(self, key)}
+        return {
+            key: getattr(self, key)
+            for key in inspect.signature(self.__init__).parameters.keys()
+            if hasattr(self, key)
+        }
 
 
 class DemographicEvent(object):
     """
     Superclass of demographic events that occur during simulations.
     """
+
     def __init__(self, type_, time):
         self.type = type_
         self.time = time
@@ -1506,8 +1565,11 @@ class DemographicEvent(object):
         return repr(self.__dict__)
 
     def asdict(self):
-        return {key: getattr(self, key) for key in inspect.signature(
-            self.__init__).parameters.keys() if hasattr(self, key)}
+        return {
+            key: getattr(self, key)
+            for key in inspect.signature(self.__init__).parameters.keys()
+            if hasattr(self, key)
+        }
 
 
 class PopulationParametersChange(DemographicEvent):
@@ -1530,14 +1592,20 @@ class PopulationParametersChange(DemographicEvent):
         ``population`` is None, the changes affect all populations
         simultaneously.
     """
+
     def __init__(
-            self, time, initial_size=None, growth_rate=None, population=None,
-            population_id=None):
-        super().__init__(
-            "population_parameters_change", time)
+        self,
+        time,
+        initial_size=None,
+        growth_rate=None,
+        population=None,
+        population_id=None,
+    ):
+        super().__init__("population_parameters_change", time)
         if population_id is not None and population is not None:
             raise ValueError(
-                "population_id and population are aliases; cannot supply both.")
+                "population_id and population are aliases; cannot supply both."
+            )
         if population_id is not None:
             population = population_id
         if growth_rate is None and initial_size is None:
@@ -1550,11 +1618,7 @@ class PopulationParametersChange(DemographicEvent):
         self.population = -1 if population is None else population
 
     def get_ll_representation(self, num_populations):
-        ret = {
-            "type": self.type,
-            "time": self.time,
-            "population": self.population
-        }
+        ret = {"type": self.type, "time": self.time, "population": self.population}
         if self.growth_rate is not None:
             ret["growth_rate"] = self.growth_rate
         if self.initial_size is not None:
@@ -1581,9 +1645,9 @@ class MigrationRateChange(DemographicEvent):
         non-diagonal entries of the migration matrix are changed
         simultaneously.
     """
+
     def __init__(self, time, rate, matrix_index=None):
-        super().__init__(
-            "migration_rate_change", time)
+        super().__init__("migration_rate_change", time)
         self.rate = rate
         self.matrix_index = matrix_index
 
@@ -1595,7 +1659,7 @@ class MigrationRateChange(DemographicEvent):
             "type": self.type,
             "time": self.time,
             "migration_rate": self.rate,
-            "matrix_index": matrix_index
+            "matrix_index": matrix_index,
         }
 
     def __str__(self):
@@ -1603,7 +1667,8 @@ class MigrationRateChange(DemographicEvent):
             ret = "Migration rate change to {} everywhere".format(self.rate)
         else:
             ret = "Migration rate change for {} to {}".format(
-                self.matrix_index, self.rate)
+                self.matrix_index, self.rate
+            )
         return ret
 
 
@@ -1625,11 +1690,11 @@ class MassMigration(DemographicEvent):
     :param float proportion: The probability that any given lineage within
         the source population migrates to the destination population.
     """
+
     def __init__(self, time, source, dest=None, proportion=1.0, destination=None):
         super().__init__("mass_migration", time)
         if dest is not None and destination is not None:
-            raise ValueError(
-                "dest and destination are aliases; cannot supply both")
+            raise ValueError("dest and destination are aliases; cannot supply both")
         if destination is not None:
             dest = destination
         self.source = source
@@ -1642,7 +1707,7 @@ class MassMigration(DemographicEvent):
             "time": self.time,
             "source": self.source,
             "dest": self.dest,
-            "proportion": self.proportion
+            "proportion": self.proportion,
         }
 
     def __str__(self):
@@ -1652,8 +1717,9 @@ class MassMigration(DemographicEvent):
             "source {} & dest {}"
             "\n                     "
             "(equivalent to migration from {} to {} forwards in time)".format(
-                self.proportion, self.source, self.dest,
-                self.dest, self.source))
+                self.proportion, self.source, self.dest, self.dest, self.source
+            )
+        )
 
 
 class SimulationModelChange(DemographicEvent):
@@ -1680,6 +1746,7 @@ class SimulationModelChange(DemographicEvent):
         Ne (if model was not specified).
     :type model: str or simulation model instance
     """
+
     # Implementation note: these are treated as demographic events for the
     # sake of the high-level interface, but are treated differently at run
     # time. There is no corresponding demographic event in the C layer, as
@@ -1694,7 +1761,7 @@ class SimulationModelChange(DemographicEvent):
         return {
             "type": self.type,
             "time": self.time,
-            "model": self.model.get_ll_representation()
+            "model": self.model.get_ll_representation(),
         }
 
     def __str__(self):
@@ -1707,7 +1774,8 @@ class SimpleBottleneck(DemographicEvent):
         super().__init__("simple_bottleneck", time)
         if population_id is not None and population is not None:
             raise ValueError(
-                "population_id and population are aliases; cannot supply both.")
+                "population_id and population are aliases; cannot supply both."
+            )
         if population_id is not None:
             population = population_id
         self.population = population
@@ -1718,13 +1786,14 @@ class SimpleBottleneck(DemographicEvent):
             "type": self.type,
             "time": self.time,
             "population": self.population,
-            "proportion": self.proportion
+            "proportion": self.proportion,
         }
 
     def __str__(self):
         return (
             "Simple bottleneck: lineages in population {} coalesce "
-            "probability {}".format(self.population, self.proportion))
+            "probability {}".format(self.population, self.proportion)
+        )
 
 
 class InstantaneousBottleneck(DemographicEvent):
@@ -1734,7 +1803,8 @@ class InstantaneousBottleneck(DemographicEvent):
         super().__init__("instantaneous_bottleneck", time)
         if population_id is not None and population is not None:
             raise ValueError(
-                "population_id and population are aliases; cannot supply both.")
+                "population_id and population are aliases; cannot supply both."
+            )
         if population_id is not None:
             population = population_id
         self.population = population
@@ -1751,8 +1821,8 @@ class InstantaneousBottleneck(DemographicEvent):
     def __str__(self):
         return (
             "Instantaneous bottleneck in population {}: equivalent to {} "
-            "generations of the coalescent".format(
-                self.population, self.strength))
+            "generations of the coalescent".format(self.population, self.strength)
+        )
 
 
 class CensusEvent(DemographicEvent):
@@ -1767,6 +1837,7 @@ class CensusEvent(DemographicEvent):
 
     :param float time: The time at which this event occurs in generations.
     """
+
     def __init__(self, time):
         super().__init__("census_event", time)
 
@@ -1784,6 +1855,7 @@ class SimulationModel(object):
     """
     Abstract superclass of all simulation models.
     """
+
     name = None
 
     def __init__(self, reference_size=None):
@@ -1796,8 +1868,11 @@ class SimulationModel(object):
         return "{}(reference_size={})".format(self.name, self.reference_size)
 
     def asdict(self):
-        return {key: getattr(self, key) for key in inspect.signature(
-            self.__init__).parameters.keys() if hasattr(self, key)}
+        return {
+            key: getattr(self, key)
+            for key in inspect.signature(self.__init__).parameters.keys()
+            if hasattr(self, key)
+        }
 
 
 class StandardCoalescent(SimulationModel):
@@ -1807,6 +1882,7 @@ class StandardCoalescent(SimulationModel):
 
     This is the default simulation model.
     """
+
     name = "hudson"
 
 
@@ -1819,6 +1895,7 @@ class SmcApproxCoalescent(SimulationModel):
 
     The string ``"smc"`` can be used to refer to this model.
     """
+
     name = "smc"
 
 
@@ -1831,6 +1908,7 @@ class SmcPrimeApproxCoalescent(SimulationModel):
 
     The string ``"smc_prime"`` can be used to refer to this model.
     """
+
     name = "smc_prime"
 
 
@@ -1860,7 +1938,8 @@ class DiscreteTimeWrightFisher(SimulationModel):
       `previous_generation < sample_time <= current_generation` are inserted.
 
     """
-    name = 'dtwf'
+
+    name = "dtwf"
 
 
 class WrightFisherPedigree(SimulationModel):
@@ -1870,13 +1949,14 @@ class WrightFisherPedigree(SimulationModel):
     individuals and back-and-forth recombination. The string ``"wf_ped"`` can
     be used to refer to this model.
     """
-    name = 'wf_ped'
+    name = "wf_ped"
 
 
 class ParametricSimulationModel(SimulationModel):
     """
     The superclass of simulation models that require extra parameters.
     """
+
     def get_ll_representation(self):
         d = super().get_ll_representation()
         d.update(self.__dict__)
@@ -1914,8 +1994,8 @@ class SweepGenicSelection(ParametricSimulationModel):
     name = "sweep_genic_selection"
 
     def __init__(
-            self, position, start_frequency, end_frequency,
-            alpha, dt=None, reference_size=1):
+        self, position, start_frequency, end_frequency, alpha, dt=None, reference_size=1
+    ):
         # We might want to have a default dt value that depends on the other
         # parameters.
         if dt is None:
@@ -1933,6 +2013,7 @@ class PopulationParameters(object):
     Simple class to represent the state of a population in terms of its
     demographic parameters.
     """
+
     def __init__(self, start_size, end_size, growth_rate):
         self.start_size = start_size
         self.end_size = end_size
@@ -1947,9 +2028,15 @@ class Epoch(object):
     Represents a single epoch in the simulation within which the state
     of the demographic parameters are constant.
     """
+
     def __init__(
-            self, start_time=None, end_time=None, populations=None,
-            migration_matrix=None, demographic_events=None):
+        self,
+        start_time=None,
+        end_time=None,
+        populations=None,
+        migration_matrix=None,
+        demographic_events=None,
+    ):
         self.start_time = start_time
         self.end_time = end_time
         self.populations = populations
@@ -1979,9 +2066,15 @@ class DemographyDebugger(object):
     A class to facilitate debugging of population parameters and migration
     rates in the past.
     """
+
     def __init__(
-            self, Ne=1, population_configurations=None, migration_matrix=None,
-            demographic_events=None, model='hudson'):
+        self,
+        Ne=1,
+        population_configurations=None,
+        migration_matrix=None,
+        demographic_events=None,
+        model="hudson",
+    ):
         if demographic_events is None:
             demographic_events = []
         self.demographic_events = demographic_events
@@ -1993,18 +2086,23 @@ class DemographyDebugger(object):
             sample_size = 2
         else:
             saved_sample_sizes = [
-                pop_config.sample_size for pop_config in population_configurations]
+                pop_config.sample_size for pop_config in population_configurations
+            ]
             for pop_config in population_configurations:
                 pop_config.sample_size = 2
         simulator = simulator_factory(
-            sample_size=sample_size, model=model, Ne=Ne,
+            sample_size=sample_size,
+            model=model,
+            Ne=Ne,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
-            demographic_events=demographic_events)
+            demographic_events=demographic_events,
+        )
         if len(simulator.model_change_events) > 0:
             raise ValueError(
                 "Model changes not currently supported by the DemographyDebugger. "
-                "Please open an issue on GitHub if this feature would be useful to you")
+                "Please open an issue on GitHub if this feature would be useful to you"
+            )
         assert len(simulator.model_change_events) == 0
         self._make_epochs(simulator, sorted(demographic_events, key=lambda e: e.time))
         self.simulation_model = simulator.model
@@ -2012,7 +2110,8 @@ class DemographyDebugger(object):
         if population_configurations is not None:
             # Restore the saved sample sizes.
             for pop_config, sample_size in zip(
-                    population_configurations, saved_sample_sizes):
+                population_configurations, saved_sample_sizes
+            ):
                 pop_config.sample_size = sample_size
 
     def _make_epochs(self, simulator, demographic_events):
@@ -2026,25 +2125,28 @@ class DemographyDebugger(object):
         event_index = 0
         while not math.isinf(end_time):
             events = []
-            while (
-                    event_index < len(demographic_events) and
-                    utils.almost_equal(
-                        demographic_events[event_index].time,
-                        start_time, abs_tol=abs_tol)):
+            while event_index < len(demographic_events) and utils.almost_equal(
+                demographic_events[event_index].time, start_time, abs_tol=abs_tol
+            ):
                 events.append(demographic_events[event_index])
                 event_index += 1
             end_time = ll_sim.debug_demography()
             m = ll_sim.get_migration_matrix()
             migration_matrix = [[m[j * N + k] for k in range(N)] for j in range(N)]
             growth_rates = [
-                conf["growth_rate"] for conf in ll_sim.get_population_configuration()]
+                conf["growth_rate"] for conf in ll_sim.get_population_configuration()
+            ]
             populations = [
                 PopulationParameters(
                     start_size=ll_sim.compute_population_size(j, start_time),
                     end_size=ll_sim.compute_population_size(j, end_time),
-                    growth_rate=growth_rates[j]) for j in range(N)]
-            self.epochs.append(Epoch(
-                start_time, end_time, populations, migration_matrix, events))
+                    growth_rate=growth_rates[j],
+                )
+                for j in range(N)
+            ]
+            self.epochs.append(
+                Epoch(start_time, end_time, populations, migration_matrix, events)
+            )
             start_time = end_time
 
     def _print_populations(self, epoch, output):
@@ -2056,22 +2158,36 @@ class DemographyDebugger(object):
             "{id:<2} "
             "{start_size:^{field_width}}"
             "{end_size:^{field_width}}"
-            "{growth_rate:>{growth_rate_field_width}}")
-        print(fmt.format(
-            id="", start_size="start", end_size="end",
-            growth_rate="growth_rate", field_width=field_width,
-            growth_rate_field_width=growth_rate_field_width), end=sep_str,
-            file=output)
+            "{growth_rate:>{growth_rate_field_width}}"
+        )
+        print(
+            fmt.format(
+                id="",
+                start_size="start",
+                end_size="end",
+                growth_rate="growth_rate",
+                field_width=field_width,
+                growth_rate_field_width=growth_rate_field_width,
+            ),
+            end=sep_str,
+            file=output,
+        )
         for k in range(N):
             print("{0:^{1}}".format(k, field_width), end="", file=output)
         print(file=output)
         h = "-" * (field_width - 1)
         print(
             fmt.format(
-                id="", start_size=h, end_size=h, growth_rate=h,
+                id="",
+                start_size=h,
+                end_size=h,
+                growth_rate=h,
                 field_width=field_width,
-                growth_rate_field_width=growth_rate_field_width),
-            end=sep_str, file=output)
+                growth_rate_field_width=growth_rate_field_width,
+            ),
+            end=sep_str,
+            file=output,
+        )
         for k in range(N):
             s = "-" * (field_width - 1)
             print("{0:<{1}}".format(s, field_width), end="", file=output)
@@ -2082,18 +2198,23 @@ class DemographyDebugger(object):
                 "{start_size:^{field_width}.{precision}g}"
                 "{end_size:^{field_width}.{precision}g}"
                 "{growth_rate:>{growth_rate_field_width}.{precision}g}"
-                ).format(
-                    id=j,
-                    start_size=pop.start_size,
-                    end_size=pop.end_size,
-                    growth_rate=pop.growth_rate,
-                    precision=self._precision, field_width=field_width,
-                    growth_rate_field_width=growth_rate_field_width)
+            ).format(
+                id=j,
+                start_size=pop.start_size,
+                end_size=pop.end_size,
+                growth_rate=pop.growth_rate,
+                precision=self._precision,
+                field_width=field_width,
+                growth_rate_field_width=growth_rate_field_width,
+            )
             print(s, end=sep_str, file=output)
             for k in range(N):
                 x = epoch.migration_matrix[j][k]
-                print("{0:^{1}.{2}g}".format(
-                    x, field_width, self._precision), end="", file=output)
+                print(
+                    "{0:^{1}.{2}g}".format(x, field_width, self._precision),
+                    end="",
+                    file=output,
+                )
             print(file=output)
 
     def print_history(self, output=sys.stdout):
@@ -2134,7 +2255,8 @@ class DemographyDebugger(object):
         return N_t
 
     def mean_coalescence_time(
-            self, num_samples, min_pop_size=1, steps=None, rtol=0.005, max_iter=12):
+        self, num_samples, min_pop_size=1, steps=None, rtol=0.005, max_iter=12
+    ):
         """
         Compute the mean time until coalescence between lineages of two samples drawn
         from the sample configuration specified in `num_samples`. This is done using
@@ -2189,68 +2311,92 @@ class DemographyDebugger(object):
             dt = np.diff(steps)
             dP = np.diff(P)
             dlogP = np.diff(np.log(P))
-            nz = np.logical_and(dP < 0, P[1:]*P[:-1] > 0)
-            const = (dP == 0)
-            return (np.sum(dt[const] * (P[:-1])[const])
-                    + np.sum(dt[nz] * dP[nz] / dlogP[nz]))
+            nz = np.logical_and(dP < 0, P[1:] * P[:-1] > 0)
+            const = dP == 0
+            return np.sum(dt[const] * (P[:-1])[const]) + np.sum(
+                dt[nz] * dP[nz] / dlogP[nz]
+            )
 
         if steps is None:
             last_N = max(self.population_size_history[:, self.num_epochs - 1])
             last_epoch = max(self.epoch_times)
-            steps = sorted(list(set(np.linspace(0, last_epoch + 12 * last_N,
-                                                101)).union(set(self.epoch_times))))
+            steps = sorted(
+                list(
+                    set(np.linspace(0, last_epoch + 12 * last_N, 101)).union(
+                        set(self.epoch_times)
+                    )
+                )
+            )
         p_diff = m_diff = np.inf
         last_P = np.inf
         step_type = "none"
         n = 0
         logger.debug(
             "iter    mean    P_diff    mean_diff last_P    adjust_type"
-            "num_steps  last_step")
+            "num_steps  last_step"
+        )
         # The factors of 20 here are probably not optimal: clearly, we need to
         # compute P accurately, but there's no good reason for this stopping rule.
         # If populations have picewise constant size then we shouldn't need this:
         # setting steps equal to the epoch boundaries should suffice; while if
         # there is very fast exponential change in some epochs caution is needed.
-        while n < max_iter and (last_P > rtol or p_diff > rtol/20 or m_diff > rtol/20):
+        while n < max_iter and (
+            last_P > rtol or p_diff > rtol / 20 or m_diff > rtol / 20
+        ):
             last_steps = steps
             _, P1 = self.coalescence_rate_trajectory(
-                            steps=last_steps, num_samples=num_samples,
-                            min_pop_size=min_pop_size,
-                            double_step_validation=False)
+                steps=last_steps,
+                num_samples=num_samples,
+                min_pop_size=min_pop_size,
+                double_step_validation=False,
+            )
             m1 = mean_time(last_steps, P1)
             if last_P > rtol:
                 step_type = "extend"
-                steps = np.concatenate([
-                    steps,
-                    np.linspace(steps[-1], steps[-1] * 1.2, 20)[1:]])
+                steps = np.concatenate(
+                    [steps, np.linspace(steps[-1], steps[-1] * 1.2, 20)[1:]]
+                )
             else:
                 step_type = "refine"
-                inter = steps[:-1] + np.diff(steps)/2
+                inter = steps[:-1] + np.diff(steps) / 2
                 steps = np.concatenate([steps, inter])
                 steps.sort()
             _, P2 = self.coalescence_rate_trajectory(
-                            steps=steps, num_samples=num_samples,
-                            min_pop_size=min_pop_size,
-                            double_step_validation=False)
+                steps=steps,
+                num_samples=num_samples,
+                min_pop_size=min_pop_size,
+                double_step_validation=False,
+            )
             m2 = mean_time(steps, P2)
             keep_steps = np.in1d(steps, last_steps)
             p_diff = max(np.abs(P1 - P2[keep_steps]))
-            m_diff = np.abs(m1 - m2)/m2
+            m_diff = np.abs(m1 - m2) / m2
             last_P = P2[-1]
             n += 1
             # Use the old-style string formatting as this is the logging default
             logger.debug(
                 "%d %g %g %g %g %s %d %d",
-                n, m2, p_diff, m_diff, last_P, step_type, len(steps), max(steps))
+                n,
+                m2,
+                p_diff,
+                m_diff,
+                last_P,
+                step_type,
+                len(steps),
+                max(steps),
+            )
 
         if n == max_iter:
-            raise ValueError("Did not converge on an adequate discretisation: "
-                             "Increase max_iter or rtol. Consult the log for "
-                             "debugging information")
+            raise ValueError(
+                "Did not converge on an adequate discretisation: "
+                "Increase max_iter or rtol. Consult the log for "
+                "debugging information"
+            )
         return m2
 
     def coalescence_rate_trajectory(
-            self, steps, num_samples, min_pop_size=1, double_step_validation=True):
+        self, steps, num_samples, min_pop_size=1, double_step_validation=True
+    ):
         """
         This function will calculate the mean coalescence rates and proportions
         of uncoalesced lineages between the lineages of the sample
@@ -2300,24 +2446,23 @@ class DemographyDebugger(object):
         num_pops = self.num_populations
         if not len(num_samples) == num_pops:
             raise ValueError(
-                "`num_samples` must have the same length as the number of populations")
+                "`num_samples` must have the same length as the number of populations"
+            )
         steps = np.array(steps)
         if not np.all(np.diff(steps) > 0):
             raise ValueError("`steps` must be a sequence of increasing times.")
         if np.any(steps < 0):
             raise ValueError("`steps` must be non-negative")
         r, p_t = self._calculate_coalescence_rate_trajectory(
-                        steps=steps,
-                        num_samples=num_samples,
-                        min_pop_size=min_pop_size)
+            steps=steps, num_samples=num_samples, min_pop_size=min_pop_size
+        )
         if double_step_validation:
-            inter = steps[:-1] + np.diff(steps)/2
+            inter = steps[:-1] + np.diff(steps) / 2
             double_steps = np.concatenate([steps, inter])
             double_steps.sort()
             rd, p_td = self._calculate_coalescence_rate_trajectory(
-                              steps=double_steps,
-                              num_samples=num_samples,
-                              min_pop_size=min_pop_size)
+                steps=double_steps, num_samples=num_samples, min_pop_size=min_pop_size
+            )
             assert np.all(steps == double_steps[::2])
             r_prediction_close = np.allclose(r, rd[::2], rtol=1e-3)
             p_prediction_close = np.allclose(p_t, p_td[::2], rtol=1e-3)
@@ -2325,26 +2470,29 @@ class DemographyDebugger(object):
                 warnings.warn(
                     "Doubling the number of steps has resulted in different "
                     " predictions, please re-run with smaller step sizes to ensure "
-                    " numerical accuracy.")
+                    " numerical accuracy."
+                )
         return r, p_t
 
     def _calculate_coalescence_rate_trajectory(self, steps, num_samples, min_pop_size):
         num_pops = self.num_populations
-        P = np.zeros([num_pops**2, num_pops**2])
-        IA = np.array(range(num_pops**2)).reshape([num_pops, num_pops])
+        P = np.zeros([num_pops ** 2, num_pops ** 2])
+        IA = np.array(range(num_pops ** 2)).reshape([num_pops, num_pops])
         Identity = np.eye(num_pops)
         for x in range(num_pops):
             for y in range(num_pops):
                 P[IA[x, y], IA[x, y]] = num_samples[x] * (num_samples[y] - (x == y))
         P = P / np.sum(P)
         # add epoch breaks if not there already but remember which steps they are
-        epoch_breaks = list(set([0.0] + [t for t in self.epoch_times
-                                         if t not in steps]))
+        epoch_breaks = list(
+            set([0.0] + [t for t in self.epoch_times if t not in steps])
+        )
         steps_b = np.concatenate([steps, epoch_breaks])
         ix = np.argsort(steps_b)
         steps_b = steps_b[ix]
-        keep_steps = np.concatenate([np.repeat(True, len(steps)),
-                                     np.repeat(False, len(epoch_breaks))])[ix]
+        keep_steps = np.concatenate(
+            [np.repeat(True, len(steps)), np.repeat(False, len(epoch_breaks))]
+        )[ix]
         assert np.all(steps == steps_b[keep_steps])
         mass_migration_objects = []
         mass_migration_times = []
@@ -2360,7 +2508,7 @@ class DemographyDebugger(object):
             time = steps_b[j]
             dt = steps_b[j + 1] - steps_b[j]
             N, M = self._pop_size_and_migration_at_t(time)
-            C = np.zeros([num_pops**2, num_pops**2])
+            C = np.zeros([num_pops ** 2, num_pops ** 2])
             for idx in range(num_pops):
                 C[IA[idx, idx], IA[idx, idx]] = 1 / (2 * max(min_pop_size, N[idx]))
             dM = np.diag([sum(s) for s in M])
@@ -2369,7 +2517,7 @@ class DemographyDebugger(object):
                 a = mass_migration_objects[idx].source
                 b = mass_migration_objects[idx].dest
                 p = mass_migration_objects[idx].proportion
-                S = np.eye(num_pops**2, num_pops**2)
+                S = np.eye(num_pops ** 2, num_pops ** 2)
                 for x in range(num_pops):
                     if x == a:
                         S[IA[a, a], IA[a, b]] = S[IA[a, a], IA[b, a]] = p * (1 - p)

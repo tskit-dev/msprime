@@ -31,8 +31,8 @@ IS_WINDOWS = platform.system() == "Windows"
 def run_threads(worker, num_threads):
     results = [None for _ in range(num_threads)]
     threads = [
-        threading.Thread(target=worker, args=(j, results))
-        for j in range(num_threads)]
+        threading.Thread(target=worker, args=(j, results)) for j in range(num_threads)
+    ]
     for t in threads:
         t.start()
     for t in threads:
@@ -45,10 +45,10 @@ class TestSimulatorThreads(unittest.TestCase):
     Tests that we can run simulations in separate threads and
     get the same results.
     """
+
     num_threads = 10
 
     def test_single_replicate_equality(self):
-
         def worker(thread_index, results):
             results[thread_index] = msprime.simulate(100, random_seed=10)
 
@@ -65,7 +65,8 @@ class TestSimulatorThreads(unittest.TestCase):
         def worker(thread_index, results):
             results[thread_index] = []
             iterator = msprime.simulate(
-                10, random_seed=10, num_replicates=num_replicates)
+                10, random_seed=10, num_replicates=num_replicates
+            )
             for ts in iterator:
                 results[thread_index].append(list(ts.records()))
 

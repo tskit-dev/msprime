@@ -36,9 +36,17 @@ class WrightFisherSimulator(object):
     mutations/Morgan/generation. If num_loci not None, a discrete recombination
     model is used where breakpoints are chosen uniformly from 1 to num_loci - 1.
     """
+
     def __init__(
-            self, N, survival=0.0, seed=None, deep_history=True, debug=False,
-            initial_generation_samples=False, num_loci=None):
+        self,
+        N,
+        survival=0.0,
+        seed=None,
+        deep_history=True,
+        debug=False,
+        initial_generation_samples=False,
+        num_loci=None,
+    ):
         self.N = N
         self.num_loci = num_loci
         self.survival = survival
@@ -63,17 +71,19 @@ class WrightFisherSimulator(object):
         if self.deep_history:
             # initial population
             init_ts = msprime.simulate(
-                self.N, recombination_rate=1.0, length=L, random_seed=self.seed)
+                self.N, recombination_rate=1.0, length=L, random_seed=self.seed
+            )
             init_tables = init_ts.dump_tables()
             flags = init_tables.nodes.flags
             if not self.initial_generation_samples:
                 flags = np.zeros_like(init_tables.nodes.flags)
-            tables.nodes.set_columns(
-                time=init_tables.nodes.time + ngens,
-                flags=flags)
+            tables.nodes.set_columns(time=init_tables.nodes.time + ngens, flags=flags)
             tables.edges.set_columns(
-                left=init_tables.edges.left, right=init_tables.edges.right,
-                parent=init_tables.edges.parent, child=init_tables.edges.child)
+                left=init_tables.edges.left,
+                right=init_tables.edges.right,
+                parent=init_tables.edges.parent,
+                child=init_tables.edges.child,
+            )
         else:
             flags = 0
             if self.initial_generation_samples:
@@ -90,7 +100,8 @@ class WrightFisherSimulator(object):
             dead = [self.rng.random() > self.survival for k in pop]
             # sample these first so that all parents are from the previous gen
             new_parents = [
-                (self.rng.choice(pop), self.rng.choice(pop)) for k in range(sum(dead))]
+                (self.rng.choice(pop), self.rng.choice(pop)) for k in range(sum(dead))
+            ]
             k = 0
             if self.debug:
                 print("Replacing", sum(dead), "individuals.")
@@ -107,10 +118,12 @@ class WrightFisherSimulator(object):
                     pop[j] = offspring
                     if bp > 0.0:
                         tables.edges.add_row(
-                            left=0.0, right=bp, parent=lparent, child=offspring)
+                            left=0.0, right=bp, parent=lparent, child=offspring
+                        )
                     if bp < L:
                         tables.edges.add_row(
-                            left=bp, right=L, parent=rparent, child=offspring)
+                            left=bp, right=L, parent=rparent, child=offspring
+                        )
 
         if self.debug:
             print("Done! Final pop:")
@@ -118,16 +131,28 @@ class WrightFisherSimulator(object):
         flags = tables.nodes.flags
         flags[pop] = tskit.NODE_IS_SAMPLE
         tables.nodes.set_columns(
-            flags=flags,
-            time=tables.nodes.time,
-            population=tables.nodes.population)
+            flags=flags, time=tables.nodes.time, population=tables.nodes.population
+        )
         return tables
 
 
 def wf_sim(
-        N, ngens, survival=0.0, deep_history=True, debug=False, seed=None,
-        initial_generation_samples=False, num_loci=None):
+    N,
+    ngens,
+    survival=0.0,
+    deep_history=True,
+    debug=False,
+    seed=None,
+    initial_generation_samples=False,
+    num_loci=None,
+):
     sim = WrightFisherSimulator(
-        N, survival=survival, deep_history=deep_history, debug=debug, seed=seed,
-        initial_generation_samples=initial_generation_samples, num_loci=num_loci)
+        N,
+        survival=survival,
+        deep_history=deep_history,
+        debug=debug,
+        seed=seed,
+        initial_generation_samples=initial_generation_samples,
+        num_loci=num_loci,
+    )
     return sim.run(ngens)

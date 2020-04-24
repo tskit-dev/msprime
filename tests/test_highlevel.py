@@ -41,12 +41,16 @@ def get_bottleneck_examples():
     bottlenecks = [
         msprime.SimpleBottleneck(0.01, 0, proportion=0.05),
         msprime.SimpleBottleneck(0.02, 0, proportion=0.25),
-        msprime.SimpleBottleneck(0.03, 0, proportion=1)]
+        msprime.SimpleBottleneck(0.03, 0, proportion=1),
+    ]
     for n in [3, 10, 100]:
         ts = msprime.simulate(
-            n, length=100, recombination_rate=1,
+            n,
+            length=100,
+            recombination_rate=1,
             demographic_events=bottlenecks,
-            random_seed=n)
+            random_seed=n,
+        )
         yield ts
 
 
@@ -54,6 +58,7 @@ class HighLevelTestCase(tests.MsprimeTestCase):
     """
     Superclass of tests on the high level interface.
     """
+
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp(prefix="msp_hl_testcase_")
         self.temp_file = os.path.join(self.temp_dir, "generic")
@@ -167,6 +172,7 @@ class TestSingleLocusSimulation(HighLevelTestCase):
     """
     Tests on the single locus simulations.
     """
+
     def test_simple_cases(self):
         for n in range(2, 10):
             st = next(msprime.simulate(n).trees())
@@ -180,10 +186,12 @@ class TestSingleLocusSimulation(HighLevelTestCase):
         for n in [2, 10, 100]:
             m1 = msprime.PopulationConfiguration(n, growth_rate=0)
             m2 = msprime.PopulationConfiguration(n, initial_size=1.0)
-            st1 = next(msprime.simulate(
-                random_seed=1, population_configurations=[m1]).trees())
-            st2 = next(msprime.simulate(
-                random_seed=1, population_configurations=[m2]).trees())
+            st1 = next(
+                msprime.simulate(random_seed=1, population_configurations=[m1]).trees()
+            )
+            st2 = next(
+                msprime.simulate(random_seed=1, population_configurations=[m2]).trees()
+            )
             self.assertEqual(st1.parent_dict, st2.parent_dict)
         # TODO add more tests!
 
@@ -192,6 +200,7 @@ class TestMultiLocusSimulation(HighLevelTestCase):
     """
     Tests on the single locus simulations.
     """
+
     def test_simple_cases(self):
         m = 1
         r = 0.1
@@ -210,8 +219,8 @@ class TestMultiLocusSimulation(HighLevelTestCase):
 
     def test_error_cases(self):
         def f(n, m, r):
-            return msprime.simulate(
-                sample_size=n, length=m, recombination_rate=r)
+            return msprime.simulate(sample_size=n, length=m, recombination_rate=r)
+
         for n in [-100, -1, 0, 1, None]:
             self.assertRaises(ValueError, f, n, 1, 1.0)
         for n in ["", "2", 2.2, 1e5]:
@@ -222,6 +231,7 @@ class TestFullArg(unittest.TestCase):
     """
     Tests for recording the full ARG.
     """
+
     def verify(self, sim, multiple_mergers=False):
         sim.run()
         tree_sequence = sim.get_tree_sequence()
@@ -240,13 +250,14 @@ class TestFullArg(unittest.TestCase):
         ca_nodes = np.where(flags == msprime.NODE_IS_CA_EVENT)[0]
         coal_nodes = np.where(flags == 0)[0]
         # There should be two recombination nodes for every event
-        self.assertTrue(np.array_equal(
-            time[re_nodes[::2]],  # Even indexes
-            time[re_nodes[1::2]]))  # Odd indexes
-        self.assertEqual(re_nodes.shape[0] / 2,  sim.num_recombination_events)
+        self.assertTrue(
+            np.array_equal(time[re_nodes[::2]], time[re_nodes[1::2]])  # Even indexes
+        )  # Odd indexes
+        self.assertEqual(re_nodes.shape[0] / 2, sim.num_recombination_events)
         if not multiple_mergers:
             self.assertEqual(
-                ca_nodes.shape[0] + coal_nodes.shape[0], sim.num_common_ancestor_events)
+                ca_nodes.shape[0] + coal_nodes.shape[0], sim.num_common_ancestor_events
+            )
         # After simplification, all the RE and CA nodes should be gone.
         ts_simplified = tree_sequence.simplify()
         new_flags = ts_simplified.tables.nodes.flags
@@ -272,33 +283,42 @@ class TestFullArg(unittest.TestCase):
     def test_recombination_n25(self):
         rng = msprime.RandomGenerator(10)
         sim = msprime.simulator_factory(
-            25, recombination_rate=1, record_full_arg=True, random_generator=rng)
+            25, recombination_rate=1, record_full_arg=True, random_generator=rng
+        )
         self.verify(sim)
 
     def test_recombination_n5(self):
         rng = msprime.RandomGenerator(10)
         sim = msprime.simulator_factory(
-            5, recombination_rate=10, record_full_arg=True, random_generator=rng)
+            5, recombination_rate=10, record_full_arg=True, random_generator=rng
+        )
         self.verify(sim)
 
     def test_recombination_n50(self):
         rng = msprime.RandomGenerator(100)
         sim = msprime.simulator_factory(
-            50, recombination_rate=2, record_full_arg=True, random_generator=rng)
+            50, recombination_rate=2, record_full_arg=True, random_generator=rng
+        )
         self.verify(sim)
 
     def test_recombination_n100(self):
         rng = msprime.RandomGenerator(100)
         sim = msprime.simulator_factory(
-            100, recombination_rate=0.2, record_full_arg=True, random_generator=rng)
+            100, recombination_rate=0.2, record_full_arg=True, random_generator=rng
+        )
         self.verify(sim)
 
     def test_multimerger(self):
         rng = msprime.RandomGenerator(1234)
         sim = msprime.simulator_factory(
-            100, recombination_rate=0.1, record_full_arg=True,
-            random_generator=rng, demographic_events=[
-                msprime.InstantaneousBottleneck(time=0.1, population=0, strength=5)])
+            100,
+            recombination_rate=0.1,
+            record_full_arg=True,
+            random_generator=rng,
+            demographic_events=[
+                msprime.InstantaneousBottleneck(time=0.1, population=0, strength=5)
+            ],
+        )
         self.verify(sim, multiple_mergers=True)
 
 
@@ -329,7 +349,8 @@ class TestSimulator(HighLevelTestCase):
         recomb_map = msprime.RecombinationMap.uniform_map(m, r, discrete=True)
         rng = msprime.RandomGenerator(1)
         sim = msprime.simulator_factory(
-            n, recombination_map=recomb_map, random_generator=rng)
+            n, recombination_map=recomb_map, random_generator=rng
+        )
         self.assertEqual(sim.random_generator, rng)
         sim.run()
         self.assertEqual(sim.num_breakpoints, len(sim.breakpoints))
@@ -375,8 +396,7 @@ class TestSimulator(HighLevelTestCase):
     def test_bad_inputs(self):
         recomb_map = msprime.RecombinationMap.uniform_map(1, 0)
         for bad_type in ["xd", None, 4.4]:
-            self.assertRaises(
-                TypeError, msprime.Simulator, [(0, 0), (0, 0)], bad_type)
+            self.assertRaises(TypeError, msprime.Simulator, [(0, 0), (0, 0)], bad_type)
         self.assertRaises(ValueError, msprime.Simulator, [], recomb_map)
         self.assertRaises(ValueError, msprime.Simulator, [(0, 0)], recomb_map)
 
@@ -386,6 +406,7 @@ class TestSimulatorFactory(unittest.TestCase):
     Tests that the simulator factory high-level function correctly
     creates simulators with the required parameter values.
     """
+
     def test_default_random_seed(self):
         sim = msprime.simulator_factory(10)
         rng = sim.random_generator
@@ -412,8 +433,7 @@ class TestSimulatorFactory(unittest.TestCase):
     def test_sample_size(self):
         self.assertRaises(ValueError, msprime.simulator_factory)
         self.assertRaises(ValueError, msprime.simulator_factory, 1)
-        self.assertRaises(
-            ValueError, msprime.simulator_factory, sample_size=1)
+        self.assertRaises(ValueError, msprime.simulator_factory, sample_size=1)
         for n in [2, 100, 1000]:
             sim = msprime.simulator_factory(n)
             self.assertEqual(len(sim.samples), n)
@@ -428,6 +448,7 @@ class TestSimulatorFactory(unittest.TestCase):
     def test_effective_population_size(self):
         def f(Ne):
             return msprime.simulator_factory(10, Ne=Ne)
+
         for bad_value in [-1, -1e16, 0]:
             self.assertRaises(ValueError, f, bad_value)
         for Ne in [1, 10, 1e5]:
@@ -440,6 +461,7 @@ class TestSimulatorFactory(unittest.TestCase):
     def test_population_configurations(self):
         def f(configs):
             return msprime.simulator_factory(population_configurations=configs)
+
         for bad_type in [10, ["sdf"], "sdfsd"]:
             self.assertRaises(TypeError, f, bad_type)
         # Just test the basic equalities here. The actual
@@ -462,7 +484,8 @@ class TestSimulatorFactory(unittest.TestCase):
             # Zero sample size is always an error
             configs = [msprime.PopulationConfiguration(0) for _ in range(d)]
             self.assertRaises(
-                ValueError, msprime.simulator_factory, population_configurations=configs)
+                ValueError, msprime.simulator_factory, population_configurations=configs
+            )
             configs = [msprime.PopulationConfiguration(2) for _ in range(d)]
             sim = msprime.simulator_factory(population_configurations=configs)
             self.assertEqual(len(sim.samples), 2 * d)
@@ -477,13 +500,11 @@ class TestSimulatorFactory(unittest.TestCase):
         # Cannot specify a migration matrix without population
         # configurations
         self.assertRaises(
-            ValueError, msprime.simulator_factory, 10,
-            migration_matrix=[])
+            ValueError, msprime.simulator_factory, 10, migration_matrix=[]
+        )
         for N in range(1, 10):
-            pop_configs = [
-                msprime.PopulationConfiguration(5) for _ in range(N)]
-            sim = msprime.simulator_factory(
-                population_configurations=pop_configs)
+            pop_configs = [msprime.PopulationConfiguration(5) for _ in range(N)]
+            sim = msprime.simulator_factory(population_configurations=pop_configs)
             ll_sim = sim.create_ll_instance()
             # If we don't specify a matrix, it's 0 everywhere.
             matrix = [0 for j in range(N * N)]
@@ -491,10 +512,10 @@ class TestSimulatorFactory(unittest.TestCase):
 
             def f(hl_matrix):
                 return msprime.simulator_factory(
-                    population_configurations=pop_configs,
-                    migration_matrix=hl_matrix)
-            hl_matrix = [
-                [(j + k) * int(j != k) for j in range(N)] for k in range(N)]
+                    population_configurations=pop_configs, migration_matrix=hl_matrix
+                )
+
+            hl_matrix = [[(j + k) * int(j != k) for j in range(N)] for k in range(N)]
             sim = f(hl_matrix)
             self.assertEqual(sim.migration_matrix, hl_matrix)
             # Try with equivalent numpy array.
@@ -534,12 +555,14 @@ class TestSimulatorFactory(unittest.TestCase):
     def test_demographic_events(self):
         for bad_type in ["sdf", 234, [12], [None]]:
             self.assertRaises(
-                TypeError, msprime.simulator_factory, 2, demographic_events=bad_type)
+                TypeError, msprime.simulator_factory, 2, demographic_events=bad_type
+            )
         # TODO test for bad values.
 
     def test_recombination_rate(self):
         def f(recomb_rate):
             return msprime.simulator_factory(10, recombination_rate=recomb_rate)
+
         for bad_type in ["", {}, []]:
             self.assertRaises(TypeError, f, bad_type)
         for bad_value in [-1, -1e15]:
@@ -553,6 +576,7 @@ class TestSimulatorFactory(unittest.TestCase):
     def test_recombination_map(self):
         def f(recomb_map):
             return msprime.simulator_factory(10, recombination_map=recomb_map)
+
         self.assertRaises(TypeError, f, "wrong type")
         for n in range(2, 10):
             positions = list(range(n))
@@ -565,20 +589,33 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertEqual(sim.sequence_length, recomb_map.get_sequence_length())
             ll_sim = sim.create_ll_instance()
             self.assertEqual(
-                ll_sim.get_sequence_length(), recomb_map.get_sequence_length())
+                ll_sim.get_sequence_length(), recomb_map.get_sequence_length()
+            )
 
     def test_combining_recomb_map_and_rate_length(self):
         recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
         self.assertRaises(
-            ValueError, msprime.simulator_factory, 10,
-            recombination_map=recomb_map, length=1)
+            ValueError,
+            msprime.simulator_factory,
+            10,
+            recombination_map=recomb_map,
+            length=1,
+        )
         self.assertRaises(
-            ValueError, msprime.simulator_factory, 10,
-            recombination_map=recomb_map, recombination_rate=100)
+            ValueError,
+            msprime.simulator_factory,
+            10,
+            recombination_map=recomb_map,
+            recombination_rate=100,
+        )
         self.assertRaises(
-            ValueError, msprime.simulator_factory, 10,
-            recombination_map=recomb_map, length=1,
-            recombination_rate=1)
+            ValueError,
+            msprime.simulator_factory,
+            10,
+            recombination_map=recomb_map,
+            length=1,
+            recombination_rate=1,
+        )
 
     def test_sample_combination_errors(self):
         # Make sure that the various ways we can specify the samples
@@ -588,39 +625,50 @@ class TestSimulatorFactory(unittest.TestCase):
         # Cannot provide sample_size with either population configurations
         # or samples
         self.assertRaises(
-            ValueError, msprime.simulator_factory,
-            sample_size=2, samples=[s, s])
-        pop_configs = [
-            msprime.PopulationConfiguration(sample_size=2)]
+            ValueError, msprime.simulator_factory, sample_size=2, samples=[s, s]
+        )
+        pop_configs = [msprime.PopulationConfiguration(sample_size=2)]
         self.assertRaises(
-            ValueError, msprime.simulator_factory,
-            sample_size=2, population_configurations=pop_configs)
+            ValueError,
+            msprime.simulator_factory,
+            sample_size=2,
+            population_configurations=pop_configs,
+        )
         # If we provide samples and population_configurations we cannot
         # have a sample size for the config.
-        pop_configs = [
-            msprime.PopulationConfiguration(sample_size=2)]
+        pop_configs = [msprime.PopulationConfiguration(sample_size=2)]
         self.assertRaises(
-            ValueError, msprime.simulator_factory,
-            samples=[s, s], population_configurations=pop_configs)
+            ValueError,
+            msprime.simulator_factory,
+            samples=[s, s],
+            population_configurations=pop_configs,
+        )
         pop_configs = [
             msprime.PopulationConfiguration(sample_size=None),
-            msprime.PopulationConfiguration(sample_size=2)]
+            msprime.PopulationConfiguration(sample_size=2),
+        ]
         self.assertRaises(
-            ValueError, msprime.simulator_factory,
-            samples=[s, s], population_configurations=pop_configs)
+            ValueError,
+            msprime.simulator_factory,
+            samples=[s, s],
+            population_configurations=pop_configs,
+        )
 
     def test_samples(self):
         pop_configs = [
             msprime.PopulationConfiguration(),
             msprime.PopulationConfiguration(),
-            msprime.PopulationConfiguration()]
+            msprime.PopulationConfiguration(),
+        ]
         samples = [
             msprime.Sample(population=0, time=0),
             msprime.Sample(population=1, time=1),
-            msprime.Sample(population=2, time=2)]
+            msprime.Sample(population=2, time=2),
+        ]
         # Ne = 1/4 to keep in coalescence units.
         sim = msprime.simulator_factory(
-            Ne=1/4, samples=samples, population_configurations=pop_configs)
+            Ne=1 / 4, samples=samples, population_configurations=pop_configs
+        )
         self.assertEqual(sim.samples, samples)
         ll_sim = sim.create_ll_instance()
         self.assertEqual(ll_sim.get_samples(), samples)
@@ -630,31 +678,46 @@ class TestSimulatorFactory(unittest.TestCase):
         # Ne is ignored.
         for Ne in [0, 1234, None, "sdf"]:
             sim = msprime.simulator_factory(
-                sample_size=2, Ne=Ne,
-                model=msprime.SmcPrimeApproxCoalescent(20))
+                sample_size=2, Ne=Ne, model=msprime.SmcPrimeApproxCoalescent(20)
+            )
             self.assertEqual(sim.model.reference_size, 20)
 
     def test_model_change_event_sizes(self):
-        models = [msprime.SweepGenicSelection(
-            position=j, start_frequency=j, end_frequency=j, alpha=j, dt=j,
-            reference_size=j) for j in range(1, 10)]
+        models = [
+            msprime.SweepGenicSelection(
+                position=j,
+                start_frequency=j,
+                end_frequency=j,
+                alpha=j,
+                dt=j,
+                reference_size=j,
+            )
+            for j in range(1, 10)
+        ]
         sim = msprime.simulator_factory(
-            sample_size=2, Ne=10,
+            sample_size=2,
+            Ne=10,
             demographic_events=[
-                msprime.SimulationModelChange(None, model) for model in models])
+                msprime.SimulationModelChange(None, model) for model in models
+            ],
+        )
         self.assertEqual(sim.model.reference_size, 10)
         self.assertEqual(len(sim.model_change_events), len(models))
         for event, model in zip(sim.model_change_events, models):
             self.assertEqual(
-                event.model.get_ll_representation(), model.get_ll_representation())
+                event.model.get_ll_representation(), model.get_ll_representation()
+            )
 
     def test_model_change_inherits_Ne(self):
         K = 10
         sim = msprime.simulator_factory(
-            sample_size=2, Ne=10,
+            sample_size=2,
+            Ne=10,
             demographic_events=[
-                msprime.SimulationModelChange(
-                    None, msprime.SmcApproxCoalescent()) for _ in range(K)])
+                msprime.SimulationModelChange(None, msprime.SmcApproxCoalescent())
+                for _ in range(K)
+            ],
+        )
         self.assertEqual(sim.model.reference_size, 10)
         self.assertEqual(len(sim.model_change_events), K)
         for event in sim.model_change_events:
@@ -664,11 +727,13 @@ class TestSimulatorFactory(unittest.TestCase):
     def test_model_change_no_model_inherits_model_size(self):
         main_model = msprime.SmcApproxCoalescent(100)
         sim = msprime.simulator_factory(
-            sample_size=2, model=main_model,
+            sample_size=2,
+            model=main_model,
             demographic_events=[
-                msprime.SimulationModelChange(
-                    1, msprime.DiscreteTimeWrightFisher(500)),
-                msprime.SimulationModelChange(2, None)])
+                msprime.SimulationModelChange(1, msprime.DiscreteTimeWrightFisher(500)),
+                msprime.SimulationModelChange(2, None),
+            ],
+        )
         self.assertEqual(sim.model.reference_size, 100)
         self.assertEqual(len(sim.model_change_events), 2)
         self.assertEqual(sim.model_change_events[0].time, 1)
@@ -681,11 +746,13 @@ class TestSimulatorFactory(unittest.TestCase):
 
     def test_model_change_no_model_inherits_Ne(self):
         sim = msprime.simulator_factory(
-            sample_size=2, Ne=1500,
+            sample_size=2,
+            Ne=1500,
             demographic_events=[
-                msprime.SimulationModelChange(
-                    1, msprime.DiscreteTimeWrightFisher(500)),
-                msprime.SimulationModelChange(2, None)])
+                msprime.SimulationModelChange(1, msprime.DiscreteTimeWrightFisher(500)),
+                msprime.SimulationModelChange(2, None),
+            ],
+        )
         self.assertEqual(sim.model.reference_size, 1500)
         self.assertEqual(len(sim.model_change_events), 2)
         self.assertEqual(sim.model_change_events[0].time, 1)
@@ -700,12 +767,11 @@ class TestSimulatorFactory(unittest.TestCase):
             msprime.simulate(
                 samples=[
                     msprime.Sample(population=0, time=0),
-                    msprime.Sample(population=1, time=0)
+                    msprime.Sample(population=1, time=0),
                 ]
             )
         self.assertEqual(
-            str(ve.exception),
-            "Invalid population reference '1' in sample at index 1"
+            str(ve.exception), "Invalid population reference '1' in sample at index 1"
         )
 
         with self.assertRaises(ValueError) as ve:
@@ -717,8 +783,7 @@ class TestSimulatorFactory(unittest.TestCase):
                 ]
             )
         self.assertEqual(
-            str(ve.exception),
-            "Negative population ID in sample at index 2"
+            str(ve.exception), "Negative population ID in sample at index 2"
         )
 
 
@@ -726,6 +791,7 @@ class TestSimulateInterface(unittest.TestCase):
     """
     Some simple test cases for the simulate() interface.
     """
+
     def test_defaults(self):
         n = 10
         ts = msprime.simulate(n)
@@ -794,7 +860,8 @@ class TestSimulateInterface(unittest.TestCase):
     def test_mutation_generator_unsupported(self):
         n = 10
         mutgen = msprime.mutations._simple_mutation_generator(
-                1, 1, msprime.RandomGenerator(1))
+            1, 1, msprime.RandomGenerator(1)
+        )
         with self.assertRaises(ValueError):
             msprime.simulate(n, mutation_generator=mutgen)
 
@@ -815,8 +882,13 @@ class TestSimulateInterface(unittest.TestCase):
     def test_gene_conversion_simple_map(self):
         n = 10
         ts = msprime.simulate(
-            n, gene_conversion_rate=1, gene_conversion_track_length=1,
-            recombination_map=msprime.RecombinationMap.uniform_map(10, 1, discrete=True))
+            n,
+            gene_conversion_rate=1,
+            gene_conversion_track_length=1,
+            recombination_map=msprime.RecombinationMap.uniform_map(
+                10, 1, discrete=True
+            ),
+        )
         self.assertIsInstance(ts, msprime.TreeSequence)
         self.assertEqual(ts.num_samples, n)
         self.assertGreater(ts.num_trees, 1)
@@ -825,8 +897,11 @@ class TestSimulateInterface(unittest.TestCase):
         rm = msprime.RecombinationMap.uniform_map(10, 1, discrete=False)
         with self.assertRaises(ValueError):
             msprime.simulate(
-                10, gene_conversion_rate=1, gene_conversion_track_length=1,
-                recombination_map=rm)
+                10,
+                gene_conversion_rate=1,
+                gene_conversion_track_length=1,
+                recombination_map=rm,
+            )
 
     @unittest.skip("Cannot use GC with default recomb map")
     def test_gene_conversion_default_map(self):
@@ -834,8 +909,7 @@ class TestSimulateInterface(unittest.TestCase):
         # FIXME we have to be quite delicate with the GC code at the moment.
         # If we take the default where we have a very large number of loci,
         # we might be getting overflows. It's not clear what happening in any case.
-        ts = msprime.simulate(
-            n, gene_conversion_rate=1, gene_conversion_track_length=1)
+        ts = msprime.simulate(n, gene_conversion_rate=1, gene_conversion_track_length=1)
         self.assertIsInstance(ts, msprime.TreeSequence)
         self.assertEqual(ts.num_samples, n)
         self.assertGreater(ts.num_trees, 1)
@@ -845,7 +919,8 @@ class TestSimulateInterface(unittest.TestCase):
         # setting should have no effect.
         tables = [
             msprime.simulate(10, num_labels=num_labels, random_seed=1).tables
-            for num_labels in range(1, 5)]
+            for num_labels in range(1, 5)
+        ]
         for t in tables:
             t.provenances.clear()
         for t in tables:
@@ -864,14 +939,14 @@ class TestSimulateInterface(unittest.TestCase):
             "Cannot specify replicate_index without random_seed as this "
             "has the same effect as not specifying replicate_index i.e. a "
             "random tree sequence",
-            str(cm.exception)
+            str(cm.exception),
         )
         with self.assertRaises(ValueError) as cm:
             msprime.simulate(5, random_seed=1, replicate_index=5, num_replicates=26)
         self.assertEqual(
             "Cannot specify replicate_index with num_replicates as only "
             "the replicate_index specified will be returned.",
-            str(cm.exception)
+            str(cm.exception),
         )
 
 
@@ -879,6 +954,7 @@ class TestRecombinationMap(unittest.TestCase):
     """
     Tests for the RecombinationMap class.
     """
+
     # TODO these are incomplete.
     def test_discrete(self):
         for truthy in [True, False, {}, None, "ser"]:

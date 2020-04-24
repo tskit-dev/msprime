@@ -4,6 +4,7 @@ flake8
 mock
 nose
 numpy
+pre-commit
 tskit
 scipy
 # TODO we're pinning the version here because of problems on Travis.

@@ -29,6 +29,7 @@ class FenwickTree(object):
     frequency tables: an improved frequency-to-symbol algorithm." available at
     https://www.cs.auckland.ac.nz/~peter-f/FTPfiles/TechRep110.ps
     """
+
     def __init__(self, max_index):
         assert max_index > 0
         self.__max_index = max_index
@@ -37,7 +38,7 @@ class FenwickTree(object):
         u = self.__max_index
         while u != 0:
             self.__log_max_index = u
-            u -= (u & -u)
+            u -= u & -u
 
     def get_total(self):
         """
@@ -54,7 +55,7 @@ class FenwickTree(object):
         j = index
         while j <= self.__max_index:
             self.__tree[j] += v
-            j += (j & -j)
+            j += j & -j
 
     def set_value(self, index, v):
         """
@@ -72,7 +73,7 @@ class FenwickTree(object):
         s = 0
         while j > 0:
             s += self.__tree[j]
-            j -= (j & -j)
+            j -= j & -j
         return s
 
     def get_frequency(self, index):
@@ -114,6 +115,7 @@ class Segment(object):
     and right, denoting the loci over which it spans, a node and a
     next, giving the next in the chain.
     """
+
     def __init__(self, index):
         self.left = None
         self.right = None
@@ -128,19 +130,29 @@ class Segment(object):
 
     def __str__(self):
         s = "({}:{}-{}->{}: prev={} next={})".format(
-            self.index, self.left, self.right, self.node, repr(self.prev),
-            repr(self.next))
+            self.index,
+            self.left,
+            self.right,
+            self.node,
+            repr(self.prev),
+            repr(self.next),
+        )
         return s
 
     def __lt__(self, other):
-        return ((self.left, self.right, self.population, self.node)
-                < (other.left, other.right, other.population, self.node))
+        return (self.left, self.right, self.population, self.node) < (
+            other.left,
+            other.right,
+            other.population,
+            self.node,
+        )
 
 
 class Population(object):
     """
     Class representing a population in the simulation.
     """
+
     def __init__(self, id_, num_labels=1):
         self._id = id_
         self._start_time = 0
@@ -163,7 +175,8 @@ class Population(object):
                 s = ""
                 while u is not None:
                     s += "({}-{}->{}({});lab:{})".format(
-                        u.left, u.right, u.node, u.index, u.label)
+                        u.left, u.right, u.node, u.index, u.label
+                    )
                     u = u.next
                 print("\t\t" + s)
 
@@ -176,7 +189,7 @@ class Population(object):
                     u = u.next
                 right = u.right
                 dist = right - left
-                cleft += 1 - ((tracklength-1) / tracklength) ** (dist - 1)
+                cleft += 1 - ((tracklength - 1) / tracklength) ** (dist - 1)
         return cleft
 
     def find_cleft(self, rvalue, tracklength):
@@ -188,7 +201,7 @@ class Population(object):
                     u = u.next
                 right = u.right
                 dist = right - left
-                rvalue -= 1 - ((tracklength-1)/tracklength) ** (dist - 1)
+                rvalue -= 1 - ((tracklength - 1) / tracklength) ** (dist - 1)
                 if rvalue <= 0:
                     break
             return rvalue, index, dist
@@ -233,8 +246,12 @@ class Population(object):
             else:
                 dt = t - self._start_time
                 z = (
-                    1 + self._growth_rate * self._start_size
-                    * math.exp(-self._growth_rate * dt) * u)
+                    1
+                    + self._growth_rate
+                    * self._start_size
+                    * math.exp(-self._growth_rate * dt)
+                    * u
+                )
                 if z > 0:
                     ret = math.log(z) / self._growth_rate
         return ret
@@ -244,7 +261,7 @@ class Population(object):
         first_ind = np.sum([self.get_size(t_prev) for t_prev in range(0, t)])
         last_ind = first_ind + self.get_size(t)
 
-        return range(int(first_ind), int(last_ind)+1)
+        return range(int(first_ind), int(last_ind) + 1)
 
     def remove(self, index, label=0):
         """
@@ -295,6 +312,7 @@ class Pedigree(object):
     Class representing a pedigree for use with the DTWF model, as implemented
     in C library
     """
+
     def __init__(self, num_individuals, ploidy):
         self.ploidy = ploidy
         self.num_individuals = num_individuals
@@ -309,8 +327,9 @@ class Pedigree(object):
 
     def set_pedigree(self, inds, parents, times, is_sample):
         self.ploidy = parents.shape[1]
-        self.inds = [Individual(ploidy=self.ploidy)
-                     for i in range(self.num_individuals)]
+        self.inds = [
+            Individual(ploidy=self.ploidy) for i in range(self.num_individuals)
+        ]
 
         num_samples = 0
         for i in range(self.num_individuals):
@@ -320,7 +339,7 @@ class Pedigree(object):
             ind.time = times[i]
             for j, parent in enumerate(parents[i]):
                 if parent != tskit.NULL:
-                    assert(parent >= 0)
+                    assert parent >= 0
                     ind.parents[j] = self.inds[parent]
 
             if is_sample[i] != 0:
@@ -335,13 +354,17 @@ class Pedigree(object):
         Loads segments from a given pop into the pedigree samples
         """
         if self.num_sample_lineages() != pop.get_num_ancestors():
-            err_str = "Ped samples: " + str(self.num_sample_lineages()) + \
-                    " Samples: " + str(pop.get_num_ancestors()) + \
-                    " - must be equal!"
+            err_str = (
+                "Ped samples: "
+                + str(self.num_sample_lineages())
+                + " Samples: "
+                + str(pop.get_num_ancestors())
+                + " - must be equal!"
+            )
             raise ValueError(err_str)
 
         # for i, anc in enumerate(pop):
-        for i in range(pop.get_num_ancestors()-1, -1, -1):
+        for i in range(pop.get_num_ancestors() - 1, -1, -1):
             anc = pop.remove(i)
             # Each individual gets 'ploidy' lineages
             ind = self.samples[i // self.ploidy]
@@ -420,6 +443,7 @@ class Individual(object):
     Class representing a diploid individual in the DTWF model. Trying to make
     arbitrary ploidy possible at some point in the future.
     """
+
     def __init__(self, ploidy=2):
         self.id = None  # This is the index of the individual in pedigree.inds
         self.ploidy = ploidy
@@ -442,8 +466,7 @@ class Individual(object):
 
         parents_str = ",".join(parents)
 
-        return "(ID: {}, time: {}, parents: {})".format(
-                self.id, self.time, parents_str)
+        return "(ID: {}, time: {}, parents: {})".format(self.id, self.time, parents_str)
 
     def __repr__(self):
         return self.__str__()
@@ -467,6 +490,7 @@ class TrajectorySimulator(object):
     Class to simulate an allele frequency trajectory on which to condition
     the coalescent simulation.
     """
+
     def __init__(self, initial_freq, end_freq, alpha, time_slice):
         self._initial_freq = initial_freq
         self._end_freq = end_freq
@@ -500,7 +524,8 @@ class TrajectorySimulator(object):
             # current_size = self._size_calculator(t)
             #
             x = 1.0 - self._genic_selection_stochastic_forwards(
-                t_inc, 1.0 - x, self._alpha * current_size)
+                t_inc, 1.0 - x, self._alpha * current_size
+            )
             t += self._time_slice
         # will want to return current_size / N_max
         # for prototype this always equals 1
@@ -524,7 +549,7 @@ class RecombinationMap(object):
         recomb_mass = 0
         cumulative = [recomb_mass]
         for i in range(1, len(positions)):
-            recomb_mass += (positions[i] - positions[i-1]) * rates[i-1]
+            recomb_mass += (positions[i] - positions[i - 1]) * rates[i - 1]
             cumulative.append(recomb_mass)
         return cumulative
 
@@ -648,15 +673,33 @@ class Simulator(object):
     """
     A reference implementation of the multi locus simulation algorithm.
     """
+
     def __init__(
-            self, sample_size, num_loci, recombination_rate, recombination_map,
-            migration_matrix,
-            sample_configuration, population_growth_rates, population_sizes,
-            population_growth_rate_changes, population_size_changes,
-            migration_matrix_element_changes, bottlenecks, census_times,
-            model='hudson', from_ts=None, max_segments=100, num_labels=1,
-            sweep_trajectory=None, full_arg=False, time_slice=None,
-            gene_conversion_rate=0.0, gene_conversion_length=1, pedigree=None):
+        self,
+        sample_size,
+        num_loci,
+        recombination_rate,
+        recombination_map,
+        migration_matrix,
+        sample_configuration,
+        population_growth_rates,
+        population_sizes,
+        population_growth_rate_changes,
+        population_size_changes,
+        migration_matrix_element_changes,
+        bottlenecks,
+        census_times,
+        model="hudson",
+        from_ts=None,
+        max_segments=100,
+        num_labels=1,
+        sweep_trajectory=None,
+        full_arg=False,
+        time_slice=None,
+        gene_conversion_rate=0.0,
+        gene_conversion_length=1,
+        pedigree=None,
+    ):
         # Must be a square matrix.
         N = len(migration_matrix)
         assert len(sample_configuration) == N
@@ -673,11 +716,11 @@ class Simulator(object):
         self.recomb_map = recombination_map
         self.g = gene_conversion_rate
         self.tracklength = gene_conversion_length
-        self.pc = (self.tracklength-1)/self.tracklength
+        self.pc = (self.tracklength - 1) / self.tracklength
         if self.tracklength == 1:
             self.lnpc = -math.inf
         else:
-            self.lnpc = math.log(1.0-1.0/self.tracklength)
+            self.lnpc = math.log(1.0 - 1.0 / self.tracklength)
         self.migration_matrix = migration_matrix
         self.num_labels = num_labels
         self.num_populations = N
@@ -694,8 +737,7 @@ class Simulator(object):
         self.S = bintrees.AVLTree()
         for pop_index in range(N):
             self.P[pop_index].set_start_size(population_sizes[pop_index])
-            self.P[pop_index].set_growth_rate(
-                    population_growth_rates[pop_index], 0)
+            self.P[pop_index].set_growth_rate(population_growth_rates[pop_index], 0)
         self.edge_buffer = []
         self.from_ts = from_ts
         self.pedigree = pedigree
@@ -708,15 +750,18 @@ class Simulator(object):
                 for k in range(sample_size):
                     j = len(self.tables.nodes)
                     x = self.alloc_segment(
-                        0, self.m, 0,
+                        0,
+                        self.m,
+                        0,
                         self.recomb_map.position_to_mass(self.m),
-                        j, pop_index)
+                        j,
+                        pop_index,
+                    )
                     self.set_single_segment_mass(x)
                     self.P[pop_index].add(x)
                     self.tables.nodes.add_row(
-                        flags=msprime.NODE_IS_SAMPLE,
-                        time=0,
-                        population=pop_index)
+                        flags=msprime.NODE_IS_SAMPLE, time=0, population=pop_index
+                    )
                     j += 1
             self.S[0] = self.n
             self.S[self.m] = -1
@@ -746,18 +791,28 @@ class Simulator(object):
         self.modifier_events = [(sys.float_info.max, None, None)]
         for time, pop_id, new_size in population_size_changes:
             self.modifier_events.append(
-                (time, self.change_population_size, (int(pop_id), new_size)))
+                (time, self.change_population_size, (int(pop_id), new_size))
+            )
         for time, pop_id, new_rate in population_growth_rate_changes:
             self.modifier_events.append(
-                (time, self.change_population_growth_rate,
-                    (int(pop_id), new_rate, time)))
+                (
+                    time,
+                    self.change_population_growth_rate,
+                    (int(pop_id), new_rate, time),
+                )
+            )
         for time, pop_i, pop_j, new_rate in migration_matrix_element_changes:
             self.modifier_events.append(
-                (time, self.change_migration_matrix_element,
-                    (int(pop_i), int(pop_j), new_rate)))
+                (
+                    time,
+                    self.change_migration_matrix_element,
+                    (int(pop_i), int(pop_j), new_rate),
+                )
+            )
         for time, pop_id, intensity in bottlenecks:
             self.modifier_events.append(
-                (time, self.bottleneck_event, (int(pop_id), 0, intensity)))
+                (time, self.bottleneck_event, (int(pop_id), 0, intensity))
+            )
         for time in census_times:
             self.modifier_events.append((time[0], self.census_event, time))
         self.modifier_events.sort()
@@ -783,10 +838,13 @@ class Simulator(object):
                     population = ts.node(root).population
                     if root_segments_head[root] is None:
                         seg = self.alloc_segment(
-                                left, right,
-                                self.recomb_map.position_to_mass(left),
-                                self.recomb_map.position_to_mass(right),
-                                root, population)
+                            left,
+                            right,
+                            self.recomb_map.position_to_mass(left),
+                            self.recomb_map.position_to_mass(right),
+                            root,
+                            population,
+                        )
                         root_segments_head[root] = seg
                         root_segments_tail[root] = seg
                     else:
@@ -795,10 +853,14 @@ class Simulator(object):
                             tail.right = right
                         else:
                             seg = self.alloc_segment(
-                                    left, right,
-                                    self.recomb_map.position_to_mass(left),
-                                    self.recomb_map.position_to_mass(right),
-                                    root, population, tail)
+                                left,
+                                right,
+                                self.recomb_map.position_to_mass(left),
+                                self.recomb_map.position_to_mass(right),
+                                root,
+                                population,
+                                tail,
+                            )
                             tail.next = seg
                             root_segments_tail[root] = seg
         self.S[self.m] = -1
@@ -850,9 +912,8 @@ class Simulator(object):
         return index, distance
 
     def alloc_segment(
-            self, left, right,
-            left_mass, right_mass,  node,
-            pop_index, prev=None, next=None):
+        self, left, right, left_mass, right_mass, node, pop_index, prev=None, next=None
+    ):
         """
         Pops a new segment off the stack and sets its properties.
         """
@@ -906,7 +967,8 @@ class Simulator(object):
         Stores the specified edge to the output tree sequence.
         """
         self.edge_buffer.append(
-            msprime.Edge(left=left, right=right, parent=parent, child=child))
+            msprime.Edge(left=left, right=right, parent=parent, child=child)
+        )
 
     def finalise(self):
         """
@@ -916,14 +978,14 @@ class Simulator(object):
         ts = self.tables.tree_sequence()
         return ts
 
-    def simulate(self, model='hudson'):
-        if self.model == 'hudson':
+    def simulate(self, model="hudson"):
+        if self.model == "hudson":
             self.hudson_simulate()
-        elif self.model == 'dtwf':
+        elif self.model == "dtwf":
             self.dtwf_simulate()
-        elif self.model == 'wf_ped':
+        elif self.model == "wf_ped":
             self.pedigree_simulate()
-        elif self.model == 'single_sweep':
+        elif self.model == "single_sweep":
             # self.print_state()
             self.single_sweep_simulate()
         else:
@@ -1021,7 +1083,7 @@ class Simulator(object):
                 self.set_labels(u, 1)
                 indices.append(idx)
             else:
-                assert(u.label == 0)
+                assert u.label == 0
         popped = 0
         for i in indices:
             tmp = self.P[0].remove(i - popped, 0)
@@ -1031,21 +1093,18 @@ class Simulator(object):
         # main loop time
         t_inc_orig = self.time_slice
         e_time = 0.0
-        while (
-                self.ancestors_remain()
-                and sweep_traj_step < len(times) - 1):
+        while self.ancestors_remain() and sweep_traj_step < len(times) - 1:
             self.verify()
             event_prob = 1.0
-            while (
-                    event_prob > random.random() and
-                    sweep_traj_step < len(times) - 1):
+            while event_prob > random.random() and sweep_traj_step < len(times) - 1:
                 sweep_traj_step += 1
                 x = allele_freqs[sweep_traj_step]
                 e_time += times[sweep_traj_step]
                 # self.t = self.t + times[sweep_traj_step]
                 sweep_pop_sizes = [
                     self.P[0].get_num_ancestors(label=0),
-                    self.P[0].get_num_ancestors(label=1)]
+                    self.P[0].get_num_ancestors(label=1),
+                ]
                 # print(sweep_pop_sizes)
                 p_rec_b = self.L[0].get_total() * t_inc_orig
                 p_rec_B = self.L[1].get_total() * t_inc_orig
@@ -1054,11 +1113,17 @@ class Simulator(object):
                 # into a method in Population like get_common_ancestor_waiting_time().
                 # That way we can handle exponentially growing populations as well?
                 p_coal_b = (
-                    (sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1)) /
-                    (1.0 - x) * t_inc_orig / self.P[0]._start_size)
+                    (sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1))
+                    / (1.0 - x)
+                    * t_inc_orig
+                    / self.P[0]._start_size
+                )
                 p_coal_B = (
-                    (sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1)) /
-                    x * t_inc_orig / self.P[0]._start_size)
+                    (sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1))
+                    / x
+                    * t_inc_orig
+                    / self.P[0]._start_size
+                )
                 sweep_pop_tot_rate = p_rec_b + p_rec_B + p_coal_b + p_coal_B
 
                 total_rate = sweep_pop_tot_rate
@@ -1093,11 +1158,13 @@ class Simulator(object):
                             if r < e_sum / sweep_pop_tot_rate:
                                 # recomb in B
                                 self.hudson_recombination_event_sweep_phase(
-                                    1, self.sweep_site, x)
+                                    1, self.sweep_site, x
+                                )
                             else:
                                 # recomb in b
                                 self.hudson_recombination_event_sweep_phase(
-                                    0, self.sweep_site, 1.0 - x)
+                                    0, self.sweep_site, 1.0 - x
+                                )
         # clean up the labels at end
         for idx, u in enumerate(self.P[0].iter_label(1)):
             tmp = self.P[0].remove(idx, u.label)
@@ -1325,9 +1392,8 @@ class Simulator(object):
         if y.left < k:
             # Make new segment
             z = self.alloc_segment(
-                k, y.right,
-                k_mass, y.right_mass, y.node,
-                y.population, None, y.next)
+                k, y.right, k_mass, y.right_mass, y.node, y.population, None, y.next
+            )
             if y.next is not None:
                 y.next.prev = z
             y.next = None
@@ -1375,7 +1441,7 @@ class Simulator(object):
         """
         h = random.uniform(0, self.L[label].get_total())
         # generate tracklength
-        tl = np.random.geometric(1/self.tracklength)
+        tl = np.random.geometric(1 / self.tracklength)
         # Get the segment containing the h'th link
         y = self.segments[self.L[label].find(h)]
         t = self.L[label].get_cumulative_frequency(y.index)
@@ -1383,31 +1449,42 @@ class Simulator(object):
         k_plus_tl_mass = self.recomb_map.position_to_mass(k + tl)
         k_mass = self.recomb_map.position_to_mass(k)
         # check if the gene conversion falls between segments --> no effect
-        if y.left >= k+tl:
+        if y.left >= k + tl:
             # print("noneffective GCI EVENT")
             return None
         self.num_gc_events += 1
         x = y.prev
         # both breaks are within the same segment
-        if k+tl < y.right:
+        if k + tl < y.right:
             if k <= y.left:
                 y.prev = None
                 z2 = self.alloc_segment(
-                    k+tl, y.right,
-                    k_plus_tl_mass, y.right_mass,
-                    y.node, y.population, x, y.next)
+                    k + tl,
+                    y.right,
+                    k_plus_tl_mass,
+                    y.right_mass,
+                    y.node,
+                    y.population,
+                    x,
+                    y.next,
+                )
                 lhs_tail = x
                 self.cut_right_break(lhs_tail, y, z2, k + tl, label)
                 z = y
             elif k > y.left:
                 z = self.alloc_segment(
-                    k, k+tl,
-                    k_mass, k_plus_tl_mass,
-                    y.node, y.population, None, None)
+                    k, k + tl, k_mass, k_plus_tl_mass, y.node, y.population, None, None
+                )
                 z2 = self.alloc_segment(
-                    k+tl, y.right,
-                    k_plus_tl_mass, y.right_mass,
-                    y.node, y.population, y, y.next)
+                    k + tl,
+                    y.right,
+                    k_plus_tl_mass,
+                    y.right_mass,
+                    y.node,
+                    y.population,
+                    y,
+                    y.next,
+                )
                 if y.next is not None:
                     y.next.prev = z2
                 y.next = z2
@@ -1421,7 +1498,7 @@ class Simulator(object):
         else:
             # Get the segment y2 containing the end of the conversion tract
             y2 = y
-            while y2 is not None and k+tl >= y2.right:
+            while y2 is not None and k + tl >= y2.right:
                 y2 = y2.next
             # process left break
             if k <= y.left:
@@ -1432,9 +1509,8 @@ class Simulator(object):
                 lhs_tail = x
             elif k > y.left:
                 z = self.alloc_segment(
-                    k, y.right,
-                    k_mass, y.right_mass,
-                    y.node, y.population, None, y.next)
+                    k, y.right, k_mass, y.right_mass, y.node, y.population, None, y.next
+                )
                 self.set_single_segment_mass(z)
                 if y.next is not None:
                     y.next.prev = z
@@ -1447,9 +1523,15 @@ class Simulator(object):
             if y2 is not None:
                 if y2.left < k + tl:
                     z2 = self.alloc_segment(
-                        k + tl, y2.right,
-                        k_plus_tl_mass, y2.right_mass,
-                        y2.node, y2.population, lhs_tail, y2.next)
+                        k + tl,
+                        y2.right,
+                        k_plus_tl_mass,
+                        y2.right_mass,
+                        y2.node,
+                        y2.population,
+                        lhs_tail,
+                        y2.next,
+                    )
                     self.cut_right_break(lhs_tail, y2, z2, k + tl, label)
                     if z2.prev is None:
                         z = z2
@@ -1482,9 +1564,11 @@ class Simulator(object):
         index, distance = self.find_cleft_individual(h, self.tracklength)
         y = self.segments[index]
         # generate tracklength
-        k = y.left + math.floor(1.0 +
-                                math.log(1.0 - random.random() *
-                                         (1.0 - (self.pc) ** (distance - 1)))/self.lnpc)
+        k = y.left + math.floor(
+            1.0
+            + math.log(1.0 - random.random() * (1.0 - (self.pc) ** (distance - 1)))
+            / self.lnpc
+        )
         k_mass = self.recomb_map.position_to_mass(k)
         while y.right <= k:
             y = y.next
@@ -1492,9 +1576,8 @@ class Simulator(object):
         if y.left < k:
             # Make new segment
             z = self.alloc_segment(
-                k, y.right,
-                k_mass, y.right_mass,
-                y.node, y.population, None, y.next)
+                k, y.right, k_mass, y.right_mass, y.node, y.population, None, y.next
+            )
             if y.next is not None:
                 y.next.prev = z
             y.next = None
@@ -1588,9 +1671,8 @@ class Simulator(object):
                 else:
                     tail = seg_tails[ix]
                 z = self.alloc_segment(
-                    k, x.right,
-                    k_mass, x.right_mass,
-                    x.node, x.population, tail, x.next)
+                    k, x.right, k_mass, x.right_mass, x.node, x.population, tail, x.next
+                )
                 if z.prev is None:
                     self.set_single_segment_mass(z)
                 else:
@@ -1651,8 +1733,7 @@ class Simulator(object):
             u = x
             s = ""
             while u is not None:
-                s += "({}-{}->{}({}))".format(
-                    u.left, u.right, u.node, u.index)
+                s += "({}-{}->{}({}))".format(u.left, u.right, u.node, u.index)
                 u = u.next
             print(s)
 
@@ -1662,7 +1743,8 @@ class Simulator(object):
                 seg = ancestor
                 self.flush_edges()
                 u = self.tables.nodes.add_row(
-                        time=time, flags=msprime.NODE_IS_CEN_EVENT, population=pop._id)
+                    time=time, flags=msprime.NODE_IS_CEN_EVENT, population=pop._id
+                )
                 while seg is not None:
                     # Add an edge joining the segment to the new node.
                     self.store_edge(seg.left, seg.right, u, seg.node)
@@ -1702,9 +1784,8 @@ class Simulator(object):
                 if len(H) > 0 and H[0][0] < x.right:
                     next_l_mass = H[0][1].left_mass
                     alpha = self.alloc_segment(
-                        x.left, H[0][0],
-                        x.left_mass, next_l_mass,
-                        x.node, x.population)
+                        x.left, H[0][0], x.left_mass, next_l_mass, x.node, x.population
+                    )
                     alpha.label = label
                     x.left = H[0][0]
                     x.left_mass = next_l_mass
@@ -1738,10 +1819,13 @@ class Simulator(object):
                         self.S[right] -= len(X) - 1
                         right = self.S.succ_key(right)
                     alpha = self.alloc_segment(
-                                left, right,
-                                self.recomb_map.position_to_mass(left),
-                                self.recomb_map.position_to_mass(right),
-                                u, pop_id)
+                        left,
+                        right,
+                        self.recomb_map.position_to_mass(left),
+                        self.recomb_map.position_to_mass(right),
+                        u,
+                        pop_id,
+                    )
                 # Update the heaps and make the record.
                 for x in X:
                     self.store_edge(left, right, u, x.node)
@@ -1760,8 +1844,7 @@ class Simulator(object):
                     self.set_single_segment_mass(alpha)
                     # Pedigrees don't currently track lineages in Populations,
                     # so keep reference to merged segments instead.
-                    if (self.pedigree is not None and
-                            self.pedigree.is_climbing):
+                    if self.pedigree is not None and self.pedigree.is_climbing:
                         assert self.pedigree.merged_segment is None
                         self.pedigree.merged_segment = alpha
                     else:
@@ -1771,7 +1854,8 @@ class Simulator(object):
                         defrag_required |= z.right == alpha.left
                     else:
                         defrag_required |= (
-                            z.right == alpha.left and z.node == alpha.node)
+                            z.right == alpha.left and z.node == alpha.node
+                        )
                     z.next = alpha
                     self.set_segment_mass(alpha, z)
                 alpha.prev = z
@@ -1848,9 +1932,8 @@ class Simulator(object):
                     alpha.next = None
                 elif x.left != y.left:
                     alpha = self.alloc_segment(
-                        x.left, y.left,
-                        x.left_mass, y.left_mass,
-                        x.node, x.population)
+                        x.left, y.left, x.left_mass, y.left_mass, x.node, x.population
+                    )
                     x.left = y.left
                     x.left_mass = y.left_mass
                     alpha.label = x.label
@@ -1879,10 +1962,13 @@ class Simulator(object):
                             self.S[right] -= 1
                             right = self.S.succ_key(right)
                         alpha = self.alloc_segment(
-                                    left, right,
-                                    self.recomb_map.position_to_mass(left),
-                                    self.recomb_map.position_to_mass(right),
-                                    u, population_index)
+                            left,
+                            right,
+                            self.recomb_map.position_to_mass(left),
+                            self.recomb_map.position_to_mass(right),
+                            u,
+                            population_index,
+                        )
                         alpha.label = label
                     self.store_edge(left, right, u, x.node)
                     self.store_edge(left, right, u, y.node)
@@ -1908,7 +1994,8 @@ class Simulator(object):
                         defrag_required |= z.right == alpha.left
                     else:
                         defrag_required |= (
-                            z.right == alpha.left and z.node == alpha.node)
+                            z.right == alpha.left and z.node == alpha.node
+                        )
                     z.next = alpha
                     self.set_segment_mass(alpha, z)
                 alpha.prev = z
@@ -1945,8 +2032,7 @@ class Simulator(object):
             for j in range(1, self.max_segments + 1):
                 s = self.L[l].get_frequency(j)
                 if s != 0:
-                    print(
-                        "\t", j, "->", s, self.L[l].get_cumulative_frequency(j))
+                    print("\t", j, "->", s, self.L[l].get_cumulative_frequency(j))
         print("nodes")
         print(self.tables.nodes)
         print("edges")
@@ -1991,9 +2077,10 @@ class Simulator(object):
                             assert u.prev.label == u.label
                         else:
                             s = self.recomb_map.mass_between_left_exclusive(
-                                            u.left, u.right)
+                                u.left, u.right
+                            )
                         right = u.right
-                        if self.model != 'wf_ped':
+                        if self.model != "wf_ped":
                             freq = self.L[l].get_frequency(u.index)
                             total_mass += freq
                             assert math.isclose(s, freq, abs_tol=1e-6)
@@ -2013,7 +2100,7 @@ class Simulator(object):
         lab_tot = 0
         for l in range(self.num_labels):
             lab_tot += self.L[l].get_total()
-        if self.model != 'wf_ped':
+        if self.model != "wf_ped":
             assert math.isclose(q, lab_tot, abs_tol=1e-6)
 
         assert self.S[self.m] == -1
@@ -2063,7 +2150,8 @@ def run_simulate(args):
     num_populations = args.num_populations
     migration_matrix = [
         [args.migration_rate * int(j != k) for j in range(num_populations)]
-        for k in range(num_populations)]
+        for k in range(num_populations)
+    ]
     sample_configuration = [0 for j in range(num_populations)]
     population_growth_rates = [0 for j in range(num_populations)]
     population_sizes = [1 for j in range(num_populations)]
@@ -2084,7 +2172,7 @@ def run_simulate(args):
         recombination_map = RecombinationMap(positions, rates, True)
     num_labels = 1
     sweep_trajectory = None
-    if args.model == 'single_sweep':
+    if args.model == "single_sweep":
         if num_populations > 1:
             raise ValueError("Multiple populations not currently supported")
         # Compute the trajectory
@@ -2098,8 +2186,9 @@ def run_simulate(args):
     if args.pedigree_file is not None:
         if n % 2 != 0:
             raise ValueError(
-                    "Must specify an even number of sample lineages for "
-                    "diploid simulations")
+                "Must specify an even number of sample lineages for "
+                "diploid simulations"
+            )
 
         num_diploid_individuals = n // 2
         py_pedigree = msprime.Pedigree.read_txt(args.pedigree_file)
@@ -2107,23 +2196,38 @@ def run_simulate(args):
         ll_pedigree = py_pedigree.get_ll_representation()
         pedigree = Pedigree(py_pedigree.num_individuals, py_pedigree.ploidy)
         pedigree.set_pedigree(
-                ll_pedigree['individual'],
-                ll_pedigree['parents'],
-                ll_pedigree['time'],
-                ll_pedigree['is_sample'])
+            ll_pedigree["individual"],
+            ll_pedigree["parents"],
+            ll_pedigree["time"],
+            ll_pedigree["is_sample"],
+        )
     random.seed(args.random_seed)
-    np.random.seed(args.random_seed+1)
+    np.random.seed(args.random_seed + 1)
     s = Simulator(
-        n, m, rho, recombination_map, migration_matrix,
-        sample_configuration, population_growth_rates,
-        population_sizes, args.population_growth_rate_change,
+        n,
+        m,
+        rho,
+        recombination_map,
+        migration_matrix,
+        sample_configuration,
+        population_growth_rates,
+        population_sizes,
+        args.population_growth_rate_change,
         args.population_size_change,
         args.migration_matrix_element_change,
-        args.bottleneck, args.census_time, args.model, from_ts=args.from_ts,
-        max_segments=100000, num_labels=num_labels, full_arg=args.full_arg,
-        sweep_trajectory=sweep_trajectory, time_slice=args.time_slice,
-        gene_conversion_rate=gamma, gene_conversion_length=mean_tracklength,
-        pedigree=pedigree)
+        args.bottleneck,
+        args.census_time,
+        args.model,
+        from_ts=args.from_ts,
+        max_segments=100000,
+        num_labels=num_labels,
+        full_arg=args.full_arg,
+        sweep_trajectory=sweep_trajectory,
+        time_slice=args.time_slice,
+        gene_conversion_rate=gamma,
+        gene_conversion_length=mean_tracklength,
+        pedigree=pedigree,
+    )
     ts = s.simulate()
     ts.dump(args.output_file)
     if args.verbose:
@@ -2134,60 +2238,77 @@ def add_simulator_arguments(parser):
     parser.add_argument("sample_size", type=int)
     parser.add_argument("output_file")
     parser.add_argument(
-            "-v", "--verbose", help="increase output verbosity", action="store_true")
+        "-v", "--verbose", help="increase output verbosity", action="store_true"
+    )
+    parser.add_argument("--random-seed", "-s", type=int, default=1)
+    parser.add_argument("--num-loci", "-m", type=int, default=100)
+    parser.add_argument("--num-replicates", "-R", type=int, default=1000)
+    parser.add_argument("--recombination-rate", "-r", type=float, default=0.01)
+    parser.add_argument("--recomb-positions", type=float, nargs="+", default=None)
+    parser.add_argument("--recomb-rates", type=float, nargs="+", default=None)
     parser.add_argument(
-        "--random-seed", "-s", type=int, default=1)
+        "--gene-conversion-rate", "-c", type=float, nargs=2, default=[0, 3]
+    )
+    parser.add_argument("--num-populations", "-p", type=int, default=1)
+    parser.add_argument("--migration-rate", "-g", type=float, default=1)
+    parser.add_argument("--sample-configuration", type=int, nargs="+", default=None)
     parser.add_argument(
-        "--num-loci", "-m", type=int, default=100)
+        "--population-growth-rates", type=float, nargs="+", default=None
+    )
+    parser.add_argument("--population-sizes", type=float, nargs="+", default=None)
     parser.add_argument(
-        "--num-replicates", "-R", type=int, default=1000)
+        "--population-size-change", type=float, nargs=3, action="append", default=[]
+    )
     parser.add_argument(
-        "--recombination-rate", "-r", type=float, default=0.01)
+        "--population-growth-rate-change",
+        type=float,
+        nargs=3,
+        action="append",
+        default=[],
+    )
     parser.add_argument(
-        "--recomb-positions", type=float, nargs="+", default=None)
+        "--migration-matrix-element-change",
+        type=float,
+        nargs=4,
+        action="append",
+        default=[],
+    )
     parser.add_argument(
-        "--recomb-rates", type=float, nargs="+", default=None)
+        "--bottleneck", type=float, nargs=3, action="append", default=[]
+    )
     parser.add_argument(
-        "--gene-conversion-rate", "-c", type=float, nargs=2, default=[0, 3])
+        "--census-time", type=float, nargs=1, action="append", default=[]
+    )
     parser.add_argument(
-        "--num-populations", "-p", type=int, default=1)
+        "--trajectory",
+        type=float,
+        nargs=3,
+        default=None,
+        help="Parameters for the allele frequency trajectory simulation",
+    )
     parser.add_argument(
-        "--migration-rate", "-g", type=float, default=1)
+        "--full-arg",
+        action="store_true",
+        default=False,
+        help="Store the full ARG with all recombination and common ancestor nodes",
+    )
     parser.add_argument(
-        "--sample-configuration", type=int, nargs="+", default=None)
-    parser.add_argument(
-        "--population-growth-rates", type=float, nargs="+", default=None)
-    parser.add_argument(
-        "--population-sizes", type=float, nargs="+", default=None)
-    parser.add_argument(
-        "--population-size-change", type=float, nargs=3, action="append",
-        default=[])
-    parser.add_argument(
-        "--population-growth-rate-change", type=float, nargs=3,
-        action="append", default=[])
-    parser.add_argument(
-        "--migration-matrix-element-change", type=float, nargs=4,
-        action="append", default=[])
-    parser.add_argument(
-        "--bottleneck", type=float, nargs=3, action="append", default=[])
-    parser.add_argument(
-        "--census-time", type=float, nargs=1, action="append", default=[])
-    parser.add_argument(
-        "--trajectory", type=float, nargs=3, default=None,
-        help="Parameters for the allele frequency trajectory simulation")
-    parser.add_argument(
-        "--full-arg", action="store_true", default=False,
-        help="Store the full ARG with all recombination and common ancestor nodes")
-    parser.add_argument(
-        "--time-slice", type=float, default=1e-6,
-        help="The delta_t value for selective sweeps")
-    parser.add_argument("--model", default='hudson')
+        "--time-slice",
+        type=float,
+        default=1e-6,
+        help="The delta_t value for selective sweeps",
+    )
+    parser.add_argument("--model", default="hudson")
     parser.add_argument("--pedigree-file", default=None)
     parser.add_argument(
-        "--from-ts", "-F", default=None,
+        "--from-ts",
+        "-F",
+        default=None,
         help=(
             "Specify the tree sequence to complete. The sample_size argument "
-            "is ignored if this is provided"))
+            "is ignored if this is provided"
+        ),
+    )
 
 
 def main():

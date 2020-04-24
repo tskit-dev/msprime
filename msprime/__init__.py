@@ -30,17 +30,39 @@ NULL_INDIVIDUAL = tskit.NULL
 NULL_MUTATION = tskit.NULL
 
 from tskit import (
-    Individual, Node, Edge, Site, Mutation, Migration, Population,
-    Variant, Edgeset, Provenance)
+    Individual,
+    Node,
+    Edge,
+    Site,
+    Mutation,
+    Migration,
+    Population,
+    Variant,
+    Edgeset,
+    Provenance,
+)
 from tskit import Tree as SparseTree  # Rename SparseTree to Tree in tskit
 from tskit import TreeSequence
 from tskit import (
-    IndividualTable, NodeTable, EdgeTable, SiteTable, MutationTable,
-    MigrationTable, PopulationTable, ProvenanceTable, TableCollection)
+    IndividualTable,
+    NodeTable,
+    EdgeTable,
+    SiteTable,
+    MutationTable,
+    MigrationTable,
+    PopulationTable,
+    ProvenanceTable,
+    TableCollection,
+)
 from tskit import LdCalculator
 from tskit import load, load_text
 from tskit import (
-    parse_nodes, parse_edges, parse_individuals, parse_sites, parse_mutations)
+    parse_nodes,
+    parse_edges,
+    parse_individuals,
+    parse_sites,
+    parse_mutations,
+)
 from tskit import pack_strings, pack_bytes, unpack_bytes, unpack_strings
 from tskit import validate_provenance
 
