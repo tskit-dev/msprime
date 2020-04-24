@@ -909,7 +909,7 @@ class SimulationVerifier:
                 gene_conversion_track_length=gc_length[k],
                 num_replicates=R,
             )
-            for j, ts in enumerate(replicates):
+            for ts in replicates:
                 firstroot = ts.first().root
                 lastroot = ts.last().root
                 for tree in ts.trees():
@@ -930,9 +930,7 @@ class SimulationVerifier:
             # Predicted prob
             # From Wiuf, Hein, 2000, eqn (15), pg. 457
             rG = (
-                2
-                / gc_length_rate_ratio[k]
-                * (1.0 - np.exp(-np.arange(seq_length) / gc_length[k]))
+                2 / gc_length_rate_ratio[k] * (1.0 - np.exp(-np.arange(seq_length) / l))
             )
             predicted_prob[k, :] = (18.0 + rG) / (18.0 + 13.0 * rG + rG * rG)
 
@@ -2196,7 +2194,7 @@ class SimulationVerifier:
         )
 
         population_configurations = []
-        for i in range(N):
+        for _ in range(N):
             population_configurations.append(
                 msprime.PopulationConfiguration(
                     sample_size=np.random.randint(1, 10), initial_size=int(1000 / N)
@@ -2485,7 +2483,7 @@ class SimulationVerifier:
 
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
-        for j, ts in enumerate(reps):
+        for ts in reps:
             for tree in ts.trees():
                 tot_bl = 0.0
                 tbl = [0] * (sample_size - 1)
@@ -2539,7 +2537,7 @@ class SimulationVerifier:
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
         tot_bl_sum = [0]
-        for j, ts in enumerate(reps):
+        for ts in reps:
             for tree in ts.trees():
                 tot_bl = 0.0
                 tbl = [0] * (sample_size - 1)
@@ -2837,7 +2835,7 @@ class SimulationVerifier:
 
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
-        for j, ts in enumerate(reps):
+        for ts in reps:
             for tree in ts.trees():
                 tot_bl = 0.0
                 tbl = [0] * (sample_size - 1)
@@ -2889,7 +2887,7 @@ class SimulationVerifier:
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
         tot_bl_sum = [0]
-        for j, ts in enumerate(reps):
+        for ts in reps:
             for tree in ts.trees():
                 tot_bl = 0.0
                 tbl = [0] * (sample_size - 1)
@@ -2966,7 +2964,7 @@ class SimulationVerifier:
             os.mkdir(basedir)
         empirical_theta = []
         empirical_rho = []
-        for i in range(1, 500):
+        for _ in range(1, 500):
             ts = msprime.simulate(
                 Ne=Ne,
                 recombination_rate=r,
@@ -3535,7 +3533,7 @@ class SimulationVerifier:
                 cmd += f" -eN 0 {random.random()}"
         # Add some demographic events
         t = 0
-        for j in range(num_demographic_events):
+        for _ in range(num_demographic_events):
             t += 0.125
             if random.random() < 0.5:
                 cmd += f" -eG {t} {random.random()}"

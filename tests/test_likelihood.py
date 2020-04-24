@@ -584,13 +584,13 @@ class TestOddTopologies(unittest.TestCase):
 
     def test_zero_edges(self):
         tables = tskit.TableCollection(1)
-        for j in range(2):
+        for _ in range(2):
             tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE)
         self.verify(tables.tree_sequence())
 
     def test_no_edges_mutations(self):
         tables = tskit.TableCollection(1)
-        for j in range(2):
+        for _ in range(2):
             tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE)
         tables.sites.add_row(0, "A")
         tables.mutations.add_row(0, 0, "T")

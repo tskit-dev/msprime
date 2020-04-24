@@ -625,7 +625,7 @@ class TestInterval(unittest.TestCase):
         ts = msprime.simulate(10, random_seed=2)
         for start, end in [(-2, -3), (1, 0), (1e6, 1e5)]:
             with self.assertRaises(ValueError):
-                msprime.mutate(ts, start_time=-2.0, end_time=-3.0)
+                msprime.mutate(ts, start_time=start, end_time=end)
 
     def test_stick_tree(self):
         tables = msprime.TableCollection(1.0)
@@ -1069,7 +1069,13 @@ class Site:
         return s
 
     def add_mutation(
-        self, node, time, new, derived_state=None, metadata=b"", id=tskit.NULL
+        self,
+        node,
+        time,
+        new,
+        derived_state=None,
+        metadata=b"",
+        id=tskit.NULL,  # noqa: A002
     ):
         mutation = Mutation(
             node=node,
@@ -1093,7 +1099,7 @@ class Mutation:
     time = attr.ib()
     new = attr.ib()
     keep = attr.ib()
-    id = attr.ib()
+    id = attr.ib()  # noqa: A003
 
     def __str__(self):
         if self.parent is None:
@@ -1311,7 +1317,7 @@ class PythonMutationGenerator:
         j = 0
         mutation_id_offset = 0
         tree_parent = np.repeat(tskit.NULL, tables.nodes.num_rows)
-        for (tree_left, tree_right), edges_out, edges_in in ts.edge_diffs():
+        for (_tree_left, tree_right), edges_out, edges_in in ts.edge_diffs():
             for edge in edges_out:
                 tree_parent[edge.child] = tskit.NULL
             for edge in edges_in:

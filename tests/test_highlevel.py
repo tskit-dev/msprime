@@ -373,7 +373,7 @@ class TestSimulator(HighLevelTestCase):
 
     def test_random_parameters(self):
         num_random_sims = 10
-        for j in range(num_random_sims):
+        for _ in range(num_random_sims):
             n = random.randint(2, 100)
             m = random.randint(10, 100)
             r = random.random()

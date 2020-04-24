@@ -201,11 +201,13 @@ def parse_provenance(provenance, current_ts):
 
 
 def _human_readable_size(size, decimal_places=2):
+    chosen_unit = "TB"
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size < 1024.0:
+            chosen_unit = unit
             break
         size /= 1024.0
-    return f"{size:.{decimal_places}f}{unit}"
+    return f"{size:.{decimal_places}f}{chosen_unit}"
 
 
 def json_encode_provenance(provenance_dict, num_replicates=1):

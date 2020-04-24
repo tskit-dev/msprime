@@ -295,7 +295,7 @@ class SimulationRunner:
         # The first line of ms's output is the command line.
         print(" ".join(sys.argv), file=output)
         print(" ".join(str(s) for s in self._ms_random_seeds), file=output)
-        for j in range(self._num_replicates):
+        for _ in range(self._num_replicates):
             self._simulator.run()
             tree_sequence = self._simulator.get_tree_sequence(self._mutation_generator)
             print(file=output)
@@ -1013,7 +1013,7 @@ def mspms_main(arg_list=None):
 #######################################################
 
 
-def exit(message):
+def exit(message):  # noqa: A001
     sys.exit(message)
 
 
