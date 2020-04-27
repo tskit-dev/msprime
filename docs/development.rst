@@ -28,10 +28,20 @@ Quickstart
 - Build the low level module by running ``make`` in the project root.
 - Run the tests to ensure everything has worked: ``python3 -m nose -vs``. These should
   all pass.
-- Make your changes in a local branch, and open a pull request on GitHub when you
-  are ready. Please make sure that (a) the tests pass before you open the PR; and
-  (b) your code passes PEP8 checks (see below for a git commit hook to ensure this
-  happens automatically) before opening the PR.
+- Install the pre-commit checks: ``pre-commit install``
+- Make your changes in a local branch. On each commit a `pre-commit hook
+  <https://pre-commit.com/>`_  will run
+  checks for code style and common problems.
+  Sometimes these will report "files were modified by this hook" ``git add``
+  and ``git commit --amend`` will update the commit with the automatically modified
+  version.
+  The modifications made are for consistency, code readability and designed to
+  minimise merge conflicts. They are guaranteed not to modify the functionality of the
+  code. To run the checks without committing use ``pre-commit run``. To bypass
+  the checks (to save or get feedback on work-in-progress) use ``git commit
+  --no-verify``
+- When ready open a pull request on GitHub. Please make sure that the tests pass before
+  you open the PR, unless you want to ask the community for help with a failing test.
 - See the `tskit documentation <https://tskit.readthedocs.io/en/latest/development.html#github-workflow>`_
   for more details on the recommended GitHub workflow.
 
@@ -42,16 +52,19 @@ Continuous integration tests
 Three different continuous integration providers are used, which run different
 combinations of tests on different platforms:
 
-1. `Travis CI <https://travis-ci.org/>`_ runs tests on Linux and OSX using the
+1. A `Github action <https://help.github.com/en/actions>`_ runs `pre-commit
+   <https://pre-commit.com/>`_ to run a variety of code style and quality checks.
+
+2. `Travis CI <https://travis-ci.org/>`_ runs tests on Linux and OSX using the
    `Conda <https://conda.io/docs/>`__ infrastructure for the system level
    requirements. All supported versions of Python are tested here.
 
-2. `CircleCI <https://circleci.com/>`_ Runs all Python tests using the apt-get
+3. `CircleCI <https://circleci.com/>`_ Runs all Python tests using the apt-get
    infrastructure for system requirements. Additionally, the low-level tests
    are run, coverage statistics calculated using `CodeCov <https://codecov.io/gh>`__,
    and the documentation built.
 
-3. `AppVeyor <https://www.appveyor.com/>`_ Runs Python tests on Windows using conda.
+4. `AppVeyor <https://www.appveyor.com/>`_ Runs Python tests on Windows using conda.
 
 +++++++++++++++++++++++++++++++++++++++++++++++++
 Running tests on multiple Python versions locally
@@ -114,18 +127,8 @@ Conventions
 
 All Python code follows the `PEP8 <https://www.python.org/dev/peps/pep-0008/>`_ style
 guide, and is checked using the `flake8 <http://flake8.pycqa.org/en/latest/>`_  tool as
-part of the continuous integration tests. In particular, lines must be no longer than
-89 characters.
-
-To avoid failing CI tests, it's a good idea to install a local `commit hook
-<http://git-scm.com/book/gr/v2/Customizing-Git-Git-Hooks>`_ to automatically check
-that code conforms to PEP8 before committing. The following commands install the hook
-and configure git to prevent commits that violate the checks:
-
-.. code-block:: bash
-
-    flake8 --install-hook git
-    git config --bool flake8.strict true
+part of the continuous integration tests. `Black <https://github.com/psf/black>`_ is
+used as part of the pre-commit hook for python code style and formatting.
 
 +++++++++
 Packaging
