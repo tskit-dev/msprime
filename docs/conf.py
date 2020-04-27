@@ -11,20 +11,19 @@
 #
 # All configuration values have a default; values that are commented out
 # serve to show the default.
-
-import sys
 import os
+import sys
+from unittest.mock import MagicMock
+
 import pkg_resources
 from docutils import nodes
-from sphinx.util.docfields import TypedField
 from sphinx import addnodes
+from sphinx.util.docfields import TypedField
 
 # It's easier not to try to build the low-level module for the
 # documentation build on readthedocs, so we mock the module. Follows
 # the recommended pattern at
 # http://docs.readthedocs.org/en/latest/faq.html
-
-from unittest.mock import MagicMock
 
 
 class Mock(MagicMock):

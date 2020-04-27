@@ -27,27 +27,26 @@ import inspect
 import json
 import logging
 import math
-import sys
 import os
+import sys
 import warnings
 
-import tskit
 import numpy as np
+import tskit
 
-from . import utils
-from . import provenance
-from . import mutations
 import _msprime
-
+from . import mutations
+from . import provenance
+from . import utils
 from _msprime import NODE_IS_CA_EVENT  # NOQA
-from _msprime import NODE_IS_RE_EVENT  # NOQA
-from _msprime import NODE_IS_MIG_EVENT  # NOQA
 from _msprime import NODE_IS_CEN_EVENT  # NOQA
+from _msprime import NODE_IS_MIG_EVENT  # NOQA
+from _msprime import NODE_IS_RE_EVENT  # NOQA
+from _msprime import RandomGenerator
 
 # Make the low-level generator appear like its from this module
 # NOTE: Using these classes directly from client code is undocumented
 # and may be removed in future versions.
-from _msprime import RandomGenerator
 
 # Make sure the GSL error handler is turned off so that we can be sure that
 # we don't abort on errors. This can be reset by using the function

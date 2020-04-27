@@ -23,6 +23,7 @@ import random
 import unittest
 
 import numpy as np
+
 import msprime
 
 NULL_NODE = -1

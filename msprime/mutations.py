@@ -21,13 +21,13 @@ Module responsible for generating mutations on a given tree sequence.
 """
 import inspect
 import sys
+
+import numpy as np
 import tskit
 
 import _msprime
-from . import utils
 from . import provenance
-
-import numpy as np
+from . import utils
 
 
 class MutationModel(_msprime.MutationModel):

@@ -20,13 +20,13 @@
 Tests for the provenance information attached to tree sequences.
 """
 import base64
+import json
 import marshal
 import unittest
-import json
 
-import tskit
 import numpy as np
 import python_jsonschema_objects as pjs
+import tskit
 
 import _msprime
 import msprime

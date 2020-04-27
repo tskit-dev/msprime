@@ -19,9 +19,9 @@
 """
 Test cases for the high level interface to utils.
 """
-import unittest
 import multiprocessing
 import sys
+import unittest
 
 import msprime.utils as utils
 

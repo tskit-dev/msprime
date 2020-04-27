@@ -1,7 +1,7 @@
 import os
 import shutil
-import unittest
 import tempfile
+import unittest
 
 import numpy as np
 

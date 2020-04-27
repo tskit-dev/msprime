@@ -7,6 +7,11 @@ repos:
       - id: mixed-line-ending
       - id: check-case-conflict
       - id: check-yaml
+  - repo: https://github.com/asottile/reorder_python_imports
+    rev: v2.1.0
+    hooks:
+      - id: reorder-python-imports
+        args: [--unclassifiable-application-module=_msprime]
   - repo: https://github.com/psf/black
     rev: 19.10b0
     hooks:

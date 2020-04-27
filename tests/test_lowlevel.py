@@ -24,13 +24,13 @@ import itertools
 import math
 import random
 import unittest
-import numpy as np
 
+import _tskit
+import numpy as np
 import tskit
 
-import tests
 import _msprime
-import _tskit
+import tests
 
 # Root node marker
 NULL_NODE = -1

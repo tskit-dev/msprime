@@ -1,16 +1,17 @@
 """
 Python version of the simulation algorithm.
 """
-import sys
-import random
 import argparse
 import heapq
 import math
-import numpy as np
+import random
+import sys
 
 import bintrees
-import msprime
+import numpy as np
 import tskit
+
+import msprime
 
 
 class FenwickTree(object):

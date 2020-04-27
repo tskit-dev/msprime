@@ -19,14 +19,14 @@
 """
 Test cases for the simulate-from functionality.
 """
-import unittest
 import itertools
+import unittest
 
 import numpy as np
 import tskit
 
-import msprime
 import _msprime
+import msprime
 import tests.tsutil as tsutil
 import tests.wright_fisher as wf
 

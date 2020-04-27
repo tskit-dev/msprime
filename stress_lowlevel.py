@@ -3,18 +3,18 @@ Code to stress the low-level API as much as possible to expose
 any memory leaks or error handling issues.
 """
 import argparse
-import unittest
+import logging
+import os
 import random
 import resource
-import os
 import sys
 import time
-import logging
+import unittest
 
 import tests.test_demography as test_demography
+import tests.test_dict_encoding as test_dict_encoding
 import tests.test_highlevel as test_highlevel
 import tests.test_lowlevel as test_lowlevel
-import tests.test_dict_encoding as test_dict_encoding
 import tests.test_recombination_map as test_recombination_map
 
 
