@@ -29,7 +29,7 @@ import msprime
 
 
 def add_provenance(provenance_table, method_name):
-    d = provenance.get_provenance_dict({"command": "tsutil.{}".format(method_name)})
+    d = provenance.get_provenance_dict({"command": f"tsutil.{method_name}"})
     provenance_table.add_row(json.dumps(d))
 
 
@@ -511,7 +511,7 @@ def algorithm_T(ts):
         left = right
 
 
-class LinkedTree(object):
+class LinkedTree:
     """
     Straightforward implementation of the quintuply linked tree for developing
     and testing the sample lists feature.

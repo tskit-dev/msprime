@@ -50,7 +50,7 @@ class MutationModel(_msprime.MutationModel):
 
     def __str__(self):
         alleles = " ".join([x.decode() for x in self.alleles])
-        s = "Mutation model with alleles {}\n".format(alleles)
+        s = f"Mutation model with alleles {alleles}\n"
         s += "  root distribution: {}\n".format(
             " ".join(map(str, self.root_distribution))
         )
@@ -113,7 +113,7 @@ class InfiniteSites(MutationModel):
         )
 
 
-class MutationMap(object):
+class MutationMap:
     # TODO Get rid of this class and use IntervalMap (or maybe IntervalRateMap) instead.
     # See
     # https://github.com/tskit-dev/msprime/issues/902

@@ -185,7 +185,7 @@ class TestMutationModel(unittest.TestCase):
         self.validate_stationary(model)
 
 
-class MutateMixin(object):
+class MutateMixin:
     def verify_topology(self, source, dest):
         self.assertEqual(source.nodes, dest.nodes)
         self.assertEqual(source.edges, dest.edges)
@@ -875,7 +875,7 @@ class TestKeep(unittest.TestCase):
         self.assertEqual(t1, t2)
 
 
-class StatisticalTestMixin(object):
+class StatisticalTestMixin:
 
     p_threshold = 0.01
 
@@ -1054,7 +1054,7 @@ def py_mutate(ts, rate=None, random_seed=None, model=None, keep=False, discrete=
 
 
 @attr.s
-class Site(object):
+class Site:
     position = attr.ib()
     ancestral_state = attr.ib()
     metadata = attr.ib()
@@ -1085,7 +1085,7 @@ class Site(object):
 
 
 @attr.s
-class Mutation(object):
+class Mutation:
     node = attr.ib()
     derived_state = attr.ib()
     parent = attr.ib()
@@ -1117,7 +1117,7 @@ def cmp_mutation(a, b):
     return out
 
 
-class PythonMutationGenerator(object):
+class PythonMutationGenerator:
     """
     Python implementation of the C code which should produce precisely the same
     results.

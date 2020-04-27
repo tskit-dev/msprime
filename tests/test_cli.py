@@ -981,7 +981,7 @@ class TestMspmsArgsFromFileErrors(TestCli):
     def test_file_arg_in_file(self):
         with open(self.temp_file, "w") as f:
             f.write("-f otherfile")
-        self.assert_parser_error("10 1 -f {}".format(self.temp_file))
+        self.assert_parser_error(f"10 1 -f {self.temp_file}")
 
     def test_missing_file(self):
         self.assert_parser_error("10 1 -f /does/not/exist")
@@ -1675,7 +1675,7 @@ class TestMspConversionOutput(unittest.TestCase):
         ]
         self.assertEqual(len(variants), len(output_variants))
         for (pos, v), line in zip(variants, output_variants):
-            self.assertEqual("{}\t{}".format(pos, v), line)
+            self.assertEqual(f"{pos}\t{v}", line)
 
     def test_variants(self):
         cmd = "variants"

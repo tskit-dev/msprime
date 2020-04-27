@@ -30,7 +30,7 @@ CONDA_PREFIX = os.getenv("MSP_CONDA_PREFIX", None)
 IS_WINDOWS = platform.system() == "Windows"
 
 
-class PathConfigurator(object):
+class PathConfigurator:
     """
     A class to attempt configuration of the compile search paths
     on various platforms.
@@ -42,7 +42,7 @@ class PathConfigurator(object):
         try:
             self._configure_gsl()
         except OSError as e:
-            warn("Error occured getting GSL path config: {}".format(e))
+            warn(f"Error occured getting GSL path config: {e}")
         # If the conda prefix is defined, then we are compiling in a conda
         # context. All include and lib paths should come from within this prefix.
         if CONDA_PREFIX is not None:
@@ -154,13 +154,11 @@ setup(
     keywords=["Coalescent simulation", "ms"],
     license="GNU GPLv3+",
     platforms=["POSIX", "Windows", "MacOS X"],
-    python_requires=">=3.4",
+    python_requires=">=3.6",
     classifiers=[
         "Programming Language :: C",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.4",
-        "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3 :: Only",

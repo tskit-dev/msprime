@@ -187,7 +187,7 @@ def plot_dtwf_coalescent_stats(basedir, df):
     df_dtwf = df[df.model == "dtwf"]
     for stat in ["tmrca_mean", "num_trees"]:
         plot_qq(df_hudson[stat], df_dtwf[stat])
-        f = os.path.join(basedir, "{}.png".format(stat))
+        f = os.path.join(basedir, f"{stat}.png")
         pyplot.savefig(f, dpi=72)
         pyplot.close("all")
 
@@ -217,7 +217,7 @@ def plot_tree_intervals(basedir, df):
     pyplot.close("all")
 
 
-class SimulationVerifier(object):
+class SimulationVerifier:
     """
     Class to compare msprime against ms to ensure that the same distributions
     of values are output under the same parameters.
@@ -360,7 +360,7 @@ class SimulationVerifier(object):
         }
         for j in range(num_populations ** 2):
             events = [mig_events[k][j] for k in range(replicates)]
-            d["mig_events_{}".format(j)] = events
+            d[f"mig_events_{j}"] = events
         d["breakpoints"] = breakpoints
         df = pd.DataFrame(d)
         return df
@@ -753,13 +753,13 @@ class SimulationVerifier(object):
 
             sm.graphics.qqplot(T_w_ms)
             sm.qqplot_2samples(T_w_ms, T_w_msp, line="45")
-            f = os.path.join(basedir, "within_{}.png".format(d))
+            f = os.path.join(basedir, f"within_{d}.png")
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(T_b_ms)
             sm.qqplot_2samples(T_b_ms, T_b_msp, line="45")
-            f = os.path.join(basedir, "between_{}.png".format(d))
+            f = os.path.join(basedir, f"between_{d}.png")
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
@@ -800,14 +800,14 @@ class SimulationVerifier(object):
         if not os.path.exists(basedir):
             os.mkdir(basedir)
         for n in range(2, 15):
-            cmd = "{} {} -t {}".format(n, R, theta)
+            cmd = f"{n} {R} -t {theta}"
             S_ms = self.get_segregating_sites_histogram(
                 self._ms_executable + cmd.split() + self.get_ms_seeds()
             )
             S_msp = self.get_segregating_sites_histogram(
                 self._mspms_executable + cmd.split() + self.get_ms_seeds()
             )
-            filename = os.path.join(basedir, "{}.png".format(n))
+            filename = os.path.join(basedir, f"{n}.png")
 
             fig, ax = pyplot.subplots()
             index = np.arange(10)
@@ -1091,7 +1091,7 @@ class SimulationVerifier(object):
         Returns an array of the R total branch length values from
         the specified ms-like executable.
         """
-        cmd = executable + "{} {} -T -p 10".format(n, R).split()
+        cmd = executable + f"{n} {R} -T -p 10".split()
         cmd += self.get_ms_seeds()
         print("\t", " ".join(cmd))
         output = subprocess.check_output(cmd)
@@ -1128,7 +1128,7 @@ class SimulationVerifier(object):
 
             sm.graphics.qqplot(tbl_ms)
             sm.qqplot_2samples(tbl_ms, tbl_msp, line="45")
-            filename = os.path.join(basedir, "qqplot_{}.png".format(n))
+            filename = os.path.join(basedir, f"qqplot_{n}.png")
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
@@ -1148,7 +1148,7 @@ class SimulationVerifier(object):
             pyplot.legend()
             # pyplot.xticks(index + bar_width, [str(j) for j in index])
             pyplot.tight_layout()
-            filename = os.path.join(basedir, "hist_{}.png".format(n))
+            filename = os.path.join(basedir, f"hist_{n}.png")
             pyplot.savefig(filename)
 
     def get_num_trees(self, cmd, R):
@@ -1409,7 +1409,7 @@ class SimulationVerifier(object):
 
                 sm.graphics.qqplot(T1)
                 sm.qqplot_2samples(T1, T2, line="45")
-                filename = os.path.join(basedir, "T_mrca_n={}_t={}.png".format(n, t))
+                filename = os.path.join(basedir, f"T_mrca_n={n}_t={t}.png")
                 pyplot.savefig(filename, dpi=72)
                 pyplot.close("all")
 
@@ -1454,13 +1454,13 @@ class SimulationVerifier(object):
 
                 sm.graphics.qqplot(T1)
                 sm.qqplot_2samples(T1, T2, line="45")
-                filename = os.path.join(basedir, "T_mrca_m={}_t={}.png".format(m, t))
+                filename = os.path.join(basedir, f"T_mrca_m={m}_t={t}.png")
                 pyplot.savefig(filename, dpi=72)
                 pyplot.close("all")
 
                 sm.graphics.qqplot(num_trees1)
                 sm.qqplot_2samples(num_trees1, num_trees2, line="45")
-                filename = os.path.join(basedir, "num_trees_m={}_t={}.png".format(m, t))
+                filename = os.path.join(basedir, f"num_trees_m={m}_t={t}.png")
                 pyplot.savefig(filename, dpi=72)
                 pyplot.close("all")
 
@@ -1531,25 +1531,25 @@ class SimulationVerifier(object):
 
             sm.graphics.qqplot(T1)
             sm.qqplot_2samples(T1, T2, line="45")
-            filename = os.path.join(basedir, "T_mrca_t={}.png".format(t))
+            filename = os.path.join(basedir, f"T_mrca_t={t}.png")
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_trees1)
             sm.qqplot_2samples(num_trees1, num_trees2, line="45")
-            filename = os.path.join(basedir, "num_trees_t={}.png".format(t))
+            filename = os.path.join(basedir, f"num_trees_t={t}.png")
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_edges1)
             sm.qqplot_2samples(num_edges1, num_edges2, line="45")
-            filename = os.path.join(basedir, "num_edges_t={}.png".format(t))
+            filename = os.path.join(basedir, f"num_edges_t={t}.png")
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_nodes1)
             sm.qqplot_2samples(num_nodes1, num_nodes2, line="45")
-            filename = os.path.join(basedir, "num_nodes_t={}.png".format(t))
+            filename = os.path.join(basedir, f"num_nodes_t={t}.png")
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
@@ -1687,43 +1687,43 @@ class SimulationVerifier(object):
 
             sm.graphics.qqplot(T1)
             sm.qqplot_2samples(T1, T2, line="45")
-            filename = os.path.join(basedir, "T_mrca_t={}.png".format(t))
+            filename = os.path.join(basedir, f"T_mrca_t={t}.png")
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_trees1)
             sm.qqplot_2samples(num_trees1, num_trees2, line="45")
-            filename = os.path.join(basedir, "num_trees_t={}.png".format(t))
+            filename = os.path.join(basedir, f"num_trees_t={t}.png")
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_edges1)
             sm.qqplot_2samples(num_edges1, num_edges2, line="45")
-            filename = os.path.join(basedir, "num_edges_t={}.png".format(t))
+            filename = os.path.join(basedir, f"num_edges_t={t}.png")
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_nodes1)
             sm.qqplot_2samples(num_nodes1, num_nodes2, line="45")
-            filename = os.path.join(basedir, "num_nodes_t={}.png".format(t))
+            filename = os.path.join(basedir, f"num_nodes_t={t}.png")
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_ca_events1)
             sm.qqplot_2samples(num_ca_events1, num_ca_events2, line="45")
-            filename = os.path.join(basedir, "num_ca_events_t={}.png".format(t))
+            filename = os.path.join(basedir, f"num_ca_events_t={t}.png")
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_re_events1)
             sm.qqplot_2samples(num_re_events1, num_re_events2, line="45")
-            filename = os.path.join(basedir, "num_re_events_t={}.png".format(t))
+            filename = os.path.join(basedir, f"num_re_events_t={t}.png")
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_mig_events1)
             sm.qqplot_2samples(num_mig_events1, num_mig_events2, line="45")
-            filename = os.path.join(basedir, "num_mig_events_t={}.png".format(t))
+            filename = os.path.join(basedir, f"num_mig_events_t={t}.png")
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
@@ -1741,7 +1741,7 @@ class SimulationVerifier(object):
             )
             duration = time.perf_counter() - before
 
-            print("Full sim required {:.2f} sec".format(duration))
+            print(f"Full sim required {duration:.2f} sec")
 
             before = time.perf_counter()
             t = ts.tables.nodes.time[-1] / 100
@@ -1754,7 +1754,7 @@ class SimulationVerifier(object):
                 end_time=t,
             )
             duration = time.perf_counter() - before
-            print("Initial sim required {:.2f} sec".format(duration))
+            print(f"Initial sim required {duration:.2f} sec")
             roots = np.array([tree.num_roots for tree in ts.trees()])
             print("\t", roots.shape[0], "trees, mean roots = ", np.mean(roots))
             before = time.perf_counter()
@@ -1766,7 +1766,7 @@ class SimulationVerifier(object):
                 random_seed=seed,
             )
             duration = time.perf_counter() - before
-            print("Final sim required {:.2f} sec".format(duration))
+            print(f"Final sim required {duration:.2f} sec")
 
     def run_dtwf_pedigree_comparison(self, test_name, **kwargs):
         df = pd.DataFrame()
@@ -1817,7 +1817,7 @@ class SimulationVerifier(object):
             v2 = df_dtwf[stat]
             sm.graphics.qqplot(v1)
             sm.qqplot_2samples(v1, v2, line="45")
-            f = os.path.join(basedir, "{}.png".format(stat))
+            f = os.path.join(basedir, f"{stat}.png")
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
@@ -2310,7 +2310,7 @@ class SimulationVerifier(object):
             v2 = df_dtwf[stat]
             sm.graphics.qqplot(v1)
             sm.qqplot_2samples(v1, v2, line="45")
-            f = os.path.join(basedir, "{}.png".format(stat))
+            f = os.path.join(basedir, f"{stat}.png")
             pyplot.xlabel("DTWF")
             pyplot.ylabel("SLiM")
             pyplot.savefig(f, dpi=72)
@@ -2431,7 +2431,7 @@ class SimulationVerifier(object):
             v2 = df_xi[stat]
             sm.graphics.qqplot(v1)
             sm.qqplot_2samples(v1, v2, line="45")
-            f = os.path.join(basedir, "{}.png".format(stat))
+            f = os.path.join(basedir, f"{stat}.png")
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
@@ -2505,7 +2505,7 @@ class SimulationVerifier(object):
         basedir = os.path.join("tmp__NOBACKUP__", "xi_dirac_expected_sfs")
         if not os.path.exists(basedir):
             os.mkdir(basedir)
-        f = os.path.join(basedir, "n={}_psi={}_c={}.png".format(sample_size, psi, c))
+        f = os.path.join(basedir, f"n={sample_size}_psi={psi}_c={c}.png")
         ax = sns.violinplot(
             data=data, x="num_leaves", y="total_branch_length", color="grey"
         )
@@ -2560,7 +2560,7 @@ class SimulationVerifier(object):
         basedir = os.path.join("tmp__NOBACKUP__", "xi_dirac_expected_sfs")
         if not os.path.exists(basedir):
             os.mkdir(basedir)
-        f = os.path.join(basedir, "n={}_psi={}_c={}.png".format(sample_size, psi, c))
+        f = os.path.join(basedir, f"n={sample_size}_psi={psi}_c={c}.png")
         ax = sns.violinplot(
             data=data, x="num_leaves", y="total_branch_length", color="grey"
         )
@@ -2857,7 +2857,7 @@ class SimulationVerifier(object):
         basedir = os.path.join("tmp__NOBACKUP__", "xi_beta_expected_sfs")
         if not os.path.exists(basedir):
             os.mkdir(basedir)
-        f = os.path.join(basedir, "n={}_alpha={}.png".format(sample_size, alpha))
+        f = os.path.join(basedir, f"n={sample_size}_alpha={alpha}.png")
         ax = sns.violinplot(
             data=data, x="num_leaves", y="total_branch_length", color="grey"
         )
@@ -2909,7 +2909,7 @@ class SimulationVerifier(object):
         basedir = os.path.join("tmp__NOBACKUP__", "xi_beta_expected_sfs")
         if not os.path.exists(basedir):
             os.mkdir(basedir)
-        f = os.path.join(basedir, "n={}_alpha={}.png".format(sample_size, alpha))
+        f = os.path.join(basedir, f"n={sample_size}_alpha={alpha}.png")
         ax = sns.violinplot(
             data=data, x="num_leaves", y="total_branch_length", color="grey"
         )
@@ -3500,14 +3500,14 @@ class SimulationVerifier(object):
                 t += 0.125
                 u = random.random()
                 if u < 0.33:
-                    cmd += " -eM {} {}".format(t, random.random())
+                    cmd += f" -eM {t} {random.random()}"
                 elif u < 0.66:
                     j = random.randint(1, N)
                     k = j
                     while k == j:
                         k = random.randint(1, N)
                     r = random.random()
-                    cmd += " -em {} {}".format(t, j, k, r)
+                    cmd += f" -em {t} {j}"
                 else:
                     migration_matrix = [
                         random.random() * (j % (N + 1) != 0) for j in range(N ** 2)
@@ -3519,17 +3519,17 @@ class SimulationVerifier(object):
         # Set some initial growth rates, etc.
         if N == 1:
             if random.random() < 0.5:
-                cmd += " -G {}".format(random.random())
+                cmd += f" -G {random.random()}"
             else:
-                cmd += " -eN 0 {}".format(random.random())
+                cmd += f" -eN 0 {random.random()}"
         # Add some demographic events
         t = 0
         for j in range(num_demographic_events):
             t += 0.125
             if random.random() < 0.5:
-                cmd += " -eG {} {}".format(t, random.random())
+                cmd += f" -eG {t} {random.random()}"
             else:
-                cmd += " -eN {} {}".format(t, random.random())
+                cmd += f" -eN {t} {random.random()}"
 
         self.add_ms_instance(key, cmd)
 
