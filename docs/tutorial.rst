@@ -1731,8 +1731,8 @@ Running this code we get::
     ┃ ┃ ┃ ┏━╋━┓ ┃ ┃ ┃ ┃
     8 9 2 0 4 6 1 3 5 7
 
-The specified value of :math:`\\alpha = 1.001` corresponds to a heavily skewed
-offspring distribution. Values closer to :math:`\\alpha = 2` result in trees
+The specified value of :math:`\alpha = 1.001` corresponds to a heavily skewed
+offspring distribution. Values closer to :math:`\alpha = 2` result in trees
 whose distribution is closer to that of the standard coalescent, often featuring
 no multiple mergers for small sample sizes:
 
@@ -1767,17 +1767,17 @@ Running this code we get::
     ┃ ┃ ┃ ┃ ┃ ┃ ┃ ┃ ┏┻┓
     5 2 3 7 8 0 6 9 1 4
 
-The timescale of the Beta-Xi-coalescent depends nonlinearly on both `alpha`
-and the effective population size `Ne` as detailed in
-:ref:`_sec_api_simulation_models_multiple_mergers`. For a fixed :math:`\\alpha`,
-a unit of coalescent time is proportional to :math:`Ne^{\\alpha - 1}` generations,
-albeit with a complicated constant of proportionality that depends on :math:`\\alpha`.
-The dependence on :math:`\\alpha` for fixed :math:`Ne` is not monotone.
+The timescale of the Beta-Xi-coalescent depends nonlinearly on both :math:`\alpha`
+and the effective population size :math:`N_e` as detailed in
+:ref:`sec_api_simulation_models_multiple_mergers`. For a fixed :math:`\alpha`,
+a unit of coalescent time is proportional to :math:`N_e^{\alpha - 1}` generations,
+albeit with a complicated constant of proportionality that depends on :math:`\alpha`.
+The dependence on :math:`\alpha` for fixed :math:`N_e` is not monotone.
 Since two lineages merge in 0.5 units of coalescent time on average regadless of
-:math:`Ne` and :math:`alpha`, the time to their most recent common ancestor depends 
-on both of these paramenters when measured in generations.
+:math:`N_e` and :math:`\alpha`, the time to their most recent common ancestor depends
+on both of these parameters when measured in generations.
 
-To illustrate, for :math:`alpha` close to 2 the relationship between effective
+To illustrate, for :math:`\alpha` close to 2 the relationship between effective
 population size and number of generations is almost linear:
 
 .. code-block:: python
@@ -1801,7 +1801,7 @@ which results in::
     1.5705367504768712
     99.09416974894381
 
-For :math:`alpha` close to 1 the effective population size has little effect:
+For :math:`\alpha` close to 1 the effective population size has little effect:
 
 .. code-block:: python
 
@@ -1837,28 +1837,26 @@ The Dirac-Xi-coalescent is simulated similarly:
 
 which gives::
 
-         15
-      ┏━━━┻━━┓
-      ┃     14
-      ┃   ┏━━┻━━┓
-     12   ┃    13
-    ┏━╋━┓ ┃ ┏━┳━╋━━━┓
-    ┃ ┃ ┃ ┃ ┃ ┃ ┃  11
-    ┃ ┃ ┃ ┃ ┃ ┃ ┃ ┏━┻┓
-    ┃ ┃ ┃ ┃ ┃ ┃ ┃ ┃ 10
-    ┃ ┃ ┃ ┃ ┃ ┃ ┃ ┃ ┏┻┓
-    1 4 6 8 0 7 9 2 3 5
+           14
+       ┏━━━━┻━━━┓
+       ┃       13
+       ┃      ┏━┻━━┓
+      12      ┃    ┃
+    ┏━┳┻━━┓   ┃    ┃
+    ┃ ┃  11   ┃   10
+    ┃ ┃ ┏━╋━┓ ┃ ┏━┳┻┳━┓
+    2 6 3 4 8 1 0 5 7 9
 
 Larger values of the parameter :math:`c > 0` result in more frequent multiple
-mergers, while larger values of :math:`0 < psi <= 1` result in multiple mergers
+mergers, while larger values of :math:`0 < \psi \leq 1` result in multiple mergers
 with more participating lineages. Setting either parameter to 0 would correspond
 to the standard coalescent.
 
 The Dirac-Xi-coalescent is obtained as the infinite population scaling limit of
 Moran models, and therefore coalescent time is measured in units of
-:math:`Ne^2 (1 + c \\psi^2)` generations. However, under a Moran model, the
+:math:`N_e^2` generations. However, under a Moran model, the
 population-rescaled recombination rate is still obtained from the per-generation
-recombination probability by rescaling with :math:`Ne (1 + c \\psi^2)`.
+recombination probability by rescaling with :math:`N_e`.
 The overall effect is that coalescent branch lengths scale with the square of the
 effective population size in units of generations, and thus so do other quantities
 which depend on branch lengths such as the number of mutations, while the number of
@@ -1876,18 +1874,18 @@ recombinations scales linearly.
         sites = 0
         for t in ts:
             trees = trees + t.num_trees
-            sites = trees + t.num_sites
+            sites = sites + t.num_sites
         print(sites / trees)
 
 Running this code results in::
 
-    21.93897882938979
+    1241.8241770462635
 
-which is larger than 1, though less than :math:`Ne = 1000` because not every
-recombination event results in a new tree.
+which is larger than :math:`N_e = 1000` because not every recombination
+results in a new tree.
 
 This behaviour is a consequence of the time and parameter scalings under the Moran
 model, as well as the fact that ``msprime`` simulates recombinations on the coalescent
 time scale, but mutations on trees in units of generations. The rates of mutations
 and recombinations can be made commensurate by either dividing the mutation rate by
-:math:`Ne`, or multiplying the recombination rate by :math:`Ne`.
+:math:`N_e`, or multiplying the recombination rate by :math:`N_e`.

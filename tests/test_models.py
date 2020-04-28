@@ -605,7 +605,10 @@ class TestMixedModels(unittest.TestCase):
                     40, msprime.DiscreteTimeWrightFisher(100)
                 ),
                 msprime.SimulationModelChange(
-                    50, msprime.BetaCoalescent(reference_size=10)
+                    50,
+                    msprime.BetaCoalescent(
+                        reference_size=10, alpha=1.1, truncation_point=1
+                    ),
                 ),
                 msprime.SimulationModelChange(60, msprime.StandardCoalescent(0.1)),
             ],

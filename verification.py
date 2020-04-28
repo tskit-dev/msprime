@@ -3110,7 +3110,7 @@ class SimulationVerifier:
 
     def run_xi_dirac_recombinations(self):
         basedir = "tmp__NOBACKUP__/xi_dirac_recombinations"
-        Ne=100
+        Ne = 100
         for psi in [0.1, 0.3, 0.5, 0.9]:
             for c in [1, 10, 100]:
                 # The Dirac coalescent has branch lengths proportional to Ne^2
@@ -3123,7 +3123,7 @@ class SimulationVerifier:
                     sample_size=100,
                     Ne=Ne,
                     r=1e-8,
-                    m=1e-8/Ne,
+                    m=1e-8 / Ne,
                     L=10 ** 6,
                     model=msprime.DiracCoalescent(reference_size=Ne, psi=psi, c=c),
                 )

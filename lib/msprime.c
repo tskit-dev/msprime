@@ -5711,34 +5711,25 @@ msp_std_common_ancestor_event(msp_t *self, population_id_t population_id,
 static double
 dirac_model_time_to_generations(simulation_model_t *model, double t)
 {
-    double x = 1 + model->params.dirac_coalescent.c * gsl_pow_2(
-               model->params.dirac_coalescent.psi);
-    return 4 * gsl_pow_2(model->reference_size) * t * x;
+    return 4 * gsl_pow_2(model->reference_size) * t;
 }
 
 static double
 dirac_generations_to_model_time(simulation_model_t *model, double g)
 {
-
-    double x = 1 + model->params.dirac_coalescent.c * gsl_pow_2(
-               model->params.dirac_coalescent.psi);
-    return g / (4 * gsl_pow_2(model->reference_size) * x);
+    return g / (4 * gsl_pow_2(model->reference_size));
 }
 
 static double
 dirac_generation_rate_to_model_rate(simulation_model_t *model, double rate)
 {
-    double x = 1 + model->params.dirac_coalescent.c * gsl_pow_2(
-               model->params.dirac_coalescent.psi);
-    return rate * 4 * model->reference_size * x;
+    return rate * 4 * model->reference_size;
 }
 
 static double
 dirac_model_rate_to_generation_rate(simulation_model_t *model, double rate)
 {
-    double x = 1 + model->params.dirac_coalescent.c * gsl_pow_2(
-               model->params.dirac_coalescent.psi);
-    return rate / (4 * model->reference_size * x);
+    return rate / (4 * model->reference_size);
 }
 
 static double

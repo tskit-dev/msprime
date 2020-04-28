@@ -1969,11 +1969,12 @@ class BetaCoalescent(ParametricSimulationModel):
     standard coalescent. Firstly, the number of lineages that take part in each
     common ancestor event is random, with distribution determined by moments of
     the :math:`Beta(2 - \\alpha, \\alpha)`-distribution. In particular, when there
-    are :math:`n` lineages, each set of :math:`k <= n` of them participates in a
+    are :math:`n` lineages, each set of :math:`k \\leq n` of them participates in a
     common ancestor event at rate
 
     .. math::
-        8 \\int_0^1 x^{k - \\alpha - 1} (1 - x)^{n - k + \\alpha - 1} dx / B(2 - \\alpha, \\alpha),
+        \\frac{8}{B(2 - \\alpha, \\alpha)}
+        \\int_0^1 x^{k - \\alpha - 1} (1 - x)^{n - k + \\alpha - 1} dx,
 
     where :math:`B(2 - \\alpha, \\alpha)` is the Beta-function.
 
@@ -1990,24 +1991,26 @@ class BetaCoalescent(ParametricSimulationModel):
         rate :math:`n (n - 1)`.
 
     Secondly, the time scale predicted by the Beta-Xi-coalescent is proportional
-    to :math:`Ne^{\\alpha - 1}` generations. Specifically, one unit of coalescent time
-    corresponds to a number of generations given by
+    to :math:`N_e^{\\alpha - 1}` generations, where :math:`N_e` is the effective
+    population size. Specifically, one unit of coalescent time corresponds to
+    a number of generations given by
 
     .. math::
-        m^{\\alpha} Ne^{\\alpha - 1} / [\\alpha B(2 - \\alpha, \\alpha)],
+        \\frac{m^{\\alpha} N_e^{\\alpha - 1}}{\\alpha B(2 - \\alpha, \\alpha)},
 
     where
 
     .. math::
-        m = 2 + (2 / 3)^{\\alpha} 3 / (\\alpha - 1).
+        m = 2 + \\frac{2^{\\alpha}}{3^{\\alpha - 1} (\\alpha - 1)}.
 
-    Note that the time scale depends both on the effective population size :math:`Ne`
-    and :math:`alpha`, and can be dramatically shorter than the timescale of the 
+    Note that the time scale depends both on the effective population size :math:`N_e`
+    and :math:`\\alpha`, and can be dramatically shorter than the timescale of the
     standard coalescent. Thus, effective population sizes must often be many orders
     of magnitude larger than census population sizes. The per-generation recombination
     rate is rescaled similarly to obtain the population-rescaled recombination rate.
 
-    See `Schweinsberg (2003) <https://www.sciencedirect.com/science/article/pii/S0304414903000280>`_
+    See `Schweinsberg (2003)
+    <https://www.sciencedirect.com/science/article/pii/S0304414903000280>`_
     for the derivation of the common ancestor event rate, as well as the time scaling.
     Note however that the model of Schweinsberg (2003) is haploid, so that
     all participating lineages merge in a common ancestor event without
@@ -2019,15 +2022,16 @@ class BetaCoalescent(ParametricSimulationModel):
         would coincide with the standard coalescent.
     :param float truncation_point: Determines the maximum fraction of the
         population replaced by offspring in one reproduction event, and must
-        satisfy :math:`0 < truncation_point <= 1`. The default is
-        :math:`truncation_point = 1`, which corresponds to the standard
-        Beta-Xi-coalescent. When :math:`truncation_point < 1`, the number of
-        lineages participating in a common ancestor event is determined by moments
+        satisfy :math:`0 < \\tau \\leq 1`, where :math:`\\tau` is the truncation point.
+        The default is :math:`\\tau = 1`, which corresponds to the standard
+        Beta-Xi-coalescent. When :math:`\\tau < 1`, the number of lineages
+        participating in a common ancestor event is determined by moments
         of the :math:`Beta(2 - \\alpha, \\alpha)` distribution conditioned on not
-        exceeding `truncation_point`, and the Beta-function in the expression
+        exceeding :math:`\\tau`, and the Beta-function in the expression
         for the time scale is also replaced by the incomplete Beta function
-        :math:`Beta(truncation_point; 2 - \\alpha, \\alpha)`.
+        :math:`Beta(\\tau; 2 - \\alpha, \\alpha)`.
     """
+
     name = "beta"
 
     def __init__(self, reference_size=1, alpha=None, truncation_point=1):
@@ -2047,7 +2051,7 @@ class DiracCoalescent(ParametricSimulationModel):
     In addition to binary common ancestor events at rate :math:`n (n - 1)` when
     there are :math:`n` lineages, potential multiple merger events take place
     at rate :math:`2 c > 0`. Each lineage participates in each multiple merger
-    event independently with probability :math:`0 < \\psi <= 1`. All participating
+    event independently with probability :math:`0 < \\psi \\leq 1`. All participating
     lineages are randomly split into four groups, corresponding to the four
     parental chromosomes present in a diploid, bi-parental reproduction event,
     and the lineages within each group merge simultaneously.
@@ -2055,20 +2059,21 @@ class DiracCoalescent(ParametricSimulationModel):
     .. warning::
         The Dirac-Xi-coalescent is obtained as a scaling limit of Moran models,
         rather than Wright-Fisher models. As a consequence, one unit of coalescent
-        time is proportional to :math:`Ne^2 / (1 + c \\psi^2)` generations,
-        rather than :math:`Ne` generations as in the standard coalescent.
+        time is proportional to :math:`N_e^2` generations,
+        rather than :math:`N_e` generations as in the standard coalescent.
         However, the coalescent recombination rate is obtained from the
         per-generation recombination probability by rescaling with
-        :math:`Ne / (1 + c \\psi^2)`. See :ref:`sec_tutorial_multiple_mergers`
+        :math:`N_e`. See :ref:`sec_tutorial_multiple_mergers`
         for an illustration of how this affects simulation output in practice.
 
     :param float c: Determines the rate of potential multiple merger events.
         We require :math:`c > 0`.
-    :param float psi:` Determines the fraction of the population replaced by
+    :param float psi: Determines the fraction of the population replaced by
         offspring in one large reproduction event, i.e. one reproduction event
         giving rise to potential multiple mergers when viewed backwards in time.
-        We require :math:`0 < \\psi <= 1`.
+        We require :math:`0 < \\psi \\leq 1`.
     """
+
     name = "dirac"
 
     def __init__(self, reference_size=1, psi=None, c=None):
