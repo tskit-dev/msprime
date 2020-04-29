@@ -2034,8 +2034,8 @@ class BetaCoalescent(ParametricSimulationModel):
 
     name = "beta"
 
-    def __init__(self, reference_size=1, alpha=None, truncation_point=1):
-        self.reference_size = reference_size
+    def __init__(self, reference_size=None, alpha=None, truncation_point=1):
+        super().__init__(reference_size=reference_size)
         self.alpha = alpha
         self.truncation_point = truncation_point
 
@@ -2076,8 +2076,8 @@ class DiracCoalescent(ParametricSimulationModel):
 
     name = "dirac"
 
-    def __init__(self, reference_size=1, psi=None, c=None):
-        self.reference_size = reference_size
+    def __init__(self, reference_size=None, psi=None, c=None):
+        super().__init__(reference_size=reference_size)
         self.psi = psi
         self.c = c
 
@@ -2086,14 +2086,22 @@ class SweepGenicSelection(ParametricSimulationModel):
     # TODO document
     name = "sweep_genic_selection"
 
+    # TODO Probably want to rethink the parameters here. Probably these should
+    # be kw-only?
     def __init__(
-        self, position, start_frequency, end_frequency, alpha, dt=None, reference_size=1
+        self,
+        position,
+        start_frequency,
+        end_frequency,
+        alpha,
+        dt=None,
+        reference_size=None,
     ):
+        super().__init__(reference_size=reference_size)
         # We might want to have a default dt value that depends on the other
         # parameters.
         if dt is None:
             dt = 0.01
-        self.reference_size = reference_size
         self.position = position
         self.start_frequency = start_frequency
         self.end_frequency = end_frequency
