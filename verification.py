@@ -2957,7 +2957,7 @@ class SimulationVerifier:
         pyplot.close("all")
 
     def verify_recombination(
-        self, basedir, name, sample_size, Ne, r, L, model, growth_rate=0
+        self, basedir, name, sample_size, Ne, r, m, L, model, growth_rate=0
     ):
         """
         Verifies that the number of recombination equals the number of mutation.
@@ -2970,7 +2970,7 @@ class SimulationVerifier:
             ts = msprime.simulate(
                 Ne=Ne,
                 recombination_rate=r,
-                mutation_rate=r,
+                mutation_rate=m,
                 length=L,
                 population_configurations=[
                     msprime.PopulationConfiguration(
@@ -3042,15 +3042,16 @@ class SimulationVerifier:
 
     def run_xi_beta_breakpoints(self):
         basedir = "tmp__NOBACKUP__/xi_beta_breakpoints"
+        Ne = 10 ** 4
         for alpha in [1.1, 1.3, 1.6, 1.9]:
             self.verify_breakpoint_distribution(
                 basedir,
                 f"n=100_alpha={alpha}",
                 sample_size=100,
-                Ne=10 ** 4,
+                Ne=Ne,
                 r=1e-8,
                 L=10 ** 6,
-                model=msprime.BetaCoalescent(alpha=alpha),
+                model=msprime.BetaCoalescent(reference_size=Ne, alpha=alpha),
             )
             # Add a growth rate with a higher recombination rate so
             # we still get decent numbers of trees
@@ -3058,25 +3059,26 @@ class SimulationVerifier:
                 basedir,
                 f"n=100_alpha={alpha}",
                 sample_size=100,
-                Ne=10 ** 4,
+                Ne=Ne,
                 r=1e-7,
                 L=10 ** 6,
-                model=msprime.BetaCoalescent(alpha=alpha),
+                model=msprime.BetaCoalescent(reference_size=Ne, alpha=alpha),
                 growth_rate=0.05,
             )
 
     def run_xi_dirac_breakpoints(self):
         basedir = "tmp__NOBACKUP__/xi_dirac_breakpoints"
+        Ne = 10 ** 4
         for psi in [0.1, 0.3, 0.6, 0.9]:
             for c in [1, 10]:
                 self.verify_breakpoint_distribution(
                     basedir,
                     f"n=100_psi={psi}_c={c}",
                     sample_size=100,
-                    Ne=10 ** 4,
+                    Ne=Ne,
                     r=1e-8,
                     L=10 ** 6,
-                    model=msprime.DiracCoalescent(psi=psi, c=c),
+                    model=msprime.DiracCoalescent(reference_size=Ne, psi=psi, c=c),
                 )
                 # Add a growth rate with a higher recombination rate so
                 # we still get decent numbers of trees
@@ -3084,38 +3086,46 @@ class SimulationVerifier:
                     basedir,
                     f"n=100_psi={psi}_c={c}",
                     sample_size=100,
-                    Ne=10 ** 4,
+                    Ne=Ne,
                     r=1e-7,
                     L=10 ** 6,
-                    model=msprime.DiracCoalescent(psi=psi, c=c),
+                    model=msprime.DiracCoalescent(reference_size=Ne, psi=psi, c=c),
                     growth_rate=0.05,
                 )
 
     def run_xi_beta_recombinations(self):
         basedir = "tmp__NOBACKUP__/xi_beta_recombinations"
+        Ne = 10000
         for alpha in [1.1, 1.3, 1.5, 1.9]:
             self.verify_recombination(
                 basedir,
                 f"n=100_alpha={alpha}",
                 sample_size=100,
-                Ne=10000,
+                Ne=Ne,
                 r=1e-8,
+                m=1e-8,
                 L=10 ** 6,
-                model=msprime.BetaCoalescent(alpha=alpha),
+                model=msprime.BetaCoalescent(reference_size=Ne, alpha=alpha),
             )
 
     def run_xi_dirac_recombinations(self):
         basedir = "tmp__NOBACKUP__/xi_dirac_recombinations"
+        Ne = 100
         for psi in [0.1, 0.3, 0.5, 0.9]:
             for c in [1, 10, 100]:
+                # The Dirac coalescent has branch lengths proportional to Ne^2
+                # and recombination rate proportional to Ne so need to divide
+                # the mutation rate by Ne to make numbers of mutations and
+                # recombinations comparable.
                 self.verify_recombination(
                     basedir,
                     f"n=100_psi={psi}_c={c}",
                     sample_size=100,
-                    Ne=10000,
+                    Ne=Ne,
                     r=1e-8,
+                    m=1e-8 / Ne,
                     L=10 ** 6,
-                    model=msprime.DiracCoalescent(psi=psi, c=c),
+                    model=msprime.DiracCoalescent(reference_size=Ne, psi=psi, c=c),
                 )
 
     def run_Hudson_recombinations(self):
@@ -3126,6 +3136,7 @@ class SimulationVerifier:
             sample_size=100,
             Ne=10000,
             r=1e-8,
+            m=1e-8,
             L=10 ** 6,
             model="hudson",
         )

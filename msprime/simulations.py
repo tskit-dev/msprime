@@ -1961,27 +1961,123 @@ class ParametricSimulationModel(SimulationModel):
 
 
 class BetaCoalescent(ParametricSimulationModel):
-    # TODO document.
+    """
+    A diploid Xi-coalescent with up to four simultaneous multiple mergers and
+    crossover recombination.
+
+    There are two main differences between the Beta-Xi-coalescent and the
+    standard coalescent. Firstly, the number of lineages that take part in each
+    common ancestor event is random, with distribution determined by moments of
+    the :math:`Beta(2 - \\alpha, \\alpha)`-distribution. In particular, when there
+    are :math:`n` lineages, each set of :math:`k \\leq n` of them participates in a
+    common ancestor event at rate
+
+    .. math::
+        \\frac{8}{B(2 - \\alpha, \\alpha)}
+        \\int_0^1 x^{k - \\alpha - 1} (1 - x)^{n - k + \\alpha - 1} dx,
+
+    where :math:`B(2 - \\alpha, \\alpha)` is the Beta-function.
+
+    In a common ancestor event, all participating lineages are randomly split
+    into four groups, corresponding to the four parental chromosomes in a diploid,
+    bi-parental reproduction event. All lineages within each group merge simultaneously.
+
+    .. warning::
+        The prefactor of 8 in the common ancestor event rate arises as the product
+        of two terms. A factor of 4 compensates for the fact that only one quarter
+        of binary common ancestor events result in a merger due to diploidy.
+        A further factor of 2 is included for consistency with the implementation
+        of the Hudson model, in which :math:`n` lineages undergo binary mergers at
+        rate :math:`n (n - 1)`.
+
+    Secondly, the time scale predicted by the Beta-Xi-coalescent is proportional
+    to :math:`N_e^{\\alpha - 1}` generations, where :math:`N_e` is the effective
+    population size. Specifically, one unit of coalescent time corresponds to
+    a number of generations given by
+
+    .. math::
+        \\frac{m^{\\alpha} N_e^{\\alpha - 1}}{\\alpha B(2 - \\alpha, \\alpha)},
+
+    where
+
+    .. math::
+        m = 2 + \\frac{2^{\\alpha}}{3^{\\alpha - 1} (\\alpha - 1)}.
+
+    Note that the time scale depends both on the effective population size :math:`N_e`
+    and :math:`\\alpha`, and can be dramatically shorter than the timescale of the
+    standard coalescent. Thus, effective population sizes must often be many orders
+    of magnitude larger than census population sizes. The per-generation recombination
+    rate is rescaled similarly to obtain the population-rescaled recombination rate.
+
+    See `Schweinsberg (2003)
+    <https://www.sciencedirect.com/science/article/pii/S0304414903000280>`_
+    for the derivation of the common ancestor event rate, as well as the time scaling.
+    Note however that the model of Schweinsberg (2003) is haploid, so that
+    all participating lineages merge in a common ancestor event without
+    splitting into four groups.
+
+    :param float alpha: Determines the degree of skewness in the family size
+        distribution, and must satisfy :math:`1 < \\alpha < 2`. Smaller values of
+        :math:`\\alpha` correspond to greater skewness, and :math:`\\alpha = 2`
+        would coincide with the standard coalescent.
+    :param float truncation_point: Determines the maximum fraction of the
+        population replaced by offspring in one reproduction event, and must
+        satisfy :math:`0 < \\tau \\leq 1`, where :math:`\\tau` is the truncation point.
+        The default is :math:`\\tau = 1`, which corresponds to the standard
+        Beta-Xi-coalescent. When :math:`\\tau < 1`, the number of lineages
+        participating in a common ancestor event is determined by moments
+        of the :math:`Beta(2 - \\alpha, \\alpha)` distribution conditioned on not
+        exceeding :math:`\\tau`, and the Beta-function in the expression
+        for the time scale is also replaced by the incomplete Beta function
+        :math:`Beta(\\tau; 2 - \\alpha, \\alpha)`.
+    """
+
     name = "beta"
 
-    # Must have 1 < alpha < 2 and 0 < truncation_point <= 1.
-    # alpha = 2 and truncation_point = 1 is equivalent to the Kingman coalescent,
-    # but numerical instability occurs with alpha > 2.0 - 0.0005.
-    def __init__(self, reference_size=1, alpha=1.5, truncation_point=None):
-        self.reference_size = reference_size
+    def __init__(self, reference_size=None, alpha=None, truncation_point=1):
+        super().__init__(reference_size=reference_size)
         self.alpha = alpha
-        if truncation_point is None:
-            truncation_point = 1
         self.truncation_point = truncation_point
 
 
 class DiracCoalescent(ParametricSimulationModel):
-    # TODO document
+    """
+    A diploid Xi-coalescent with up to four simultaneous multiple mergers and
+    crossover recombination.
+
+    The Dirac-Xi-coalescent is an implementation of the model of
+    `Blath et al. (2013) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3527250/>`_
+    The simulation proceeds similarly to the standard coalescent.
+    In addition to binary common ancestor events at rate :math:`n (n - 1)` when
+    there are :math:`n` lineages, potential multiple merger events take place
+    at rate :math:`2 c > 0`. Each lineage participates in each multiple merger
+    event independently with probability :math:`0 < \\psi \\leq 1`. All participating
+    lineages are randomly split into four groups, corresponding to the four
+    parental chromosomes present in a diploid, bi-parental reproduction event,
+    and the lineages within each group merge simultaneously.
+
+    .. warning::
+        The Dirac-Xi-coalescent is obtained as a scaling limit of Moran models,
+        rather than Wright-Fisher models. As a consequence, one unit of coalescent
+        time is proportional to :math:`N_e^2` generations,
+        rather than :math:`N_e` generations as in the standard coalescent.
+        However, the coalescent recombination rate is obtained from the
+        per-generation recombination probability by rescaling with
+        :math:`N_e`. See :ref:`sec_tutorial_multiple_mergers`
+        for an illustration of how this affects simulation output in practice.
+
+    :param float c: Determines the rate of potential multiple merger events.
+        We require :math:`c > 0`.
+    :param float psi: Determines the fraction of the population replaced by
+        offspring in one large reproduction event, i.e. one reproduction event
+        giving rise to potential multiple mergers when viewed backwards in time.
+        We require :math:`0 < \\psi \\leq 1`.
+    """
+
     name = "dirac"
 
-    # TODO What is a meaningful default for this value? See above.
-    def __init__(self, reference_size=1, psi=0.5, c=10.0):
-        self.reference_size = reference_size
+    def __init__(self, reference_size=None, psi=None, c=None):
+        super().__init__(reference_size=reference_size)
         self.psi = psi
         self.c = c
 
@@ -1990,14 +2086,22 @@ class SweepGenicSelection(ParametricSimulationModel):
     # TODO document
     name = "sweep_genic_selection"
 
+    # TODO Probably want to rethink the parameters here. Probably these should
+    # be kw-only?
     def __init__(
-        self, position, start_frequency, end_frequency, alpha, dt=None, reference_size=1
+        self,
+        position,
+        start_frequency,
+        end_frequency,
+        alpha,
+        dt=None,
+        reference_size=None,
     ):
+        super().__init__(reference_size=reference_size)
         # We might want to have a default dt value that depends on the other
         # parameters.
         if dt is None:
             dt = 0.01
-        self.reference_size = reference_size
         self.position = position
         self.start_frequency = start_frequency
         self.end_frequency = end_frequency

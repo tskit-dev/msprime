@@ -3123,12 +3123,10 @@ test_large_bottleneck_simulation(void)
 #define check_time_change(msp, t) \
     do { \
         const double tol = 1e-4; \
-        double g, g2, t2; \
+        double g, t2; \
         g = (msp)->model.model_time_to_generations(&(msp)->model, t); \
         t2 = (msp)->model.generations_to_model_time(&(msp)->model, g); \
         CU_ASSERT_DOUBLE_EQUAL(t, t2, tol); \
-        g2 = (msp)->model.generation_rate_to_model_rate(&(msp)->model, t); \
-        CU_ASSERT_DOUBLE_EQUAL(g, g2, tol); \
         g = (msp)->model.model_rate_to_generation_rate(&(msp)->model, t); \
         t2 = (msp)->model.generation_rate_to_model_rate(&(msp)->model, g); \
         CU_ASSERT_DOUBLE_EQUAL(t, t2, tol); \
@@ -3181,8 +3179,7 @@ check_model_time_change_consistency(double population_size, double t)
         for (k = 0; k < sizeof(cs) / sizeof(*cs); k++) {
             ret = msp_set_simulation_model_dirac(&msp, population_size, psis[j], cs[k]);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
-            /* TODO: enable this check once the dirac rate/time scaling is fixed.
-            check_time_change(&msp, t); */
+            check_time_change(&msp, t);
         }
     }
 
@@ -3340,7 +3337,7 @@ test_multiple_mergers_simulation(void)
                     ret = msp_set_simulation_model_dirac(msp, 1,
                             psi_params[p][0], psi_params[p][1]);
                 } else {
-                    ret = msp_set_simulation_model_beta(msp, 1e6,
+                    ret = msp_set_simulation_model_beta(msp, 1,
                             beta_params[p][0], beta_params[p][1]);
                 }
                 CU_ASSERT_EQUAL(ret, 0);
@@ -3354,22 +3351,18 @@ test_multiple_mergers_simulation(void)
                 msp_print_state(msp, _devnull);
 
                 ret = msp_run(msp, DBL_MAX, ULONG_MAX);
-                //if (store_full_arg[k]) {
-                    /* Can't support this for now. */
-                //    CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
-                //} else {
-                    CU_ASSERT_EQUAL_FATAL(ret, 0);
-                    CU_ASSERT_TRUE(msp_is_completed(msp));
-                    CU_ASSERT_TRUE(msp->time > 0);
-                    msp_verify(msp, 0);
+                CU_ASSERT_EQUAL_FATAL(ret, 0);
+                CU_ASSERT_TRUE(msp_is_completed(msp));
+                CU_ASSERT_TRUE(msp->time > 0);
+                msp_verify(msp, 0);
 
-                    msp_reset(msp);
-                    while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
-                        msp_verify(msp, 0);
-                    }
-                    CU_ASSERT_EQUAL_FATAL(ret, 0);
-                    CU_ASSERT_TRUE(msp_is_completed(msp));
-                //}
+                msp_reset(msp);
+                while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+                    msp_verify(msp, 0);
+                }
+                CU_ASSERT_EQUAL_FATAL(ret, 0);
+                CU_ASSERT_TRUE(msp_is_completed(msp));
+
                 ret = msp_free(msp);
                 CU_ASSERT_EQUAL(ret, 0);
             }

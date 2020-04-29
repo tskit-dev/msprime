@@ -54,6 +54,12 @@ class TestModelFactory(unittest.TestCase):
             model = msprime.model_factory(model=name)
             self.assertIsInstance(model, model_class)
 
+    def test_named_parametric_models_fail(self):
+        parametric_models = ["beta", "dirac"]
+        for name in parametric_models:
+            with self.assertRaises(ValueError):
+                msprime.model_factory(model=name)
+
     def test_bad_models(self):
         for bad_type in [1234, {}]:
             self.assertRaises(TypeError, msprime.model_factory, model=bad_type)
@@ -73,13 +79,36 @@ class TestModelFactory(unittest.TestCase):
                 alpha=0.1,
                 dt=0.01,
             ),
-            msprime.DiracCoalescent(),
-            msprime.BetaCoalescent(),
+            msprime.BetaCoalescent(100, alpha=2),
+            msprime.DiracCoalescent(20, psi=1, c=1),
         ]
         for model in models:
             new_model = msprime.model_factory(model=model)
             self.assertFalse(new_model is model)
             self.assertEqual(new_model.__dict__, model.__dict__)
+
+    def test_reference_size_inherited(self):
+        for Ne in [1, 10, 100]:
+            models = [
+                msprime.DiracCoalescent(psi=0.5, c=0),
+                msprime.StandardCoalescent(),
+                msprime.SmcApproxCoalescent(),
+                msprime.SmcPrimeApproxCoalescent(),
+                msprime.DiscreteTimeWrightFisher(),
+                msprime.WrightFisherPedigree(),
+                msprime.SweepGenicSelection(
+                    position=0.5,
+                    start_frequency=0.1,
+                    end_frequency=0.9,
+                    alpha=0.1,
+                    dt=0.01,
+                ),
+                msprime.BetaCoalescent(alpha=2),
+                msprime.DiracCoalescent(psi=1, c=1),
+            ]
+            for model in models:
+                new_model = msprime.model_factory(model, reference_size=Ne)
+                self.assertEqual(new_model.reference_size, Ne)
 
     def test_reference_size_string(self):
         for size in range(1, 10):
@@ -278,14 +307,12 @@ class TestMultipleMergerModels(unittest.TestCase):
     def test_dirac_coalescent(self):
         model = msprime.DiracCoalescent(100, 0.3, 10)
         ts = msprime.simulate(sample_size=10, model=model)
-        # TODO real tests
-        self.assertTrue(ts is not None)
+        self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
 
     def test_beta_coalescent(self):
         model = msprime.BetaCoalescent(reference_size=5, alpha=1.5, truncation_point=1)
         ts = msprime.simulate(sample_size=10, model=model)
-        # TODO real tests
-        self.assertTrue(ts is not None)
+        self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
 
     def test_dtwf(self):
         model = msprime.DiscreteTimeWrightFisher()
@@ -605,7 +632,10 @@ class TestMixedModels(unittest.TestCase):
                     40, msprime.DiscreteTimeWrightFisher(100)
                 ),
                 msprime.SimulationModelChange(
-                    50, msprime.BetaCoalescent(reference_size=10)
+                    50,
+                    msprime.BetaCoalescent(
+                        reference_size=10, alpha=1.1, truncation_point=1
+                    ),
                 ),
                 msprime.SimulationModelChange(60, msprime.StandardCoalescent(0.1)),
             ],

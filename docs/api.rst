@@ -284,6 +284,25 @@ Coalescent and approximations
 
 .. autoclass:: msprime.SmcPrimeApproxCoalescent
 
+.. _sec_api_simulation_models_multiple_mergers:
+
++++++++++++++++++++++++++++
+Multiple merger coalescents
++++++++++++++++++++++++++++
+
+Some evolutionary scenarios, such as a skewed offspring distribution
+combined with a type III survivorship curve, range expansion, and
+rapid adaptation, can predict diploid genealogies with up to four
+simultaneous multiple mergers. Msprime provides the option to simulate
+from two classes of such genealogical processes.
+
+See :ref:`sec_tutorial_multiple_mergers` for examples of how to use these
+multiple merger coalescents.
+
+.. autoclass:: msprime.BetaCoalescent
+
+.. autoclass:: msprime.DiracCoalescent
+
 +++++++++++++++++++++++++++
 Discrete time Wright-Fisher
 +++++++++++++++++++++++++++
