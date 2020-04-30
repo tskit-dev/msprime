@@ -632,9 +632,8 @@ Demography
 in arbitrary combinations. Here is an example describing the
 `Gutenkunst et al. <http://dx.doi.org/10.1371/journal.pgen.1000695>`_
 out-of-Africa model. 
-`Figure 2B <http://dx.doi.org/10.1371/journal.pgen.1000695.g002>`_
-of that paper provides a schematic, with the values below taken from
-`Table 1 <http://dx.doi.org/10.1371/journal.pgen.1000695.t001>`_.
+This model is illustrated below, with the model parameters taken from
+`Table 1 <http://dx.doi.org/10.1371/journal.pgen.1000695.t001>`_ that paper.
 Note that the code reproduced below is provided by way of illustration:
 to use this exact model for your own purposes, we recommend that you try the
 :ref:`version <stdpopsim:sec_catalog_homsap_models_outofafrica_3g09>`
@@ -645,7 +644,18 @@ Coalescent simulation moves from the present back into the past,
 so times are in units of generations *ago*, and we build the model
 with most recent events first.
 
-.. todo:: Add a diagram of the model for convenience.
+.. image:: _static/Gutenkunst_OOA_diagram.svg
+   :width: 500px
+   :align: center
+   :alt: Schematic of Gutenkunst et al. (2009) out-of-Africa model.
+
+.. note::
+
+    A previous version of this model in the tutorial mistakenly allowed for migration
+    to continue beyond the merger of the African and Eurasian bottleneck populations.
+    This has now been fixed, but if you had copied this model from the tutorial
+    for your own analyses, we suggest you update that model or use the implementation
+    that has been verified in :ref:`stdpopsim project <stdpopsim:sec_introduction>`.
 
 .. code-block:: python
 
@@ -706,6 +716,7 @@ with most recent events first.
             # Population B merges into YRI at T_B
             msprime.MassMigration(
                 time=T_B, source=1, destination=0, proportion=1.0),
+            msprime.MigrationRateChange(time=T_B, rate=0),
             # Size changes to N_A at T_AF
             msprime.PopulationParametersChange(
                 time=T_AF, initial_size=N_A, population_id=0)
@@ -725,51 +736,54 @@ The :class:`.DemographyDebugger` provides a method to debug the history that
 you have described so that you can be sure that the migration rates, population
 sizes and growth rates are all as you intend during each epoch::
 
-    =============================
-    Epoch: 0 -- 848.0 generations
-    =============================
-         start     end      growth_rate |     0        1        2
-       -------- --------       -------- | -------- -------- --------
-    0 |1.23e+04 1.23e+04              0 |     0      3e-05   1.9e-05
-    1 |2.97e+04   1e+03           0.004 |   3e-05      0     9.6e-05
-    2 |5.41e+04    510           0.0055 |  1.9e-05  9.6e-05     0
+   =============================
+   Epoch: 0 -- 848.0 generations
+   =============================
+        start     end      growth_rate |     0        1        2    
+      -------- --------       -------- | -------- -------- -------- 
+   0 |1.23e+04 1.23e+04              0 |     0      3e-05   1.9e-05 
+   1 |2.97e+04   1e+03           0.004 |   3e-05      0     9.6e-05 
+   2 |5.41e+04    510           0.0055 |  1.9e-05  9.6e-05     0    
 
-    Events @ generation 848.0
-       - Mass migration: lineages move from 2 to 1 with probability 1.0
-       - Migration rate change to 0 everywhere
-       - Migration rate change for (0, 1) to 0.00025
-       - Migration rate change for (1, 0) to 0.00025
-       - Population parameter change for 1: initial_size -> 2100 growth_rate -> 0
-    ==================================
-    Epoch: 848.0 -- 5600.0 generations
-    ==================================
-         start     end      growth_rate |     0        1        2
-       -------- --------       -------- | -------- -------- --------
-    0 |1.23e+04 1.23e+04              0 |     0     0.00025     0
-    1 | 2.1e+03  2.1e+03              0 |  0.00025     0        0
-    2 |   510   2.27e-09         0.0055 |     0        0        0
+   Events @ generation 848.0
+      - Mass migration: Lineages moved with probability 1.0 backwards in time with source 2 & dest 1
+                        (equivalent to migration from 1 to 2 forwards in time)
+      - Migration rate change to 0 everywhere
+      - Migration rate change for (0, 1) to 0.00025
+      - Migration rate change for (1, 0) to 0.00025
+      - Population parameter change for 1: initial_size -> 2100 growth_rate -> 0 
+   ==================================
+   Epoch: 848.0 -- 5600.0 generations
+   ==================================
+        start     end      growth_rate |     0        1        2    
+      -------- --------       -------- | -------- -------- -------- 
+   0 |1.23e+04 1.23e+04              0 |     0     0.00025     0    
+   1 | 2.1e+03  2.1e+03              0 |  0.00025     0        0    
+   2 |   510   2.27e-09         0.0055 |     0        0        0    
 
-    Events @ generation 5600.0
-       - Mass migration: lineages move from 1 to 0 with probability 1.0
-    ===================================
-    Epoch: 5600.0 -- 8800.0 generations
-    ===================================
-         start     end      growth_rate |     0        1        2
-       -------- --------       -------- | -------- -------- --------
-    0 |1.23e+04 1.23e+04              0 |     0     0.00025     0
-    1 | 2.1e+03  2.1e+03              0 |  0.00025     0        0
-    2 |2.27e-09 5.17e-17         0.0055 |     0        0        0
+   Events @ generation 5600.0
+      - Mass migration: Lineages moved with probability 1.0 backwards in time with source 1 & dest 0
+                        (equivalent to migration from 0 to 1 forwards in time)
+      - Migration rate change to 0 everywhere
+   ===================================
+   Epoch: 5600.0 -- 8800.0 generations
+   ===================================
+        start     end      growth_rate |     0        1        2    
+      -------- --------       -------- | -------- -------- -------- 
+   0 |1.23e+04 1.23e+04              0 |     0        0        0    
+   1 | 2.1e+03  2.1e+03              0 |     0        0        0    
+   2 |2.27e-09 5.17e-17         0.0055 |     0        0        0    
 
-    Events @ generation 8800.0
-       - Population parameter change for 0: initial_size -> 7300
-    ================================
-    Epoch: 8800.0 -- inf generations
-    ================================
-         start     end      growth_rate |     0        1        2
-       -------- --------       -------- | -------- -------- --------
-    0 | 7.3e+03  7.3e+03              0 |     0     0.00025     0
-    1 | 2.1e+03  2.1e+03              0 |  0.00025     0        0
-    2 |5.17e-17     0            0.0055 |     0        0        0
+   Events @ generation 8800.0
+      - Population parameter change for 0: initial_size -> 7300 
+   ================================
+   Epoch: 8800.0 -- inf generations
+   ================================
+        start     end      growth_rate |     0        1        2    
+      -------- --------       -------- | -------- -------- -------- 
+   0 | 7.3e+03  7.3e+03              0 |     0        0        0    
+   1 | 2.1e+03  2.1e+03              0 |     0        0        0    
+   2 |5.17e-17     0            0.0055 |     0        0        0    
 
 .. warning:: The output of the :meth:`.DemographyDebugger.print_history` method
     is intended only for debugging purposes, and is not meant to be machine
