@@ -179,7 +179,6 @@ fenwick_get_value(fenwick_t *self, size_t index)
     return self->values[index];
 }
 
-
 size_t
 fenwick_find(fenwick_t *self, double sum)
 {

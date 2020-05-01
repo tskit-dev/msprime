@@ -114,7 +114,7 @@ sort_mutations(site_t *site)
             if (k == num_mutations - 1) {
                 m->next = NULL;
             } else {
-                m->next = p[k+1];
+                m->next = p[k + 1];
             }
         }
     }
@@ -205,8 +205,8 @@ out:
 }
 
 int MSP_WARN_UNUSED
-mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
-        char **alleles, double *root_distribution, double *transition_matrix)
+mutation_model_alloc(mutation_model_t *self, size_t num_alleles, char **alleles,
+    double *root_distribution, double *transition_matrix)
 {
     int ret = 0;
 
@@ -217,18 +217,18 @@ mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
     }
     self->alleles = calloc(num_alleles, sizeof(*self->alleles));
     self->root_distribution = malloc(num_alleles * sizeof(*self->root_distribution));
-    self->transition_matrix = malloc(num_alleles * num_alleles
-        * sizeof(*self->transition_matrix));
+    self->transition_matrix
+        = malloc(num_alleles * num_alleles * sizeof(*self->transition_matrix));
     if (self->alleles == NULL || self->root_distribution == NULL
-            || self->transition_matrix == NULL) {
+        || self->transition_matrix == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     self->num_alleles = num_alleles;
     memcpy(self->root_distribution, root_distribution,
-            num_alleles * sizeof(*root_distribution));
+        num_alleles * sizeof(*root_distribution));
     memcpy(self->transition_matrix, transition_matrix,
-            num_alleles * num_alleles * sizeof(*transition_matrix));
+        num_alleles * num_alleles * sizeof(*transition_matrix));
     ret = mutation_model_copy_alleles(self, alleles);
     if (ret != 0) {
         goto out;
@@ -276,19 +276,16 @@ mutation_model_allele_index(mutation_model_t *self, const char *allele, size_t l
     return ret;
 }
 
-static const char *binary_alleles[] = {"0", "1"};
-static double binary_model_root_distribution[] = {1.0, 0.0};
-static double binary_model_transition_matrix[] = {0.0, 1.0, 1.0, 0.0};
+static const char *binary_alleles[] = { "0", "1" };
+static double binary_model_root_distribution[] = { 1.0, 0.0 };
+static double binary_model_transition_matrix[] = { 0.0, 1.0, 1.0, 0.0 };
 
 #define ONE_THIRD (1.0 / 3.0)
-static const char *acgt_alleles[] = {"A", "C", "G", "T"};
-static double jukes_cantor_model_root_distribution[] = {0.25, 0.25, 0.25, 0.25};
-static double jukes_cantor_model_transition_matrix[] =
-        {0.0, ONE_THIRD, ONE_THIRD, ONE_THIRD,
-        ONE_THIRD, 0.0, ONE_THIRD, ONE_THIRD,
-        ONE_THIRD, ONE_THIRD, 0.0, ONE_THIRD,
-        ONE_THIRD, ONE_THIRD, ONE_THIRD, 0.0};
-
+static const char *acgt_alleles[] = { "A", "C", "G", "T" };
+static double jukes_cantor_model_root_distribution[] = { 0.25, 0.25, 0.25, 0.25 };
+static double jukes_cantor_model_transition_matrix[]
+    = { 0.0, ONE_THIRD, ONE_THIRD, ONE_THIRD, ONE_THIRD, 0.0, ONE_THIRD, ONE_THIRD,
+          ONE_THIRD, ONE_THIRD, 0.0, ONE_THIRD, ONE_THIRD, ONE_THIRD, ONE_THIRD, 0.0 };
 
 /* Populates this mutation model instance with simple mutation model.
  *
@@ -307,10 +304,10 @@ mutation_model_factory(mutation_model_t *self, int model)
      * about discarding const qualifiers. */
     if (model == 0) {
         ret = mutation_model_alloc(self, 2, (char **) (uintptr_t *) binary_alleles,
-                binary_model_root_distribution, binary_model_transition_matrix);
+            binary_model_root_distribution, binary_model_transition_matrix);
     } else if (model == 1) {
         ret = mutation_model_alloc(self, 4, (char **) (uintptr_t *) acgt_alleles,
-                jukes_cantor_model_root_distribution, jukes_cantor_model_transition_matrix);
+            jukes_cantor_model_root_distribution, jukes_cantor_model_transition_matrix);
     }
     return ret;
 }
@@ -362,15 +359,13 @@ mutgen_print_state(mutgen_t *self, FILE *out)
     for (a = self->sites.head; a != NULL; a = a->next) {
         s = (site_t *) a->item;
         fprintf(out, "%f\t%.*s\t%.*s\t(%d)\t%d\n", s->position,
-                (int) s->ancestral_state_length, s->ancestral_state,
-                (int) s->metadata_length, s->metadata,
-                s->new, (int) s->mutations_length);
+            (int) s->ancestral_state_length, s->ancestral_state,
+            (int) s->metadata_length, s->metadata, s->new, (int) s->mutations_length);
         for (m = s->mutations; m != NULL; m = m->next) {
             parent_id = m->parent == NULL ? TSK_NULL : m->parent->id;
-            fprintf(out, "\t(%d)\t%f\t%d\t%d\t%.*s\t%.*s\t(%d)\t%d\n",
-                    m->id, m->time, m->node, parent_id,
-                    (int) m->derived_state_length, m->derived_state,
-                    (int) m->metadata_length, m->metadata, m->new, m->keep);
+            fprintf(out, "\t(%d)\t%f\t%d\t%d\t%.*s\t%.*s\t(%d)\t%d\n", m->id, m->time,
+                m->node, parent_id, (int) m->derived_state_length, m->derived_state,
+                (int) m->metadata_length, m->metadata, m->new, m->keep);
         }
     }
     mutgen_check_state(self);
@@ -378,7 +373,7 @@ mutgen_print_state(mutgen_t *self, FILE *out)
 
 int MSP_WARN_UNUSED
 mutgen_alloc(mutgen_t *self, gsl_rng *rng, interval_map_t *rate_map,
-        mutation_model_t *model, size_t block_size)
+    mutation_model_t *model, size_t block_size)
 {
     int ret = 0;
     size_t j;
@@ -453,12 +448,14 @@ mutgen_init_allocator(mutgen_t *self, tsk_table_collection_t *tables)
      * We need to add one because the assert trips when the block size is equal
      * to chunk size (probably wrongly).
      */
-    self->block_size = GSL_MAX(self->block_size, 1 + tables->sites.ancestral_state_length);
+    self->block_size
+        = GSL_MAX(self->block_size, 1 + tables->sites.ancestral_state_length);
     self->block_size = GSL_MAX(self->block_size, 1 + tables->sites.metadata_length);
-    self->block_size = GSL_MAX(self->block_size, 1 + tables->mutations.derived_state_length);
+    self->block_size
+        = GSL_MAX(self->block_size, 1 + tables->mutations.derived_state_length);
     self->block_size = GSL_MAX(self->block_size, 1 + tables->mutations.metadata_length);
-    self->block_size = GSL_MAX(self->block_size,
-            (1 + tables->mutations.num_rows) * sizeof(tsk_mutation_t));
+    self->block_size = GSL_MAX(
+        self->block_size, (1 + tables->mutations.num_rows) * sizeof(tsk_mutation_t));
     ret = tsk_blkalloc_init(&self->allocator, self->block_size);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
@@ -469,10 +466,9 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_add_site(mutgen_t *self, double position, bool new,
-        const char *ancestral_state, tsk_size_t ancestral_state_length,
-        const char *metadata, tsk_size_t metadata_length,
-        avl_node_t **avl_nodep)
+mutgen_add_site(mutgen_t *self, double position, bool new, const char *ancestral_state,
+    tsk_size_t ancestral_state_length, const char *metadata, tsk_size_t metadata_length,
+    avl_node_t **avl_nodep)
 {
     int ret = 0;
     char *buff;
@@ -522,10 +518,9 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_add_mutation(mutgen_t *self, site_t *site,
-        tsk_id_t id, node_id_t node, double time, bool new,
-        const char *derived_state, tsk_size_t derived_state_length,
-        const char *metadata, tsk_size_t metadata_length)
+mutgen_add_mutation(mutgen_t *self, site_t *site, tsk_id_t id, node_id_t node,
+    double time, bool new, const char *derived_state, tsk_size_t derived_state_length,
+    const char *metadata, tsk_size_t metadata_length)
 {
     int ret = 0;
     char *buff;
@@ -536,8 +531,7 @@ mutgen_add_mutation(mutgen_t *self, site_t *site,
         goto out;
     }
     memset(mutation, 0, sizeof(*mutation));
-    mutation->id = id,
-    mutation->node = node;
+    mutation->id = id, mutation->node = node;
     mutation->parent = NULL;
     mutation->time = time;
     mutation->new = new;
@@ -589,12 +583,12 @@ mutgen_initialise_sites(mutgen_t *self, tsk_table_collection_t *tables)
         }
         state = sites->ancestral_state + sites->ancestral_state_offset[site_id];
         length = sites->ancestral_state_offset[site_id + 1]
-                    - sites->ancestral_state_offset[site_id];
+                 - sites->ancestral_state_offset[site_id];
         metadata = sites->metadata + sites->metadata_offset[site_id];
-        metadata_length = sites->metadata_offset[site_id + 1]
-                    - sites->metadata_offset[site_id];
-        ret = mutgen_add_site(self, sites->position[site_id], false,
-                    state, length, metadata, metadata_length, &avl_node);
+        metadata_length
+            = sites->metadata_offset[site_id + 1] - sites->metadata_offset[site_id];
+        ret = mutgen_add_site(self, sites->position[site_id], false, state, length,
+            metadata, metadata_length, &avl_node);
         if (ret != 0) {
             goto out;
         }
@@ -603,14 +597,13 @@ mutgen_initialise_sites(mutgen_t *self, tsk_table_collection_t *tables)
             assert(j < mutations->num_rows);
             state = mutations->derived_state + mutations->derived_state_offset[j];
             length = mutations->derived_state_offset[j + 1]
-                        - mutations->derived_state_offset[j];
+                     - mutations->derived_state_offset[j];
             metadata = mutations->metadata + mutations->metadata_offset[j];
-            metadata_length = mutations->metadata_offset[j + 1]
-                        - mutations->metadata_offset[j];
-            ret = mutgen_add_mutation(self,
-                    (site_t *) avl_node->item, (int) j,
-                    mutations->node[j], nodes->time[mutations->node[j]], false,
-                    state, length, metadata, metadata_length);
+            metadata_length
+                = mutations->metadata_offset[j + 1] - mutations->metadata_offset[j];
+            ret = mutgen_add_mutation(self, (site_t *) avl_node->item, (int) j,
+                mutations->node[j], nodes->time[mutations->node[j]], false, state,
+                length, metadata, metadata_length);
             if (ret != 0) {
                 goto out;
             }
@@ -623,7 +616,8 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_populate_tables(mutgen_t *self, tsk_site_table_t *sites, tsk_mutation_table_t *mutations)
+mutgen_populate_tables(
+    mutgen_t *self, tsk_site_table_t *sites, tsk_mutation_table_t *mutations)
 {
     int ret = 0;
     tsk_id_t site_id, mutation_id, parent_id;
@@ -644,10 +638,9 @@ mutgen_populate_tables(mutgen_t *self, tsk_site_table_t *sites, tsk_mutation_tab
                     parent_id = m->parent->id;
                     assert(parent_id != TSK_NULL);
                 }
-                mutation_id = tsk_mutation_table_add_row(mutations, site_id,
-                                m->node, parent_id,
-                                m->derived_state, m->derived_state_length,
-                                m->metadata, m->metadata_length);
+                mutation_id = tsk_mutation_table_add_row(mutations, site_id, m->node,
+                    parent_id, m->derived_state, m->derived_state_length, m->metadata,
+                    m->metadata_length);
                 if (mutation_id < 0) {
                     ret = msp_set_tsk_error(mutation_id);
                     goto out;
@@ -660,7 +653,7 @@ mutgen_populate_tables(mutgen_t *self, tsk_site_table_t *sites, tsk_mutation_tab
         /* Omit any new sites that have no mutations */
         if ((!site->new) || num_mutations > 0) {
             ret = tsk_site_table_add_row(sites, site->position, site->ancestral_state,
-                    site->ancestral_state_length, site->metadata, site->metadata_length);
+                site->ancestral_state_length, site->metadata, site->metadata_length);
             if (ret < 0) {
                 goto out;
             }
@@ -673,7 +666,8 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_place_mutations(mutgen_t *self, tsk_table_collection_t *tables, bool discrete_sites)
+mutgen_place_mutations(
+    mutgen_t *self, tsk_table_collection_t *tables, bool discrete_sites)
 {
     /* The mutation model for discrete sites is that there is
      * a unit of "mutation mass" on each integer, so that
@@ -733,16 +727,14 @@ mutgen_place_mutations(mutgen_t *self, tsk_table_collection_t *tables, bool disc
                 assert(site_left <= position && position < site_right);
                 assert(branch_start <= time && time < branch_end);
                 if (avl_node == NULL) {
-                    ret = mutgen_add_site(self, position, true,
-                            NULL, 0, NULL, 0, &avl_node);
+                    ret = mutgen_add_site(
+                        self, position, true, NULL, 0, NULL, 0, &avl_node);
                     if (ret != 0) {
                         goto out;
                     }
                 }
-                ret = mutgen_add_mutation(self,
-                        (site_t *) avl_node->item,
-                        TSK_NULL, child, time, true,
-                        NULL, 0, NULL, 0);
+                ret = mutgen_add_mutation(self, (site_t *) avl_node->item, TSK_NULL,
+                    child, time, true, NULL, 0, NULL, 0);
                 if (ret != 0) {
                     goto out;
                 }
@@ -820,7 +812,7 @@ out:
 
 static int MSP_WARN_UNUSED
 mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_mutation,
-        tsk_size_t num_nodes, site_t *site)
+    tsk_size_t num_nodes, site_t *site)
 {
     int ret = 0;
     int ai, pa, da;
@@ -843,8 +835,8 @@ mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_muta
          * because it's ok if we don't try to add a mutation to the site,
          * e.g., if it is kept and we're doing infinite sites, or if we're
          * mutating a different part of the genome  */
-        ai = mutation_model_allele_index(self->model,
-                site->ancestral_state, site->ancestral_state_length);
+        ai = mutation_model_allele_index(
+            self->model, site->ancestral_state, site->ancestral_state_length);
     }
 
     /* Create a mapping from mutations to nodes in bottom_mutation. If we see
@@ -867,8 +859,8 @@ mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_muta
                 goto out;
             }
             if (mut->new) {
-                pa = mutation_model_allele_index(self->model,
-                        parent_mut->derived_state, parent_mut->derived_state_length);
+                pa = mutation_model_allele_index(self->model, parent_mut->derived_state,
+                    parent_mut->derived_state_length);
             }
         }
         if (mut->new) {
@@ -962,8 +954,8 @@ mutgen_apply_mutations(mutgen_t *self, tsk_table_collection_t *tables)
             if (site->position >= right) {
                 break;
             }
-            ret = mutgen_choose_alleles(self, parent, bottom_mutation,
-                    nodes.num_rows, site);
+            ret = mutgen_choose_alleles(
+                self, parent, bottom_mutation, nodes.num_rows, site);
             if (ret != 0) {
                 goto out;
             }
@@ -978,7 +970,6 @@ out:
     msp_safe_free(bottom_mutation);
     return ret;
 }
-
 
 int MSP_WARN_UNUSED
 mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags)

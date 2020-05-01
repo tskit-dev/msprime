@@ -28,7 +28,8 @@
 #include "msprime.h"
 
 static double
-get_total_material(tsk_treeseq_t *ts) {
+get_total_material(tsk_treeseq_t *ts)
+{
     double ret = 0;
     tsk_size_t j;
     const tsk_edge_table_t *edges = &ts->tables->edges;
@@ -40,14 +41,14 @@ get_total_material(tsk_treeseq_t *ts) {
         parent = edges->parent[j];
         child = edges->child[j];
         ret += (edges->right[j] - edges->left[j])
-            * (nodes->time[parent] - nodes->time[child]);
+               * (nodes->time[parent] - nodes->time[child]);
     }
     return ret;
 }
 
 int
-msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double mu,
-                                    double *r_lik) {
+msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double mu, double *r_lik)
+{
     int ret = 0;
     tsk_size_t j;
     tsk_mutation_t mut;
@@ -76,15 +77,15 @@ msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double mu,
                 branch_length = node_time[parent] - node_time[child];
                 child = parent;
                 parent = tree.parent[parent];
-                while (parent != TSK_NULL && tree.left_child[child]
-                        == tree.right_child[child]) {
+                while (parent != TSK_NULL
+                       && tree.left_child[child] == tree.right_child[child]) {
                     branch_length += node_time[parent] - node_time[child];
                     child = parent;
                     parent = tree.parent[parent];
                 }
                 child = mut.node;
-                while (tree.left_child[child] != TSK_NULL &&
-                        tree.left_child[child] == tree.right_child[child]) {
+                while (tree.left_child[child] != TSK_NULL
+                       && tree.left_child[child] == tree.right_child[child]) {
                     // unary nodes have left_child[node] == right_child[node]
                     // so this measures the valid leafwards branch length on
                     // which mutation mut could have taken place
@@ -140,7 +141,7 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double r, double Ne, double *r_lik)
     }
     memset(first_parent_edge, TSK_NULL, sizeof(tsk_id_t) * nodes->num_rows);
     memset(last_parent_edge, TSK_NULL, sizeof(tsk_id_t) * nodes->num_rows);
-    for (i = 0; i < (tsk_id_t)edges->num_rows; i++) {
+    for (i = 0; i < (tsk_id_t) edges->num_rows; i++) {
         if (first_parent_edge[edges->child[i]] == TSK_NULL) {
             first_parent_edge[edges->child[i]] = i;
         }
@@ -157,8 +158,7 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double r, double Ne, double *r_lik)
                 ret = 0;
                 goto out;
             }
-            while (edge < (tsk_id_t)edges->num_rows
-                    && edges->parent[edge] == parent) {
+            while (edge < (tsk_id_t) edges->num_rows && edges->parent[edge] == parent) {
                 edge++;
             }
             gap = edges->left[edge] - edges->right[edge - 1];
@@ -183,7 +183,7 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double r, double Ne, double *r_lik)
                 material -= material_in_children;
             } else {
                 material_in_parent = edges->right[last_parent_edge[parent]]
-                    - edges->left[first_parent_edge[parent]];
+                                     - edges->left[first_parent_edge[parent]];
                 lineages--;
                 material -= material_in_children - material_in_parent;
             }

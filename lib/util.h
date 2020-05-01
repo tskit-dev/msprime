@@ -23,18 +23,19 @@
 #include <math.h>
 
 #ifdef __GNUC__
-    /*
-     * raise a compiler warning if a potentially error raising function's return
-     * value is not used.
-     */
-	#define MSP_WARN_UNUSED __attribute__ ((warn_unused_result))
-    /* Annotate a function parameter as unused */
-	#define MSP_UNUSED(x) MSP_UNUSED_ ## x __attribute__((__unused__))
+/*
+ * raise a compiler warning if a potentially error raising function's return
+ * value is not used.
+ */
+#define MSP_WARN_UNUSED __attribute__((warn_unused_result))
+/* Annotate a function parameter as unused */
+#define MSP_UNUSED(x) MSP_UNUSED_##x __attribute__((__unused__))
 #else
-	#define MSP_WARN_UNUSED
-	#define MSP_UNUSED(x) MSP_UNUSED_ ## x
+#define MSP_WARN_UNUSED
+#define MSP_UNUSED(x) MSP_UNUSED_##x
 #endif
 
+/* clang-format off */
 /* Error codes */
 #define MSP_ERR_GENERIC                                             -1
 #define MSP_ERR_NO_MEMORY                                           -2
@@ -92,13 +93,13 @@
 #define MSP_ERR_INSUFFICIENT_ALLELES                                -54
 #define MSP_ERR_BAD_ROOT_PROBABILITIES                              -55
 #define MSP_ERR_BAD_TRANSITION_MATRIX                               -56
-
+/* clang-format on */
 /* This bit is 0 for any errors originating from tskit */
 #define MSP_TSK_ERR_BIT 13
 
 int msp_set_tsk_error(int err);
 bool msp_is_tsk_error(int err);
-const char * msp_strerror(int err);
+const char *msp_strerror(int err);
 void __msp_safe_free(void **ptr);
 
 #define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))

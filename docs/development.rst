@@ -40,6 +40,9 @@ Quickstart
   code. To run the checks without committing use ``pre-commit run``. To bypass
   the checks (to save or get feedback on work-in-progress) use ``git commit
   --no-verify``
+- If you have modifed the C code then
+  ``clang-format -i lib/tests/* lib/!(avl).{c,h}`` will format the code to
+  satisfy CI checks.
 - When ready open a pull request on GitHub. Please make sure that the tests pass before
   you open the PR, unless you want to ask the community for help with a failing test.
 - See the `tskit documentation <https://tskit.readthedocs.io/en/latest/development.html#github-workflow>`_

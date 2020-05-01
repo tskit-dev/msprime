@@ -40,8 +40,7 @@ object_heap_print_state(object_heap_t *self, FILE *out)
     fprintf(out, "\ttop = %d\n", (int) self->top);
     fprintf(out, "\tblock_size = %d\n", (int) self->block_size);
     fprintf(out, "\tnum_blocks = %d\n", (int) self->num_blocks);
-    fprintf(out, "\ttotal allocated = %d\n",
-            (int) object_heap_get_num_allocated(self));
+    fprintf(out, "\ttotal allocated = %d\n", (int) object_heap_get_num_allocated(self));
 }
 
 static void
@@ -99,7 +98,7 @@ out:
 /*
  * Returns the jth object in the memory buffers.
  */
-inline void * MSP_WARN_UNUSED
+inline void *MSP_WARN_UNUSED
 object_heap_get_object(object_heap_t *self, size_t index)
 {
     void *ret = NULL;
@@ -119,7 +118,7 @@ object_heap_empty(object_heap_t *self)
     return self->top == 0;
 }
 
-inline void * MSP_WARN_UNUSED
+inline void *MSP_WARN_UNUSED
 object_heap_alloc_object(object_heap_t *self)
 {
     void *ret = NULL;
@@ -141,7 +140,7 @@ object_heap_free_object(object_heap_t *self, void *obj)
 
 int MSP_WARN_UNUSED
 object_heap_init(object_heap_t *self, size_t object_size, size_t block_size,
-        void (*init_object)(void **, size_t))
+    void (*init_object)(void **, size_t))
 {
     int ret = -1;
 

@@ -98,15 +98,15 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_BAD_MODEL:
             ret = "Model error. Either a bad model, or the requested operation "
-                "is not supported for the current model";
+                  "is not supported for the current model";
             break;
         case MSP_ERR_INCOMPATIBLE_FROM_TS:
             ret = "The specified tree sequence is not a compatible starting point "
-                "for the current simulation";
+                  "for the current simulation";
             break;
         case MSP_ERR_BAD_START_TIME_FROM_TS:
             ret = "The specified start_time and from_ts are not compatible. All "
-                "node times in the tree sequence must be <= start_time.";
+                  "node times in the tree sequence must be <= start_time.";
             break;
         case MSP_ERR_BAD_START_TIME:
             ret = "start_time must be >= 0.";
@@ -116,18 +116,19 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_RECOMB_MAP_TOO_COARSE:
             ret = "The specified recombination map is cannot translate the coordinates"
-                "for the specified tree sequence. It is either too coarse (num_loci "
-                "is too small) or contains zero recombination rates. Please either "
-                "increase the number of loci or recombination rate";
+                  "for the specified tree sequence. It is either too coarse (num_loci "
+                  "is too small) or contains zero recombination rates. Please either "
+                  "increase the number of loci or recombination rate";
             break;
         case MSP_ERR_TIME_TRAVEL:
             ret = "The simulation model supplied resulted in a parent node having "
-                "a time value <= to its child. This can occur either as a result "
-                "of multiple bottlenecks happening at the same time or because of "
-                "numerical imprecision with very small population sizes.";
+                  "a time value <= to its child. This can occur either as a result "
+                  "of multiple bottlenecks happening at the same time or because of "
+                  "numerical imprecision with very small population sizes.";
             break;
         case MSP_ERR_INTEGRATION_FAILED:
-            ret = "GSL numerical integration failed. Please check the stderr for details.";
+            ret = "GSL numerical integration failed. Please check the stderr for "
+                  "details.";
             break;
         case MSP_ERR_BAD_SWEEP_POSITION:
             ret = "Sweep position must be between 0 and sequence length.";
@@ -146,7 +147,7 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_EVENTS_DURING_SWEEP:
             ret = "Demographic and sampling events during a sweep "
-                "are not supported";
+                  "are not supported";
             break;
         case MSP_ERR_UNSUPPORTED_OPERATION:
             ret = "Current simulation configuration is not supported.";
@@ -156,11 +157,11 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK:
             ret = "Bottleneck events are not supported in the DTWF model. "
-                "They can be implemented as population size changes.";
+                  "They can be implemented as population size changes.";
             break;
         case MSP_ERR_BAD_PEDIGREE_NUM_SAMPLES:
             ret = "The number of haploid lineages denoted by sample_size must "
-                "be divisible by ploidy (default 2)";
+                  "be divisible by ploidy (default 2)";
             break;
         case MSP_ERR_BAD_PEDIGREE_ID:
             ret = "Individual IDs in pedigrees must be strictly > 0.";
@@ -200,8 +201,8 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER:
             ret = "Tree sequence contains mutations that would descend from "
-                "existing mutations: finite site mutations must be generated on "
-                "older time periods first.";
+                  "existing mutations: finite site mutations must be generated on "
+                  "older time periods first.";
             break;
         case MSP_ERR_INSUFFICIENT_ALLELES:
             ret = "Must have at least two alleles.";
@@ -210,11 +211,12 @@ msp_strerror_internal(int err)
             ret = "Root probabilities must be nonnegative and sum to one.";
             break;
         case MSP_ERR_BAD_TRANSITION_MATRIX:
-            ret = "Each row of the transition matrix must be nonnegative and sum to one.";
+            ret = "Each row of the transition matrix must be nonnegative and sum to "
+                  "one.";
             break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
-                "report!";
+                  "report!";
             break;
     }
 out:
@@ -246,7 +248,8 @@ msp_strerror(int err)
 }
 
 void
-__msp_safe_free(void **ptr) {
+__msp_safe_free(void **ptr)
+{
     if (ptr != NULL) {
         if (*ptr != NULL) {
             free(*ptr);

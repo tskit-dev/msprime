@@ -33,18 +33,17 @@
 #include <gsl/gsl_randist.h>
 #include <CUnit/Basic.h>
 
-
 #define ALPHABET_BINARY 0
 #define ALPHABET_NUCLEOTIDE 1
 
 /* Global variables used for test in state in the test suite */
 
-char * _tmp_file_name;
-FILE * _devnull;
+char *_tmp_file_name;
+FILE *_devnull;
 
 static void
-verify_simulator_tsk_treeseq_equality(msp_t *msp, tsk_treeseq_t *tree_seq,
-        mutgen_t *mutgen, double scale)
+verify_simulator_tsk_treeseq_equality(
+    msp_t *msp, tsk_treeseq_t *tree_seq, mutgen_t *mutgen, double scale)
 {
     int ret;
     uint32_t num_samples = msp_get_num_samples(msp);
@@ -54,19 +53,15 @@ verify_simulator_tsk_treeseq_equality(msp_t *msp, tsk_treeseq_t *tree_seq,
     node_id_t *sample_ids;
 
     CU_ASSERT_EQUAL_FATAL(
-            tsk_treeseq_get_num_samples(tree_seq),
-            msp_get_num_samples(msp));
+        tsk_treeseq_get_num_samples(tree_seq), msp_get_num_samples(msp));
+    CU_ASSERT_EQUAL_FATAL(tsk_treeseq_get_num_edges(tree_seq), msp_get_num_edges(msp));
     CU_ASSERT_EQUAL_FATAL(
-            tsk_treeseq_get_num_edges(tree_seq),
-            msp_get_num_edges(msp));
-    CU_ASSERT_EQUAL_FATAL(
-            tsk_treeseq_get_num_migrations(tree_seq),
-            msp_get_num_migrations(msp));
+        tsk_treeseq_get_num_migrations(tree_seq), msp_get_num_migrations(msp));
     ret = msp_get_samples(msp, &samples);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(tsk_treeseq_get_num_nodes(tree_seq) >= num_samples);
     CU_ASSERT_TRUE(tsk_migration_table_equals(
-                &msp->tables->migrations, &tree_seq->tables->migrations))
+        &msp->tables->migrations, &tree_seq->tables->migrations))
 
     for (j = 0; j < num_samples; j++) {
         ret = tsk_treeseq_get_node(tree_seq, j, &node);
@@ -137,7 +132,8 @@ test_fenwick_expand(void)
         CU_ASSERT(fenwick_expand(&t1, 2 * n) == 0);
         CU_ASSERT_EQUAL(t1.size, t2.size);
         CU_ASSERT_EQUAL(memcmp(t1.tree, t2.tree, (t2.size + 1) * sizeof(int64_t)), 0);
-        CU_ASSERT_EQUAL(memcmp(t1.values, t2.values, (t2.size + 1) * sizeof(int64_t)), 0);
+        CU_ASSERT_EQUAL(
+            memcmp(t1.values, t2.values, (t2.size + 1) * sizeof(int64_t)), 0);
         CU_ASSERT(fenwick_free(&t1) == 0);
         CU_ASSERT(fenwick_free(&t2) == 0);
     }
@@ -149,7 +145,7 @@ test_single_locus_two_populations(void)
     int ret;
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    sample_t samples[] = {{0, 0.0}, {0, 0.0}, {1, 40.0}};
+    sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 }, { 1, 40.0 } };
     tsk_table_collection_t tables;
     tsk_edge_table_t *edges;
     tsk_node_table_t *nodes;
@@ -237,7 +233,7 @@ test_single_locus_many_populations(void)
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     uint32_t num_populations = 500;
-    sample_t samples[] = {{0, 0.0}, {num_populations - 1, 0.0}};
+    sample_t samples[] = { { 0, 0.0 }, { num_populations - 1, 0.0 } };
     uint32_t n = 2;
     recomb_map_t recomb_map;
     tsk_table_collection_t tables;
@@ -283,7 +279,7 @@ test_dtwf_simultaneous_historical_samples(void)
     int ret;
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    sample_t samples[] = {{0, 0}, {0, 1.1}, {0, 1.2}};
+    sample_t samples[] = { { 0, 0 }, { 0, 1.1 }, { 0, 1.2 } };
     tsk_node_table_t *nodes;
     uint32_t n = 3;
     recomb_map_t recomb_map;
@@ -333,7 +329,7 @@ test_single_locus_historical_sample(void)
     int ret, j;
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    sample_t samples[] = {{0, 0.0}, {0, 101.0}};
+    sample_t samples[] = { { 0, 0.0 }, { 0, 101.0 } };
     tsk_edge_table_t *edges;
     tsk_node_table_t *nodes;
     uint32_t n = 2;
@@ -399,7 +395,7 @@ test_single_locus_multiple_historical_samples(void)
     int ret, j;
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    sample_t samples[] = {{0, 0.0}, {0, 10.0}, {0, 10.0}, {0, 10.0}};
+    sample_t samples[] = { { 0, 0.0 }, { 0, 10.0 }, { 0, 10.0 }, { 0, 10.0 } };
     /* tsk_edge_table_t *edges; */
     /* tsk_node_table_t *nodes; */
     uint32_t n = 4;
@@ -458,14 +454,14 @@ test_single_locus_historical_sample_start_time(void)
     int ret;
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    sample_t samples[] = {{0, 0.0}, {0, 10.0}};
+    sample_t samples[] = { { 0, 0.0 }, { 0, 10.0 } };
     tsk_edge_table_t *edges;
     tsk_node_table_t *nodes;
     uint32_t n = 2;
     size_t j, model;
     recomb_map_t recomb_map;
     tsk_table_collection_t tables;
-    double start_times[] = {0, 2, 10, 10.0001, 1000};
+    double start_times[] = { 0, 2, 10, 10.0001, 1000 };
     /* double start_times[] = {0, 2, 9.99}; //10, 1000}; */
     /* double start_times[] = {10.00}; //10, 1000}; */
 
@@ -534,7 +530,7 @@ test_single_locus_historical_sample_end_time(void)
     int ret;
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    sample_t samples[] = {{0, 0.0}, {0, 10.0}};
+    sample_t samples[] = { { 0, 0.0 }, { 0, 10.0 } };
     tsk_node_table_t *nodes;
     uint32_t n = 2;
     size_t model;
@@ -609,7 +605,7 @@ test_simulator_getters_setters(void)
     uint32_t m = 10;
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    double migration_matrix[] = {0, 0, 0, 0};
+    double migration_matrix[] = { 0, 0, 0, 0 };
     double matrix[4], growth_rate, initial_size;
     double Ne = 4;
     size_t migration_events[4];
@@ -631,7 +627,8 @@ test_simulator_getters_setters(void)
     }
     CU_ASSERT_EQUAL(msp_alloc(&msp, 0, NULL, NULL, NULL, rng), MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
-    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, NULL, NULL, rng), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(
+        msp_alloc(&msp, n, samples, NULL, NULL, rng), MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
     ret = msp_alloc(&msp, 0, samples, &recomb_map, &tables, rng);
     msp_free(&msp);
@@ -642,8 +639,8 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SAMPLES);
     msp_free(&msp);
     samples[0].time = -1.0;
-    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, &recomb_map, &tables, rng),
-            MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(
+        msp_alloc(&msp, n, samples, &recomb_map, &tables, rng), MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
     samples[0].time = 0.0;
 
@@ -651,19 +648,14 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(msp_set_dimensions(&msp, 0, 1), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_dimensions(&msp, 1, 0), MSP_ERR_BAD_PARAM_VALUE);
-    CU_ASSERT_EQUAL(msp_set_node_mapping_block_size(&msp, 0),
-            MSP_ERR_BAD_PARAM_VALUE);
-    CU_ASSERT_EQUAL(msp_set_segment_block_size(&msp, 0),
-            MSP_ERR_BAD_PARAM_VALUE);
-    CU_ASSERT_EQUAL(msp_set_avl_node_block_size(&msp, 0),
-            MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_node_mapping_block_size(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_segment_block_size(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_set_avl_node_block_size(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_num_populations(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
-    CU_ASSERT_EQUAL(
-            msp_set_population_configuration(&msp, -1, 0, 0),
-            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-    CU_ASSERT_EQUAL(
-            msp_set_population_configuration(&msp, 3, 0, 0),
-            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL(msp_set_population_configuration(&msp, -1, 0, 0),
+        MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL(msp_set_population_configuration(&msp, 3, 0, 0),
+        MSP_ERR_POPULATION_OUT_OF_BOUNDS);
 
     ret = msp_set_simulation_model_hudson(&msp, Ne);
     CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
@@ -671,27 +663,22 @@ test_simulator_getters_setters(void)
 
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
-    CU_ASSERT_EQUAL(
-            msp_get_population_configuration(&msp, 3, NULL, NULL),
-            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL(msp_get_population_configuration(&msp, 3, NULL, NULL),
+        MSP_ERR_POPULATION_OUT_OF_BOUNDS);
     ret = msp_set_population_configuration(&msp, 0, 2 * Ne, 0.5);
     CU_ASSERT_EQUAL(ret, 0);
 
     CU_ASSERT_EQUAL(
-            msp_set_migration_matrix(&msp, 0, NULL),
-            MSP_ERR_BAD_MIGRATION_MATRIX);
-    CU_ASSERT_EQUAL(
-            msp_set_migration_matrix(&msp, 3, migration_matrix),
-            MSP_ERR_BAD_MIGRATION_MATRIX);
+        msp_set_migration_matrix(&msp, 0, NULL), MSP_ERR_BAD_MIGRATION_MATRIX);
+    CU_ASSERT_EQUAL(msp_set_migration_matrix(&msp, 3, migration_matrix),
+        MSP_ERR_BAD_MIGRATION_MATRIX);
     migration_matrix[0] = 1;
-    CU_ASSERT_EQUAL(
-            msp_set_migration_matrix(&msp, 4, migration_matrix),
-            MSP_ERR_BAD_MIGRATION_MATRIX);
+    CU_ASSERT_EQUAL(msp_set_migration_matrix(&msp, 4, migration_matrix),
+        MSP_ERR_BAD_MIGRATION_MATRIX);
     migration_matrix[0] = 0;
     migration_matrix[1] = -1;
-    CU_ASSERT_EQUAL(
-            msp_set_migration_matrix(&msp, 4, migration_matrix),
-            MSP_ERR_BAD_MIGRATION_MATRIX);
+    CU_ASSERT_EQUAL(msp_set_migration_matrix(&msp, 4, migration_matrix),
+        MSP_ERR_BAD_MIGRATION_MATRIX);
 
     migration_matrix[1] = 1;
     migration_matrix[2] = 1;
@@ -754,7 +741,7 @@ test_demographic_events(void)
     uint32_t m = 10;
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    double migration_matrix[] = {0, 1, 1, 0};
+    double migration_matrix[] = { 0, 1, 1, 0 };
     double last_time, time, pop_size;
     recomb_map_t recomb_map;
     tsk_table_collection_t tables;
@@ -801,62 +788,45 @@ test_demographic_events(void)
             CU_ASSERT_EQUAL(ret, 0);
         }
 
-        CU_ASSERT_EQUAL(
-            msp_add_mass_migration(&msp, 10, -1, 0, 1),
+        CU_ASSERT_EQUAL(msp_add_mass_migration(&msp, 10, -1, 0, 1),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
         CU_ASSERT_EQUAL(
-            msp_add_mass_migration(&msp, 10, 2, 0, 1),
-            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+            msp_add_mass_migration(&msp, 10, 2, 0, 1), MSP_ERR_POPULATION_OUT_OF_BOUNDS);
         CU_ASSERT_EQUAL(
-            msp_add_mass_migration(&msp, 10, 0, 0, 1),
-            MSP_ERR_SOURCE_DEST_EQUAL);
+            msp_add_mass_migration(&msp, 10, 0, 0, 1), MSP_ERR_SOURCE_DEST_EQUAL);
         CU_ASSERT_EQUAL(
-            msp_add_mass_migration(&msp, 10, 0, 1, -5),
-            MSP_ERR_BAD_PROPORTION);
+            msp_add_mass_migration(&msp, 10, 0, 1, -5), MSP_ERR_BAD_PROPORTION);
 
-        CU_ASSERT_EQUAL(
-            msp_add_migration_rate_change(&msp, 10, -2, 2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -2, 2.0),
             MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
         CU_ASSERT_EQUAL(
-            msp_add_migration_rate_change(&msp, 10, -1, -2.0),
-            MSP_ERR_BAD_PARAM_VALUE);
-        CU_ASSERT_EQUAL(
-            msp_add_migration_rate_change(&msp, 10, 3, 2.0),
+            msp_add_migration_rate_change(&msp, 10, -1, -2.0), MSP_ERR_BAD_PARAM_VALUE);
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 3, 2.0),
             MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX);
 
-        CU_ASSERT_EQUAL(
-            msp_add_population_parameters_change(&msp, 10, -2, 0, 0),
+        CU_ASSERT_EQUAL(msp_add_population_parameters_change(&msp, 10, -2, 0, 0),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-        CU_ASSERT_EQUAL(
-            msp_add_population_parameters_change(&msp, 10, -1, -1, 0),
+        CU_ASSERT_EQUAL(msp_add_population_parameters_change(&msp, 10, -1, -1, 0),
             MSP_ERR_BAD_PARAM_VALUE);
         CU_ASSERT_EQUAL(
             msp_add_population_parameters_change(&msp, 10, -1, GSL_NAN, GSL_NAN),
             MSP_ERR_BAD_PARAM_VALUE);
 
-        CU_ASSERT_EQUAL(
-            msp_add_simple_bottleneck(&msp, 10, -1, 0),
+        CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 10, -1, 0),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
         CU_ASSERT_EQUAL(
-            msp_add_simple_bottleneck(&msp, 10, 0, -1),
-            MSP_ERR_BAD_PROPORTION);
+            msp_add_simple_bottleneck(&msp, 10, 0, -1), MSP_ERR_BAD_PROPORTION);
         CU_ASSERT_EQUAL(
-            msp_add_simple_bottleneck(&msp, 10, 0, 1.1),
-            MSP_ERR_BAD_PROPORTION);
+            msp_add_simple_bottleneck(&msp, 10, 0, 1.1), MSP_ERR_BAD_PROPORTION);
 
-        CU_ASSERT_EQUAL(
-            msp_add_instantaneous_bottleneck(&msp, 10, 2, 0),
+        CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 10, 2, 0),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
         CU_ASSERT_EQUAL(
-            msp_add_simple_bottleneck(&msp, 10, 0, -1),
-            MSP_ERR_BAD_PROPORTION);
-        CU_ASSERT_EQUAL_FATAL(
-            msp_add_simple_bottleneck(&msp, 10, -1, 0),
+            msp_add_simple_bottleneck(&msp, 10, 0, -1), MSP_ERR_BAD_PROPORTION);
+        CU_ASSERT_EQUAL_FATAL(msp_add_simple_bottleneck(&msp, 10, -1, 0),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
 
-        CU_ASSERT_EQUAL(
-            msp_add_census_event(&msp, -0.5),
-            MSP_ERR_BAD_PARAM_VALUE);
+        CU_ASSERT_EQUAL(msp_add_census_event(&msp, -0.5), MSP_ERR_BAD_PARAM_VALUE);
 
         ret = msp_add_census_event(&msp, 0.05);
         CU_ASSERT_EQUAL(ret, 0);
@@ -896,26 +866,19 @@ test_demographic_events(void)
             CU_ASSERT_EQUAL(ret, 0);
         }
 
-        CU_ASSERT_EQUAL(
-                msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5),
-                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-        CU_ASSERT_EQUAL(
-                msp_add_migration_rate_change(&msp, 0.2, 1, 2.0),
-                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-        CU_ASSERT_EQUAL(
-                msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0),
-                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+        CU_ASSERT_EQUAL(msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5),
+            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 0.2, 1, 2.0),
+            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+        CU_ASSERT_EQUAL(msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0),
+            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
 
-        CU_ASSERT_EQUAL(
-                msp_add_simple_bottleneck(&msp, 0.7, 0, 1.0),
-                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-        CU_ASSERT_EQUAL(
-                msp_add_instantaneous_bottleneck(&msp, 0.8, 0, 1.0),
-                MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+        CU_ASSERT_EQUAL(msp_add_simple_bottleneck(&msp, 0.7, 0, 1.0),
+            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
+        CU_ASSERT_EQUAL(msp_add_instantaneous_bottleneck(&msp, 0.8, 0, 1.0),
+            MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
 
-        CU_ASSERT_EQUAL(
-            msp_debug_demography(&msp, &time),
-            MSP_ERR_BAD_STATE);
+        CU_ASSERT_EQUAL(msp_debug_demography(&msp, &time), MSP_ERR_BAD_STATE);
 
         ret = msp_initialise(&msp);
         CU_ASSERT_EQUAL(ret, 0);
@@ -936,18 +899,16 @@ test_demographic_events(void)
                 CU_ASSERT_EQUAL(ret, 0);
                 CU_ASSERT_TRUE(pop_size >= 0);
                 ret = msp_compute_population_size(
-                        &msp, k, last_time + (time - last_time) / 2, &pop_size);
+                    &msp, k, last_time + (time - last_time) / 2, &pop_size);
                 CU_ASSERT_EQUAL(ret, 0);
                 CU_ASSERT_TRUE(pop_size >= 0);
             }
             j++;
             last_time = time;
-        } while (! gsl_isinf(time));
+        } while (!gsl_isinf(time));
         CU_ASSERT_TRUE(j >= 9);
         CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL(
-            msp_run(&msp, DBL_MAX, ULONG_MAX),
-            MSP_ERR_BAD_STATE);
+        CU_ASSERT_EQUAL(msp_run(&msp, DBL_MAX, ULONG_MAX), MSP_ERR_BAD_STATE);
         ret = msp_reset(&msp);
         CU_ASSERT_EQUAL(ret, 0);
         msp_print_state(&msp, _devnull);
@@ -1026,7 +987,7 @@ test_dtwf_events_between_generations(void)
     msp_t msp;
     population_t pop;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    double migration_matrix[] = {0, 0, 0, 0};
+    double migration_matrix[] = { 0, 0, 0, 0 };
     recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
@@ -1329,10 +1290,10 @@ test_pedigree_multi_locus_simulation(void)
     tsk_table_collection_t tables;
     int num_inds = 4;
     int ploidy = 2;
-    tsk_id_t inds[4] = {1, 2, 3, 4};
-    tsk_id_t parents[8] = {2, 3, 2, 3, -1, -1, -1, -1};  // size num_inds * ploidy
-    double times[4] = {0, 0, 1, 1};
-    tsk_flags_t is_sample[4] = {1, 1, 0, 0};
+    tsk_id_t inds[4] = { 1, 2, 3, 4 };
+    tsk_id_t parents[8] = { 2, 3, 2, 3, -1, -1, -1, -1 }; // size num_inds * ploidy
+    double times[4] = { 0, 0, 1, 1 };
+    tsk_flags_t is_sample[4] = { 1, 1, 0, 0 };
     uint32_t N = 4;
     uint32_t n = 2 * ploidy;
     sample_t *samples = malloc(n * sizeof(sample_t));
@@ -1398,10 +1359,10 @@ test_pedigree_specification(void)
     tsk_table_collection_t tables;
     int num_inds = 4;
     int ploidy = 2;
-    tsk_id_t inds[4] = {1, 2, 3, 4};
-    tsk_id_t parents[8] = {2, 3, 2, 3, -1, -1, -1, -1};  // size num_inds * ploidy
-    double times_good[4] = {0, 0, 1, 1};
-    tsk_flags_t is_sample[4] = {1, 1, 0, 0};
+    tsk_id_t inds[4] = { 1, 2, 3, 4 };
+    tsk_id_t parents[8] = { 2, 3, 2, 3, -1, -1, -1, -1 }; // size num_inds * ploidy
+    double times_good[4] = { 0, 0, 1, 1 };
+    tsk_flags_t is_sample[4] = { 1, 1, 0, 0 };
     uint32_t n = 2 * ploidy;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
@@ -1449,7 +1410,6 @@ test_pedigree_specification(void)
     tsk_table_collection_free(&tables);
 }
 
-
 static void
 test_pedigree_single_locus_simulation(void)
 {
@@ -1462,12 +1422,12 @@ test_pedigree_single_locus_simulation(void)
     tsk_table_collection_t tables;
     int num_inds = 4;
     int ploidy = 2;
-    tsk_id_t inds[4] = {1, 2, 3, 4};
-    tsk_id_t bad_inds[4] = {0, 1, 2, 3};
-    tsk_id_t parents[8] = {2, 3, 2, 3, -1, -1, -1, -1};  // size num_inds * ploidy
-    double times[4] = {0, 0, 1, 1};
-    tsk_flags_t is_sample[4] = {1, 1, 0, 0};
-    tsk_flags_t bad_is_sample[4] = {1, 0, 0, 0};
+    tsk_id_t inds[4] = { 1, 2, 3, 4 };
+    tsk_id_t bad_inds[4] = { 0, 1, 2, 3 };
+    tsk_id_t parents[8] = { 2, 3, 2, 3, -1, -1, -1, -1 }; // size num_inds * ploidy
+    double times[4] = { 0, 0, 1, 1 };
+    tsk_flags_t is_sample[4] = { 1, 1, 0, 0 };
+    tsk_flags_t bad_is_sample[4] = { 1, 0, 0, 0 };
     uint32_t N = 4;
     uint32_t n = 2 * ploidy;
     sample_t *samples = malloc(n * sizeof(sample_t));
@@ -1518,12 +1478,12 @@ test_pedigree_single_locus_simulation(void)
     /* For the single locus sim we should have n-1 coalescent events,
      * counting multiple mergers as multiple coalescent events */
     for (i = 0; i < msp->tables->nodes.num_rows; i++) {
-      num_children = get_num_children(i, &msp->tables->edges);
-      if (num_children > 0) {
-        num_coalescent_events += num_children - 1;
-      }
+        num_children = get_num_children(i, &msp->tables->edges);
+        if (num_children > 0) {
+            num_coalescent_events += num_children - 1;
+        }
     }
-    CU_ASSERT_EQUAL(num_coalescent_events, n-1);
+    CU_ASSERT_EQUAL(num_coalescent_events, n - 1);
 
     ret = msp_finalise_tables(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1582,7 +1542,6 @@ test_dtwf_deterministic(void)
         CU_ASSERT_EQUAL(tables[j].migrations.num_rows, 0);
         CU_ASSERT(tables[j].nodes.num_rows > 0);
         CU_ASSERT(tables[j].edges.num_rows > 0);
-
     }
     CU_ASSERT_TRUE(tsk_node_table_equals(&tables[0].nodes, &tables[1].nodes));
     CU_ASSERT_TRUE(tsk_edge_table_equals(&tables[0].edges, &tables[1].edges));
@@ -1741,7 +1700,7 @@ test_dtwf_single_locus_simulation(void)
             num_coalescent_events += num_children - 1;
         }
     }
-    CU_ASSERT_EQUAL(num_coalescent_events, n-1);
+    CU_ASSERT_EQUAL(num_coalescent_events, n - 1);
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1943,7 +1902,7 @@ test_dtwf_multi_locus_simulation(void)
     uint32_t n = 100;
     uint32_t m = 10;
     long seed = 10;
-    double migration_matrix[] = {0, 0.1, 0.1, 0};
+    double migration_matrix[] = { 0, 0.1, 0.1, 0 };
     const char *model_name;
     size_t num_ca_events, num_re_events;
     double t;
@@ -2029,7 +1988,7 @@ test_gene_conversion_simulation(void)
     int ret;
     uint32_t n = 100;
     uint32_t m = 100;
-    double track_lengths[] = {1.0, 1.3333, 5, 100};
+    double track_lengths[] = { 1.0, 1.3333, 5, 100 };
     long seed = 10;
     size_t j, num_events, num_ca_events, num_re_events, num_gc_events;
     recomb_map_t recomb_map;
@@ -2098,11 +2057,11 @@ test_likelihood_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.sequence_length = 1;
 
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL,
-            TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL,
-            TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 1.0, TSK_NULL, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
@@ -2121,7 +2080,6 @@ test_likelihood_errors(void)
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-
 
     /* Ne <= 0 is an error */
     ret = msp_log_likelihood_arg(&ts, 1, 0, &lik);
@@ -2151,11 +2109,11 @@ test_likelihood_zero_edges(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.sequence_length = 1;
 
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL,
-            TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL,
-            TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
@@ -2208,8 +2166,8 @@ test_likelihood_three_leaves(void)
 {
     int i;
     int ret;
-    double rho[] = {0.1, 1, 10};
-    double theta[] = {0.1, 1, 10};
+    double rho[] = { 0.1, 1, 10 };
+    double theta[] = { 0.1, 1, 10 };
     double ll_exact;
     double lik = 0;
     double tree_length = 19.0 / 8;
@@ -2220,20 +2178,25 @@ test_likelihood_three_leaves(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.sequence_length = 1;
 
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 3, 2);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 4, 2);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 5, 1);
@@ -2312,8 +2275,8 @@ test_likelihood_two_mrcas(void)
 {
     int i;
     int ret;
-    double rho[] = {0.1, 1, 10};
-    double theta[] = {0.1, 1, 10};
+    double rho[] = { 0.1, 1, 10 };
+    double theta[] = { 0.1, 1, 10 };
     double ll_exact;
     double lik = 0;
     double tree_length = 1.5;
@@ -2324,27 +2287,33 @@ test_likelihood_two_mrcas(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.sequence_length = 1;
 
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 2, 1);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 3, 1);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 4, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 5, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.15, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.15, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.15, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.15, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 6, 2);
@@ -2407,8 +2376,8 @@ test_likelihood_material_overhang(void)
 {
     int i;
     int ret;
-    double rho[] = {0.1, 1, 10};
-    double theta[] = {0.1, 1, 10};
+    double rho[] = { 0.1, 1, 10 };
+    double theta[] = { 0.1, 1, 10 };
     double ll_exact;
     double lik = 0;
     double tree_length = 81.0 / 50;
@@ -2419,27 +2388,33 @@ test_likelihood_material_overhang(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.sequence_length = 1;
 
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 2, 1);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 3, 1);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0, 0.7, 4, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_edge_table_add_row(&tables.edges, 0.7, 1, 5, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.15, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.15, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.15, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.15, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 6, 2);
@@ -2510,8 +2485,8 @@ test_likelihood_material_gap(void)
 {
     int i;
     int ret;
-    double rho[] = {0.1, 1, 10};
-    double theta[] = {0.1, 1, 10};
+    double rho[] = { 0.1, 1, 10 };
+    double theta[] = { 0.1, 1, 10 };
     double ll_exact;
     double lik = 0;
     double tree_length = 0.84;
@@ -2522,27 +2497,33 @@ test_likelihood_material_gap(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.sequence_length = 1;
 
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 2, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_edge_table_add_row(&tables.edges, 0.3, 1, 3, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 4, 3);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 5, 3);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.2, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.2, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.2, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.2, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 6, 2);
@@ -2622,8 +2603,8 @@ test_likelihood_recombination_in_material_gap(void)
 {
     int i;
     int ret;
-    double rho[] = {0.1, 1, 10};
-    double theta[] = {0.1, 1, 10};
+    double rho[] = { 0.1, 1, 10 };
+    double theta[] = { 0.1, 1, 10 };
     double ll_exact;
     double lik = 0;
     double tree_length = 1.34;
@@ -2634,27 +2615,33 @@ test_likelihood_recombination_in_material_gap(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.sequence_length = 1;
 
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 2, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_edge_table_add_row(&tables.edges, 0.3, 1, 3, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 4, 3);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 5, 3);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.2, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.2, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.2, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.2, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 6, 2);
@@ -2668,9 +2655,11 @@ test_likelihood_recombination_in_material_gap(void)
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 8, 6);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.4, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.4, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables.nodes, MSP_NODE_IS_RE_EVENT, 0.4, 0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.4, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 9, 4);
@@ -2750,12 +2739,12 @@ test_multi_locus_simulation(void)
     uint32_t m = 100;
     long seed = 10;
     int model;
-    double migration_matrix[] = {0, 1, 1, 0};
+    double migration_matrix[] = { 0, 1, 1, 0 };
     size_t migration_events[4];
-    int models[] = {MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME};
-    const char *model_names[] = {"hudson", "smc", "smc_prime"};
+    int models[] = { MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME };
+    const char *model_names[] = { "hudson", "smc", "smc_prime" };
     const char *model_name;
-    bool store_full_arg[] = {true, false};
+    bool store_full_arg[] = { true, false };
     size_t j, k;
     recomb_map_t recomb_map;
     tsk_table_collection_t tables;
@@ -2820,11 +2809,11 @@ test_multi_locus_simulation(void)
             CU_ASSERT_EQUAL(ret, 0);
             CU_ASSERT(num_events > n - 1);
             CU_ASSERT_EQUAL(1 + num_events,
-                    /* diagonals must be zero here */
-                    migration_events[1] + migration_events[2] +
-                    msp_get_num_recombination_events(msp) +
-                    msp_get_num_common_ancestor_events(msp) +
-                    msp_get_num_rejected_common_ancestor_events(msp));
+                /* diagonals must be zero here */
+                migration_events[1] + migration_events[2]
+                    + msp_get_num_recombination_events(msp)
+                    + msp_get_num_common_ancestor_events(msp)
+                    + msp_get_num_rejected_common_ancestor_events(msp));
             if (models[j] == MSP_MODEL_HUDSON) {
                 CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
             }
@@ -2839,11 +2828,11 @@ test_multi_locus_simulation(void)
             CU_ASSERT_EQUAL(ret, 0);
             ret = msp_get_num_migration_events(msp, migration_events);
             CU_ASSERT_EQUAL(ret, 0);
-            CU_ASSERT_EQUAL(1 + num_events,
-                    migration_events[1] + migration_events[2] +
-                    msp_get_num_recombination_events(msp) +
-                    msp_get_num_common_ancestor_events(msp) +
-                    msp_get_num_rejected_common_ancestor_events(msp));
+            CU_ASSERT_EQUAL(
+                1 + num_events, migration_events[1] + migration_events[2]
+                                    + msp_get_num_recombination_events(msp)
+                                    + msp_get_num_common_ancestor_events(msp)
+                                    + msp_get_num_rejected_common_ancestor_events(msp));
             if (models[j] == MSP_MODEL_HUDSON) {
                 CU_ASSERT_EQUAL(msp_get_num_rejected_common_ancestor_events(msp), 0);
             }
@@ -2872,7 +2861,7 @@ test_simulation_replicates(void)
     double mutation_rate = 2;
     size_t num_replicates = 10;
     long seed = 10;
-    double migration_matrix[] = {0, 1, 1, 0};
+    double migration_matrix[] = { 0, 1, 1, 0 };
     size_t j;
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
@@ -3081,8 +3070,8 @@ test_large_bottleneck_simulation(void)
     ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     for (j = 0; j < num_bottlenecks; j++) {
-        ret = msp_add_simple_bottleneck(msp, bottlenecks[j].time, 0,
-                bottlenecks[j].parameter);
+        ret = msp_add_simple_bottleneck(
+            msp, bottlenecks[j].time, 0, bottlenecks[j].parameter);
         CU_ASSERT_EQUAL(ret, 0);
     }
     ret = msp_initialise(msp);
@@ -3120,17 +3109,17 @@ test_large_bottleneck_simulation(void)
     tsk_table_collection_free(&tables);
 }
 
-#define check_time_change(msp, t) \
-    do { \
-        const double tol = 1e-4; \
-        double g, t2; \
-        g = (msp)->model.model_time_to_generations(&(msp)->model, t); \
-        t2 = (msp)->model.generations_to_model_time(&(msp)->model, g); \
-        CU_ASSERT_DOUBLE_EQUAL(t, t2, tol); \
-        g = (msp)->model.model_rate_to_generation_rate(&(msp)->model, t); \
-        t2 = (msp)->model.generation_rate_to_model_rate(&(msp)->model, g); \
-        CU_ASSERT_DOUBLE_EQUAL(t, t2, tol); \
-    } while(0)
+#define check_time_change(msp, t)                                                       \
+    do {                                                                                \
+        const double tol = 1e-4;                                                        \
+        double g, t2;                                                                   \
+        g = (msp)->model.model_time_to_generations(&(msp)->model, t);                   \
+        t2 = (msp)->model.generations_to_model_time(&(msp)->model, g);                  \
+        CU_ASSERT_DOUBLE_EQUAL(t, t2, tol);                                             \
+        g = (msp)->model.model_rate_to_generation_rate(&(msp)->model, t);               \
+        t2 = (msp)->model.generation_rate_to_model_rate(&(msp)->model, g);              \
+        CU_ASSERT_DOUBLE_EQUAL(t, t2, tol);                                             \
+    } while (0)
 
 static void
 check_model_time_change_consistency(double population_size, double t)
@@ -3140,10 +3129,10 @@ check_model_time_change_consistency(double population_size, double t)
     msp_t msp;
     const unsigned int n = 10;
     const double N2 = population_size * population_size;
-    const double psis[] = {1e-6, 0.01, 0.5, 0.9, 1};
-    const double cs[] = {0.01*N2, 0.5*N2, 0.99*N2};
-    const double alphas[] = {1.1, 1.5, 1.9};
-    const double truncation_points[] = {0.1, 0.5, 0.9, 1};
+    const double psis[] = { 1e-6, 0.01, 0.5, 0.9, 1 };
+    const double cs[] = { 0.01 * N2, 0.5 * N2, 0.99 * N2 };
+    const double alphas[] = { 1.1, 1.5, 1.9 };
+    const double truncation_points[] = { 0.1, 0.5, 0.9, 1 };
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     recomb_map_t recomb_map;
@@ -3185,8 +3174,8 @@ check_model_time_change_consistency(double population_size, double t)
 
     for (j = 0; j < sizeof(alphas) / sizeof(*alphas); j++) {
         for (k = 0; k < sizeof(truncation_points) / sizeof(*truncation_points); k++) {
-            ret = msp_set_simulation_model_beta(&msp, population_size,
-                    alphas[j], truncation_points[k]);
+            ret = msp_set_simulation_model_beta(
+                &msp, population_size, alphas[j], truncation_points[k]);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             check_time_change(&msp, t);
         }
@@ -3202,7 +3191,7 @@ check_model_time_change_consistency(double population_size, double t)
 static void
 test_model_time_change_consistency(void)
 {
-    double Ns[] = {1e-6, 1, 10, 1e4, 1e9};
+    double Ns[] = { 1e-6, 1, 10, 1e4, 1e9 };
     int i;
     for (i = 0; i < sizeof(Ns) / sizeof(*Ns); i++) {
         check_model_time_change_consistency(Ns[i], 0.0);
@@ -3219,8 +3208,8 @@ test_dirac_coalescent_bad_parameters(void)
     int ret;
     msp_t msp;
     unsigned int n = 10;
-    double cs[] = {-1};
-    double psis[] = {-1e6, 1e6};
+    double cs[] = { -1 };
+    double psis[] = { -1e6, 1e6 };
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     recomb_map_t recomb_map;
@@ -3237,11 +3226,11 @@ test_dirac_coalescent_bad_parameters(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < sizeof(cs) / sizeof(*cs); j++) {
-        ret = msp_set_simulation_model_dirac(&msp, 1, 0.1 ,cs[j]);
+        ret = msp_set_simulation_model_dirac(&msp, 1, 0.1, cs[j]);
         CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_C);
     }
     for (j = 0; j < sizeof(psis) / sizeof(*psis); j++) {
-        ret = msp_set_simulation_model_dirac(&msp, 1, psis[j] , 10);
+        ret = msp_set_simulation_model_dirac(&msp, 1, psis[j], 10);
         CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PSI);
     }
 
@@ -3259,8 +3248,8 @@ test_beta_coalescent_bad_parameters(void)
     int ret;
     msp_t msp;
     unsigned int n = 10;
-    double alphas[] = {-1e6, 0, 0.001, 1.0, 2.0, 1e6};
-    double truncation_points[] = {-1e6, 0, 1.001, 1e6};
+    double alphas[] = { -1e6, 0, 0.001, 1.0, 2.0, 1e6 };
+    double truncation_points[] = { -1e6, 0, 1.001, 1e6 };
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     recomb_map_t recomb_map;
@@ -3300,11 +3289,11 @@ test_multiple_mergers_simulation(void)
     uint32_t n = 10;
     uint32_t m = 10;
     long seed = 10;
-    bool store_full_arg[] = {true, false};
+    bool store_full_arg[] = { true, false };
     /* These simulations can be slow, so just choose a few param combinations */
-    double beta_params[][2] = {{1.1, 0.5}, {1.99, 1}};
+    double beta_params[][2] = { { 1.1, 0.5 }, { 1.99, 1 } };
     /* TODO what are good psi parameters here? */
-    double psi_params[][2] = {{0.9, 10}, {0.1, 1}};
+    double psi_params[][2] = { { 0.9, 10 }, { 0.1, 1 } };
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
@@ -3334,11 +3323,11 @@ test_multiple_mergers_simulation(void)
                 ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
                 CU_ASSERT_EQUAL(ret, 0);
                 if (j == 0) {
-                    ret = msp_set_simulation_model_dirac(msp, 1,
-                            psi_params[p][0], psi_params[p][1]);
+                    ret = msp_set_simulation_model_dirac(
+                        msp, 1, psi_params[p][0], psi_params[p][1]);
                 } else {
-                    ret = msp_set_simulation_model_beta(msp, 1,
-                            beta_params[p][0], beta_params[p][1]);
+                    ret = msp_set_simulation_model_beta(
+                        msp, 1, beta_params[p][0], beta_params[p][1]);
                 }
                 CU_ASSERT_EQUAL(ret, 0);
                 /* TODO check for adding various complications like multiple
@@ -3375,15 +3364,14 @@ test_multiple_mergers_simulation(void)
     tsk_table_collection_free(&tables);
 }
 
-
 static void
 test_simple_recomb_map(void)
 {
     int ret;
     recomb_map_t recomb_map;
     double seq_length;
-    double positions[][2] = {{0.0, 1.0}, {0.0, 100.0}, {0.0, 10000.0}};
-    double rates[] = {0.0, 1.0};
+    double positions[][2] = { { 0.0, 1.0 }, { 0.0, 100.0 }, { 0.0, 10000.0 } };
+    double rates[] = { 0.0, 1.0 };
     size_t j;
 
     for (j = 0; j < 3; j++) {
@@ -3406,8 +3394,7 @@ verify_recomb_maps_equal(recomb_map_t *actual, recomb_map_t *expected)
     CU_ASSERT_EQUAL(actual->map.size, expected->map.size);
     CU_ASSERT_EQUAL(actual->discrete, expected->discrete);
     for (i = 0; i < actual->map.size; i++) {
-        CU_ASSERT_DOUBLE_EQUAL(actual->map.position[i],
-                expected->map.position[i], 0.0);
+        CU_ASSERT_DOUBLE_EQUAL(actual->map.position[i], expected->map.position[i], 0.0);
         CU_ASSERT_DOUBLE_EQUAL(actual->map.value[i], expected->map.value[i], 0.0);
         CU_ASSERT_DOUBLE_EQUAL(actual->cumulative[i], expected->cumulative[i], 1e-6);
     }
@@ -3424,9 +3411,9 @@ test_recomb_map_copy(void)
 {
     int ret = 0;
     recomb_map_t map, other, copy;
-    double positions[] = {0.0, 1.0, 2.0};
-    double rates[] = {1.0, 2.0, 0.0};
-    double other_rates[] = {2.0, 4.0, 0.0};
+    double positions[] = { 0.0, 1.0, 2.0 };
+    double rates[] = { 1.0, 2.0, 0.0 };
+    double other_rates[] = { 2.0, 4.0, 0.0 };
 
     ret = recomb_map_alloc(&map, 3, positions, rates, true);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3451,9 +3438,9 @@ test_recomb_map_errors(void)
 {
     int ret;
     recomb_map_t recomb_map;
-    double positions[] = {0.0, 1.0, 2.0};
-    double rates[] = {1.0, 2.0, 0.0};
-    double short_positions[] = {0.0, 0.25, 0.5};
+    double positions[] = { 0.0, 1.0, 2.0 };
+    double rates[] = { 1.0, 2.0, 0.0 };
+    double short_positions[] = { 0.0, 0.25, 0.5 };
 
     ret = recomb_map_alloc(&recomb_map, 0, positions, rates, true);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_INTERVALS);
@@ -3537,10 +3524,10 @@ verify_recomb_map(double length, double *positions, double *rates, size_t size)
 static void
 test_recomb_map_examples(void)
 {
-    double p1[] =  {0, 0.05019838393314813, 0.36933662489552865, 1};
-    double r1[] = {3.5510784169955434, 4.184964179610539, 3.800808140657212, 0};
-    double p2[] =  {0, 0.125, 0.875, 1, 4, 8, 16};
-    double r2[] = {0.1, 6.0, 3.333, 2.1, 0.0, 2.2, 0};
+    double p1[] = { 0, 0.05019838393314813, 0.36933662489552865, 1 };
+    double r1[] = { 3.5510784169955434, 4.184964179610539, 3.800808140657212, 0 };
+    double p2[] = { 0, 0.125, 0.875, 1, 4, 8, 16 };
+    double r2[] = { 0.1, 6.0, 3.333, 2.1, 0.0, 2.2, 0 };
 
     verify_recomb_map(1.0, p1, r1, 4);
     verify_recomb_map(1.0, p1, r1, 4);
@@ -3555,8 +3542,8 @@ static void
 test_translate_position_and_recomb_mass(void)
 {
     recomb_map_t map;
-    double p1[] = {0, 6, 13, 20};
-    double r1[] = {3, 0, 1, 0};
+    double p1[] = { 0, 6, 13, 20 };
+    double r1[] = { 3, 0, 1, 0 };
     recomb_map_alloc(&map, 4, p1, r1, true);
 
     /* interval edges */
@@ -3587,8 +3574,8 @@ test_recomb_map_mass_between(void)
 {
     recomb_map_t discrete_map;
     recomb_map_t cont_map;
-    double p1[] = {0, 6, 13, 20};
-    double r1[] = {3, 0, 1, 0};
+    double p1[] = { 0, 6, 13, 20 };
+    double r1[] = { 3, 0, 1, 0 };
     double tol = 1e-9;
 
     recomb_map_alloc(&discrete_map, 4, p1, r1, true);
@@ -3597,9 +3584,9 @@ test_recomb_map_mass_between(void)
     CU_ASSERT_DOUBLE_EQUAL_FATAL(recomb_map_mass_between(&discrete_map, 0, 2), 6, tol);
     CU_ASSERT_DOUBLE_EQUAL_FATAL(recomb_map_mass_between(&cont_map, 0, 2), 6, tol);
     CU_ASSERT_DOUBLE_EQUAL_FATAL(
-            recomb_map_mass_between_left_exclusive(&discrete_map, 0, 2), 3, tol);
+        recomb_map_mass_between_left_exclusive(&discrete_map, 0, 2), 3, tol);
     CU_ASSERT_DOUBLE_EQUAL_FATAL(
-            recomb_map_mass_between_left_exclusive(&cont_map, 0, 2), 6, tol);
+        recomb_map_mass_between_left_exclusive(&cont_map, 0, 2), 6, tol);
 
     recomb_map_free(&discrete_map);
     recomb_map_free(&cont_map);
@@ -3608,48 +3595,48 @@ test_recomb_map_mass_between(void)
 static void
 test_msp_binary_interval_search(void)
 {
-        double values[] = {-10, 10, 20, 30};
-        size_t size = 4;
-        size_t idx;
+    double values[] = { -10, 10, 20, 30 };
+    size_t size = 4;
+    size_t idx;
 
-        // Search from bottom
-        idx = msp_binary_interval_search(-11, values, size);
-        CU_ASSERT_EQUAL(idx, 0);
-        // Exact match returns index of value
-        idx = msp_binary_interval_search(-10, values, size);
-        CU_ASSERT_EQUAL(idx, 0);
-        // values[index-1] < query <= values[index]
-        idx = msp_binary_interval_search(9, values, size);
-        CU_ASSERT_EQUAL(idx, 1);
-        // exact match
-        idx = msp_binary_interval_search(10, values, size);
-        CU_ASSERT_EQUAL(idx, 1);
-        // Within mid interval
-        idx = msp_binary_interval_search(11, values, size);
-        CU_ASSERT_EQUAL(idx, 2);
-        idx = msp_binary_interval_search(19, values, size);
-        CU_ASSERT_EQUAL(idx, 2);
-        // Exact
-        idx = msp_binary_interval_search(20, values, size);
-        CU_ASSERT_EQUAL(idx, 2);
-        // Within
-        idx = msp_binary_interval_search(21, values, size);
-        CU_ASSERT_EQUAL(idx, 3);
-        // Exact
-        idx = msp_binary_interval_search(30, values, size);
-        CU_ASSERT_EQUAL(idx, 3);
-        // from the top - return last element
-        idx = msp_binary_interval_search(31, values, size);
-        CU_ASSERT_EQUAL(idx, 3);
-        // way above - same
-        idx = msp_binary_interval_search(300, values, size);
-        CU_ASSERT_EQUAL(idx, 3);
+    // Search from bottom
+    idx = msp_binary_interval_search(-11, values, size);
+    CU_ASSERT_EQUAL(idx, 0);
+    // Exact match returns index of value
+    idx = msp_binary_interval_search(-10, values, size);
+    CU_ASSERT_EQUAL(idx, 0);
+    // values[index-1] < query <= values[index]
+    idx = msp_binary_interval_search(9, values, size);
+    CU_ASSERT_EQUAL(idx, 1);
+    // exact match
+    idx = msp_binary_interval_search(10, values, size);
+    CU_ASSERT_EQUAL(idx, 1);
+    // Within mid interval
+    idx = msp_binary_interval_search(11, values, size);
+    CU_ASSERT_EQUAL(idx, 2);
+    idx = msp_binary_interval_search(19, values, size);
+    CU_ASSERT_EQUAL(idx, 2);
+    // Exact
+    idx = msp_binary_interval_search(20, values, size);
+    CU_ASSERT_EQUAL(idx, 2);
+    // Within
+    idx = msp_binary_interval_search(21, values, size);
+    CU_ASSERT_EQUAL(idx, 3);
+    // Exact
+    idx = msp_binary_interval_search(30, values, size);
+    CU_ASSERT_EQUAL(idx, 3);
+    // from the top - return last element
+    idx = msp_binary_interval_search(31, values, size);
+    CU_ASSERT_EQUAL(idx, 3);
+    // way above - same
+    idx = msp_binary_interval_search(300, values, size);
+    CU_ASSERT_EQUAL(idx, 3);
 }
 
 static void
 test_msp_binary_interval_search_repeating(void)
 {
-    double values_repeating[] = {0, 10, 10, 30};
+    double values_repeating[] = { 0, 10, 10, 30 };
     size_t size = 4;
     size_t idx;
 
@@ -3664,7 +3651,6 @@ test_msp_binary_interval_search_repeating(void)
     CU_ASSERT_EQUAL(idx, 3);
 }
 
-
 static void
 test_msp_binary_interval_search_edge_cases(void)
 {
@@ -3676,7 +3662,7 @@ test_msp_binary_interval_search_edge_cases(void)
     CU_ASSERT_EQUAL(idx, 0);
 
     // Size 1 list
-    double values_one[] = {10};
+    double values_one[] = { 10 };
 
     // below
     idx = msp_binary_interval_search(9, values_one, 1);
@@ -3689,7 +3675,7 @@ test_msp_binary_interval_search_edge_cases(void)
     CU_ASSERT_EQUAL(idx, 0);
 
     // Size 2 list
-    double values_two[] = {10,20};
+    double values_two[] = { 10, 20 };
     idx = msp_binary_interval_search(9, values_two, 2);
     CU_ASSERT_EQUAL(idx, 0);
     idx = msp_binary_interval_search(10, values_two, 2);
@@ -3702,7 +3688,7 @@ test_msp_binary_interval_search_edge_cases(void)
     CU_ASSERT_EQUAL(idx, 1);
 
     // All zeros
-    double values_zeros[] = {0,0,0};
+    double values_zeros[] = { 0, 0, 0 };
     idx = msp_binary_interval_search(-1, values_zeros, 3);
     CU_ASSERT_EQUAL(idx, 0);
     idx = msp_binary_interval_search(0, values_zeros, 3);
@@ -3711,10 +3697,9 @@ test_msp_binary_interval_search_edge_cases(void)
     CU_ASSERT_EQUAL(idx, 2);
 }
 
-
 static void
 verify_simulate_from(int model, recomb_map_t *recomb_map,
-        tsk_table_collection_t *from_tables, size_t num_replicates)
+    tsk_table_collection_t *from_tables, size_t num_replicates)
 {
     int ret;
     size_t j;
@@ -3776,8 +3761,8 @@ verify_simulate_from(int model, recomb_map_t *recomb_map,
 /* Verify that the initial state we get in a new simulator from calling
  * with from_ts is equivalent to the state in the original simulator */
 static void
-verify_initial_simulate_from_state(msp_t *msp_source, recomb_map_t *recomb_map,
-        tsk_table_collection_t *from_tables)
+verify_initial_simulate_from_state(
+    msp_t *msp_source, recomb_map_t *recomb_map, tsk_table_collection_t *from_tables)
 {
     int ret;
     msp_t msp_dest;
@@ -3803,8 +3788,9 @@ verify_initial_simulate_from_state(msp_t *msp_source, recomb_map_t *recomb_map,
 }
 
 static void
-verify_simple_simulate_from(int model, uint32_t n, size_t num_loci, double sequence_length,
-        double recombination_rate, size_t num_events, size_t num_replicates)
+verify_simple_simulate_from(int model, uint32_t n, size_t num_loci,
+    double sequence_length, double recombination_rate, size_t num_events,
+    size_t num_replicates)
 {
     int ret;
     tsk_table_collection_t tables;
@@ -3815,8 +3801,8 @@ verify_simple_simulate_from(int model, uint32_t n, size_t num_loci, double seque
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, sequence_length,
-            recombination_rate, true);
+    ret = recomb_map_alloc_uniform(
+        &recomb_map, sequence_length, recombination_rate, true);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3886,7 +3872,7 @@ test_simulate_from_completed(void)
     CU_ASSERT_FATAL(rng != NULL);
     ret = recomb_map_alloc_uniform(&recomb_map, 1.0, recombination_rate, true);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_table_collection_init(&tables,0);
+    ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     memset(samples, 0, n * sizeof(sample_t));
@@ -3928,16 +3914,17 @@ test_simulate_from_incompatible(void)
     /* Add a node so that we get past the first check */
     ret = tsk_population_table_add_row(&from_tables.populations, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_node_table_add_row(&from_tables.nodes, 0, 0.0,
-            0, TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(&from_tables.nodes, 0, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Malformed tree sequence */
     from_tables.nodes.individual[0] = 100;
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
     CU_ASSERT_FATAL(msp_is_tsk_error(ret));
-    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_TSK_ERR_BIT), TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS);
-    CU_ASSERT_STRING_EQUAL(msp_strerror(ret), tsk_strerror(TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS));
+    CU_ASSERT_EQUAL_FATAL(
+        ret ^ (1 << MSP_TSK_ERR_BIT), TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS);
+    CU_ASSERT_STRING_EQUAL(
+        msp_strerror(ret), tsk_strerror(TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS));
     from_tables.nodes.individual[0] = -1;
     msp_free(&msp);
 
@@ -3956,11 +3943,11 @@ test_simulate_from_incompatible(void)
 
     /* older nodes */
     from_tables.sequence_length = 10.0;
-    ret = tsk_node_table_add_row(&from_tables.nodes, TSK_NODE_IS_SAMPLE, 1.0, 0,
-            TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &from_tables.nodes, TSK_NODE_IS_SAMPLE, 1.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&from_tables.nodes, TSK_NODE_IS_SAMPLE, 2.0, 0,
-            TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &from_tables.nodes, TSK_NODE_IS_SAMPLE, 2.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
@@ -4021,10 +4008,10 @@ test_simulate_from_incompatible(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_FATAL(msp_is_tsk_error(ret));
-    CU_ASSERT_EQUAL_FATAL(ret ^ (1 << MSP_TSK_ERR_BIT),
-            TSK_ERR_BAD_EDGES_CONTRADICTORY_CHILDREN);
-    CU_ASSERT_STRING_EQUAL(msp_strerror(ret),
-            tsk_strerror(TSK_ERR_BAD_EDGES_CONTRADICTORY_CHILDREN));
+    CU_ASSERT_EQUAL_FATAL(
+        ret ^ (1 << MSP_TSK_ERR_BIT), TSK_ERR_BAD_EDGES_CONTRADICTORY_CHILDREN);
+    CU_ASSERT_STRING_EQUAL(
+        msp_strerror(ret), tsk_strerror(TSK_ERR_BAD_EDGES_CONTRADICTORY_CHILDREN));
     msp_free(&msp);
 
     gsl_rng_free(rng);
@@ -4108,17 +4095,17 @@ insert_single_tree(tsk_table_collection_t *tables, int alphabet)
     */
     int ret;
     tables->sequence_length = 1.0;
-    ret = tsk_node_table_add_row(&tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0,
-            TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_node_table_add_row(&tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0,
-            TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0,
-            TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_node_table_add_row(&tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0,
-            TSK_NULL, NULL, 0);
+    ret = tsk_node_table_add_row(
+        &tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables->nodes, 0, 1.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
@@ -4170,8 +4157,8 @@ test_mutgen_simple_map(void)
     mutation_model_t mut_model;
     tsk_table_collection_t tables;
     interval_map_t rate_map;
-    double pos[] = {0, 0.1, 0.2, 0.3, 0.4, 1.0};
-    double rate[] = {0, 0.01, 0.02, 0.03, 0.04, 0.0};
+    double pos[] = { 0, 0.1, 0.2, 0.3, 0.4, 1.0 };
+    double rate[] = { 0, 0.01, 0.02, 0.03, 0.04, 0.0 };
 
     CU_ASSERT_FATAL(rng != NULL);
     ret = tsk_table_collection_init(&tables, 0);
@@ -4476,7 +4463,6 @@ test_single_tree_mutgen_keep_sites(void)
     ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_DUPLICATE_SITE_POSITION);
 
-
     mutgen_free(&mutgen);
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
@@ -4711,13 +4697,13 @@ test_single_tree_mutgen_do_nothing_mutations(void)
     tsk_table_collection_t tables, copy;
     interval_map_t rate_map;
     mutation_model_t mut_model;
-    static const char *binary_alleles[] = {"0", "1"};
-    static double root_distribution[] = {0.5, 0.5};
-    static double transition_matrix[] = {1.0, 0.0, 0.0, 1.0};
+    static const char *binary_alleles[] = { "0", "1" };
+    static double root_distribution[] = { 0.5, 0.5 };
+    static double transition_matrix[] = { 1.0, 0.0, 0.0, 1.0 };
 
     CU_ASSERT_FATAL(rng != NULL);
     ret = mutation_model_alloc(&mut_model, 2, (char **) (uintptr_t *) binary_alleles,
-            root_distribution, transition_matrix);
+        root_distribution, transition_matrix);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = interval_map_alloc_single(&rate_map, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4788,13 +4774,12 @@ test_single_tree_mutgen_many_mutations(void)
 
 static void
 verify_simple_genic_selection_trajectory(
-       double start_frequency, double end_frequency, double alpha,
-       double dt)
+    double start_frequency, double end_frequency, double alpha, double dt)
 {
     int ret;
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    sample_t samples[] = {{0, 0.0}, {0, 0.0}};
+    sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 } };
     tsk_table_collection_t tables;
     recomb_map_t recomb_map;
     size_t j, num_steps;
@@ -4816,7 +4801,7 @@ verify_simple_genic_selection_trajectory(
 
     /* compute the trajectory */
     ret = msp.model.params.sweep.generate_trajectory(
-            &msp.model.params.sweep, &msp, &num_steps, &time, &allele_frequency);
+        &msp.model.params.sweep, &msp, &num_steps, &time, &allele_frequency);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(num_steps > 1);
     CU_ASSERT_EQUAL(time[0], 0);
@@ -4855,7 +4840,7 @@ test_sweep_genic_selection_bad_parameters(void)
     int ret;
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    sample_t samples[] = {{0, 0.0}, {0, 0.0}};
+    sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 } };
     tsk_table_collection_t tables;
     recomb_map_t recomb_map;
 
@@ -4905,7 +4890,6 @@ test_sweep_genic_selection_bad_parameters(void)
         &msp, 1.0, 5.0, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_POSITION);
 
-
     ret = msp_set_simulation_model_sweep_genic_selection(
         &msp, 1.0, 0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4933,7 +4917,7 @@ test_sweep_genic_selection_events(void)
     int ret;
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    sample_t samples[] = {{0, 0.0}, {0, 0.0}, {0, 0.0}};
+    sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 }, { 0, 0.0 } };
     tsk_table_collection_t tables;
     recomb_map_t recomb_map;
 
@@ -5005,7 +4989,7 @@ verify_sweep_genic_selection(uint32_t num_loci, double growth_rate)
         ret = msp_set_dimensions(&msp, 1, 2);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_simulation_model_sweep_genic_selection(
-                &msp, 1, num_loci / 2, 0.1, 0.9, 0.1, 0.01);
+            &msp, 1, num_loci / 2, 0.1, 0.9, 0.1, 0.01);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_population_configuration(&msp, 0, 1.0, growth_rate);
         CU_ASSERT_EQUAL(ret, 0);
@@ -5020,7 +5004,6 @@ verify_sweep_genic_selection(uint32_t num_loci, double growth_rate)
         CU_ASSERT_EQUAL(tables[j].migrations.num_rows, 0);
         CU_ASSERT(tables[j].nodes.num_rows > 0);
         CU_ASSERT(tables[j].edges.num_rows > 0);
-
     }
     CU_ASSERT_TRUE(tsk_node_table_equals(&tables[0].nodes, &tables[1].nodes));
     CU_ASSERT_TRUE(tsk_edge_table_equals(&tables[0].edges, &tables[1].edges));
@@ -5048,7 +5031,6 @@ test_sweep_genic_selection_recomb(void)
     verify_sweep_genic_selection(100, 1.0);
     verify_sweep_genic_selection(100, -1.0);
 }
-
 
 static void
 test_sweep_genic_selection_time_change(void)
@@ -5087,7 +5069,7 @@ test_sweep_genic_selection_time_change(void)
     for (j = 0; j < 10; j++) {
 
         ret = msp_set_simulation_model_sweep_genic_selection(
-                &msp, 10, num_loci / 2, 0.1, 0.9, 0.1, 0.01);
+            &msp, 10, num_loci / 2, 0.1, 0.9, 0.1, 0.01);
         CU_ASSERT_EQUAL(ret, 0);
 
         CU_ASSERT_EQUAL(ret, 0);
@@ -5111,8 +5093,8 @@ test_interval_map(void)
     int ret;
     size_t j;
     interval_map_t imap;
-    double position[] = {0, 1, 2, 3, 4, 5};
-    double value[] = {0.1, 1.1, 2.1, 3.1, 4.1, 5.1};
+    double position[] = { 0, 1, 2, 3, 4, 5 };
+    double value[] = { 0.1, 1.1, 2.1, 3.1, 4.1, 5.1 };
 
     ret = interval_map_alloc(&imap, 0, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_INTERVALS);
@@ -5149,9 +5131,9 @@ test_mutation_model_errors(void)
 {
     int ret;
     mutation_model_t model;
-    const char *alleles[] = {"A", "B"};
-    double dist[] = {0.5, 0.5};
-    double matrix[] = {0, 1.0, 1.0, 0};
+    const char *alleles[] = { "A", "B" };
+    double dist[] = { 0.5, 0.5 };
+    double matrix[] = { 0, 1.0, 1.0, 0 };
 
     ret = mutation_model_alloc(&model, 0, NULL, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_ALLELES);
@@ -5159,79 +5141,68 @@ test_mutation_model_errors(void)
 
     /* Bad probability values */
     dist[0] = -1;
-    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles,
-            dist, matrix);
+    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ROOT_PROBABILITIES);
     mutation_model_free(&model);
 
     /* Sums to 1, but bad values */
     dist[0] = -1;
     dist[1] = 2;
-    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles,
-            dist, matrix);
+    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ROOT_PROBABILITIES);
     mutation_model_free(&model);
 
     dist[0] = 1.1;
     dist[1] = 0.5;
-    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles,
-            dist, matrix);
+    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ROOT_PROBABILITIES);
     mutation_model_free(&model);
 
     /* Must sum to 1 */
     dist[0] = 0.9;
-    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles,
-            dist, matrix);
+    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ROOT_PROBABILITIES);
     mutation_model_free(&model);
 
     dist[0] = 0.1;
-    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles,
-            dist, matrix);
+    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ROOT_PROBABILITIES);
     mutation_model_free(&model);
 
     /* Make sure dist is still OK . */
     dist[0] = 0.5;
-    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles,
-            dist, matrix);
+    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutation_model_free(&model);
 
     /* Matrix values must be probablilities */
     matrix[0] = -1;
-    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles,
-            dist, matrix);
+    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRANSITION_MATRIX);
     mutation_model_free(&model);
 
     /* Sums to 1, but bad values */
     matrix[0] = -1;
     matrix[1] = 2;
-    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles,
-            dist, matrix);
+    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRANSITION_MATRIX);
     mutation_model_free(&model);
 
     matrix[0] = 1.1;
     matrix[1] = 1.0;
-    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles,
-            dist, matrix);
+    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRANSITION_MATRIX);
     mutation_model_free(&model);
 
     matrix[0] = 0.6;
     matrix[1] = 0.5;
-    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles,
-            dist, matrix);
+    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRANSITION_MATRIX);
     mutation_model_free(&model);
 
     matrix[0] = 0.5;
     matrix[1] = 0.5;
-    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles,
-            dist, matrix);
+    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutation_model_free(&model);
 }
@@ -5241,13 +5212,12 @@ test_mutation_model_properties(void)
 {
     int ret;
     mutation_model_t model;
-    const char *alleles[] = {"A", "B"};
-    double dist[] = {0.5, 0.5};
-    double matrix[] = {0, 1.0, 1.0, 0};
+    const char *alleles[] = { "A", "B" };
+    double dist[] = { 0.5, 0.5 };
+    double matrix[] = { 0, 1.0, 1.0, 0 };
     int num_alleles;
 
-    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles,
-            dist, matrix);
+    ret = mutation_model_alloc(&model, 2, (char **) (uintptr_t) alleles, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     num_alleles = mutation_model_get_num_alleles(&model);
     CU_ASSERT_EQUAL_FATAL(num_alleles, 2);
@@ -5272,8 +5242,8 @@ test_strerror(void)
 static void
 test_strerror_tskit(void)
 {
-    int tskit_errors[] = {TSK_ERR_NO_MEMORY,
-        TSK_ERR_NODE_OUT_OF_BOUNDS, TSK_ERR_EDGE_OUT_OF_BOUNDS};
+    int tskit_errors[]
+        = { TSK_ERR_NO_MEMORY, TSK_ERR_NODE_OUT_OF_BOUNDS, TSK_ERR_EDGE_OUT_OF_BOUNDS };
     size_t j;
     int err;
 
@@ -5326,8 +5296,7 @@ msprime_suite_cleanup(void)
 static void
 handle_cunit_error()
 {
-    fprintf(stderr, "CUnit error occured: %d: %s\n",
-            CU_get_error(), CU_get_error_msg());
+    fprintf(stderr, "CUnit error occured: %d: %s\n", CU_get_error(), CU_get_error_msg());
     exit(EXIT_FAILURE);
 }
 
@@ -5338,120 +5307,123 @@ main(int argc, char **argv)
     CU_pTest test;
     CU_pSuite suite;
     CU_TestInfo tests[] = {
-        {"test_fenwick", test_fenwick},
-        {"test_fenwick_expand", test_fenwick_expand},
-        {"test_single_locus_two_populations", test_single_locus_two_populations},
-        {"test_single_locus_many_populations", test_single_locus_many_populations},
-        {"test_single_locus_historical_sample", test_single_locus_historical_sample},
-        {"test_single_locus_multiple_historical_samples",
-            test_single_locus_multiple_historical_samples},
-        {"test_dtwf_simultaneous_historical_samples",
-            test_dtwf_simultaneous_historical_samples},
-        {"test_single_locus_historical_sample_start_time",
-            test_single_locus_historical_sample_start_time},
-        {"test_single_locus_historical_sample_end_time",
-            test_single_locus_historical_sample_end_time},
-        {"test_simulator_getters_setters", test_simulator_getters_setters},
-        {"test_demographic_events", test_demographic_events},
-        {"test_demographic_events_start_time", test_demographic_events_start_time},
-        {"test_census_event", test_census_event},
-        {"test_dtwf_unsupported_bottleneck", test_dtwf_unsupported_bottleneck},
-        {"test_time_travel_error", test_time_travel_error},
-        {"test_single_locus_simulation", test_single_locus_simulation},
-        {"test_single_locus_gene_conversion", test_single_locus_gene_conversion},
-        {"test_multi_locus_bottleneck_arg", test_multi_locus_bottleneck_arg},
-        {"test_mixed_model_simulation", test_mixed_model_simulation},
-        {"test_dtwf_deterministic", test_dtwf_deterministic},
-        {"test_dtwf_zero_pop_size", test_dtwf_zero_pop_size},
-        {"test_dtwf_events_between_generations", test_dtwf_events_between_generations},
-        {"test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation},
-        {"test_dtwf_low_recombination", test_dtwf_low_recombination},
-        {"test_pedigree_single_locus_simulation", test_pedigree_single_locus_simulation},
-        {"test_pedigree_multi_locus_simulation", test_pedigree_multi_locus_simulation},
-        {"test_pedigree_specification", test_pedigree_specification},
+        { "test_fenwick", test_fenwick },
+        { "test_fenwick_expand", test_fenwick_expand },
+        { "test_single_locus_two_populations", test_single_locus_two_populations },
+        { "test_single_locus_many_populations", test_single_locus_many_populations },
+        { "test_single_locus_historical_sample", test_single_locus_historical_sample },
+        { "test_single_locus_multiple_historical_samples",
+            test_single_locus_multiple_historical_samples },
+        { "test_dtwf_simultaneous_historical_samples",
+            test_dtwf_simultaneous_historical_samples },
+        { "test_single_locus_historical_sample_start_time",
+            test_single_locus_historical_sample_start_time },
+        { "test_single_locus_historical_sample_end_time",
+            test_single_locus_historical_sample_end_time },
+        { "test_simulator_getters_setters", test_simulator_getters_setters },
+        { "test_demographic_events", test_demographic_events },
+        { "test_demographic_events_start_time", test_demographic_events_start_time },
+        { "test_census_event", test_census_event },
+        { "test_dtwf_unsupported_bottleneck", test_dtwf_unsupported_bottleneck },
+        { "test_time_travel_error", test_time_travel_error },
+        { "test_single_locus_simulation", test_single_locus_simulation },
+        { "test_single_locus_gene_conversion", test_single_locus_gene_conversion },
+        { "test_multi_locus_bottleneck_arg", test_multi_locus_bottleneck_arg },
+        { "test_mixed_model_simulation", test_mixed_model_simulation },
+        { "test_dtwf_deterministic", test_dtwf_deterministic },
+        { "test_dtwf_zero_pop_size", test_dtwf_zero_pop_size },
+        { "test_dtwf_events_between_generations", test_dtwf_events_between_generations },
+        { "test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation },
+        { "test_dtwf_low_recombination", test_dtwf_low_recombination },
+        { "test_pedigree_single_locus_simulation",
+            test_pedigree_single_locus_simulation },
+        { "test_pedigree_multi_locus_simulation", test_pedigree_multi_locus_simulation },
+        { "test_pedigree_specification", test_pedigree_specification },
 
         /* TODO we should move the likelihood tests to their own file */
-        {"test_likelihood_errors", test_likelihood_errors},
-        {"test_likelihood_zero_edges", test_likelihood_zero_edges},
-        {"test_likelihood_three_leaves", test_likelihood_three_leaves},
-        {"test_likelihood_two_mrcas", test_likelihood_two_mrcas},
-        {"test_likelihood_material_overhang", test_likelihood_material_overhang},
-        {"test_likelihood_material_gap", test_likelihood_material_gap},
-        {"test_likelihood_recombination_in_material_gap",
-            test_likelihood_recombination_in_material_gap},
+        { "test_likelihood_errors", test_likelihood_errors },
+        { "test_likelihood_zero_edges", test_likelihood_zero_edges },
+        { "test_likelihood_three_leaves", test_likelihood_three_leaves },
+        { "test_likelihood_two_mrcas", test_likelihood_two_mrcas },
+        { "test_likelihood_material_overhang", test_likelihood_material_overhang },
+        { "test_likelihood_material_gap", test_likelihood_material_gap },
+        { "test_likelihood_recombination_in_material_gap",
+            test_likelihood_recombination_in_material_gap },
 
-        {"test_multi_locus_simulation", test_multi_locus_simulation},
-        {"test_dtwf_multi_locus_simulation", test_dtwf_multi_locus_simulation},
-        {"test_gene_conversion_simulation", test_gene_conversion_simulation},
-        {"test_simulation_replicates", test_simulation_replicates},
-        {"test_bottleneck_simulation", test_bottleneck_simulation},
-        {"test_dirac_coalescent_bad_parameters", test_dirac_coalescent_bad_parameters},
-        {"test_beta_coalescent_bad_parameters", test_beta_coalescent_bad_parameters},
-        {"test_model_time_change_consistency", test_model_time_change_consistency},
-        {"test_multiple_mergers_simulation", test_multiple_mergers_simulation},
-        {"test_large_bottleneck_simulation", test_large_bottleneck_simulation},
-        {"test_simple_recombination_map", test_simple_recomb_map},
-        {"test_recombination_map_copy", test_recomb_map_copy},
-        {"test_recombination_map_errors", test_recomb_map_errors},
-        {"test_recombination_map_examples", test_recomb_map_examples},
+        { "test_multi_locus_simulation", test_multi_locus_simulation },
+        { "test_dtwf_multi_locus_simulation", test_dtwf_multi_locus_simulation },
+        { "test_gene_conversion_simulation", test_gene_conversion_simulation },
+        { "test_simulation_replicates", test_simulation_replicates },
+        { "test_bottleneck_simulation", test_bottleneck_simulation },
+        { "test_dirac_coalescent_bad_parameters", test_dirac_coalescent_bad_parameters },
+        { "test_beta_coalescent_bad_parameters", test_beta_coalescent_bad_parameters },
+        { "test_model_time_change_consistency", test_model_time_change_consistency },
+        { "test_multiple_mergers_simulation", test_multiple_mergers_simulation },
+        { "test_large_bottleneck_simulation", test_large_bottleneck_simulation },
+        { "test_simple_recombination_map", test_simple_recomb_map },
+        { "test_recombination_map_copy", test_recomb_map_copy },
+        { "test_recombination_map_errors", test_recomb_map_errors },
+        { "test_recombination_map_examples", test_recomb_map_examples },
 
-        {"test_translate_position_and_recomb_mass", test_translate_position_and_recomb_mass},
-        {"test_recomb_map_mass_between", test_recomb_map_mass_between},
+        { "test_translate_position_and_recomb_mass",
+            test_translate_position_and_recomb_mass },
+        { "test_recomb_map_mass_between", test_recomb_map_mass_between },
 
-        {"test_binary_search", test_msp_binary_interval_search},
-        {"test_binary_search_repeating", test_msp_binary_interval_search_repeating},
-        {"test_binary_search_edge_cases", test_msp_binary_interval_search_edge_cases},
+        { "test_binary_search", test_msp_binary_interval_search },
+        { "test_binary_search_repeating", test_msp_binary_interval_search_repeating },
+        { "test_binary_search_edge_cases", test_msp_binary_interval_search_edge_cases },
 
-        {"test_simulate_from_single_locus", test_simulate_from_single_locus},
-        {"test_simulate_from_single_locus_replicates",
-            test_simulate_from_single_locus_replicates},
-        {"test_simulate_from_empty", test_simulate_from_empty},
-        {"test_simulate_from_completed", test_simulate_from_completed},
-        {"test_simulate_from_incompatible", test_simulate_from_incompatible},
-        {"test_simulate_init_errors", test_simulate_init_errors},
+        { "test_simulate_from_single_locus", test_simulate_from_single_locus },
+        { "test_simulate_from_single_locus_replicates",
+            test_simulate_from_single_locus_replicates },
+        { "test_simulate_from_empty", test_simulate_from_empty },
+        { "test_simulate_from_completed", test_simulate_from_completed },
+        { "test_simulate_from_incompatible", test_simulate_from_incompatible },
+        { "test_simulate_init_errors", test_simulate_init_errors },
 
-        {"test_mutgen_simple_map", test_mutgen_simple_map},
-        {"test_mutgen_errors", test_mutgen_errors},
-        {"test_mutgen_bad_mutation_order", test_mutgen_bad_mutation_order},
-        {"test_single_tree_mutgen", test_single_tree_mutgen},
-        {"test_single_tree_mutgen_keep_sites", test_single_tree_mutgen_keep_sites},
-        {"test_single_tree_mutgen_discrete_sites", test_single_tree_mutgen_discrete_sites},
-        {"test_single_tree_mutgen_keep_sites_many_mutations",
-            test_single_tree_mutgen_keep_sites_many_mutations},
-        {"test_single_tree_mutgen_interval", test_single_tree_mutgen_interval},
-        {"test_single_tree_mutgen_empty_site", test_single_tree_mutgen_empty_site},
-        {"test_single_tree_mutgen_do_nothing_mutations", test_single_tree_mutgen_do_nothing_mutations},
-        {"test_single_tree_mutgen_many_mutations", test_single_tree_mutgen_many_mutations},
+        { "test_mutgen_simple_map", test_mutgen_simple_map },
+        { "test_mutgen_errors", test_mutgen_errors },
+        { "test_mutgen_bad_mutation_order", test_mutgen_bad_mutation_order },
+        { "test_single_tree_mutgen", test_single_tree_mutgen },
+        { "test_single_tree_mutgen_keep_sites", test_single_tree_mutgen_keep_sites },
+        { "test_single_tree_mutgen_discrete_sites",
+            test_single_tree_mutgen_discrete_sites },
+        { "test_single_tree_mutgen_keep_sites_many_mutations",
+            test_single_tree_mutgen_keep_sites_many_mutations },
+        { "test_single_tree_mutgen_interval", test_single_tree_mutgen_interval },
+        { "test_single_tree_mutgen_empty_site", test_single_tree_mutgen_empty_site },
+        { "test_single_tree_mutgen_do_nothing_mutations",
+            test_single_tree_mutgen_do_nothing_mutations },
+        { "test_single_tree_mutgen_many_mutations",
+            test_single_tree_mutgen_many_mutations },
 
-        {"test_genic_selection_trajectory", test_genic_selection_trajectory},
-        {"test_sweep_genic_selection_bad_parameters",
-            test_sweep_genic_selection_bad_parameters},
-        {"test_sweep_genic_selection_events", test_sweep_genic_selection_events},
-        {"test_sweep_genic_selection_single_locus",
-            test_sweep_genic_selection_single_locus},
-        {"test_sweep_genic_selection_recomb", test_sweep_genic_selection_recomb},
-        {"test_sweep_genic_selection_time_change",
-            test_sweep_genic_selection_time_change},
+        { "test_genic_selection_trajectory", test_genic_selection_trajectory },
+        { "test_sweep_genic_selection_bad_parameters",
+            test_sweep_genic_selection_bad_parameters },
+        { "test_sweep_genic_selection_events", test_sweep_genic_selection_events },
+        { "test_sweep_genic_selection_single_locus",
+            test_sweep_genic_selection_single_locus },
+        { "test_sweep_genic_selection_recomb", test_sweep_genic_selection_recomb },
+        { "test_sweep_genic_selection_time_change",
+            test_sweep_genic_selection_time_change },
 
-        {"test_interval_map", test_interval_map},
+        { "test_interval_map", test_interval_map },
 
-        {"test_mutation_model_errors", test_mutation_model_errors},
-        {"test_mutation_model_properties", test_mutation_model_properties},
+        { "test_mutation_model_errors", test_mutation_model_errors },
+        { "test_mutation_model_properties", test_mutation_model_properties },
 
-        {"test_strerror", test_strerror},
-        {"test_strerror_tskit", test_strerror_tskit},
+        { "test_strerror", test_strerror },
+        { "test_strerror_tskit", test_strerror_tskit },
         CU_TEST_INFO_NULL,
     };
 
     /* We use initialisers here as the struct definitions change between
      * versions of CUnit */
     CU_SuiteInfo suites[] = {
-        {
-            .pName = "msprime",
+        { .pName = "msprime",
             .pInitFunc = msprime_suite_init,
             .pCleanupFunc = msprime_suite_cleanup,
-            .pTests = tests
-        },
+            .pTests = tests },
         CU_SUITE_INFO_NULL,
     };
     if (CUE_SUCCESS != CU_initialize_registry()) {
@@ -5489,4 +5461,3 @@ main(int argc, char **argv)
     CU_cleanup_registry();
     return ret;
 }
-
