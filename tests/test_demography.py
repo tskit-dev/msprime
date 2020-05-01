@@ -2080,19 +2080,18 @@ class TestLowLevelConversions(unittest.TestCase):
 
     def test_population_parameters_change_initial_size(self):
         g = 100
-        for Ne in [1, 10, 1000]:
-            for initial_size in [0.01, 1, 100, 1e6]:
-                event = msprime.PopulationParametersChange(
-                    time=g, initial_size=initial_size
-                )
-                d = event.get_ll_representation(1)
-                dp = {
-                    "time": g,
-                    "population": -1,
-                    "type": "population_parameters_change",
-                    "initial_size": initial_size,
-                }
-                self.assertEqual(d, dp)
+        for initial_size in [0.01, 1, 100, 1e6]:
+            event = msprime.PopulationParametersChange(
+                time=g, initial_size=initial_size
+            )
+            d = event.get_ll_representation(1)
+            dp = {
+                "time": g,
+                "population": -1,
+                "type": "population_parameters_change",
+                "initial_size": initial_size,
+            }
+            self.assertEqual(d, dp)
 
     def test_population_parameters_change_growth_rate(self):
         g = 100

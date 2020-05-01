@@ -96,7 +96,7 @@ def insert_branch_mutations(ts, mutations_per_branch=1):
                 if v != msprime.NULL_NODE:
                     state[u] = state[v]
                     parent = mutation[v]
-                    for j in range(mutations_per_branch):
+                    for _ in range(mutations_per_branch):
                         state[u] = (state[u] + 1) % 2
                         mutation[u] = tables.mutations.add_row(
                             site=site,
@@ -708,7 +708,7 @@ def mean_descendants(ts, reference_sets):
     last_update = np.zeros(ts.num_nodes)
     total_length = np.zeros(ts.num_nodes)
 
-    def update_counts(edge, sign):
+    def update_counts(edge, left, sign):
         # Update the counts and statistics for a given node. Before we change the
         # node counts in the given direction, check to see if we need to update
         # statistics for that node. When a node count changes, we add the
@@ -729,13 +729,13 @@ def mean_descendants(ts, reference_sets):
         ref_count[reference_sets[j], j] = 1
     ref_count[ts.samples(), K] = 1
 
-    for (left, right), edges_out, edges_in in ts.edge_diffs():
+    for (left, _right), edges_out, edges_in in ts.edge_diffs():
         for edge in edges_out:
             parent[edge.child] = -1
-            update_counts(edge, -1)
+            update_counts(edge, left, -1)
         for edge in edges_in:
             parent[edge.child] = edge.parent
-            update_counts(edge, +1)
+            update_counts(edge, left, +1)
 
     # Finally, add the stats for the last tree and divide by the total
     # length that each node was an ancestor to > 0 samples.
@@ -795,7 +795,7 @@ def genealogical_nearest_neighbours(ts, focal, reference_sets):
                 length = right - left
                 L[j] += length
                 scale = length / (total - int(focal_reference_set != -1))
-                for k, reference_set in enumerate(reference_sets):
+                for k, _ in enumerate(reference_sets):
                     n = sample_count[p, k] - int(focal_reference_set == k)
                     A[j, k] += n * scale
 

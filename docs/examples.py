@@ -379,7 +379,7 @@ def wright_fisher(N, T, L=100, random_seed=None):
     tables = msprime.TableCollection(L)
     P = np.arange(N, dtype=int)
     # Mark the initial generation as samples so that we remember these nodes.
-    for j in range(N):
+    for _ in range(N):
         tables.nodes.add_row(time=T, flags=msprime.NODE_IS_SAMPLE)
     t = T
     while t > 0:

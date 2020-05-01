@@ -154,7 +154,7 @@ def simulator_factory(
     pedigree=None,
     migration_matrix=None,
     samples=None,
-    demographic_events=[],
+    demographic_events=(),
     model=None,
     record_migrations=False,
     from_ts=None,
@@ -315,7 +315,7 @@ def simulate(
     population_configurations=None,
     pedigree=None,
     migration_matrix=None,
-    demographic_events=[],
+    demographic_events=(),
     samples=None,
     model=None,
     record_migrations=False,
@@ -549,10 +549,8 @@ def simulate(
             sim, mutation_generator, replicate_index + 1, provenance_dict, end_time
         )
         # Return the last element of the iterator
-        ts = next(iterator)
-        for ts in iterator:
-            continue
-        return ts
+        deque = collections.deque(iterator, maxlen=1)
+        return deque.pop()
     else:
         return _replicate_generator(
             sim, mutation_generator, num_replicates, provenance_dict, end_time
@@ -1046,7 +1044,7 @@ class RecombinationMap:
 
         return np.average(rates, weights=weights)
 
-    def slice(self, start=None, end=None, trim=False):
+    def slice(self, start=None, end=None, trim=False):  # noqa: A003
         """
         Returns a subset of this recombination map between the specified end
         points. If start is None, it defaults to 0. If end is None, it defaults
@@ -2289,7 +2287,7 @@ class DemographyDebugger:
             end=sep_str,
             file=output,
         )
-        for k in range(N):
+        for _ in range(N):
             s = "-" * (field_width - 1)
             print("{0:<{1}}".format(s, field_width), end="", file=output)
         print(file=output)
@@ -2669,7 +2667,7 @@ class DemographyDebugger:
         pop_size = np.zeros((num_pops, len(self.epochs)))
         for j, epoch in enumerate(self.epochs):
             for k, pop in enumerate(epoch.populations):
-                pop_size[k, j] = epoch.populations[k].start_size
+                pop_size[k, j] = pop.start_size
         return pop_size
 
     @property

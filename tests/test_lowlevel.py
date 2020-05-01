@@ -248,7 +248,7 @@ def get_random_demographic_events(num_populations, num_events):
     of populations. Note: we return num_events of *each type*.
     """
     events = []
-    for j in range(num_events):
+    for _ in range(num_events):
         events.append(
             get_size_change_event(
                 time=random.random(),
@@ -338,7 +338,7 @@ def get_random_population_models(n):
     """
     t = 0.0
     models = []
-    for j in range(n):
+    for _ in range(n):
         t += random.uniform(0, 0.3)
         p = random.uniform(0.1, 2.0)
         mod = {"start_time": t}
@@ -430,7 +430,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertEqual(breakpoints, sorted(breakpoints))
         nodes = sim.get_nodes()
         self.assertEqual(len(nodes), sim.get_num_nodes())
-        for j, (flags, t, pop, ind, metadata) in enumerate(nodes):
+        for j, (flags, t, pop, _ind, metadata) in enumerate(nodes):
             if j < sim.get_num_samples():
                 self.assertEqual(t, 0.0)
                 self.assertEqual(flags, 1)
@@ -667,7 +667,7 @@ class TestSimulationState(LowLevelTestCase):
             for n1, n2 in zip(sample_pop_sizes, pop_sizes):
                 self.assertEqual(n1, n2)
             self.assertEqual(a, n)
-            for j in range(3):
+            for _ in range(3):
                 # Check the getters to ensure we've got the right values.
                 self.assertEqual(n, sim.get_num_samples())
                 self.assertEqual(m, sim.get_sequence_length())
@@ -698,9 +698,9 @@ class TestSimulationState(LowLevelTestCase):
             last_right = right
             self.assertGreater(right, left)
             self.assertLessEqual(right, L)
-            for l, r, p, c in edges_in:
+            for l, _r, _p, _c in edges_in:
                 self.assertEqual(l, left)
-            for l, r, p, c in edges_out:
+            for _l, r, _p, _c in edges_out:
                 self.assertEqual(r, left)
             # Make sure in edges are in increasing time order.
             time_sorted = sorted(edges_in, key=lambda x: t[x[2]])
@@ -726,12 +726,12 @@ class TestSimulationState(LowLevelTestCase):
                     edge, (py_edge.left, py_edge.right, py_edge.parent, py_edge.child)
                 )
 
-    def verify_simulation(
-        self, n, m, r, demographic_events=[], model=get_simulation_model()
-    ):
+    def verify_simulation(self, n, m, r, demographic_events=(), model=None):
         """
         Runs the specified simulation and verifies its state.
         """
+        if model is None:
+            model = get_simulation_model()
         # These tests don't work for n == 2
         assert n > 2
         random_seed = random.randint(0, 2 ** 31)
@@ -741,7 +741,7 @@ class TestSimulationState(LowLevelTestCase):
             recombination_map=uniform_recombination_map(L=m, rate=r),
             random_generator=_msprime.RandomGenerator(random_seed),
             tables=tables,
-            demographic_events=demographic_events,
+            demographic_events=list(demographic_events),
             segment_block_size=1000,
             avl_node_block_size=1000,
             node_mapping_block_size=1000,
@@ -1623,6 +1623,7 @@ class TestSimulator(LowLevelTestCase):
                 self.assertRaises(ValueError, f, [event])
         for bad_event in [b"", b"1", b"x" * 1000, b"Size_change", 2, "none"]:
             for generator in event_generators:
+                event = generator()
                 event["type"] = bad_event
                 self.assertRaises(ValueError, f, [event])
         for bad_type in [[], "", {}]:
@@ -2535,7 +2536,7 @@ class TestMutationGenerator(unittest.TestCase):
         tables = tskit.TableCollection(1)
         tables.nodes.add_row(0)
         tables.sites.add_row(0, "a")
-        for j in range(8192):
+        for _ in range(8192):
             tables.mutations.add_row(0, node=0, derived_state="b")
         tables.build_index()
         tables.compute_mutation_parents()

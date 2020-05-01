@@ -74,7 +74,7 @@ class TestRandomSeeds(unittest.TestCase):
             input_seeds = set()
             python_seeds = set()
             values = set()
-            for j in range(num_random_tests):
+            for _ in range(num_random_tests):
                 input_seed = tuple([random.randint(1, max_seed) for k in range(3)])
                 python_seed = cli.get_single_seed(input_seed)
                 self.assertNotIn(input_seed, input_seeds)
@@ -1012,7 +1012,7 @@ class TestMspmsOutput(TestCli):
         mutation_rate=0.0,
         print_trees=True,
         precision=3,
-        random_seeds=[1, 2, 3],
+        random_seeds=(1, 2, 3),
     ):
         """
         Runs the UI for the specified parameters, and parses the output
@@ -1038,7 +1038,7 @@ class TestMspmsOutput(TestCli):
             line = f.readline().rstrip()
             self.assertEqual(line, " ".join(sys.argv))
             # The second line is three integers, equal to the seeds
-            s = list(map(int, f.readline().split()))
+            s = tuple(map(int, f.readline().split()))
             self.assertEqual(len(s), 3)
             if random_seeds is not None:
                 self.assertEqual(s, random_seeds)
@@ -1180,7 +1180,7 @@ class TestMspmsOutput(TestCli):
 
     def test_seeds_output(self):
         self.verify_output(random_seeds=None)
-        self.verify_output(random_seeds=[2, 3, 4])
+        self.verify_output(random_seeds=(2, 3, 4))
 
     def test_correct_streams(self):
         args = "15 1 -r 0 1.0 -eG 1.0 5.25 -eG 2.0 10 -G 4 -eN 3.0 1.0 -T"

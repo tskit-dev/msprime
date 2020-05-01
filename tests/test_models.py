@@ -901,7 +901,7 @@ class TestSweepGenicSelection(unittest.TestCase):
     def test_too_many_sweeps(self):
         # What happens when we have loads of sweeps
         demographic_events = []
-        for j in range(1000):
+        for _ in range(1000):
             sweep_model = msprime.SweepGenicSelection(
                 position=0.5,
                 start_frequency=0.69,

@@ -172,7 +172,8 @@ class TestBuildObjects(unittest.TestCase):
             parameters.demographic_events[1],
             {
                 "time": {
-                    "__error__": "Configuration function bad_func refers to global variables"
+                    "__error__": "Configuration function bad_func "
+                    "refers to global variables"
                     " ('msprime',) which are not currently serialized"
                 },
                 "model": None,

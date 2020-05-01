@@ -647,7 +647,7 @@ class OverlapCounter:
                     self._split(curr_interval, left)
                     curr_interval = curr_interval.next
 
-    def _split(self, seg, breakpoint):
+    def _split(self, seg, breakpoint):  # noqa: A002
         """
         Split the segment at breakpoint and add in another segment
         from breakpoint to seg.right. Set the original segment's
@@ -747,7 +747,7 @@ class Simulator:
             for pop_index in range(N):
                 self.tables.populations.add_row()
                 sample_size = sample_configuration[pop_index]
-                for k in range(sample_size):
+                for _ in range(sample_size):
                     j = len(self.tables.nodes)
                     x = self.alloc_segment(
                         0,
@@ -912,7 +912,15 @@ class Simulator:
         return index, distance
 
     def alloc_segment(
-        self, left, right, left_mass, right_mass, node, pop_index, prev=None, next=None
+        self,
+        left,
+        right,
+        left_mass,
+        right_mass,
+        node,
+        pop_index,
+        prev=None,
+        next=None,  # noqa: A002
     ):
         """
         Pops a new segment off the stack and sets its properties.
@@ -2041,7 +2049,7 @@ class Simulator:
 
     def verify_overlaps(self):
         overlap_counter = OverlapCounter(self.m)
-        for pop_index, pop in enumerate(self.P):
+        for pop in self.P:
             for l in range(self.num_labels):
                 for u in pop.iter_label(l):
                     while u is not None:
@@ -2108,7 +2116,7 @@ class Simulator:
         A = bintrees.AVLTree()
         A[0] = 0
         A[self.m] = -1
-        for pop_index, pop in enumerate(self.P):
+        for pop in self.P:
             for l in range(self.num_labels):
                 for u in pop.iter_label(l):
                     while u is not None:

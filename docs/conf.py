@@ -44,7 +44,7 @@ sys.path.insert(0, os.path.abspath(".."))
 #
 # Monkey-patching sphinx to workaround really annoying bug in ivar
 # handling. See
-# https://stackoverflow.com/questions/31784830/sphinx-ivar-tag-goes-looking-for-cross-references
+# https://stackoverflow.com/questions/31784830
 #
 
 
@@ -125,7 +125,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "msprime"
-copyright = "2015-2019, Jerome Kelleher"
+copyright = "2015-2019, Jerome Kelleher"  # noqa: A001
 author = "Jerome Kelleher"
 
 # The version info for the project you're documenting, acts as replacement for
