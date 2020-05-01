@@ -56,18 +56,18 @@ out:
 }
 
 int MSP_WARN_UNUSED
-recomb_map_alloc_uniform(recomb_map_t *self, double sequence_length,
-        double rate, bool discrete)
+recomb_map_alloc_uniform(
+    recomb_map_t *self, double sequence_length, double rate, bool discrete)
 {
-    double positions[] = {0.0, sequence_length};
-    double rates[] = {rate, 0.0};
+    double positions[] = { 0.0, sequence_length };
+    double rates[] = { rate, 0.0 };
 
     return recomb_map_alloc(self, 2, positions, rates, discrete);
 }
 
 int MSP_WARN_UNUSED
-recomb_map_alloc(recomb_map_t *self, size_t size, double *position, double *rate,
-        bool discrete)
+recomb_map_alloc(
+    recomb_map_t *self, size_t size, double *position, double *rate, bool discrete)
 {
     int ret = 0;
 
@@ -95,8 +95,8 @@ out:
 int
 recomb_map_copy(recomb_map_t *to, recomb_map_t *from)
 {
-    return recomb_map_alloc(to, from->map.size,
-            from->map.position, from->map.value, from->discrete);
+    return recomb_map_alloc(
+        to, from->map.size, from->map.position, from->map.value, from->discrete);
 }
 
 int
@@ -240,7 +240,8 @@ recomb_map_get_positions(recomb_map_t *self, double *position)
     return 0;
 }
 
-int recomb_map_get_rates(recomb_map_t *self, double *rate)
+int
+recomb_map_get_rates(recomb_map_t *self, double *rate)
 {
     memcpy(rate, self->map.value, sizeof(double) * self->map.size);
     return 0;

@@ -80,7 +80,7 @@ out:
 int MSP_WARN_UNUSED
 interval_map_alloc_single(interval_map_t *self, double sequence_length, double value)
 {
-    double position[2] = {0, sequence_length};
+    double position[2] = { 0, sequence_length };
     return interval_map_alloc(self, 2, position, &value);
 }
 

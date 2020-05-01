@@ -23,9 +23,7 @@
 #include <stdio.h>
 #include <tskit.h>
 
-int msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double mu,
-                                        double *lik);
-int msp_log_likelihood_arg(tsk_treeseq_t *ts, double r, double Ne,
-                           double *lik);
+int msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double mu, double *lik);
+int msp_log_likelihood_arg(tsk_treeseq_t *ts, double r, double Ne, double *lik);
 
 #endif /*__LIKELIHOOD_H__*/
