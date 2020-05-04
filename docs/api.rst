@@ -12,6 +12,8 @@ information on how to use the
 `tskit Python API <https://tskit.readthedocs.io/en/stable/python-api.html>`_
 to analyse simulation results.
 
+.. _sec_api_simulation_model:
+
 ****************
 Simulation model
 ****************
@@ -65,10 +67,26 @@ However, recombination (with or without recombination maps) and a constant gene 
 rate along the genome can be combined in ``msprime``.
 
 Population structure is modelled by specifying a fixed number of subpopulations
-:math:`d`, and a :math:`d \times d` matrix :math:`M` of per generation
-migration rates. Each element of the matrix :math:`M_{j,k}` defines
+:math:`d`, and a :math:`d \times d` matrix :math:`M` of per generation migration rates.
+Each element of the matrix :math:`M_{j,k}` defines
 the fraction of population :math:`j` that consists of migrants from
 population :math:`k` in each generation.
+Note that migration rates are specified in a way that makes sense for the
+coalescence process, so that the :math:`(j, k)^{th}` entry of the migration matrix,
+:math:`M_{j, k}`, gives the rate at which an ancestral lineage moves from
+population :math:`j` to population :math:`k` as one follows it back through time.
+In terms of the demographic process of the populations, if a total of
+:math:`n` migrants move from population :math:`k` to
+population :math:`j` per generation, and population :math:`j` has a total of
+:math:`N_{j}` individuals, then the migration matrix has :math:`M_{j,k} = n/N_j`.
+This differs from the migration matrix one usually uses in population
+demography: if :math:`m_{k,j}` is the proportion
+of individuals (in the usual sense; not lineages) in population :math:`k`
+that move to population :math:`j` per generation,
+then translating this proportion of population :math:`k`
+to a proportion of population :math:`j`, we have
+:math:`M_{j,k} = m_{k,j} \times N_k / N_j`.
+
 Each subpopulation has an initial absolute population size :math:`s`
 and a per generation exponential growth rate :math:`\alpha`. The size of a
 given population at time :math:`t` in the past (measured in generations) is
@@ -157,7 +175,7 @@ Species trees hold information about the sequence and the times at which species
 diverged from each other. Viewed backwards in time, divergence events are equivalent
 to mass migration events in which all lineages from one population move to another
 population. The history of a set of populations can thus be modelled according to
-a given species tree. To faciliate the specification of the model, 
+a given species tree. To faciliate the specification of the model,
 :func:`.parse_species_tree` parses a species tree and returns the mass migration
 events corresponding to all species divergence events in the tree, together with
 population configurations that specify population sizes and names.
@@ -483,7 +501,7 @@ Evaluating sampling probabilities
 that of a stored tree sequence for a given diploid effective population size
 :math:`N_e` and per-link, per-generation recombination probability :math:`r`
 under the standard ancestral recombination graph; and that of a pattern of
-mutations given a tree sequence and per-site, per-generation mutation 
+mutations given a tree sequence and per-site, per-generation mutation
 probability :math:`\mu` under the infinite sites model.
 
 Specifically, the methods assume that each pair of lineages merges at rate

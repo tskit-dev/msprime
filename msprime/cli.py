@@ -488,13 +488,13 @@ def create_simulation_runner(parser, arg_list):
             parser, args.migration_matrix, num_populations
         )
     for matrix_entry in args.migration_matrix_entry:
-        dest = convert_population_id(parser, matrix_entry[0], num_populations)
-        source = convert_population_id(parser, matrix_entry[1], num_populations)
+        pop_i = convert_population_id(parser, matrix_entry[0], num_populations)
+        pop_j = convert_population_id(parser, matrix_entry[1], num_populations)
         rate = matrix_entry[2]
-        if dest == source:
+        if pop_i == pop_j:
             parser.error("Cannot set diagonal elements in migration matrix")
         check_migration_rate(parser, rate)
-        migration_matrix[dest][source] = rate
+        migration_matrix[pop_i][pop_j] = rate
 
     # Set the initial demography
     demographic_events = []
@@ -574,17 +574,15 @@ def create_simulation_runner(parser, arg_list):
                 ),
             )
         )
-    for index, (t, source, dest) in args.population_split:
+    for index, (t, pop_i, pop_j) in args.population_split:
         check_event_time(parser, t)
-        source_id = convert_population_id(parser, source, num_populations)
-        dest_id = convert_population_id(parser, dest, num_populations)
-        demographic_events.append(
-            (index, msprime.MassMigration(t, source_id, dest_id, 1.0))
-        )
-        # Set the migration rates for source to 0
-        for j in range(num_populations):
-            if j != source_id:
-                event = msprime.MigrationRateChange(t, 0.0, (j, source_id))
+        pop_i = convert_population_id(parser, pop_i, num_populations)
+        pop_j = convert_population_id(parser, pop_j, num_populations)
+        demographic_events.append((index, msprime.MassMigration(t, pop_i, pop_j, 1.0)))
+        # Migration rates from subpopulation i (M[k, i], k != i) are set to zero.
+        for k in range(num_populations):
+            if k != pop_i:
+                event = msprime.MigrationRateChange(t, 0.0, matrix_index=(k, pop_i))
                 demographic_events.append((index, event))
 
     # Demographic events that affect the migration matrix
@@ -606,13 +604,13 @@ def create_simulation_runner(parser, arg_list):
     for index, event in args.migration_matrix_entry_change:
         t = event[0]
         check_event_time(parser, t)
-        dest = convert_population_id(parser, event[1], num_populations)
-        source = convert_population_id(parser, event[2], num_populations)
-        if dest == source:
+        pop_i = convert_population_id(parser, event[1], num_populations)
+        pop_j = convert_population_id(parser, event[2], num_populations)
+        if pop_i == pop_j:
             parser.error("Cannot set diagonal elements in migration matrix")
         rate = event[3]
         check_migration_rate(parser, rate)
-        msp_event = msprime.MigrationRateChange(t, rate, (dest, source))
+        msp_event = msprime.MigrationRateChange(t, rate, matrix_index=(pop_i, pop_j))
         demographic_events.append((index, msp_event))
     for index, event in args.migration_matrix_change:
         if len(event) < 3:
@@ -627,7 +625,9 @@ def create_simulation_runner(parser, arg_list):
         for j in range(num_populations):
             for k in range(num_populations):
                 if j != k:
-                    msp_event = msprime.MigrationRateChange(t, matrix[j][k], (j, k))
+                    msp_event = msprime.MigrationRateChange(
+                        t, matrix[j][k], matrix_index=(j, k)
+                    )
                     demographic_events.append((index, msp_event))
 
     # We've created all the events and PopulationConfiguration objects. Because
@@ -781,13 +781,13 @@ def get_mspms_parser(error_handler=None):
         "--migration-matrix-entry",
         "-m",
         action="append",
-        metavar=("dest", "source", "rate"),
+        metavar=("i", "j", "rate"),
         nargs=3,
         type=float,
         default=[],
         help=(
-            "Sets an entry M[dest, source] in the migration matrix to the "
-            "specified rate. source and dest are (1-indexed) population "
+            "Sets an entry M[i, j] in the migration matrix to the "
+            "specified rate. i and j are (1-indexed) population "
             "IDs. Multiple options can be specified."
         ),
     )
@@ -820,13 +820,13 @@ def get_mspms_parser(error_handler=None):
         "--migration-matrix-entry-change",
         "-em",
         action=IndexedAction,
-        metavar=("time", "dest", "source", "rate"),
+        metavar=("time", "i", "j", "rate"),
         nargs=4,
         type=float,
         default=[],
         help=(
-            "Sets an entry M[dest, source] in the migration matrix to the "
-            "specified rate at the specified time. source and dest are "
+            "Sets an entry M[i, j] in the migration matrix to the "
+            "specified rate at the specified time. i and j are "
             "(1-indexed) population IDs."
         ),
     )
@@ -922,12 +922,12 @@ def get_mspms_parser(error_handler=None):
         action=IndexedAction,
         type=float,
         default=[],
-        metavar=("t", "dest", "source"),
+        metavar=("t", "i", "j"),
         help=(
-            "Move all lineages in population dest to source at time t. "
+            "Move all lineages in population i to j at time t. "
             "Forwards in time, this corresponds to a population split "
-            "in which lineages in source split into dest. All migration "
-            "rates for population source are set to zero."
+            "in which lineages in j split into i. All migration "
+            "rates for population i are set to zero."
         ),
     )
     group.add_argument(

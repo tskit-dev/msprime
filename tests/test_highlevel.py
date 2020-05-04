@@ -507,41 +507,37 @@ class TestSimulatorFactory(unittest.TestCase):
             sim = msprime.simulator_factory(population_configurations=pop_configs)
             ll_sim = sim.create_ll_instance()
             # If we don't specify a matrix, it's 0 everywhere.
-            matrix = [0 for j in range(N * N)]
+            matrix = np.zeros((N, N))
             np.testing.assert_array_equal(ll_sim.get_migration_matrix(), matrix)
 
-            def f(hl_matrix):
+            def f(matrix):
                 return msprime.simulator_factory(
-                    population_configurations=pop_configs, migration_matrix=hl_matrix
+                    population_configurations=pop_configs, migration_matrix=matrix
                 )
 
-            hl_matrix = [[(j + k) * int(j != k) for j in range(N)] for k in range(N)]
-            sim = f(hl_matrix)
-            self.assertEqual(sim.migration_matrix, hl_matrix)
+            matrix = [[(j + k) * int(j != k) for j in range(N)] for k in range(N)]
+            sim = f(matrix)
+            np.testing.assert_array_equal(sim.migration_matrix, matrix)
             # Try with equivalent numpy array.
-            sim = f(np.array(hl_matrix))
-            self.assertEqual(sim.migration_matrix, hl_matrix)
+            sim = f(np.array(matrix))
+            np.testing.assert_array_equal(sim.migration_matrix, matrix)
             ll_sim = sim.create_ll_instance()
-            ll_matrix = [v for row in hl_matrix for v in row]
-            np.testing.assert_array_equal(ll_sim.get_migration_matrix(), ll_matrix)
-            for bad_type in [234, 1.2]:
-                self.assertRaises(TypeError, f, bad_type)
-            # Iterables should raise a value error.
-            for bad_type in [{}, ""]:
+            np.testing.assert_array_equal(ll_sim.get_migration_matrix(), matrix)
+            for bad_type in [{}, "", 234, 1.2]:
                 self.assertRaises(ValueError, f, bad_type)
             # Now check for the structure of the matrix.
-            hl_matrix[0][0] = "bad value"
-            sim = f(hl_matrix)
+            matrix[0][0] = "bad value"
+            sim = f(matrix)
             self.assertRaises(TypeError, sim.create_ll_instance)
-            hl_matrix[0] = None
-            self.assertRaises(TypeError, f, hl_matrix)
-            hl_matrix[0] = []
-            self.assertRaises(ValueError, f, hl_matrix)
+            matrix[0] = None
+            self.assertRaises(ValueError, f, matrix)
+            matrix[0] = []
+            self.assertRaises(ValueError, f, matrix)
             # Simple numpy array.
-            hl_matrix = np.ones((N, N))
-            np.fill_diagonal(hl_matrix, 0)
-            sim = f(hl_matrix)
-            np.testing.assert_array_equal(np.array(sim.migration_matrix), hl_matrix)
+            matrix = np.ones((N, N))
+            np.fill_diagonal(matrix, 0)
+            sim = f(matrix)
+            np.testing.assert_array_equal(np.array(sim.migration_matrix), matrix)
             sim.run()
             events = np.array(sim.num_migration_events)
             self.assertEqual(events.shape, (N, N))

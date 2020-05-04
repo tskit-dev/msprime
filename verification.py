@@ -1962,7 +1962,7 @@ class SimulationVerifier:
                 positions=[0, 100, 101, 201], rates=[0, 1, 0, 0], discrete=True
             )
 
-            self.run_dtwf_coalescent_single_replicate(
+            self.run_dtwf_coalescent_comparison(
                 test_name,
                 sample_size=10,
                 Ne=10,

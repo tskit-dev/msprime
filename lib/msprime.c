@@ -5127,22 +5127,28 @@ msp_print_migration_rate_change(
  * units of generations. */
 int MSP_WARN_UNUSED
 msp_add_migration_rate_change(
-    msp_t *self, double time, int matrix_index, double migration_rate)
+    msp_t *self, double time, int source, int dest, double migration_rate)
 {
     int ret = -1;
     demographic_event_t *de;
     int N = (int) self->num_populations;
+    int matrix_index;
 
-    if (matrix_index < -1 || matrix_index >= N * N) {
-        ret = MSP_ERR_BAD_MIGRATION_MATRIX_INDEX;
-        goto out;
+    if (source == -1 && dest == -1) {
+        matrix_index = -1;
+    } else {
+        if (source < 0 || source >= N || dest < 0 || dest >= N) {
+            ret = MSP_ERR_BAD_MIGRATION_MATRIX_INDEX;
+            goto out;
+        }
+        if (source == dest) {
+            ret = MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX;
+            goto out;
+        }
+        matrix_index = source * N + dest;
     }
     if (migration_rate < 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    if (matrix_index % (N + 1) == 0) {
-        ret = MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX;
         goto out;
     }
     ret = msp_add_demographic_event(self, time, &de);
