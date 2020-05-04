@@ -2101,43 +2101,30 @@ class SweepGenicSelection(ParametricSimulationModel):
         self.dt = dt
 
 
+@attr.s
 class PopulationParameters:
     """
     Simple class to represent the state of a population in terms of its
     demographic parameters.
     """
 
-    def __init__(self, start_size, end_size, growth_rate):
-        self.start_size = start_size
-        self.end_size = end_size
-        self.growth_rate = growth_rate
-
-    def __repr__(self):
-        return repr(self.__dict__)
+    start_size = attr.ib(default=None)
+    end_size = attr.ib(default=None)
+    growth_rate = attr.ib(default=None)
 
 
+@attr.s
 class Epoch:
     """
     Represents a single epoch in the simulation within which the state
     of the demographic parameters are constant.
     """
 
-    def __init__(
-        self,
-        start_time=None,
-        end_time=None,
-        populations=None,
-        migration_matrix=None,
-        demographic_events=None,
-    ):
-        self.start_time = start_time
-        self.end_time = end_time
-        self.populations = populations
-        self.migration_matrix = migration_matrix
-        self.demographic_events = demographic_events
-
-    def __repr__(self):
-        return repr(self.__dict__)
+    start_time = attr.ib(default=None)
+    end_time = attr.ib(default=None)
+    populations = attr.ib(default=None)
+    migration_matrix = attr.ib(default=None)
+    demographic_events = attr.ib(default=None)
 
 
 def _matrix_exponential(A):
