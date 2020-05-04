@@ -672,7 +672,7 @@ class TestSimulatorFactory(unittest.TestCase):
     def test_specify_model_and_Ne(self):
         # When them model reference size and Ne are both specified,
         # Ne is ignored.
-        for Ne in [0, 1234, None, "sdf"]:
+        for Ne in [0.001, 1234, 1e6, 2 ** 32]:
             sim = msprime.simulator_factory(
                 sample_size=2, Ne=Ne, model=msprime.SmcPrimeApproxCoalescent(20)
             )

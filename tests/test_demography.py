@@ -98,13 +98,25 @@ class TestBadDemographicParameters(unittest.TestCase):
                 ValueError, msprime.PopulationParametersChange, 0, initial_size=bad_size
             )
             self.assertRaises(
-                ValueError, msprime.PopulationConfiguration, initial_size=bad_size
+                ValueError,
+                msprime.simulate,
+                population_configurations=[
+                    msprime.PopulationConfiguration(
+                        initial_size=bad_size, sample_size=2
+                    )
+                ],
             )
 
     def test_bad_sample_size(self):
         for bad_size in [-1, -1e300]:
             self.assertRaises(
-                ValueError, msprime.PopulationConfiguration, sample_size=bad_size
+                ValueError,
+                msprime.simulate,
+                population_configurations=[
+                    msprime.PopulationConfiguration(
+                        initial_size=1, sample_size=bad_size
+                    )
+                ],
             )
 
     def test_dtwf_bottleneck(self):
@@ -2051,16 +2063,26 @@ class TestLowLevelConversions(unittest.TestCase):
     def test_population_configuration_defaults(self):
         conf = msprime.PopulationConfiguration()
         self.assertIsNone(conf.sample_size)
-        d = conf.get_ll_representation()
-        dp = {"initial_size": None, "growth_rate": 0}
+        d = conf.asdict()
+        dp = {
+            "initial_size": None,
+            "growth_rate": 0,
+            "metadata": None,
+            "sample_size": None,
+        }
         self.assertEqual(d, dp)
 
     def test_population_configuration_initial_size(self):
         for initial_size in [1, 10, 1000]:
             conf = msprime.PopulationConfiguration(initial_size=initial_size)
             self.assertIsNone(conf.sample_size)
-            d = conf.get_ll_representation()
-            dp = {"initial_size": initial_size, "growth_rate": 0}
+            d = conf.asdict()
+            dp = {
+                "initial_size": initial_size,
+                "growth_rate": 0,
+                "metadata": None,
+                "sample_size": None,
+            }
             self.assertEqual(d, dp)
 
     def test_population_configuration_growth_rate(self):
@@ -2068,8 +2090,13 @@ class TestLowLevelConversions(unittest.TestCase):
         for growth_rate in [1, 10, -10]:
             conf = msprime.PopulationConfiguration(sample_size, growth_rate=growth_rate)
             self.assertEqual(conf.sample_size, sample_size)
-            d = conf.get_ll_representation()
-            dp = {"initial_size": None, "growth_rate": growth_rate}
+            d = conf.asdict()
+            dp = {
+                "initial_size": None,
+                "growth_rate": growth_rate,
+                "metadata": None,
+                "sample_size": sample_size,
+            }
             self.assertEqual(d, dp)
 
     def test_population_parameters_change_time(self):
@@ -2669,8 +2696,9 @@ class TestPopulationMetadata(unittest.TestCase):
 
     def test_errors(self):
         for bad_metadata in [b"asdf", Exception]:
+            popconf = msprime.PopulationConfiguration(2, metadata=bad_metadata)
             with self.assertRaises(TypeError):
-                msprime.PopulationConfiguration(2, metadata=bad_metadata)
+                popconf.encode_metadata()
 
     def test_multi_population(self):
         for num_pops in range(1, 10):

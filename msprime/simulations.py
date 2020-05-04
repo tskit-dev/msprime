@@ -31,6 +31,7 @@ import os
 import sys
 import warnings
 
+import attr
 import numpy as np
 import tskit
 
@@ -74,6 +75,8 @@ def model_factory(model, reference_size=1):
       parameter reference size.
     - Otherwise return a type error.
     """
+    if reference_size <= 0:
+        raise ValueError("Model reference size must be > 0")
     model_map = {
         "hudson": StandardCoalescent(reference_size),
         "smc": SmcApproxCoalescent(reference_size),
@@ -110,6 +113,10 @@ def _check_population_configurations(population_configurations):
     for config in population_configurations:
         if not isinstance(config, PopulationConfiguration):
             raise TypeError(err)
+        if config.initial_size is not None and config.initial_size <= 0:
+            raise ValueError("Population size must be > 0")
+        if config.sample_size is not None and config.sample_size < 0:
+            raise ValueError("Sample size must be >= 0")
 
 
 def _replicate_generator(
@@ -776,7 +783,7 @@ class Simulator:
         logger.debug("Setting initial model %s", ll_simulation_model)
         d = len(self.population_configurations)
         ll_population_configuration = [
-            conf.get_ll_representation() for conf in self.population_configurations
+            conf.asdict() for conf in self.population_configurations
         ]
         ll_demographic_events = [
             event.get_ll_representation(d) for event in self.demographic_events
@@ -858,7 +865,7 @@ class Simulator:
             assert len(tables.populations) == len(self.population_configurations)
             tables.populations.clear()
             for pop_config in self.population_configurations:
-                tables.populations.add_row(metadata=pop_config.encoded_metadata)
+                tables.populations.add_row(metadata=pop_config.encode_metadata())
         return tables.tree_sequence()
 
     def reset(self):
@@ -1145,7 +1152,18 @@ class RecombinationMap:
         }
 
 
-class PopulationConfiguration:
+class AttrDictableMixin:
+    """
+    Mixin to provide attrs data class instances an asdict() method.
+    """
+
+    def asdict(self):
+        # For simplicity define this here for now.
+        return attr.asdict(self)
+
+
+@attr.s
+class PopulationConfiguration(AttrDictableMixin):
     """
     The initial configuration of a population (or deme) in a simulation.
 
@@ -1165,34 +1183,16 @@ class PopulationConfiguration:
         is used as the starting point take precedence.
     """
 
-    def __init__(
-        self, sample_size=None, initial_size=None, growth_rate=0.0, metadata=None
-    ):
-        if initial_size is not None and initial_size <= 0:
-            raise ValueError("Population size must be > 0")
-        if sample_size is not None and sample_size < 0:
-            raise ValueError("Sample size must be >= 0")
-        self.sample_size = sample_size
-        self.initial_size = initial_size
-        self.growth_rate = growth_rate
-        self.metadata = metadata
-        self.encoded_metadata = b""
+    sample_size = attr.ib(default=None)
+    initial_size = attr.ib(default=None)
+    growth_rate = attr.ib(default=0.0)
+    metadata = attr.ib(default=None)
+
+    def encode_metadata(self):
+        encoded_metadata = b""
         if self.metadata is not None:
-            self.encoded_metadata = json.dumps(self.metadata).encode()
-
-    def get_ll_representation(self):
-        """
-        Returns the low-level representation of this PopulationConfiguration.
-        """
-        return {"initial_size": self.initial_size, "growth_rate": self.growth_rate}
-
-    def asdict(self):
-        """
-        Returns a dict of arguments to recreate this PopulationConfiguration
-        """
-        ret = dict(self.__dict__)
-        del ret["encoded_metadata"]
-        return ret
+            encoded_metadata = json.dumps(self.metadata).encode()
+        return encoded_metadata
 
 
 class Pedigree:
