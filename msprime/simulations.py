@@ -781,12 +781,11 @@ class Simulator:
         # counterparts.
         ll_simulation_model = self.model.get_ll_representation()
         logger.debug("Setting initial model %s", ll_simulation_model)
-        d = len(self.population_configurations)
         ll_population_configuration = [
             conf.asdict() for conf in self.population_configurations
         ]
         ll_demographic_events = [
-            event.get_ll_representation(d) for event in self.demographic_events
+            event.get_ll_representation() for event in self.demographic_events
         ]
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
         self.ll_tables = _msprime.LightweightTableCollection(
@@ -1152,18 +1151,8 @@ class RecombinationMap:
         }
 
 
-class AttrDictableMixin:
-    """
-    Mixin to provide attrs data class instances an asdict() method.
-    """
-
-    def asdict(self):
-        # For simplicity define this here for now.
-        return attr.asdict(self)
-
-
 @attr.s
-class PopulationConfiguration(AttrDictableMixin):
+class PopulationConfiguration:
     """
     The initial configuration of a population (or deme) in a simulation.
 
@@ -1193,6 +1182,10 @@ class PopulationConfiguration(AttrDictableMixin):
         if self.metadata is not None:
             encoded_metadata = json.dumps(self.metadata).encode()
         return encoded_metadata
+
+    def asdict(self):
+        # For simplicity define this here for now.
+        return attr.asdict(self)
 
 
 class Pedigree:
@@ -1591,7 +1584,7 @@ class PopulationParametersChange(DemographicEvent):
         self.initial_size = initial_size
         self.population = -1 if population is None else population
 
-    def get_ll_representation(self, num_populations):
+    def get_ll_representation(self):
         ret = {"type": self.type, "time": self.time, "population": self.population}
         if self.growth_rate is not None:
             ret["growth_rate"] = self.growth_rate
@@ -1641,7 +1634,7 @@ class MigrationRateChange(DemographicEvent):
             self.source = matrix_index[0]
             self.dest = matrix_index[1]
 
-    def get_ll_representation(self, num_populations):
+    def get_ll_representation(self):
         return {
             "type": self.type,
             "time": self.time,
@@ -1690,7 +1683,7 @@ class MassMigration(DemographicEvent):
         self.dest = dest
         self.proportion = proportion
 
-    def get_ll_representation(self, num_populations):
+    def get_ll_representation(self):
         return {
             "type": self.type,
             "time": self.time,
@@ -1746,7 +1739,7 @@ class SimulationModelChange(DemographicEvent):
         super().__init__("simulation_model_change", time)
         self.model = model
 
-    def get_ll_representation(self, num_populations):
+    def get_ll_representation(self):
         return {
             "type": self.type,
             "time": self.time,
@@ -1770,7 +1763,7 @@ class SimpleBottleneck(DemographicEvent):
         self.population = population
         self.proportion = proportion
 
-    def get_ll_representation(self, num_populations):
+    def get_ll_representation(self):
         return {
             "type": self.type,
             "time": self.time,
@@ -1799,7 +1792,7 @@ class InstantaneousBottleneck(DemographicEvent):
         self.population = population
         self.strength = strength
 
-    def get_ll_representation(self, num_populations):
+    def get_ll_representation(self):
         return {
             "type": self.type,
             "time": self.time,
@@ -1830,7 +1823,7 @@ class CensusEvent(DemographicEvent):
     def __init__(self, time):
         super().__init__("census_event", time)
 
-    def get_ll_representation(self, num_populations):
+    def get_ll_representation(self):
         return {
             "type": self.type,
             "time": self.time,

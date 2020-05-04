@@ -284,7 +284,7 @@ class TestRateConversions(unittest.TestCase):
             "population": -1,
             "initial_size": new_size,
         }
-        self.assertEqual(event.get_ll_representation(1), ll_event)
+        self.assertEqual(event.get_ll_representation(), ll_event)
 
     def test_growth_rate_change(self):
         g = 512
@@ -298,7 +298,7 @@ class TestRateConversions(unittest.TestCase):
             "population": 1,
             "growth_rate": growth_rate,
         }
-        self.assertEqual(event.get_ll_representation(1), ll_event)
+        self.assertEqual(event.get_ll_representation(), ll_event)
 
     def test_growth_rate_and_size_change(self):
         g = 1024
@@ -314,12 +314,11 @@ class TestRateConversions(unittest.TestCase):
             "initial_size": initial_size,
             "growth_rate": growth_rate,
         }
-        self.assertEqual(event.get_ll_representation(1), ll_event)
+        self.assertEqual(event.get_ll_representation(), ll_event)
 
     def test_migration_rate_change(self):
         g = 1024
         migration_rate = 0.125
-        d = 2
         event = msprime.MigrationRateChange(time=g, rate=migration_rate)
         ll_event = {
             "type": "migration_rate_change",
@@ -328,7 +327,7 @@ class TestRateConversions(unittest.TestCase):
             "dest": -1,
             "migration_rate": migration_rate,
         }
-        self.assertEqual(event.get_ll_representation(d), ll_event)
+        self.assertEqual(event.get_ll_representation(), ll_event)
 
 
 class TestDemographyDebuggerOutput(unittest.TestCase):
@@ -2103,7 +2102,7 @@ class TestLowLevelConversions(unittest.TestCase):
         for Ne in [1, 10, 1000]:
             for g in [0.1, 1, 100, 1e6]:
                 event = msprime.PopulationParametersChange(time=g, initial_size=Ne)
-                d = event.get_ll_representation(1)
+                d = event.get_ll_representation()
                 dp = {
                     "time": g,
                     "population": -1,
@@ -2118,7 +2117,7 @@ class TestLowLevelConversions(unittest.TestCase):
             event = msprime.PopulationParametersChange(
                 time=g, initial_size=initial_size
             )
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "population": -1,
@@ -2131,7 +2130,7 @@ class TestLowLevelConversions(unittest.TestCase):
         g = 100
         for growth_rate in [0.01, 1, 100, 1e6]:
             event = msprime.PopulationParametersChange(time=g, growth_rate=growth_rate)
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "population": -1,
@@ -2147,7 +2146,7 @@ class TestLowLevelConversions(unittest.TestCase):
             event = msprime.PopulationParametersChange(
                 time=g, initial_size=Ne, population=population
             )
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "population": population,
@@ -2159,7 +2158,7 @@ class TestLowLevelConversions(unittest.TestCase):
     def test_migration_rate_change_time(self):
         for g in [0.1, 1, 100, 1e6]:
             event = msprime.MigrationRateChange(time=g, rate=0)
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "type": "migration_rate_change",
@@ -2176,7 +2175,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 event = msprime.MigrationRateChange(
                     time=g, rate=0, source=index[0], dest=index[1]
                 )
-                d = event.get_ll_representation(N)
+                d = event.get_ll_representation()
                 dp = {
                     "time": g,
                     "type": "migration_rate_change",
@@ -2188,14 +2187,14 @@ class TestLowLevelConversions(unittest.TestCase):
 
                 # Check the deprecated form
                 event = msprime.MigrationRateChange(time=g, rate=0, matrix_index=index)
-                d = event.get_ll_representation(N)
+                d = event.get_ll_representation()
                 self.assertEqual(d, dp)
 
     def test_migration_rate_change_rate(self):
         g = 1234
         for rate in [0, 1e-6, 10, 1e6]:
             event = msprime.MigrationRateChange(time=g, rate=rate)
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "type": "migration_rate_change",
@@ -2208,7 +2207,7 @@ class TestLowLevelConversions(unittest.TestCase):
     def test_mass_migration_time(self):
         for g in [0.1, 1, 100, 1e6]:
             event = msprime.MassMigration(time=g, source=0, dest=1)
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "type": "mass_migration",
@@ -2222,7 +2221,7 @@ class TestLowLevelConversions(unittest.TestCase):
         g = 51
         for source, dest in itertools.permutations(range(4), 2):
             event = msprime.MassMigration(time=g, source=source, dest=dest)
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "type": "mass_migration",
@@ -2236,7 +2235,7 @@ class TestLowLevelConversions(unittest.TestCase):
         g = 51
         for p in [0, 1e-6, 0.4, 1]:
             event = msprime.MassMigration(time=g, source=0, dest=1, proportion=p)
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "type": "mass_migration",
@@ -2265,7 +2264,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 event = msprime.InstantaneousBottleneck(
                     time=g, population=population, strength=strength
                 )
-                d = event.get_ll_representation(1)
+                d = event.get_ll_representation()
                 dp = {
                     "time": g,
                     "type": "instantaneous_bottleneck",
