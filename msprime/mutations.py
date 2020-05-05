@@ -26,8 +26,8 @@ import numpy as np
 import tskit
 
 import _msprime
+from . import core
 from . import provenance
-from . import utils
 
 
 class MutationModel(_msprime.MutationModel):
@@ -212,7 +212,7 @@ def mutate(
         raise ValueError("First argument must be a TreeSequence instance.")
     seed = random_seed
     if random_seed is None:
-        seed = utils.get_random_seed()
+        seed = core.get_random_seed()
     else:
         seed = int(seed)
 

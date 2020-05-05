@@ -17,7 +17,7 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Test cases for the high level interface to msprime.
+Test cases for mutation generation.
 """
 import functools
 import itertools
@@ -1330,7 +1330,7 @@ class PythonMutationGenerator:
                 j += 1
 
     def generate(self, tables, seed, keep=False, discrete=False):
-        self.rng = msprime.RandomGenerator(seed)
+        self.rng = _msprime.RandomGenerator(seed)
         if keep:
             self.initialise_sites(tables)
         tables.sites.clear()

@@ -29,6 +29,7 @@ import sys
 
 import tskit
 
+import _msprime
 import msprime
 from . import mutations
 
@@ -229,7 +230,7 @@ class SimulationRunner:
         if random_seeds is None:
             ms_seeds = generate_seeds()
         seed = get_single_seed(ms_seeds)
-        self._random_generator = msprime.RandomGenerator(seed)
+        self._random_generator = _msprime.RandomGenerator(seed)
         self._ms_random_seeds = ms_seeds
         self._simulator.random_generator = self._random_generator
         self._mutation_generator = mutations._simple_mutation_generator(

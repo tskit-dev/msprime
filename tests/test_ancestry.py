@@ -17,20 +17,19 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Test cases for the high level interface to msprime.
+Test cases for basic ancestry simulation operations.
 """
 import datetime
 import json
 import os
 import random
-import shutil
 import tempfile
 import unittest
 
 import numpy as np
 
+import _msprime
 import msprime
-import tests
 
 
 def get_bottleneck_examples():
@@ -52,179 +51,6 @@ def get_bottleneck_examples():
             random_seed=n,
         )
         yield ts
-
-
-class HighLevelTestCase(tests.MsprimeTestCase):
-    """
-    Superclass of tests on the high level interface.
-    """
-
-    def setUp(self):
-        self.temp_dir = tempfile.mkdtemp(prefix="msp_hl_testcase_")
-        self.temp_file = os.path.join(self.temp_dir, "generic")
-
-    def tearDown(self):
-        shutil.rmtree(self.temp_dir)
-
-    def verify_sparse_tree_branch_lengths(self, st):
-        for j in range(st.get_sample_size()):
-            u = j
-            while st.get_parent(u) != msprime.NULL_NODE:
-                length = st.get_time(st.get_parent(u)) - st.get_time(u)
-                self.assertGreater(length, 0.0)
-                self.assertEqual(st.get_branch_length(u), length)
-                u = st.get_parent(u)
-
-    def verify_sparse_tree_structure(self, st):
-        roots = set()
-        for u in st.samples():
-            # verify the path to root
-            self.assertTrue(st.is_sample(u))
-            times = []
-            while st.get_parent(u) != msprime.NULL_NODE:
-                v = st.get_parent(u)
-                times.append(st.get_time(v))
-                self.assertGreaterEqual(st.get_time(v), 0.0)
-                self.assertIn(u, st.get_children(v))
-                u = v
-            roots.add(u)
-            self.assertEqual(times, sorted(times))
-        self.assertEqual(sorted(list(roots)), sorted(st.roots))
-        self.assertEqual(len(st.roots), st.num_roots)
-        u = st.left_root
-        roots = []
-        while u != msprime.NULL_NODE:
-            roots.append(u)
-            u = st.right_sib(u)
-        self.assertEqual(roots, st.roots)
-        # To a top-down traversal, and make sure we meet all the samples.
-        samples = []
-        for root in st.roots:
-            stack = [root]
-            while len(stack) > 0:
-                u = stack.pop()
-                self.assertNotEqual(u, msprime.NULL_NODE)
-                if st.is_sample(u):
-                    samples.append(u)
-                if st.is_leaf(u):
-                    self.assertEqual(len(st.get_children(u)), 0)
-                else:
-                    for c in reversed(st.get_children(u)):
-                        stack.append(c)
-                # Check that we get the correct number of samples at each
-                # node.
-                self.assertEqual(st.get_num_samples(u), len(list(st.samples(u))))
-                self.assertEqual(st.get_num_tracked_samples(u), 0)
-        self.assertEqual(sorted(samples), sorted(st.samples()))
-        # Check the parent dict
-        pi = st.get_parent_dict()
-        for root in st.roots:
-            self.assertNotIn(root, pi)
-        for k, v in pi.items():
-            self.assertEqual(st.get_parent(k), v)
-        self.assertEqual(st.num_samples(), len(samples))
-        self.assertEqual(sorted(st.samples()), sorted(samples))
-
-    def verify_sparse_tree(self, st):
-        self.verify_sparse_tree_branch_lengths(st)
-        self.verify_sparse_tree_structure(st)
-
-    def verify_sparse_trees(self, ts):
-        pts = tests.PythonTreeSequence(ts.get_ll_tree_sequence())
-        iter1 = ts.trees()
-        iter2 = pts.trees()
-        length = 0
-        num_trees = 0
-        breakpoints = [0]
-        for st1, st2 in zip(iter1, iter2):
-            self.assertEqual(st1.get_sample_size(), ts.get_sample_size())
-            roots = set()
-            for u in ts.samples():
-                root = u
-                while st1.get_parent(root) != msprime.NULL_NODE:
-                    root = st1.get_parent(root)
-                roots.add(root)
-            self.assertEqual(sorted(list(roots)), sorted(st1.roots))
-            if len(roots) > 1:
-                with self.assertRaises(ValueError):
-                    st1.root
-            else:
-                self.assertEqual(st1.root, list(roots)[0])
-            self.assertEqual(st2, st1)
-            self.assertFalse(st2 != st1)
-            l, r = st1.get_interval()
-            breakpoints.append(r)
-            self.assertAlmostEqual(l, length)
-            self.assertGreaterEqual(l, 0)
-            self.assertGreater(r, l)
-            self.assertLessEqual(r, ts.get_sequence_length())
-            length += r - l
-            self.verify_sparse_tree(st1)
-            num_trees += 1
-        self.assertRaises(StopIteration, next, iter1)
-        self.assertRaises(StopIteration, next, iter2)
-        self.assertEqual(ts.get_num_trees(), num_trees)
-        self.assertEqual(breakpoints, list(ts.breakpoints()))
-        self.assertAlmostEqual(length, ts.get_sequence_length())
-
-
-class TestSingleLocusSimulation(HighLevelTestCase):
-    """
-    Tests on the single locus simulations.
-    """
-
-    def test_simple_cases(self):
-        for n in range(2, 10):
-            st = next(msprime.simulate(n).trees())
-            self.verify_sparse_tree(st)
-        for n in [11, 13, 19, 101]:
-            st = next(msprime.simulate(n).trees())
-            self.verify_sparse_tree(st)
-
-    def test_models(self):
-        # Exponential growth of 0 and constant model should be identical.
-        for n in [2, 10, 100]:
-            m1 = msprime.PopulationConfiguration(n, growth_rate=0)
-            m2 = msprime.PopulationConfiguration(n, initial_size=1.0)
-            st1 = next(
-                msprime.simulate(random_seed=1, population_configurations=[m1]).trees()
-            )
-            st2 = next(
-                msprime.simulate(random_seed=1, population_configurations=[m2]).trees()
-            )
-            self.assertEqual(st1.parent_dict, st2.parent_dict)
-        # TODO add more tests!
-
-
-class TestMultiLocusSimulation(HighLevelTestCase):
-    """
-    Tests on the single locus simulations.
-    """
-
-    def test_simple_cases(self):
-        m = 1
-        r = 0.1
-        for n in range(2, 10):
-            self.verify_sparse_trees(msprime.simulate(n, m, r))
-        n = 4
-        for m in range(1, 10):
-            self.verify_sparse_trees(msprime.simulate(n, m, r))
-        m = 100
-        for r in [0.001, 0.01]:
-            self.verify_sparse_trees(msprime.simulate(n, m, r))
-
-    def test_nonbinary_cases(self):
-        for ts in get_bottleneck_examples():
-            self.verify_sparse_trees(ts)
-
-    def test_error_cases(self):
-        def f(n, m, r):
-            return msprime.simulate(sample_size=n, length=m, recombination_rate=r)
-
-        for n in [-100, -1, 0, 1, None]:
-            self.assertRaises(ValueError, f, n, 1, 1.0)
-        for n in ["", "2", 2.2, 1e5]:
-            self.assertRaises(TypeError, f, n, 1, 1.0)
 
 
 class TestFullArg(unittest.TestCase):
@@ -271,7 +97,7 @@ class TestFullArg(unittest.TestCase):
         return tree_sequence
 
     def test_no_recombination(self):
-        rng = msprime.RandomGenerator(1)
+        rng = _msprime.RandomGenerator(1)
         sim = msprime.simulator_factory(10, random_generator=rng, record_full_arg=True)
         ts = self.verify(sim)
         ts_simplified = ts.simplify()
@@ -281,35 +107,35 @@ class TestFullArg(unittest.TestCase):
         self.assertEqual(t1.edges, t2.edges)
 
     def test_recombination_n25(self):
-        rng = msprime.RandomGenerator(10)
+        rng = _msprime.RandomGenerator(10)
         sim = msprime.simulator_factory(
             25, recombination_rate=1, record_full_arg=True, random_generator=rng
         )
         self.verify(sim)
 
     def test_recombination_n5(self):
-        rng = msprime.RandomGenerator(10)
+        rng = _msprime.RandomGenerator(10)
         sim = msprime.simulator_factory(
             5, recombination_rate=10, record_full_arg=True, random_generator=rng
         )
         self.verify(sim)
 
     def test_recombination_n50(self):
-        rng = msprime.RandomGenerator(100)
+        rng = _msprime.RandomGenerator(100)
         sim = msprime.simulator_factory(
             50, recombination_rate=2, record_full_arg=True, random_generator=rng
         )
         self.verify(sim)
 
     def test_recombination_n100(self):
-        rng = msprime.RandomGenerator(100)
+        rng = _msprime.RandomGenerator(100)
         sim = msprime.simulator_factory(
             100, recombination_rate=0.2, record_full_arg=True, random_generator=rng
         )
         self.verify(sim)
 
     def test_multimerger(self):
-        rng = msprime.RandomGenerator(1234)
+        rng = _msprime.RandomGenerator(1234)
         sim = msprime.simulator_factory(
             100,
             recombination_rate=0.1,
@@ -322,32 +148,17 @@ class TestFullArg(unittest.TestCase):
         self.verify(sim, multiple_mergers=True)
 
 
-class TestSimulator(HighLevelTestCase):
+class TestSimulator(unittest.TestCase):
     """
     Runs tests on the underlying Simulator object.
     """
-
-    def verify_dump_load(self, tree_sequence):
-        """
-        Dump the tree sequence and verify we can load again from the same
-        file.
-        """
-        tree_sequence.dump(self.temp_file)
-        other = msprime.load(self.temp_file)
-        self.assertIsNotNone(other.file_uuid)
-        records = list(tree_sequence.edges())
-        other_records = list(other.edges())
-        self.assertEqual(records, other_records)
-        haplotypes = list(tree_sequence.haplotypes())
-        other_haplotypes = list(other.haplotypes())
-        self.assertEqual(haplotypes, other_haplotypes)
 
     def verify_simulation(self, n, m, r):
         """
         Verifies a simulation for the specified parameters.
         """
         recomb_map = msprime.RecombinationMap.uniform_map(m, r, discrete=True)
-        rng = msprime.RandomGenerator(1)
+        rng = _msprime.RandomGenerator(1)
         sim = msprime.simulator_factory(
             n, recombination_map=recomb_map, random_generator=rng
         )
@@ -368,8 +179,6 @@ class TestSimulator(HighLevelTestCase):
         self.assertGreaterEqual(sim.num_recombination_events, 0)
         self.assertGreaterEqual(sim.total_num_migration_events, 0)
         self.assertGreaterEqual(sim.num_multiple_recombination_events, 0)
-        self.verify_sparse_trees(tree_sequence)
-        self.verify_dump_load(tree_sequence)
 
     def test_random_parameters(self):
         num_random_sims = 10
@@ -410,12 +219,12 @@ class TestSimulatorFactory(unittest.TestCase):
     def test_default_random_seed(self):
         sim = msprime.simulator_factory(10)
         rng = sim.random_generator
-        self.assertIsInstance(rng, msprime.RandomGenerator)
+        self.assertIsInstance(rng, _msprime.RandomGenerator)
         self.assertNotEqual(rng.get_seed(), 0)
 
     def test_random_seed(self):
         seed = 12345
-        rng = msprime.RandomGenerator(seed)
+        rng = _msprime.RandomGenerator(seed)
         sim = msprime.simulator_factory(10, random_generator=rng)
         self.assertEqual(rng, sim.random_generator)
         self.assertEqual(rng.get_seed(), seed)
@@ -856,7 +665,7 @@ class TestSimulateInterface(unittest.TestCase):
     def test_mutation_generator_unsupported(self):
         n = 10
         mutgen = msprime.mutations._simple_mutation_generator(
-            1, 1, msprime.RandomGenerator(1)
+            1, 1, _msprime.RandomGenerator(1)
         )
         with self.assertRaises(ValueError):
             msprime.simulate(n, mutation_generator=mutgen)

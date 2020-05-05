@@ -23,7 +23,7 @@ import re
 
 import newick
 
-import msprime
+from . import demography
 
 
 def parse_starbeast(tree, generation_time, branch_length_units="myr"):
@@ -221,7 +221,7 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
             # size Ne. Species names are stored as metadata with the "species_name"
             # tag.
             population_configurations.append(
-                msprime.PopulationConfiguration(
+                demography.PopulationConfiguration(
                     initial_size=Ne, metadata={"species_name": node.name.strip()}
                 )
             )
@@ -236,7 +236,7 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
             # a MassMigration into the left-most species.
             for child in node.descendants[1:]:
                 demographic_events.append(
-                    msprime.MassMigration(
+                    demography.MassMigration(
                         source=leaf_map[child], dest=leaf_map[node], time=node.time
                     )
                 )
@@ -279,7 +279,7 @@ def process_starbeast_tree(
             species_name = species_name_map[newick_id]
             metadata = {"species_name": species_name}
             population_configurations.append(
-                msprime.PopulationConfiguration(
+                demography.PopulationConfiguration(
                     initial_size=pop_size, metadata=metadata
                 )
             )
@@ -294,12 +294,12 @@ def process_starbeast_tree(
             # a MassMigration into the left-most species.
             for child in node.descendants[1:]:
                 demographic_events.append(
-                    msprime.MassMigration(
+                    demography.MassMigration(
                         source=leaf_map[child], dest=leaf_map[node], time=node.time
                     )
                 )
             demographic_events.append(
-                msprime.PopulationParametersChange(
+                demography.PopulationParametersChange(
                     node.time, initial_size=pop_size, population_id=leaf_map[node]
                 )
             )

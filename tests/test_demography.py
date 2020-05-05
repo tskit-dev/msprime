@@ -781,7 +781,7 @@ class TestDemographyTrajectories(unittest.TestCase):
 
     def test_logging(self):
         ddb = self.one_pop_example()
-        with mock.patch("msprime.simulations.logger.debug") as mocked_debug:
+        with mock.patch("msprime.demography.logger.debug") as mocked_debug:
             ddb.mean_coalescence_time([2])
         self.assertEqual(mocked_debug.call_count, 3)
 
@@ -1203,7 +1203,7 @@ class TestMatrixExponential(unittest.TestCase):
 
     def verify(self, A):
         E1 = scipy.linalg.expm(A)
-        E2 = msprime.simulations._matrix_exponential(A)
+        E2 = msprime.demography._matrix_exponential(A)
         self.assertEqual(E1.shape, E2.shape)
         self.assertTrue(np.allclose(E1, E2))
 
@@ -1229,14 +1229,14 @@ class TestMatrixExponential(unittest.TestCase):
         # a 1 x 1 matrix consisting of just 0 (compared to exp(0) = 1)
         # a 1 x 1 matrix consisting of just -1 (compared to exp(-1))
         for t in [0, -1]:
-            A = msprime.simulations._matrix_exponential([[t]])
+            A = msprime.demography._matrix_exponential([[t]])
             B = np.exp(t)
             self.assertEqual(A, B)
 
     def test_identity_exp(self):
         # (-1) * np.eye(k), compared to exp(-1) * np.eye(k)
         for k in range(2, 5):
-            A = msprime.simulations._matrix_exponential((-1) * np.eye(k))
+            A = msprime.demography._matrix_exponential((-1) * np.eye(k))
             B = np.exp(-1) * np.eye(k)
             self.assertTrue(np.allclose(A, B))
 

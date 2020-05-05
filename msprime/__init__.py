@@ -68,9 +68,17 @@ from tskit import validate_provenance
 
 from tskit import NODE_IS_SAMPLE, FORWARD, REVERSE
 
-from msprime.provenance import __version__
-from msprime.simulations import *
+# TODO document these flags
+import _msprime
+from _msprime import NODE_IS_CA_EVENT
+from _msprime import NODE_IS_CEN_EVENT
+from _msprime import NODE_IS_MIG_EVENT
+from _msprime import NODE_IS_RE_EVENT
+
+from msprime.core import __version__
 from msprime.exceptions import *
+from msprime.demography import *
+from msprime.ancestry import *
 from msprime.mutations import *
 from msprime.likelihood import *
 from msprime.species_trees import parse_species_tree, parse_starbeast
