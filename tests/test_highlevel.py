@@ -1014,3 +1014,113 @@ class TestRecombinationMap(unittest.TestCase):
             mean_rr = recomb_map.mean_recombination_rate
             mean_rr2 = hapmap_rr(hapfile)
         self.assertAlmostEqual(mean_rr, mean_rr2, places=15)
+
+
+class TestReprRoundTrip(unittest.TestCase):
+    """
+    Tests that we can eval the repr of objects to round trip them.
+    """
+
+    def assert_repr_round_trip(self, obj_list):
+        for obj in obj_list:
+            obj_copy = eval(repr(obj), globals(), msprime.__dict__)
+            self.assertEqual(obj_copy, obj)
+            self.assertFalse(obj_copy is obj)
+
+    def test_population_configuration(self):
+        examples = [
+            msprime.PopulationConfiguration(),
+            msprime.PopulationConfiguration(sample_size=10),
+            msprime.PopulationConfiguration(initial_size=2),
+            msprime.PopulationConfiguration(growth_rate=5),
+            msprime.PopulationConfiguration(metadata={"a": 2}),
+            msprime.PopulationConfiguration(
+                sample_size=5, initial_size=234, growth_rate=10, metadata={"asd": 1234}
+            ),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_population_parameters_change(self):
+        examples = [
+            msprime.PopulationParametersChange(time=1, initial_size=1),
+            msprime.PopulationParametersChange(time=1, growth_rate=2),
+            msprime.PopulationParametersChange(time=1, growth_rate=1, population=2),
+            msprime.PopulationParametersChange(
+                time=3, initial_size=3, growth_rate=1, population=2
+            ),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_migration_rate_change(self):
+        examples = [
+            msprime.MigrationRateChange(time=1, rate=1),
+            msprime.MigrationRateChange(time=1, rate=1, source=1, dest=2),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_mass_migration(self):
+        examples = [
+            msprime.MassMigration(time=1, source=1, dest=2),
+            msprime.MassMigration(time=1, source=1, dest=2, proportion=0.2),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_simulation_model_change(self):
+        examples = [
+            msprime.SimulationModelChange(),
+            msprime.SimulationModelChange(model="hudson"),
+            msprime.SimulationModelChange(model=msprime.DiscreteTimeWrightFisher(100)),
+            msprime.SimulationModelChange(
+                model=msprime.BetaCoalescent(1000, alpha=1, truncation_point=2)
+            ),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_simple_bottleneck(self):
+        examples = [
+            msprime.SimpleBottleneck(time=10, population=2),
+            msprime.SimpleBottleneck(time=10, population=2, proportion=0.5),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_instantaneous_bottleneck(self):
+        examples = [
+            msprime.InstantaneousBottleneck(time=10, population=1),
+            msprime.InstantaneousBottleneck(time=10, population=1, strength=10),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_census_event(self):
+        examples = [
+            msprime.CensusEvent(time=10),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_simulation_models(self):
+        examples = [
+            msprime.StandardCoalescent(),
+            msprime.StandardCoalescent(100),
+            msprime.SmcApproxCoalescent(),
+            msprime.SmcApproxCoalescent(1234),
+            msprime.SmcPrimeApproxCoalescent(),
+            msprime.SmcPrimeApproxCoalescent(1234),
+            msprime.DiscreteTimeWrightFisher(),
+            msprime.DiscreteTimeWrightFisher(1234),
+            msprime.WrightFisherPedigree(),
+            msprime.WrightFisherPedigree(1234),
+            msprime.BetaCoalescent(),
+            msprime.BetaCoalescent(reference_size=10),
+            msprime.BetaCoalescent(reference_size=10, alpha=1, truncation_point=10),
+            msprime.DiracCoalescent(),
+            msprime.DiracCoalescent(reference_size=10),
+            msprime.DiracCoalescent(reference_size=10, psi=1234, c=56),
+            msprime.SweepGenicSelection(
+                reference_size=100,
+                position=1,
+                start_frequency=0.5,
+                end_frequency=0.9,
+                alpha=1,
+                dt=1e-4,
+            ),
+        ]
+        self.assert_repr_round_trip(examples)

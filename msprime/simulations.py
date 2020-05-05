@@ -1743,16 +1743,9 @@ class SimulationModelChange(DemographicEvent):
     :type model: str or simulation model instance
     """
 
-    # We redefine time here because we want it to default to None here.
+    # We redefine time because we want it to default to None here.
     time = attr.ib(default=None)
     model = attr.ib(default=None)
-
-    def get_ll_representation(self):
-        return {
-            "type": "simulation_model_change",
-            "time": self.time,
-            "model": self.model.get_ll_representation(),
-        }
 
     def __str__(self):
         return f"Population model changes to {self.model}"
@@ -1824,6 +1817,7 @@ class CensusEvent(DemographicEvent):
         return "Census event"
 
 
+@attr.s
 class SimulationModel:
     """
     Abstract superclass of all simulation models.
@@ -1831,21 +1825,13 @@ class SimulationModel:
 
     name = None
 
-    def __init__(self, reference_size=None):
-        self.reference_size = reference_size
+    reference_size = attr.ib(default=None)
 
     def get_ll_representation(self):
         return {"name": self.name, "reference_size": self.reference_size}
 
-    def __str__(self):
-        return f"{self.name}(reference_size={self.reference_size})"
-
     def asdict(self):
-        return {
-            key: getattr(self, key)
-            for key in inspect.signature(self.__init__).parameters.keys()
-            if hasattr(self, key)
-        }
+        return attr.asdict(self)
 
 
 class StandardCoalescent(SimulationModel):
@@ -1936,6 +1922,7 @@ class ParametricSimulationModel(SimulationModel):
         return d
 
 
+@attr.s
 class BetaCoalescent(ParametricSimulationModel):
     """
     A diploid Xi-coalescent with up to four simultaneous multiple mergers and
@@ -2010,12 +1997,11 @@ class BetaCoalescent(ParametricSimulationModel):
 
     name = "beta"
 
-    def __init__(self, reference_size=None, alpha=None, truncation_point=1):
-        super().__init__(reference_size=reference_size)
-        self.alpha = alpha
-        self.truncation_point = truncation_point
+    alpha = attr.ib(default=None)
+    truncation_point = attr.ib(default=1)
 
 
+@attr.s
 class DiracCoalescent(ParametricSimulationModel):
     """
     A diploid Xi-coalescent with up to four simultaneous multiple mergers and
@@ -2052,37 +2038,20 @@ class DiracCoalescent(ParametricSimulationModel):
 
     name = "dirac"
 
-    def __init__(self, reference_size=None, psi=None, c=None):
-        super().__init__(reference_size=reference_size)
-        self.psi = psi
-        self.c = c
+    psi = attr.ib(default=None)
+    c = attr.ib(default=None)
 
 
+@attr.s
 class SweepGenicSelection(ParametricSimulationModel):
-    # TODO document
+    # TODO document and finalise the API
     name = "sweep_genic_selection"
 
-    # TODO Probably want to rethink the parameters here. Probably these should
-    # be kw-only?
-    def __init__(
-        self,
-        position,
-        start_frequency,
-        end_frequency,
-        alpha,
-        dt=None,
-        reference_size=None,
-    ):
-        super().__init__(reference_size=reference_size)
-        # We might want to have a default dt value that depends on the other
-        # parameters.
-        if dt is None:
-            dt = 0.01
-        self.position = position
-        self.start_frequency = start_frequency
-        self.end_frequency = end_frequency
-        self.alpha = alpha
-        self.dt = dt
+    position = attr.ib(default=None)
+    start_frequency = attr.ib(default=None)
+    end_frequency = attr.ib(default=None)
+    alpha = attr.ib(default=None)
+    dt = attr.ib(default=None)
 
 
 @attr.s
@@ -2375,7 +2344,7 @@ class DemographyDebugger:
         mass_migration_objects = []
         mass_migration_times = []
         for demo in self.demographic_events:
-            if demo.type == "mass_migration":
+            if isinstance(demo, MassMigration):
                 mass_migration_objects.append(demo)
                 mass_migration_times.append(demo.time)
 
