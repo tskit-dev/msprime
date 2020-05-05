@@ -1184,7 +1184,6 @@ class PopulationConfiguration:
         return encoded_metadata
 
     def asdict(self):
-        # For simplicity define this here for now.
         return attr.asdict(self)
 
 
@@ -1519,17 +1518,13 @@ class Pedigree:
         }
 
 
+@attr.s
 class DemographicEvent:
     """
     Superclass of demographic events that occur during simulations.
     """
 
-    def __init__(self, type_, time):
-        self.type = type_
-        self.time = time
-
-    def __repr__(self):
-        return repr(self.__dict__)
+    time = attr.ib()
 
     def asdict(self):
         return {
@@ -1539,6 +1534,7 @@ class DemographicEvent:
         }
 
 
+@attr.s
 class PopulationParametersChange(DemographicEvent):
     """
     Changes the demographic parameters of a population at a given time.
@@ -1560,32 +1556,35 @@ class PopulationParametersChange(DemographicEvent):
         simultaneously.
     """
 
-    def __init__(
-        self,
-        time,
-        initial_size=None,
-        growth_rate=None,
-        population=None,
-        population_id=None,
-    ):
-        super().__init__("population_parameters_change", time)
-        if population_id is not None and population is not None:
+    initial_size = attr.ib(default=None)
+    growth_rate = attr.ib(default=None)
+    # TODO change the default to -1 to match MigrationRateChange.
+    population = attr.ib(default=None)
+    # Deprecated.
+    # TODO add a formal deprecation notice
+    population_id = attr.ib(default=None, repr=False)
+
+    def __attrs_post_init__(self):
+
+        if self.population_id is not None and self.population is not None:
             raise ValueError(
                 "population_id and population are aliases; cannot supply both."
             )
-        if population_id is not None:
-            population = population_id
-        if growth_rate is None and initial_size is None:
+
+        if self.population_id is not None:
+            self.population = self.population_id
+        if self.growth_rate is None and self.initial_size is None:
             raise ValueError("Must specify one or more of growth_rate and initial_size")
-        if initial_size is not None and initial_size <= 0:
+        if self.initial_size is not None and self.initial_size <= 0:
             raise ValueError("Cannot have a population size <= 0")
-        self.time = time
-        self.growth_rate = growth_rate
-        self.initial_size = initial_size
-        self.population = -1 if population is None else population
+        self.population = -1 if self.population is None else self.population
 
     def get_ll_representation(self):
-        ret = {"type": self.type, "time": self.time, "population": self.population}
+        ret = {
+            "type": "population_parameters_change",
+            "time": self.time,
+            "population": self.population,
+        }
         if self.growth_rate is not None:
             ret["growth_rate"] = self.growth_rate
         if self.initial_size is not None:
@@ -1598,9 +1597,10 @@ class PopulationParametersChange(DemographicEvent):
             s += f"initial_size -> {self.initial_size} "
         if self.growth_rate is not None:
             s += f"growth_rate -> {self.growth_rate} "
-        return s
+        return s[:-1]
 
 
+@attr.s
 class MigrationRateChange(DemographicEvent):
     """
     Changes the rate of migration from one deme to another to a new value at a
@@ -1622,21 +1622,23 @@ class MigrationRateChange(DemographicEvent):
     :param int source: The source population ID.
     """
 
-    # matrix_index is the old form, and deprecated as of 1.0
-    def __init__(self, time, rate, source=-1, dest=-1, matrix_index=None):
-        super().__init__("migration_rate_change", time)
-        self.rate = rate
-        self.source = source
-        self.dest = dest
+    rate = attr.ib()
+    source = attr.ib(default=-1)
+    dest = attr.ib(default=-1)
+    # Deprecated.
+    # TODO add a formal deprecation notice
+    matrix_index = attr.ib(default=None, repr=False)
+
+    def __attrs_post_init__(self):
         # If the deprecated form is used, it overwrites the values of source
         # and dest
-        if matrix_index is not None:
-            self.source = matrix_index[0]
-            self.dest = matrix_index[1]
+        if self.matrix_index is not None:
+            self.source = self.matrix_index[0]
+            self.dest = self.matrix_index[1]
 
     def get_ll_representation(self):
         return {
-            "type": self.type,
+            "type": "migration_rate_change",
             "time": self.time,
             "migration_rate": self.rate,
             "source": self.source,
@@ -1652,6 +1654,7 @@ class MigrationRateChange(DemographicEvent):
         return ret
 
 
+@attr.s
 class MassMigration(DemographicEvent):
     """
     A mass migration event in which some fraction of the population in one deme
@@ -1673,19 +1676,23 @@ class MassMigration(DemographicEvent):
         the source population migrates to the destination population.
     """
 
-    def __init__(self, time, source, dest=None, proportion=1.0, destination=None):
-        super().__init__("mass_migration", time)
-        if dest is not None and destination is not None:
+    source = attr.ib()
+    # dest only has a default because of the deprecated destination attr.
+    dest = attr.ib(default=None)
+    proportion = attr.ib(default=1.0)
+    # Deprecated.
+    # TODO add a formal deprecation notice
+    destination = attr.ib(default=None, repr=False)
+
+    def __attrs_post_init__(self):
+        if self.dest is not None and self.destination is not None:
             raise ValueError("dest and destination are aliases; cannot supply both")
-        if destination is not None:
-            dest = destination
-        self.source = source
-        self.dest = dest
-        self.proportion = proportion
+        if self.destination is not None:
+            self.dest = self.destination
 
     def get_ll_representation(self):
         return {
-            "type": self.type,
+            "type": "mass_migration",
             "time": self.time,
             "source": self.source,
             "dest": self.dest,
@@ -1704,6 +1711,13 @@ class MassMigration(DemographicEvent):
         )
 
 
+# Implementation note: these are treated as demographic events for the
+# sake of the high-level interface, but are treated differently at run
+# time. There is no corresponding demographic event in the C layer, as
+# this would add too much complexity to the main loops. Instead, we
+# detect these events at the high level, and insert calls to set_model
+# as appropriate.
+@attr.s
 class SimulationModelChange(DemographicEvent):
     """
     An event representing a change of underlying :ref:`simulation model
@@ -1729,19 +1743,13 @@ class SimulationModelChange(DemographicEvent):
     :type model: str or simulation model instance
     """
 
-    # Implementation note: these are treated as demographic events for the
-    # sake of the high-level interface, but are treated differently at run
-    # time. There is no corresponding demographic event in the C layer, as
-    # this would add too much complexity to the main loops. Instead, we
-    # detect these events at the high level, and insert calls to set_model
-    # as appropriate.
-    def __init__(self, time=None, model=None):
-        super().__init__("simulation_model_change", time)
-        self.model = model
+    # We redefine time here because we want it to default to None here.
+    time = attr.ib(default=None)
+    model = attr.ib(default=None)
 
     def get_ll_representation(self):
         return {
-            "type": self.type,
+            "type": "simulation_model_change",
             "time": self.time,
             "model": self.model.get_ll_representation(),
         }
@@ -1750,22 +1758,15 @@ class SimulationModelChange(DemographicEvent):
         return f"Population model changes to {self.model}"
 
 
+# This is an unsupported/undocumented demographic event.
+@attr.s
 class SimpleBottleneck(DemographicEvent):
-    # This is an unsupported/undocumented demographic event.
-    def __init__(self, time, population=None, proportion=1.0, population_id=None):
-        super().__init__("simple_bottleneck", time)
-        if population_id is not None and population is not None:
-            raise ValueError(
-                "population_id and population are aliases; cannot supply both."
-            )
-        if population_id is not None:
-            population = population_id
-        self.population = population
-        self.proportion = proportion
+    population = attr.ib()
+    proportion = attr.ib(default=1.0)
 
     def get_ll_representation(self):
         return {
-            "type": self.type,
+            "type": "simple_bottleneck",
             "time": self.time,
             "population": self.population,
             "proportion": self.proportion,
@@ -1778,23 +1779,15 @@ class SimpleBottleneck(DemographicEvent):
         )
 
 
+# TODO document
+@attr.s
 class InstantaneousBottleneck(DemographicEvent):
-    # TODO document
-
-    def __init__(self, time, population=None, strength=1.0, population_id=None):
-        super().__init__("instantaneous_bottleneck", time)
-        if population_id is not None and population is not None:
-            raise ValueError(
-                "population_id and population are aliases; cannot supply both."
-            )
-        if population_id is not None:
-            population = population_id
-        self.population = population
-        self.strength = strength
+    population = attr.ib(default=None)
+    strength = attr.ib(default=1.0)
 
     def get_ll_representation(self):
         return {
-            "type": self.type,
+            "type": "instantaneous_bottleneck",
             "time": self.time,
             "population": self.population,
             "strength": self.strength,
@@ -1807,6 +1800,7 @@ class InstantaneousBottleneck(DemographicEvent):
         )
 
 
+@attr.s
 class CensusEvent(DemographicEvent):
     """
     An event that adds a node to each branch of every tree at a given time
@@ -1820,12 +1814,9 @@ class CensusEvent(DemographicEvent):
     :param float time: The time at which this event occurs in generations.
     """
 
-    def __init__(self, time):
-        super().__init__("census_event", time)
-
     def get_ll_representation(self):
         return {
-            "type": self.type,
+            "type": "census_event",
             "time": self.time,
         }
 

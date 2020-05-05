@@ -35,6 +35,177 @@ import _msprime
 import msprime
 
 
+class TestReprRoundTrip(unittest.TestCase):
+    """
+    Tests that we can eval the repr of objects to round trip them.
+    """
+
+    def assert_repr_round_trip(self, obj_list):
+        for obj in obj_list:
+            obj_copy = eval(repr(obj), globals(), msprime.__dict__)
+            self.assertEqual(obj_copy, obj)
+            self.assertFalse(obj_copy is obj)
+
+    def test_population_configuration(self):
+        examples = [
+            msprime.PopulationConfiguration(),
+            msprime.PopulationConfiguration(sample_size=10),
+            msprime.PopulationConfiguration(initial_size=2),
+            msprime.PopulationConfiguration(growth_rate=5),
+            msprime.PopulationConfiguration(metadata={"a": 2}),
+            msprime.PopulationConfiguration(
+                sample_size=5, initial_size=234, growth_rate=10, metadata={"asd": 1234}
+            ),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_population_parameters_change(self):
+        examples = [
+            msprime.PopulationParametersChange(time=1, initial_size=1),
+            msprime.PopulationParametersChange(time=1, growth_rate=2),
+            msprime.PopulationParametersChange(time=1, growth_rate=1, population=2),
+            msprime.PopulationParametersChange(
+                time=3, initial_size=3, growth_rate=1, population=2
+            ),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_migration_rate_change(self):
+        examples = [
+            msprime.MigrationRateChange(time=1, rate=1),
+            msprime.MigrationRateChange(time=1, rate=1, source=1, dest=2),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_mass_migration(self):
+        examples = [
+            msprime.MassMigration(time=1, source=1, dest=2),
+            msprime.MassMigration(time=1, source=1, dest=2, proportion=0.2),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    @unittest.skip("port models to attrs")
+    def test_simulation_model_change(self):
+        examples = [
+            msprime.SimulationModelChange(),
+            msprime.SimulationModelChange(model="hudson"),
+            msprime.SimulationModelChange(model=msprime.DiscreteTimeWrightFisher(100)),
+            # msprime.MassMigration(time=1, source=1, dest=2, proportion=0.2),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_simple_bottleneck(self):
+        examples = [
+            msprime.SimpleBottleneck(time=10, population=2),
+            msprime.SimpleBottleneck(time=10, population=2, proportion=0.5),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_instantaneous_bottleneck(self):
+        examples = [
+            msprime.InstantaneousBottleneck(time=10, population=1),
+            msprime.InstantaneousBottleneck(time=10, population=1, strength=10),
+        ]
+        self.assert_repr_round_trip(examples)
+
+    def test_census_event(self):
+        examples = [
+            msprime.CensusEvent(time=10),
+        ]
+        self.assert_repr_round_trip(examples)
+
+
+class TestIntrospectionInterface(unittest.TestCase):
+    """
+    Tests that we have meaningful repr and str functions for all the
+    classes used in the demography hierarchy.
+    """
+
+    def test_population_configuration(self):
+        s = (
+            "PopulationConfiguration(sample_size=None, initial_size=None, "
+            "growth_rate=0.0, metadata=None)"
+        )
+        pop_config = msprime.PopulationConfiguration()
+        self.assertEqual(s, str(pop_config))
+        self.assertEqual(s, repr(pop_config))
+
+    def test_population_parameters_change(self):
+        event = msprime.PopulationParametersChange(1.0, population=1, initial_size=2.0)
+        repr_s = (
+            "PopulationParametersChange(time=1.0, initial_size=2.0, "
+            "growth_rate=None, population=1)"
+        )
+        self.assertEqual(repr(event), repr_s)
+        str_s = "Population parameter change for 1: initial_size -> 2.0"
+        self.assertEqual(str(event), str_s)
+
+        event = msprime.PopulationParametersChange(1.0, population=1, growth_rate=2.0)
+        str_s = "Population parameter change for 1: growth_rate -> 2.0"
+        self.assertEqual(str(event), str_s)
+
+        event = msprime.PopulationParametersChange(
+            1.0, population=1, growth_rate=2.0, initial_size=4.0
+        )
+        str_s = (
+            "Population parameter change for 1: initial_size -> 4.0 growth_rate -> 2.0"
+        )
+        self.assertEqual(str(event), str_s)
+
+    def test_migration_rate_change(self):
+        event = msprime.MigrationRateChange(time=1, rate=2)
+        repr_s = "MigrationRateChange(time=1, rate=2, source=-1, dest=-1)"
+        str_s = "Migration rate change to 2 everywhere"
+        self.assertEqual(repr(event), repr_s)
+        self.assertEqual(str(event), str_s)
+
+        event = msprime.MigrationRateChange(time=1, rate=2, source=0, dest=1)
+        repr_s = "MigrationRateChange(time=1, rate=2, source=0, dest=1)"
+        str_s = "Migration rate change for (0, 1) to 2"
+        self.assertEqual(repr(event), repr_s)
+        self.assertEqual(str(event), str_s)
+
+    def test_mass_migration(self):
+        event = msprime.MassMigration(time=1, proportion=0.5, source=0, dest=1)
+        repr_s = "MassMigration(time=1, source=0, dest=1, proportion=0.5)"
+        str_s = (
+            "Mass migration: Lineages moved with probability 0.5 backwards in time "
+            "with source 0 & dest 1 (equivalent to migration from 1 to 0 "
+            "forwards in time)"
+        )
+        self.assertEqual(repr(event), repr_s)
+        # Too much hassle to track the exact whitespace in the output string.
+        self.assertEqual(str(event).split(), str_s.split())
+
+    @unittest.skip("Port simualtion models to attrs")
+    def test_simulation_model_change(self):
+        pass
+
+    def test_simple_bottleneck(self):
+        event = msprime.SimpleBottleneck(time=1, population=1, proportion=0.5)
+        repr_s = "SimpleBottleneck(time=1, population=1, proportion=0.5)"
+        str_s = "Simple bottleneck: lineages in population 1 coalesce probability 0.5"
+        self.assertEqual(repr(event), repr_s)
+        self.assertEqual(str(event), str_s)
+
+    def test_instantaneous_bottleneck(self):
+        event = msprime.InstantaneousBottleneck(time=1, population=1, strength=1.5)
+        repr_s = "InstantaneousBottleneck(time=1, population=1, strength=1.5)"
+        str_s = (
+            "Instantaneous bottleneck in population 1: equivalent to 1.5 "
+            "generations of the coalescent"
+        )
+        self.assertEqual(repr(event), repr_s)
+        self.assertEqual(str(event), str_s)
+
+    def test_census(self):
+        event = msprime.CensusEvent(time=1)
+        repr_s = "CensusEvent(time=1)"
+        str_s = "Census event"
+        self.assertEqual(repr(event), repr_s)
+        self.assertEqual(str(event), str_s)
+
+
 class TestTimeTravelErrors(unittest.TestCase):
     """
     It is possible to specify models in msprime that result in malformed
@@ -144,24 +315,6 @@ class TestBadDemographicEvents(unittest.TestCase):
                 msprime.simulate(10, demographic_events=des)
 
 
-class TestDemographicEventStr(unittest.TestCase):
-    """
-    Make sure __str__ works for demographic events.
-    """
-
-    def test_defaults(self):
-        events = [
-            msprime.PopulationParametersChange(0, initial_size=1),
-            msprime.MigrationRateChange(0, 1),
-            msprime.MassMigration(0, 0),
-            msprime.SimulationModelChange(0, msprime.StandardCoalescent(1)),
-            msprime.SimpleBottleneck(0),
-            msprime.InstantaneousBottleneck(0),
-        ]
-        for event in events:
-            self.assertGreater(len(str(event)), 0)
-
-
 class TestDeprecatedParameters(unittest.TestCase):
     """
     Tests to check that aliased parameters are handled correctly.
@@ -219,54 +372,6 @@ class TestDeprecatedParameters(unittest.TestCase):
             self.assertEqual(e.initial_size, 1.1)
             self.assertEqual(e.growth_rate, 0.1)
             self.assertEqual(e.population, j)
-
-    def test_simple_bottleneck_population_id(self):
-        self.assertRaises(
-            ValueError,
-            msprime.SimpleBottleneck,
-            time=0,
-            population=1,
-            proportion=5,
-            population_id=1,
-        )
-
-        for j in range(10):
-            e = msprime.SimpleBottleneck(time=0.1, population=j, proportion=5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.population, j)
-            self.assertEqual(e.proportion, 5)
-            e = msprime.SimpleBottleneck(0.1, j, 5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.population, j)
-            self.assertEqual(e.proportion, 5)
-            e = msprime.SimpleBottleneck(time=0.1, population_id=j, proportion=5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.population, j)
-            self.assertEqual(e.proportion, 5)
-
-    def test_instantaneous_bottleneck_population_id(self):
-        self.assertRaises(
-            ValueError,
-            msprime.InstantaneousBottleneck,
-            time=0,
-            population=1,
-            strength=1,
-            population_id=1,
-        )
-
-        for j in range(10):
-            e = msprime.InstantaneousBottleneck(time=0.1, population=j, strength=5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.population, j)
-            self.assertEqual(e.strength, 5)
-            e = msprime.InstantaneousBottleneck(0.1, j, 5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.population, j)
-            self.assertEqual(e.strength, 5)
-            e = msprime.InstantaneousBottleneck(time=0.1, population_id=j, strength=5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.population, j)
-            self.assertEqual(e.strength, 5)
 
 
 class TestRateConversions(unittest.TestCase):
