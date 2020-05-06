@@ -504,40 +504,6 @@ under the standard ancestral recombination graph; and that of a pattern of
 mutations given a tree sequence and per-site, per-generation mutation
 probability :math:`\mu` under the infinite sites model.
 
-Specifically, the methods assume that each pair of lineages merges at rate
-:math:`1 / (2 N_e)`, and each link which separates ancestral material splits
-at rate :math:`r`. The number of mutations has a conditional Poisson
-distribution with mean :math:`T \mu`, where :math:`T` is the total branch
-length in the tree sequence, and each mutation further contributes a factor of
-:math:`l / T`, where :math:`l` is the branch length on which the mutation could
-have happened such that it appears on all of the lineages on which it is
-observed. Branch lengths must be stored in generations.
-
-For both methods, the full history of the sample must be encoded into the tree
-sequence. If the tree sequence is a realisation from the :func:`.simulate`
-function, then the ``record_full_arg`` setting must have been used to store
-recombination events, as well as coancestor events without marginal
-coalescences. Sampling probabilities of tree sequences from other sources can
-also be evaluated provided they contain the same information in the same
-format.
-
 .. autofunction:: msprime.log_arg_likelihood
 
 .. autofunction:: msprime.unnormalised_log_mutation_likelihood
-
-.. warning:: As the name suggests, the
-    :func:`.unnormalised_log_mutation_likelihood` function returns the
-    probability of the pattern of mutations given the underlying tree sequence
-    and per-site, per-generation mutation probability only up to a
-    combinatorial factor which depends on the configuration of mutations, but
-    not on the tree sequence or other parameters. As such, it is only
-    appropriate for use as a relative likelihood function. In contrast, the
-    :func:`.log_arg_likelihood` function returns the exact probability of the
-    tree sequence given the effective population size and per-link,
-    per-generation recombination probabilty.
-
-A recombination probability of zero is a permitted argument, and will return
-a finite log likelihood if there are no break points in the tree sequence, and
-a numerican representation of negative infinity, `-float("inf")`, if there are
-one or more breakpoints. Zero mutation probabilities are also permitted, and
-handled similarly.
