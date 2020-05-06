@@ -628,8 +628,8 @@ class TestInterval(unittest.TestCase):
                 msprime.mutate(ts, start_time=start, end_time=end)
 
     def test_stick_tree(self):
-        tables = msprime.TableCollection(1.0)
-        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0)
+        tables = tskit.TableCollection(1.0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0)
         tables.nodes.add_row(flags=0, time=1)
         tables.nodes.add_row(flags=0, time=2)
         tables.edges.add_row(0, 1, 1, 0)
@@ -755,7 +755,7 @@ class TestKeep(unittest.TestCase):
                     self.assertEqual(mutation.metadata, old_mutation.metadata)
                     self.assertEqual(mutation.node, old_mutation.node)
                     self.assertEqual(mutation.derived_state, old_mutation.derived_state)
-                    if old_mutation.parent == msprime.NULL_MUTATION:
+                    if old_mutation.parent == tskit.NULL:
                         self.assertEqual(mutation.parent, old_mutation.parent)
                     else:
                         self.assertEqual(

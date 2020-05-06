@@ -49,7 +49,7 @@ def get_wf_base(N, ngens, survival=0.0, num_loci=10, seed=1):
     # Unmark the ancient samples
     flags = tables.nodes.flags
     flags = np.zeros_like(flags)
-    flags[tables.nodes.time == 0] = msprime.NODE_IS_SAMPLE
+    flags[tables.nodes.time == 0] = tskit.NODE_IS_SAMPLE
     tables.nodes.set_columns(
         flags=flags, population=tables.nodes.population, time=tables.nodes.time
     )
@@ -464,12 +464,12 @@ class TestBasicFunctionality(unittest.TestCase):
     def test_from_subclass(self):
         from_ts = msprime.simulate(20, end_time=1, random_seed=5)
 
-        class MockTreeSequence(msprime.TreeSequence):
+        class MockTreeSequence(tskit.TreeSequence):
             pass
 
         subclass_instance = MockTreeSequence(from_ts.ll_tree_sequence)
         self.assertTrue(type(subclass_instance), MockTreeSequence)
-        self.assertIsInstance(subclass_instance, msprime.TreeSequence)
+        self.assertIsInstance(subclass_instance, tskit.TreeSequence)
         self.assertGreater(max(tree.num_roots for tree in subclass_instance.trees()), 1)
         start_time = subclass_instance.tables.nodes.time.max()
         final_ts = msprime.simulate(
@@ -586,10 +586,10 @@ class BaseEquivalanceMixin:
             recombination_map=recombination_map,
             model=self.model,
         )
-        tables = msprime.TableCollection(ts1.sequence_length)
+        tables = tskit.TableCollection(ts1.sequence_length)
         tables.populations.add_row()
         for _ in range(n):
-            tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
+            tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
         ts2 = msprime.simulate(
             from_ts=tables.tree_sequence(),
             start_time=0,
@@ -650,11 +650,11 @@ class BaseEquivalanceMixin:
             migration_matrix=[[0, 1], [1, 0]],
             random_seed=seed,
         )
-        tables = msprime.TableCollection(1)
+        tables = tskit.TableCollection(1)
         tables.populations.add_row()
         tables.populations.add_row()
         for _ in range(n):
-            tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
+            tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
         ts2 = msprime.simulate(
             from_ts=tables.tree_sequence(),
             start_time=0,
@@ -947,21 +947,21 @@ class TestSlimOutput(unittest.TestCase):
         self.assertEqual(max(tree.num_roots for tree in final_ts.trees()), 1)
 
     def test_minimal_example_no_recombination(self):
-        from_ts = msprime.load("tests/data/SLiM/minimal-example.trees")
+        from_ts = tskit.load("tests/data/SLiM/minimal-example.trees")
         ts = self.finish_simulation(from_ts, recombination_rate=0, seed=1)
         self.verify_completed(from_ts, ts)
 
     def test_minimal_example_recombination(self):
-        from_ts = msprime.load("tests/data/SLiM/minimal-example.trees")
+        from_ts = tskit.load("tests/data/SLiM/minimal-example.trees")
         ts = self.finish_simulation(from_ts, recombination_rate=0.1, seed=1)
         self.verify_completed(from_ts, ts)
 
     def test_single_locus_example_no_recombination(self):
-        from_ts = msprime.load("tests/data/SLiM/single-locus-example.trees")
+        from_ts = tskit.load("tests/data/SLiM/single-locus-example.trees")
         ts = self.finish_simulation(from_ts, recombination_rate=0, seed=1)
         self.verify_completed(from_ts, ts)
 
     def test_single_locus_example_recombination(self):
-        from_ts = msprime.load("tests/data/SLiM/single-locus-example.trees")
+        from_ts = tskit.load("tests/data/SLiM/single-locus-example.trees")
         ts = self.finish_simulation(from_ts, recombination_rate=0.1, seed=1)
         self.verify_completed(from_ts, ts)

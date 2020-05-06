@@ -17,7 +17,7 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Module responsible for running simulations.
+Module responsible for defining and debugging demographic models.
 """
 import collections
 import inspect
@@ -201,7 +201,7 @@ class MigrationRateChange(DemographicEvent):
         }
 
     def __str__(self):
-        if self.source == -1 is self.dest == -1:
+        if self.source == -1 and self.dest == -1:
             ret = f"Migration rate change to {self.rate} everywhere"
         else:
             matrix_index = (self.source, self.dest)

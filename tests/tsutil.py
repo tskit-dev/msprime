@@ -23,13 +23,11 @@ import json
 import random
 
 import numpy as np
-import tskit.provenance as provenance
-
-import msprime
+import tskit
 
 
 def add_provenance(provenance_table, method_name):
-    d = provenance.get_provenance_dict({"command": f"tsutil.{method_name}"})
+    d = tskit.provenance.get_provenance_dict({"command": f"tsutil.{method_name}"})
     provenance_table.add_row(json.dumps(d))
 
 
@@ -67,7 +65,7 @@ def insert_branch_mutations(ts, mutations_per_branch=1):
                 u = stack.pop()
                 stack.extend(tree.children(u))
                 v = tree.parent(u)
-                if v != msprime.NULL_NODE:
+                if v != tskit.NULL:
                     state[u] = state[v]
                     parent = mutation[v]
                     for _ in range(mutations_per_branch):
@@ -131,7 +129,7 @@ def insert_random_ploidy_individuals(ts, max_ploidy=5, max_dimension=3, seed=1):
     tables = ts.dump_tables()
     tables.individuals.clear()
     individual = tables.nodes.individual[:]
-    individual[:] = msprime.NULL_INDIVIDUAL
+    individual[:] = tskit.NULL
     while j < len(samples):
         ploidy = rng.randint(0, max_ploidy)
         nodes = samples[j : min(j + ploidy, len(samples))]

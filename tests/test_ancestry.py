@@ -27,6 +27,7 @@ import tempfile
 import unittest
 
 import numpy as np
+import tskit
 
 import _msprime
 import msprime
@@ -600,7 +601,7 @@ class TestSimulateInterface(unittest.TestCase):
     def test_defaults(self):
         n = 10
         ts = msprime.simulate(n)
-        self.assertIsInstance(ts, msprime.TreeSequence)
+        self.assertIsInstance(ts, tskit.TreeSequence)
         self.assertEqual(ts.get_sample_size(), n)
         self.assertEqual(ts.get_num_trees(), 1)
         self.assertEqual(ts.get_num_mutations(), 0)
@@ -642,7 +643,7 @@ class TestSimulateInterface(unittest.TestCase):
         count = 0
         for ts in msprime.simulate(n, num_replicates=num_replicates):
             count += 1
-            self.assertIsInstance(ts, msprime.TreeSequence)
+            self.assertIsInstance(ts, tskit.TreeSequence)
             self.assertEqual(ts.get_sample_size(), n)
             self.assertEqual(ts.get_num_trees(), 1)
         self.assertEqual(num_replicates, count)
@@ -650,7 +651,7 @@ class TestSimulateInterface(unittest.TestCase):
     def test_mutations(self):
         n = 10
         ts = msprime.simulate(n, mutation_rate=10)
-        self.assertIsInstance(ts, msprime.TreeSequence)
+        self.assertIsInstance(ts, tskit.TreeSequence)
         self.assertEqual(ts.get_sample_size(), n)
         self.assertEqual(ts.get_num_trees(), 1)
         self.assertGreater(ts.get_num_mutations(), 0)
@@ -679,7 +680,7 @@ class TestSimulateInterface(unittest.TestCase):
     def test_recombination(self):
         n = 10
         ts = msprime.simulate(n, recombination_rate=10)
-        self.assertIsInstance(ts, msprime.TreeSequence)
+        self.assertIsInstance(ts, tskit.TreeSequence)
         self.assertEqual(ts.sample_size, n)
         self.assertGreater(ts.num_trees, 1)
         self.assertEqual(ts.num_mutations, 0)
@@ -694,7 +695,7 @@ class TestSimulateInterface(unittest.TestCase):
                 10, 1, discrete=True
             ),
         )
-        self.assertIsInstance(ts, msprime.TreeSequence)
+        self.assertIsInstance(ts, tskit.TreeSequence)
         self.assertEqual(ts.num_samples, n)
         self.assertGreater(ts.num_trees, 1)
 
@@ -715,7 +716,7 @@ class TestSimulateInterface(unittest.TestCase):
         # If we take the default where we have a very large number of loci,
         # we might be getting overflows. It's not clear what happening in any case.
         ts = msprime.simulate(n, gene_conversion_rate=1, gene_conversion_track_length=1)
-        self.assertIsInstance(ts, msprime.TreeSequence)
+        self.assertIsInstance(ts, tskit.TreeSequence)
         self.assertEqual(ts.num_samples, n)
         self.assertGreater(ts.num_trees, 1)
 
