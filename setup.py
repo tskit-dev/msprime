@@ -149,7 +149,8 @@ setup(
         "console_scripts": ["mspms=msprime.cli:mspms_main", "msp=msprime.cli:msp_main"]
     },
     include_package_data=True,
-    install_requires=[numpy_ver, "tskit"],
+    # NOTE: make sure this is the 'attrs' package, not 'attr'!
+    install_requires=[numpy_ver, "attrs>=19.1.0", "tskit"],
     ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms"],
     license="GNU GPLv3+",

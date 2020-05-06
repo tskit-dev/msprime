@@ -1,3 +1,4 @@
+attrs
 numpy
 nose
 gsl

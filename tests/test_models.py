@@ -28,6 +28,65 @@ import _msprime
 import msprime
 
 
+class TestIntrospectionInterface(unittest.TestCase):
+    """
+    Tests that we have meaningful repr and str functions for all the
+    classes used in the model hierarchy.
+    """
+
+    def test_standard_coalescent(self):
+        model = msprime.StandardCoalescent(10)
+        repr_s = "StandardCoalescent(reference_size=10)"
+        self.assertEqual(repr(model), repr_s)
+        self.assertEqual(str(model), repr_s)
+
+    def test_smc_models(self):
+        model = msprime.SmcApproxCoalescent(10)
+        repr_s = "SmcApproxCoalescent(reference_size=10)"
+        self.assertEqual(repr(model), repr_s)
+        self.assertEqual(str(model), repr_s)
+
+        model = msprime.SmcPrimeApproxCoalescent(10)
+        repr_s = "SmcPrimeApproxCoalescent(reference_size=10)"
+        self.assertEqual(repr(model), repr_s)
+        self.assertEqual(str(model), repr_s)
+
+    def test_dtwf(self):
+        model = msprime.DiscreteTimeWrightFisher(10)
+        repr_s = "DiscreteTimeWrightFisher(reference_size=10)"
+        self.assertEqual(repr(model), repr_s)
+        self.assertEqual(str(model), repr_s)
+
+    def test_wf_pedigree(self):
+        model = msprime.WrightFisherPedigree(10)
+        repr_s = "WrightFisherPedigree(reference_size=10)"
+        self.assertEqual(repr(model), repr_s)
+        self.assertEqual(str(model), repr_s)
+
+    def test_beta_coalescent(self):
+        model = msprime.BetaCoalescent(10, alpha=1, truncation_point=2)
+        repr_s = "BetaCoalescent(reference_size=10, alpha=1, truncation_point=2)"
+        self.assertEqual(repr(model), repr_s)
+        self.assertEqual(str(model), repr_s)
+
+    def test_dirac_coalescent(self):
+        model = msprime.DiracCoalescent(10, psi=123, c=2)
+        repr_s = "DiracCoalescent(reference_size=10, psi=123, c=2)"
+        self.assertEqual(repr(model), repr_s)
+        self.assertEqual(str(model), repr_s)
+
+    def test_sweep_genic_selection(self):
+        model = msprime.SweepGenicSelection(
+            10, position=1, start_frequency=0.5, end_frequency=0.9, alpha=1, dt=0.01
+        )
+        repr_s = (
+            "SweepGenicSelection(reference_size=10, position=1, start_frequency=0.5, "
+            "end_frequency=0.9, alpha=1, dt=0.01)"
+        )
+        self.assertEqual(repr(model), repr_s)
+        self.assertEqual(str(model), repr_s)
+
+
 class TestModelFactory(unittest.TestCase):
     """
     Tests that the model_factory function, which we use for instantiating model
@@ -709,12 +768,6 @@ class TestSweepGenicSelection(unittest.TestCase):
     """
     Tests for the single sweep model.
     """
-
-    def test_default_dt(self):
-        model = msprime.SweepGenicSelection(
-            position=0.5, start_frequency=0.1, end_frequency=0.9, alpha=0.1
-        )
-        self.assertEqual(model.dt, 0.01)
 
     def test_incorrect_num_labels(self):
         model = msprime.SweepGenicSelection(

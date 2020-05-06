@@ -35,6 +35,108 @@ import _msprime
 import msprime
 
 
+class TestIntrospectionInterface(unittest.TestCase):
+    """
+    Tests that we have meaningful repr and str functions for all the
+    classes used in the demography hierarchy.
+    """
+
+    def test_population_configuration(self):
+        s = (
+            "PopulationConfiguration(sample_size=None, initial_size=None, "
+            "growth_rate=0.0, metadata=None)"
+        )
+        pop_config = msprime.PopulationConfiguration()
+        self.assertEqual(s, str(pop_config))
+        self.assertEqual(s, repr(pop_config))
+
+    def test_population_parameters_change(self):
+        event = msprime.PopulationParametersChange(1.0, population=1, initial_size=2.0)
+        repr_s = (
+            "PopulationParametersChange(time=1.0, initial_size=2.0, "
+            "growth_rate=None, population=1)"
+        )
+        self.assertEqual(repr(event), repr_s)
+        str_s = "Population parameter change for 1: initial_size -> 2.0"
+        self.assertEqual(str(event), str_s)
+
+        event = msprime.PopulationParametersChange(1.0, population=1, growth_rate=2.0)
+        str_s = "Population parameter change for 1: growth_rate -> 2.0"
+        self.assertEqual(str(event), str_s)
+
+        event = msprime.PopulationParametersChange(
+            1.0, population=1, growth_rate=2.0, initial_size=4.0
+        )
+        str_s = (
+            "Population parameter change for 1: initial_size -> 4.0 growth_rate -> 2.0"
+        )
+        self.assertEqual(str(event), str_s)
+
+    def test_migration_rate_change(self):
+        event = msprime.MigrationRateChange(time=1, rate=2)
+        repr_s = "MigrationRateChange(time=1, rate=2, source=-1, dest=-1)"
+        str_s = "Migration rate change to 2 everywhere"
+        self.assertEqual(repr(event), repr_s)
+        self.assertEqual(str(event), str_s)
+
+        event = msprime.MigrationRateChange(time=1, rate=2, source=0, dest=1)
+        repr_s = "MigrationRateChange(time=1, rate=2, source=0, dest=1)"
+        str_s = "Migration rate change for (0, 1) to 2"
+        self.assertEqual(repr(event), repr_s)
+        self.assertEqual(str(event), str_s)
+
+    def test_mass_migration(self):
+        event = msprime.MassMigration(time=1, proportion=0.5, source=0, dest=1)
+        repr_s = "MassMigration(time=1, source=0, dest=1, proportion=0.5)"
+        str_s = (
+            "Mass migration: Lineages moved with probability 0.5 backwards in time "
+            "with source 0 & dest 1 (equivalent to migration from 1 to 0 "
+            "forwards in time)"
+        )
+        self.assertEqual(repr(event), repr_s)
+        # Too much hassle to track the exact whitespace in the output string.
+        self.assertEqual(str(event).split(), str_s.split())
+
+    def test_simulation_model_change(self):
+        model = msprime.DiscreteTimeWrightFisher(100)
+        event = msprime.SimulationModelChange(model=model)
+
+        repr_s = (
+            "SimulationModelChange(time=None, model="
+            "DiscreteTimeWrightFisher(reference_size=100))"
+        )
+        str_s = (
+            "Population model changes to "
+            "DiscreteTimeWrightFisher(reference_size=100)"
+        )
+        self.assertEqual(repr(event), repr_s)
+        self.assertEqual(str(event), str_s)
+
+    def test_simple_bottleneck(self):
+        event = msprime.SimpleBottleneck(time=1, population=1, proportion=0.5)
+        repr_s = "SimpleBottleneck(time=1, population=1, proportion=0.5)"
+        str_s = "Simple bottleneck: lineages in population 1 coalesce probability 0.5"
+        self.assertEqual(repr(event), repr_s)
+        self.assertEqual(str(event), str_s)
+
+    def test_instantaneous_bottleneck(self):
+        event = msprime.InstantaneousBottleneck(time=1, population=1, strength=1.5)
+        repr_s = "InstantaneousBottleneck(time=1, population=1, strength=1.5)"
+        str_s = (
+            "Instantaneous bottleneck in population 1: equivalent to 1.5 "
+            "generations of the coalescent"
+        )
+        self.assertEqual(repr(event), repr_s)
+        self.assertEqual(str(event), str_s)
+
+    def test_census(self):
+        event = msprime.CensusEvent(time=1)
+        repr_s = "CensusEvent(time=1)"
+        str_s = "Census event"
+        self.assertEqual(repr(event), repr_s)
+        self.assertEqual(str(event), str_s)
+
+
 class TestTimeTravelErrors(unittest.TestCase):
     """
     It is possible to specify models in msprime that result in malformed
@@ -98,13 +200,25 @@ class TestBadDemographicParameters(unittest.TestCase):
                 ValueError, msprime.PopulationParametersChange, 0, initial_size=bad_size
             )
             self.assertRaises(
-                ValueError, msprime.PopulationConfiguration, initial_size=bad_size
+                ValueError,
+                msprime.simulate,
+                population_configurations=[
+                    msprime.PopulationConfiguration(
+                        initial_size=bad_size, sample_size=2
+                    )
+                ],
             )
 
     def test_bad_sample_size(self):
         for bad_size in [-1, -1e300]:
             self.assertRaises(
-                ValueError, msprime.PopulationConfiguration, sample_size=bad_size
+                ValueError,
+                msprime.simulate,
+                population_configurations=[
+                    msprime.PopulationConfiguration(
+                        initial_size=1, sample_size=bad_size
+                    )
+                ],
             )
 
     def test_dtwf_bottleneck(self):
@@ -130,24 +244,6 @@ class TestBadDemographicEvents(unittest.TestCase):
             des = [msprime.SimulationModelChange(time=0, model=model)]
             with self.assertRaises(TypeError):
                 msprime.simulate(10, demographic_events=des)
-
-
-class TestDemographicEventStr(unittest.TestCase):
-    """
-    Make sure __str__ works for demographic events.
-    """
-
-    def test_defaults(self):
-        events = [
-            msprime.PopulationParametersChange(0, initial_size=1),
-            msprime.MigrationRateChange(0, 1),
-            msprime.MassMigration(0, 0),
-            msprime.SimulationModelChange(0, msprime.StandardCoalescent(1)),
-            msprime.SimpleBottleneck(0),
-            msprime.InstantaneousBottleneck(0),
-        ]
-        for event in events:
-            self.assertGreater(len(str(event)), 0)
 
 
 class TestDeprecatedParameters(unittest.TestCase):
@@ -208,54 +304,6 @@ class TestDeprecatedParameters(unittest.TestCase):
             self.assertEqual(e.growth_rate, 0.1)
             self.assertEqual(e.population, j)
 
-    def test_simple_bottleneck_population_id(self):
-        self.assertRaises(
-            ValueError,
-            msprime.SimpleBottleneck,
-            time=0,
-            population=1,
-            proportion=5,
-            population_id=1,
-        )
-
-        for j in range(10):
-            e = msprime.SimpleBottleneck(time=0.1, population=j, proportion=5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.population, j)
-            self.assertEqual(e.proportion, 5)
-            e = msprime.SimpleBottleneck(0.1, j, 5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.population, j)
-            self.assertEqual(e.proportion, 5)
-            e = msprime.SimpleBottleneck(time=0.1, population_id=j, proportion=5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.population, j)
-            self.assertEqual(e.proportion, 5)
-
-    def test_instantaneous_bottleneck_population_id(self):
-        self.assertRaises(
-            ValueError,
-            msprime.InstantaneousBottleneck,
-            time=0,
-            population=1,
-            strength=1,
-            population_id=1,
-        )
-
-        for j in range(10):
-            e = msprime.InstantaneousBottleneck(time=0.1, population=j, strength=5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.population, j)
-            self.assertEqual(e.strength, 5)
-            e = msprime.InstantaneousBottleneck(0.1, j, 5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.population, j)
-            self.assertEqual(e.strength, 5)
-            e = msprime.InstantaneousBottleneck(time=0.1, population_id=j, strength=5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.population, j)
-            self.assertEqual(e.strength, 5)
-
 
 class TestRateConversions(unittest.TestCase):
     """
@@ -272,7 +320,7 @@ class TestRateConversions(unittest.TestCase):
             "population": -1,
             "initial_size": new_size,
         }
-        self.assertEqual(event.get_ll_representation(1), ll_event)
+        self.assertEqual(event.get_ll_representation(), ll_event)
 
     def test_growth_rate_change(self):
         g = 512
@@ -286,7 +334,7 @@ class TestRateConversions(unittest.TestCase):
             "population": 1,
             "growth_rate": growth_rate,
         }
-        self.assertEqual(event.get_ll_representation(1), ll_event)
+        self.assertEqual(event.get_ll_representation(), ll_event)
 
     def test_growth_rate_and_size_change(self):
         g = 1024
@@ -302,12 +350,11 @@ class TestRateConversions(unittest.TestCase):
             "initial_size": initial_size,
             "growth_rate": growth_rate,
         }
-        self.assertEqual(event.get_ll_representation(1), ll_event)
+        self.assertEqual(event.get_ll_representation(), ll_event)
 
     def test_migration_rate_change(self):
         g = 1024
         migration_rate = 0.125
-        d = 2
         event = msprime.MigrationRateChange(time=g, rate=migration_rate)
         ll_event = {
             "type": "migration_rate_change",
@@ -316,7 +363,7 @@ class TestRateConversions(unittest.TestCase):
             "dest": -1,
             "migration_rate": migration_rate,
         }
-        self.assertEqual(event.get_ll_representation(d), ll_event)
+        self.assertEqual(event.get_ll_representation(), ll_event)
 
 
 class TestDemographyDebuggerOutput(unittest.TestCase):
@@ -2051,16 +2098,26 @@ class TestLowLevelConversions(unittest.TestCase):
     def test_population_configuration_defaults(self):
         conf = msprime.PopulationConfiguration()
         self.assertIsNone(conf.sample_size)
-        d = conf.get_ll_representation()
-        dp = {"initial_size": None, "growth_rate": 0}
+        d = conf.asdict()
+        dp = {
+            "initial_size": None,
+            "growth_rate": 0,
+            "metadata": None,
+            "sample_size": None,
+        }
         self.assertEqual(d, dp)
 
     def test_population_configuration_initial_size(self):
         for initial_size in [1, 10, 1000]:
             conf = msprime.PopulationConfiguration(initial_size=initial_size)
             self.assertIsNone(conf.sample_size)
-            d = conf.get_ll_representation()
-            dp = {"initial_size": initial_size, "growth_rate": 0}
+            d = conf.asdict()
+            dp = {
+                "initial_size": initial_size,
+                "growth_rate": 0,
+                "metadata": None,
+                "sample_size": None,
+            }
             self.assertEqual(d, dp)
 
     def test_population_configuration_growth_rate(self):
@@ -2068,15 +2125,20 @@ class TestLowLevelConversions(unittest.TestCase):
         for growth_rate in [1, 10, -10]:
             conf = msprime.PopulationConfiguration(sample_size, growth_rate=growth_rate)
             self.assertEqual(conf.sample_size, sample_size)
-            d = conf.get_ll_representation()
-            dp = {"initial_size": None, "growth_rate": growth_rate}
+            d = conf.asdict()
+            dp = {
+                "initial_size": None,
+                "growth_rate": growth_rate,
+                "metadata": None,
+                "sample_size": sample_size,
+            }
             self.assertEqual(d, dp)
 
     def test_population_parameters_change_time(self):
         for Ne in [1, 10, 1000]:
             for g in [0.1, 1, 100, 1e6]:
                 event = msprime.PopulationParametersChange(time=g, initial_size=Ne)
-                d = event.get_ll_representation(1)
+                d = event.get_ll_representation()
                 dp = {
                     "time": g,
                     "population": -1,
@@ -2091,7 +2153,7 @@ class TestLowLevelConversions(unittest.TestCase):
             event = msprime.PopulationParametersChange(
                 time=g, initial_size=initial_size
             )
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "population": -1,
@@ -2104,7 +2166,7 @@ class TestLowLevelConversions(unittest.TestCase):
         g = 100
         for growth_rate in [0.01, 1, 100, 1e6]:
             event = msprime.PopulationParametersChange(time=g, growth_rate=growth_rate)
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "population": -1,
@@ -2120,7 +2182,7 @@ class TestLowLevelConversions(unittest.TestCase):
             event = msprime.PopulationParametersChange(
                 time=g, initial_size=Ne, population=population
             )
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "population": population,
@@ -2132,7 +2194,7 @@ class TestLowLevelConversions(unittest.TestCase):
     def test_migration_rate_change_time(self):
         for g in [0.1, 1, 100, 1e6]:
             event = msprime.MigrationRateChange(time=g, rate=0)
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "type": "migration_rate_change",
@@ -2149,7 +2211,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 event = msprime.MigrationRateChange(
                     time=g, rate=0, source=index[0], dest=index[1]
                 )
-                d = event.get_ll_representation(N)
+                d = event.get_ll_representation()
                 dp = {
                     "time": g,
                     "type": "migration_rate_change",
@@ -2161,14 +2223,14 @@ class TestLowLevelConversions(unittest.TestCase):
 
                 # Check the deprecated form
                 event = msprime.MigrationRateChange(time=g, rate=0, matrix_index=index)
-                d = event.get_ll_representation(N)
+                d = event.get_ll_representation()
                 self.assertEqual(d, dp)
 
     def test_migration_rate_change_rate(self):
         g = 1234
         for rate in [0, 1e-6, 10, 1e6]:
             event = msprime.MigrationRateChange(time=g, rate=rate)
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "type": "migration_rate_change",
@@ -2181,7 +2243,7 @@ class TestLowLevelConversions(unittest.TestCase):
     def test_mass_migration_time(self):
         for g in [0.1, 1, 100, 1e6]:
             event = msprime.MassMigration(time=g, source=0, dest=1)
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "type": "mass_migration",
@@ -2195,7 +2257,7 @@ class TestLowLevelConversions(unittest.TestCase):
         g = 51
         for source, dest in itertools.permutations(range(4), 2):
             event = msprime.MassMigration(time=g, source=source, dest=dest)
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "type": "mass_migration",
@@ -2209,7 +2271,7 @@ class TestLowLevelConversions(unittest.TestCase):
         g = 51
         for p in [0, 1e-6, 0.4, 1]:
             event = msprime.MassMigration(time=g, source=0, dest=1, proportion=p)
-            d = event.get_ll_representation(1)
+            d = event.get_ll_representation()
             dp = {
                 "time": g,
                 "type": "mass_migration",
@@ -2238,7 +2300,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 event = msprime.InstantaneousBottleneck(
                     time=g, population=population, strength=strength
                 )
-                d = event.get_ll_representation(1)
+                d = event.get_ll_representation()
                 dp = {
                     "time": g,
                     "type": "instantaneous_bottleneck",
@@ -2669,8 +2731,9 @@ class TestPopulationMetadata(unittest.TestCase):
 
     def test_errors(self):
         for bad_metadata in [b"asdf", Exception]:
+            popconf = msprime.PopulationConfiguration(2, metadata=bad_metadata)
             with self.assertRaises(TypeError):
-                msprime.PopulationConfiguration(2, metadata=bad_metadata)
+                popconf.encode_metadata()
 
     def test_multi_population(self):
         for num_pops in range(1, 10):

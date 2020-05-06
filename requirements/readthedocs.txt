@@ -1,5 +1,6 @@
 setuptools_scm
 sphinx-argparse
 sphinx-issues
+attrs
 tskit
 newick

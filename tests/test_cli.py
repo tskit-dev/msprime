@@ -702,13 +702,13 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         self.assertEqual(len(events), 3)
         for event in events:
             self.assertEqual(event.time, 1.0)
-        self.assertEqual(events[0].type, "population_parameters_change")
+        self.assertIsInstance(events[0], msprime.PopulationParametersChange)
         self.assertEqual(events[0].initial_size, 0.5)
         self.assertEqual(events[0].growth_rate, 0)
-        self.assertEqual(events[1].type, "population_parameters_change")
+        self.assertIsInstance(events[1], msprime.PopulationParametersChange)
         self.assertEqual(events[1].growth_rate, 3)
         self.assertEqual(events[1].initial_size, None)
-        self.assertEqual(events[2].type, "population_parameters_change")
+        self.assertIsInstance(events[2], msprime.PopulationParametersChange)
         self.assertEqual(events[2].initial_size, 1)
         self.assertEqual(events[2].growth_rate, 0)
 
@@ -762,17 +762,17 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
 
         events = f("2 1 -T -eg 0.1 1 2")
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "population_parameters_change")
+        self.assertIsInstance(events[0], msprime.PopulationParametersChange)
         self.assertEqual(events[0].growth_rate, 2.0)
         self.assertEqual(events[0].time, 0.1)
         self.assertEqual(events[0].population, 0)
         events = f("2 1 -T -I 2 1 1 -eg 0.1 1 2 -eg 0.2 2 3")
         self.assertEqual(len(events), 2)
-        self.assertEqual(events[0].type, "population_parameters_change")
+        self.assertIsInstance(events[0], msprime.PopulationParametersChange)
         self.assertEqual(events[0].growth_rate, 2.0)
         self.assertEqual(events[0].time, 0.1)
         self.assertEqual(events[0].population, 0)
-        self.assertEqual(events[1].type, "population_parameters_change")
+        self.assertIsInstance(events[1], msprime.PopulationParametersChange)
         self.assertEqual(events[1].growth_rate, 3.0)
         self.assertEqual(events[1].time, 0.2)
         self.assertEqual(events[1].population, 1)
@@ -784,19 +784,19 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
 
         events = f("2 1 -T -en 0.1 1 2")
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "population_parameters_change")
+        self.assertIsInstance(events[0], msprime.PopulationParametersChange)
         self.assertEqual(events[0].initial_size, 2.0 / 4)
         self.assertEqual(events[0].growth_rate, 0)
         self.assertEqual(events[0].time, 0.1)
         self.assertEqual(events[0].population, 0)
         events = f("2 1 -T -I 2 1 1 -en 0.1 1 2 -en 0.2 2 3")
         self.assertEqual(len(events), 2)
-        self.assertEqual(events[0].type, "population_parameters_change")
+        self.assertIsInstance(events[0], msprime.PopulationParametersChange)
         self.assertEqual(events[0].initial_size, 2.0 / 4)
         self.assertEqual(events[0].growth_rate, 0)
         self.assertEqual(events[0].time, 0.1)
         self.assertEqual(events[0].population, 0)
-        self.assertEqual(events[1].type, "population_parameters_change")
+        self.assertIsInstance(events[1], msprime.PopulationParametersChange)
         self.assertEqual(events[1].initial_size, 3.0 / 4)
         self.assertEqual(events[1].growth_rate, 0)
         self.assertEqual(events[1].time, 0.2)
@@ -808,7 +808,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             events = sim.demographic_events
             self.assertEqual(len(events), len(results))
             for event, result in zip(events, results):
-                self.assertEqual(event.type, "migration_rate_change")
+                self.assertIsInstance(event, msprime.MigrationRateChange)
                 self.assertEqual(event.time, result[0])
                 self.assertEqual(event.rate, result[1])
                 self.assertEqual(event.source, -1)
@@ -823,7 +823,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             events = sim.demographic_events
             self.assertEqual(len(events), len(results))
             for event, result in zip(events, results):
-                self.assertEqual(event.type, "migration_rate_change")
+                self.assertIsInstance(event, msprime.MigrationRateChange)
                 self.assertEqual(event.time, result[0])
                 self.assertEqual(event.rate, result[1])
                 self.assertEqual((event.source, event.dest), result[2])
@@ -845,7 +845,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             events = sim.demographic_events
             self.assertEqual(len(events), len(results))
             for event, result in zip(events, results):
-                self.assertEqual(event.type, "migration_rate_change")
+                self.assertIsInstance(event, msprime.MigrationRateChange)
                 self.assertEqual(event.time, result[0])
                 self.assertEqual(event.rate, result[1])
                 self.assertEqual((event.source, event.dest), result[2])
@@ -874,7 +874,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             for result in results:
                 event = events[k]
                 new_pop = event.source
-                self.assertEqual(event.type, "mass_migration")
+                self.assertIsInstance(event, msprime.MassMigration)
                 self.assertEqual(event.time, result[0])
                 self.assertEqual(event.source, result[1])
                 self.assertEqual(event.dest, result[2])
@@ -884,7 +884,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 for j in range(N):
                     if j != new_pop:
                         event = events[k]
-                        self.assertEqual(event.type, "migration_rate_change")
+                        self.assertIsInstance(event, msprime.MigrationRateChange)
                         self.assertEqual(event.time, result[0])
                         self.assertEqual(event.rate, 0.0)
                         self.assertEqual(event.source, j)
@@ -908,7 +908,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             matrix = [[0 for _ in range(N)] for _ in range(N)]
             np.testing.assert_array_equal(sim.migration_matrix, matrix)
             for result, event in zip(results, events):
-                self.assertEqual(event.type, "mass_migration")
+                self.assertIsInstance(event, msprime.MassMigration)
                 self.assertEqual(event.time, result[0])
                 self.assertEqual(event.source, result[1])
                 self.assertEqual(event.dest, result[2])
