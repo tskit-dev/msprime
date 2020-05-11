@@ -2396,7 +2396,6 @@ class TestMutationModel(unittest.TestCase):
             matrix = np.zeros((n, n))
             matrix[:, 0] = 1
             mm = _msprime.MutationModel(alleles, dist, matrix)
-            self.assertEqual(mm.get_num_alleles(), len(alleles))
             self.assertEqual(mm.alleles, alleles)
             self.assertTrue(np.array_equal(mm.root_distribution, dist))
             self.assertTrue(np.array_equal(mm.transition_matrix, matrix))

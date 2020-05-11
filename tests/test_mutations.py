@@ -1110,6 +1110,60 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         self.verify_mutation_rates(model)
 
 
+class TestSlimMutationGenerator(unittest.TestCase):
+    """
+    Tests for the SLiM mutation generator.
+    """
+
+    def validate_slim_mutations(self, ts, increasing=True):
+        # slim alleles should be unique comma-separated lists of integers
+        # and ancestral states the empty string
+        # if `increasing` then each one should have one more integer than the one before
+        alleles = {}
+        for s in ts.sites():
+            self.assertEqual(s.ancestral_state, "")
+            for m in s.mutations:
+                a = tuple(m.derived_state.split(","))
+                self.assertGreater(len(a), 0)
+                self.assertEqual(len(set(a)), len(a))
+                for aa in a:
+                    self.assertTrue(aa.isdigit())
+                self.assertFalse(a in alleles)
+                alleles[a] = s.id
+                if m.parent == tskit.NULL:
+                    pa = tuple()
+                else:
+                    pa = tuple(ts.mutation(m.parent).derived_state.split(","))
+                if increasing:
+                    self.assertEqual(len(a), len(pa) + 1)
+                    self.assertEqual(len(set(a).symmetric_difference(set(pa))), 1)
+
+    def test_slim_mutation(self):
+        ts = msprime.simulate(10, length=100, random_seed=5)
+        model = PythonSlimMutationModel(0)
+        mts = py_mutate(ts, rate=1, random_seed=23, model=model, discrete=True)
+        self.validate_slim_mutations(mts)
+
+    def test_add_slim_mutation(self):
+        ts = msprime.simulate(10, length=100, random_seed=5)
+        model = PythonSlimMutationModel(0)
+        mts = py_mutate(ts, rate=1, random_seed=23, model=model, discrete=True)
+        self.assertGreater(mts.num_mutations, 0)
+        self.assertEqual(model.next_id, mts.num_mutations)
+        self.validate_slim_mutations(mts)
+        mmts = py_mutate(
+            mts,
+            rate=1,
+            random_seed=23,
+            model=model,
+            discrete=True,
+            keep=True,
+            sequential_only=False,
+        )
+        self.assertGreater(mmts.num_mutations, mts.num_mutations)
+        self.validate_slim_mutations(mmts, increasing=False)
+
+
 class TestPythonMutationGenerator(unittest.TestCase):
     """
     Tests for the python implementation of the mutation generator
@@ -1157,7 +1211,15 @@ class TestPythonMutationGenerator(unittest.TestCase):
 ####################################################
 
 
-def py_mutate(ts, rate=None, random_seed=None, model=None, keep=False, discrete=False):
+def py_mutate(
+    ts,
+    rate=None,
+    random_seed=None,
+    model=None,
+    keep=False,
+    discrete=False,
+    sequential_only=True,
+):
     """
     Same interface as mutations.mutate() and should provide identical results.
     """
@@ -1165,10 +1227,24 @@ def py_mutate(ts, rate=None, random_seed=None, model=None, keep=False, discrete=
         rate = 0
     if model is None:
         model = msprime.BinaryMutations()
+    if isinstance(model, PythonMutationModel):
+        py_model = model
+    else:
+        py_model = PythonMutationMatrixModel(
+            alleles=model.alleles,
+            root_distribution=model.root_distribution,
+            transition_matrix=model.transition_matrix,
+        )
     tables = ts.dump_tables()
     mutmap = msprime.MutationMap([0, ts.sequence_length], [rate, 0])
-    mutgen = PythonMutationGenerator(mutmap, model)
-    return mutgen.generate(tables, random_seed, keep=keep, discrete=discrete)
+    mutgen = PythonMutationGenerator(mutmap, py_model)
+    return mutgen.generate(
+        tables,
+        random_seed,
+        keep=keep,
+        discrete=discrete,
+        sequential_only=sequential_only,
+    )
 
 
 @attr.s
@@ -1230,6 +1306,56 @@ class Mutation:
         return s
 
 
+class PythonMutationModel:
+    # Base class for mutation models, which must define these methods:
+
+    def root_allele(self, rng):
+        pass
+
+    def transition_allele(self, rng, current_allele):
+        pass
+
+
+@attr.s
+class PythonSlimMutationModel(PythonMutationModel):
+    next_id = attr.ib()
+
+    def root_allele(self, rng):
+        return ""
+
+    def transition_allele(self, rng, current_allele):
+        out = current_allele
+        if len(out) > 0:
+            out += ","
+        out += str(self.next_id)
+        self.next_id += 1
+        return out
+
+
+@attr.s
+class PythonMutationMatrixModel(PythonMutationModel):
+    # for compatability with the C code we provide alleles as bytes,
+    # but we want them as strings here for simplicity.
+    alleles = attr.ib()
+    root_distribution = attr.ib()
+    transition_matrix = attr.ib()
+
+    def choose_allele(self, rng, distribution):
+        u = rng.flat(0, 1)
+        j = 0
+        while u > distribution[j]:
+            u -= distribution[j]
+            j += 1
+        return self.alleles[j]
+
+    def root_allele(self, rng):
+        return self.choose_allele(rng, self.root_distribution)
+
+    def transition_allele(self, rng, current_allele):
+        j = self.alleles.index(current_allele)
+        return self.choose_allele(rng, self.transition_matrix[j])
+
+
 def cmp_mutation(a, b):
     # Sort mutations by decreasing time and increasing parent,
     # but preserving order of any kept mutations (assumed to be
@@ -1237,7 +1363,7 @@ def cmp_mutation(a, b):
     # their order in the initial tables, and new mutations have id -1.
     out = a.id * (not a.new) - b.id * (not b.new)
     if out == 0:
-        out = (b.time > a.time) - (a.time > b.time)
+        out = b.time - a.time
     return out
 
 
@@ -1252,15 +1378,10 @@ class PythonMutationGenerator:
         Defaults to all 0->1 mutations.
         """
         self.rate_map = rate_map
-        # for compatability with the C code we provide alleles as bytes,
-        # but we want them as strings here for simplicity.
-        self.alleles = [allele.decode() for allele in model.alleles]
-        self.transition_matrix = model.transition_matrix
-        self.root_distribution = model.root_distribution
+        self.model = model
         self.sites = {}
 
     def print_state(self):
-        print("alleles", self.alleles)
         positions = sorted(self.sites.keys())
         for pos in positions:
             print(self.sites[pos])
@@ -1370,26 +1491,9 @@ class PythonMutationGenerator:
                 index += 1
                 left = right
 
-    def choose_index(self, distribution):
-        u = self.rng.flat(0, 1)
-        j = 0
-        while u > distribution[j]:
-            u -= distribution[j]
-            j += 1
-        return j
-
-    def pick_allele(self):
-        return self.choose_index(self.root_distribution)
-
-    def transition_allele(self, current_allele):
-        return self.choose_index(self.transition_matrix[current_allele])
-
-    def choose_alleles(self, tree_parent, site, mutation_id_offset):
+    def choose_alleles(self, tree_parent, site, mutation_id_offset, sequential_only):
         if site.new:
-            ai = self.pick_allele()
-            site.ancestral_state = self.alleles[ai]
-        else:
-            ai = self.alleles.index(site.ancestral_state)
+            site.ancestral_state = self.model.root_allele(self.rng)
         # sort mutations by (increasing id if both are not null,
         #  decreasing time, increasing insertion order)
         site.mutations.sort(key=functools.cmp_to_key(cmp_mutation))
@@ -1402,34 +1506,35 @@ class PythonMutationGenerator:
             while u != tskit.NULL and u not in bottom_mutation:
                 u = tree_parent[u]
             if u == tskit.NULL:
-                # parent is the ancestral state
-                pa = ai
+                pa = site.ancestral_state
                 assert mut.parent is None
             else:
                 assert u in bottom_mutation
                 parent_mut = bottom_mutation[u]
                 mut.parent = parent_mut
                 assert mut.time <= parent_mut.time, "Parent after child mutation."
-                if mut.time > parent_mut.time or (parent_mut.new and not mut.new):
+                if sequential_only and (
+                    mut.time > parent_mut.time or (parent_mut.new and not mut.new)
+                ):
                     raise ValueError(
                         "Generated mutation appears above "
-                        "an existing mutation: cannot apply"
-                        "finite sites mutations to a earlier"
+                        "an existing mutation: cannot apply "
+                        "finite sites mutations to a earlier "
                         "time period than where they already exist."
                     )
                 if mut.new:
-                    pa = self.alleles.index(parent_mut.derived_state)
+                    pa = parent_mut.derived_state
 
             if mut.new:
-                da = self.transition_allele(pa)
+                da = self.model.transition_allele(self.rng, pa)
                 if da == pa:
                     mut.keep = False
                 else:
-                    mut.derived_state = self.alleles[da]
+                    mut.derived_state = da
             if mut.keep:
                 bottom_mutation[mut.node] = mut
 
-    def apply_mutations(self, tables):
+    def apply_mutations(self, tables, sequential_only):
         ts = tables.tree_sequence()
         positions = sorted(self.sites.keys())
         j = 0
@@ -1442,19 +1547,21 @@ class PythonMutationGenerator:
                 tree_parent[edge.child] = edge.parent
             while j < len(positions) and positions[j] < tree_right:
                 site = self.sites[positions[j]]
-                self.choose_alleles(tree_parent, site, mutation_id_offset)
+                self.choose_alleles(
+                    tree_parent, site, mutation_id_offset, sequential_only
+                )
                 num_mutations = len(site.mutations)
                 mutation_id_offset += num_mutations
                 j += 1
 
-    def generate(self, tables, seed, keep=False, discrete=False):
+    def generate(self, tables, seed, keep=False, discrete=False, sequential_only=True):
         self.rng = _msprime.RandomGenerator(seed)
         if keep:
             self.initialise_sites(tables)
         tables.sites.clear()
         tables.mutations.clear()
         self.place_mutations(tables, discrete=discrete)
-        self.apply_mutations(tables)
+        self.apply_mutations(tables, sequential_only=sequential_only)
         self.populate_tables(tables)
         self.record_provenance(tables, seed, keep, discrete)
         return tables.tree_sequence()
@@ -1466,9 +1573,7 @@ class PythonMutationGenerator:
             "keep": keep,
             "discrete": discrete,
             "rate_map": None,  # not working??
-            "alleles": self.alleles,
-            "transition_matrix": self.transition_matrix,
-            "root_distribution": self.root_distribution,
+            "model": None,  # TODO
         }
         provenance_dict = msprime.provenance.get_provenance_dict(parameters)
         encoded_provenance = msprime.provenance.json_encode_provenance(provenance_dict)

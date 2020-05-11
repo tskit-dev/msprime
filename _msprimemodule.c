@@ -1923,7 +1923,7 @@ MutationModel_init(MutationModel *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    err = mutation_model_alloc(self->mutation_model,
+    err = mutation_matrix_model_alloc(self->mutation_model,
             num_alleles, alleles,
             PyArray_DATA(root_distribution_array),
             PyArray_DATA(transition_matrix_array));
@@ -1944,15 +1944,16 @@ MutationModel_get_alleles(MutationModel *self, void *closure)
 {
     PyObject *ret = NULL;
     size_t j;
-    size_t size = self->mutation_model->num_alleles;
     PyObject *item;
+    mutation_matrix_t *params = &self->mutation_model->params.mutation_matrix;
+    size_t size = params->num_alleles;
     PyObject *list = PyList_New(size);
 
     if (list == NULL) {
         goto out;
     }
     for (j = 0; j < size; j++) {
-        item = PyBytes_FromString(self->mutation_model->alleles[j]);
+        item = PyBytes_FromStringAndSize(params->alleles[j], params->allele_length[j]);
         if (item == NULL) {
             goto out;
         }
@@ -1966,30 +1967,19 @@ out:
 }
 
 static PyObject *
-MutationModel_get_num_alleles(MutationModel *self)
-{
-    PyObject *ret = NULL;
-    if (MutationModel_check_state(self) != 0) {
-        goto out;
-    }
-        ret = Py_BuildValue("n", (Py_ssize_t) mutation_model_get_num_alleles(self->mutation_model));
-out:
-    return ret;
-}
-
-static PyObject *
 MutationModel_get_root_distribution(MutationModel *self, void *closure)
 {
     PyObject *ret = NULL;
     PyArrayObject *array;
-    size_t size = self->mutation_model->num_alleles;
+    mutation_matrix_t *params = &self->mutation_model->params.mutation_matrix;
+    size_t size = params->num_alleles;
     npy_intp dims = (npy_intp) size;
 
     array = (PyArrayObject *) PyArray_EMPTY(1, &dims, NPY_FLOAT64, 0);
     if (array == NULL) {
         goto out;
     }
-    memcpy(PyArray_DATA(array), self->mutation_model->root_distribution,
+    memcpy(PyArray_DATA(array), params->root_distribution,
             size * sizeof(double));
     ret = (PyObject *) array;
 out:
@@ -2001,14 +1991,15 @@ MutationModel_get_transition_matrix(MutationModel *self, void *closure)
 {
     PyObject *ret = NULL;
     PyArrayObject *array;
-    size_t size = self->mutation_model->num_alleles;
+    mutation_matrix_t *params = &self->mutation_model->params.mutation_matrix;
+    size_t size = params->num_alleles;
     npy_intp dims[] = {size, size};
 
     array = (PyArrayObject *) PyArray_EMPTY(2, dims, NPY_FLOAT64, 0);
     if (array == NULL) {
         goto out;
     }
-    memcpy(PyArray_DATA(array), self->mutation_model->transition_matrix,
+    memcpy(PyArray_DATA(array), params->transition_matrix,
             size * size * sizeof(double));
     ret = (PyObject *) array;
 out:
@@ -2030,8 +2021,6 @@ static PyMemberDef MutationModel_members[] = {
 };
 
 static PyMethodDef MutationModel_methods[] = {
-    {"get_num_alleles", (PyCFunction) MutationModel_get_num_alleles, METH_NOARGS,
-            "Returns the number of alleles." },
     {NULL}  /* Sentinel */
 };
 
