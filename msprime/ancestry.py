@@ -202,7 +202,7 @@ def simulator_factory(
                 if conf.sample_size is not None:
                     raise ValueError(
                         "Cannot specify population configuration sample size"
-                        "and samples simultaneously"
+                        " and samples simultaneously"
                     )
             the_samples = samples
     elif samples is not None:
