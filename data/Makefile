@@ -1,4 +1,11 @@
-all: scrm ms msHOT slim
+all: scrm ms msHOT slim seq-gen
+
+seq-gen:
+	rm -fR seq-gen Seq-Gen* 1.3.4.tar.gz
+	wget https://github.com/rambaut/Seq-Gen/archive/1.3.4.tar.gz
+	tar -zxf 1.3.4.tar.gz
+	make -C Seq-Gen-1.3.4/source
+	cp Seq-Gen-1.3.4/source/seq-gen ./
 
 slim:
 	rm -fR SLiM*
@@ -15,7 +22,7 @@ scrm:
 	cd scrm-1.7.2 && ./configure && make
 	cp scrm-1.7.2/scrm ./
 
-ms:	
+ms:
 	make -C msdir
 	cp msdir/ms ./
 	cp msdir/ms_summary_stats ./
@@ -29,8 +36,9 @@ msHOT:
 discoal:
 	wget https://github.com/kern-lab/discoal/archive/v0.1.4.tar.gz
 	tar -xf v0.1.4.tar.gz
-	cd discoal-0.1.4/ && make 
+	cd discoal-0.1.4/ && make
 	cp discoal-0.1.4/discoal ./
 
 clean:
-	rm -fR scrm* ms ms_summary_stats msHOT msHOT_summary_stats sample_stats discoal* v0.1.4.tar.gz*
+	rm -fR scrm* ms ms_summary_stats msHOT msHOT_summary_stats sample_stats \
+		discoal* v0.1.4.tar.gz* seq-gen SeqGen*
