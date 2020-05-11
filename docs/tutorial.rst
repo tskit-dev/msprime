@@ -1045,7 +1045,7 @@ can be generated:
             branch_length_units="myr",
             generation_time=28)
 
-The above code stores a tuple of two lists in the variable ``parsed_tuple``:
+The ``parse_species_tree()`` method returns a tuple of two lists:
 
 .. code-block:: python
 
@@ -1118,14 +1118,16 @@ meaning that they all have constant population sizes:
 
 To simulate under the model corresponding to the species tree, the population
 configurations and mass migration events are used as input for
-:func:`.simulate`:
+:func:`.simulate`. We can specify the genomes to sample either by using the
+``samples`` parameter or by setting a sample size for each population:
 
 .. code-block:: python
 
-    for pop_conf in parsed_tuple[0]:
-        pop_conf.sample_size = 2
+    for pop_config in pop_configs:
+        pop_config.sample_size = 2
+    # pop_configs now has 2 genomes sampled from each population at time 0. Equivalent to
+    # msprime.simulate(samples=[(0,0), (0,0), (1,0), (1,0), (2,0), (2,0), (3,0), (3,0)], ...)
     tree_sequence = msprime.simulate(
-            samples=samples,
             population_configurations=pop_configs,
             demographic_events=demographic_events)
     tree = tree_sequence.first()
