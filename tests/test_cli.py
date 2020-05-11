@@ -127,53 +127,6 @@ class TestCli(unittest.TestCase):
         os.unlink(self.temp_file)
 
 
-class TestMspmsRoundTrip(unittest.TestCase):
-    """
-    Tests the mspms argument parsing to ensure that we correctly round-trip
-    to the ms arguments.
-    """
-
-    @unittest.skip
-    # Skip these tests until we've got the ms cmd line generation code
-    # reimplemented.
-    def test_msdoc_examples(self):
-
-        arg_list = ["4", "1", "-T"]
-        simulator = cli.get_mspms_runner(arg_list).get_simulator()
-        line = simulator.get_ms_command_line()
-        parser = cli.get_mspms_parser()
-        args = parser.parse_args(line[1:])
-        self.assertEqual(args.sample_size, 4)
-        self.assertEqual(args.num_replicates, 1)
-        self.assertEqual(args.trees, True)
-
-        arg_list = "15 1000 -t 2.0 -eN 1.0 .1 -eN 2.0 4.0".split()
-        simulator = cli.get_mspms_runner(arg_list).get_simulator()
-        line = simulator.get_ms_command_line(
-            num_replicates=1000, scaled_mutation_rate=2.0
-        )
-        parser = cli.get_mspms_parser()
-        args = parser.parse_args(line[1:])
-        self.assertEqual(args.sample_size, 15)
-        self.assertEqual(args.num_replicates, 1000)
-        self.assertEqual(args.mutation_rate, 2.0)
-        self.assertEqual(args.size_change, [(0, [1.0, 0.1]), (1, [2.0, 4.0])])
-
-        arg_list = "15 1000 -t 6.4 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5".split()
-        simulator = cli.get_mspms_runner(arg_list).get_simulator()
-        line = simulator.get_ms_command_line(
-            num_replicates=1000, scaled_mutation_rate=6.4
-        )
-        parser = cli.get_mspms_parser()
-        args = parser.parse_args(line[1:])
-        self.assertEqual(args.sample_size, 15)
-        self.assertEqual(args.num_replicates, 1000)
-        self.assertEqual(args.mutation_rate, 6.4)
-        self.assertEqual(args.growth_rate, 6.93)
-        self.assertEqual(args.growth_rate_change, [(0, [0.2, 0.0])])
-        self.assertEqual(args.size_change, [(1, [0.3, 0.5])])
-
-
 class TestMspmsArgumentParser(unittest.TestCase):
     """
     Tests the parser to ensure it works correctly and is ms compatible.
@@ -1779,8 +1732,3 @@ class TestUpgrade(TestCli):
             tsp = tskit.load(self.current_file_name)
             self.assertEqual(tsp.sample_size, ts.sample_size)
             self.assertEqual(tsp.num_sites, 1)
-
-    @unittest.skip("CLI error testing")
-    def test_duplicate_positions_error(self):
-        # TODO implement the check that we handle the error condition correctly.
-        pass

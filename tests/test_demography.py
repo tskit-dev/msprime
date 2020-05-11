@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2018 University of Oxford
+# Copyright (C) 2016-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -781,7 +781,7 @@ class TestDemographyTrajectories(unittest.TestCase):
 
     def test_logging(self):
         ddb = self.one_pop_example()
-        with mock.patch("msprime.simulations.logger.debug") as mocked_debug:
+        with mock.patch("msprime.demography.logger.debug") as mocked_debug:
             ddb.mean_coalescence_time([2])
         self.assertEqual(mocked_debug.call_count, 3)
 
@@ -1203,7 +1203,7 @@ class TestMatrixExponential(unittest.TestCase):
 
     def verify(self, A):
         E1 = scipy.linalg.expm(A)
-        E2 = msprime.simulations._matrix_exponential(A)
+        E2 = msprime.demography._matrix_exponential(A)
         self.assertEqual(E1.shape, E2.shape)
         self.assertTrue(np.allclose(E1, E2))
 
@@ -1229,14 +1229,14 @@ class TestMatrixExponential(unittest.TestCase):
         # a 1 x 1 matrix consisting of just 0 (compared to exp(0) = 1)
         # a 1 x 1 matrix consisting of just -1 (compared to exp(-1))
         for t in [0, -1]:
-            A = msprime.simulations._matrix_exponential([[t]])
+            A = msprime.demography._matrix_exponential([[t]])
             B = np.exp(t)
             self.assertEqual(A, B)
 
     def test_identity_exp(self):
         # (-1) * np.eye(k), compared to exp(-1) * np.eye(k)
         for k in range(2, 5):
-            A = msprime.simulations._matrix_exponential((-1) * np.eye(k))
+            A = msprime.demography._matrix_exponential((-1) * np.eye(k))
             B = np.exp(-1) * np.eye(k)
             self.assertTrue(np.allclose(A, B))
 
@@ -1576,11 +1576,11 @@ class TestCoalescenceLocations(unittest.TestCase):
         self.assertEqual(list(ts.samples(1)), [1])
 
     def test_migration_rate_directionality_from_ts(self):
-        tables = msprime.TableCollection(1)
+        tables = tskit.TableCollection(1)
         for _ in range(3):
             tables.populations.add_row()
-        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
-        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0, population=1)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=1)
 
         population_configurations = [
             msprime.PopulationConfiguration(),
@@ -1638,12 +1638,12 @@ class TestCoalescenceLocations(unittest.TestCase):
 
     def test_many_demes_from_ts(self):
         num_demes = 300
-        tables = msprime.TableCollection(1)
+        tables = tskit.TableCollection(1)
         for _ in range(num_demes):
             tables.populations.add_row()
-        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
         tables.nodes.add_row(
-            flags=msprime.NODE_IS_SAMPLE, time=0, population=num_demes - 1
+            flags=tskit.NODE_IS_SAMPLE, time=0, population=num_demes - 1
         )
         population_configurations = (
             [msprime.PopulationConfiguration()]
@@ -1765,9 +1765,9 @@ class MigrationRecordsMixin:
         self.verify_two_pops_single_sample(ts, t)
 
     def test_two_pops_single_sample_from_ts(self):
-        tables = msprime.TableCollection(1)
-        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
-        tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0, population=1)
+        tables = tskit.TableCollection(1)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=1)
         for _ in range(3):
             tables.populations.add_row()
         population_configurations = [
@@ -1821,11 +1821,11 @@ class MigrationRecordsMixin:
         self.verify_two_pops_asymmetric_migrations(ts)
 
     def test_two_pops_asymmetric_migrations_from_ts(self):
-        tables = msprime.TableCollection(1)
+        tables = tskit.TableCollection(1)
         for _ in range(10):
-            tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0, population=0)
+            tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
         for _ in range(10):
-            tables.nodes.add_row(flags=msprime.NODE_IS_SAMPLE, time=0, population=1)
+            tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=1)
         tables.populations.add_row()
         tables.populations.add_row()
 
@@ -3043,6 +3043,7 @@ class TestLineageProbabilities(unittest.TestCase):
             demographic_events=dd.demographic_events,
             end_time=max(dd.epoch_times + 1),
             num_replicates=100,
+            random_seed=42,
         )
         for ts in reps:
             t = ts.first()

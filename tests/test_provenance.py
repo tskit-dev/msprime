@@ -143,14 +143,14 @@ class TestBuildObjects(unittest.TestCase):
                     "initial_size": 1,
                     "growth_rate": 0.0,
                     "metadata": None,
-                    "__class__": "msprime.simulations.PopulationConfiguration",
+                    "__class__": "msprime.demography.PopulationConfiguration",
                 },
                 {
                     "sample_size": 5,
                     "initial_size": 1,
                     "growth_rate": 0.0,
                     "metadata": None,
-                    "__class__": "msprime.simulations.PopulationConfiguration",
+                    "__class__": "msprime.demography.PopulationConfiguration",
                 },
             ],
         )
@@ -165,7 +165,7 @@ class TestBuildObjects(unittest.TestCase):
                     "defaults": None,
                 },
                 "model": None,
-                "__class__": "msprime.simulations.SimulationModelChange",
+                "__class__": "msprime.demography.SimulationModelChange",
             },
         )
         self.assertDictEqual(
@@ -177,7 +177,7 @@ class TestBuildObjects(unittest.TestCase):
                     " ('msprime',) which are not currently serialized"
                 },
                 "model": None,
-                "__class__": "msprime.simulations.SimulationModelChange",
+                "__class__": "msprime.demography.SimulationModelChange",
             },
         ),
         self.assertDictEqual(
@@ -188,7 +188,7 @@ class TestBuildObjects(unittest.TestCase):
                     " variables which are not currently serialized"
                 },
                 "model": None,
-                "__class__": "msprime.simulations.SimulationModelChange",
+                "__class__": "msprime.demography.SimulationModelChange",
             },
         )
 

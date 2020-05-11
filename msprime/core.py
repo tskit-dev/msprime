@@ -17,10 +17,27 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Various utilities shared across modules.
+Core functions and classes used throughout msprime.
 """
 import os
 import random
+
+import _msprime
+
+__version__ = "undefined"
+try:
+    from . import _version
+
+    __version__ = _version.version
+except ImportError:
+    pass
+
+
+# Make sure the GSL error handler is turned off so that we can be sure that
+# we don't abort on errors. This can be reset by using the function
+# _msprime.restore_gsl_error_handler(), which will set the error handler to
+# the value that it had before this function was called.
+_msprime.unset_gsl_error_handler()
 
 
 # Some machinery here for generating default random seeds. We need a map

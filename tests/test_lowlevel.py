@@ -315,7 +315,7 @@ def get_random_demographic_events(num_populations, num_events, rng=None):
     return sorted_events
 
 
-class TestModule(tests.MsprimeTestCase):
+class TestModule(unittest.TestCase):
     """
     Tests for module level stuff.
     """
@@ -355,7 +355,7 @@ def get_random_population_models(n):
     return models
 
 
-class LowLevelTestCase(tests.SequenceEqualityMixin, tests.MsprimeTestCase):
+class LowLevelTestCase(tests.SequenceEqualityMixin, unittest.TestCase):
     """
     Superclass of tests for the low-level interface.
     """

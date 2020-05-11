@@ -23,12 +23,12 @@ import multiprocessing
 import sys
 import unittest
 
-import msprime.utils as utils
+import msprime.core as core
 
 
 # Convenience method for getting seeds in a subprocess.
 def get_seed(x):
-    return utils.get_random_seed()
+    return core.get_random_seed()
 
 
 class TestDefaultRandomSeeds(unittest.TestCase):
@@ -37,23 +37,23 @@ class TestDefaultRandomSeeds(unittest.TestCase):
     """
 
     def test_seed_generator_init(self):
-        utils.clear_seed_rng()
-        seed = utils.get_random_seed()
+        core.clear_seed_rng()
+        seed = core.get_random_seed()
         self.assertGreater(seed, 0)
-        self.assertIsNotNone(utils.get_seed_rng())
+        self.assertIsNotNone(core.get_seed_rng())
 
     def test_unique(self):
         n = 100
-        utils.clear_seed_rng()
-        seeds1 = [utils.get_random_seed() for _ in range(n)]
+        core.clear_seed_rng()
+        seeds1 = [core.get_random_seed() for _ in range(n)]
         self.assertEqual(len(set(seeds1)), n)
-        seeds2 = [utils.get_random_seed() for _ in range(n)]
+        seeds2 = [core.get_random_seed() for _ in range(n)]
         self.assertEqual(len(set(seeds2)), n)
         self.assertEqual(len(set(seeds2)) + len(set(seeds2)), 2 * n)
 
     def test_unique_multiple_processes_no_init(self):
         n = 100
-        utils.clear_seed_rng()
+        core.clear_seed_rng()
         # Would use with block here, but not supported in Py < 3.3.
         pool = multiprocessing.Pool(5)
         seeds = pool.map(get_seed, range(n))
@@ -63,8 +63,8 @@ class TestDefaultRandomSeeds(unittest.TestCase):
 
     def test_unique_multiple_processes_init(self):
         n = 100
-        utils.get_random_seed()
-        self.assertIsNotNone(utils.get_seed_rng())
+        core.get_random_seed()
+        self.assertIsNotNone(core.get_seed_rng())
         # Would use with block here, but not supported in Py < 3.3.
         pool = multiprocessing.Pool(5)
         seeds = pool.map(get_seed, range(n))
@@ -83,15 +83,15 @@ class TestAlmostEqual(unittest.TestCase):
         equal = [(1, 1), (0, 0), (1 + eps, 1), (1, 1 - eps), (10.000000000001, 10.0)]
         for a, b in equal:
             self.assertAlmostEqual(a, b)
-            self.assertTrue(utils.almost_equal(a, b))
+            self.assertTrue(core.almost_equal(a, b))
 
     def test_near_zero(self):
         eps = sys.float_info.epsilon
         equal = [(0, 0), (eps, 0), (0, -eps), (-eps, eps)]
         for a, b in equal:
             self.assertAlmostEqual(a, b)
-            self.assertTrue(utils.almost_equal(a, b, abs_tol=1e-9))
+            self.assertTrue(core.almost_equal(a, b, abs_tol=1e-9))
         not_equal = [(0, 0.0000001), (-0.0000001, 0)]
         for a, b in not_equal:
             self.assertNotAlmostEqual(a, b)
-            self.assertFalse(utils.almost_equal(a, b, abs_tol=1e-9))
+            self.assertFalse(core.almost_equal(a, b, abs_tol=1e-9))

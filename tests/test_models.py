@@ -199,7 +199,7 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
     def test_hudson(self):
         threshold = 20
         sim = msprime.simulator_factory(sample_size=10, recombination_rate=10)
-        sim.random_generator = msprime.RandomGenerator(2)
+        sim.random_generator = _msprime.RandomGenerator(2)
         sim.run()
         self.assertGreater(sim.num_common_ancestor_events, threshold)
         self.assertGreater(sim.num_recombination_events, threshold)
@@ -208,7 +208,7 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
         sim2 = msprime.simulator_factory(
             sample_size=10, recombination_rate=10, model="hudson"
         )
-        sim2.random_generator = msprime.RandomGenerator(2)
+        sim2.random_generator = _msprime.RandomGenerator(2)
         sim2.run()
         self.assertEqual(
             sim2.num_common_ancestor_events, sim.num_common_ancestor_events
@@ -222,7 +222,7 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
             sim = msprime.simulator_factory(
                 sample_size=10, recombination_rate=5, model=model
             )
-            sim.random_generator = msprime.RandomGenerator(3)
+            sim.random_generator = _msprime.RandomGenerator(3)
             sim.run()
             self.assertGreater(sim.num_rejected_common_ancestor_events, 0)
             self.assertGreater(sim.num_common_ancestor_events, threshold)

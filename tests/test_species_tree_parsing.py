@@ -467,11 +467,11 @@ class TestSpeciesTreeExamples(unittest.TestCase):
         self.assertIsInstance(parsed_tuple[0], list)
         self.assertEqual(len(parsed_tuple[0]), 4)
         for pc in parsed_tuple[0]:
-            self.assertIsInstance(pc, msprime.simulations.PopulationConfiguration)
+            self.assertIsInstance(pc, msprime.PopulationConfiguration)
         self.assertIsInstance(parsed_tuple[1], list)
         self.assertEqual(len(parsed_tuple[1]), 3)
         for mm in parsed_tuple[1]:
-            self.assertIsInstance(mm, msprime.simulations.MassMigration)
+            self.assertIsInstance(mm, msprime.MassMigration)
 
 
 class TestStarbeastParsingErrors(unittest.TestCase):
@@ -635,10 +635,10 @@ class TestStarbeastExamples(unittest.TestCase):
                 species_name = pc.metadata["species_name"]
                 self.assertTrue(species_name.startswith("spc"))
                 self.assertTrue(species_name[3:].isnumeric())
-                self.assertIsInstance(pc, msprime.simulations.PopulationConfiguration)
+                self.assertIsInstance(pc, msprime.PopulationConfiguration)
             self.assertIsInstance(parsed_tuple[1], list)
             self.assertEqual(len(parsed_tuple[1]), 22)
-            event_types = [msprime.simulations.MassMigration]
-            event_types.append(msprime.simulations.PopulationParametersChange)
+            event_types = [msprime.MassMigration]
+            event_types.append(msprime.PopulationParametersChange)
             for mm in parsed_tuple[1]:
                 self.assertIn(type(mm), event_types)
