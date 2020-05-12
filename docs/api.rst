@@ -555,3 +555,18 @@ probability :math:`\mu` under the infinite sites model.
 .. autofunction:: msprime.log_arg_likelihood
 
 .. autofunction:: msprime.unnormalised_log_mutation_likelihood
+
+
+**********
+Demography
+**********
+
+.. note:: This is draft documentation of the in-development 1.0 Demography API.
+
+.. autoclass:: msprime.Demography
+    :members:
+
+.. autoclass:: msprime.Population
+    :members:
+
+

@@ -95,6 +95,56 @@ class TestBuildObjects(unittest.TestCase):
         ts = msprime.simulate(5, record_provenance=False)
         self.assertEqual(len(list(ts.provenances())), 0)
 
+    def test_encode_simulation_models(self):
+        simple_model = ["hudson", [10, "dtwf"], [20, "smc"], [None, None]]
+        ts = msprime.simulate(10, model=simple_model)
+        decoded = self.decode(ts.provenance(0).record)
+        parameters = decoded.parameters
+        self.assertEqual(parameters.sample_size, 10)
+        self.assertEqual(list(parameters.model), simple_model)
+
+        model_instances = [
+            msprime.StandardCoalescent(),
+            msprime.SimulationModelChange(10, msprime.DiscreteTimeWrightFisher()),
+            msprime.SimulationModelChange(20, msprime.SmcApproxCoalescent()),
+            msprime.SimulationModelChange(30, msprime.BetaCoalescent(alpha=1.1)),
+        ]
+        ts = msprime.simulate(10, model=model_instances)
+        decoded = self.decode(ts.provenance(0).record)
+        parameters = decoded.parameters
+        self.assertEqual(parameters.sample_size, 10)
+        self.assertEqual(
+            parameters.model[0], {"__class__": "msprime.ancestry.StandardCoalescent"}
+        )
+        self.assertDictEqual(
+            parameters.model[1],
+            {
+                "__class__": "msprime.ancestry.SimulationModelChange",
+                "model": {"__class__": "msprime.ancestry.DiscreteTimeWrightFisher"},
+                "time": 10,
+            },
+        )
+        self.assertDictEqual(
+            parameters.model[2],
+            {
+                "__class__": "msprime.ancestry.SimulationModelChange",
+                "model": {"__class__": "msprime.ancestry.SmcApproxCoalescent"},
+                "time": 20,
+            },
+        )
+        self.assertDictEqual(
+            parameters.model[3],
+            {
+                "__class__": "msprime.ancestry.SimulationModelChange",
+                "model": {
+                    "__class__": "msprime.ancestry.BetaCoalescent",
+                    "alpha": 1.1,
+                    "truncation_point": 1.0,
+                },
+                "time": 30,
+            },
+        )
+
     def test_encode_numpy_functions_and_classes(self):
         seeds = np.ones(1, dtype=int)
         pop_configs = [msprime.PopulationConfiguration(5) for _ in range(2)]
@@ -140,14 +190,14 @@ class TestBuildObjects(unittest.TestCase):
             [
                 {
                     "sample_size": 5,
-                    "initial_size": 1,
+                    "initial_size": None,
                     "growth_rate": 0.0,
                     "metadata": None,
                     "__class__": "msprime.demography.PopulationConfiguration",
                 },
                 {
                     "sample_size": 5,
-                    "initial_size": 1,
+                    "initial_size": None,
                     "growth_rate": 0.0,
                     "metadata": None,
                     "__class__": "msprime.demography.PopulationConfiguration",
@@ -165,7 +215,7 @@ class TestBuildObjects(unittest.TestCase):
                     "defaults": None,
                 },
                 "model": None,
-                "__class__": "msprime.demography.SimulationModelChange",
+                "__class__": "msprime.ancestry.SimulationModelChange",
             },
         )
         self.assertDictEqual(
@@ -177,7 +227,7 @@ class TestBuildObjects(unittest.TestCase):
                     " ('msprime',) which are not currently serialized"
                 },
                 "model": None,
-                "__class__": "msprime.demography.SimulationModelChange",
+                "__class__": "msprime.ancestry.SimulationModelChange",
             },
         ),
         self.assertDictEqual(
@@ -188,7 +238,7 @@ class TestBuildObjects(unittest.TestCase):
                     " variables which are not currently serialized"
                 },
                 "model": None,
-                "__class__": "msprime.demography.SimulationModelChange",
+                "__class__": "msprime.ancestry.SimulationModelChange",
             },
         )
 
@@ -347,6 +397,20 @@ class TestSimulateRoundTrip(TestRoundTrip):
             migration_matrix=[[0, 1], [1, 0]],
             demographic_events=[msprime.SimulationModelChange(time=lambda t: t + 0.1)],
         )
+        self.verify(ts)
+
+    def test_simulation_models(self):
+        simple_model = ["hudson", [10, "dtwf"], [20, "smc"]]
+        ts = msprime.simulate(10, model=simple_model)
+        self.verify(ts)
+
+        model_instances = [
+            msprime.StandardCoalescent(),
+            msprime.SimulationModelChange(10, msprime.DiscreteTimeWrightFisher()),
+            msprime.SimulationModelChange(20, msprime.SmcApproxCoalescent()),
+            msprime.SimulationModelChange(30, msprime.BetaCoalescent(alpha=1.1)),
+        ]
+        ts = msprime.simulate(10, model=model_instances)
         self.verify(ts)
 
     def test_pedigree(self):
