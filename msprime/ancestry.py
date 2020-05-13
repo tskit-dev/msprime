@@ -44,30 +44,23 @@ logger = logging.getLogger(__name__)
 Sample = collections.namedtuple("Sample", ["population", "time"])
 
 
-def model_factory(model, reference_size=1):
+def model_factory(model):
     """
-    Returns a simulation model corresponding to the specified model and
-    reference size.
-    - If model is None, the default simulation model is returned with the
-      specified reference size.
-    - If model is a string, return the corresponding model instance
-      with the specified reference size
+    Returns a simulation model corresponding to the specified model.
+    - If model is None, the default simulation model is returned.
+    - If model is a string, return the corresponding model instance.
     - If model is an instance of SimulationModel, return a copy of it.
-      In this case, if the model's reference_size is None, set it to the
-      parameter reference size.
-    - Otherwise return a type error.
+    - Otherwise raise a type error.
     """
-    if reference_size <= 0:
-        raise ValueError("Model reference size must be > 0")
     model_map = {
-        "hudson": StandardCoalescent(reference_size),
-        "smc": SmcApproxCoalescent(reference_size),
-        "smc_prime": SmcPrimeApproxCoalescent(reference_size),
-        "dtwf": DiscreteTimeWrightFisher(reference_size),
-        "wf_ped": WrightFisherPedigree(reference_size),
+        "hudson": StandardCoalescent(),
+        "smc": SmcApproxCoalescent(),
+        "smc_prime": SmcPrimeApproxCoalescent(),
+        "dtwf": DiscreteTimeWrightFisher(),
+        "wf_ped": WrightFisherPedigree(),
     }
     if model is None:
-        model_instance = StandardCoalescent(reference_size)
+        model_instance = StandardCoalescent()
     elif isinstance(model, str):
         lower_model = model.lower()
         if lower_model not in model_map:
@@ -79,8 +72,6 @@ def model_factory(model, reference_size=1):
         model_instance = model_map[lower_model]
     elif isinstance(model, SimulationModel):
         model_instance = copy.copy(model)
-        if model_instance.reference_size is None:
-            model_instance.reference_size = reference_size
     else:
         raise TypeError(
             "Simulation model must be a string or an instance of SimulationModel"
@@ -158,6 +149,8 @@ def simulator_factory(
     Convenience method to create a simulator instance using the same
     parameters as the `simulate` function. Primarily used for testing.
     """
+    if Ne <= 0:
+        raise ValueError("Population size must be positive")
     condition = (
         sample_size is None
         and population_configurations is None
@@ -169,7 +162,7 @@ def simulator_factory(
             "Either sample_size, population_configurations, samples or from_ts must "
             "be specified"
         )
-    the_samples = None
+    the_samples = []
     if sample_size is not None:
         if samples is not None:
             raise ValueError("Cannot specify sample size and samples simultaneously.")
@@ -241,21 +234,24 @@ def simulator_factory(
             raise ValueError("Cannot provide non-positive sequence length")
         if the_rate < 0:
             raise ValueError("Cannot provide negative recombination rate")
-        recomb_map = RecombinationMap.uniform_map(the_length, the_rate, discrete=False)
+        recombination_map = RecombinationMap.uniform_map(
+            the_length, the_rate, discrete=False
+        )
     else:
+        if not isinstance(recombination_map, RecombinationMap):
+            raise TypeError("RecombinationMap instance required")
         if length is not None or recombination_rate is not None:
             raise ValueError(
                 "Cannot specify length/recombination_rate along with "
                 "a recombination map"
             )
-        recomb_map = recombination_map
 
     # FIXME check the valid inputs for GC. Should we allow it when we
     # have a non-trivial genetic map?
     if gene_conversion_rate is None:
         gene_conversion_rate = 0
     else:
-        if not recomb_map.discrete:
+        if not recombination_map.discrete:
             raise ValueError(
                 "Cannot specify gene_conversion_rate along with "
                 "a nondiscrete recombination map"
@@ -264,13 +260,24 @@ def simulator_factory(
         gene_conversion_track_length = 1
 
     if from_ts is not None:
-        if from_ts.sequence_length != recomb_map.get_length():
+        if from_ts.sequence_length != recombination_map.get_length():
             raise ValueError(
                 "The simulated sequence length must be the same as "
                 "from_ts.sequence_length"
             )
 
-    sim = Simulator(the_samples, recomb_map, model, Ne, from_ts)
+    if from_ts is None:
+        if len(the_samples) < 2:
+            raise ValueError("Sample size must be >= 2")
+    else:
+        if len(the_samples) > 0:
+            raise ValueError("Cannot specify samples with from_ts")
+
+    model = model_factory(model)
+    # TODO factor out this Simulator object here and instead call a
+    # factory function to make the low-level Simulator given the
+    # state of the variables in here.
+    sim = Simulator(the_samples, recombination_map, Ne, model, from_ts)
     sim.store_migrations = record_migrations
     sim.store_full_arg = record_full_arg
     sim.start_time = start_time
@@ -282,7 +289,7 @@ def simulator_factory(
         rng = _msprime.RandomGenerator(core.get_random_seed())
     sim.random_generator = rng
     if population_configurations is not None:
-        sim.set_population_configurations(population_configurations)
+        sim.set_population_configurations(population_configurations, Ne)
     if migration_matrix is not None:
         sim.set_migration_matrix(migration_matrix)
     if demographic_events is not None:
@@ -546,32 +553,25 @@ def simulate(
         )
 
 
+# TODO This class is largely pointless. We should factor it out entirely
+# and replace with the low-level class. If we change the low-level class
+# to use attributes instead of "get_x" methods we can jettison a whole
+# bunch of boilerplate.
 class Simulator:
     """
     Class to simulate trees under a variety of population models.
     """
 
-    def __init__(
-        self, samples, recombination_map, model="hudson", Ne=0.25, from_ts=None
-    ):
-        if from_ts is None:
-            if len(samples) < 2:
-                raise ValueError("Sample size must be >= 2")
-            self.samples = samples
-        else:
-            if samples is not None and len(samples) > 0:
-                raise ValueError("Cannot specify samples with from_ts")
-            self.samples = []
-        if not isinstance(recombination_map, RecombinationMap):
-            raise TypeError("RecombinationMap instance required")
+    def __init__(self, samples, recombination_map, Ne, model=None, from_ts=None):
         self.ll_sim = None
-        self.model = model_factory(model, Ne)
+        self.samples = samples
+        self.model = model
         self.recombination_map = recombination_map
         self.from_ts = from_ts
         self.start_time = None
         self.random_generator = None
         self.population_configurations = [
-            demography.PopulationConfiguration(initial_size=self.model.reference_size)
+            demography.PopulationConfiguration(initial_size=Ne)
         ]
         self.pedigree = None
         self.migration_matrix = [[0]]
@@ -675,14 +675,14 @@ class Simulator:
         if self.migration_matrix.shape != (N, N):
             raise ValueError(err)
 
-    def set_population_configurations(self, population_configurations):
+    def set_population_configurations(self, population_configurations, Ne):
         _check_population_configurations(population_configurations)
         self.population_configurations = population_configurations
         # For any populations configurations in which the initial size is None,
-        # set it to the population size.
+        # set it to Ne
         for pop_conf in self.population_configurations:
             if pop_conf.initial_size is None:
-                pop_conf.initial_size = self.model.reference_size
+                pop_conf.initial_size = Ne
         # Now set the default migration matrix.
         N = len(self.population_configurations)
         self.migration_matrix = np.zeros((N, N))
@@ -738,9 +738,8 @@ class Simulator:
             if isinstance(event, demography.SimulationModelChange):
                 # Take a copy so that we're not modifying our input params
                 event = copy.copy(event)
-                # Update the model so that we can parse strings and set
-                # the reference size appropriately.
-                event.model = model_factory(event.model, self.model.reference_size)
+                # Update the model so that we can parse strings
+                event.model = model_factory(event.model)
                 self.model_change_events.append(event)
             else:
                 self.demographic_events.append(event)
@@ -1472,10 +1471,8 @@ class SimulationModel:
 
     name = None
 
-    reference_size = attr.ib(default=None)
-
     def get_ll_representation(self):
-        return {"name": self.name, "reference_size": self.reference_size}
+        return {"name": self.name}
 
     def asdict(self):
         return attr.asdict(self)

@@ -65,11 +65,11 @@ def get_mutation_model(model=0):
     )
 
 
-def get_simulation_model(name="hudson", reference_size=0.25, **kwargs):
+def get_simulation_model(name="hudson", **kwargs):
     """
     Returns simulation model dictionary suitable for passing to the low-level API.
     """
-    d = {"name": name, "reference_size": reference_size}
+    d = {"name": name}
     d.update(kwargs)
     return d
 
@@ -87,7 +87,6 @@ def get_sweep_genic_selection_model(
     """
     return get_simulation_model(
         name="sweep_genic_selection",
-        reference_size=reference_size,
         position=position,
         start_frequency=start_frequency,
         end_frequency=end_frequency,
@@ -1178,18 +1177,18 @@ class TestSimulator(LowLevelTestCase):
         for alpha in np.arange(1.01, 2, 0.01):
             for truncation_point in np.arange(0, 1, 0.01) + 0.01:
                 model = get_simulation_model(
-                    "beta", 2, alpha=alpha, truncation_point=truncation_point
+                    "beta", alpha=alpha, truncation_point=truncation_point
                 )
                 sim = f(model=model)
                 self.assertEqual(sim.get_model(), model)
         # bad values
         for alpha in (-1e9, -1, 0, 1, 2, 5, 1e9):
-            model = get_simulation_model("beta", 2, alpha=alpha, truncation_point=1)
+            model = get_simulation_model("beta", alpha=alpha, truncation_point=1)
             with self.assertRaises(_msprime.InputError):
                 sim = f(model=model)
         for truncation_point in [-1e9, -1, 0, 1.1, 2, 1e9]:
             model = get_simulation_model(
-                "beta", 2, alpha=1.5, truncation_point=truncation_point
+                "beta", alpha=1.5, truncation_point=truncation_point
             )
             with self.assertRaises(_msprime.InputError):
                 sim = f(model=model)
@@ -1419,7 +1418,7 @@ class TestSimulator(LowLevelTestCase):
         self.assertEqual(sim.get_migration_matrix(), [0.0])
         self.assertEqual(
             sim.get_population_configuration(),
-            [get_population_configuration(initial_size=0.25)],
+            [get_population_configuration(initial_size=1)],
         )
 
     def test_bad_population_configurations(self):

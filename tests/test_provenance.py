@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018-2019 University of Oxford
+# Copyright (C) 2018-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -365,7 +365,7 @@ class TestSimulateRoundTrip(TestRoundTrip):
             sample_size=4,
             pedigree=ped,
             demographic_events=[
-                msprime.SimulationModelChange(t, msprime.DiscreteTimeWrightFisher(2))
+                msprime.SimulationModelChange(t, msprime.DiscreteTimeWrightFisher())
             ],
             model=model,
         )

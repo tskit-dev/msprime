@@ -223,74 +223,7 @@ Simulations models are specified using the ``model`` parameter to
 :func:`.simulate`. This parameter can either take the form of a
 string describing the model (e.g. ``model="dtwf"``) or an instance of a
 model definition class (e.g ``model=msprime.DiscreteTimeWrightFisher(1000)``).
-The available models are documented in the following subsections.
-
-A key element of simulation models in ``msprime`` is the concept
-of a "reference population size". The ``Ne`` argument to
-:func:`simulate` can also be used to define this parameter
-when combined with a string shorthand for a model.
-
-.. code-block:: python
-
-    msprime.simulate(10, Ne=1000, model="dtwf")
-
-and
-
-.. code-block:: python
-
-    msprime.simulate(10, model=msprime.DiscreteTimeWrightFisher(1000))
-
-define the same simulation.
-
-.. note:: When ``Ne`` and an instance of :class:`.SimulationModel` with
-    ``reference_size`` set are both provided as arguments to :func:`.simulate`,
-    the ``Ne`` parameter is ignored.
-
-
-.. todo:: Add a discussion of population sizes here, describing
-    what Ne/model.reference_size really means, and how it interacts
-    with the individual population sizes.
-
-.. JK: Commented this discussion out as it seemed likely to confuse. We
-.. definitely need to give a thorough description of what's actually
-.. going on somewhere though.
-
-.. Simulation models such as the coalescent are defined
-.. in terms of "scaled time". Time in the standard diploid coalescent
-.. is measured in units of :math:`N_e` generations, and
-.. one of the ways in which msprime tries to make life easier for
-.. users is to automatically convert times and rates to and
-.. from units of generations. Thus, a key responsibility for a simulation model is to
-.. convert times specified by users in generations into "model time"
-.. (in which the simulation is performed) and to tranlate the
-.. simulated model times back into generations. This is what the
-.. reference population size associated with a model is used for
-.. and fundamentally what it means.
-
-.. The situation is somewhat confused by the sizes associated
-.. with specific populations using, e.g., the
-.. :class:`.PopulationConfiguration` class. In coalescent models, these
-.. sizes are used to compute rates of coalescence, and have no direct
-.. relationship to the model's reference population size. Thus, we may
-.. have several populations, all of which have different sizes and none
-.. equal to the model's reference population size.
-.. The model's reference population size is used to scale all times
-.. and rates, irrespective of the sizes of the various individual
-.. populations.
-
-.. The situation for the :class:`.DiscreteTimeWrightFisher` model
-.. is different. In this case, there is no concept of rescaling time
-.. as time is always measured in generations. Therefore, in this case the
-.. reference population size has no function and is just used as a
-.. shortcut for specifying individual population sizes.
-
-We are often interested in simulating mixtures of models: for example,
-using the :class:`.DiscreteTimeWrightFisher` model to simulate the
-recent past and then using the standard coalescent to complete the
-simulation of the ancient past. This can be achieved using the
-:class:`.SimulationModelChange` event. See the
-:ref:`sec_tutorial_hybrid_simulations` for an example of this
-approach.
+The available models are documented in this section.
 
 +++++++++++++++++++++++++++++
 Coalescent and approximations
@@ -355,6 +288,14 @@ Selective sweeps
 ++++++++++++++++++++++++
 Simulation model changes
 ++++++++++++++++++++++++
+
+We are often interested in simulating mixtures of models: for example,
+using the :class:`.DiscreteTimeWrightFisher` model to simulate the
+recent past and then using the standard coalescent to complete the
+simulation of the ancient past. This can be achieved using the
+:class:`.SimulationModelChange` event. See the
+:ref:`sec_tutorial_hybrid_simulations` for an example of this
+approach.
 
 .. todo:: Describe the subtleties of how simulation model changes work
     along with how times are computed.

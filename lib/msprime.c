@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2018 University of Oxford
+** Copyright (C) 2015-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -202,7 +202,7 @@ msp_set_start_time(msp_t *self, double start_time)
         ret = MSP_ERR_BAD_START_TIME;
         goto out;
     }
-    self->start_time = self->model.generations_to_model_time(&self->model, start_time);
+    self->start_time = start_time;
 out:
     return ret;
 }
@@ -320,7 +320,6 @@ msp_set_population_configuration(
     msp_t *self, int population_id, double initial_size, double growth_rate)
 {
     int ret = MSP_ERR_BAD_POPULATION_CONFIGURATION;
-    simulation_model_t *model = &self->model;
 
     if (population_id < 0 || population_id > (int) self->num_populations) {
         ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
@@ -330,10 +329,8 @@ msp_set_population_configuration(
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->initial_populations[population_id].initial_size
-        = initial_size / model->reference_size;
-    self->initial_populations[population_id].growth_rate
-        = model->generation_rate_to_model_rate(model, growth_rate);
+    self->initial_populations[population_id].initial_size = initial_size;
+    self->initial_populations[population_id].growth_rate = growth_rate;
     ret = 0;
 out:
     return ret;
@@ -345,7 +342,6 @@ msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix)
     int ret = MSP_ERR_BAD_MIGRATION_MATRIX;
     size_t j, k;
     size_t N = self->num_populations;
-    simulation_model_t *model = &self->model;
 
     if (N * N != size) {
         goto out;
@@ -365,8 +361,7 @@ msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix)
         }
     }
     for (j = 0; j < N * N; j++) {
-        self->initial_migration_matrix[j]
-            = model->generation_rate_to_model_rate(model, migration_matrix[j]);
+        self->initial_migration_matrix[j] = migration_matrix[j];
     }
     ret = 0;
 out:
@@ -466,18 +461,14 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, recomb_map_t *reco
         goto out;
     }
 
-    /* Use the standard coalescent with coalescent time units by default. */
+    /* Use the standard coalescent by default. */
     self->model.type = -1;
-    ret = msp_set_simulation_model_hudson(self, 0.25);
+    ret = msp_set_simulation_model_hudson(self);
     assert(ret == 0);
     self->rng = rng;
 
     self->tables = tables;
     self->sequence_length = recomb_map_get_sequence_length(&self->recomb_map);
-
-    /* And rescale the rates */
-    self->gene_conversion_rate = self->model.generation_rate_to_model_rate(
-        &self->model, self->gene_conversion_rate);
 
     if (num_samples > 0) {
         if (num_samples < 2 || samples == NULL || self->tables->nodes.num_rows > 0) {
@@ -1068,7 +1059,6 @@ msp_print_state(msp_t *self, FILE *out)
         goto out;
     }
     fprintf(out, "simulation model      = '%s'\n", msp_get_model_name(self));
-    fprintf(out, "model reference_size = %f\n", self->model.reference_size);
     if (self->model.type == MSP_MODEL_BETA) {
         fprintf(out, "\tbeta coalescent parameters: alpha = %f, truncation_point = %f\n",
             self->model.params.beta_coalescent.alpha,
@@ -1196,10 +1186,9 @@ msp_record_migration(msp_t *self, double left, double right, node_id_t node,
     population_id_t source_pop, population_id_t dest_pop)
 {
     int ret = 0;
-    double scaled_time = self->model.model_time_to_generations(&self->model, self->time);
 
     ret = tsk_migration_table_add_row(
-        &self->tables->migrations, left, right, node, source_pop, dest_pop, scaled_time);
+        &self->tables->migrations, left, right, node, source_pop, dest_pop, self->time);
     if (ret < 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
@@ -1244,14 +1233,13 @@ msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t populat
     tsk_id_t individual)
 {
     int ret = 0;
-    double scaled_time = self->model.model_time_to_generations(&self->model, time);
 
     ret = msp_flush_edges(self);
     if (ret != 0) {
         goto out;
     }
     ret = tsk_node_table_add_row(
-        &self->tables->nodes, flags, scaled_time, population_id, individual, NULL, 0);
+        &self->tables->nodes, flags, time, population_id, individual, NULL, 0);
     if (ret < 0) {
         goto out;
     }
@@ -3392,7 +3380,7 @@ static int MSP_WARN_UNUSED
 msp_initialise_from_ts(msp_t *self)
 {
     int ret = 0;
-    double model_time, root_time;
+    double root_time;
     uint32_t num_samples;
     size_t num_nodes = self->tables->nodes.num_rows;
     population_id_t pop;
@@ -3406,9 +3394,7 @@ msp_initialise_from_ts(msp_t *self)
     num_samples = 0;
     root_time = 0.0;
     for (j = 0; j < num_nodes; j++) {
-        model_time = self->model.generations_to_model_time(
-            &self->model, self->tables->nodes.time[j]);
-        root_time = GSL_MAX(model_time, root_time);
+        root_time = GSL_MAX(self->tables->nodes.time[j], root_time);
         /* TODO we can catch ancient samples here and insert them as sampling
          * events, if we wish to support this. */
         if (self->tables->nodes.flags[j] & TSK_NODE_IS_SAMPLE) {
@@ -3508,11 +3494,15 @@ msp_get_common_ancestor_waiting_time_from_rate(
 
     if (lambda > 0.0) {
         u = gsl_ran_exponential(self->rng, 1.0 / lambda);
+        /* FIXME Shoehorning an extra factor of 4 here in both cases where we
+         * use pop->initial_size becuase it needs to be 4 time larger for the
+         * coalescent calcs to work. This is TEMPORARY while we're getting
+         * rid of the model time transformations. */
         if (alpha == 0.0) {
-            ret = pop->initial_size * u;
+            ret = 4 * pop->initial_size * u;
         } else {
             dt = t - pop->start_time;
-            z = 1 + alpha * pop->initial_size * exp(-alpha * dt) * u;
+            z = 1 + 4 * alpha * pop->initial_size * exp(-alpha * dt) * u;
             /* if z is <= 0 no coancestry can occur */
             if (z > 0) {
                 ret = log(z) / alpha;
@@ -3899,8 +3889,7 @@ msp_dtwf_generation(msp_t *self)
          * the nearest integer. Thus, the population's size is always relative
          * to the reference model population size (which is also true for the
          * coalescent models. */
-        N = (uint32_t) round(
-            get_population_size(pop, self->time) * self->model.reference_size);
+        N = (uint32_t) round(get_population_size(pop, self->time));
         if (N == 0) {
             ret = MSP_ERR_DTWF_ZERO_POPULATION_SIZE;
             goto out;
@@ -4461,8 +4450,6 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
     int err;
-    simulation_model_t *model = &self->model;
-    double scaled_time = model->generations_to_model_time(model, max_time);
 
     if (self->state == MSP_STATE_INITIALISED) {
         self->state = MSP_STATE_SIMULATING;
@@ -4487,7 +4474,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
          * all models. */
         ret = 0;
     } else if (self->model.type == MSP_MODEL_DTWF) {
-        ret = msp_run_dtwf(self, scaled_time, max_events);
+        ret = msp_run_dtwf(self, max_time, max_events);
     } else if (self->model.type == MSP_MODEL_WF_PED) {
         if (self->pedigree == NULL || self->pedigree->state != MSP_PED_STATE_UNCLIMBED) {
             ret = MSP_ERR_BAD_STATE;
@@ -4509,7 +4496,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         /* FIXME making sweep atomic for now as it's non-rentrant */
         ret = msp_run_sweep(self);
     } else {
-        ret = msp_run_coalescent(self, scaled_time, max_events);
+        ret = msp_run_coalescent(self, max_time, max_events);
     }
 
     if (ret < 0) {
@@ -4520,7 +4507,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
          * after this we will get unary edges on the end of each extant node
          * to this point so that the simulation can be resumed accurately.
          */
-        self->time = scaled_time;
+        self->time = max_time;
     }
     err = msp_flush_edges(self);
     if (err != 0) {
@@ -4543,8 +4530,7 @@ msp_insert_uncoalesced_edges(msp_t *self)
     node_id_t node;
     int64_t edge_start;
     tsk_node_table_t *nodes = &self->tables->nodes;
-    const double current_time
-        = self->model.model_time_to_generations(&self->model, self->time);
+    const double current_time = self->time;
     tsk_bookmark_t bookmark;
 
     for (pop = 0; pop < (population_id_t) self->num_populations; pop++) {
@@ -4639,7 +4625,6 @@ msp_debug_demography(msp_t *self, double *end_time)
     int ret = 0;
     double t = GSL_POSINF;
     int first_call = 0;
-    simulation_model_t *model = &self->model;
     demographic_event_t *de;
     sampling_event_t *se;
 
@@ -4673,7 +4658,7 @@ msp_debug_demography(msp_t *self, double *end_time)
     if (self->next_demographic_event != NULL) {
         t = self->next_demographic_event->time;
     }
-    *end_time = model->model_time_to_generations(model, t);
+    *end_time = t;
 out:
     return ret;
 }
@@ -4685,7 +4670,6 @@ msp_compute_population_size(
 {
     int ret = 0;
     population_t *pop;
-    simulation_model_t *model = &self->model;
     double dt;
 
     if (population_id > self->num_populations) {
@@ -4694,11 +4678,10 @@ msp_compute_population_size(
     }
     pop = &self->populations[population_id];
     if (pop->growth_rate == 0.0) {
-        *pop_size = model->reference_size * pop->initial_size;
+        *pop_size = pop->initial_size;
     } else {
-        dt = model->generations_to_model_time(model, time) - pop->start_time;
-        *pop_size
-            = model->reference_size * pop->initial_size * exp(-pop->growth_rate * dt);
+        dt = time - pop->start_time;
+        *pop_size = pop->initial_size * exp(-pop->growth_rate * dt);
     }
 out:
     return ret;
@@ -4855,11 +4838,9 @@ msp_get_migration_matrix(msp_t *self, double *migration_matrix)
 {
     size_t N = self->num_populations;
     size_t j;
-    simulation_model_t *model = &self->model;
 
     for (j = 0; j < N * N; j++) {
-        migration_matrix[j]
-            = model->model_rate_to_generation_rate(model, self->migration_matrix[j]);
+        migration_matrix[j] = self->migration_matrix[j];
     }
     return 0;
 }
@@ -4886,15 +4867,14 @@ msp_get_population_configuration(
 {
     int ret = 0;
     population_t *pop;
-    simulation_model_t *model = &self->model;
 
     if (population_id > self->num_populations) {
         ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
     pop = &self->populations[population_id];
-    *initial_size = model->reference_size * pop->initial_size;
-    *growth_rate = model->model_rate_to_generation_rate(model, pop->growth_rate);
+    *initial_size = pop->initial_size;
+    *growth_rate = pop->growth_rate;
 out:
     return ret;
 }
@@ -4902,15 +4882,13 @@ out:
 double
 msp_get_time(msp_t *self)
 {
-    simulation_model_t *model = &self->model;
-    return model->model_time_to_generations(model, self->time);
+    return self->time;
 }
 
 double
 msp_get_gene_conversion_rate(msp_t *self)
 {
-    simulation_model_t *model = &self->model;
-    return model->model_rate_to_generation_rate(model, self->gene_conversion_rate);
+    return self->gene_conversion_rate;
 }
 
 /* Demographic events. All times and input parameters are specified in units
@@ -4938,7 +4916,7 @@ msp_add_demographic_event(msp_t *self, double time, demographic_event_t **event)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    ret_event->time = self->model.generations_to_model_time(&self->model, time);
+    ret_event->time = time;
     /* now insert this event at the end of the chain. */
     if (self->demographic_events_head == NULL) {
         self->demographic_events_head = ret_event;
@@ -4963,7 +4941,6 @@ msp_change_single_population_parameters(msp_t *self, size_t population_id, doubl
     int ret = 0;
     double dt;
     population_t *pop;
-    simulation_model_t *model = &self->model;
 
     if (population_id >= self->num_populations) {
         ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
@@ -4978,11 +4955,11 @@ msp_change_single_population_parameters(msp_t *self, size_t population_id, doubl
         dt = time - pop->start_time;
         pop->initial_size = pop->initial_size * exp(-pop->growth_rate * dt);
     } else {
-        pop->initial_size = initial_size / model->reference_size;
+        pop->initial_size = initial_size;
     }
     /* Do not change the growth_rate unless it is specified */
     if (!gsl_isnan(growth_rate)) {
-        pop->growth_rate = model->generation_rate_to_model_rate(model, growth_rate);
+        pop->growth_rate = growth_rate;
     }
     pop->start_time = time;
 out:
@@ -5093,9 +5070,7 @@ msp_change_migration_rate(msp_t *self, demographic_event_t *event)
     int ret = 0;
     int index = event->params.migration_rate_change.matrix_index;
     int N = (int) self->num_populations;
-    simulation_model_t *model = &self->model;
-    double rate = model->generation_rate_to_model_rate(
-        model, event->params.migration_rate_change.migration_rate);
+    double rate = event->params.migration_rate_change.migration_rate;
 
     if (index == -1) {
         for (index = 0; index < N * N; index++) {
@@ -5495,7 +5470,6 @@ msp_add_instantaneous_bottleneck(
     int ret = 0;
     demographic_event_t *de;
     int N = (int) self->num_populations;
-    simulation_model_t *model = &self->model;
 
     if (population_id < 0 || population_id >= N) {
         ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
@@ -5510,8 +5484,7 @@ msp_add_instantaneous_bottleneck(
         goto out;
     }
     de->params.instantaneous_bottleneck.population_id = population_id;
-    de->params.instantaneous_bottleneck.strength
-        = model->generations_to_model_time(model, strength);
+    de->params.instantaneous_bottleneck.strength = strength;
     de->change_state = msp_instantaneous_bottleneck;
     de->print_state = msp_print_instantaneous_bottleneck;
     ret = 0;
@@ -5524,11 +5497,10 @@ static int
 msp_census_event(msp_t *self, demographic_event_t *event)
 {
     int ret = 0;
-    double time = self->model.model_time_to_generations(&self->model, event->time);
     avl_tree_t *ancestors;
     avl_node_t *node;
     segment_t *seg;
-    int i, j;
+    tsk_id_t i, j;
     node_id_t u;
 
     for (i = 0; i < (int) self->num_populations; i++) {
@@ -5548,8 +5520,7 @@ msp_census_event(msp_t *self, demographic_event_t *event)
                         goto out;
                     }
                     ret = tsk_node_table_add_row(&self->tables->nodes,
-                        MSP_NODE_IS_CEN_EVENT, time, (population_id_t) i, TSK_NULL, NULL,
-                        0);
+                        MSP_NODE_IS_CEN_EVENT, event->time, i, TSK_NULL, NULL, 0);
                     if (ret < 0) {
                         goto out;
                     }
@@ -5611,30 +5582,6 @@ out:
  **************************************************************/
 
 static double
-std_model_time_to_generations(simulation_model_t *model, double t)
-{
-    return 4 * model->reference_size * t;
-}
-
-static double
-std_generations_to_model_time(simulation_model_t *model, double g)
-{
-    return g / (4 * model->reference_size);
-}
-
-static double
-std_generation_rate_to_model_rate(simulation_model_t *model, double rate)
-{
-    return rate * 4 * model->reference_size;
-}
-
-static double
-std_model_rate_to_generation_rate(simulation_model_t *model, double rate)
-{
-    return rate / (4 * model->reference_size);
-}
-
-static double
 msp_std_get_common_ancestor_waiting_time(
     msp_t *self, population_id_t pop_id, label_id_t label)
 {
@@ -5692,30 +5639,6 @@ msp_std_common_ancestor_event(
 /**************************************************************
  * Dirac coalescent
  **************************************************************/
-
-static double
-dirac_model_time_to_generations(simulation_model_t *model, double t)
-{
-    return 4 * gsl_pow_2(model->reference_size) * t;
-}
-
-static double
-dirac_generations_to_model_time(simulation_model_t *model, double g)
-{
-    return g / (4 * gsl_pow_2(model->reference_size));
-}
-
-static double
-dirac_generation_rate_to_model_rate(simulation_model_t *model, double rate)
-{
-    return rate * 4 * model->reference_size;
-}
-
-static double
-dirac_model_rate_to_generation_rate(simulation_model_t *model, double rate)
-{
-    return rate / (4 * model->reference_size);
-}
 
 static double
 msp_dirac_get_common_ancestor_waiting_time(
@@ -5788,43 +5711,6 @@ out:
 /**************************************************************
  * Beta coalescent
  **************************************************************/
-
-static double
-beta_model_compute_timescale(simulation_model_t *model)
-{
-    double alpha = model->params.beta_coalescent.alpha;
-    double truncation_point = model->params.beta_coalescent.truncation_point;
-    double reference_size = model->reference_size;
-    double m = 2.0 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
-    double timescale
-        = exp(alpha * log(m) + (alpha - 1) * log(reference_size) - log(alpha))
-          / gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
-    return timescale;
-}
-
-static double
-beta_model_time_to_generations(simulation_model_t *model, double t)
-{
-    return 4 * beta_model_compute_timescale(model) * t;
-}
-
-static double
-beta_generations_to_model_time(simulation_model_t *model, double g)
-{
-    return g / (4 * beta_model_compute_timescale(model));
-}
-
-static double
-beta_generation_rate_to_model_rate(simulation_model_t *model, double rate)
-{
-    return rate * 4 * beta_model_compute_timescale(model);
-}
-
-static double
-beta_model_rate_to_generation_rate(simulation_model_t *model, double rate)
-{
-    return rate / (4 * beta_model_compute_timescale(model));
-}
 
 static double
 msp_beta_get_common_ancestor_waiting_time(
@@ -5955,35 +5841,6 @@ out:
 }
 
 /**************************************************************
- * Discrete Time Wright Fisher
- *
- * TODO provide background and documentation.
- **************************************************************/
-static double
-dtwf_model_time_to_generations(simulation_model_t *MSP_UNUSED(model), double t)
-{
-    return t;
-}
-
-static double
-dtwf_generations_to_model_time(simulation_model_t *MSP_UNUSED(model), double g)
-{
-    return g;
-}
-
-static double
-dtwf_generation_rate_to_model_rate(simulation_model_t *MSP_UNUSED(model), double rate)
-{
-    return rate;
-}
-
-static double
-dtwf_model_rate_to_generation_rate(simulation_model_t *MSP_UNUSED(model), double rate)
-{
-    return rate;
-}
-
-/**************************************************************
  * Allele frequency trajectory simulation for genic selection
  *
  **************************************************************/
@@ -6081,135 +5938,8 @@ genic_selection_print_state(sweep_t *self, FILE *out)
  * Public API for setting simulation models.
  **************************************************************/
 
-static void
-msp_reset_segment_chain_masses(msp_t *self, segment_t *head)
-{
-    segment_t *seg, *prev;
-
-    head->left_mass = recomb_map_position_to_mass(&self->recomb_map, head->left);
-    head->right_mass = recomb_map_position_to_mass(&self->recomb_map, head->right);
-    msp_set_single_segment_mass(self, head);
-
-    prev = head;
-    seg = head->next;
-    while (seg != NULL) {
-        if (seg->left == prev->right) {
-            seg->left_mass = prev->right_mass;
-        } else {
-            seg->left_mass = recomb_map_position_to_mass(&self->recomb_map, seg->left);
-        }
-        seg->right_mass = recomb_map_position_to_mass(&self->recomb_map, seg->right);
-        msp_set_segment_mass(self, seg, prev);
-
-        prev = seg;
-        seg = seg->next;
-    }
-}
-
-static void
-msp_reset_all_segment_masses(msp_t *self)
-{
-    uint32_t j;
-    avl_tree_t *ancestors;
-    avl_node_t *node;
-    for (j = 0; j < self->num_populations; j++) {
-        ancestors = self->populations[j].ancestors;
-        for (node = ancestors->head; node != NULL; node = node->next) {
-            msp_reset_segment_chain_masses(self, (segment_t *) node->item);
-        }
-    }
-}
-
-/* Unscale all times and rates from the current model time to generations. */
 static int
-msp_unscale_model_times(msp_t *self)
-{
-    uint32_t j;
-    simulation_model_t *model = &self->model;
-    demographic_event_t *de;
-
-    self->start_time = self->model.model_time_to_generations(model, self->start_time);
-    self->time = self->model.model_time_to_generations(model, self->time);
-    self->gene_conversion_rate
-        = self->model.model_rate_to_generation_rate(model, self->gene_conversion_rate);
-    recomb_map_convert_rates(&self->recomb_map,
-        (msp_convert_func) self->model.model_rate_to_generation_rate, &self->model);
-    msp_reset_all_segment_masses(self);
-    /* Samples */
-    for (j = 0; j < self->num_samples; j++) {
-        self->samples[j].time
-            = model->model_time_to_generations(model, self->samples[j].time);
-    }
-    /* Sampling events */
-    for (j = 0; j < self->num_sampling_events; j++) {
-        self->sampling_events[j].time
-            = model->model_time_to_generations(model, self->sampling_events[j].time);
-    }
-    /* Growth rates and start times for populations */
-    for (j = 0; j < self->num_populations; j++) {
-        self->populations[j].growth_rate = model->model_rate_to_generation_rate(
-            model, self->populations[j].growth_rate);
-        self->populations[j].start_time
-            = model->model_time_to_generations(model, self->populations[j].start_time);
-    }
-    /* Migration rates */
-    for (j = 0; j < gsl_pow_2(self->num_populations); j++) {
-        self->migration_matrix[j]
-            = model->model_rate_to_generation_rate(model, self->migration_matrix[j]);
-    }
-    /* Demographic events */
-    for (de = self->demographic_events_head; de != NULL; de = de->next) {
-        de->time = model->model_time_to_generations(model, de->time);
-    }
-    return 0;
-}
-
-/* Rescale all times and rates from generations back into the current model time */
-static int
-msp_rescale_model_times(msp_t *self)
-{
-    uint32_t j;
-    simulation_model_t *model = &self->model;
-    demographic_event_t *de;
-
-    self->time = model->generations_to_model_time(model, self->time);
-    self->start_time = model->generations_to_model_time(model, self->start_time);
-    self->gene_conversion_rate
-        = model->generation_rate_to_model_rate(model, self->gene_conversion_rate);
-    recomb_map_convert_rates(&self->recomb_map,
-        (msp_convert_func) self->model.generation_rate_to_model_rate, &self->model);
-    msp_reset_all_segment_masses(self);
-    /* Samples */
-    for (j = 0; j < self->num_samples; j++) {
-        self->samples[j].time
-            = model->generations_to_model_time(model, self->samples[j].time);
-    }
-    /* Sampling events */
-    for (j = 0; j < self->num_sampling_events; j++) {
-        self->sampling_events[j].time
-            = model->generations_to_model_time(model, self->sampling_events[j].time);
-    }
-    /* Growth rates and start times for populations */
-    for (j = 0; j < self->num_populations; j++) {
-        self->populations[j].growth_rate = model->generation_rate_to_model_rate(
-            model, self->populations[j].growth_rate);
-        self->populations[j].start_time
-            = model->generations_to_model_time(model, self->populations[j].start_time);
-    }
-    /* Migration rates */
-    for (j = 0; j < gsl_pow_2(self->num_populations); j++) {
-        self->migration_matrix[j]
-            = model->generation_rate_to_model_rate(model, self->migration_matrix[j]);
-    }
-    /* Demographic events */
-    for (de = self->demographic_events_head; de != NULL; de = de->next) {
-        de->time = model->generations_to_model_time(model, de->time);
-    }
-    return 0;
-}
-
-static int
-msp_set_simulation_model(msp_t *self, int model, double reference_size)
+msp_set_simulation_model(msp_t *self, int model)
 {
     int ret = 0;
 
@@ -6220,31 +5950,13 @@ msp_set_simulation_model(msp_t *self, int model, double reference_size)
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
-    if (reference_size <= 0) {
-        ret = MSP_ERR_BAD_POPULATION_SIZE;
-        goto out;
-    }
-    /* If this isn't the first time we've set the model, rescale times back
-     * to generations so that we can scale them back into the appropriate values
-     * after the model has been set */
     if (self->model.type != -1) {
-        ret = msp_unscale_model_times(self);
-        if (ret != 0) {
-            goto out;
-        }
         if (self->model.free != NULL) {
             self->model.free(&self->model);
         }
     }
     self->model.type = model;
-    self->model.reference_size = reference_size;
-    /* For convenience here we set these to what is needed for the standard
-     * coalcescent. For other models, these functions must be overwritten
-     * with the correct values *before* rescaling time. */
-    self->model.model_time_to_generations = std_model_time_to_generations;
-    self->model.generations_to_model_time = std_generations_to_model_time;
-    self->model.generation_rate_to_model_rate = std_generation_rate_to_model_rate;
-    self->model.model_rate_to_generation_rate = std_model_rate_to_generation_rate;
+
     self->get_common_ancestor_waiting_time = msp_std_get_common_ancestor_waiting_time;
     self->common_ancestor_event = msp_std_common_ancestor_event;
 out:
@@ -6252,111 +5964,63 @@ out:
 }
 
 int
-msp_set_simulation_model_hudson(msp_t *self, double reference_size)
+msp_set_simulation_model_hudson(msp_t *self)
 {
-    int ret = msp_set_simulation_model(self, MSP_MODEL_HUDSON, reference_size);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = msp_rescale_model_times(self);
-out:
-    return ret;
+    return msp_set_simulation_model(self, MSP_MODEL_HUDSON);
 }
 
 int
-msp_set_simulation_model_smc(msp_t *self, double reference_size)
+msp_set_simulation_model_smc(msp_t *self)
 {
-    int ret = msp_set_simulation_model(self, MSP_MODEL_SMC, reference_size);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = msp_rescale_model_times(self);
-out:
-    return ret;
+    return msp_set_simulation_model(self, MSP_MODEL_SMC);
 }
 
 int
-msp_set_simulation_model_smc_prime(msp_t *self, double reference_size)
+msp_set_simulation_model_smc_prime(msp_t *self)
 {
-    int ret = msp_set_simulation_model(self, MSP_MODEL_SMC_PRIME, reference_size);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = msp_rescale_model_times(self);
-out:
-    return ret;
+    return msp_set_simulation_model(self, MSP_MODEL_SMC_PRIME);
 }
 
 int
-msp_set_simulation_model_dtwf(msp_t *self, double reference_size)
+msp_set_simulation_model_dtwf(msp_t *self)
+{
+    return msp_set_simulation_model(self, MSP_MODEL_DTWF);
+}
+
+int
+msp_set_simulation_model_wf_ped(msp_t *self)
+{
+    return msp_set_simulation_model(self, MSP_MODEL_WF_PED);
+}
+
+int
+msp_set_simulation_model_dirac(msp_t *self, double psi, double c)
 {
     int ret = 0;
-    ret = msp_set_simulation_model(self, MSP_MODEL_DTWF, reference_size);
-    if (ret != 0) {
-        goto out;
-    }
-    self->model.model_time_to_generations = dtwf_model_time_to_generations;
-    self->model.generations_to_model_time = dtwf_generations_to_model_time;
-    self->model.model_rate_to_generation_rate = dtwf_model_rate_to_generation_rate;
-    self->model.generation_rate_to_model_rate = dtwf_generation_rate_to_model_rate;
 
-    ret = msp_rescale_model_times(self);
-out:
-    return ret;
-}
-
-int
-msp_set_simulation_model_wf_ped(msp_t *self, double reference_size)
-{
-    int ret = 0;
-    ret = msp_set_simulation_model(self, MSP_MODEL_WF_PED, reference_size);
-    if (ret != 0) {
-        goto out;
-    }
-    self->model.model_time_to_generations = dtwf_model_time_to_generations;
-    self->model.generations_to_model_time = dtwf_generations_to_model_time;
-    self->model.model_rate_to_generation_rate = dtwf_model_rate_to_generation_rate;
-    self->model.generation_rate_to_model_rate = dtwf_generation_rate_to_model_rate;
-
-    ret = msp_rescale_model_times(self);
-out:
-    return ret;
-}
-
-int
-msp_set_simulation_model_dirac(msp_t *self, double reference_size, double psi, double c)
-{
-    int ret = 0;
     /* We assume to be in the limit where N is infinite*/
     if (psi <= 0 || psi > 1.0) {
         ret = MSP_ERR_BAD_PSI;
         goto out;
     }
-
     if (c < 0.0) {
         ret = MSP_ERR_BAD_C;
         goto out;
     }
-    ret = msp_set_simulation_model(self, MSP_MODEL_DIRAC, reference_size);
+    ret = msp_set_simulation_model(self, MSP_MODEL_DIRAC);
     if (ret != 0) {
         goto out;
     }
     self->model.params.dirac_coalescent.psi = psi;
     self->model.params.dirac_coalescent.c = c;
-    self->model.model_time_to_generations = dirac_model_time_to_generations;
-    self->model.generations_to_model_time = dirac_generations_to_model_time;
-    self->model.generation_rate_to_model_rate = dirac_generation_rate_to_model_rate;
-    self->model.model_rate_to_generation_rate = dirac_model_rate_to_generation_rate;
     self->get_common_ancestor_waiting_time = msp_dirac_get_common_ancestor_waiting_time;
     self->common_ancestor_event = msp_dirac_common_ancestor_event;
-    ret = msp_rescale_model_times(self);
 out:
     return ret;
 }
 
 int
-msp_set_simulation_model_beta(
-    msp_t *self, double reference_size, double alpha, double truncation_point)
+msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point)
 {
     int ret = 0;
 
@@ -6370,29 +6034,22 @@ msp_set_simulation_model_beta(
         goto out;
     }
 
-    ret = msp_set_simulation_model(self, MSP_MODEL_BETA, reference_size);
+    ret = msp_set_simulation_model(self, MSP_MODEL_BETA);
     if (ret != 0) {
         goto out;
     }
 
     self->model.params.beta_coalescent.alpha = alpha;
     self->model.params.beta_coalescent.truncation_point = truncation_point;
-
-    self->model.model_time_to_generations = beta_model_time_to_generations;
-    self->model.generations_to_model_time = beta_generations_to_model_time;
-    self->model.generation_rate_to_model_rate = beta_generation_rate_to_model_rate;
-    self->model.model_rate_to_generation_rate = beta_model_rate_to_generation_rate;
     self->get_common_ancestor_waiting_time = msp_beta_get_common_ancestor_waiting_time;
     self->common_ancestor_event = msp_beta_common_ancestor_event;
-    ret = msp_rescale_model_times(self);
 out:
     return ret;
 }
 
 int
-msp_set_simulation_model_sweep_genic_selection(msp_t *self, double reference_size,
-    double position, double start_frequency, double end_frequency, double alpha,
-    double dt)
+msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
+    double start_frequency, double end_frequency, double alpha, double dt)
 {
     int ret = 0;
     simulation_model_t *model = &self->model;
@@ -6423,7 +6080,7 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double reference_siz
         goto out;
     }
 
-    ret = msp_set_simulation_model(self, MSP_MODEL_SWEEP, reference_size);
+    ret = msp_set_simulation_model(self, MSP_MODEL_SWEEP);
     if (ret != 0) {
         goto out;
     }
@@ -6432,15 +6089,8 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double reference_siz
     model->params.sweep.print_state = genic_selection_print_state;
     trajectory->start_frequency = start_frequency;
     trajectory->end_frequency = end_frequency;
-    /* FIXME alpha must be rescaled here. See
-     * https://github.com/tskit-dev/msprime/issues/941
-     */
     trajectory->alpha = alpha;
-    /* dt value is expressed in generations for consistency; translate to
-     * model time. */
-    trajectory->dt = self->model.generations_to_model_time(&self->model, dt);
-
-    ret = msp_rescale_model_times(self);
+    trajectory->dt = dt;
 out:
     return ret;
 }

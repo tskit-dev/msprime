@@ -15,6 +15,13 @@
 - Add replicate_index to simulate, allowing output of a single tree sequence
   from a set of replicates. (:user:`benjeffery` :pr:`914`).
 
+**Breaking changes**:
+
+- The class form for specifying models (e.g., ``msprime.StandardCoalescent()``)
+  no longer take a ``reference_size`` argument.
+  (TODO add paper trail for this)
+
+
 ********************
 [0.7.4] - 2019-12-05
 ********************
