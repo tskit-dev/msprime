@@ -114,12 +114,6 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME:
             ret = "demographic event time must be >= start_time.";
             break;
-        case MSP_ERR_RECOMB_MAP_TOO_COARSE:
-            ret = "The specified recombination map is cannot translate the coordinates"
-                  "for the specified tree sequence. It is either too coarse (num_loci "
-                  "is too small) or contains zero recombination rates. Please either "
-                  "increase the number of loci or recombination rate";
-            break;
         case MSP_ERR_TIME_TRAVEL:
             ret = "The simulation model supplied resulted in a parent node having "
                   "a time value <= to its child. This can occur either as a result "
