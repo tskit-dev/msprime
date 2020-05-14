@@ -3591,9 +3591,11 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                 total_recomb_rate
                     = recomb_map_get_total_recombination_rate(&self->recomb_map);
                 if (total_recomb_rate == 0.0) {
+                    /* FIXME */
                     printf("recombination rate zero and gene conversion rate > 0 "
                            "currently not supported\n");
-                    assert(total_recomb_rate > 0.0);
+                    ret = MSP_ERR_GENERIC;
+                    goto out;
                 } else {
                     lambda = 0.0;
                 }
