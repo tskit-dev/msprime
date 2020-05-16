@@ -29,6 +29,8 @@ import _msprime
 from . import core
 from . import provenance
 
+_ACGT_ALLELES = [b"A", b"C", b"G", b"T"]
+
 
 class MutationModel(_msprime.MutationModel):
     """
@@ -83,11 +85,105 @@ class JukesCantor(MutationModel):
     """
 
     def __init__(self):
-        alleles = [b"A", b"C", b"T", b"G"]
+        alleles = _ACGT_ALLELES
         root_distribution = [0.25, 0.25, 0.25, 0.25]
         transition_matrix = np.zeros((4, 4))
         transition_matrix[:] = 1 / 3
         np.fill_diagonal(transition_matrix, 0)
+        super().__init__(alleles, root_distribution, transition_matrix)
+
+
+class HKY(MutationModel):
+    """
+    The Hasegawa, Kishino and Yano mutation model (Hasegawa et al. 1985).
+
+    .. todo: documentation
+    """
+
+    def __init__(self, kappa=1.0, equilibrium_frequencies=None, root_distribution=None):
+        alleles = _ACGT_ALLELES
+        if equilibrium_frequencies is None:
+            equilibrium_frequencies = np.array(
+                [0.25, 0.25, 0.25, 0.25], dtype="float64"
+            )
+        if root_distribution is None:
+            root_distribution = equilibrium_frequencies.copy()
+
+        transition_matrix = np.full((4, 4), 1.0)
+        np.fill_diagonal(transition_matrix, 0.0)
+        # positions in transition matrix for transversions
+        transition_pos = ((0, 1, 2, 3), (2, 3, 0, 1))
+        transition_matrix[transition_pos] = kappa
+        transition_matrix *= equilibrium_frequencies
+        row_sums = transition_matrix.sum(axis=1, dtype="float64")
+        transition_matrix /= max(row_sums)
+        np.fill_diagonal(transition_matrix, 1.0 - row_sums / max(row_sums))
+
+        super().__init__(alleles, root_distribution, transition_matrix)
+
+
+class F84(MutationModel):
+    """
+    The F84 mutation model (Felsenstein and Churchill, 1996).
+    2 types of events
+    I: no change/transition
+    II: no change/transition/transversion
+    .. todo: documentation
+    """
+
+    def __init__(self, kappa=1.0, equilibrium_frequencies=None, root_distribution=None):
+        alleles = _ACGT_ALLELES
+        if equilibrium_frequencies is None:
+            equilibrium_frequencies = [0.25, 0.25, 0.25, 0.25]
+        if root_distribution is None:
+            root_distribution = equilibrium_frequencies.copy()
+
+        transition_matrix = np.full((4, 4), 1.0, dtype="float64")
+        np.fill_diagonal(transition_matrix, 0.0)
+        # positions in transition matrix for transversions
+        transition_pos_AG = ((0, 2), (2, 0))
+        transition_pos_CT = ((1, 3), (3, 1))
+        p_AG = equilibrium_frequencies[0] + equilibrium_frequencies[2]
+        p_CT = equilibrium_frequencies[1] + equilibrium_frequencies[3]
+        gamma = kappa - 1
+        transition_matrix[transition_pos_AG] = np.float64(1 + gamma / p_AG)
+        transition_matrix[transition_pos_CT] = np.float64(1 + gamma / p_CT)
+        transition_matrix *= equilibrium_frequencies
+        row_sums = transition_matrix.sum(axis=1)
+        transition_matrix = transition_matrix / max(row_sums)
+        row_sums = transition_matrix.sum(axis=1, dtype="float64")
+        np.fill_diagonal(transition_matrix, 1.0 - row_sums)
+
+        super().__init__(alleles, root_distribution, transition_matrix)
+
+
+class GTR(MutationModel):
+    """
+    The  Generalised time-reversible mutation model (Tavaré et al. 1986).
+    .. todo: documentation
+    """
+
+    def __init__(
+        self, relative_rates, equilibrium_frequencies=None, root_distribution=None
+    ):
+        alleles = _ACGT_ALLELES
+        assert len(relative_rates) == 6
+        if equilibrium_frequencies is None:
+            equilibrium_frequencies = [0.25, 0.25, 0.25, 0.25]
+        if root_distribution is None:
+            root_distribution = equilibrium_frequencies
+
+        transition_matrix = np.zeros((4, 4))
+        # relative_rates: [A->C, A->G,A->T,C->G,C->T,G->T]
+        tri_upper = np.triu_indices_from(transition_matrix, k=1)
+        transition_matrix[tri_upper] = relative_rates
+        transition_matrix += transition_matrix.T
+        transition_matrix *= equilibrium_frequencies
+        row_sums = transition_matrix.sum(axis=1)
+        transition_matrix = transition_matrix / max(row_sums)
+        row_sums = transition_matrix.sum(axis=1, dtype="float64")
+        np.fill_diagonal(transition_matrix, 1.0 - row_sums)
+
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
