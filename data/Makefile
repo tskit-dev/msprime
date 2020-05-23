@@ -41,4 +41,4 @@ discoal:
 
 clean:
 	rm -fR scrm* ms ms_summary_stats msHOT msHOT_summary_stats sample_stats \
-		discoal* v0.1.4.tar.gz* seq-gen SeqGen*
+		discoal* v0.1.4.tar.gz* seq-gen SeqGen* SLiM
