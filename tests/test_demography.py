@@ -137,6 +137,37 @@ class TestIntrospectionInterface(unittest.TestCase):
         self.assertEqual(str(event), str_s)
 
 
+class TestDemographicEventsHaveExtraLLParameter(unittest.TestCase):
+    """
+    For legacy reasons the DemographicEvent.get_ll_representation took
+    a "num_populations" argument. In versions of stdpopsim using
+    msprime < 1.0, this parameter was specified when testing for
+    model equality (even though it did nothing). To ensure we're not
+    breaking older versions of stdpopsim, we keep this extra parameter
+    and test it here to make sure it works.
+
+    Since the functionality is only really used as a developer tool
+    in stdpopsim, we can get rid of the extra parameters once
+    stdpopsim 0.2 (which won't use this API) has been released.
+
+    See https://github.com/tskit-dev/msprime/issues/1037
+    """
+
+    def test_demographic_events_have_param(self):
+        events = [
+            msprime.PopulationParametersChange(1.0, population=1, initial_size=2.0),
+            msprime.MigrationRateChange(1.0, 1.0),
+            msprime.MassMigration(1.0, 0),
+            msprime.SimpleBottleneck(1.0, 0),
+            msprime.InstantaneousBottleneck(1.0),
+            msprime.CensusEvent(1.0),
+        ]
+        for event in events:
+            ll_config1 = event.get_ll_representation()
+            ll_config2 = event.get_ll_representation(None)
+            self.assertEqual(ll_config1, ll_config2)
+
+
 class TestTimeTravelErrors(unittest.TestCase):
     """
     It is possible to specify models in msprime that result in malformed
