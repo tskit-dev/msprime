@@ -43,7 +43,7 @@ jobs:
       - run:
           name: Run highlevel tests and upload coverage
           command: |
-            nosetests -v --with-coverage --cover-package msprime \
+            nosetests -v --with-coverage --cover-package msprime --cover-package docs.examples \
               --cover-branches --cover-erase --cover-xml --cover-inclusive tests
             codecov -X gcov -F python
             rm .coverage
