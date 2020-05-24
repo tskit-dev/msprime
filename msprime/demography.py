@@ -134,7 +134,9 @@ class PopulationParametersChange(DemographicEvent):
             raise ValueError("Cannot have a population size <= 0")
         self.population = -1 if self.population is None else self.population
 
-    def get_ll_representation(self):
+    def get_ll_representation(self, num_populations=None):
+        # We need to keep the num_populations argument until stdpopsim 0.2 is out
+        # https://github.com/tskit-dev/msprime/issues/1037
         ret = {
             "type": "population_parameters_change",
             "time": self.time,
@@ -191,7 +193,9 @@ class MigrationRateChange(DemographicEvent):
             self.source = self.matrix_index[0]
             self.dest = self.matrix_index[1]
 
-    def get_ll_representation(self):
+    def get_ll_representation(self, num_populations=None):
+        # We need to keep the num_populations argument until stdpopsim 0.1 is out
+        # https://github.com/tskit-dev/msprime/issues/1037
         return {
             "type": "migration_rate_change",
             "time": self.time,
@@ -245,7 +249,9 @@ class MassMigration(DemographicEvent):
         if self.destination is not None:
             self.dest = self.destination
 
-    def get_ll_representation(self):
+    def get_ll_representation(self, num_populations=None):
+        # We need to keep the num_populations argument until stdpopsim 0.1 is out
+        # https://github.com/tskit-dev/msprime/issues/1037
         return {
             "type": "mass_migration",
             "time": self.time,
@@ -272,7 +278,9 @@ class SimpleBottleneck(DemographicEvent):
     population = attr.ib()
     proportion = attr.ib(default=1.0)
 
-    def get_ll_representation(self):
+    def get_ll_representation(self, num_populations=None):
+        # We need to keep the num_populations argument until stdpopsim 0.1 is out
+        # https://github.com/tskit-dev/msprime/issues/1037
         return {
             "type": "simple_bottleneck",
             "time": self.time,
@@ -293,7 +301,9 @@ class InstantaneousBottleneck(DemographicEvent):
     population = attr.ib(default=None)
     strength = attr.ib(default=1.0)
 
-    def get_ll_representation(self):
+    def get_ll_representation(self, num_populations=None):
+        # We need to keep the num_populations argument until stdpopsim 0.1 is out
+        # https://github.com/tskit-dev/msprime/issues/1037
         return {
             "type": "instantaneous_bottleneck",
             "time": self.time,
@@ -322,7 +332,9 @@ class CensusEvent(DemographicEvent):
     :param float time: The time at which this event occurs in generations.
     """
 
-    def get_ll_representation(self):
+    def get_ll_representation(self, num_populations=None):
+        # We need to keep the num_populations argument until stdpopsim 0.1 is out
+        # https://github.com/tskit-dev/msprime/issues/1037
         return {
             "type": "census_event",
             "time": self.time,
