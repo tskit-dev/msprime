@@ -275,7 +275,7 @@ class MassMigration(DemographicEvent):
 # This is an unsupported/undocumented demographic event.
 @attr.s
 class SimpleBottleneck(DemographicEvent):
-    population = attr.ib()
+    population = attr.ib(default=None)
     proportion = attr.ib(default=1.0)
 
     def get_ll_representation(self, num_populations=None):
