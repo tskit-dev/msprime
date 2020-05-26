@@ -4133,6 +4133,7 @@ Simulator_get_nodes(Simulator *self)
         node.time = nodes->time[j];
         node.population = nodes->population[j];
         node.individual = nodes->individual[j];
+        node.metadata = NULL;
         node.metadata_length = 0;
         py_node = make_node(&node);
         if (py_node == NULL) {
