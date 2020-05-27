@@ -556,7 +556,7 @@ then A and T alleles have a 25% lower mutation rate than do C and G alleles,
 since 25% of the time that we consider mutating them, we leave them unchanged.
 From the properties of the Poisson distribution,
 the probability that a tree of total length :math:`T`
-has no mutations at a given discrete site is :math:`exp(-rT)`,
+has no mutations at a given discrete site is :math:`\exp(-rT)`,
 if mutations are put down at a rate of :math:`r`.
 Suppose that a single tree of total length :math:`T = 1.5`
 extends over many discrete sites,
@@ -580,17 +580,23 @@ In this situation it can be computed as follows:
 Two more facts about Markov chains are useful to interpret the statistics
 of these mutation models.
 First, suppose we have tabulated all mutations, and so for each pair of alleles
-:math:`i` and :math:`j` we have the proportion of mutations that caused an :math:`i -> j` change.
-If allele :math:`i` mutates to a different allele, the chance it mutates to allele ``j``
+:math:`i` and :math:`j` we have the proportion of mutations that caused an :math:`i \to j` change.
+If allele :math:`i` mutates to a different allele, the chance it mutates to allele :math:`j`
 is proportional to ``transition_matrix[i,j]`` but excluding the diagonal (no-change) entry,
 so is equal to ``transition_matrix[i,j] / (1 - transition_matrix[i,i])``.
 Second, suppose that an ancestor carries allele :math:`i` at a given position.
 The probability that her descendant some time :math:`t` in the future carries allele :math:`j` at that position
-is given by a matrix exponential: 
-let :math:`Q` be the scaled *infinitestimal rate matrix* of the Markov chain:
-``Q = (transition_matrix - np.eye(num_alleles))``.
-Then this probability is the ``[i,j]``-th entry of the matrix exponential of :math:`trQ`,
-i.e., ``scipy.linalg.expm(t * rate * Q)[i,j]``.
+is given by a matrix exponential of
+the scaled `infinitestimal rate matrix <https://en.wikipedia.org/wiki/Transition_rate_matrix>`_ of the Markov chain,
+which can be computed as follows:
+
+.. code-block:: python
+
+   Q = (transition_matrix - np.eye(len(alleles)))
+   Pt = scipy.linalg.expm(t * rate * Q)[i,j]
+
+If the top of a branch of length :math:`t` has allele :math:`i`,
+the bottom of the branch has allele :math:`j` with probability :math:`P[i,j]`.
 
 
 
