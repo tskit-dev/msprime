@@ -479,6 +479,7 @@ of different random mutational processes on top of a single simulated topology,
 or if we have obtained the tree sequence from another program and wish to
 overlay neutral mutations on this tree sequence.
 
+
 .. autoclass:: msprime.InfiniteSites
 
 .. data:: msprime.BINARY == 0
@@ -492,6 +493,112 @@ overlay neutral mutations on this tree sequence.
     chosen from the characters "A", "C", "G" and "T".
 
 .. autofunction:: msprime.mutate
+
+++++++++++++++++++++++
+Mutation Matrix Models
+++++++++++++++++++++++
+
+Mutation matrix models are specified by three things: an alphabet,
+a root distribution, and a transition matrix.
+These leave one free parameter: an overall mutation rate,
+specified by the mutation ``rate`` in the call to :func:`.mutate`.
+Concisely,
+the underlying model of mutation is a continuous-time Markov chain on the alphabet,
+started by a draw from ``root_distribution``, and
+with instantaneous transition rate from ``i`` to ``j`` that is equal to
+``rate`` multiplied by ``transition_matrix[i,j]``.
+The ``root distribution`` and every row in the ``transition_matrix``
+must give *probabilities*, i.e., they must be nonnegative numbers summing to 1.
+
+To interpret the implications,
+it helps to know how the underlying mutational process is implemented.
+First, "possible" mutations are placed on the tree,
+with a mean density equal to the ``rate``, per unit of time and sequence length.
+If ``discrete=False`` then this is an infinite-sites model,
+so each possible mutation occurs at a distinct location.
+If ``discrete=True`` then at each integer position,
+each branch of the tree at that position gets a Poisson number of mutations
+with mean equal to ``rate`` multiplied by the length of the branch.
+Next, each site that has a possible mutation is assigned an ancestral state,
+i.e., the allele at the root of the tree at that position,
+by drawing an allele from the probabilities in the ``root_distribution``.
+Now, each possible mutation is examined, moving down the tree.
+For each, a derived state is chosen using the probabilities given in the
+row of the ``transition_matrix`` that corresponds to the "parental state",
+i.e., the allele that this mutation will replace.
+Importantly, if the chosen allele is the *same* as the parental allele,
+no mutation is recorded (that's why they were called "possible mutations").
+And, any site at which no mutations are recorded is not recorded either.
+
+This arrangement is necessary to fully specify Markov models of mutation,
+with a free "mutation rate" parameter.
+However, there are some surprising consequences.
+For instance, the distribution of ancestral alleles, across all sites,
+is *not* necessarily equal to the root distribution.
+This is because the root distribution gives the distribution of
+"ancestral" alleles across the entire sequence,
+but we only see the ancestral alleles at *mutated* sites,
+and some alleles may have a higher mutation rate than others.
+For instance, if we have
+
+.. code-block:: python
+
+   alleles = ["A", "C", "G", "T"]
+   root_distribution = np.array([0.25, 0.25, 0.25, 0.25])
+   transition_matrix = np.array([
+      [0.25, 0.25, 0.25, 0.25],
+      [ 0.3,  0.0,  0.4,  0.3],
+      [ 0.3,  0.4,  0.0,  0.3],
+      [0.25, 0.25, 0.25, 0.25]
+   ])
+
+then A and T alleles have a 25% lower mutation rate than do C and G alleles,
+since 25% of the time that we consider mutating them, we leave them unchanged.
+From the properties of the Poisson distribution,
+the probability that a tree of total length :math:`T`
+has no mutations at a given discrete site is :math:`\exp(-rT)`,
+if mutations are put down at a rate of :math:`r`.
+Suppose that a single tree of total length :math:`T = 1.5`
+extends over many discrete sites,
+and that mutations are placed on it at rate :math:`r = 2.0`.
+Every site that is assigned a "C" or "G" ancestral allele is retained,
+but of those sites that are assigned an "A" or "T",
+some are not recorded in the resulting tree sequence.
+The expected proportions of the ancestral states
+across all sites is proportional to the root distribution
+multiplied by the probability that at least one mutation is retained on the tree.
+In this situation it can be computed as follows:
+
+.. code-block:: python
+
+   r = 2.0
+   T = 1.5
+   prob_mut = 1.0 - np.diag(transition_matrix)
+   ancestral_state_distribution = root_distribution * (1 - exp(- r * T * prob_mut))
+   ancestral_state_distribution /= sum(ancestral_state_distribution)
+
+Two more facts about Markov chains are useful to interpret the statistics
+of these mutation models.
+First, suppose we have tabulated all mutations, and so for each pair of alleles
+:math:`i` and :math:`j` we have the proportion of mutations that caused an :math:`i \to j` change.
+If allele :math:`i` mutates to a different allele, the chance it mutates to allele :math:`j`
+is proportional to ``transition_matrix[i,j]`` but excluding the diagonal (no-change) entry,
+so is equal to ``transition_matrix[i,j] / (1 - transition_matrix[i,i])``.
+Second, suppose that an ancestor carries allele :math:`i` at a given position.
+The probability that her descendant some time :math:`t` in the future carries allele :math:`j` at that position
+is given by a matrix exponential of
+the scaled `infinitestimal rate matrix <https://en.wikipedia.org/wiki/Transition_rate_matrix>`_ of the Markov chain,
+which can be computed as follows:
+
+.. code-block:: python
+
+   Q = (transition_matrix - np.eye(len(alleles)))
+   Pt = scipy.linalg.expm(t * rate * Q)[i,j]
+
+If the top of a branch of length :math:`t` has allele :math:`i`,
+the bottom of the branch has allele :math:`j` with probability :math:`P[i,j]`.
+
+
 
 *********************************
 Evaluating sampling probabilities
