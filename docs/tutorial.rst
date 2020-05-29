@@ -486,7 +486,29 @@ Coalescent simulation moves from the present back into the past,
 so times are in units of generations *ago*, and we build the model
 with most recent events first.
 
-.. todo:: Add a diagram of the model for convenience.
+The code below is provided as an example to help you develop your
+own models. If you want to use this precise model in your analyses
+we strongly recommend using
+`stdpopsim <https://stdpopsim.readthedocs.io/en/stable/introduction.html#sec-introduction>`__
+which provides a community maintained
+`catalog <https://stdpopsim.readthedocs.io/en/stable/catalog.html#sec-catalog>`__
+of simulation species information and demographic models. The
+model given here is identical to the
+`HomSam/OutOfAfrica_3G09 <https://stdpopsim.readthedocs.io/en/stable/catalog.html#sec_catalog_homsap_models_outofafrica_3g09>`__
+model.
+
+.. warning::
+
+    The version of this model in the tutorial from 31 May 2016 to 29 May 2020
+    (on the stable branch) was **incorrect**. Specifically, it mistakenly
+    allowed for migration to continue beyond the merger of the African and
+    Eurasian bottleneck populations. This has now been fixed, but if you had
+    copied this model from the tutorial for your own analyses, you should
+    update your model code or use the implementation that has been verified in
+    `stdpopsim <https://stdpopsim.readthedocs.io/en/stable/introduction.html#sec-introduction>`__.
+    See `here <https://github.com/jeromekelleher/msprime-model-errors>`__ for more
+    details on the faulty model and its likely effects on downstream analyses.
+
 
 .. code-block:: python
 
@@ -545,6 +567,7 @@ with most recent events first.
             # Population B merges into YRI at T_B
             msprime.MassMigration(
                 time=T_B, source=1, destination=0, proportion=1.0),
+            msprime.MigrationRateChange(time=T_B, rate=0),
             # Size changes to N_A at T_AF
             msprime.PopulationParametersChange(
                 time=T_AF, initial_size=N_A, population_id=0)
@@ -604,8 +627,8 @@ sizes and growth rates are all as you intend during each epoch::
     ================================
          start     end      growth_rate |     0        1        2
        -------- --------       -------- | -------- -------- --------
-    0 | 7.3e+03  7.3e+03              0 |     0     0.00025     0
-    1 | 2.1e+03  2.1e+03              0 |  0.00025     0        0
+    0 | 7.3e+03  7.3e+03              0 |     0        0        0
+    1 | 2.1e+03  2.1e+03              0 |     0        0        0
     2 |5.17e-17     0            0.0055 |     0        0        0
 
 .. warning:: The output of the :meth:`.DemographyDebugger.print_history` method
@@ -662,28 +685,28 @@ This tells us that the genetic material ancestral to the present day sample was 
 
     >>> print(ts.tables.nodes)
     id  flags   population  individual  time    metadata
-    0   1       0   -1  0.00000000000000    
-    1   1       0   -1  0.00000000000000    
-    2   1       1   -1  0.00000000000000    
-    3   1       1   -1  0.00000000000000    
-    4   0       1   -1  2350.08685279051815 
-    5   0       1   -1  3759.20387382847684 
-    6   0       0   -1  4234.97992185234671 
-    7   0       1   -1  4598.83898042243527 
-    8   1048576 0   -1  5000.00000000000000 
-    9   1048576 0   -1  5000.00000000000000 
-    10  1048576 0   -1  5000.00000000000000 
-    11  1048576 0   -1  5000.00000000000000 
-    12  1048576 1   -1  5000.00000000000000 
-    13  1048576 1   -1  5000.00000000000000 
-    14  0       1   -1  5246.90282987397495 
+    0   1       0   -1  0.00000000000000
+    1   1       0   -1  0.00000000000000
+    2   1       1   -1  0.00000000000000
+    3   1       1   -1  0.00000000000000
+    4   0       1   -1  2350.08685279051815
+    5   0       1   -1  3759.20387382847684
+    6   0       0   -1  4234.97992185234671
+    7   0       1   -1  4598.83898042243527
+    8   1048576 0   -1  5000.00000000000000
+    9   1048576 0   -1  5000.00000000000000
+    10  1048576 0   -1  5000.00000000000000
+    11  1048576 0   -1  5000.00000000000000
+    12  1048576 1   -1  5000.00000000000000
+    13  1048576 1   -1  5000.00000000000000
+    14  0       1   -1  5246.90282987397495
     15  0       0   -1  8206.73121309170347
 
 If we wish to study these ancestral haplotypes further, we can simplify the tree sequence
 with respect to the census nodes and perform subsequent analyses on this simplified tree
 sequence.
 In this example, ``ts_anc`` is a tree sequence obtained from the original tree sequence
-``ts`` by labelling the census nodes as samples and removing all nodes and edges that are 
+``ts`` by labelling the census nodes as samples and removing all nodes and edges that are
 not ancestral to these census nodes.
 
 .. code-block:: python
