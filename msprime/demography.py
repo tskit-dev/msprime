@@ -477,6 +477,7 @@ class DemographyDebugger:
                 pop_config.sample_size = sample_size
         self.migration_matrix = migration_matrix
         self.population_configurations = population_configurations
+        self._check_misspecification()
 
     def _make_epochs(self, simulator, demographic_events):
         self.epochs = []
@@ -511,6 +512,24 @@ class DemographyDebugger:
                 Epoch(start_time, end_time, populations, migration_matrix, events)
             )
             start_time = end_time
+
+    def _check_misspecification(self):
+        """
+        Check for things that might indicate model misspecification.
+        """
+        merged_pops = set()
+        for epoch in self.epochs:
+            for de in epoch.demographic_events:
+                if isinstance(de, MassMigration) and de.proportion == 1:
+                    merged_pops.add(de.source)
+            mm = epoch.migration_matrix
+            for k in merged_pops:
+                if any(mm[k, :] != 0) or any(mm[:, k] != 0):
+                    warnings.warn(
+                        "Non-zero migration rates exist after merging "
+                        f"population {k}. This almost certainly indicates "
+                        "demographic misspecification."
+                    )
 
     def _print_populations(self, epoch, output):
         field_width = self._precision + 6

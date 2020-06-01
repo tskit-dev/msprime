@@ -25,6 +25,7 @@ import math
 import random
 import tempfile
 import unittest
+import warnings
 from unittest import mock
 
 import numpy as np
@@ -455,10 +456,10 @@ class TestDemographyDebuggerOutput(unittest.TestCase):
         demographic_events = [
             msprime.PopulationParametersChange(0.1, initial_size=2),
             msprime.PopulationParametersChange(0.1, growth_rate=10),
-            msprime.MassMigration(0.2, source=1, dest=0),
-            msprime.MigrationRateChange(0.2, rate=0),
-            msprime.MigrationRateChange(0.4, matrix_index=(0, 1), rate=1),
-            msprime.MigrationRateChange(0.4, matrix_index=(1, 0), rate=1),
+            msprime.MigrationRateChange(0.2, matrix_index=(0, 1), rate=1),
+            msprime.MigrationRateChange(0.2, matrix_index=(1, 0), rate=1),
+            msprime.MassMigration(0.4, source=1, dest=0),
+            msprime.MigrationRateChange(0.4, rate=0),
             msprime.InstantaneousBottleneck(0.5, population=0, strength=100),
             msprime.CensusEvent(0.55),
         ]
@@ -475,7 +476,7 @@ class TestDemographyDebugger(unittest.TestCase):
 
     def verify_arrays(self, dd):
         """
-        Check that the array properties that we genereate are computed correctly.
+        Check that the array properties that we generate are computed correctly.
         """
         pop_size = dd.population_size_history
         times = dd.epoch_times
@@ -730,6 +731,33 @@ class TestDemographyDebugger(unittest.TestCase):
             self.assertEqual(e.populations[0].end_size, n0)
             self.assertEqual(e.populations[1].start_size, n1)
             self.assertEqual(e.populations[1].end_size, n1)
+
+    def check_model_misspecification_warning(self, misspecify):
+        population_configurations = [
+            msprime.PopulationConfiguration(initial_size=1000),
+            msprime.PopulationConfiguration(initial_size=1000),
+        ]
+        migration_matrix = [[0, 1e-5], [0, 0]]
+        demographic_events = [
+            msprime.MassMigration(time=1000, dest=0, source=1, proportion=1),
+        ]
+        if not misspecify:
+            demographic_events.append(msprime.MigrationRateChange(time=1000, rate=0))
+        msprime.DemographyDebugger(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            migration_matrix=migration_matrix,
+        )
+
+    def test_misspecification_warning(self):
+        with warnings.catch_warnings(record=True) as w:
+            self.check_model_misspecification_warning(misspecify=True)
+            self.assertEqual(len(w), 1)
+
+    def test_no_misspecification_no_warning(self):
+        with warnings.catch_warnings(record=True) as w:
+            self.check_model_misspecification_warning(misspecify=False)
+            self.assertEqual(len(w), 0)
 
 
 class TestDemographyTrajectories(unittest.TestCase):
@@ -2951,11 +2979,13 @@ class TestPossibleLineages(unittest.TestCase):
             msprime.PopulationConfiguration(initial_size=100),
             msprime.PopulationConfiguration(initial_size=100),
         ]
-        dd = msprime.DemographyDebugger(
-            demographic_events=dem_events,
-            population_configurations=pop_config,
-            migration_matrix=mig_mat,
-        )
+        # suppress the migrations-after-merging warning
+        with warnings.catch_warnings(record=True):
+            dd = msprime.DemographyDebugger(
+                demographic_events=dem_events,
+                population_configurations=pop_config,
+                migration_matrix=mig_mat,
+            )
         lineages = dd.possible_lineage_locations(samples=samples)
         self.assertTrue(len(lineages) == 1)
         self.assertTrue(np.all(lineages[(0, np.inf)] == [1, 1]))
