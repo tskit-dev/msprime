@@ -133,7 +133,7 @@ class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
             random_seed=2,
             end_time=100,
             demographic_events=[
-                msprime.SimulationModelChange(10, msprime.StandardCoalescent(1))
+                msprime.SimulationModelChange(10, msprime.StandardCoalescent())
             ],
         )
         self.verify(ts)
@@ -673,11 +673,11 @@ class BaseEquivalanceMixin:
 
 
 class TestBaseEquivalanceHudson(BaseEquivalanceMixin, unittest.TestCase):
-    model = msprime.StandardCoalescent(1)
+    model = msprime.StandardCoalescent()
 
 
 class TestBaseEquivalanceWrightFisher(BaseEquivalanceMixin, unittest.TestCase):
-    model = msprime.DiscreteTimeWrightFisher(10)
+    model = msprime.DiscreteTimeWrightFisher()
 
 
 class TestDemography(unittest.TestCase):

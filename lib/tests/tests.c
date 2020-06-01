@@ -297,7 +297,9 @@ test_dtwf_simultaneous_historical_samples(void)
     ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
 
-    ret = msp_set_simulation_model_dtwf(&msp, 100);
+    ret = msp_set_simulation_model_dtwf(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 100, 0);
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_initialise(&msp);
@@ -350,12 +352,14 @@ test_single_locus_historical_sample(void)
         CU_ASSERT_EQUAL(ret, 0);
 
         if (j == 0) {
-            ret = msp_set_simulation_model_hudson(&msp, 1);
+            ret = msp_set_simulation_model_hudson(&msp);
             CU_ASSERT_EQUAL(ret, 0);
         } else {
-            ret = msp_set_simulation_model_dtwf(&msp, 100);
+            ret = msp_set_simulation_model_dtwf(&msp);
             CU_ASSERT_EQUAL(ret, 0);
         }
+        ret = msp_set_population_configuration(&msp, 0, 100, 0);
+        CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(&msp);
         CU_ASSERT_EQUAL(ret, 0);
 
@@ -416,10 +420,10 @@ test_single_locus_multiple_historical_samples(void)
         CU_ASSERT_EQUAL(ret, 0);
 
         if (j == 0) {
-            ret = msp_set_simulation_model_hudson(&msp, 1);
+            ret = msp_set_simulation_model_hudson(&msp);
             CU_ASSERT_EQUAL(ret, 0);
         } else {
-            ret = msp_set_simulation_model_dtwf(&msp, 100);
+            ret = msp_set_simulation_model_dtwf(&msp);
             CU_ASSERT_EQUAL(ret, 0);
         }
         ret = msp_initialise(&msp);
@@ -477,12 +481,14 @@ test_single_locus_historical_sample_start_time(void)
             ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
             CU_ASSERT_EQUAL(ret, 0);
             if (model == 0) {
-                ret = msp_set_simulation_model_hudson(&msp, 0.25);
+                ret = msp_set_simulation_model_hudson(&msp);
                 CU_ASSERT_EQUAL(ret, 0);
             } else {
-                ret = msp_set_simulation_model_dtwf(&msp, 100);
+                ret = msp_set_simulation_model_dtwf(&msp);
                 CU_ASSERT_EQUAL(ret, 0);
             }
+            ret = msp_set_population_configuration(&msp, 0, 100, 0);
+            CU_ASSERT_EQUAL(ret, 0);
             ret = msp_set_start_time(&msp, start_times[j]);
             CU_ASSERT_EQUAL(ret, 0);
             ret = msp_initialise(&msp);
@@ -547,12 +553,14 @@ test_single_locus_historical_sample_end_time(void)
         ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
         CU_ASSERT_EQUAL(ret, 0);
         if (model == 0) {
-            ret = msp_set_simulation_model_hudson(&msp, 100);
+            ret = msp_set_simulation_model_hudson(&msp);
             CU_ASSERT_EQUAL(ret, 0);
         } else {
-            ret = msp_set_simulation_model_dtwf(&msp, 100);
+            ret = msp_set_simulation_model_dtwf(&msp);
             CU_ASSERT_EQUAL(ret, 0);
         }
+        ret = msp_set_population_configuration(&msp, 0, 100, 0);
+        CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(&msp);
         CU_ASSERT_EQUAL(ret, 0);
 
@@ -657,9 +665,10 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_set_population_configuration(&msp, 3, 0, 0),
         MSP_ERR_POPULATION_OUT_OF_BOUNDS);
 
-    ret = msp_set_simulation_model_hudson(&msp, Ne);
+    ret = msp_set_simulation_model_hudson(&msp);
     CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
-    CU_ASSERT_EQUAL(msp_get_model(&msp)->reference_size, Ne);
+    ret = msp_set_population_configuration(&msp, 0, Ne, 0);
+    CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
@@ -781,12 +790,15 @@ test_demographic_events(void)
         CU_ASSERT_EQUAL(ret, 0);
 
         if (model == 0) {
-            ret = msp_set_simulation_model_hudson(&msp, 0.25);
+            ret = msp_set_simulation_model_hudson(&msp);
             CU_ASSERT_EQUAL(ret, 0);
         } else {
-            ret = msp_set_simulation_model_dtwf(&msp, 100);
+            ret = msp_set_simulation_model_dtwf(&msp);
             CU_ASSERT_EQUAL(ret, 0);
         }
+
+        ret = msp_set_population_configuration(&msp, 0, 100, 0);
+        CU_ASSERT_EQUAL(ret, 0);
 
         CU_ASSERT_EQUAL(msp_add_mass_migration(&msp, 10, -1, 0, 1),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
@@ -1015,7 +1027,7 @@ test_dtwf_events_between_generations(void)
 
     ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(&msp, 1);
+    ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_set_num_populations(&msp, 2);
@@ -1093,7 +1105,7 @@ test_dtwf_zero_pop_size(void)
     /* DTWF population size must round to >= 1 */
     ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(&msp, 1);
+    ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_population_configuration(&msp, 0, 0.4, 0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1107,7 +1119,7 @@ test_dtwf_zero_pop_size(void)
     tsk_table_collection_clear(&tables);
     ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(&msp, 1);
+    ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_population_configuration(&msp, 0, 10, 100);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1155,7 +1167,7 @@ test_demographic_events_start_time(void)
             CU_ASSERT_EQUAL(ret, 0);
             ret = msp_add_population_parameters_change(msp, 0.4, 0, 0.5, 1.0);
             CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_set_simulation_model_hudson(msp, 0.25);
+            ret = msp_set_simulation_model_hudson(msp);
             CU_ASSERT_EQUAL(ret, 0);
         } else {
             /* Times need to be bumped to integer values for DTWF */
@@ -1163,7 +1175,7 @@ test_demographic_events_start_time(void)
             CU_ASSERT_EQUAL(ret, 0);
             ret = msp_add_population_parameters_change(msp, 1, 0, 0.5, 1.0);
             CU_ASSERT_EQUAL(ret, 0);
-            ret = msp_set_simulation_model_dtwf(msp, 1);
+            ret = msp_set_simulation_model_dtwf(msp);
             CU_ASSERT_EQUAL(ret, 0);
         }
 
@@ -1209,7 +1221,7 @@ test_dtwf_unsupported_bottleneck(void)
 
     ret = msp_add_simple_bottleneck(&msp, 0.8, 0, 0.5);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(&msp, 1);
+    ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1218,11 +1230,11 @@ test_dtwf_unsupported_bottleneck(void)
 
     ret = msp_reset(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_hudson(&msp, 1);
+    ret = msp_set_simulation_model_hudson(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_instantaneous_bottleneck(&msp, 0.8, 0, 0.5);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(&msp, 1);
+    ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK);
@@ -1326,10 +1338,12 @@ test_pedigree_multi_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_pedigree(msp, num_inds, inds, parents, times, is_sample);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(msp, 0, N, 0);
+    CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_wf_ped(msp, n);
+    ret = msp_set_simulation_model_wf_ped(msp);
     CU_ASSERT_EQUAL(ret, 0);
     model_name = msp_get_model_name(msp);
     CU_ASSERT_STRING_EQUAL(model_name, "wf_ped");
@@ -1337,7 +1351,7 @@ test_pedigree_multi_locus_simulation(void)
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
     msp_verify(msp, 0);
-    ret = msp_set_simulation_model_dtwf(msp, N);
+    ret = msp_set_simulation_model_dtwf(msp);
     CU_ASSERT_EQUAL(ret, 0);
     model_name = msp_get_model_name(msp);
     CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
@@ -1399,7 +1413,7 @@ test_pedigree_specification(void)
 
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_wf_ped(msp, n);
+    ret = msp_set_simulation_model_wf_ped(msp);
     CU_ASSERT_EQUAL(ret, 0);
     model_name = msp_get_model_name(msp);
     CU_ASSERT_STRING_EQUAL(model_name, "wf_ped");
@@ -1438,7 +1452,6 @@ test_pedigree_single_locus_simulation(void)
     double times[4] = { 0, 0, 1, 1 };
     tsk_flags_t is_sample[4] = { 1, 1, 0, 0 };
     tsk_flags_t bad_is_sample[4] = { 1, 0, 0, 0 };
-    uint32_t N = 4;
     uint32_t n = 2 * ploidy;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
@@ -1464,10 +1477,12 @@ test_pedigree_single_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PEDIGREE_ID);
     ret = msp_set_pedigree(msp, num_inds, inds, parents, times, is_sample);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_wf_ped(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(msp, 0, n, 0);
+    CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_initialise(msp);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_wf_ped(msp, n);
     CU_ASSERT_EQUAL(ret, 0);
     model_name = msp_get_model_name(msp);
     CU_ASSERT_STRING_EQUAL(model_name, "wf_ped");
@@ -1477,7 +1492,7 @@ test_pedigree_single_locus_simulation(void)
     msp_verify(msp, 0);
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_STATE);
-    ret = msp_set_simulation_model_dtwf(msp, N);
+    ret = msp_set_simulation_model_dtwf(msp);
     CU_ASSERT_EQUAL(ret, 0);
     model_name = msp_get_model_name(msp);
     CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
@@ -1537,7 +1552,7 @@ test_dtwf_deterministic(void)
         gsl_rng_set(rng, seed);
         ret = msp_alloc(msp, n, samples, &recomb_map, &tables[j], rng);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_simulation_model_dtwf(msp, n);
+        ret = msp_set_simulation_model_dtwf(msp);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_population_configuration(msp, 0, n, 0);
         CU_ASSERT_EQUAL(ret, 0);
@@ -1597,7 +1612,7 @@ test_mixed_model_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(msp, 3);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(msp, N);
+    ret = msp_set_simulation_model_dtwf(msp);
     CU_ASSERT_EQUAL(ret, 0);
     /* Set the populations to 1, 2, and 3N. We don't simulate them,
      * but they should be equal at the end */
@@ -1628,14 +1643,14 @@ test_mixed_model_simulation(void)
             CU_ASSERT_EQUAL(model, MSP_MODEL_HUDSON);
             model_name = msp_get_model_name(msp);
             CU_ASSERT_STRING_EQUAL(model_name, "hudson");
-            ret = msp_set_simulation_model_dtwf(msp, N);
+            ret = msp_set_simulation_model_dtwf(msp);
             CU_ASSERT_EQUAL(ret, 0);
         } else {
             model = msp_get_model(msp)->type;
             CU_ASSERT_EQUAL(model, MSP_MODEL_DTWF);
             model_name = msp_get_model_name(msp);
             CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
-            ret = msp_set_simulation_model_hudson(msp, N);
+            ret = msp_set_simulation_model_hudson(msp);
             CU_ASSERT_EQUAL(ret, 0);
         }
         j++;
@@ -1693,7 +1708,7 @@ test_dtwf_single_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(msp, n);
+    ret = msp_set_simulation_model_dtwf(msp);
     CU_ASSERT_EQUAL(ret, 0);
     model_name = msp_get_model_name(msp);
     CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
@@ -1744,9 +1759,11 @@ test_dtwf_low_recombination(void)
     memset(samples, 0, n * sizeof(sample_t));
     ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_initialise(msp);
+    ret = msp_set_simulation_model_dtwf(msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(msp, 1e3);
+    ret = msp_set_population_configuration(msp, 0, n, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
@@ -1934,7 +1951,9 @@ test_dtwf_multi_locus_simulation(void)
     memset(samples, 0, n * sizeof(sample_t));
     ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(msp, n);
+    ret = msp_set_simulation_model_dtwf(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(msp, 0, n, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1962,7 +1981,9 @@ test_dtwf_multi_locus_simulation(void)
     tsk_table_collection_clear(&tables);
     ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_simulation_model_dtwf(msp, n);
+    ret = msp_set_simulation_model_dtwf(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(msp, 0, n, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1996,9 +2017,9 @@ static void
 test_gene_conversion_simulation(void)
 {
     int ret;
-    uint32_t n = 100;
-    uint32_t m = 100;
-    double track_lengths[] = { 1.0, 1.3333, 5, 100 };
+    uint32_t n = 10;
+    uint32_t m = 10;
+    double track_lengths[] = { 1.0, 1.3333, 5, 10 };
     long seed = 10;
     size_t j, num_events, num_ca_events, num_re_events, num_gc_events;
     recomb_map_t recomb_map;
@@ -2008,12 +2029,10 @@ test_gene_conversion_simulation(void)
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
 
-    num_events = 0;
-
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, m, 1.0, true);
+    ret = recomb_map_alloc_uniform(&recomb_map, m, 0.1, true);
     CU_ASSERT_EQUAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2028,6 +2047,7 @@ test_gene_conversion_simulation(void)
         ret = msp_initialise(msp);
         CU_ASSERT_EQUAL(ret, 0);
 
+        num_events = 0;
         while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
             msp_verify(msp, MSP_VERIFY_BREAKPOINTS);
             num_events++;
@@ -2794,13 +2814,13 @@ test_multi_locus_simulation(void)
             CU_ASSERT_EQUAL(ret, 0);
             switch (j) {
                 case 0:
-                    ret = msp_set_simulation_model_hudson(msp, 0.25);
+                    ret = msp_set_simulation_model_hudson(msp);
                     break;
                 case 1:
-                    ret = msp_set_simulation_model_smc(msp, 0.25);
+                    ret = msp_set_simulation_model_smc(msp);
                     break;
                 case 2:
-                    ret = msp_set_simulation_model_smc_prime(msp, 0.25);
+                    ret = msp_set_simulation_model_smc_prime(msp);
                     break;
             }
             ret = msp_set_store_full_arg(msp, store_full_arg[k]);
@@ -3044,8 +3064,8 @@ test_large_bottleneck_simulation(void)
 {
     int ret;
     uint32_t j;
-    uint32_t n = 10000;
-    uint32_t m = 100;
+    uint32_t n = 1000;
+    uint32_t m = 10;
     long seed = 10;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
@@ -3084,6 +3104,8 @@ test_large_bottleneck_simulation(void)
             msp, bottlenecks[j].time, 0, bottlenecks[j].parameter);
         CU_ASSERT_EQUAL(ret, 0);
     }
+    ret = msp_set_population_configuration(msp, 0, 0.25, 0);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
 
@@ -3119,98 +3141,6 @@ test_large_bottleneck_simulation(void)
     tsk_table_collection_free(&tables);
 }
 
-#define check_time_change(msp, t)                                                       \
-    do {                                                                                \
-        const double tol = 1e-4;                                                        \
-        double g, t2;                                                                   \
-        g = (msp)->model.model_time_to_generations(&(msp)->model, t);                   \
-        t2 = (msp)->model.generations_to_model_time(&(msp)->model, g);                  \
-        CU_ASSERT_DOUBLE_EQUAL(t, t2, tol);                                             \
-        g = (msp)->model.model_rate_to_generation_rate(&(msp)->model, t);               \
-        t2 = (msp)->model.generation_rate_to_model_rate(&(msp)->model, g);              \
-        CU_ASSERT_DOUBLE_EQUAL(t, t2, tol);                                             \
-    } while (0)
-
-static void
-check_model_time_change_consistency(double population_size, double t)
-{
-    int ret;
-    int j, k;
-    msp_t msp;
-    const unsigned int n = 10;
-    const double N2 = population_size * population_size;
-    const double psis[] = { 1e-6, 0.01, 0.5, 0.9, 1 };
-    const double cs[] = { 0.01 * N2, 0.5 * N2, 0.99 * N2 };
-    const double alphas[] = { 1.1, 1.5, 1.9 };
-    const double truncation_points[] = { 0.1, 0.5, 0.9, 1 };
-    sample_t *samples = malloc(n * sizeof(sample_t));
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
-    tsk_table_collection_t tables;
-
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = tsk_table_collection_init(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_FATAL(samples != NULL);
-    CU_ASSERT_FATAL(rng != NULL);
-    memset(samples, 0, n * sizeof(*samples));
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    ret = msp_set_simulation_model_hudson(&msp, population_size);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    check_time_change(&msp, t);
-    ret = msp_set_simulation_model_smc(&msp, population_size);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    check_time_change(&msp, t);
-    ret = msp_set_simulation_model_smc_prime(&msp, population_size);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    check_time_change(&msp, t);
-    ret = msp_set_simulation_model_dtwf(&msp, population_size);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    check_time_change(&msp, t);
-    ret = msp_set_simulation_model_wf_ped(&msp, population_size);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    check_time_change(&msp, t);
-
-    for (j = 0; j < sizeof(psis) / sizeof(*psis); j++) {
-        for (k = 0; k < sizeof(cs) / sizeof(*cs); k++) {
-            ret = msp_set_simulation_model_dirac(&msp, population_size, psis[j], cs[k]);
-            CU_ASSERT_EQUAL_FATAL(ret, 0);
-            check_time_change(&msp, t);
-        }
-    }
-
-    for (j = 0; j < sizeof(alphas) / sizeof(*alphas); j++) {
-        for (k = 0; k < sizeof(truncation_points) / sizeof(*truncation_points); k++) {
-            ret = msp_set_simulation_model_beta(
-                &msp, population_size, alphas[j], truncation_points[k]);
-            CU_ASSERT_EQUAL_FATAL(ret, 0);
-            check_time_change(&msp, t);
-        }
-    }
-
-    msp_free(&msp);
-    recomb_map_free(&recomb_map);
-    tsk_table_collection_free(&tables);
-    free(samples);
-    gsl_rng_free(rng);
-}
-
-static void
-test_model_time_change_consistency(void)
-{
-    double Ns[] = { 1e-6, 1, 10, 1e4, 1e9 };
-    int i;
-    for (i = 0; i < sizeof(Ns) / sizeof(*Ns); i++) {
-        check_model_time_change_consistency(Ns[i], 0.0);
-        check_model_time_change_consistency(Ns[i], 1.0 / Ns[i]);
-        check_model_time_change_consistency(Ns[i], Ns[i]);
-        check_model_time_change_consistency(Ns[i], 100.0 * Ns[i]);
-    }
-}
-
 static void
 test_dirac_coalescent_bad_parameters(void)
 {
@@ -3236,11 +3166,11 @@ test_dirac_coalescent_bad_parameters(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < sizeof(cs) / sizeof(*cs); j++) {
-        ret = msp_set_simulation_model_dirac(&msp, 1, 0.1, cs[j]);
+        ret = msp_set_simulation_model_dirac(&msp, 0.1, cs[j]);
         CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_C);
     }
     for (j = 0; j < sizeof(psis) / sizeof(*psis); j++) {
-        ret = msp_set_simulation_model_dirac(&msp, 1, psis[j], 10);
+        ret = msp_set_simulation_model_dirac(&msp, psis[j], 10);
         CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PSI);
     }
 
@@ -3276,11 +3206,11 @@ test_beta_coalescent_bad_parameters(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < sizeof(alphas) / sizeof(*alphas); j++) {
-        ret = msp_set_simulation_model_beta(&msp, 1, alphas[j], 1);
+        ret = msp_set_simulation_model_beta(&msp, alphas[j], 1);
         CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_BETA_MODEL_ALPHA);
     }
     for (j = 0; j < sizeof(truncation_points) / sizeof(*truncation_points); j++) {
-        ret = msp_set_simulation_model_beta(&msp, 1, 1.5, truncation_points[j]);
+        ret = msp_set_simulation_model_beta(&msp, 1.5, truncation_points[j]);
         CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_TRUNCATION_POINT);
     }
 
@@ -3334,10 +3264,10 @@ test_multiple_mergers_simulation(void)
                 CU_ASSERT_EQUAL(ret, 0);
                 if (j == 0) {
                     ret = msp_set_simulation_model_dirac(
-                        msp, 1, psi_params[p][0], psi_params[p][1]);
+                        msp, psi_params[p][0], psi_params[p][1]);
                 } else {
                     ret = msp_set_simulation_model_beta(
-                        msp, 1, beta_params[p][0], beta_params[p][1]);
+                        msp, beta_params[p][0], beta_params[p][1]);
                 }
                 CU_ASSERT_EQUAL(ret, 0);
                 /* TODO check for adding various complications like multiple
@@ -3726,9 +3656,11 @@ verify_simulate_from(int model, recomb_map_t *recomb_map,
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     if (model == MSP_MODEL_DTWF) {
-        ret = msp_set_simulation_model_dtwf(&msp, 10);
+        ret = msp_set_simulation_model_dtwf(&msp);
         CU_ASSERT_EQUAL(ret, 0);
     }
+    ret = msp_set_population_configuration(&msp, 0, 10, 0);
+    CU_ASSERT_EQUAL(ret, 0);
     /* TODO add dirac and other models */
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4804,7 +4736,7 @@ verify_simple_genic_selection_trajectory(
     ret = msp_alloc(&msp, 2, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 0.25, 0.5, start_frequency, end_frequency, alpha, dt);
+        &msp, 0.5, start_frequency, end_frequency, alpha, dt);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4863,49 +4795,38 @@ test_sweep_genic_selection_bad_parameters(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 0.5, -0.01, 0.9, 0.1, 0.1);
+        &msp, 0.5, -0.01, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ALLELE_FREQUENCY);
     ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 0.5, 0.01, -0.9, 0.1, 0.1);
+        &msp, 0.5, 0.01, -0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ALLELE_FREQUENCY);
     ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 0.5, 10.01, 0.9, 0.1, 0.1);
+        &msp, 0.5, 10.01, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ALLELE_FREQUENCY);
     ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 0.5, 0.01, 10.9, 0.1, 0.1);
+        &msp, 0.5, 0.01, 10.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ALLELE_FREQUENCY);
 
-    ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 0.5, 0.1, 0.01, 0.1, 0.1);
+    ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.01, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRAJECTORY_START_END);
-    ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 0.5, 0.1, 0.1, 0.1, 0.1);
+    ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.1, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRAJECTORY_START_END);
 
-    ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 0.5, 0.1, 0.9, 0.1, 0.0);
+    ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, 0.1, 0.0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TIME_DELTA);
     ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 0.5, 0.1, 0.9, 0.1, -0.01);
+        &msp, 0.5, 0.1, 0.9, 0.1, -0.01);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TIME_DELTA);
 
-    ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, -1.0, 0.5, 0.1, 0.9, 0.1, 0.1);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_POPULATION_SIZE);
-
-    ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, -0.5, 0.1, 0.9, 0.1, 0.1);
+    ret = msp_set_simulation_model_sweep_genic_selection(&msp, -0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_POSITION);
-    ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 5.0, 0.1, 0.9, 0.1, 0.1);
+    ret = msp_set_simulation_model_sweep_genic_selection(&msp, 5.0, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_POSITION);
 
-    ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 0.5, 0.1, 0.9, 0.1, 0.1);
+    ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 0.5, 0.1, 0.9, -666, 0.1);
+    ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, -666, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_GENIC_SELECTION_ALPHA);
     /* The incorrect number of populations was specified */
     ret = msp_set_dimensions(&msp, 2, 2);
@@ -4939,8 +4860,7 @@ test_sweep_genic_selection_events(void)
 
     ret = msp_alloc(&msp, 2, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 0.5, 0.1, 0.9, 0.1, 0.1);
+    ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_dimensions(&msp, 1, 2);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4956,8 +4876,7 @@ test_sweep_genic_selection_events(void)
     samples[1].time = 0.1;
     ret = msp_alloc(&msp, 3, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, 1.0, 0.5, 0.1, 0.9, 0.1, 0.1);
+    ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_dimensions(&msp, 1, 2);
     CU_ASSERT_EQUAL(ret, 0);
@@ -4999,7 +4918,7 @@ verify_sweep_genic_selection(uint32_t num_loci, double growth_rate)
         ret = msp_set_dimensions(&msp, 1, 2);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_simulation_model_sweep_genic_selection(
-            &msp, 1, num_loci / 2, 0.1, 0.9, 0.1, 0.01);
+            &msp, num_loci / 2, 0.1, 0.9, 0.1, 0.01);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_population_configuration(&msp, 0, 1.0, growth_rate);
         CU_ASSERT_EQUAL(ret, 0);
@@ -5079,13 +4998,13 @@ test_sweep_genic_selection_time_change(void)
     for (j = 0; j < 10; j++) {
 
         ret = msp_set_simulation_model_sweep_genic_selection(
-            &msp, 10, num_loci / 2, 0.1, 0.9, 0.1, 0.01);
+            &msp, num_loci / 2, 0.1, 0.9, 0.1, 0.01);
         CU_ASSERT_EQUAL(ret, 0);
 
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(msp_get_time(&msp), t);
 
-        ret = msp_set_simulation_model_hudson(&msp, 2);
+        ret = msp_set_simulation_model_hudson(&msp);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL(msp_get_time(&msp), t);
     }
@@ -5367,7 +5286,6 @@ main(int argc, char **argv)
         { "test_bottleneck_simulation", test_bottleneck_simulation },
         { "test_dirac_coalescent_bad_parameters", test_dirac_coalescent_bad_parameters },
         { "test_beta_coalescent_bad_parameters", test_beta_coalescent_bad_parameters },
-        { "test_model_time_change_consistency", test_model_time_change_consistency },
         { "test_multiple_mergers_simulation", test_multiple_mergers_simulation },
         { "test_large_bottleneck_simulation", test_large_bottleneck_simulation },
         { "test_simple_recombination_map", test_simple_recomb_map },

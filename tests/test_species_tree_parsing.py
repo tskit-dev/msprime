@@ -29,7 +29,7 @@ def get_non_binary_tree(n):
     demographic_events = [
         msprime.SimpleBottleneck(time=0.1, population=0, proportion=0.5)
     ]
-    ts = msprime.simulate(n, demographic_events=demographic_events, random_seed=1)
+    ts = msprime.simulate(n, demographic_events=demographic_events, random_seed=3)
     tree = ts.first()
     found = False
     for u in tree.nodes():

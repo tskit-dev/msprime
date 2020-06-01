@@ -174,8 +174,6 @@ typedef struct _sweep_t {
 
 typedef struct _simulation_model_t {
     int type;
-    /* For coalescent models, the reference population size used to rescale time */
-    double reference_size;
     union {
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
@@ -183,13 +181,6 @@ typedef struct _simulation_model_t {
     } params;
     /* If the model allocates memory this function should be non-null. */
     void (*free)(struct _simulation_model_t *model);
-    /* Time and rate conversions */
-    double (*model_time_to_generations)(struct _simulation_model_t *model, double t);
-    double (*generations_to_model_time)(struct _simulation_model_t *model, double g);
-    double (*generation_rate_to_model_rate)(
-        struct _simulation_model_t *model, double rg);
-    double (*model_rate_to_generation_rate)(
-        struct _simulation_model_t *model, double rm);
 } simulation_model_t;
 
 typedef struct {
@@ -346,18 +337,15 @@ typedef struct {
 int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
     recomb_map_t *recomb_map, tsk_table_collection_t *from_ts_tables, gsl_rng *rng);
 int msp_set_start_time(msp_t *self, double start_time);
-int msp_set_simulation_model_hudson(msp_t *self, double population_size);
-int msp_set_simulation_model_smc(msp_t *self, double population_size);
-int msp_set_simulation_model_smc_prime(msp_t *self, double population_size);
-int msp_set_simulation_model_dtwf(msp_t *self, double population_size);
-int msp_set_simulation_model_wf_ped(msp_t *self, double population_size);
-int msp_set_simulation_model_dirac(
-    msp_t *self, double population_size, double psi, double c);
-int msp_set_simulation_model_beta(
-    msp_t *self, double population_size, double alpha, double truncation_point);
-int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double population_size,
-    double position, double start_frequency, double end_frequency, double alpha,
-    double dt);
+int msp_set_simulation_model_hudson(msp_t *self);
+int msp_set_simulation_model_smc(msp_t *self);
+int msp_set_simulation_model_smc_prime(msp_t *self);
+int msp_set_simulation_model_dtwf(msp_t *self);
+int msp_set_simulation_model_wf_ped(msp_t *self);
+int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
+int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
+int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
+    double start_frequency, double end_frequency, double alpha, double dt);
 
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);

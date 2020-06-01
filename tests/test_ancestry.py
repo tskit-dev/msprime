@@ -203,13 +203,6 @@ class TestSimulator(unittest.TestCase):
         self.assertEqual(sim.segment_block_size, 1)
         self.assertEqual(sim.node_mapping_block_size, 1)
 
-    def test_bad_inputs(self):
-        recomb_map = msprime.RecombinationMap.uniform_map(1, 0)
-        for bad_type in ["xd", None, 4.4]:
-            self.assertRaises(TypeError, msprime.Simulator, [(0, 0), (0, 0)], bad_type)
-        self.assertRaises(ValueError, msprime.Simulator, [], recomb_map)
-        self.assertRaises(ValueError, msprime.Simulator, [(0, 0)], recomb_map)
-
 
 class TestSimulatorFactory(unittest.TestCase):
     """
@@ -263,10 +256,10 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertRaises(ValueError, f, bad_value)
         for Ne in [1, 10, 1e5]:
             sim = f(Ne)
-            self.assertEqual(sim.model.reference_size, Ne)
+            self.assertEqual(sim.population_configurations[0].initial_size, Ne)
         # Test the default.
         sim = msprime.simulator_factory(10)
-        self.assertEqual(sim.model.reference_size, 1)
+        self.assertEqual(sim.population_configurations[0].initial_size, 1)
 
     def test_population_configurations(self):
         def f(configs):
@@ -471,32 +464,17 @@ class TestSimulatorFactory(unittest.TestCase):
             msprime.Sample(population=1, time=1),
             msprime.Sample(population=2, time=2),
         ]
-        # Ne = 1/4 to keep in coalescence units.
         sim = msprime.simulator_factory(
-            Ne=1 / 4, samples=samples, population_configurations=pop_configs
+            samples=samples, population_configurations=pop_configs
         )
         self.assertEqual(sim.samples, samples)
         ll_sim = sim.create_ll_instance()
         self.assertEqual(ll_sim.get_samples(), samples)
 
-    def test_specify_model_and_Ne(self):
-        # When them model reference size and Ne are both specified,
-        # Ne is ignored.
-        for Ne in [0.001, 1234, 1e6, 2 ** 32]:
-            sim = msprime.simulator_factory(
-                sample_size=2, Ne=Ne, model=msprime.SmcPrimeApproxCoalescent(20)
-            )
-            self.assertEqual(sim.model.reference_size, 20)
-
     def test_model_change_event_sizes(self):
         models = [
             msprime.SweepGenicSelection(
-                position=j,
-                start_frequency=j,
-                end_frequency=j,
-                alpha=j,
-                dt=j,
-                reference_size=j,
+                position=j, start_frequency=j, end_frequency=j, alpha=j, dt=j,
             )
             for j in range(1, 10)
         ]
@@ -507,7 +485,6 @@ class TestSimulatorFactory(unittest.TestCase):
                 msprime.SimulationModelChange(None, model) for model in models
             ],
         )
-        self.assertEqual(sim.model.reference_size, 10)
         self.assertEqual(len(sim.model_change_events), len(models))
         for event, model in zip(sim.model_change_events, models):
             self.assertEqual(
@@ -524,30 +501,25 @@ class TestSimulatorFactory(unittest.TestCase):
                 for _ in range(K)
             ],
         )
-        self.assertEqual(sim.model.reference_size, 10)
         self.assertEqual(len(sim.model_change_events), K)
         for event in sim.model_change_events:
-            self.assertEqual(event.model.reference_size, 10)
             self.assertEqual(event.time, None)
 
     def test_model_change_no_model_inherits_model_size(self):
-        main_model = msprime.SmcApproxCoalescent(100)
+        main_model = msprime.SmcApproxCoalescent()
         sim = msprime.simulator_factory(
+            Ne=100,
             sample_size=2,
             model=main_model,
             demographic_events=[
-                msprime.SimulationModelChange(1, msprime.DiscreteTimeWrightFisher(500)),
+                msprime.SimulationModelChange(1, msprime.DiscreteTimeWrightFisher()),
                 msprime.SimulationModelChange(2, None),
             ],
         )
-        self.assertEqual(sim.model.reference_size, 100)
         self.assertEqual(len(sim.model_change_events), 2)
         self.assertEqual(sim.model_change_events[0].time, 1)
-        self.assertEqual(sim.model_change_events[0].model.reference_size, 500)
-        # When model=None we change to the standard coalescent using the
-        # reference size set by the initial model.
+        # When model=None we change to the standard coalescent
         self.assertEqual(sim.model_change_events[1].time, 2)
-        self.assertEqual(sim.model_change_events[1].model.reference_size, 100)
         self.assertEqual(sim.model_change_events[1].model.name, "hudson")
 
     def test_model_change_no_model_inherits_Ne(self):
@@ -555,16 +527,13 @@ class TestSimulatorFactory(unittest.TestCase):
             sample_size=2,
             Ne=1500,
             demographic_events=[
-                msprime.SimulationModelChange(1, msprime.DiscreteTimeWrightFisher(500)),
+                msprime.SimulationModelChange(1, msprime.DiscreteTimeWrightFisher()),
                 msprime.SimulationModelChange(2, None),
             ],
         )
-        self.assertEqual(sim.model.reference_size, 1500)
         self.assertEqual(len(sim.model_change_events), 2)
         self.assertEqual(sim.model_change_events[0].time, 1)
-        self.assertEqual(sim.model_change_events[0].model.reference_size, 500)
         self.assertEqual(sim.model_change_events[1].time, 2)
-        self.assertEqual(sim.model_change_events[1].model.reference_size, 1500)
         self.assertEqual(sim.model_change_events[1].model.name, "hudson")
 
     def test_bad_sample_population_reference(self):
@@ -636,6 +605,12 @@ class TestSimulateInterface(unittest.TestCase):
         for ts in msprime.simulate(10, num_replicates=10):
             self.assertEqual(ts.num_provenances, 1)
             self.verify_provenance(ts.provenance(0))
+
+    def test_end_time(self):
+        ts = msprime.simulate(15, recombination_rate=2, random_seed=8, end_time=0.1)
+        for tree in ts.trees():
+            for root in tree.roots:
+                self.assertEqual(tree.time(root), 0.1)
 
     def test_replicates(self):
         n = 20
@@ -879,9 +854,9 @@ class TestReprRoundTrip(unittest.TestCase):
         examples = [
             msprime.SimulationModelChange(),
             msprime.SimulationModelChange(model="hudson"),
-            msprime.SimulationModelChange(model=msprime.DiscreteTimeWrightFisher(100)),
+            msprime.SimulationModelChange(model=msprime.DiscreteTimeWrightFisher()),
             msprime.SimulationModelChange(
-                model=msprime.BetaCoalescent(1000, alpha=1, truncation_point=2)
+                model=msprime.BetaCoalescent(alpha=1, truncation_point=2)
             ),
         ]
         self.assert_repr_round_trip(examples)
@@ -909,28 +884,16 @@ class TestReprRoundTrip(unittest.TestCase):
     def test_simulation_models(self):
         examples = [
             msprime.StandardCoalescent(),
-            msprime.StandardCoalescent(100),
             msprime.SmcApproxCoalescent(),
-            msprime.SmcApproxCoalescent(1234),
             msprime.SmcPrimeApproxCoalescent(),
-            msprime.SmcPrimeApproxCoalescent(1234),
             msprime.DiscreteTimeWrightFisher(),
-            msprime.DiscreteTimeWrightFisher(1234),
             msprime.WrightFisherPedigree(),
-            msprime.WrightFisherPedigree(1234),
             msprime.BetaCoalescent(),
-            msprime.BetaCoalescent(reference_size=10),
-            msprime.BetaCoalescent(reference_size=10, alpha=1, truncation_point=10),
+            msprime.BetaCoalescent(alpha=1, truncation_point=10),
             msprime.DiracCoalescent(),
-            msprime.DiracCoalescent(reference_size=10),
-            msprime.DiracCoalescent(reference_size=10, psi=1234, c=56),
+            msprime.DiracCoalescent(psi=1234, c=56),
             msprime.SweepGenicSelection(
-                reference_size=100,
-                position=1,
-                start_frequency=0.5,
-                end_frequency=0.9,
-                alpha=1,
-                dt=1e-4,
+                position=1, start_frequency=0.5, end_frequency=0.9, alpha=1, dt=1e-4,
             ),
         ]
         self.assert_repr_round_trip(examples)

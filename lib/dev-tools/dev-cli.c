@@ -167,7 +167,7 @@ read_sweep_genic_selection_model_config(msp_t *msp, config_setting_t *model_sett
     }
     alpha = config_setting_get_float(s);
 
-    ret = msp_set_simulation_model_sweep_genic_selection(msp, population_size,
+    ret = msp_set_simulation_model_sweep_genic_selection(msp,
             position, start_frequency, end_frequency, alpha, dt);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
@@ -202,13 +202,13 @@ read_model_config(msp_t *msp, config_t *config)
     population_size = config_setting_get_float(s);
     /* printf("Checking model specification\n"); */
     if (strcmp(name, "hudson") == 0) {
-        ret = msp_set_simulation_model_hudson(msp, population_size);
+        ret = msp_set_simulation_model_hudson(msp);
     } else if (strcmp(name, "smc") == 0) {
-        ret = msp_set_simulation_model_smc(msp, population_size);
+        ret = msp_set_simulation_model_smc(msp);
     } else if (strcmp(name, "smc_prime") == 0) {
-        ret = msp_set_simulation_model_smc_prime(msp, population_size);
+        ret = msp_set_simulation_model_smc_prime(msp);
     } else if (strcmp(name, "dtwf") == 0) {
-        ret = msp_set_simulation_model_dtwf(msp, population_size);
+        ret = msp_set_simulation_model_dtwf(msp);
     } else if (strcmp(name, "dirac") == 0) {
         s = config_setting_get_member(setting, "psi");
         if (s == NULL) {
@@ -220,7 +220,7 @@ read_model_config(msp_t *msp, config_t *config)
             fatal_error("dirac model c not specified");
         }
         c = config_setting_get_float(s);
-        ret = msp_set_simulation_model_dirac(msp, population_size, psi, c);
+        ret = msp_set_simulation_model_dirac(msp, psi, c);
     } else if (strcmp(name, "beta") == 0) {
         s = config_setting_get_member(setting, "alpha");
         if (s == NULL) {
@@ -232,7 +232,7 @@ read_model_config(msp_t *msp, config_t *config)
             fatal_error("beta model truncation_point not specified");
         }
         truncation_point = config_setting_get_float(s);
-        ret = msp_set_simulation_model_beta(msp, population_size, alpha, truncation_point);
+        ret = msp_set_simulation_model_beta(msp, alpha, truncation_point);
     } else if (strcmp(name, "sweep_genic_selection") == 0) {
         read_sweep_genic_selection_model_config(msp, setting, population_size);
     } else {

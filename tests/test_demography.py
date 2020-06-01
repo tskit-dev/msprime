@@ -36,6 +36,176 @@ import _msprime
 import msprime
 
 
+class TestNePopulationSizeEquivalence(unittest.TestCase):
+    """
+    Test that setting Ne as a parameter of the population model and
+    at individual populations is the same thing.
+    """
+
+    def assert_tree_sequences_equal(self, ts1, ts2):
+        t1 = ts1.dump_tables()
+        t2 = ts2.dump_tables()
+        # We can't compare directly byte-for-byte because there'll be slight
+        # differences in the computed times.
+        self.assertEqual(len(t1.nodes), len(t2.nodes))
+        np.testing.assert_array_equal(t1.nodes.flags, t2.nodes.flags)
+        np.testing.assert_array_almost_equal(t1.nodes.time, t2.nodes.time)
+        np.testing.assert_array_equal(t1.nodes.population, t2.nodes.population)
+        np.testing.assert_array_equal(t1.nodes.individual, t2.nodes.individual)
+        np.testing.assert_array_equal(t1.nodes.metadata, t2.nodes.metadata)
+        np.testing.assert_array_equal(
+            t1.nodes.metadata_offset, t2.nodes.metadata_offset
+        )
+        self.assertEqual(len(t1.edges), len(t2.edges))
+        np.testing.assert_array_almost_equal(t1.edges.left, t2.edges.left)
+        np.testing.assert_array_almost_equal(t1.edges.right, t2.edges.right)
+        np.testing.assert_array_equal(t1.edges.parent, t2.edges.parent)
+        np.testing.assert_array_equal(t1.edges.child, t2.edges.child)
+
+    def test_one_population(self):
+        random_seed = 1012
+        for Ne in [1e-6, 0.5, 1, 1e6]:
+            samples = [msprime.Sample(0, 0)] * 10
+            ts1 = msprime.simulate(samples=samples, Ne=Ne, random_seed=random_seed)
+            ts2 = msprime.simulate(
+                samples=samples,
+                population_configurations=[
+                    msprime.PopulationConfiguration(initial_size=Ne)
+                ],
+                random_seed=random_seed,
+            )
+            self.assert_tree_sequences_equal(ts1, ts2)
+            # Specifying Ne as well should be the same thing
+            ts3 = msprime.simulate(
+                samples=samples,
+                Ne=Ne,
+                population_configurations=[
+                    msprime.PopulationConfiguration(initial_size=Ne)
+                ],
+                random_seed=random_seed,
+            )
+            self.assert_tree_sequences_equal(ts1, ts3)
+
+    def test_many_populations_equal_size_no_recombination(self):
+        random_seed = 1012
+        num_pops = 4
+        migration_matrix = np.ones((num_pops, num_pops)) * 1e-3
+        np.fill_diagonal(migration_matrix, 0)
+
+        for Ne in [0.5, 1, 1.5]:
+            samples = [msprime.Sample(population=j, time=0) for j in range(num_pops)]
+            ts1 = msprime.simulate(
+                samples=samples,
+                Ne=Ne,
+                population_configurations=[
+                    msprime.PopulationConfiguration() for _ in range(num_pops)
+                ],
+                migration_matrix=migration_matrix,
+                random_seed=random_seed,
+            )
+            ts2 = msprime.simulate(
+                samples=samples,
+                migration_matrix=migration_matrix,
+                population_configurations=[
+                    msprime.PopulationConfiguration(initial_size=Ne)
+                    for _ in range(num_pops)
+                ],
+                random_seed=random_seed,
+            )
+            self.assert_tree_sequences_equal(ts1, ts2)
+            # Also setting initial_size=Ne is the same.
+            ts3 = msprime.simulate(
+                samples=samples,
+                Ne=Ne,
+                population_configurations=[
+                    msprime.PopulationConfiguration(initial_size=Ne)
+                    for _ in range(num_pops)
+                ],
+                migration_matrix=migration_matrix,
+                random_seed=random_seed,
+            )
+            self.assert_tree_sequences_equal(ts1, ts3)
+
+    def test_many_populations_equal_size_recombination(self):
+        random_seed = 1012234
+        num_pops = 3
+        recombination_rate = 1
+        migration_matrix = np.ones((num_pops, num_pops)) * 1e-3
+        np.fill_diagonal(migration_matrix, 0)
+        recombination_rate = 0.5
+
+        for Ne in [0.5, 1, 1.5]:
+            samples = [
+                msprime.Sample(population=j, time=0) for j in range(num_pops)
+            ] * 4
+            ts1 = msprime.simulate(
+                samples=samples,
+                Ne=Ne,
+                recombination_rate=recombination_rate,
+                population_configurations=[
+                    msprime.PopulationConfiguration() for _ in range(num_pops)
+                ],
+                migration_matrix=migration_matrix,
+                random_seed=random_seed,
+            )
+            self.assertGreater(ts1.num_trees, 1)
+            ts2 = msprime.simulate(
+                samples=samples,
+                recombination_rate=recombination_rate,
+                migration_matrix=migration_matrix,
+                population_configurations=[
+                    msprime.PopulationConfiguration(initial_size=Ne)
+                    for _ in range(num_pops)
+                ],
+                random_seed=random_seed,
+            )
+            self.assert_tree_sequences_equal(ts1, ts2)
+            # Also setting initial_size=Ne is the same.
+            ts3 = msprime.simulate(
+                samples=samples,
+                Ne=Ne,
+                recombination_rate=recombination_rate,
+                population_configurations=[
+                    msprime.PopulationConfiguration(initial_size=Ne)
+                    for _ in range(num_pops)
+                ],
+                migration_matrix=migration_matrix,
+                random_seed=random_seed,
+            )
+            self.assert_tree_sequences_equal(ts1, ts3)
+
+    def test_many_populations_different_sizes(self):
+        random_seed = 1012
+        num_pops = 5
+        migration_matrix = np.ones((num_pops, num_pops)) * 1e-3
+        np.fill_diagonal(migration_matrix, 0)
+
+        for Ne in [0.5, 1, 1.5]:
+            samples = [
+                msprime.Sample(population=j, time=0) for j in range(num_pops)
+            ] * 5
+            ts1 = msprime.simulate(
+                samples=samples,
+                Ne=Ne,
+                population_configurations=[
+                    msprime.PopulationConfiguration(initial_size=Ne * (j + 1))
+                    for j in reversed(range(num_pops))
+                ],
+                migration_matrix=migration_matrix,
+                random_seed=random_seed,
+            )
+            ts2 = msprime.simulate(
+                samples=samples,
+                migration_matrix=migration_matrix,
+                population_configurations=[
+                    msprime.PopulationConfiguration(initial_size=Ne * (j + 1))
+                    for j in reversed(range(num_pops))
+                ],
+                random_seed=random_seed,
+            )
+            self.assert_tree_sequences_equal(ts1, ts2)
+
+
 class TestIntrospectionInterface(unittest.TestCase):
     """
     Tests that we have meaningful repr and str functions for all the
@@ -99,17 +269,11 @@ class TestIntrospectionInterface(unittest.TestCase):
         self.assertEqual(str(event).split(), str_s.split())
 
     def test_simulation_model_change(self):
-        model = msprime.DiscreteTimeWrightFisher(100)
+        model = msprime.DiscreteTimeWrightFisher()
         event = msprime.SimulationModelChange(model=model)
 
-        repr_s = (
-            "SimulationModelChange(time=None, model="
-            "DiscreteTimeWrightFisher(reference_size=100))"
-        )
-        str_s = (
-            "Population model changes to "
-            "DiscreteTimeWrightFisher(reference_size=100)"
-        )
+        repr_s = "SimulationModelChange(time=None, model=DiscreteTimeWrightFisher())"
+        str_s = "Population model changes to " "DiscreteTimeWrightFisher()"
         self.assertEqual(repr(event), repr_s)
         self.assertEqual(str(event), str_s)
 
@@ -1815,6 +1979,7 @@ class MigrationRecordsMixin:
             msprime.MassMigration(time=t, source=1, dest=2),
         ]
         ts = msprime.simulate(
+            Ne=100,
             model=self.model,
             population_configurations=population_configurations,
             demographic_events=demographic_events,
@@ -1838,6 +2003,7 @@ class MigrationRecordsMixin:
             msprime.MassMigration(time=t, source=1, dest=2),
         ]
         ts = msprime.simulate(
+            Ne=100,
             model=self.model,
             from_ts=tables.tree_sequence(),
             start_time=0,
@@ -1971,7 +2137,7 @@ class TestMigrationRecordsSmcPrime(unittest.TestCase, MigrationRecordsMixin):
 
 
 class TestMigrationRecordsDtwf(unittest.TestCase, MigrationRecordsMixin):
-    model = msprime.DiscreteTimeWrightFisher(10)
+    model = "dtwf"
 
 
 class TestFullArgMigration(unittest.TestCase):
@@ -2580,10 +2746,6 @@ class EndTimeMixin:
     """
     Tests for the max_time parameter.
     """
-
-    # NOTE This feature is only partially implemented and does not currently
-    # have the semantics that we would like. We use the parameter end_time
-    # to ensure that it's not used accidentally.
 
     def verify_empty_tree_sequence(self, n, ts):
         self.assertEqual(ts.num_edges, 0)

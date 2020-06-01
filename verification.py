@@ -2500,7 +2500,7 @@ class SimulationVerifier:
             N = 100
             self.run_xi_hudson_comparison(
                 "xi_dirac_vs_hudson_single_locus",
-                msprime.DiracCoalescent(N, psi=0.99, c=0),
+                msprime.DiracCoalescent(psi=0.99, c=0),
                 sample_size=10,
                 Ne=N,
                 num_replicates=5000,
@@ -2517,7 +2517,7 @@ class SimulationVerifier:
             N = 100
             self.run_xi_hudson_comparison(
                 "xi_dirac_vs_hudson_recombination",
-                msprime.DiracCoalescent(N, psi=0.99, c=0),
+                msprime.DiracCoalescent(psi=0.99, c=0),
                 sample_size=50,
                 Ne=N,
                 num_replicates=1000,
@@ -2880,55 +2880,6 @@ class SimulationVerifier:
         """
         self._instances["xi_dirac_expected_sfs"] = self.run_xi_dirac_expected_sfs
 
-    def compare_xi_beta_sfs(self, sample_size, alpha, sfs, num_replicates=1000):
-        """
-        Runs simulations of the xi beta model and compares to the expected SFS.
-        """
-        print("running SFS for", sample_size, alpha)
-        reps = msprime.simulate(
-            sample_size,
-            num_replicates=num_replicates,
-            model=msprime.BetaCoalescent(alpha=alpha, truncation_point=1),
-        )
-
-        data = collections.defaultdict(list)
-        tbl_sum = [0] * (sample_size - 1)
-        for ts in reps:
-            for tree in ts.trees():
-                tot_bl = 0.0
-                tbl = [0] * (sample_size - 1)
-                for node in tree.nodes():
-                    if tree.parent(node) != msprime.NULL_NODE:
-                        tbl[tree.num_samples(node) - 1] = tbl[
-                            tree.num_samples(node) - 1
-                        ] + tree.branch_length(node)
-                        tot_bl = tot_bl + tree.branch_length(node)
-
-                for xi in range(sample_size - 1):
-                    rescaled_x = tbl[xi] / tot_bl
-                    data["total_branch_length"].append(rescaled_x)
-                    tbl_sum[xi] = tbl_sum[xi] + rescaled_x
-                data["num_leaves"].extend(range(1, sample_size))
-
-        basedir = os.path.join("tmp__NOBACKUP__", "xi_beta_expected_sfs")
-        if not os.path.exists(basedir):
-            os.mkdir(basedir)
-        f = os.path.join(basedir, f"n={sample_size}_alpha={alpha}.png")
-        ax = sns.violinplot(
-            data=data, x="num_leaves", y="total_branch_length", color="grey"
-        )
-        ax.set_xlabel("num leaves")
-        l1 = ax.plot(np.arange(sample_size - 1), sfs[::], "--", linewidth=3)
-        l2 = ax.plot(
-            np.arange(sample_size - 1),
-            [x / num_replicates for x in tbl_sum],
-            "--",
-            linewidth=3,
-        )
-        ax.legend((l1[0], l2[0]), ("Expected", "Observed"))
-        pyplot.savefig(f, dpi=72)
-        pyplot.close("all")
-
     def compare_normalized_xi_beta_sfs(
         self, sample_size, alpha, sfs, num_replicates=1000
     ):
@@ -3107,7 +3058,7 @@ class SimulationVerifier:
                 Ne=Ne,
                 r=1e-8,
                 L=10 ** 6,
-                model=msprime.BetaCoalescent(reference_size=Ne, alpha=alpha),
+                model=msprime.BetaCoalescent(alpha=alpha),
             )
             # Add a growth rate with a higher recombination rate so
             # we still get decent numbers of trees
@@ -3118,7 +3069,7 @@ class SimulationVerifier:
                 Ne=Ne,
                 r=1e-7,
                 L=10 ** 6,
-                model=msprime.BetaCoalescent(reference_size=Ne, alpha=alpha),
+                model=msprime.BetaCoalescent(alpha=alpha),
                 growth_rate=0.05,
             )
 
@@ -3134,7 +3085,7 @@ class SimulationVerifier:
                     Ne=Ne,
                     r=1e-8,
                     L=10 ** 6,
-                    model=msprime.DiracCoalescent(reference_size=Ne, psi=psi, c=c),
+                    model=msprime.DiracCoalescent(psi=psi, c=c),
                 )
                 # Add a growth rate with a higher recombination rate so
                 # we still get decent numbers of trees
@@ -3145,7 +3096,7 @@ class SimulationVerifier:
                     Ne=Ne,
                     r=1e-7,
                     L=10 ** 6,
-                    model=msprime.DiracCoalescent(reference_size=Ne, psi=psi, c=c),
+                    model=msprime.DiracCoalescent(psi=psi, c=c),
                     growth_rate=0.05,
                 )
 
@@ -3161,7 +3112,7 @@ class SimulationVerifier:
                 r=1e-8,
                 m=1e-8,
                 L=10 ** 6,
-                model=msprime.BetaCoalescent(reference_size=Ne, alpha=alpha),
+                model=msprime.BetaCoalescent(alpha=alpha),
             )
 
     def run_xi_dirac_recombinations(self):
@@ -3169,19 +3120,15 @@ class SimulationVerifier:
         Ne = 100
         for psi in [0.1, 0.3, 0.5, 0.9]:
             for c in [1, 10, 100]:
-                # The Dirac coalescent has branch lengths proportional to Ne^2
-                # and recombination rate proportional to Ne so need to divide
-                # the mutation rate by Ne to make numbers of mutations and
-                # recombinations comparable.
                 self.verify_recombination(
                     basedir,
                     f"n=100_psi={psi}_c={c}",
                     sample_size=100,
                     Ne=Ne,
                     r=1e-8,
-                    m=1e-8 / Ne,
+                    m=1e-8,
                     L=10 ** 6,
-                    model=msprime.DiracCoalescent(reference_size=Ne, psi=psi, c=c),
+                    model=msprime.DiracCoalescent(psi=psi, c=c),
                 )
 
     def run_Hudson_recombinations(self):
