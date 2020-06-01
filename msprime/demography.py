@@ -31,7 +31,6 @@ import attr
 import numpy as np
 
 from . import ancestry
-from . import core
 
 
 logger = logging.getLogger(__name__)
@@ -490,7 +489,7 @@ class DemographyDebugger:
         event_index = 0
         while not math.isinf(end_time):
             events = []
-            while event_index < len(demographic_events) and core.almost_equal(
+            while event_index < len(demographic_events) and math.isclose(
                 demographic_events[event_index].time, start_time, abs_tol=abs_tol
             ):
                 events.append(demographic_events[event_index])

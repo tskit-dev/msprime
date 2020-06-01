@@ -69,16 +69,3 @@ def get_random_seed():
         # be unique, even across different processes.
         _seed_rng_map[pid] = random.Random()
     return _seed_rng_map[pid].randint(1, 2 ** 32 - 1)
-
-
-# Note, this is no longer needed as we have Python 3.6 minimum.
-# https://github.com/tskit-dev/msprime/issues/960
-def almost_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
-    """
-    Returns true if the specified pair of numbers are equal to
-    within the specified tolerances.
-
-    The signature and implementation are taken from PEP 485,
-    https://www.python.org/dev/peps/pep-0485/
-    """
-    return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
