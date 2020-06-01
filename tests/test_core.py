@@ -20,7 +20,6 @@
 Test cases for the high level interface to utils.
 """
 import multiprocessing
-import sys
 import unittest
 
 import msprime.core as core
@@ -71,27 +70,3 @@ class TestDefaultRandomSeeds(unittest.TestCase):
         self.assertEqual(len(set(seeds)), n)
         pool.terminate()
         pool.join()
-
-
-class TestAlmostEqual(unittest.TestCase):
-    """
-    Simple tests to ensure that the almost_equal() method is sensible.
-    """
-
-    def test_defaults(self):
-        eps = sys.float_info.epsilon
-        equal = [(1, 1), (0, 0), (1 + eps, 1), (1, 1 - eps), (10.000000000001, 10.0)]
-        for a, b in equal:
-            self.assertAlmostEqual(a, b)
-            self.assertTrue(core.almost_equal(a, b))
-
-    def test_near_zero(self):
-        eps = sys.float_info.epsilon
-        equal = [(0, 0), (eps, 0), (0, -eps), (-eps, eps)]
-        for a, b in equal:
-            self.assertAlmostEqual(a, b)
-            self.assertTrue(core.almost_equal(a, b, abs_tol=1e-9))
-        not_equal = [(0, 0.0000001), (-0.0000001, 0)]
-        for a, b in not_equal:
-            self.assertNotAlmostEqual(a, b)
-            self.assertFalse(core.almost_equal(a, b, abs_tol=1e-9))
