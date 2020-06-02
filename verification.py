@@ -24,6 +24,7 @@ import tqdm
 from matplotlib import lines as mlines
 from matplotlib import pyplot
 
+import _msprime
 import msprime
 import msprime.cli as cli
 
@@ -605,7 +606,7 @@ class MsTest(SimulationVerifier):
         print("\t mspms:", args)
         runner = cli.get_mspms_runner(args.split())
         sim = runner.get_simulator()
-        rng = msprime.RandomGenerator(random.randint(1, 2 ** 32 - 1))
+        rng = _msprime.RandomGenerator(random.randint(1, 2 ** 32 - 1))
         sim.random_generator = rng
         num_populations = sim.num_populations
         replicates = runner.get_num_replicates()
@@ -3945,6 +3946,7 @@ def add_simulator_arguments(parser):
         choices=tests,
         help="Run all tests for specified group",
     )
+    parser.add_argument("tests", nargs="*", help="Run specific tests")
 
 
 def run_tests(args):
@@ -4001,9 +4003,22 @@ def run_tests(args):
             classes.append(ms)
         elif args.group == "random":
             classes.append(random)
+
+    all_tests = {}
     for c in classes:
         c.add_instances()
-        c.run()
+        all_tests.update(c._instances)
+    # JK: This is a quick hack to allow us to run single tests again.
+    # We want to decouple the *definition* of the tests from the *running*
+    # of the tests, so that the top-level runner class (currently called
+    # SimulationVerifier) only does basic things like collect the
+    # instances together, and run them.
+    verifier = SimulationVerifier(output_dir)
+    verifier._instances = all_tests
+    keys = None
+    if len(args.tests) > 0:
+        keys = args.tests
+    verifier.run(keys)
 
 
 def main():
