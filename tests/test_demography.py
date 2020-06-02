@@ -19,6 +19,7 @@
 """
 Test cases for demographic events in msprime.
 """
+import collections
 import itertools
 import json
 import math
@@ -3403,3 +3404,222 @@ class TestLineageProbabilities(unittest.TestCase):
         self.assertTrue(np.all(P_out[1] > 0))
         self.assertTrue(np.allclose(P_out[2], [[1, 0], [1, 0]]))
         self.verify_simulation(dd)
+
+
+class TestDemographyDebuggerAsGraph(unittest.TestCase):
+    def reachable(self, graph, node, seen=None):
+        """
+        Return the set of reachable nodes of ``graph``, starting from ``node``.
+        """
+        if seen is None:
+            seen = set()
+        self.assertFalse(node in seen, msg=f"Cycle detected at {node}.")
+        children = graph.get(node, dict()).keys()
+        return {node}.union(*(self.reachable(graph, child, seen) for child in children))
+
+    def check_graph(self, ddb, leaves=None):
+        """
+        Sanity check the ddb graph.
+        """
+        graph, node_attrs = ddb.as_graph(leaves=leaves)
+        self.assertLessEqual(len(node_attrs), len(ddb.epochs) * ddb.num_populations)
+        # Get the nodes in the dict-of-dicts graph.
+        from_nodes = set(graph.keys())
+        to_nodes = set(itertools.chain(*(d.keys() for d in graph.values())))
+        all_nodes = from_nodes | to_nodes
+        # One root node.
+        self.assertEqual(len(from_nodes - to_nodes), 1)
+        # One leaf node for each population.
+        num_leaves = ddb.num_populations if leaves is None else len(leaves)
+        self.assertEqual(len(to_nodes - from_nodes), num_leaves)
+        # Check that all nodes are reachable from the root.
+        root = (from_nodes - to_nodes).pop()
+        self.assertEqual(all_nodes, self.reachable(graph, root))
+        # Check that all nodes have at most one edge in.
+        edges_in = collections.Counter()
+        for to_dict in graph.values():
+            edges_in.update(to_dict.keys())
+        for node, count in edges_in.items():
+            self.assertEqual(count, 1, msg=f"{node} has {count} edges in.")
+        # All graph nodes must have a node_attrs entry,
+        # and all node_attrs entries must correspond to a graph node.
+        self.assertEqual(all_nodes, set(node_attrs.keys()))
+        # Check that node attributes make sense.
+        for (epoch_j, pop_k), node_attr in node_attrs.items():
+            self.assertTrue(0 <= epoch_j < len(ddb.epochs))
+            self.assertTrue(0 <= pop_k < ddb.num_populations)
+            self.assertLess(node_attr["start_time"], node_attr["end_time"])
+        # Check that edges make sense.
+        for from_node, to_dict in graph.items():
+            (from_j, from_k) = from_node
+            for to_node in to_dict.keys():
+                (to_j, to_k) = to_node
+                self.assertLess(to_j, from_j)
+                # We must have temporal continuity.
+                self.assertEqual(
+                    node_attrs[from_node]["start_time"], node_attrs[to_node]["end_time"]
+                )
+        return graph, node_attrs
+
+    def test_one_population_demography(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(initial_size=1000),
+        ]
+        demographic_events = [
+            msprime.PopulationParametersChange(
+                time=100, population=0, initial_size=100
+            ),
+            msprime.PopulationParametersChange(
+                time=200, population=0, initial_size=100, growth_rate=-0.023
+            ),
+            msprime.PopulationParametersChange(
+                time=300, population=0, initial_size=1000, growth_rate=0
+            ),
+            msprime.PopulationParametersChange(
+                time=500, population=0, initial_size=500
+            ),
+            # Redundant event, should be merged into the previous node.
+            msprime.PopulationParametersChange(
+                time=600, population=0, initial_size=500
+            ),
+        ]
+        ddb = msprime.DemographyDebugger(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+        )
+        graph, node_attrs = self.check_graph(ddb)
+        expected_graph = {
+            (4, 0): {(3, 0): {}},
+            (3, 0): {(2, 0): {}},
+            (2, 0): {(1, 0): {}},
+            (1, 0): {(0, 0): {}},
+        }
+        self.assertEqual(expected_graph, graph)
+
+    def test_multi_population_demography(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(initial_size=1000) for _ in range(5)
+        ]
+        N = len(population_configurations)
+        migration_matrix = [[0] * N for _ in range(N)]
+        demographic_events = [
+            # epoch 1
+            msprime.MigrationRateChange(time=50, rate=1e-5),
+            # epoch 2
+            msprime.MassMigration(time=200, dest=1, source=4, proportion=1),
+            msprime.MigrationRateChange(time=200, rate=0),
+            # epoch 3
+            msprime.MassMigration(time=300, dest=1, source=3, proportion=0.1),
+            # epoch 4
+            msprime.MassMigration(time=310, dest=1, source=3, proportion=0.1),
+            # epoch 5
+            msprime.MassMigration(time=320, dest=1, source=3, proportion=1),
+            # epoch 6
+            msprime.MigrationRateChange(time=350, dest=2, source=1, rate=1e-5),
+            # epoch 7
+            msprime.MigrationRateChange(time=360, dest=0, source=1, rate=1e-5),
+            # epoch 8
+            msprime.MassMigration(time=400, dest=1, source=2, proportion=1),
+            msprime.MigrationRateChange(time=400, rate=0),
+            # epoch 9
+            msprime.MassMigration(time=500, dest=0, source=1, proportion=1),
+        ]
+        ddb = msprime.DemographyDebugger(
+            population_configurations=population_configurations,
+            migration_matrix=migration_matrix,
+            demographic_events=demographic_events,
+        )
+        graph, node_attrs = self.check_graph(ddb)
+        expected_graph = {
+            # epoch 9
+            (9, 0): {(8, 0): {}, (8, 1): {}},
+            # epoch 8
+            (8, 0): {(7, 0): {}},
+            (8, 1): {(7, 1): {}, (6, 2): {}},
+            # epoch 7
+            (7, 0): {(2, 0): {}},
+            (7, 1): {(6, 1): {}},
+            # epoch 6
+            (6, 2): {(2, 2): {}},
+            (6, 1): {(5, 1): {}},
+            # epoch 5
+            (5, 1): {(2, 1): {}, (2, 3): {}},
+            # epoch 2
+            (2, 0): {(1, 0): {}},
+            (2, 1): {(1, 1): {}, (1, 4): {}},
+            (2, 2): {(1, 2): {}},
+            (2, 3): {(1, 3): {}},
+            # epoch 1
+            (1, 0): {(0, 0): {}},
+            (1, 1): {(0, 1): {}},
+            (1, 2): {(0, 2): {}},
+            (1, 3): {(0, 3): {}},
+            (1, 4): {(0, 4): {}},
+        }
+        self.assertEqual(expected_graph, graph)
+
+    def test_internal_nodes(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(initial_size=1000) for _ in range(5)
+        ]
+        demographic_events = [
+            msprime.MassMigration(time=100, dest=2, source=4, proportion=1),
+            msprime.MassMigration(time=100, dest=2, source=3, proportion=1),
+            msprime.MassMigration(time=200, dest=0, source=2, proportion=1),
+            msprime.MassMigration(time=200, dest=0, source=1, proportion=1),
+        ]
+        ddb = msprime.DemographyDebugger(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+        )
+        graph, node_attrs = self.check_graph(ddb, leaves=[1, 3, 4])
+        expected_graph = {
+            (1, 2): {(0, 4): {}, (0, 3): {}},
+            (2, 0): {(1, 2): {}, (0, 1): {}},
+        }
+        self.assertEqual(expected_graph, graph)
+
+    def test_bad_leaves(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(initial_size=1000) for _ in range(5)
+        ]
+        demographic_events = [
+            msprime.MassMigration(time=100, dest=2, source=4, proportion=1),
+            msprime.MassMigration(time=100, dest=2, source=3, proportion=1),
+            msprime.MassMigration(time=200, dest=0, source=2, proportion=1),
+            msprime.MassMigration(time=200, dest=0, source=1, proportion=1),
+        ]
+        ddb = msprime.DemographyDebugger(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+        )
+        for bad_leaves in ([-1], [100], ["Not an int"]):
+            with self.assertRaises(ValueError):
+                ddb.as_graph(leaves=bad_leaves)
+        with self.assertRaises(ValueError):
+            # Population 4 is missing from the leaves.
+            ddb.as_graph(leaves=[1, 3])
+
+    def test_unsupported_events(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(initial_size=1000),
+        ]
+        demographic_events = [
+            msprime.SimpleBottleneck(time=100, population=0, proportion=0.1),
+        ]
+        ddb = msprime.DemographyDebugger(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+        )
+        with self.assertRaises(ValueError):
+            ddb.as_graph()
+
+        demographic_events = [
+            msprime.InstantaneousBottleneck(time=100, population=0, strength=2.0),
+        ]
+        ddb = msprime.DemographyDebugger(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+        )
+        with self.assertRaises(ValueError):
+            ddb.as_graph()

@@ -1119,3 +1119,144 @@ class DemographyDebugger:
         Returns the number of epochs defined by the demographic model.
         """
         return len(self.epochs)
+
+    def as_graph(self, leaves=None):
+        """
+        Build a networkx-compatible dict-of-dicts digraph of the demography.
+
+        Each node in the graph represents a single population over a time span
+        in which the population's size and migration parameters don't change.
+        Multiple nodes may exist for a given population, reflecting different
+        demographic parameters in different time periods. Nodes are represented
+        as (epoch_id, population_id) tuples, where epoch_id is an index into
+        the self.epochs array.
+        Edges in the graph are directed from ancestors to descendents. An edge
+        between nodes with the same population ID indicates one or more
+        demographic parameter changes, whereas an edge between nodes with
+        different population IDs indicates a MassMigration(proportion=1).
+
+        To convert the graph into a networkx DiGraph::
+
+            import networkx as nx
+
+            ddb = msprime.DemographyDebugger(...)
+            dict_graph, node_attrs = ddb.as_graph()
+            G = nx.DiGraph(dict_graph)
+            assert nx.is_directed_acyclic_graph(G)
+            for node, node_attr in node_attrs.items():
+                G.nodes[node].update(**node_attr)
+
+        :param: leaves: An iterable of population IDs corresponding to leaves
+            in the graph. If None, all population IDs will be leaves. Non leaf
+            populations will be attached to the graph only via a MassMigration.
+        :return: A tuple of ``(dict_graph, node_attrs)``, where ``dict_graph``
+            is the digraph, and ``node_attrs`` is a dict of node attributes.
+            Node attributes reflect the population parameters in a given epoch:
+            ``start_time``, ``end_time``, ``start_size``, ``end_size``,
+            ``growth_rate``, ``M_in`` and ``M_out``.
+            ``M_in[k]`` is the migration rate from population `k` into
+            the node, and ``M_out[k]`` is the migration rate out of the node
+            and into population `k`.
+        """
+
+        def attrs_equal(attr1, attr2, abs_tol=1e-9):
+            """
+            Returns True if the the two attribute dicts are the same,
+            when considering only demography-relevant attributes.
+            """
+            for key in ("start_size", "end_size", "growth_rate"):
+                if not math.isclose(attr1[key], attr2[key], abs_tol=abs_tol):
+                    return False
+            for key in ("M_in", "M_out"):
+                if not all(
+                    math.isclose(a1, a2, abs_tol=abs_tol)
+                    for a1, a2 in zip(attr1[key], attr2[key])
+                ):
+                    return False
+            return True
+
+        def get_descendent(node_attrs, node):
+            """
+            Return the oldest node descended from ``node`` in ``node_attrs``.
+            """
+            epoch_j, pop_k = node
+            a = epoch_j - 1
+            while a >= 0:
+                descendent = (a, pop_k)
+                if descendent in node_attrs:
+                    break
+                a -= 1
+            if a < 0:
+                descendent = None
+            return descendent
+
+        if leaves is None:
+            leaves = range(self.num_populations)
+        else:
+            possible_leaves = set(range(self.num_populations))
+            for leaf in leaves:
+                if leaf not in possible_leaves:
+                    raise ValueError(f"Leaf {leaf} is not a valid population ID.")
+        # Population IDs that have been incorporated into the graph.
+        interned = set(leaves)
+
+        graph = collections.defaultdict(dict)
+        node_attrs = dict()
+        merged_pops = set()
+        for j, epoch in enumerate(self.epochs):
+            for de in epoch.demographic_events:
+                if isinstance(de, MassMigration):
+                    source = get_descendent(node_attrs, (j, de.source))
+                    if source is None:
+                        assert de.source not in interned
+                        raise ValueError(
+                            f"{de.source} not in graph at epoch {j}. "
+                            f"Should {de.source} be a leaf node?"
+                        )
+                    if de.proportion == 1:
+                        merged_pops.add(de.source)
+                        interned.add(de.dest)
+                        dest = (j, de.dest)
+                        graph[dest][source] = {}
+                        end_time = max(node_attrs[source]["end_time"], de.time)
+                        node_attrs[source].update(end_time=end_time)
+                    else:
+                        dest = get_descendent(node_attrs, (j, de.dest))
+                        assert dest is not None
+                        node_attrs[dest]["pulse_in"][(source, de.time)] = de.proportion
+                        node_attrs[source]["pulse_out"][(dest, de.time)] = de.proportion
+
+                elif isinstance(de, (SimpleBottleneck, InstantaneousBottleneck)):
+                    raise ValueError(f"Unsupported event: {de.__class__.__name__}")
+            for k, pop in enumerate(epoch.populations):
+                if k in interned and k not in merged_pops:
+                    node = (j, k)
+                    assert node not in node_attrs
+                    node_attr = dict(
+                        start_size=pop.start_size,
+                        end_size=pop.end_size,
+                        growth_rate=pop.growth_rate,
+                        start_time=epoch.start_time,
+                        end_time=epoch.end_time,
+                        M_in=epoch.migration_matrix[k, :],
+                        M_out=epoch.migration_matrix[:, k],
+                        pulse_in={},
+                        pulse_out={},
+                    )
+                    if j == 0:
+                        node_attrs[node] = node_attr
+                        continue
+                    descendent = get_descendent(node_attrs, node)
+                    if descendent is None:
+                        node_attrs[node] = node_attr
+                    elif node in graph or not attrs_equal(
+                        node_attr, node_attrs[descendent]
+                    ):
+                        node_attrs[node] = node_attr
+                        graph[node][descendent] = {}
+                        # Extend the descendent's end_time up to the current node.
+                        node_attrs[descendent].update(end_time=node_attr["start_time"])
+        assert len(interned) == self.num_populations
+        # Don't return a defaultdict, as the behaviour is not desirable in general.
+        graph = dict(graph)
+        return graph, node_attrs
