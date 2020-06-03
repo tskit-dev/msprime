@@ -1156,7 +1156,10 @@ class DemographyDebugger:
             ``growth_rate``, ``M_in`` and ``M_out``.
             ``M_in[k]`` is the migration rate from population `k` into
             the node, and ``M_out[k]`` is the migration rate out of the node
-            and into population `k`.
+            and into population `k`. ``pulse_in[(k, t)]`` is the proportion of
+            migrants into the node from population `k` at time `t`.
+            ``pulse_out[(k, t)]`` is the proportion of migrants out of the node
+            that enter population `k` at time `t`.
         """
 
         def attrs_equal(attr1, attr2, abs_tol=1e-9):
