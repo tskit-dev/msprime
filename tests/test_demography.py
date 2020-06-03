@@ -3414,6 +3414,7 @@ class TestDemographyDebuggerAsGraph(unittest.TestCase):
         if seen is None:
             seen = set()
         self.assertFalse(node in seen, msg=f"Cycle detected at {node}.")
+        seen.add(node)
         children = graph.get(node, dict()).keys()
         return {node}.union(*(self.reachable(graph, child, seen) for child in children))
 
