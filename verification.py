@@ -2107,12 +2107,10 @@ class XiTest(SimulationVerifier):
                 f"n=100_alpha={alpha}",
                 sample_size=100,
                 Ne=Ne,
-                r=1e-8,
+                r=1e-7,
                 L=10 ** 6,
                 model=msprime.BetaCoalescent(alpha=alpha),
             )
-            # Add a growth rate with a higher recombination rate so
-            # we still get decent numbers of trees
             self.verify_breakpoint_distribution(
                 basedir_name,
                 f"n=100_alpha={alpha}",
@@ -2126,7 +2124,7 @@ class XiTest(SimulationVerifier):
 
     def run_xi_dirac_breakpoints(self):
         basedir_name = "xi_dirac_breakpoints"
-        Ne = 10 ** 4
+        Ne = 10 ** 2
         for psi in [0.1, 0.3, 0.6, 0.9]:
             for c in [1, 10]:
                 self.verify_breakpoint_distribution(

@@ -5640,6 +5640,45 @@ msp_std_common_ancestor_event(
  * Dirac coalescent
  **************************************************************/
 
+/* Given the specified rate, return the waiting time until the next common ancestor
+ * event for the specified population */
+static double
+msp_dirac_get_common_ancestor_waiting_time_from_rate(
+    msp_t *self, population_t *pop, double lambda)
+{
+    double ret = DBL_MAX;
+    double alpha = pop->growth_rate;
+    double t = self->time;
+    double u, dt, z;
+
+    if (lambda > 0.0) {
+        u = gsl_ran_exponential(self->rng, 1.0 / lambda);
+        if (alpha == 0.0) {
+            ret = pop->initial_size * pop->initial_size * u;
+        } else {
+            dt = t - pop->start_time;
+            z = 1 + alpha * pop->initial_size * pop->initial_size
+                * exp(-alpha * dt) * u;
+            /* if z is <= 0 no coancestry can occur */
+            if (z > 0) {
+                ret = log(z) / alpha;
+            }
+        }
+        if (u == 0) {
+            /* In the exceedingly rare cases where gsl_ran_exponential returns
+             * 0, we return the smallest representable value > the current time
+             * to avoid returning a tree sequence with zero length branches.
+             * Note that we can still return 0 from this function if population
+             * sizes are extremely small. This is intentional, as it is almost
+             * certainly an error to have simulations at such extreme values
+             * and the user should be alerted to this. */
+            ret = nextafter(t, DBL_MAX) - t;
+            assert(ret != 0);
+        }
+    }
+    return ret;
+}
+
 static double
 msp_dirac_get_common_ancestor_waiting_time(
     msp_t *self, population_id_t pop_id, label_id_t label)
@@ -5649,7 +5688,7 @@ msp_dirac_get_common_ancestor_waiting_time(
     double c = self->model.params.dirac_coalescent.c;
     double lambda = 2 * (gsl_sf_choose(n, 2) + c);
 
-    return msp_get_common_ancestor_waiting_time_from_rate(self, pop, lambda);
+    return msp_dirac_get_common_ancestor_waiting_time_from_rate(self, pop, lambda);
 }
 
 static int MSP_WARN_UNUSED
@@ -5713,6 +5752,58 @@ out:
  **************************************************************/
 
 static double
+beta_compute_timescale(msp_t *self, population_t *pop)
+{
+    double alpha = self->model.params.beta_coalescent.alpha;
+    double truncation_point = self->model.params.beta_coalescent.truncation_point;
+    double pop_size = pop->initial_size;
+    double m = 2 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
+    double timescale
+        = exp(alpha * log(m) + (alpha - 1) * log(pop_size) - log(alpha))
+          / gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
+    return timescale;
+}
+
+/* Given the specified rate, return the waiting time until the next common ancestor
+ * event for the specified population */
+static double
+msp_beta_get_common_ancestor_waiting_time_from_rate(
+    msp_t *self, population_t *pop, double lambda)
+{
+    double ret = DBL_MAX;
+    double alpha = self->model.params.beta_coalescent.alpha;
+    double gamma = pop->growth_rate * (alpha - 1);
+    double t = self->time;
+    double u, dt, z;
+
+    if (lambda > 0.0) {
+        u = gsl_ran_exponential(self->rng, 1.0 / lambda);
+        if (gamma == 0.0) {
+            ret = beta_compute_timescale(self, pop) * u;
+        } else {
+            dt = t - pop->start_time;
+            z = 1 + gamma * beta_compute_timescale(self, pop) * exp(-gamma * dt) * u;
+            /* if z is <= 0 no coancestry can occur */
+            if (z > 0) {
+                ret = log(z) / gamma;
+            }
+        }
+        if (u == 0) {
+            /* In the exceedingly rare cases where gsl_ran_exponential returns
+             * 0, we return the smallest representable value > the current time
+             * to avoid returning a tree sequence with zero length branches.
+             * Note that we can still return 0 from this function if population
+             * sizes are extremely small. This is intentional, as it is almost
+             * certainly an error to have simulations at such extreme values
+             * and the user should be alerted to this. */
+            ret = nextafter(t, DBL_MAX) - t;
+            assert(ret != 0);
+        }
+    }
+    return ret;
+}
+
+static double
 msp_beta_get_common_ancestor_waiting_time(
     msp_t *self, population_id_t pop_id, label_id_t label)
 {
@@ -5721,7 +5812,8 @@ msp_beta_get_common_ancestor_waiting_time(
     /* Factor of 4 because only 1/4 of binary events result in a merger due to
      * diploidy, and 2 for consistency with the hudson model */
     double lambda = 8 * gsl_sf_choose(n, 2);
-    double result = msp_get_common_ancestor_waiting_time_from_rate(self, pop, lambda);
+    double result
+        = msp_beta_get_common_ancestor_waiting_time_from_rate(self, pop, lambda);
     return result;
 }
 

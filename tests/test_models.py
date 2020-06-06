@@ -295,7 +295,7 @@ class TestMultipleMergerModels(unittest.TestCase):
         self.verify_non_binary(ts)
 
     def test_dirac_coalescent_lambda_regime_recombination(self):
-        model = msprime.DiracCoalescent(psi=0.9, c=1)
+        model = msprime.DiracCoalescent(psi=0.9, c=100)
         ts = msprime.simulate(
             sample_size=100, recombination_rate=100, model=model, random_seed=3
         )
