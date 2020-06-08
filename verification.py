@@ -3925,7 +3925,7 @@ class MutationTest(SimulationVerifier):
     def _transition_matrix_chi_sq(self, transitions, transition_matrix):
         tm_chisq = []
         for row, p in zip(transitions, transition_matrix):
-            not_zeros = row > 0
+            not_zeros = p > 0
             if sum(not_zeros) > 1:
                 chisq = scipy.stats.chisquare(row[not_zeros], p[not_zeros])
                 tm_chisq.append(chisq.statistic)
@@ -4144,15 +4144,15 @@ class SeqGenTest(MutationTest):
             )
             num_sites = ts_mutated.num_sites
             t = ts_mutated.first()
-
+            t_span = np.ceil(t.interval[1] - np.ceil(t.interval[0]))
             # expected number of ancestral alleles for sites
             expected_ancestral_states_ts = np.zeros(num_alleles)
             change_probs = transition_matrix.sum(axis=1) - np.diag(transition_matrix)
-            expected_ancestral_states_ts += root_distribution * (
-                1 - np.exp(-mutation_rate * t.total_branch_length * change_probs)
+            expected_ancestral_states_ts += (
+                root_distribution
+                * t_span
+                * (1 - np.exp(-mutation_rate * t.total_branch_length * change_probs))
             )
-            expected_ancestral_states_ts /= expected_ancestral_states_ts.sum()
-            expected_num_ancestral_states_ts = expected_ancestral_states_ts * num_sites
 
             # observed number of ancestral alleles
             obs_ancestral_states_ts = np.zeros((num_alleles,))
@@ -4204,7 +4204,7 @@ class SeqGenTest(MutationTest):
                 observed_transitions_ts, expected_ts
             )
             root_chisq_ts = scipy.stats.chisquare(
-                obs_ancestral_states_ts, expected_num_ancestral_states_ts
+                obs_ancestral_states_ts, expected_ancestral_states_ts
             ).statistic
             ts_results["root_distribution"].append(root_chisq_ts)
             sg_results["root_distribution"].append(root_chisq_sg)
