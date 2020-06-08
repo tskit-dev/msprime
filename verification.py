@@ -5,6 +5,7 @@ known statistical results and benchmark programs such as Hudson's ms.
 import argparse
 import ast
 import collections
+import itertools
 import math
 import os
 import random
@@ -13,20 +14,24 @@ import sys
 import tempfile
 import time
 
+import allel
 import dendropy
 import matplotlib
 import numpy as np
 import pandas as pd
+import pyvolve
 import scipy.special
 import scipy.stats
 import seaborn as sns
 import tqdm
+import tskit
 from matplotlib import lines as mlines
 from matplotlib import pyplot
 
 import _msprime
 import msprime
 import msprime.cli as cli
+from msprime.demography import _matrix_exponential
 
 # Force matplotlib to not use any Xwindows backend.
 # Note this must be done before importing statsmodels.
@@ -3916,6 +3921,499 @@ class RandomTest(MsTest):
         self.add_ms_instance(key, cmd)
 
 
+class MutationTest(SimulationVerifier):
+    def _transition_matrix_chi_sq(self, transitions, transition_matrix):
+        tm_chisq = []
+        for row, p in zip(transitions, transition_matrix):
+            not_zeros = row > 0
+            if sum(not_zeros) > 1:
+                chisq = scipy.stats.chisquare(row[not_zeros], p[not_zeros])
+                tm_chisq.append(chisq.statistic)
+            else:
+                tm_chisq.append(None)
+
+        return tm_chisq
+
+    def _transitions(self, sequences, ts, alleles, mutation_rate, Q):
+        num_alleles = len(alleles)
+        transitions = np.zeros((num_alleles, num_alleles), dtype=int)
+        expected = np.zeros((num_alleles, num_alleles))
+
+        for edge in ts.edges():
+            for idx in range(int(ts.sequence_length)):
+                p = sequences[edge.parent][idx]
+                c = sequences[edge.child][idx]
+                transitions[alleles.index(p), alleles.index(c)] += 1
+                j = alleles.index(p)
+                expected[j, :] += _matrix_exponential(
+                    ts.first().branch_length(edge.child) * mutation_rate * Q
+                )[j, :]
+
+        return (transitions, expected)
+
+    def get_allele_counts(self, ts):
+        if ts.num_sites == 0:
+            df_ts = allel.HaplotypeArray(np.zeros((2, ts.num_samples), dtype=int))
+        else:
+            df_ts = allel.HaplotypeArray(ts.genotype_matrix())
+        return df_ts.count_alleles()
+
+    def get_transition_stats(self, ts, alleles, mutation_rate, Q):
+        num_alleles = len(alleles)
+        observed_transitions_ts = np.zeros((num_alleles, num_alleles))
+        expected_ts = np.zeros((num_alleles, num_alleles))
+
+        corr = ts.sequence_length / ts.num_sites
+        # -> for this method to perform optimally, corr==1
+        # at least one  mutation on each site
+        assert ts.num_trees == 1
+        tree = ts.first()
+        for v in ts.variants(samples=range(ts.num_nodes), impute_missing_data=True):
+            for n in tree.nodes():
+                pn = tree.parent(n)
+                if pn != tskit.NULL:
+                    pa = v.alleles[v.genotypes[pn]]
+                else:
+                    pa = v.site.ancestral_state
+                da = v.alleles[v.genotypes[n]]
+                observed_transitions_ts[alleles.index(pa), alleles.index(da)] += 1
+                j = alleles.index(pa)
+                expected_ts[j, :] += _matrix_exponential(
+                    tree.branch_length(n) * mutation_rate * corr * Q
+                )[j, :]
+        return observed_transitions_ts, expected_ts
+
+    def plot_stats(self, df_test, df_msprime, alleles, test_prog, model):
+        test_key = f"{test_prog}-{model}"
+        # plot results
+        for name in ["pi", "root_distribution"]:
+            sg_results = sm.ProbPlot(df_test[name].dropna())
+            ts_results = sm.ProbPlot(df_msprime[name].dropna())
+            sm.qqplot_2samples(
+                sg_results,
+                ts_results,
+                ylabel=f"quantiles {test_prog}",
+                xlabel="quantiles msprime",
+                line="45",
+            )
+            outfile = self._build_filename(test_key, name)
+            pyplot.savefig(outfile)
+        pyplot.clf()
+        if len(alleles) == 4:
+            rows, columns = 2, 2
+        else:
+            rows, columns = 5, 4
+        fig, axs = pyplot.subplots(rows, columns, figsize=(12, 12))
+        for i, co in enumerate(itertools.product(range(rows), range(columns))):
+            a = alleles[i]
+            size = min(df_test[a].dropna().size, df_msprime[a].dropna().size)
+            temp_test = sm.ProbPlot(df_test[a].dropna()[:size])
+            temp_msprime = sm.ProbPlot(df_msprime[a].dropna()[:size])
+            sm.qqplot_2samples(
+                temp_test,
+                temp_msprime,
+                ylabel=f"quantiles {test_prog}",
+                xlabel="quantiles msprime",
+                line="45",
+                ax=axs[co],
+            )
+            axs[co].set_title(a)
+        outfile = self._build_filename(test_key, "alleles")
+        pyplot.savefig(outfile)
+
+
+class SeqGenTest(MutationTest):
+    def __init__(self, output_dir):
+        super().__init__(output_dir)
+        self._seq_gen_executable = ["./data/seq-gen"]
+
+    def _run_seq_gen(self, tree, args, model, alleles, num_sites, mutation_rate, Q):
+
+        ts = tree.tree_sequence
+        newick = tree.newick()
+        cmd = self._seq_gen_executable + args
+        num_sequences = 2 * ts.num_samples - 1
+        with tempfile.TemporaryFile("w+") as in_file, tempfile.TemporaryFile(
+            "w+"
+        ) as out_file:
+            in_file.write(newick)
+            in_file.seek(0)
+            subprocess.call(cmd, stdin=in_file, stdout=out_file)
+            out_file.seek(0)
+            sequences = {}
+            # Skip the first line
+            out_file.readline()
+            for line, node in zip(out_file, ts.first().nodes()):
+                sample_id, sequence = line.split()
+                sequences[node] = sequence
+                assert len(sequence) == ts.sequence_length
+        assert len(sequences) == num_sequences
+
+        num_alleles = len(alleles)
+
+        ancestral_sequence = sequences[len(sequences) - 1]
+        observed_ancestral_sg = np.zeros((num_alleles,))
+        for idx in np.random.choice(int(ts.sequence_length), num_sites, replace=False):
+            b = ancestral_sequence[idx]
+            observed_ancestral_sg[alleles.index(b)] += 1
+
+        def replace_variants(variants):
+            u = np.unique(variants)
+            repl = [i for i in range(len(u))]
+            return np.array([dict(zip(u, repl))[i] for i in variants])
+
+        ord_sequences = {
+            key: [ord(element) % 32 for element in value]
+            for key, value in sequences.items()
+        }
+        transitions_sg, expected = self._transitions(
+            sequences, ts, alleles, mutation_rate, Q
+        )
+
+        sg_sequences = np.transpose(
+            np.array([ord_sequences[key] for key in range(ts.num_samples)])
+        )
+        sg_reduced = np.apply_along_axis(replace_variants, 1, sg_sequences)
+        sg_genotypes = allel.HaplotypeArray(sg_reduced)
+        sg_counts = sg_genotypes.count_alleles()
+
+        return (sg_counts, transitions_sg, observed_ancestral_sg, expected)
+
+    def _run_seq_gen_msprime_stats(self, model, length=20, num_samples=10):
+        """
+        Runs a comparison between mutations generated by msprime and seq_gen
+        for the specified model and returns a tuple of data frames ready
+        for plotting.
+        """
+        model_dict = {
+            "JC69": {"model_id": msprime.JukesCantor(), "par": ["-m", "HKY"]},
+            "HKY": {
+                "model_id": msprime.HKY(
+                    kappa=1.5, equilibrium_frequencies=[0.2, 0.3, 0.1, 0.4]
+                ),
+                "par": ["-m", "HKY", "-t", "0.75", "-f", "0.2,0.3,0.1,0.4"],
+            },
+            "F84": {
+                "model_id": msprime.F84(
+                    kappa=1.0, equilibrium_frequencies=[0.3, 0.25, 0.2, 0.25]
+                ),
+                "par": ["-m", "F84", "-t", "0.5", "-f", "0.3,0.25,0.2,0.25"],
+            },
+            "GTR": {
+                "model_id": msprime.GTR(
+                    relative_rates=[0.4, 0.1, 0.4, 0.2, 0.4, 0.4],
+                    equilibrium_frequencies=[0.3, 0.2, 0.3, 0.2],
+                ),
+                "par": [
+                    "-m",
+                    "GTR",
+                    "-r",
+                    "0.4,0.1,0.4,0.2,0.4,0.4",
+                    "-f",
+                    "0.3,0.2,0.3,0.2",
+                ],
+            },
+            # "PAM": {"model_id": msprime.PAM(), "par": ["-m", "PAM"]},
+            # "BLOSUM62": {"model_id": msprime.BLOSUM62(), "par": ["-m", "BLOSUM"]},
+        }
+
+        num_replicates = 250
+        sg_results = collections.defaultdict(list)
+        ts_results = collections.defaultdict(list)
+        pos = [i for i in range(1, length + 1)]
+        mutation_rate = 1e-4
+        transition_matrix = model_dict[model]["model_id"].transition_matrix
+        root_distribution = model_dict[model]["model_id"].root_distribution
+        alleles = [a.decode() for a in model_dict[model]["model_id"].alleles]
+        num_alleles = len(alleles)
+        Q = transition_matrix.copy()
+        Q -= np.eye(num_alleles)
+        mut_rate_seq_gen = np.sum(-Q.diagonal() * root_distribution) * mutation_rate
+        args = ["-q", "-s", str(mut_rate_seq_gen), "-l", str(length), "-wa"]
+        args += model_dict[model]["par"]
+
+        Ne = 1e4
+
+        for _ in tqdm.tqdm(range(num_replicates)):
+            ts = msprime.simulate(num_samples, Ne=Ne, length=length)
+            ts_mutated = msprime.mutate(
+                ts,
+                rate=mutation_rate,
+                model=model_dict[model]["model_id"],
+                discrete=True,
+            )
+            num_sites = ts_mutated.num_sites
+            t = ts_mutated.first()
+
+            # expected number of ancestral alleles for sites
+            expected_ancestral_states_ts = np.zeros(num_alleles)
+            change_probs = transition_matrix.sum(axis=1) - np.diag(transition_matrix)
+            expected_ancestral_states_ts += root_distribution * (
+                1 - np.exp(-mutation_rate * t.total_branch_length * change_probs)
+            )
+            expected_ancestral_states_ts /= expected_ancestral_states_ts.sum()
+            expected_num_ancestral_states_ts = expected_ancestral_states_ts * num_sites
+
+            # observed number of ancestral alleles
+            obs_ancestral_states_ts = np.zeros((num_alleles,))
+            for site in ts_mutated.sites():
+                aa = site.ancestral_state
+                obs_ancestral_states_ts[alleles.index(aa)] += 1
+
+            # expected and observed number of transitions ts
+            # root distribution == equilibrium freqs for these tests,
+            # as is the case in seq-gen
+            observed_transitions_ts, expected_ts = self.get_transition_stats(
+                ts_mutated, alleles, mutation_rate, Q
+            )
+
+            # run Seq-gen and calculate statistics
+            (
+                c_sg,
+                observed_transitions_sg,
+                observed_ancestral_sg,
+                expected_sg,
+            ) = self._run_seq_gen(
+                t,
+                args,
+                model_dict[model]["model_id"],
+                alleles,
+                num_sites,
+                mutation_rate,
+                Q,
+            )
+
+            c_ts = self.get_allele_counts(ts_mutated)
+            # Compute pi
+            pi_sg = allel.sequence_diversity(pos, c_sg)
+            sg_results["pi"].append(pi_sg)
+            pi_ts = allel.sequence_diversity(pos, c_ts)
+            ts_results["pi"].append(pi_ts)
+
+            # Compute chisquare stats.
+            tm_chisq_sg = self._transition_matrix_chi_sq(
+                observed_transitions_sg, expected_sg
+            )
+            # in Seq-Gen the ancestral sequence is determined first
+            expected_num_ancestral_states_sg = root_distribution * num_sites
+            root_chisq_sg = scipy.stats.chisquare(
+                observed_ancestral_sg, expected_num_ancestral_states_sg
+            ).statistic
+
+            tm_chisq_ts = self._transition_matrix_chi_sq(
+                observed_transitions_ts, expected_ts
+            )
+            root_chisq_ts = scipy.stats.chisquare(
+                obs_ancestral_states_ts, expected_num_ancestral_states_ts
+            ).statistic
+            ts_results["root_distribution"].append(root_chisq_ts)
+            sg_results["root_distribution"].append(root_chisq_sg)
+
+            for idx, a in enumerate(alleles):
+                sg_results[a].append(tm_chisq_sg[idx])
+                ts_results[a].append(tm_chisq_ts[idx])
+
+        df_sg = pd.DataFrame.from_dict(sg_results)
+        df_ts = pd.DataFrame.from_dict(ts_results)
+        return df_sg, df_ts, alleles
+
+    def _run_seq_gen_msprime_comparison(self, model, length=20, num_samples=10):
+        df_sg, df_ts, alleles = self._run_seq_gen_msprime_stats(
+            model, length, num_samples
+        )
+        self.plot_stats(df_sg, df_ts, alleles, "seqgen", model)
+
+    def add_seq_gen(self, model):
+        key = f"seqgen-{model}"
+
+        def f():
+            self._run_seq_gen_msprime_comparison(model)
+
+        self._instances[key] = f
+
+    def add_instances(self):
+        self.add_seq_gen("JC69")
+        self.add_seq_gen("HKY")
+        self.add_seq_gen("F84")
+        self.add_seq_gen("GTR")
+
+
+class PyvolveTest(MutationTest):
+    def _run_pyvolve(
+        self, tree, py_model, model, alleles, num_sites, mutation_rate, ts_mutrate, Q
+    ):
+        ts = tree.tree_sequence
+        seq_length = int(ts.sequence_length)
+        node_labels = {u: str(u) for u in ts.samples()}
+        newick = tree.newick(node_labels=node_labels)
+        pyvolve_tree = pyvolve.read_tree(tree=newick, scale_tree=mutation_rate)
+        pyvolve_model = pyvolve.Partition(models=py_model, size=seq_length)
+        sim = pyvolve.Evolver(tree=pyvolve_tree, partitions=pyvolve_model)
+        sim(ratefile=None, infofile=None, seqfile=None)
+        seqs = sim.get_sequences(anc=True)  # seq-dict is sorted in pre-order
+        sequences = {}
+        for key, node in zip(seqs.keys(), ts.first().nodes()):
+            sequences[node] = seqs[key]
+            assert len(seqs[key]) == ts.sequence_length
+        assert len(sequences) == 2 * ts.num_samples - 1
+
+        num_alleles = len(alleles)
+        ancestral_sequence = sequences[len(sequences) - 1]
+        roots_d_py = np.zeros((num_alleles,))
+        for idx in np.random.choice(int(ts.sequence_length), num_sites, replace=False):
+            b = ancestral_sequence[idx]
+            roots_d_py[alleles.index(b)] += 1
+
+        def replace_variants(variants):
+            u = np.unique(variants)
+            repl = [i for i in range(len(u))]
+            return np.array([dict(zip(u, repl))[i] for i in variants])
+
+        ord_sequences = {
+            key: [ord(element) % 32 for element in value]
+            for key, value in sequences.items()
+        }
+        transitions_py, expected = self._transitions(
+            sequences, ts, alleles, ts_mutrate, Q
+        )
+        py_sequences = np.transpose(
+            np.array([ord_sequences[key] for key in range(ts.num_samples)])
+        )
+        py_reduced = np.apply_along_axis(replace_variants, 1, py_sequences)
+        py_genotypes = allel.HaplotypeArray(py_reduced)
+        py_counts = py_genotypes.count_alleles()
+
+        return (py_counts, transitions_py, roots_d_py, expected)
+
+    def _run_pyvolve_stats(self, model, length=20, num_samples=10):
+
+        model_dict = {
+            "JC69": {
+                "model_id": msprime.JukesCantor(),
+                "pyvolve_model": pyvolve.Model("nucleotide"),
+            },
+            "HKY": {
+                "model_id": msprime.HKY(
+                    kappa=1.5, equilibrium_frequencies=[0.2, 0.3, 0.1, 0.4]
+                ),
+                "pyvolve_model": pyvolve.Model(
+                    "nucleotide", {"kappa": 1.5, "state_freqs": [0.2, 0.3, 0.1, 0.4]}
+                ),
+            },
+        }
+
+        num_replicates = 250
+        py_results = collections.defaultdict(list)
+        ts_results = collections.defaultdict(list)
+        pos = [i for i in range(1, length + 1)]
+        mutation_rate = 1e-4
+        alleles = ["A", "C", "G", "T"]
+        num_alleles = len(alleles)
+        transition_matrix = model_dict[model]["model_id"].transition_matrix
+        root_distribution = model_dict[model]["model_id"].root_distribution
+        Q = transition_matrix.copy()
+        Q -= np.eye(num_alleles)
+        mut_rate_pyvolve = np.sum(-Q.diagonal() * root_distribution) * mutation_rate
+
+        for _ in tqdm.tqdm(range(num_replicates)):
+            ts = msprime.simulate(num_samples, Ne=1e4, length=length)
+            ts_mutated = msprime.mutate(
+                ts,
+                rate=mutation_rate,
+                model=model_dict[model]["model_id"],
+                discrete=True,
+            )
+
+            num_sites = ts_mutated.num_sites
+
+            t = ts_mutated.first()
+
+            # expected number of ancestral alleles for sites
+            expected_ancestral_states_ts = np.zeros(num_alleles)
+            change_probs = transition_matrix.sum(axis=1) - np.diag(transition_matrix)
+            # mut_rate_pyvolve = np.mean(change_probs) * mutation_rate
+            expected_ancestral_states_ts += root_distribution * (
+                1 - np.exp(-mutation_rate * t.total_branch_length * change_probs)
+            )
+            expected_ancestral_states_ts /= expected_ancestral_states_ts.sum()
+            expected_num_ancestral_states_ts = expected_ancestral_states_ts * num_sites
+
+            # observed number of ancestral alleles
+            obs_ancestral_states_ts = np.zeros((num_alleles,))
+            for site in ts_mutated.sites():
+                aa = site.ancestral_state
+                obs_ancestral_states_ts[alleles.index(aa)] += 1
+            observed_transitions_ts, expected = self.get_transition_stats(
+                ts_mutated, alleles, mutation_rate, Q
+            )
+
+            # run pyvolve and calculate statistics
+            (
+                c_py,
+                observed_transitions_py,
+                observed_ancestral_py,
+                expected_py,
+            ) = self._run_pyvolve(
+                t,
+                model_dict[model]["pyvolve_model"],
+                model_dict[model]["model_id"],
+                alleles,
+                num_sites,
+                mut_rate_pyvolve,
+                mutation_rate,
+                Q,
+            )
+            pi_py = allel.sequence_diversity(pos, c_py)
+
+            tm_chisq_py = self._transition_matrix_chi_sq(
+                observed_transitions_py, expected_py
+            )
+
+            expected_num_ancestral_states_py = root_distribution * num_sites
+            root_chisq_py = scipy.stats.chisquare(
+                observed_ancestral_py, expected_num_ancestral_states_py
+            ).statistic
+
+            tm_chisq_ts = self._transition_matrix_chi_sq(
+                observed_transitions_ts, expected
+            )
+
+            root_chisq_ts = scipy.stats.chisquare(
+                obs_ancestral_states_ts, expected_num_ancestral_states_ts
+            ).statistic
+
+            c_ts = self.get_allele_counts(ts_mutated)
+            pi_ts = allel.sequence_diversity(pos, c_ts)
+
+            ts_results["pi"].append(pi_ts)
+            ts_results["root_distribution"].append(root_chisq_ts)
+            py_results["pi"].append(pi_py)
+            py_results["root_distribution"].append(root_chisq_py)
+            for idx, a in enumerate(alleles):
+                ts_results[a].append(tm_chisq_ts[idx])
+                py_results[a].append(tm_chisq_py[idx])
+
+        df_py = pd.DataFrame.from_dict(py_results)
+        df_ts = pd.DataFrame.from_dict(ts_results)
+        return df_py, df_ts, alleles
+
+    def _run_pyvolve_comparison(self, model, length=20, num_samples=10):
+        df_py, df_ts, alleles = self._run_pyvolve_stats(model, length, num_samples)
+        self.plot_stats(df_py, df_ts, alleles, "pyvolve", model)
+
+    def add_pyvolve(self, model):
+        key = f"pyvolve-{model}"
+
+        def f():
+            self._run_pyvolve_comparison(model)
+
+        self._instances[key] = f
+
+    def add_instances(self):
+        self.add_pyvolve("JC69")
+        self.add_pyvolve("HKY")
+
+
 def get_test_names():
     tests = []
 
@@ -3963,6 +4461,8 @@ def run_tests(args):
     sim = SimTest(output_dir)
     analytical = AnalyticalTest(output_dir)
     smc = SmcTest(output_dir)
+    seqgen = SeqGenTest(output_dir)
+    pyvolve = PyvolveTest(output_dir)
 
     if args.group is None:
         classes.extend(
@@ -3978,6 +4478,8 @@ def run_tests(args):
                 smc,
                 discoal,
                 ms,
+                seqgen,
+                pyvolve,
             ]
         )
     else:
@@ -4003,6 +4505,10 @@ def run_tests(args):
             classes.append(ms)
         elif args.group == "random":
             classes.append(random)
+        elif args.group == "seqgen":
+            classes.append(seqgen)
+        elif args.group == "pyvolve":
+            classes.append(pyvolve)
 
     all_tests = {}
     for c in classes:

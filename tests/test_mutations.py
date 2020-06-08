@@ -172,6 +172,21 @@ class TestMutationModel(unittest.TestCase):
         self.validate_model(model)
         self.validate_stationary(model)
 
+    def test_HKY_default(self):
+        model = msprime.HKY()
+        self.validate_model(model)
+        self.validate_stationary(model)
+
+    def test_F84_default(self):
+        model = msprime.F84()
+        self.validate_model(model)
+        self.validate_stationary(model)
+
+    def test_GTR_default(self):
+        model = msprime.GTR([1 / 6] * 6)
+        self.validate_model(model)
+        self.validate_stationary(model)
+
     def test_new_model(self):
         alleles = [b"Alligator", b"Camel", b"Goat"]
         root_distribution = [0.5, 0.25, 0.25]
