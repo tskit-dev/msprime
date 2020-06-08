@@ -93,7 +93,7 @@ class TestMutationModel(unittest.TestCase):
         self.assertEqual((num_alleles, num_alleles), model.transition_matrix.shape)
         self.assertEqual(sum(model.root_distribution), 1.0)
         for j in range(num_alleles):
-            self.assertEqual(sum(model.transition_matrix[j]), 1.0)
+            self.assertTrue(np.allclose(sum(model.transition_matrix[j]), 1.0))
         s = model.__str__()
         self.assertIsInstance(s, str)
         self.assertTrue(s.startswith("Mutation model with alleles"))
@@ -169,6 +169,21 @@ class TestMutationModel(unittest.TestCase):
 
     def test_jukes_cantor(self):
         model = msprime.JukesCantor()
+        self.validate_model(model)
+        self.validate_stationary(model)
+
+    def test_HKY_default(self):
+        model = msprime.HKY()
+        self.validate_model(model)
+        self.validate_stationary(model)
+
+    def test_F84_default(self):
+        model = msprime.F84()
+        self.validate_model(model)
+        self.validate_stationary(model)
+
+    def test_GTR_default(self):
+        model = msprime.GTR([1 / 6] * 6)
         self.validate_model(model)
         self.validate_stationary(model)
 
@@ -879,7 +894,7 @@ class StatisticalTestMixin:
 
     p_threshold = 0.01
 
-    def chisquare(self, observed, expected):
+    def chisquare(self, observed, expected, p_th=p_threshold):
         obs = observed.reshape((np.product(observed.shape)),)
         exp = expected.reshape((np.product(observed.shape)),)
         not_zeros = exp > 0
@@ -889,7 +904,7 @@ class StatisticalTestMixin:
         )
         if sum(not_zeros) > 1:
             chisq = stats.chisquare(obs[not_zeros], exp[not_zeros])
-            self.assertGreater(chisq.pvalue, self.p_threshold)
+            self.assertGreater(chisq.pvalue, p_th)
 
     def bonferroni(self, pvals):
         self.assertGreater(min(pvals), self.p_threshold / len(pvals))
@@ -910,7 +925,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
                 ts = msprime.mutate(
                     ots, random_seed=6, rate=rate, model=model, discrete=discrete
                 )
-                self.verify_model_ts(ts, model, discrete, verify_roots)
+                self.verify_model_ts_general(ts, model, discrete, verify_roots, rate)
 
     def verify_model_ts(self, ts, model, discrete, verify_roots):
         alleles = [a.decode() for a in model.alleles]
@@ -935,6 +950,61 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
             p[j] = 0
             p /= sum(p)
             self.chisquare(row, sum(row) * p)
+
+    def verify_model_ts_general(self, ts, model, discrete, verify_roots, mutation_rate):
+        alleles = [a.decode() for a in model.alleles]
+        num_alleles = len(alleles)
+        roots = np.zeros((num_alleles,))
+
+        observed_transitions = np.zeros((num_alleles, num_alleles))
+        for mut in ts.mutations():
+            if mut.parent == tskit.NULL:
+                pa = ts.site(mut.site).ancestral_state
+            else:
+                pa = ts.mutation(mut.parent).derived_state
+            da = mut.derived_state
+            observed_transitions[alleles.index(pa), alleles.index(da)] += 1
+        pth = 0.05 / num_alleles
+        for j, (row, p) in enumerate(
+            zip(observed_transitions, model.transition_matrix)
+        ):
+            p[j] = 0
+            p /= sum(p)
+            self.chisquare(row, sum(row) * p, pth)
+
+        if verify_roots:
+            for site in ts.sites():
+                aa = site.ancestral_state
+                roots[alleles.index(aa)] += 1
+
+            expected_ancestral_states = np.zeros(num_alleles)
+            change_probs = model.transition_matrix.sum(axis=1) - np.diag(
+                model.transition_matrix
+            )
+            for t in ts.trees():
+                if discrete:
+                    t_span = np.ceil(t.interval[1] - np.ceil(t.interval[0]))
+                    expected_ancestral_states += (
+                        model.root_distribution
+                        * t_span
+                        * (
+                            1
+                            - np.exp(
+                                -mutation_rate * t.total_branch_length * change_probs
+                            )
+                        )
+                    )
+                else:
+                    t_span = t.span
+                    expected_ancestral_states += (
+                        model.root_distribution
+                        * mutation_rate
+                        * t.total_branch_length
+                        * t_span
+                        * change_probs
+                    )
+
+            self.chisquare(roots, expected_ancestral_states)
 
     def verify_mutation_rates(self, model):
         # this test only works if the probability of dropping a mutation
@@ -981,6 +1051,31 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         model = msprime.JukesCantor()
         self.verify_model(model)
         self.verify_mutation_rates(model)
+
+    def test_HKY(self):
+        equilibrium_frequencies = [0.3, 0.2, 0.3, 0.2]
+        kappa = 0.75
+        model = msprime.HKY(
+            kappa=kappa, equilibrium_frequencies=equilibrium_frequencies
+        )
+        self.verify_model(model)
+
+    def test_F84(self):
+        equilibrium_frequencies = [0.4, 0.1, 0.1, 0.4]
+        kappa = 0.75
+        model = msprime.F84(
+            kappa=kappa, equilibrium_frequencies=equilibrium_frequencies
+        )
+        self.verify_model(model)
+
+    def test_GTR(self):
+        relative_rates = [0.2, 0.1, 0.7, 0.5, 0.3, 0.4]
+        equilibrium_frequencies = [0.3, 0.4, 0.2, 0.1]
+        model = msprime.GTR(
+            relative_rates=relative_rates,
+            equilibrium_frequencies=equilibrium_frequencies,
+        )
+        self.verify_model(model)
 
     def test_arbitrary_model(self):
         model = msprime.MutationModel(
