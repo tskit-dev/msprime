@@ -3305,6 +3305,58 @@ test_multiple_mergers_simulation(void)
 }
 
 static void
+test_multiple_mergers_growth_rate(void)
+{
+    int ret;
+    size_t n = 10;
+    size_t m = 1;
+    int j;
+    sample_t *samples = calloc(n, sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    msp_t msp;
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = recomb_map_alloc_uniform(&recomb_map, m, m, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    for (j = 0; j < 2; j++) {
+
+        ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+        CU_ASSERT_EQUAL(ret, 0);
+        if (j == 0) {
+            ret = msp_set_simulation_model_dirac(&msp, 0.9, 100);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else {
+            ret = msp_set_simulation_model_beta(&msp, 1.9, 1);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
+
+        /* Set to a nonzero growth_rate */
+        ret = msp_set_population_configuration(&msp, 0, 1, -0.01);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = msp_initialise(&msp);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        msp_print_state(&msp, _devnull);
+
+        msp_free(&msp);
+
+        tsk_table_collection_clear(&tables);
+    }
+    gsl_rng_free(rng);
+    free(samples);
+    recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_simple_recomb_map(void)
 {
     int ret;
@@ -5287,6 +5339,7 @@ main(int argc, char **argv)
         { "test_dirac_coalescent_bad_parameters", test_dirac_coalescent_bad_parameters },
         { "test_beta_coalescent_bad_parameters", test_beta_coalescent_bad_parameters },
         { "test_multiple_mergers_simulation", test_multiple_mergers_simulation },
+        { "test_multiple_mergers_growth_rate", test_multiple_mergers_growth_rate },
         { "test_large_bottleneck_simulation", test_large_bottleneck_simulation },
         { "test_simple_recombination_map", test_simple_recomb_map },
         { "test_recombination_map_copy", test_recomb_map_copy },

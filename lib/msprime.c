@@ -3481,6 +3481,21 @@ get_population_size(population_t *pop, double t)
     return ret;
 }
 
+/* In the exceedingly rare cases where gsl_ran_exponential returns
+ * 0, we return the smallest representable value > the current time
+ * to avoid returning a tree sequence with zero length branches.
+ * Note that we can still return 0 from this function if population
+ * sizes are extremely small. This is intentional, as it is almost
+ * certainly an error to have simulations at such extreme values
+ * and the user should be alerted to this. */
+static double
+handle_zero_waiting_time(double t)
+{
+    double ret = nextafter(t, DBL_MAX) - t;
+    assert(ret != 0);
+    return ret;
+}
+
 /* Given the specified rate, return the waiting time until the next common ancestor
  * event for the specified population */
 static double
@@ -3509,15 +3524,7 @@ msp_get_common_ancestor_waiting_time_from_rate(
             }
         }
         if (u == 0) {
-            /* In the exceedingly rare cases where gsl_ran_exponential returns
-             * 0, we return the smallest representable value > the current time
-             * to avoid returning a tree sequence with zero length branches.
-             * Note that we can still return 0 from this function if population
-             * sizes are extremely small. This is intentional, as it is almost
-             * certainly an error to have simulations at such extreme values
-             * and the user should be alerted to this. */
-            ret = nextafter(t, DBL_MAX) - t;
-            assert(ret != 0);
+            ret = handle_zero_waiting_time(t);
         }
     }
     return ret;
@@ -5657,23 +5664,14 @@ msp_dirac_get_common_ancestor_waiting_time_from_rate(
             ret = pop->initial_size * pop->initial_size * u;
         } else {
             dt = t - pop->start_time;
-            z = 1 + alpha * pop->initial_size * pop->initial_size
-                * exp(-alpha * dt) * u;
+            z = 1 + alpha * pop->initial_size * pop->initial_size * exp(-alpha * dt) * u;
             /* if z is <= 0 no coancestry can occur */
             if (z > 0) {
                 ret = log(z) / alpha;
             }
         }
         if (u == 0) {
-            /* In the exceedingly rare cases where gsl_ran_exponential returns
-             * 0, we return the smallest representable value > the current time
-             * to avoid returning a tree sequence with zero length branches.
-             * Note that we can still return 0 from this function if population
-             * sizes are extremely small. This is intentional, as it is almost
-             * certainly an error to have simulations at such extreme values
-             * and the user should be alerted to this. */
-            ret = nextafter(t, DBL_MAX) - t;
-            assert(ret != 0);
+            ret = handle_zero_waiting_time(t);
         }
     }
     return ret;
@@ -5758,9 +5756,8 @@ beta_compute_timescale(msp_t *self, population_t *pop)
     double truncation_point = self->model.params.beta_coalescent.truncation_point;
     double pop_size = pop->initial_size;
     double m = 2 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
-    double timescale
-        = exp(alpha * log(m) + (alpha - 1) * log(pop_size) - log(alpha))
-          / gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
+    double timescale = exp(alpha * log(m) + (alpha - 1) * log(pop_size) - log(alpha))
+                       / gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
     return timescale;
 }
 
@@ -5789,15 +5786,7 @@ msp_beta_get_common_ancestor_waiting_time_from_rate(
             }
         }
         if (u == 0) {
-            /* In the exceedingly rare cases where gsl_ran_exponential returns
-             * 0, we return the smallest representable value > the current time
-             * to avoid returning a tree sequence with zero length branches.
-             * Note that we can still return 0 from this function if population
-             * sizes are extremely small. This is intentional, as it is almost
-             * certainly an error to have simulations at such extreme values
-             * and the user should be alerted to this. */
-            ret = nextafter(t, DBL_MAX) - t;
-            assert(ret != 0);
+            ret = handle_zero_waiting_time(t);
         }
     }
     return ret;
