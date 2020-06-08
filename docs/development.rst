@@ -346,6 +346,26 @@ that can be reached. (Some classes of error such as malloc failures
 and IO errors are difficult to simulate in C.) Code coverage statistics are
 automatically tracked using `CodeCov <https://codecov.io/gh/tskit-dev/msprime/>`_.
 
+++++++++++
+Code Style
+++++++++++
+
+C code is formatted using
+`clang-format <https://clang.llvm.org/docs/ClangFormat.html>`_
+with a custom configuration.
+To ensure that your code is correctly formatted, you can run
+
+.. code-block:: bash
+
+   clang-format -i lib/tests/* lib/!(avl).{c,h}
+
+before submitting a pull request.
+
+Vim users may find the
+`vim-clang-format <https://github.com/rhysd/vim-clang-format>`_
+plugin useful for automatically formatting code.
+
+
 ++++++++++++++++++
 Coding conventions
 ++++++++++++++++++
