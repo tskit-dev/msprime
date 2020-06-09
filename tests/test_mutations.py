@@ -91,7 +91,7 @@ class TestMutationModel(unittest.TestCase):
         num_alleles = len(model.alleles)
         self.assertEqual(num_alleles, len(model.root_distribution))
         self.assertEqual((num_alleles, num_alleles), model.transition_matrix.shape)
-        self.assertEqual(sum(model.root_distribution), 1.0)
+        self.assertTrue(np.allclose(sum(model.root_distribution), 1.0))
         for j in range(num_alleles):
             self.assertTrue(np.allclose(sum(model.transition_matrix[j]), 1.0))
         s = model.__str__()
@@ -102,7 +102,7 @@ class TestMutationModel(unittest.TestCase):
         # for most models, the root distribution should be the
         # stationary distribution of the transition matrix
         x = np.matmul(model.root_distribution, model.transition_matrix)
-        self.assertSequenceEqual(list(x), list(model.root_distribution))
+        self.assertTrue(np.allclose(list(x), list(model.root_distribution)))
 
     def validate_asdict(self, model):
         m = msprime.MutationModel(**model.asdict())
@@ -184,6 +184,16 @@ class TestMutationModel(unittest.TestCase):
 
     def test_GTR_default(self):
         model = msprime.GTR([1 / 6] * 6)
+        self.validate_model(model)
+        self.validate_stationary(model)
+
+    def test_PAM(self):
+        model = msprime.PAM()
+        self.validate_model(model)
+        self.validate_stationary(model)
+
+    def test_BLOSUM62(self):
+        model = msprime.BLOSUM62()
         self.validate_model(model)
         self.validate_stationary(model)
 
@@ -920,8 +930,13 @@ class StatisticalTestMixin:
 class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
     def verify_model(self, model, verify_roots=True):
         ots = msprime.simulate(10, random_seed=5, recombination_rate=0.05, length=20)
+        # "large enough sample"-condition for the chisquare test
+        if len(model.alleles) > 4:
+            rates = (15, 20)
+        else:
+            rates = (1, 10)
         for discrete in (True, False):
-            for rate in (1, 10):
+            for rate in rates:
                 ts = msprime.mutate(
                     ots, random_seed=6, rate=rate, model=model, discrete=discrete
                 )
@@ -1075,6 +1090,14 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
             relative_rates=relative_rates,
             equilibrium_frequencies=equilibrium_frequencies,
         )
+        self.verify_model(model)
+
+    def test_PAM(self):
+        model = msprime.PAM()
+        self.verify_model(model)
+
+    def test_BLOSUM62(self):
+        model = msprime.BLOSUM62()
         self.verify_model(model)
 
     def test_arbitrary_model(self):
