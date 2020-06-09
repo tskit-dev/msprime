@@ -79,6 +79,7 @@ from msprime.core import __version__
 from msprime.exceptions import *
 from msprime.demography import *
 from msprime.ancestry import *
+from msprime.pedigrees import *
 from msprime.mutations import *
 from msprime.likelihood import *
 from msprime.species_trees import parse_species_tree, parse_starbeast
