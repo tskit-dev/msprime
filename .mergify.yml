@@ -1,0 +1,30 @@
+pull_request_rules:
+  - name: Automatic rebase, CI and merge
+    conditions:
+      - "-merged"
+      - "#approved-reviews-by>=1"
+      - base=master
+      - label=AUTOMERGE-REQUESTED
+      - status-success=lint-c
+      - status-success=pre-commit
+      - "status-success=ci/circleci: build"
+      #- status-success=codecov/patch
+      #- status-success=codecov/project/c-tests
+      #- status-success=codecov/project/python-c-tests
+      #- status-success=codecov/project/python-tests
+      - status-success=continuous-integration/appveyor/pr
+      - status-success=continuous-integration/travis-ci/pr
+    actions:
+      merge:
+        strict: smart
+        strict_method: rebase
+        method: merge
+
+  - name: Remove label after merge
+    conditions:
+      - merged
+      - label=AUTOMERGE-REQUESTED
+    actions:
+      label:
+        remove:
+          - AUTOMERGE-REQUESTED
