@@ -399,41 +399,29 @@ def simulator_factory(
     if gene_conversion_track_length is None:
         gene_conversion_track_length = 1
 
-    # TODO factor out this Simulator object here and instead call a
-    # factory function to make the low-level Simulator given the
-    # state of the variables in here.
-    sim = Simulator()
-    sim.samples = samples
-    sim.model = model
-    sim.recombination_map = recombination_map
-    sim.from_ts = from_ts
-    sim.demography = demography
-    sim.model_change_events = model_change_events
-    sim.store_migrations = record_migrations
-    sim.store_full_arg = record_full_arg
-    sim.start_time = start_time
-    sim.num_labels = num_labels
-    sim.gene_conversion_rate = gene_conversion_rate
-    sim.gene_conversion_track_length = gene_conversion_track_length
-    # TODO see notes on the WrightFisherPedigree; the pedigree should
-    # be a parameter of the *model*.
-    sim.pedigree = pedigree
-    if sim.pedigree is not None:
-        sim.check_pedigree()
     if random_generator is None:
         # For the simulate code-path the rng will already be set, but
         # for convenience we allow it to be null to help with writing
         # tests.
         random_generator = _msprime.RandomGenerator(core.get_random_seed())
-    sim.random_generator = random_generator
 
-    # We always need at least n segments, so no point in making
-    # allocation any smaller than this.
-    num_samples = len(sim.samples) if sim.samples is not None else from_ts.num_samples
-    block_size = 64 * 1024
-    sim.segment_block_size = max(block_size, num_samples)
-    sim.avl_node_block_size = block_size
-    sim.node_mapping_block_size = block_size
+    sim = Simulator(
+        samples=samples,
+        recombination_map=recombination_map,
+        Ne=Ne,
+        random_generator=random_generator,
+        pedigree=pedigree,
+        model=model,
+        from_ts=from_ts,
+        store_migrations=record_migrations,
+        store_full_arg=record_full_arg,
+        start_time=start_time,
+        num_labels=num_labels,
+        gene_conversion_rate=gene_conversion_rate,
+        gene_conversion_track_length=gene_conversion_track_length,
+        demography=demography,
+        model_change_events=model_change_events,
+    )
     return sim
 
 
@@ -691,21 +679,95 @@ def simulate(
         )
 
 
-# TODO This class is largely pointless. We should factor it out entirely
-# and replace with the low-level class. If we change the low-level class
-# to use attributes instead of "get_x" methods we can jettison a whole
-# bunch of boilerplate.
-class Simulator:
+class Simulator(_msprime.Simulator):
     """
     Class to simulate trees under a variety of population models.
     """
 
-    def __init__(self):
-        self.ll_sim = None
+    def __init__(
+        self,
+        samples,
+        recombination_map,
+        Ne,
+        random_generator,
+        demography,
+        model_change_events,
+        pedigree=None,
+        model=None,
+        from_ts=None,
+        store_migrations=False,
+        store_full_arg=False,
+        start_time=None,
+        num_labels=None,
+        gene_conversion_rate=0,
+        gene_conversion_track_length=1,
+    ):
+        # We always need at least n segments, so no point in making
+        # allocation any smaller than this.
+        num_samples = len(samples) if samples is not None else from_ts.num_samples
+        block_size = 64 * 1024
+        segment_block_size = max(block_size, num_samples)
+        avl_node_block_size = block_size
+        node_mapping_block_size = block_size
+
+        if num_labels is None:
+            num_labels = self._choose_num_labels(model, model_change_events)
+
+        # Now, convert the high-level values into their low-level
+        # counterparts.
+        ll_pedigree = None
+        if pedigree is not None:
+            # TODO see notes on the WrightFisherPedigree; the pedigree should
+            # be a parameter of the *model*.
+            pedigree = self._check_pedigree(
+                pedigree, samples, model, demography, model_change_events
+            )
+            ll_pedigree = pedigree.get_ll_representation()
+        ll_simulation_model = model.get_ll_representation()
+        logger.debug("Setting initial model %s", ll_simulation_model)
+        ll_population_configuration = [pop.asdict() for pop in demography.populations]
+        ll_demographic_events = [
+            event.get_ll_representation() for event in demography.events
+        ]
+        ll_recomb_map = recombination_map.get_ll_recombination_map()
+        ll_tables = _msprime.LightweightTableCollection(
+            recombination_map.get_sequence_length()
+        )
+        if from_ts is not None:
+            from_ts_tables = from_ts.tables.asdict()
+            ll_tables.fromdict(from_ts_tables)
+        start_time = -1 if start_time is None else start_time
+        super().__init__(
+            samples=samples,
+            recombination_map=ll_recomb_map,
+            tables=ll_tables,
+            start_time=start_time,
+            random_generator=random_generator,
+            model=ll_simulation_model,
+            migration_matrix=demography.migration_matrix,
+            population_configuration=ll_population_configuration,
+            pedigree=ll_pedigree,
+            demographic_events=ll_demographic_events,
+            store_migrations=store_migrations,
+            store_full_arg=store_full_arg,
+            num_labels=num_labels,
+            segment_block_size=segment_block_size,
+            avl_node_block_size=avl_node_block_size,
+            node_mapping_block_size=node_mapping_block_size,
+            gene_conversion_rate=gene_conversion_rate,
+            gene_conversion_track_length=gene_conversion_track_length,
+        )
+        # attributes that are internal to the highlevel Simulator class
+        self._hl_from_ts = from_ts
+        # highlevel attributes used externally that have no lowlevel equivalent
+        self.model_change_events = model_change_events
+        self.demography = demography
+        self.recombination_map = recombination_map
 
     @property
-    def sequence_length(self):
-        return self.recombination_map.get_sequence_length()
+    def tables(self):
+        # convert lowlevel tables to highlevel tables
+        return tskit.TableCollection.fromdict(super().tables.asdict())
 
     @property
     def sample_configuration(self):
@@ -713,177 +775,75 @@ class Simulator:
         Returns the number of samples from each popuation.
         """
         ret = [0 for _ in range(self.num_populations)]
-        for sample in self.samples:
+        for ll_sample in self.samples:
+            sample = demog.Sample(*ll_sample)
             ret[sample.population] += 1
         return ret
 
-    @property
-    def num_breakpoints(self):
-        return self.ll_sim.get_num_breakpoints()
-
-    @property
-    def breakpoints(self):
-        """
-        Returns the recombination breakpoints translated into physical
-        coordinates.
-        """
-        return self.ll_sim.get_breakpoints()
-
-    @property
-    def time(self):
-        return self.ll_sim.get_time()
-
-    @property
-    def num_avl_node_blocks(self):
-        return self.ll_sim.get_num_avl_node_blocks()
-
-    @property
-    def num_node_mapping_blocks(self):
-        return self.ll_sim.get_num_node_mapping_blocks()
-
-    @property
-    def num_segment_blocks(self):
-        return self.ll_sim.get_num_segment_blocks()
-
-    @property
-    def num_common_ancestor_events(self):
-        return self.ll_sim.get_num_common_ancestor_events()
-
-    @property
-    def num_rejected_common_ancestor_events(self):
-        return self.ll_sim.get_num_rejected_common_ancestor_events()
-
-    @property
-    def num_recombination_events(self):
-        return self.ll_sim.get_num_recombination_events()
-
-    @property
-    def num_gene_conversion_events(self):
-        return self.ll_sim.get_num_gene_conversion_events()
-
-    @property
-    def num_populations(self):
-        return self.demography.num_populations
-
-    @property
-    def num_migration_events(self):
-        return self.ll_sim.get_num_migration_events()
-
-    @property
-    def total_num_migration_events(self):
-        return np.sum(self.num_migration_events)
-
-    @property
-    def num_multiple_recombination_events(self):
-        return self.ll_sim.get_num_multiple_recombination_events()
-
-    def check_pedigree(self):
-        # TODO this functionality is prelimary and undocumented, so this
+    def _check_pedigree(
+        self, pedigree, samples, model, demography, model_change_events
+    ):
+        # TODO this functionality is preliminary and undocumented, so this
         # code should be expected to change.
-        if self.demography.num_populations != 1:
+        if demography.num_populations != 1:
             raise ValueError(
                 "Cannot yet specify population structure "
                 "and pedigrees simultaneously"
             )
-        if not isinstance(self.model, WrightFisherPedigree):
+        if not isinstance(model, WrightFisherPedigree):
             raise ValueError("Pedigree can only be specified for wf_ped model")
 
-        if len(self.samples) % 2 != 0:
+        if len(samples) % 2 != 0:
             raise ValueError(
-                "In (diploid) pedigrees, must specify two " "lineages per individual."
+                "In (diploid) pedigrees, must specify two lineages per individual."
             )
 
-        if self.pedigree.is_sample is None:
-            self.pedigree.set_samples(num_samples=len(self.samples) // 2)
+        if pedigree.is_sample is None:
+            pedigree.set_samples(num_samples=len(samples) // 2)
 
-        if sum(self.pedigree.is_sample) * 2 != len(self.samples):
+        if sum(pedigree.is_sample) * 2 != len(samples):
             raise ValueError(
                 "{} sample lineages to be simulated, but {} in pedigree".format(
-                    len(self.samples), self.pedigree.num_samples * 2
+                    len(samples), pedigree.num_samples * 2
                 )
             )
 
-        pedigree_max_time = np.max(self.pedigree.time)
-        if len(self.demography.events) > 0:
-            de_min_time = min([x.time for x in self.demography.events])
+        pedigree_max_time = np.max(pedigree.time)
+        if len(demography.events) > 0:
+            de_min_time = min([x.time for x in demography.events])
             if de_min_time <= pedigree_max_time:
                 raise NotImplementedError(
                     "Demographic events must be older than oldest pedigree founder."
                 )
-        if len(self.model_change_events) > 0:
-            mc_min_time = min([x.time for x in self.model_change_events])
+        if len(model_change_events) > 0:
+            mc_min_time = min([x.time for x in model_change_events])
             if mc_min_time < pedigree_max_time:
                 raise NotImplementedError(
                     "Model change events earlier than founders of pedigree unsupported."
                 )
 
-    def __choose_num_labels(self):
+        return pedigree
+
+    def _choose_num_labels(self, model, model_change_events):
         """
         Choose the number of labels appropriately, given the simulation
         models that will be simulated.
         """
-        self.num_labels = 1
-        models = [self.model] + [event.model for event in self.model_change_events]
+        num_labels = 1
+        models = [model] + [event.model for event in model_change_events]
         for model in models:
             if isinstance(model, SweepGenicSelection):
-                self.num_labels = 2
-
-    def create_ll_instance(self):
-        if self.num_labels is None:
-            self.__choose_num_labels()
-        # Now, convert the high-level values into their low-level
-        # counterparts.
-        ll_simulation_model = self.model.get_ll_representation()
-        logger.debug("Setting initial model %s", ll_simulation_model)
-        ll_population_configuration = [
-            pop.asdict() for pop in self.demography.populations
-        ]
-        ll_demographic_events = [
-            event.get_ll_representation() for event in self.demography.events
-        ]
-        ll_recomb_map = self.recombination_map.get_ll_recombination_map()
-        self.ll_tables = _msprime.LightweightTableCollection(
-            self.recombination_map.get_sequence_length()
-        )
-        if self.from_ts is not None:
-            from_ts_tables = self.from_ts.tables.asdict()
-            self.ll_tables.fromdict(from_ts_tables)
-        start_time = -1 if self.start_time is None else self.start_time
-        ll_pedigree = None
-        if self.pedigree is not None:
-            ll_pedigree = self.pedigree.get_ll_representation()
-        ll_sim = _msprime.Simulator(
-            samples=self.samples,
-            recombination_map=ll_recomb_map,
-            tables=self.ll_tables,
-            start_time=start_time,
-            random_generator=self.random_generator,
-            model=ll_simulation_model,
-            migration_matrix=self.demography.migration_matrix,
-            population_configuration=ll_population_configuration,
-            pedigree=ll_pedigree,
-            demographic_events=ll_demographic_events,
-            store_migrations=self.store_migrations,
-            store_full_arg=self.store_full_arg,
-            num_labels=self.num_labels,
-            segment_block_size=self.segment_block_size,
-            avl_node_block_size=self.avl_node_block_size,
-            node_mapping_block_size=self.node_mapping_block_size,
-            gene_conversion_rate=self.gene_conversion_rate,
-            gene_conversion_track_length=self.gene_conversion_track_length,
-        )
-        return ll_sim
+                num_labels = 2
+        return num_labels
 
     def run(self, end_time=None):
         """
         Runs the simulation until complete coalescence has occurred.
         """
-        if self.ll_sim is None:
-            self.ll_sim = self.create_ll_instance()
         for event in self.model_change_events:
             # If the event time is a callable, we compute the end_time
             # as a function of the current simulation time.
-            current_time = self.ll_sim.get_time()
+            current_time = self.time
             model_start_time = event.time
             if callable(event.time):
                 model_start_time = event.time(current_time)
@@ -898,25 +858,25 @@ class Simulator:
                     f"current time = {current_time}; start_time = {model_start_time}"
                 )
             logger.debug("Running simulation until maximum: %f", model_start_time)
-            self.ll_sim.run(model_start_time)
+            super().run(model_start_time)
             ll_new_model = event.model.get_ll_representation()
             logger.debug("Changing to model %s", ll_new_model)
-            self.ll_sim.set_model(ll_new_model)
+            self.model = ll_new_model
         end_time = np.inf if end_time is None else end_time
         logger.debug("Running simulation until maximum: %f", end_time)
-        self.ll_sim.run(end_time)
-        self.ll_sim.finalise_tables()
+        super().run(end_time)
+        self.finalise_tables()
 
     def get_tree_sequence(self, mutation_generator=None, provenance_record=None):
         """
         Returns a TreeSequence representing the state of the simulation.
         """
         if mutation_generator is not None:
-            mutation_generator.generate(self.ll_tables)
-        tables = tskit.TableCollection.fromdict(self.ll_tables.asdict())
+            mutation_generator.generate(super().tables)
+        tables = self.tables
         if provenance_record is not None:
             tables.provenances.add_row(provenance_record)
-        if self.from_ts is None:
+        if self._hl_from_ts is None:
             # Add the populations with metadata
             assert len(tables.populations) == self.demography.num_populations
             tables.populations.clear()
@@ -925,13 +885,6 @@ class Simulator:
                     metadata=population.temporary_hack_for_encoding_old_style_metadata()
                 )
         return tables.tree_sequence()
-
-    def reset(self):
-        """
-        Resets the simulation so that we can perform another replicate.
-        """
-        if self.ll_sim is not None:
-            self.ll_sim.reset()
 
 
 class RecombinationMap:

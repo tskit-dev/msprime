@@ -204,6 +204,14 @@ class SimulationRunner:
                 hotspots, self._recombination_rate, num_loci
             )
 
+        # sort out the random seeds
+        ms_seeds = random_seeds
+        if random_seeds is None:
+            ms_seeds = generate_seeds()
+        seed = get_single_seed(ms_seeds)
+        self._random_generator = _msprime.RandomGenerator(seed)
+        self._ms_random_seeds = ms_seeds
+
         # If we have specified any population_configurations we don't want
         # to give the overall sample size.
         sample_size = self._sample_size
@@ -221,18 +229,11 @@ class SimulationRunner:
             demographic_events=demographic_events,
             gene_conversion_rate=scaled_gene_conversion_rate,
             gene_conversion_track_length=gene_conversion_track_length,
+            random_generator=self._random_generator,
         )
 
         self._precision = precision
         self._print_trees = print_trees
-        # sort out the random seeds
-        ms_seeds = random_seeds
-        if random_seeds is None:
-            ms_seeds = generate_seeds()
-        seed = get_single_seed(ms_seeds)
-        self._random_generator = _msprime.RandomGenerator(seed)
-        self._ms_random_seeds = ms_seeds
-        self._simulator.random_generator = self._random_generator
         self._mutation_generator = mutations._simple_mutation_generator(
             self._mutation_rate, self._simulator.sequence_length, self._random_generator
         )

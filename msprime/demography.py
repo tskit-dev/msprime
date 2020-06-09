@@ -842,8 +842,6 @@ class DemographyDebugger:
         simulator = ancestry.simulator_factory(
             sample_size=2, demography=self.demography
         )
-        ll_sim = simulator.create_ll_instance()
-        N = self.num_populations
         start_time = 0
         end_time = 0
         abs_tol = 1e-9
@@ -856,18 +854,18 @@ class DemographyDebugger:
             ):
                 events.append(all_events[event_index])
                 event_index += 1
-            end_time = ll_sim.debug_demography()
-            migration_matrix = ll_sim.get_migration_matrix()
+            end_time = simulator.debug_demography()
+            migration_matrix = simulator.migration_matrix
             growth_rates = [
-                conf["growth_rate"] for conf in ll_sim.get_population_configuration()
+                conf["growth_rate"] for conf in simulator.population_configuration
             ]
             populations = [
                 PopulationParameters(
-                    start_size=ll_sim.compute_population_size(j, start_time),
-                    end_size=ll_sim.compute_population_size(j, end_time),
+                    start_size=simulator.compute_population_size(j, start_time),
+                    end_size=simulator.compute_population_size(j, end_time),
                     growth_rate=growth_rates[j],
                 )
-                for j in range(N)
+                for j in range(self.num_populations)
             ]
             self.epochs.append(
                 Epoch(start_time, end_time, populations, migration_matrix, events)

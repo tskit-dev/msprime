@@ -178,7 +178,7 @@ class TestSimulator(unittest.TestCase):
         self.assertEqual(sim.time, t)
         self.assertGreater(sim.num_common_ancestor_events, 0)
         self.assertGreaterEqual(sim.num_recombination_events, 0)
-        self.assertGreaterEqual(sim.total_num_migration_events, 0)
+        self.assertGreaterEqual(np.sum(sim.num_migration_events), 0)
         self.assertGreaterEqual(sim.num_multiple_recombination_events, 0)
 
     def test_random_parameters(self):
@@ -195,13 +195,6 @@ class TestSimulator(unittest.TestCase):
         self.assertGreater(sim.avl_node_block_size, 0)
         self.assertGreater(sim.segment_block_size, 0)
         self.assertGreater(sim.node_mapping_block_size, 0)
-        sim.reset()
-        sim.avl_node_block_size = 1
-        sim.segment_block_size = 1
-        sim.node_mapping_block_size = 1
-        self.assertEqual(sim.avl_node_block_size, 1)
-        self.assertEqual(sim.segment_block_size, 1)
-        self.assertEqual(sim.node_mapping_block_size, 1)
 
 
 class TestDemographyFactory(unittest.TestCase):
@@ -323,12 +316,9 @@ class TestSimulatorFactory(unittest.TestCase):
         self.assertRaises(ValueError, msprime.simulator_factory, sample_size=1)
         for n in [2, 100, 1000]:
             sim = msprime.simulator_factory(n)
+            self.assertEqual(sim.num_samples, n)
             self.assertEqual(len(sim.samples), n)
-            ll_sim = sim.create_ll_instance()
-            self.assertEqual(ll_sim.get_num_samples(), n)
-            samples = ll_sim.get_samples()
-            self.assertEqual(len(samples), n)
-            for sample in samples:
+            for sample in sim.samples:
                 self.assertEqual(sample[0], 0)
                 self.assertEqual(sample[1], 0)
 
@@ -364,12 +354,10 @@ class TestSimulatorFactory(unittest.TestCase):
                 self.assertEqual(pop.initial_size, pop_config.initial_size)
                 self.assertEqual(pop.growth_rate, pop_config.growth_rate)
             self.assertEqual(len(sim.samples), sample_size)
-            ll_sim = sim.create_ll_instance()
-            self.assertEqual(len(ll_sim.get_population_configuration()), N)
+            self.assertEqual(len(sim.population_configuration), N)
         # The default is a single population
         sim = msprime.simulator_factory(10)
-        ll_sim = sim.create_ll_instance()
-        self.assertEqual(len(ll_sim.get_population_configuration()), 1)
+        self.assertEqual(len(sim.population_configuration), 1)
 
     def test_sample_size_population_configuration(self):
         for d in range(1, 5):
@@ -385,8 +373,6 @@ class TestSimulatorFactory(unittest.TestCase):
             for j in range(d):
                 samples += [msprime.Sample(population=j, time=0) for _ in range(2)]
             self.assertEqual(sim.samples, samples)
-            ll_sim = sim.create_ll_instance()
-            self.assertEqual(ll_sim.get_samples(), samples)
 
     def test_migration_matrix(self):
         # Cannot specify a migration matrix without population
@@ -397,10 +383,9 @@ class TestSimulatorFactory(unittest.TestCase):
         for N in range(1, 10):
             pop_configs = [msprime.PopulationConfiguration(5) for _ in range(N)]
             sim = msprime.simulator_factory(population_configurations=pop_configs)
-            ll_sim = sim.create_ll_instance()
             # If we don't specify a matrix, it's 0 everywhere.
             matrix = np.zeros((N, N))
-            np.testing.assert_array_equal(ll_sim.get_migration_matrix(), matrix)
+            np.testing.assert_array_equal(sim.migration_matrix, matrix)
 
             def f(matrix):
                 return msprime.simulator_factory(
@@ -413,14 +398,12 @@ class TestSimulatorFactory(unittest.TestCase):
             # Try with equivalent numpy array.
             sim = f(np.array(matrix))
             np.testing.assert_array_equal(sim.demography.migration_matrix, matrix)
-            ll_sim = sim.create_ll_instance()
-            np.testing.assert_array_equal(ll_sim.get_migration_matrix(), matrix)
+            np.testing.assert_array_equal(sim.migration_matrix, matrix)
             for bad_type in [{}, "", 234, 1.2]:
                 self.assertRaises(ValueError, f, bad_type)
             # Now check for the structure of the matrix.
             matrix[0][0] = "bad value"
-            sim = f(matrix)
-            self.assertRaises(ValueError, sim.create_ll_instance)
+            self.assertRaises(ValueError, f, matrix)
             matrix[0] = None
             self.assertRaises(ValueError, f, matrix)
             matrix[0] = []
@@ -439,8 +422,7 @@ class TestSimulatorFactory(unittest.TestCase):
 
     def test_default_migration_matrix(self):
         sim = msprime.simulator_factory(10)
-        ll_sim = sim.create_ll_instance()
-        self.assertEqual(ll_sim.get_migration_matrix(), [0.0])
+        self.assertEqual(sim.migration_matrix, [0.0])
 
     def test_demographic_events(self):
         for bad_type in ["sdf", 234, [12], [None]]:
@@ -477,10 +459,6 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertEqual(recomb_map.get_positions(), positions)
             self.assertEqual(recomb_map.get_rates(), rates)
             self.assertEqual(sim.sequence_length, recomb_map.get_sequence_length())
-            ll_sim = sim.create_ll_instance()
-            self.assertEqual(
-                ll_sim.get_sequence_length(), recomb_map.get_sequence_length()
-            )
 
     def test_combining_recomb_map_and_rate_length(self):
         recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
@@ -559,8 +537,6 @@ class TestSimulatorFactory(unittest.TestCase):
             samples=samples, population_configurations=pop_configs
         )
         self.assertEqual(sim.samples, samples)
-        ll_sim = sim.create_ll_instance()
-        self.assertEqual(ll_sim.get_samples(), samples)
 
     def test_new_old_style_model_changes_equal(self):
         models = [

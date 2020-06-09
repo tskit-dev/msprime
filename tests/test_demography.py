@@ -1713,7 +1713,7 @@ class TestCoalescenceLocations(unittest.TestCase):
             msprime.PopulationConfiguration(1),
         ]
         # We migrate the lineages to the next step by step and intersperse
-        # them mmodel change events
+        # them with model change events
         demographic_events = [
             msprime.MassMigration(time=t1, source=0, dest=1),
             msprime.SimulationModelChange(t1 + dt, "dtwf"),
