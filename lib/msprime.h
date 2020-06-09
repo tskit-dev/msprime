@@ -514,10 +514,10 @@ double recomb_map_position_to_mass(recomb_map_t *self, double position);
 double recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass);
 double recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start);
 
-int mutation_model_factory(mutation_model_t *self, int model);
-int mutation_matrix_model_alloc(mutation_model_t *self, size_t num_alleles,
+int matrix_mutation_model_factory(mutation_model_t *self, int model);
+int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
     char **alleles, double *root_distribution, double *transition_matrix);
-int slim_mutator_alloc(mutation_model_t *self, int32_t mutation_type_id,
+int slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
     int64_t next_mutation_id, size_t block_size);
 int mutation_model_free(mutation_model_t *self);
 int mutation_model_choose_root_state(mutation_model_t *self, gsl_rng *rng, site_t *site);

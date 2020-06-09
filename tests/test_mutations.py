@@ -1110,7 +1110,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         self.verify_mutation_rates(model)
 
 
-class TestSlimMutationGenerator(unittest.TestCase):
+class TestSlimMutationModel(unittest.TestCase):
     """
     Tests for the SLiM mutation generator.
     """
@@ -1143,6 +1143,13 @@ class TestSlimMutationGenerator(unittest.TestCase):
         model = PythonSlimMutationModel(0)
         mts = py_mutate(ts, rate=1, random_seed=23, model=model, discrete=True)
         self.validate_slim_mutations(mts)
+        # TODO do this properly
+        model = msprime.SlimMutationModel(0)
+        mts2 = msprime.mutate(ts, rate=1, random_seed=23, model=model, discrete=True)
+        self.assertGreater(model.next_id, 0)
+        self.assertEqual(mts2.num_mutations, model.next_id)
+        # breaks because of text decoding issues:
+        # print(mts2.tables)
 
     def test_add_slim_mutation(self):
         ts = msprime.simulate(10, length=100, random_seed=5)

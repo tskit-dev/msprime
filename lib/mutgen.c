@@ -423,7 +423,6 @@ slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
     mutation->metadata = buff;
     mutation->metadata_length
         = (tsk_size_t)(parent_metadata_length + SLIM_MUTATION_METADATA_SIZE);
-
 out:
     return ret;
 }
@@ -440,14 +439,14 @@ slim_mutator_free(mutation_model_t *self)
  * Mutation model public API
  *
  * This consists of a factory function for each type of model supported
- * (e.g., mutation_matrix_model_alloc), mutation_matrix_free,
+ * (e.g., matrix_mutation_model_alloc), mutation_matrix_free,
  * mutation_model_choose_root_state and mutation_model_transition.
  * These delegate the actual implementations to function pointers that
  * are implemented by the actual models.
  */
 
 int MSP_WARN_UNUSED
-mutation_matrix_model_alloc(mutation_model_t *self, size_t num_alleles, char **alleles,
+matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles, char **alleles,
     double *root_distribution, double *transition_matrix)
 {
     int ret = 0;
@@ -491,7 +490,7 @@ out:
 }
 
 int MSP_WARN_UNUSED
-slim_mutator_alloc(mutation_model_t *self, int32_t mutation_type_id,
+slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
     int64_t next_mutation_id, size_t block_size)
 {
     int ret = 0;
@@ -499,7 +498,17 @@ slim_mutator_alloc(mutation_model_t *self, int32_t mutation_type_id,
 
     memset(self, 0, sizeof(mutation_model_t));
 
+    self->choose_root_state = &slim_mutator_choose_root_state;
+    self->transition = &slim_mutator_transition;
+    self->print_state = &slim_mutator_print_state;
+    self->free = &slim_mutator_free;
     if (block_size == 0) {
+        /* 8K is a good default, but we need to have the
+         * block_size argument here because the size of the allocations
+         * we need to make are in principle unbounded since SLiM
+         * copies the entire parent state for every mutation as it
+         * goes down along the tree.
+         */
         block_size = 8192;
     }
     ret = tsk_blkalloc_init(&params->allocator, block_size);
@@ -507,14 +516,8 @@ slim_mutator_alloc(mutation_model_t *self, int32_t mutation_type_id,
         ret = msp_set_tsk_error(ret);
         goto out;
     }
-
     params->mutation_type_id = mutation_type_id;
     params->next_mutation_id = next_mutation_id;
-
-    self->choose_root_state = &slim_mutator_choose_root_state;
-    self->transition = &slim_mutator_transition;
-    self->print_state = &slim_mutator_print_state;
-    self->free = &slim_mutator_free;
 
     ret = slim_mutator_check_validity(params);
     if (ret != 0) {
@@ -575,18 +578,18 @@ static double jukes_cantor_model_transition_matrix[]
  * obtain a populated model.
  */
 int
-mutation_model_factory(mutation_model_t *self, int model)
+matrix_mutation_model_factory(mutation_model_t *self, int model)
 {
     int ret = MSP_ERR_GENERIC;
 
     /* We need to cast to uintptr_t * first to work around the annoying pedantry
      * about discarding const qualifiers. */
     if (model == 0) {
-        ret = mutation_matrix_model_alloc(self, 2,
+        ret = matrix_mutation_model_alloc(self, 2,
             (char **) (uintptr_t *) binary_alleles, binary_model_root_distribution,
             binary_model_transition_matrix);
     } else if (model == 1) {
-        ret = mutation_matrix_model_alloc(self, 4, (char **) (uintptr_t *) acgt_alleles,
+        ret = matrix_mutation_model_alloc(self, 4, (char **) (uintptr_t *) acgt_alleles,
             jukes_cantor_model_root_distribution, jukes_cantor_model_transition_matrix);
     }
     return ret;

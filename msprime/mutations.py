@@ -54,13 +54,7 @@ _AMINO_ACIDS = [
 ]
 
 
-class MutationModel(_msprime.MutationModel):
-    """
-    Superclass of mutation models. Allows you to build your own mutation model.
-
-    TODO document properly.
-    """
-
+class BaseMutationModel:
     def asdict(self):
         # This version of asdict makes sure that we have sufficient parameters
         # to call the contructor and recreate the class. However, this means
@@ -71,6 +65,19 @@ class MutationModel(_msprime.MutationModel):
             for key in inspect.signature(self.__init__).parameters.keys()
             if hasattr(self, key)
         }
+
+
+class SlimMutationModel(_msprime.SlimMutationModel, BaseMutationModel):
+    pass
+
+
+# TODO Change this to MatrixMutationModel
+class MutationModel(_msprime.MatrixMutationModel, BaseMutationModel):
+    """
+    Superclass of mutation models. Allows you to build your own mutation model.
+
+    TODO document properly.
+    """
 
     def __str__(self):
         alleles = " ".join([x.decode() for x in self.alleles])
@@ -839,7 +846,7 @@ def mutate(
 
     if model is None:
         model = BinaryMutations()
-    if not isinstance(model, MutationModel):
+    if not isinstance(model, BaseMutationModel):
         raise TypeError("model must be a MutationModel")
 
     argspec = inspect.getargvalues(inspect.currentframe())

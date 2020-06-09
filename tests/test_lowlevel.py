@@ -58,7 +58,7 @@ def get_mutation_model(model=0):
         root_distribution = [0.25, 0.25, 0.25, 0.25]
         transition_matrix = np.zeros((4, 4))
         transition_matrix[:, 0] = 1
-    return _msprime.MutationModel(
+    return _msprime.MatrixMutationModel(
         alleles=alleles,
         root_distribution=root_distribution,
         transition_matrix=transition_matrix,
@@ -2316,18 +2316,18 @@ class TestIntervalMap(unittest.TestCase):
             self.assertTrue(np.array_equal(value, im.value))
 
 
-class TestMutationModel(unittest.TestCase):
+class TestMatrixMutationModel(unittest.TestCase):
     """
     Tests for the mutation model class.
     """
 
     def test_constructor(self):
-        self.assertRaises(TypeError, _msprime.MutationModel)
-        self.assertRaises(TypeError, _msprime.MutationModel, [])
-        self.assertRaises(TypeError, _msprime.MutationModel, [], [])
+        self.assertRaises(TypeError, _msprime.MatrixMutationModel)
+        self.assertRaises(TypeError, _msprime.MatrixMutationModel, [])
+        self.assertRaises(TypeError, _msprime.MatrixMutationModel, [], [])
 
         for bad_type in [None, "x", 123]:
-            self.assertRaises(TypeError, _msprime.MutationModel, bad_type, [], [])
+            self.assertRaises(TypeError, _msprime.MatrixMutationModel, bad_type, [], [])
 
     def test_bad_matrix(self):
         alleles = [b"0", b"1"]
@@ -2344,30 +2344,36 @@ class TestMutationModel(unittest.TestCase):
         ]
         for bad_matrix in bad_matrixes:
             with self.assertRaises(ValueError):
-                _msprime.MutationModel(alleles, dist, bad_matrix)
+                _msprime.MatrixMutationModel(alleles, dist, bad_matrix)
 
     def test_bad_lengths(self):
         for num_alleles in [2, 4, 6]:
             alleles = [str(j).encode() for j in range(num_alleles)]
             distribution = np.zeros(num_alleles)
             matrix = np.zeros((num_alleles, num_alleles))
-            self.assertRaises(ValueError, _msprime.MutationModel, alleles, [], matrix)
             self.assertRaises(
-                ValueError, _msprime.MutationModel, alleles, distribution[:-1], matrix
-            )
-            self.assertRaises(
-                ValueError, _msprime.MutationModel, alleles, distribution, []
+                ValueError, _msprime.MatrixMutationModel, alleles, [], matrix
             )
             self.assertRaises(
                 ValueError,
-                _msprime.MutationModel,
+                _msprime.MatrixMutationModel,
+                alleles,
+                distribution[:-1],
+                matrix,
+            )
+            self.assertRaises(
+                ValueError, _msprime.MatrixMutationModel, alleles, distribution, []
+            )
+            self.assertRaises(
+                ValueError,
+                _msprime.MatrixMutationModel,
                 alleles,
                 distribution,
                 matrix[:, :-1],
             )
             self.assertRaises(
                 ValueError,
-                _msprime.MutationModel,
+                _msprime.MatrixMutationModel,
                 alleles,
                 distribution,
                 matrix[:-1, :-1],
@@ -2379,14 +2385,14 @@ class TestMutationModel(unittest.TestCase):
             distribution = np.zeros(n)
             matrix = np.zeros((n, n))
             with self.assertRaises(TypeError):
-                _msprime.MutationModel(alleles, distribution, matrix)
+                _msprime.MatrixMutationModel(alleles, distribution, matrix)
 
         for alleles in [[], [b"a"], [b"asdfsadg"]]:
             n = len(alleles)
             distribution = np.zeros(n)
             matrix = np.zeros((n, n))
             with self.assertRaises(_msprime.LibraryError):
-                _msprime.MutationModel(alleles, distribution, matrix)
+                _msprime.MatrixMutationModel(alleles, distribution, matrix)
 
     def test_good_alleles(self):
         for n in range(2, 10):
@@ -2395,7 +2401,7 @@ class TestMutationModel(unittest.TestCase):
             dist[0] = 1
             matrix = np.zeros((n, n))
             matrix[:, 0] = 1
-            mm = _msprime.MutationModel(alleles, dist, matrix)
+            mm = _msprime.MatrixMutationModel(alleles, dist, matrix)
             self.assertEqual(mm.alleles, alleles)
             self.assertTrue(np.array_equal(mm.root_distribution, dist))
             self.assertTrue(np.array_equal(mm.transition_matrix, matrix))
@@ -2407,7 +2413,7 @@ class TestMutationModel(unittest.TestCase):
             dist[:] = 1 / n
             matrix = np.zeros((n, n))
             matrix[:] = 1 / n
-            mm = _msprime.MutationModel(alleles, dist, matrix)
+            mm = _msprime.MatrixMutationModel(alleles, dist, matrix)
             self.assertEqual(mm.alleles, alleles)
             self.assertTrue(np.array_equal(mm.root_distribution, dist))
             self.assertTrue(np.array_equal(mm.transition_matrix, matrix))
@@ -2418,17 +2424,48 @@ class TestMutationModel(unittest.TestCase):
         matrix[:] = 0.5
         for bad_root in [[1, 1], [-1, 2], [0, 100]]:
             with self.assertRaises(_msprime.LibraryError):
-                _msprime.MutationModel(alleles, bad_root, matrix)
+                _msprime.MatrixMutationModel(alleles, bad_root, matrix)
 
         matrix[:] = 1
         with self.assertRaises(_msprime.LibraryError):
-            _msprime.MutationModel(alleles, [0, 1], matrix)
+            _msprime.MatrixMutationModel(alleles, [0, 1], matrix)
         matrix[:] = -1
         with self.assertRaises(_msprime.LibraryError):
-            _msprime.MutationModel(alleles, [0, 1], matrix)
+            _msprime.MatrixMutationModel(alleles, [0, 1], matrix)
         matrix = [[0, 0], [1, 1]]
         with self.assertRaises(_msprime.LibraryError):
-            _msprime.MutationModel(alleles, [0, 1], matrix)
+            _msprime.MatrixMutationModel(alleles, [0, 1], matrix)
+
+
+class TestSlimMutationModel(unittest.TestCase):
+    """
+    Tests for the slim mutation model class.
+    """
+
+    def test_constructor_errors(self):
+        self.assertRaises(TypeError, _msprime.SlimMutationModel)
+
+        for bad_type in ["sdr", 0.222, None]:
+            with self.assertRaises(TypeError):
+                _msprime.SlimMutationModel(type=bad_type, next_id=234)
+                _msprime.SlimMutationModel(type=0, next_id=bad_type)
+                _msprime.SlimMutationModel(type=0, next_id=0, block_size=bad_type)
+
+        with self.assertRaises(_msprime.LibraryError):
+            _msprime.SlimMutationModel(type=-1, next_id=0)
+            _msprime.SlimMutationModel(type=1, next_id=-1)
+
+    def test_type(self):
+        for mutation_type in [0, 10, 2 ** 31 - 1]:
+            model = _msprime.SlimMutationModel(type=mutation_type)
+            self.assertEqual(model.type, mutation_type)
+            self.assertEqual(model.next_id, 0)
+
+    def test_next_id(self):
+        for next_id in [0, 10, 2 ** 63 - 1]:
+            model = _msprime.SlimMutationModel(0, next_id=next_id)
+            self.assertEqual(model.type, 0)
+            self.assertEqual(model.next_id, next_id)
 
 
 class TestMutationGenerator(unittest.TestCase):
@@ -2476,6 +2513,14 @@ class TestMutationGenerator(unittest.TestCase):
                 rate_map=imap,
                 model=bad_type,
             )
+
+    def test_slim_model(self):
+        rng = _msprime.RandomGenerator(1)
+        imap = _msprime.IntervalMap([0, 1], [1, 0])
+        model = _msprime.SlimMutationModel(1234, 5678)
+        mutgen = _msprime.MutationGenerator(rng, imap, model)
+        tables = _msprime.LightweightTableCollection(1)
+        mutgen.generate(tables)
 
     def test_generate_interface(self):
         rng = _msprime.RandomGenerator(1)
