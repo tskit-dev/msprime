@@ -139,6 +139,14 @@ cmp_sampling_event(const void *a, const void *b)
     return (ia->time > ib->time) - (ia->time < ib->time);
 }
 
+static int
+cmp_pointer(const void *a, const void *b)
+{
+    const intptr_t ia = (const intptr_t) a;
+    const intptr_t ib = (const intptr_t) b;
+    return (ia > ib) - (ia < ib);
+}
+
 static void
 segment_init(void **obj, size_t id)
 {
@@ -239,6 +247,7 @@ msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
     /* Free any memory, if it has been allocated */
     for (j = 0; j < self->num_populations; j++) {
         msp_safe_free(self->populations[j].ancestors);
+        msp_safe_free(self->populations[j].potential_destinations);
     }
     msp_safe_free(self->populations);
     msp_safe_free(self->initial_populations);
@@ -250,15 +259,17 @@ msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
 
     self->num_populations = (uint32_t) num_populations;
     self->num_labels = (uint32_t) num_labels;
-    self->initial_migration_matrix
-        = calloc(num_populations * num_populations, sizeof(double));
-    self->migration_matrix = calloc(num_populations * num_populations, sizeof(double));
+    self->initial_migration_matrix = calloc(
+        num_populations * num_populations, sizeof(*self->initial_migration_matrix));
+    self->migration_matrix
+        = calloc(num_populations * num_populations, sizeof(*self->migration_matrix));
     self->num_migration_events
-        = calloc(num_populations * num_populations, sizeof(size_t));
-    self->initial_populations = calloc(num_populations, sizeof(population_t));
-    self->populations = calloc(num_populations, sizeof(population_t));
-    self->links = calloc(self->num_labels, sizeof(fenwick_t));
-    self->segment_heap = calloc(self->num_labels, sizeof(object_heap_t));
+        = calloc(num_populations * num_populations, sizeof(*self->num_migration_events));
+    self->initial_populations
+        = calloc(num_populations, sizeof(*self->initial_populations));
+    self->populations = calloc(num_populations, sizeof(*self->populations));
+    self->links = calloc(self->num_labels, sizeof(*self->links));
+    self->segment_heap = calloc(self->num_labels, sizeof(*self->segment_heap));
     if (self->migration_matrix == NULL || self->initial_migration_matrix == NULL
         || self->num_migration_events == NULL || self->initial_populations == NULL
         || self->populations == NULL || self->links == NULL
@@ -267,8 +278,12 @@ msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
         goto out;
     }
     for (j = 0; j < num_populations; j++) {
-        self->populations[j].ancestors = malloc(self->num_labels * sizeof(avl_tree_t));
-        if (self->populations[j].ancestors == NULL) {
+        self->populations[j].ancestors
+            = malloc(self->num_labels * sizeof(*self->populations[j].ancestors));
+        self->populations[j].potential_destinations = malloc(
+            num_populations * sizeof(*self->populations[j].potential_destinations));
+        if (self->populations[j].ancestors == NULL
+            || self->populations[j].potential_destinations == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
@@ -532,6 +547,7 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, recomb_map_t *reco
     /* set up the AVL trees */
     avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
     avl_init_tree(&self->overlap_counts, cmp_node_mapping, NULL);
+    avl_init_tree(&self->non_empty_populations, cmp_pointer, NULL);
     /* Set up the demographic events */
     self->demographic_events_head = NULL;
     self->demographic_events_tail = NULL;
@@ -620,6 +636,7 @@ msp_free(msp_t *self)
     }
     for (j = 0; j < self->num_populations; j++) {
         msp_safe_free(self->populations[j].ancestors);
+        msp_safe_free(self->populations[j].potential_destinations);
     }
     msp_safe_free(self->links);
     msp_safe_free(self->segment_heap);
@@ -867,9 +884,11 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
         assert(label_segments == object_heap_get_num_allocated(&self->segment_heap[k]));
     }
     total_avl_nodes = msp_get_num_ancestors(self) + avl_count(&self->breakpoints)
-                      + avl_count(&self->overlap_counts);
+                      + avl_count(&self->overlap_counts)
+                      + avl_count(&self->non_empty_populations);
     assert(total_avl_nodes == object_heap_get_num_allocated(&self->avl_node_heap));
     assert(total_avl_nodes - msp_get_num_ancestors(self)
+               - avl_count(&self->non_empty_populations)
            == object_heap_get_num_allocated(&self->node_mapping_heap));
     if (total_avl_nodes == label_segments) {
         /* do nothing - this is just to keep the compiler happy when
@@ -1029,11 +1048,69 @@ msp_verify_overlaps(msp_t *self)
     overlap_counter_free(&counter);
 }
 
+static void
+msp_verify_non_empty_populations(msp_t *self)
+{
+    tsk_id_t j;
+    void *search;
+    avl_node_t *avl_node;
+
+    for (avl_node = self->non_empty_populations.head; avl_node != NULL;
+         avl_node = avl_node->next) {
+        j = (tsk_id_t)(intptr_t) avl_node->item;
+        assert(msp_get_num_population_ancestors(self, j) > 0);
+    }
+
+    for (j = 0; j < (tsk_id_t) self->num_populations; j++) {
+        search = (void *) (intptr_t) j;
+        avl_node = avl_search(&self->non_empty_populations, search);
+        if (msp_get_num_population_ancestors(self, j) == 0) {
+            assert(avl_node == NULL);
+        } else {
+            assert(avl_node != NULL);
+        }
+    }
+}
+
+static void
+msp_verify_migration_destinations(msp_t *self)
+{
+    tsk_id_t j, k, i;
+    tsk_id_t N = (tsk_id_t) self->num_populations;
+    double *M = self->migration_matrix;
+    population_t *pop;
+    bool found;
+
+    for (j = 0; j < N; j++) {
+        pop = &self->populations[j];
+        for (k = 0; k < (tsk_id_t) pop->num_potential_destinations; k++) {
+            assert(M[j * N + pop->potential_destinations[k]] > 0);
+        }
+    }
+    for (j = 0; j < N; j++) {
+        pop = &self->populations[j];
+        for (k = 0; k < N; k++) {
+            found = false;
+            for (i = 0; i < (tsk_id_t) pop->num_potential_destinations; i++) {
+                if (pop->potential_destinations[i] == k) {
+                    found = true;
+                    break;
+                }
+            }
+            assert(found == (M[j * N + k] != 0));
+        }
+    }
+}
+
 void
 msp_verify(msp_t *self, int options)
 {
     msp_verify_segments(self, options & MSP_VERIFY_BREAKPOINTS);
     msp_verify_overlaps(self);
+    if (self->model.type == MSP_MODEL_HUDSON && self->state == MSP_STATE_SIMULATING) {
+        msp_verify_non_empty_populations(self);
+        msp_verify_migration_destinations(self);
+    }
 }
 
 int
@@ -1120,11 +1197,22 @@ msp_print_state(msp_t *self, FILE *out)
                 avl_count(&self->populations[k].ancestors[j]));
         }
     }
+    fprintf(out, "non_empty_populations = [");
+    for (a = self->non_empty_populations.head; a != NULL; a = a->next) {
+        j = (uint32_t)(intptr_t) a->item;
+        fprintf(out, "%d,", j);
+    }
+    fprintf(out, "]\n");
     for (j = 0; j < self->num_populations; j++) {
         fprintf(out, "pop[%d]:\n", (int) j);
         fprintf(out, "\tstart_time = %f\n", self->populations[j].start_time);
         fprintf(out, "\tinitial_size = %f\n", self->populations[j].initial_size);
         fprintf(out, "\tgrowth_rate = %f\n", self->populations[j].growth_rate);
+        fprintf(out, "\tpotential_destinations = [");
+        for (k = 0; k < self->populations[j].num_potential_destinations; k++) {
+            fprintf(out, "%d,", self->populations[j].potential_destinations[k]);
+        }
+        fprintf(out, "]\n");
     }
     fprintf(out, "Time = %f\n", self->time);
     for (j = 0; j < msp_get_num_ancestors(self); j++) {
@@ -1374,6 +1462,45 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
     }
     ret = msp_insert_individual(self, new_ind);
 out:
+    return ret;
+}
+
+/*
+ * Inserts a population ID into the set of non-empty populations.
+ */
+static int MSP_WARN_UNUSED
+msp_insert_non_empty_population(msp_t *self, tsk_id_t population)
+{
+    int ret = 0;
+    void *value = (void *) (intptr_t) population;
+    avl_node_t *node = msp_alloc_avl_node(self);
+
+    if (node == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    avl_init_node(node, value);
+    if (avl_insert_node(&self->non_empty_populations, node) == NULL) {
+        msp_free_avl_node(self, node);
+    }
+out:
+    return ret;
+}
+
+/*
+ * Removes a population from the non_empty_population set
+ */
+static int MSP_WARN_UNUSED
+msp_remove_non_empty_population(msp_t *self, tsk_id_t population)
+{
+    int ret = 0;
+    avl_node_t *node;
+    void *value = (void *) (intptr_t) population;
+
+    node = avl_search(&self->non_empty_populations, value);
+    assert(node != NULL);
+    avl_unlink_node(&self->non_empty_populations, node);
+    msp_free_avl_node(self, node);
     return ret;
 }
 
@@ -3530,6 +3657,51 @@ msp_get_common_ancestor_waiting_time_from_rate(
     return ret;
 }
 
+/* Computes the set of non empty populations and the set
+ * of populations reachable from each population. */
+static int MSP_WARN_UNUSED
+msp_compute_population_indexes(msp_t *self)
+{
+    int ret = 0;
+    const tsk_id_t N = (tsk_id_t) self->num_populations;
+    tsk_id_t j, k;
+    double migration_rate;
+    population_t *pop;
+    avl_node_t *avl_node;
+
+    /* Set up the possible destinations for each population */
+    for (j = 0; j < N; j++) {
+        pop = &self->populations[j];
+        pop->num_potential_destinations = 0;
+        for (k = 0; k < N; k++) {
+            migration_rate = self->migration_matrix[j * N + k];
+            if (migration_rate > 0) {
+                pop->potential_destinations[pop->num_potential_destinations] = k;
+                pop->num_potential_destinations++;
+            }
+        }
+    }
+
+    /* Set up the non_empty_populations */
+    /* First clear out any existing structures */
+    for (avl_node = self->non_empty_populations.head; avl_node != NULL;
+         avl_node = avl_node->next) {
+        avl_unlink_node(&self->non_empty_populations, avl_node);
+        msp_free_avl_node(self, avl_node);
+    }
+    assert(avl_count(&self->non_empty_populations) == 0);
+    for (j = 0; j < N; j++) {
+        if (msp_get_num_population_ancestors(self, j) > 0) {
+            ret = msp_insert_non_empty_population(self, j);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+out:
+    return ret;
+}
+
 /* The main event loop for continuous time coalescent models. Runs until either
  * coalescence; or the time of a simulated event would have exceeded the
  * specified max_time; or for a specified number of events. The num_events
@@ -3552,15 +3724,20 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
     double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, gc_in_t_wait, gc_left_t_wait,
         mig_t_wait, sampling_event_time, demographic_event_time;
     double recomb_mass, total_recomb_rate;
-    uint32_t j, k, n;
-    population_id_t ca_pop_id, mig_source_pop, mig_dest_pop;
+    uint32_t n;
+    tsk_id_t i, pop_id, pop_id_j, pop_id_k, ca_pop_id, mig_source_pop, mig_dest_pop;
+    const tsk_id_t N = (tsk_id_t) self->num_populations;
+    population_t *pop;
     unsigned long events = 0;
+    avl_node_t *avl_node;
     sampling_event_t *se;
     /* Only support a single label for now. */
     label_id_t label = 0;
 
-    gc_in_t_wait = DBL_MAX;
-    gc_left_t_wait = DBL_MAX;
+    ret = msp_compute_population_indexes(self);
+    if (ret != 0) {
+        goto out;
+    }
 
     while (msp_get_num_ancestors(self) > 0) {
         if (events == max_events) {
@@ -3577,6 +3754,8 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
         }
 
+        gc_in_t_wait = DBL_MAX;
+        gc_left_t_wait = DBL_MAX;
         /* For now, don't compute the GC rates if 0 to avoid slowing down other
          * simulations */
         if (self->gene_conversion_rate > 0) {
@@ -3614,12 +3793,13 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         /* Common ancestors */
         ca_t_wait = DBL_MAX;
         ca_pop_id = 0;
-        for (j = 0; j < self->num_populations; j++) {
-            t_temp = self->get_common_ancestor_waiting_time(
-                self, (population_id_t) j, label);
+        for (avl_node = self->non_empty_populations.head; avl_node != NULL;
+             avl_node = avl_node->next) {
+            pop_id = (tsk_id_t)(intptr_t) avl_node->item;
+            t_temp = self->get_common_ancestor_waiting_time(self, pop_id, label);
             if (t_temp < ca_t_wait) {
                 ca_t_wait = t_temp;
-                ca_pop_id = (population_id_t) j;
+                ca_pop_id = pop_id;
             }
         }
 
@@ -3627,25 +3807,30 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         mig_t_wait = DBL_MAX;
         mig_source_pop = 0;
         mig_dest_pop = 0;
-        for (j = 0; j < self->num_populations; j++) {
-            n = avl_count(&self->populations[j].ancestors[label]);
-            for (k = 0; k < self->num_populations; k++) {
-                lambda = n * self->migration_matrix[j * self->num_populations + k];
-                if (lambda != 0.0) {
-                    t_temp = gsl_ran_exponential(self->rng, 1.0 / lambda);
-                    if (t_temp < mig_t_wait) {
-                        mig_t_wait = t_temp;
-                        /* m[j, k] is the rate at which migrants move from
-                         * population k to j forwards in time. Backwards
-                         * in time, we move the individual from from
-                         * population j into population k.
-                         */
-                        mig_source_pop = (population_id_t) j;
-                        mig_dest_pop = (population_id_t) k;
-                    }
+        for (avl_node = self->non_empty_populations.head; avl_node != NULL;
+             avl_node = avl_node->next) {
+            pop_id_j = (tsk_id_t)(intptr_t) avl_node->item;
+            pop = &self->populations[pop_id_j];
+            n = avl_count(&pop->ancestors[label]);
+            assert(n > 0);
+            for (i = 0; i < (tsk_id_t) pop->num_potential_destinations; i++) {
+                pop_id_k = pop->potential_destinations[i];
+                lambda = n * self->migration_matrix[pop_id_j * N + pop_id_k];
+                assert(lambda > 0);
+                t_temp = gsl_ran_exponential(self->rng, 1.0 / lambda);
+                if (t_temp < mig_t_wait) {
+                    mig_t_wait = t_temp;
+                    /* m[j, k] is the rate at which migrants move from
+                     * population k to j forwards in time. Backwards
+                     * in time, we move the individual from from
+                     * population j into population k.
+                     */
+                    mig_source_pop = pop_id_j;
+                    mig_dest_pop = pop_id_k;
                 }
             }
         }
+
         t_wait = GSL_MIN(
             mig_t_wait, GSL_MIN(gc_in_t_wait,
                             GSL_MIN(gc_left_t_wait, GSL_MIN(re_t_wait, ca_t_wait))));
@@ -3686,6 +3871,12 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                     goto out;
                 }
                 self->next_sampling_event++;
+                /* To keep things simple, just insert the population
+                 * unconditionally for each sample. */
+                ret = msp_insert_non_empty_population(self, se->population_id);
+                if (ret != 0) {
+                    goto out;
+                }
             }
         } else if (demographic_event_time < t_temp) {
             if (demographic_event_time >= max_time) {
@@ -3693,6 +3884,14 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                 break;
             }
             ret = msp_apply_demographic_events(self);
+            if (ret != 0) {
+                goto out;
+            }
+            /* Rather than try to reason about the changes that have occured
+             * during the demographic event, just recompute the indexes
+             * used to track nonempty populations and migration destinations
+             */
+            ret = msp_compute_population_indexes(self);
             if (ret != 0) {
                 goto out;
             }
@@ -3715,8 +3914,21 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                     self->time -= t_wait;
                     ret = 0;
                 }
+                if (ret != 0) {
+                    goto out;
+                }
+                if (msp_get_num_population_ancestors(self, ca_pop_id) == 0) {
+                    ret = msp_remove_non_empty_population(self, ca_pop_id);
+                }
             } else {
                 ret = msp_migration_event(self, mig_source_pop, mig_dest_pop);
+                if (ret != 0) {
+                    goto out;
+                }
+                if (msp_get_num_population_ancestors(self, mig_source_pop) == 0) {
+                    ret = msp_remove_non_empty_population(self, mig_source_pop);
+                }
+                ret = msp_insert_non_empty_population(self, mig_dest_pop);
             }
             if (ret != 0) {
                 goto out;
@@ -4762,16 +4974,26 @@ msp_get_num_labels(msp_t *self)
 }
 
 size_t
+msp_get_num_population_ancestors(msp_t *self, tsk_id_t population)
+{
+    tsk_id_t label;
+    const population_t *pop = &self->populations[population];
+    size_t n = 0;
+
+    for (label = 0; label < (tsk_id_t) self->num_labels; label++) {
+        n += avl_count(&pop->ancestors[label]);
+    }
+    return n;
+}
+
+size_t
 msp_get_num_ancestors(msp_t *self)
 {
     size_t n = 0;
-    size_t j;
-    label_id_t label;
+    tsk_id_t j;
 
-    for (j = 0; j < self->num_populations; j++) {
-        for (label = 0; label < (label_id_t) self->num_labels; label++) {
-            n += avl_count(&self->populations[j].ancestors[label]);
-        }
+    for (j = 0; j < (tsk_id_t) self->num_populations; j++) {
+        n += msp_get_num_population_ancestors(self, j);
     }
     return n;
 }

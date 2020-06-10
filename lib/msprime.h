@@ -107,6 +107,8 @@ typedef struct {
     double growth_rate;
     double start_time;
     avl_tree_t *ancestors;
+    tsk_size_t num_potential_destinations;
+    tsk_id_t *potential_destinations;
 } population_t;
 
 typedef struct individual_t_t {
@@ -243,6 +245,7 @@ typedef struct _msp_t {
     double time;
     double *migration_matrix;
     population_t *populations;
+    avl_tree_t non_empty_populations;
     avl_tree_t breakpoints;
     avl_tree_t overlap_counts;
     /* We keep an independent Fenwick tree for each label */
@@ -416,6 +419,7 @@ size_t msp_get_num_samples(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
 size_t msp_get_num_populations(msp_t *self);
 size_t msp_get_num_labels(msp_t *self);
+size_t msp_get_num_population_ancestors(msp_t *self, tsk_id_t population);
 size_t msp_get_num_ancestors(msp_t *self);
 size_t msp_get_num_breakpoints(msp_t *self);
 size_t msp_get_num_nodes(msp_t *self);

@@ -155,10 +155,10 @@ class Population:
     """
 
     def __init__(self, id_, num_labels=1):
-        self._id = id_
-        self._start_time = 0
-        self._start_size = 1.0
-        self._growth_rate = 0
+        self.id = id_
+        self.start_time = 0
+        self.start_size = 1.0
+        self.growth_rate = 0
         # Keep a list of each label.
         # We'd like to use AVLTrees here for P but the API doesn't quite
         # do what we need. Lists are inefficient here and should not be
@@ -166,9 +166,9 @@ class Population:
         self._ancestors = [[] for _ in range(num_labels)]
 
     def print_state(self):
-        print("Population ", self._id)
-        print("\tstart_size = ", self._start_size)
-        print("\tgrowth_rate = ", self._growth_rate)
+        print("Population ", self.id)
+        print("\tstart_size = ", self.start_size)
+        print("\tgrowth_rate = ", self.growth_rate)
         print("\tAncestors: ", len(self._ancestors))
         for label, ancestors in enumerate(self._ancestors):
             print("\tLabel = ", label)
@@ -212,13 +212,13 @@ class Population:
         # is so we can set the start size accordingly. Need to look at
         # ms's model carefully to see what it actually does here.
         new_size = self.get_size(time)
-        self._start_size = new_size
-        self._start_time = time
-        self._growth_rate = growth_rate
+        self.start_size = new_size
+        self.start_time = time
+        self.growth_rate = growth_rate
 
     def set_start_size(self, start_size):
-        self._start_size = start_size
-        self._growth_rate = 0
+        self.start_size = start_size
+        self.growth_rate = 0
 
     def get_num_ancestors(self, label=None):
         if label is None:
@@ -230,8 +230,8 @@ class Population:
         """
         Returns the size of this population at time t.
         """
-        dt = t - self._start_time
-        return self._start_size * math.exp(-self._growth_rate * dt)
+        dt = t - self.start_time
+        return self.start_size * math.exp(-self.growth_rate * dt)
 
     def get_common_ancestor_waiting_time(self, t):
         """
@@ -242,19 +242,19 @@ class Population:
         k = self.get_num_ancestors()
         if k > 1:
             u = random.expovariate(k * (k - 1))
-            if self._growth_rate == 0:
-                ret = self._start_size * u
+            if self.growth_rate == 0:
+                ret = self.start_size * u
             else:
-                dt = t - self._start_time
+                dt = t - self.start_time
                 z = (
                     1
-                    + self._growth_rate
-                    * self._start_size
-                    * math.exp(-self._growth_rate * dt)
+                    + self.growth_rate
+                    * self.start_size
+                    * math.exp(-self.growth_rate * dt)
                     * u
                 )
                 if z > 0:
-                    ret = math.log(z) / self._growth_rate
+                    ret = math.log(z) / self.growth_rate
         return ret
 
     def get_ind_range(self, t):
@@ -735,9 +735,9 @@ class Simulator:
         self.P = [Population(id_, num_labels) for id_ in range(N)]
         self.L = [FenwickTree(self.max_segments) for j in range(num_labels)]
         self.S = bintrees.AVLTree()
-        for pop_index in range(N):
-            self.P[pop_index].set_start_size(population_sizes[pop_index])
-            self.P[pop_index].set_growth_rate(population_growth_rates[pop_index], 0)
+        for pop in self.P:
+            pop.set_start_size(population_sizes[pop.id])
+            pop.set_growth_rate(population_growth_rates[pop.id], 0)
         self.edge_buffer = []
         self.from_ts = from_ts
         self.pedigree = pedigree
@@ -1001,13 +1001,29 @@ class Simulator:
             raise ValueError
         return self.finalise()
 
+    def get_potential_destinations(self):
+        """
+        For each population return the set of populations for which it has a
+        non-zero migration into.
+        """
+        N = len(self.P)
+        potential_destinations = [set() for _ in range(N)]
+        for j in range(N):
+            for k in range(N):
+                if self.migration_matrix[j][k] > 0:
+                    potential_destinations[j].add(k)
+        return potential_destinations
+
     def hudson_simulate(self):
         """
         Simulates the algorithm until all loci have coalesced.
         """
         infinity = sys.float_info.max
+        non_empty_pops = {pop.id for pop in self.P if pop.get_num_ancestors() > 0}
+        potential_destinations = self.get_potential_destinations()
+
         # only worried about label 0 below
-        while self.ancestors_remain():
+        while len(non_empty_pops) > 0:
             self.verify()
             recomb_mass = self.L[0].get_total()
             rate = recomb_mass
@@ -1028,29 +1044,39 @@ class Simulator:
                 t_gcleft = random.expovariate(rate)
             # Common ancestor events occur within demes.
             t_ca = infinity
-            for index, pop in enumerate(self.P):
+            for index in non_empty_pops:
+                pop = self.P[index]
+                assert pop.get_num_ancestors() > 0
                 t = pop.get_common_ancestor_waiting_time(self.t)
                 if t < t_ca:
                     t_ca = t
                     ca_population = index
             t_mig = infinity
             # Migration events happen at the rates in the matrix.
-            for j in range(len(self.P)):
+            for j in non_empty_pops:
                 source_size = self.P[j].get_num_ancestors()
-                for k in range(len(self.P)):
+                assert source_size > 0
+                # for k in range(len(self.P)):
+                for k in potential_destinations[j]:
                     rate = source_size * self.migration_matrix[j][k]
-                    if rate > 0:
-                        t = random.expovariate(rate)
-                        if t < t_mig:
-                            t_mig = t
-                            mig_source = j
-                            mig_dest = k
+                    assert rate > 0
+                    t = random.expovariate(rate)
+                    if t < t_mig:
+                        t_mig = t
+                        mig_source = j
+                        mig_dest = k
             min_time = min(t_re, t_ca, t_gcin, t_gcleft, t_mig)
             assert min_time != infinity
             if self.t + min_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
                 self.t = t
                 func(*args)
+                # Don't bother trying to maintain the non-zero lists
+                # through demographic events, just recompute them.
+                non_empty_pops = {
+                    pop.id for pop in self.P if pop.get_num_ancestors() > 0
+                }
+                potential_destinations = self.get_potential_destinations()
             else:
                 self.t += min_time
                 if min_time == t_re:
@@ -1065,9 +1091,18 @@ class Simulator:
                 elif min_time == t_ca:
                     # print("CA EVENT")
                     self.common_ancestor_event(ca_population, 0)
+                    if self.P[ca_population].get_num_ancestors() == 0:
+                        non_empty_pops.remove(ca_population)
                 else:
                     # print("MIG EVENT")
                     self.migration_event(mig_source, mig_dest)
+                    if self.P[mig_source].get_num_ancestors() == 0:
+                        non_empty_pops.remove(mig_source)
+                    assert self.P[mig_dest].get_num_ancestors() > 0
+                    non_empty_pops.add(mig_dest)
+
+            X = {pop.id for pop in self.P if pop.get_num_ancestors() > 0}
+            assert non_empty_pops == X
         return self.finalise()
 
     def single_sweep_simulate(self):
@@ -1339,11 +1374,12 @@ class Simulator:
         Migrates an individual from population j to population k.
         Only does label 0
         """
-        # print("Migrating ind from ", j, " to ", k)
-        # print("Population sizes:", [len(pop) for pop in self.P])
-        index = random.randint(0, self.P[0][j].get_num_ancestors() - 1)
-        x = self.P[0][j].remove(index)
-        self.P[0][k].add(x)
+        label = 0
+        source = self.P[j]
+        dest = self.P[k]
+        index = random.randint(0, source.get_num_ancestors(label) - 1)
+        x = source.remove(index, label)
+        dest.add(x, label)
         if self.full_arg:
             self.store_node(k, flags=msprime.NODE_IS_MIG_EVENT)
             self.store_arg_edges(x)
@@ -1352,7 +1388,6 @@ class Simulator:
         while u is not None:
             u.population = k
             u = u.next
-        # print("AFTER Population sizes:", [len(pop) for pop in self.P])
 
     def set_segment_left_endpoint(self, seg, pos):
         seg.left = pos

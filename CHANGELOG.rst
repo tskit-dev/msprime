@@ -15,6 +15,9 @@
 - Add replicate_index to simulate, allowing output of a single tree sequence
   from a set of replicates. (:user:`benjeffery` :pr:`914`).
 
+- Much better simulation performance for models with large numbers
+  of populations (:user:`jeromekelleher`, :pr:`1069`).
+
 **Breaking changes**:
 
 - The class form for specifying models (e.g., ``msprime.StandardCoalescent()``)
