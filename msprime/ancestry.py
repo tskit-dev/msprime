@@ -34,14 +34,11 @@ import tskit
 
 import _msprime
 from . import core
-from . import demography
+from . import demography as demog
 from . import mutations
 from . import provenance
 
 logger = logging.getLogger(__name__)
-
-
-Sample = collections.namedtuple("Sample", ["population", "time"])
 
 
 def model_factory(model):
@@ -70,13 +67,91 @@ def model_factory(model):
                 )
             )
         model_instance = model_map[lower_model]
-    elif isinstance(model, SimulationModel):
-        model_instance = copy.copy(model)
-    else:
+    elif not isinstance(model, SimulationModel):
         raise TypeError(
             "Simulation model must be a string or an instance of SimulationModel"
         )
+    else:
+        model_instance = model
     return model_instance
+
+
+def parse_model_change_events(events):
+    """
+    Parses the specified list of events provided in model_arg[1:] into
+    SimulationModelChange events. There are two different forms supported,
+    and model descriptions are anything supported by model_factory.
+    """
+    err = (
+        "Simulation model change events must be either a two-tuple "
+        "(time, model), describing the time of the model change and "
+        "the new model or be an instance of SimulationModelChange."
+    )
+    model_change_events = []
+    for event in events:
+        if isinstance(event, (tuple, list)):
+            if len(event) != 2:
+                raise ValueError(err)
+            t = event[0]
+            if t is not None:
+                try:
+                    t = float(t)
+                except (TypeError, ValueError):
+                    raise ValueError(
+                        "Model change times must be either a floating point "
+                        "value or None"
+                    )
+            event = SimulationModelChange(t, model_factory(event[1]))
+        elif isinstance(event, SimulationModelChange):
+            # We don't want to modify our inputs, so take a deep copy.
+            event = copy.copy(event)
+            event.model = model_factory(event.model)
+        else:
+            raise TypeError(err)
+        model_change_events.append(event)
+    return model_change_events
+
+
+def parse_model_arg(model_arg):
+    """
+    Parses the specified model argument from the simulate function,
+    returning the initial model and any model change events.
+    """
+    err = (
+        "The model argument must be either (a) a value that can be "
+        "interpreted as a simulation model or (b) a list in which "
+        "the first element is a model description and the remaining "
+        "elements are model change events. These can either be described "
+        "by a (time, model) tuple or SimulationModelChange instances."
+    )
+    if isinstance(model_arg, (list, tuple)):
+        if len(model_arg) < 1:
+            raise ValueError(err)
+        model = model_factory(model_arg[0])
+        model_change_events = parse_model_change_events(model_arg[1:])
+    else:
+        model = model_factory(model_arg)
+        model_change_events = []
+    return model, model_change_events
+
+
+def filter_events(demographic_events):
+    """
+    Returns a tuple (demographic_events, model_change_events) which separates
+    out the SimulationModelChange events from the list. This is to support the
+    pre-1.0 syntax for model changes, where they were included in the
+    demographic_events parameter.
+    """
+    filtered_events = []
+    model_change_events = []
+    for event in demographic_events:
+        if isinstance(event, SimulationModelChange):
+            model_change_events.append(event)
+        else:
+            filtered_events.append(event)
+    # Make sure any model references are resolved.
+    model_change_events = parse_model_change_events(model_change_events)
+    return filtered_events, model_change_events
 
 
 def _check_population_configurations(population_configurations):
@@ -84,7 +159,7 @@ def _check_population_configurations(population_configurations):
         "Population configurations must be a list of PopulationConfiguration instances"
     )
     for config in population_configurations:
-        if not isinstance(config, demography.PopulationConfiguration):
+        if not isinstance(config, demog.PopulationConfiguration):
             raise TypeError(err)
         if config.initial_size is not None and config.initial_size <= 0:
             raise ValueError("Population size must be > 0")
@@ -99,7 +174,6 @@ def _replicate_generator(
     Generator function for the many-replicates case of the simulate
     function.
     """
-
     encoded_provenance = None
     # The JSON is modified for each replicate to insert the replicate number.
     # To avoid repeatedly encoding the same JSON (which can take milliseconds)
@@ -123,45 +197,10 @@ def _replicate_generator(
         sim.reset()
 
 
-def simulator_factory(
-    sample_size=None,
-    Ne=1,
-    random_generator=None,
-    length=None,
-    recombination_rate=None,
-    recombination_map=None,
-    population_configurations=None,
-    pedigree=None,
-    migration_matrix=None,
-    samples=None,
-    demographic_events=(),
-    model=None,
-    record_migrations=False,
-    from_ts=None,
-    start_time=None,
-    end_time=None,
-    record_full_arg=False,
-    num_labels=None,
-    gene_conversion_rate=None,
-    gene_conversion_track_length=None,
-):
+def samples_factory(sample_size, samples, pedigree, population_configurations):
     """
-    Convenience method to create a simulator instance using the same
-    parameters as the `simulate` function. Primarily used for testing.
+    Returns a list of Sample objects, given the specified inputs.
     """
-    if Ne <= 0:
-        raise ValueError("Population size must be positive")
-    condition = (
-        sample_size is None
-        and population_configurations is None
-        and samples is None
-        and from_ts is None
-    )
-    if condition:
-        raise ValueError(
-            "Either sample_size, population_configurations, samples or from_ts must "
-            "be specified"
-        )
     the_samples = []
     if sample_size is not None:
         if samples is not None:
@@ -171,7 +210,7 @@ def simulator_factory(
                 "Cannot specify sample size and population_configurations "
                 "simultaneously."
             )
-        s = Sample(population=0, time=0.0)
+        s = demog.Sample(population=0, time=0.0)
         # In pedigrees samples are diploid individuals
         if pedigree is not None:
             sample_size *= 2  # TODO: Update for different ploidy
@@ -189,7 +228,7 @@ def simulator_factory(
             the_samples = []
             for j, conf in enumerate(population_configurations):
                 if conf.sample_size is not None:
-                    the_samples += [(j, 0) for _ in range(conf.sample_size)]
+                    the_samples += [demog.Sample(j, 0) for _ in range(conf.sample_size)]
         else:
             for conf in population_configurations:
                 if conf.sample_size is not None:
@@ -200,6 +239,104 @@ def simulator_factory(
             the_samples = samples
     elif samples is not None:
         the_samples = samples
+    return the_samples
+
+
+def demography_factory(
+    Ne, demography, population_configurations, migration_matrix, demographic_events
+):
+    if demography is not None:
+        if population_configurations is not None:
+            raise ValueError(
+                "The demography and population_configurations options "
+                "cannot be used together"
+            )
+        if migration_matrix is not None:
+            raise ValueError(
+                "The demography and migration_matrix options cannot be used together"
+            )
+        if demographic_events is not None:
+            raise ValueError(
+                "The demography and demographic_events options cannot be used together"
+            )
+        # Take a copy so that we don't modify the input parameters when
+        # resolving defaults
+        demography = copy.deepcopy(demography)
+    else:
+        demography = demog.Demography.from_old_style(
+            population_configurations, migration_matrix, demographic_events
+        )
+
+    # For any populations in which the initial size is None set it to Ne
+    for pop in demography.populations:
+        if pop.initial_size is None:
+            pop.initial_size = Ne
+
+    demography.validate()
+    return demography
+
+
+def simulator_factory(
+    sample_size=None,
+    Ne=1,
+    random_generator=None,
+    length=None,
+    recombination_rate=None,
+    recombination_map=None,
+    population_configurations=None,
+    pedigree=None,
+    migration_matrix=None,
+    samples=None,
+    demographic_events=None,
+    model=None,
+    record_migrations=False,
+    from_ts=None,
+    start_time=None,
+    end_time=None,
+    record_full_arg=False,
+    num_labels=None,
+    gene_conversion_rate=None,
+    gene_conversion_track_length=None,
+    demography=None,
+):
+    """
+    Convenience method to create a simulator instance using the same
+    parameters as the `simulate` function.
+    """
+    if Ne <= 0:
+        raise ValueError("Population size must be positive")
+
+    samples_specified = (
+        sample_size is None
+        and population_configurations is None
+        and samples is None
+        and from_ts is None
+    )
+    if samples_specified:
+        # TODO remove the population_configurations message here if we're
+        # deprecating it?
+        raise ValueError(
+            "Either sample_size, samples, population_configurations or from_ts must "
+            "be specified"
+        )
+    samples = samples_factory(sample_size, samples, pedigree, population_configurations)
+
+    model, model_change_events = parse_model_arg(model)
+    if demographic_events is not None:
+        demographic_events, old_style_model_change_events = filter_events(
+            demographic_events
+        )
+        if len(old_style_model_change_events) > 0:
+            if len(model_change_events) > 0:
+                raise ValueError(
+                    "Cannot specify SimulationModelChange events using both new-style "
+                    "and pre 1.0 syntax"
+                )
+            model_change_events = old_style_model_change_events
+
+    demography = demography_factory(
+        Ne, demography, population_configurations, migration_matrix, demographic_events
+    )
 
     if start_time is not None and start_time < 0:
         raise ValueError("start_time cannot be negative")
@@ -207,6 +344,8 @@ def simulator_factory(
     if num_labels is not None and num_labels < 1:
         raise ValueError("Must have at least one structured coalescent label")
 
+    # TODO clear up the logic around from_ts. It's scattered across a few
+    # different chunks here.
     if from_ts is not None:
         if not isinstance(from_ts, tskit.TreeSequence):
             raise TypeError("from_ts must be a TreeSequence instance.")
@@ -267,17 +406,37 @@ def simulator_factory(
             )
 
     if from_ts is None:
-        if len(the_samples) < 2:
+        if len(samples) < 2:
             raise ValueError("Sample size must be >= 2")
     else:
-        if len(the_samples) > 0:
+        if len(samples) > 0:
             raise ValueError("Cannot specify samples with from_ts")
 
-    model = model_factory(model)
     # TODO factor out this Simulator object here and instead call a
     # factory function to make the low-level Simulator given the
     # state of the variables in here.
-    sim = Simulator(the_samples, recombination_map, Ne, model, from_ts)
+    sim = Simulator()
+    sim.samples = samples
+    sim.model = model
+    sim.recombination_map = recombination_map
+    sim.from_ts = from_ts
+    sim.demography = demography
+    sim.random_generator = None
+    sim.pedigree = None
+    sim.model_change_events = model_change_events
+    sim.store_migrations = False
+    sim.store_full_arg = False
+    sim.num_labels = None
+    # We always need at least n segments, so no point in making
+    # allocation any smaller than this.
+    num_samples = len(sim.samples) if sim.samples is not None else from_ts.num_samples
+    block_size = 64 * 1024
+    sim.segment_block_size = max(block_size, num_samples)
+    sim.avl_node_block_size = block_size
+    sim.node_mapping_block_size = block_size
+    sim.end_time = None
+    sim.gene_conversion_rate = 0
+    sim.gene_conversion_track_length = 1
     sim.store_migrations = record_migrations
     sim.store_full_arg = record_full_arg
     sim.start_time = start_time
@@ -288,12 +447,6 @@ def simulator_factory(
     if rng is None:
         rng = _msprime.RandomGenerator(core.get_random_seed())
     sim.random_generator = rng
-    if population_configurations is not None:
-        sim.set_population_configurations(population_configurations, Ne)
-    if migration_matrix is not None:
-        sim.set_migration_matrix(migration_matrix)
-    if demographic_events is not None:
-        sim.set_demographic_events(demographic_events)
     if pedigree is not None:
         if not isinstance(sim.model, WrightFisherPedigree):
             raise NotImplementedError("Pedigree can only be specified for wf_ped model")
@@ -311,7 +464,7 @@ def simulate(
     population_configurations=None,
     pedigree=None,
     migration_matrix=None,
-    demographic_events=(),
+    demographic_events=None,
     samples=None,
     model=None,
     record_migrations=False,
@@ -328,6 +481,7 @@ def simulate(
     # FIXME add documentation for these.
     gene_conversion_rate=None,
     gene_conversion_track_length=None,
+    demography=None,
 ):
     """
     Simulates the coalescent with recombination under the specified model
@@ -491,6 +645,7 @@ def simulate(
         num_labels=num_labels,
         gene_conversion_rate=gene_conversion_rate,
         gene_conversion_track_length=gene_conversion_track_length,
+        demography=demography,
     )
 
     if mutation_generator is not None:
@@ -562,36 +717,8 @@ class Simulator:
     Class to simulate trees under a variety of population models.
     """
 
-    def __init__(self, samples, recombination_map, Ne, model=None, from_ts=None):
+    def __init__(self):
         self.ll_sim = None
-        self.samples = samples
-        self.model = model
-        self.recombination_map = recombination_map
-        self.from_ts = from_ts
-        self.start_time = None
-        self.random_generator = None
-        self.population_configurations = [
-            demography.PopulationConfiguration(initial_size=Ne)
-        ]
-        self.pedigree = None
-        self.migration_matrix = [[0]]
-        self.demographic_events = []
-        self.model_change_events = []
-        self.store_migrations = False
-        self.store_full_arg = False
-        self.num_labels = None
-        # We always need at least n segments, so no point in making
-        # allocation any smaller than this.
-        num_samples = (
-            len(self.samples) if self.samples is not None else from_ts.num_samples
-        )
-        block_size = 64 * 1024
-        self.segment_block_size = max(block_size, num_samples)
-        self.avl_node_block_size = block_size
-        self.node_mapping_block_size = block_size
-        self.end_time = None
-        self.gene_conversion_rate = 0
-        self.gene_conversion_track_length = 1
 
     @property
     def sequence_length(self):
@@ -599,7 +726,13 @@ class Simulator:
 
     @property
     def sample_configuration(self):
-        return [conf.sample_size for conf in self.population_configurations]
+        """
+        Returns the number of samples from each popuation.
+        """
+        ret = [0 for _ in range(self.num_populations)]
+        for sample in self.samples:
+            ret[sample.population] += 1
+        return ret
 
     @property
     def num_breakpoints(self):
@@ -647,7 +780,7 @@ class Simulator:
 
     @property
     def num_populations(self):
-        return len(self.population_configurations)
+        return self.demography.num_populations
 
     @property
     def num_migration_events(self):
@@ -660,32 +793,6 @@ class Simulator:
     @property
     def num_multiple_recombination_events(self):
         return self.ll_sim.get_num_multiple_recombination_events()
-
-    def set_migration_matrix(self, migration_matrix):
-        err = (
-            "migration matrix must be a N x N square matrix encoded "
-            "as a list-of-lists or numpy array, where N is the number of populations "
-            "defined in the population_configurations. The diagonal "
-            "elements of this matrix must be zero. For example, a "
-            "valid matrix for a 3 population system is "
-            "[[0, 1, 1], [1, 0, 1], [1, 1, 0]]"
-        )
-        N = len(self.population_configurations)
-        self.migration_matrix = np.array(migration_matrix)
-        if self.migration_matrix.shape != (N, N):
-            raise ValueError(err)
-
-    def set_population_configurations(self, population_configurations, Ne):
-        _check_population_configurations(population_configurations)
-        self.population_configurations = population_configurations
-        # For any populations configurations in which the initial size is None,
-        # set it to Ne
-        for pop_conf in self.population_configurations:
-            if pop_conf.initial_size is None:
-                pop_conf.initial_size = Ne
-        # Now set the default migration matrix.
-        N = len(self.population_configurations)
-        self.migration_matrix = np.zeros((N, N))
 
     def set_pedigree(self, pedigree):
         if len(self.samples) % 2 != 0:
@@ -710,8 +817,8 @@ class Simulator:
             )
 
         pedigree_max_time = np.max(pedigree.time)
-        if len(self.demographic_events) > 0:
-            de_min_time = min([x.time for x in self.demographic_events])
+        if len(self.demography.events) > 0:
+            de_min_time = min([x.time for x in self.demography.events])
             if de_min_time <= pedigree_max_time:
                 raise NotImplementedError(
                     "Demographic events must be older than oldest pedigree founder."
@@ -724,25 +831,6 @@ class Simulator:
                 )
 
         self.pedigree = pedigree.get_ll_representation()
-
-    def set_demographic_events(self, demographic_events):
-        err = (
-            "Demographic events must be a list of DemographicEvent instances "
-            "sorted in non-decreasing order of time."
-        )
-        self.demographic_events = []
-        self.model_change_events = []
-        for event in demographic_events:
-            if not isinstance(event, demography.DemographicEvent):
-                raise TypeError(err)
-            if isinstance(event, demography.SimulationModelChange):
-                # Take a copy so that we're not modifying our input params
-                event = copy.copy(event)
-                # Update the model so that we can parse strings
-                event.model = model_factory(event.model)
-                self.model_change_events.append(event)
-            else:
-                self.demographic_events.append(event)
 
     def __choose_num_labels(self):
         """
@@ -763,10 +851,10 @@ class Simulator:
         ll_simulation_model = self.model.get_ll_representation()
         logger.debug("Setting initial model %s", ll_simulation_model)
         ll_population_configuration = [
-            conf.asdict() for conf in self.population_configurations
+            pop.asdict() for pop in self.demography.populations
         ]
         ll_demographic_events = [
-            event.get_ll_representation() for event in self.demographic_events
+            event.get_ll_representation() for event in self.demography.events
         ]
         ll_recomb_map = self.recombination_map.get_ll_recombination_map()
         self.ll_tables = _msprime.LightweightTableCollection(
@@ -783,7 +871,7 @@ class Simulator:
             start_time=start_time,
             random_generator=self.random_generator,
             model=ll_simulation_model,
-            migration_matrix=self.migration_matrix,
+            migration_matrix=self.demography.migration_matrix,
             population_configuration=ll_population_configuration,
             pedigree=self.pedigree,
             demographic_events=ll_demographic_events,
@@ -842,10 +930,12 @@ class Simulator:
             tables.provenances.add_row(provenance_record)
         if self.from_ts is None:
             # Add the populations with metadata
-            assert len(tables.populations) == len(self.population_configurations)
+            assert len(tables.populations) == self.demography.num_populations
             tables.populations.clear()
-            for pop_config in self.population_configurations:
-                tables.populations.add_row(metadata=pop_config.encode_metadata())
+            for population in self.demography.populations:
+                tables.populations.add_row(
+                    metadata=population.temporary_hack_for_encoding_old_style_metadata()
+                )
         return tables.tree_sequence()
 
     def reset(self):
@@ -1461,6 +1551,41 @@ class Pedigree:
             for key in inspect.signature(self.__init__).parameters.keys()
             if hasattr(self, key)
         }
+
+
+# TODO update the documentation here to state that using this class is
+# deprecated, and users should use the model=[...] notation instead.
+@attr.s
+class SimulationModelChange:
+    """
+    An event representing a change of underlying :ref:`simulation model
+    <sec_api_simulation_models>`.
+
+    :param float time: The time at which the simulation model changes
+        to the new model, in generations. After this time, all internal
+        tree nodes, edges and migrations are the result of the new model.
+        If time is set to None (the default), the model change will occur
+        immediately after the previous model has completed. If time is a
+        callable, the time at which the simulation model changes is the result
+        of calling this function with the time that the previous model
+        started with as a parameter.
+    :param model: The new simulation model to use.
+        This can either be a string (e.g., ``"smc_prime"``) or an instance of
+        a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher(100)``.
+        Please see the :ref:`sec_api_simulation_models` section for more details
+        on specifying simulations models. If the argument is a string, the
+        reference population size is set from the top level ``Ne`` parameter
+        to :func:`.simulate`. If this is None (the default) the model is
+        changed to the standard coalescent with a reference_size of
+        Ne (if model was not specified).
+    :type model: str or simulation model instance
+    """
+
+    time = attr.ib(default=None)
+    model = attr.ib(default=None)
+
+    def asdict(self):
+        return attr.asdict(self)
 
 
 @attr.s

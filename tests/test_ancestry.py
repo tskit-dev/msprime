@@ -204,6 +204,90 @@ class TestSimulator(unittest.TestCase):
         self.assertEqual(sim.node_mapping_block_size, 1)
 
 
+class TestDemographyFactory(unittest.TestCase):
+    """
+    Tests fo the demography_factory function.
+    """
+
+    def test_mixed_old_and_new_style(self):
+        demography = msprime.Demography()
+
+        def f(
+            population_configurations=None,
+            migration_matrix=None,
+            demographic_events=None,
+        ):
+            msprime.demography_factory(
+                Ne=1,
+                demography=demography,
+                population_configurations=population_configurations,
+                migration_matrix=migration_matrix,
+                demographic_events=demographic_events,
+            )
+
+        with self.assertRaises(ValueError):
+            f(population_configurations=[])
+        with self.assertRaises(ValueError):
+            f(migration_matrix=[[]])
+        with self.assertRaises(ValueError):
+            f(demographic_events=[])
+
+    def test_input_demography_copied(self):
+        d1 = msprime.Demography.island_model(2, 1, Ne=100)
+        d2 = msprime.demography_factory(
+            Ne=None,
+            demography=d1,
+            population_configurations=None,
+            migration_matrix=None,
+            demographic_events=None,
+        )
+        self.assertEqual(d1, d2)
+        self.assertIsNot(d1, d2)
+        self.assertIsNot(d1.populations[0], d2.populations[0])
+        self.assertIsNot(d1.populations[1], d2.populations[1])
+        self.assertIsNot(d1.migration_matrix, d2.migration_matrix)
+
+    def test_Ne_does_not_override_demography(self):
+        d1 = msprime.Demography.island_model(2, 1, Ne=100)
+        self.assertEqual(d1.populations[0].initial_size, 100)
+        self.assertEqual(d1.populations[1].initial_size, 100)
+        d2 = msprime.demography_factory(
+            Ne=1234,
+            demography=d1,
+            population_configurations=None,
+            migration_matrix=None,
+            demographic_events=None,
+        )
+        self.assertEqual(d2.populations[0].initial_size, 100)
+        self.assertEqual(d2.populations[1].initial_size, 100)
+
+    def test_Ne_overwrites_size_none(self):
+        d1 = msprime.Demography.island_model(2, 1, Ne=None)
+        self.assertEqual(d1.populations[0].initial_size, None)
+        self.assertEqual(d1.populations[1].initial_size, None)
+        d2 = msprime.demography_factory(
+            Ne=1234,
+            demography=d1,
+            population_configurations=None,
+            migration_matrix=None,
+            demographic_events=None,
+        )
+        self.assertEqual(d2.populations[0].initial_size, 1234)
+        self.assertEqual(d2.populations[1].initial_size, 1234)
+
+        d1.populations[0].initial_size = 100
+        d1.populations[1].initial_size = None
+        d2 = msprime.demography_factory(
+            Ne=1234,
+            demography=d1,
+            population_configurations=None,
+            migration_matrix=None,
+            demographic_events=None,
+        )
+        self.assertEqual(d2.populations[0].initial_size, 100)
+        self.assertEqual(d2.populations[1].initial_size, 1234)
+
+
 class TestSimulatorFactory(unittest.TestCase):
     """
     Tests that the simulator factory high-level function correctly
@@ -256,10 +340,10 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertRaises(ValueError, f, bad_value)
         for Ne in [1, 10, 1e5]:
             sim = f(Ne)
-            self.assertEqual(sim.population_configurations[0].initial_size, Ne)
+            self.assertEqual(sim.demography.populations[0].initial_size, Ne)
         # Test the default.
         sim = msprime.simulator_factory(10)
-        self.assertEqual(sim.population_configurations[0].initial_size, 1)
+        self.assertEqual(sim.demography.populations[0].initial_size, 1)
 
     def test_population_configurations(self):
         def f(configs):
@@ -270,10 +354,15 @@ class TestSimulatorFactory(unittest.TestCase):
         # Just test the basic equalities here. The actual
         # configuration options are tested elewhere.
         for N in range(1, 10):
-            pop_configs = [msprime.PopulationConfiguration(5) for _ in range(N)]
+            pop_configs = [
+                msprime.PopulationConfiguration(5, initial_size=5) for _ in range(N)
+            ]
             sample_size = 5 * N
             sim = msprime.simulator_factory(population_configurations=pop_configs)
-            self.assertEqual(sim.population_configurations, pop_configs)
+            self.assertEqual(len(sim.demography.populations), len(pop_configs))
+            for pop, pop_config in zip(sim.demography.populations, pop_configs):
+                self.assertEqual(pop.initial_size, pop_config.initial_size)
+                self.assertEqual(pop.growth_rate, pop_config.growth_rate)
             self.assertEqual(len(sim.samples), sample_size)
             ll_sim = sim.create_ll_instance()
             self.assertEqual(len(ll_sim.get_population_configuration()), N)
@@ -320,10 +409,10 @@ class TestSimulatorFactory(unittest.TestCase):
 
             matrix = [[(j + k) * int(j != k) for j in range(N)] for k in range(N)]
             sim = f(matrix)
-            np.testing.assert_array_equal(sim.migration_matrix, matrix)
+            np.testing.assert_array_equal(sim.demography.migration_matrix, matrix)
             # Try with equivalent numpy array.
             sim = f(np.array(matrix))
-            np.testing.assert_array_equal(sim.migration_matrix, matrix)
+            np.testing.assert_array_equal(sim.demography.migration_matrix, matrix)
             ll_sim = sim.create_ll_instance()
             np.testing.assert_array_equal(ll_sim.get_migration_matrix(), matrix)
             for bad_type in [{}, "", 234, 1.2]:
@@ -331,7 +420,7 @@ class TestSimulatorFactory(unittest.TestCase):
             # Now check for the structure of the matrix.
             matrix[0][0] = "bad value"
             sim = f(matrix)
-            self.assertRaises(TypeError, sim.create_ll_instance)
+            self.assertRaises(ValueError, sim.create_ll_instance)
             matrix[0] = None
             self.assertRaises(ValueError, f, matrix)
             matrix[0] = []
@@ -340,7 +429,9 @@ class TestSimulatorFactory(unittest.TestCase):
             matrix = np.ones((N, N))
             np.fill_diagonal(matrix, 0)
             sim = f(matrix)
-            np.testing.assert_array_equal(np.array(sim.migration_matrix), matrix)
+            np.testing.assert_array_equal(
+                np.array(sim.demography.migration_matrix), matrix
+            )
             sim.run()
             events = np.array(sim.num_migration_events)
             self.assertEqual(events.shape, (N, N))
@@ -471,13 +562,14 @@ class TestSimulatorFactory(unittest.TestCase):
         ll_sim = sim.create_ll_instance()
         self.assertEqual(ll_sim.get_samples(), samples)
 
-    def test_model_change_event_sizes(self):
+    def test_new_old_style_model_changes_equal(self):
         models = [
             msprime.SweepGenicSelection(
                 position=j, start_frequency=j, end_frequency=j, alpha=j, dt=j,
             )
             for j in range(1, 10)
         ]
+        # Old style
         sim = msprime.simulator_factory(
             sample_size=2,
             Ne=10,
@@ -487,25 +579,17 @@ class TestSimulatorFactory(unittest.TestCase):
         )
         self.assertEqual(len(sim.model_change_events), len(models))
         for event, model in zip(sim.model_change_events, models):
-            self.assertEqual(
-                event.model.get_ll_representation(), model.get_ll_representation()
-            )
+            self.assertEqual(event.model, model)
 
-    def test_model_change_inherits_Ne(self):
-        K = 10
-        sim = msprime.simulator_factory(
+        sim2 = msprime.simulator_factory(
             sample_size=2,
             Ne=10,
-            demographic_events=[
-                msprime.SimulationModelChange(None, msprime.SmcApproxCoalescent())
-                for _ in range(K)
-            ],
+            model=[None]
+            + [msprime.SimulationModelChange(None, model) for model in models],
         )
-        self.assertEqual(len(sim.model_change_events), K)
-        for event in sim.model_change_events:
-            self.assertEqual(event.time, None)
+        self.assertEqual(sim.model_change_events, sim2.model_change_events)
 
-    def test_model_change_no_model_inherits_model_size(self):
+    def test_model_change_old_style(self):
         main_model = msprime.SmcApproxCoalescent()
         sim = msprime.simulator_factory(
             Ne=100,
@@ -522,17 +606,13 @@ class TestSimulatorFactory(unittest.TestCase):
         self.assertEqual(sim.model_change_events[1].time, 2)
         self.assertEqual(sim.model_change_events[1].model.name, "hudson")
 
-    def test_model_change_no_model_inherits_Ne(self):
+        # This should be the same in new notation
         sim = msprime.simulator_factory(
-            sample_size=2,
-            Ne=1500,
-            demographic_events=[
-                msprime.SimulationModelChange(1, msprime.DiscreteTimeWrightFisher()),
-                msprime.SimulationModelChange(2, None),
-            ],
+            Ne=100, sample_size=2, model=[main_model, (1, "dtwf"), (2, None)],
         )
         self.assertEqual(len(sim.model_change_events), 2)
         self.assertEqual(sim.model_change_events[0].time, 1)
+        # When model=None we change to the standard coalescent
         self.assertEqual(sim.model_change_events[1].time, 2)
         self.assertEqual(sim.model_change_events[1].model.name, "hudson")
 
@@ -812,16 +892,12 @@ class TestReprRoundTrip(unittest.TestCase):
             self.assertEqual(obj_copy, obj)
             self.assertFalse(obj_copy is obj)
 
-    def test_population_configuration(self):
+    def test_population(self):
         examples = [
-            msprime.PopulationConfiguration(),
-            msprime.PopulationConfiguration(sample_size=10),
-            msprime.PopulationConfiguration(initial_size=2),
-            msprime.PopulationConfiguration(growth_rate=5),
-            msprime.PopulationConfiguration(metadata={"a": 2}),
-            msprime.PopulationConfiguration(
-                sample_size=5, initial_size=234, growth_rate=10, metadata={"asd": 1234}
-            ),
+            msprime.Population(),
+            msprime.Population(initial_size=2),
+            msprime.Population(growth_rate=5),
+            msprime.Population(initial_size=234, growth_rate=10),
         ]
         self.assert_repr_round_trip(examples)
 

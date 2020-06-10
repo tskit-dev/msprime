@@ -602,56 +602,60 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_structure_args(self):
         sim = self.create_simulator("2 1 -T")
         self.assertEqual(sim.sample_configuration, [2])
-        self.assertEqual(sim.migration_matrix, [[0]])
+        self.assertEqual(sim.demography.migration_matrix, [[0]])
 
         # Specifying 1 population is the same as the default.
         sim = self.create_simulator("2 1 -T -I 1 2")
         self.assertEqual(sim.sample_configuration, [2])
-        self.assertEqual(sim.migration_matrix, [[0]])
+        self.assertEqual(sim.demography.migration_matrix, [[0]])
 
         sim = self.create_simulator("2 1 -T -I 2 1 1")
         self.assertEqual(sim.sample_configuration, [1, 1])
-        np.testing.assert_array_equal(sim.migration_matrix, [[0, 0], [0, 0]])
+        np.testing.assert_array_equal(sim.demography.migration_matrix, [[0, 0], [0, 0]])
 
         # Default migration matrix is zeros
         sim = self.create_simulator("2 1 -T -I 2 2 0")
-        np.testing.assert_array_equal(sim.migration_matrix, [[0, 0], [0, 0]])
+        np.testing.assert_array_equal(sim.demography.migration_matrix, [[0, 0], [0, 0]])
         self.assertEqual(sim.sample_configuration, [2, 0])
 
         sim = self.create_simulator("2 1 -T -I 2 1 1 0.1")
-        np.testing.assert_array_equal(sim.migration_matrix, [[0, 0.1], [0.1, 0]])
+        np.testing.assert_array_equal(
+            sim.demography.migration_matrix, [[0, 0.1], [0.1, 0]]
+        )
         self.assertEqual(sim.sample_configuration, [1, 1])
 
         # Initial migration matrix is M / (num_pops - 1)
         sim = self.create_simulator("3 1 -T -I 3 1 1 1 2")
         self.assertEqual(sim.sample_configuration, [1, 1, 1])
         np.testing.assert_array_equal(
-            sim.migration_matrix, [[0, 1, 1], [1, 0, 1], [1, 1, 0]]
+            sim.demography.migration_matrix, [[0, 1, 1], [1, 0, 1], [1, 1, 0]]
         )
         sim = self.create_simulator("15 1 -T -I 6 5 4 3 2 1 0")
         self.assertEqual(sim.sample_configuration, [5, 4, 3, 2, 1, 0])
 
     def test_migration_matrix_entry(self):
         sim = self.create_simulator("3 1 -T -I 2 3 0 -m 1 2 1.1 -m 2 1 9.0")
-        np.testing.assert_array_equal(sim.migration_matrix, [[0, 1.1], [9.0, 0]])
+        np.testing.assert_array_equal(
+            sim.demography.migration_matrix, [[0, 1.1], [9.0, 0]]
+        )
         sim = self.create_simulator("3 1 -T -I 3 3 0 0 -m 1 2 1.1 -m 2 1 9.0")
         np.testing.assert_array_equal(
-            sim.migration_matrix, [[0, 1.1, 0], [9.0, 0, 0], [0, 0, 0]]
+            sim.demography.migration_matrix, [[0, 1.1, 0], [9.0, 0, 0], [0, 0, 0]]
         )
 
     def test_migration_matrix(self):
         sim = self.create_simulator("2 1 -T -I 2 2 0 -ma 0 1 2 3")
-        np.testing.assert_array_equal(sim.migration_matrix, [[0, 1], [2, 0]])
+        np.testing.assert_array_equal(sim.demography.migration_matrix, [[0, 1], [2, 0]])
         sim = self.create_simulator("2 1 -T -I 2 2 0 -ma x 1 2 x")
-        np.testing.assert_array_equal(sim.migration_matrix, [[0, 1], [2, 0]])
+        np.testing.assert_array_equal(sim.demography.migration_matrix, [[0, 1], [2, 0]])
         sim = self.create_simulator("3 1 -T -I 3 1 1 1 -ma 1 2 3 4 5 6 7 8 9")
         np.testing.assert_array_equal(
-            sim.migration_matrix, [[0, 2, 3], [4, 0, 6], [7, 8, 0]]
+            sim.demography.migration_matrix, [[0, 2, 3], [4, 0, 6], [7, 8, 0]]
         )
 
     def test_simultaneous_events(self):
         sim = self.create_simulator("2 1 -T -eN 1 2.0 -eG 1.0 3 -eN 1 4")
-        events = sim.demographic_events
+        events = sim.demography.events
         self.assertEqual(len(events), 3)
         for event in events:
             self.assertEqual(event.time, 1.0)
@@ -669,8 +673,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         def f(args):
             sim = self.create_simulator(args)
             return [
-                (c.initial_size * 4, c.growth_rate)
-                for c in sim.population_configurations
+                (c.initial_size * 4, c.growth_rate) for c in sim.demography.populations
             ]
 
         self.assertEqual(f("2 1 -T -I 3 2 0 0 -g 1 -1"), [(1, -1), (1, 0), (1, 0)])
@@ -691,8 +694,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         def f(args):
             sim = self.create_simulator(args)
             return [
-                (c.initial_size * 4, c.growth_rate)
-                for c in sim.population_configurations
+                (c.initial_size * 4, c.growth_rate) for c in sim.demography.populations
             ]
 
         self.assertEqual(f("2 1 -T -I 3 2 0 0 -n 1 2"), [(2, 0), (1, 0), (1, 0)])
@@ -711,7 +713,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_population_growth_rate_change(self):
         def f(args):
             sim = self.create_simulator(args)
-            return sim.demographic_events
+            return sim.demography.events
 
         events = f("2 1 -T -eg 0.1 1 2")
         self.assertEqual(len(events), 1)
@@ -733,7 +735,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_population_size_change(self):
         def f(args):
             sim = self.create_simulator(args)
-            return sim.demographic_events
+            return sim.demography.events
 
         events = f("2 1 -T -en 0.1 1 2")
         self.assertEqual(len(events), 1)
@@ -758,7 +760,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_migration_rate_change(self):
         def check(args, results):
             sim = self.create_simulator(args)
-            events = sim.demographic_events
+            events = sim.demography.events
             self.assertEqual(len(events), len(results))
             for event, result in zip(events, results):
                 self.assertIsInstance(event, msprime.MigrationRateChange)
@@ -773,7 +775,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_migration_matrix_entry_change(self):
         def check(args, results):
             sim = self.create_simulator(args)
-            events = sim.demographic_events
+            events = sim.demography.events
             self.assertEqual(len(events), len(results))
             for event, result in zip(events, results):
                 self.assertIsInstance(event, msprime.MigrationRateChange)
@@ -791,11 +793,11 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         def check(args, results):
             sim = self.create_simulator(args)
             # Make sure we haven't changed the initial matrix.
-            matrix = sim.migration_matrix
+            matrix = sim.demography.migration_matrix
             for row in matrix:
                 for entry in row:
                     self.assertEqual(entry, 0.0)
-            events = sim.demographic_events
+            events = sim.demography.events
             self.assertEqual(len(events), len(results))
             for event, result in zip(events, results):
                 self.assertIsInstance(event, msprime.MigrationRateChange)
@@ -821,7 +823,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_population_split(self):
         def check(N, args, results):
             sim = self.create_simulator(args)
-            events = sim.demographic_events
+            events = sim.demography.events
             self.assertEqual(len(events), len(results) * N)
             k = 0
             for result in results:
@@ -855,11 +857,11 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_admixture(self):
         def check(N, args, results):
             sim = self.create_simulator(args)
-            events = sim.demographic_events
+            events = sim.demography.events
             self.assertEqual(sim.num_populations, N)
             self.assertEqual(len(events), len(results))
             matrix = [[0 for _ in range(N)] for _ in range(N)]
-            np.testing.assert_array_equal(sim.migration_matrix, matrix)
+            np.testing.assert_array_equal(sim.demography.migration_matrix, matrix)
             for result, event in zip(results, events):
                 self.assertIsInstance(event, msprime.MassMigration)
                 self.assertEqual(event.time, result[0])

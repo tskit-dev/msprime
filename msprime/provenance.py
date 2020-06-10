@@ -31,6 +31,7 @@ import numpy
 import tskit
 
 import _msprime
+from . import ancestry
 
 __version__ = "undefined"
 try:
@@ -89,6 +90,11 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
     """
 
     def default(self, obj):
+        # TODO it's a bit ugly and brittle that we have to have these
+        # special cases, but this needed so that we can recursively
+        # process the SimulationModelChange below.
+        if obj is None or isinstance(obj, str):
+            return obj
         if isinstance(obj, types.FunctionType):
             # Some provenance-relevant classes such as SimulationModelChange take
             # functional arguments. Note that we have a tight definition of
@@ -143,12 +149,20 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
             ret = obj.asdict()
             cls = obj.__class__
             ret["__class__"] = f"{cls.__module__}.{cls.__name__}"
+            if isinstance(obj, ancestry.SimulationModelChange):
+                # We have to special-case the SimulationModelChange because it
+                # can contain an embedded msprime object. To complicate things
+                # a bit more, the model can be either None, a string or an
+                # instance. The simplest way around this seems to be to
+                # recursively parse the process the model and to guard against
+                # None as input
+                ret["model"] = self.default(obj.model)
             return ret
         except AttributeError:
             raise TypeError(
                 f"Object of type {obj.__class__.__name__} "
-                f"is not JSON serializable, provide an `asdict` method "
-                f"that gives the objects args"
+                f"is not JSON serializable. Please provide an `asdict` method "
+                f"that returns the object's constructor arguments."
             )
 
     @staticmethod
