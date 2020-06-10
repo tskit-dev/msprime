@@ -23,7 +23,7 @@ import re
 
 import newick
 
-from . import demography
+from . import demography as demog
 
 
 def parse_starbeast(tree, generation_time, branch_length_units="myr"):
@@ -206,26 +206,24 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
     # Parse the tree with the newick library.
     root = parse_newick(tree, generations_per_branch_length_unit)
 
-    # Define population configuratons and demographic events according to the
+    # Define populations and demographic events according to the
     # specified population size and the divergence times in the species tree.
     # Per divergence event (node in the tree), a mass migration with a proportion
     # of 1 of the population is used. The destination is the left-most leaf for
     # each node. Because we are using the n leaf populations, we map each node back
     # to the leaf population that it corresponds to.
-    population_configurations = []
-    demographic_events = []
+    populations = []
+    events = []
     leaf_map = {}
     for node in root.walk("postorder"):
         if len(node.descendants) == 0:
             # Per extant species (= leaf node) in the tree, add a population with
             # size Ne. Species names are stored as metadata with the "species_name"
             # tag.
-            population_configurations.append(
-                demography.PopulationConfiguration(
-                    initial_size=Ne, metadata={"species_name": node.name.strip()}
-                )
+            populations.append(
+                demog.Population(initial_size=Ne, name=node.name.strip())
             )
-            leaf_map[node] = len(population_configurations) - 1
+            leaf_map[node] = len(populations) - 1
         else:
             # Per internal node, add one (if the node is bifurcating) or multiple
             # (if the node is multi-furcating) MassMigrations. The parent species
@@ -235,16 +233,12 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
             # For each child species after the left-most one, we create
             # a MassMigration into the left-most species.
             for child in node.descendants[1:]:
-                demographic_events.append(
-                    demography.MassMigration(
+                events.append(
+                    demog.MassMigration(
                         source=leaf_map[child], dest=leaf_map[node], time=node.time
                     )
                 )
-
-    # Sort demographic events by time.
-    demographic_events.sort(key=lambda de: de.time)
-
-    return population_configurations, demographic_events
+    return demog.Demography(populations=populations, events=events)
 
 
 def process_starbeast_tree(
@@ -256,8 +250,8 @@ def process_starbeast_tree(
     demographic_events.
     """
     root = parse_newick(tree_string, generations_per_branch_length_unit)
-    population_configurations = []
-    demographic_events = []
+    populations = []
+    events = []
     # The destination is the left-most leaf for each node. Because we are
     # using the n leaf populations, we map each node back to the leaf
     # population that it corresponds to.
@@ -277,13 +271,10 @@ def process_starbeast_tree(
             # tag.
             newick_id = node.name.strip().split("[")[0]
             species_name = species_name_map[newick_id]
-            metadata = {"species_name": species_name}
-            population_configurations.append(
-                demography.PopulationConfiguration(
-                    initial_size=pop_size, metadata=metadata
-                )
+            populations.append(
+                demog.Population(initial_size=pop_size, name=species_name)
             )
-            leaf_map[node] = len(population_configurations) - 1
+            leaf_map[node] = len(populations) - 1
         else:
             # Per internal node, add one (if the node is bifurcating) or multiple
             # (if the node is multi-furcating) MassMigrations. The parent species
@@ -293,18 +284,17 @@ def process_starbeast_tree(
             # For each child species after the left-most one, we create
             # a MassMigration into the left-most species.
             for child in node.descendants[1:]:
-                demographic_events.append(
-                    demography.MassMigration(
+                events.append(
+                    demog.MassMigration(
                         source=leaf_map[child], dest=leaf_map[node], time=node.time
                     )
                 )
-            demographic_events.append(
-                demography.PopulationParametersChange(
+            events.append(
+                demog.PopulationParametersChange(
                     node.time, initial_size=pop_size, population_id=leaf_map[node]
                 )
             )
-    demographic_events.sort(key=lambda de: de.time)
-    return population_configurations, demographic_events
+    return demog.Demography(populations=populations, events=events)
 
 
 def is_number(s):
