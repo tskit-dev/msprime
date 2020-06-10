@@ -6,6 +6,7 @@ import argparse
 import ast
 import collections
 import itertools
+import logging
 import math
 import os
 import random
@@ -15,6 +16,7 @@ import tempfile
 import time
 
 import allel
+import attr
 import dendropy
 import matplotlib
 import numpy as np
@@ -226,18 +228,21 @@ def make_test_dir(test_name):
     return basedir
 
 
-class SimulationVerifier:
+@attr.s
+class Test:
     """
-    Class to compare msprime against ms to ensure that the same distributions
-    of values are output under the same parameters.
+    The superclass of all tests. Each test must define a name, a group
+    and a run method.
     """
 
-    def __init__(self, output_dir):
-        self._output_dir = output_dir
-        self._instances = {}
-        self._mspms_executable = [sys.executable, "mspms_dev.py"]
-        self._slim_executable = ["./data/slim"]
-        self._ms_executable = ["./data/ms"]
+    name = attr.ib(type=str)
+    group = attr.ib(type=str)
+    _mspms_executable = attr.ib(init=False, default=[sys.executable, "mspms_dev.py"])
+    _slim_executable = attr.ib(init=False, default=["./data/slim"])
+    _ms_executable = attr.ib(init=False, default=["./data/ms"])
+
+    def run(self, output_dir):
+        raise NotImplementedError()
 
     def _run_sample_stats(self, args):
         print("\t", " ".join(args))
@@ -275,15 +280,6 @@ class SimulationVerifier:
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
-    def run(self, keys=None):
-        the_keys = sorted(self._instances.keys())
-        if keys is not None:
-            the_keys = keys
-        for key in the_keys:
-            print(key)
-            runner = self._instances[key]
-            runner()
-
     def get_ms_seeds(self):
         max_seed = 2 ** 16
         seeds = [random.randint(1, max_seed) for j in range(3)]
@@ -294,288 +290,9 @@ class SimulationVerifier:
             self._mspms_executable + args.split() + self.get_ms_seeds()
         )
 
-    # used in Xi and Hudson tests
-    def verify_breakpoint_distribution(
-        self, basedir_name, name, sample_size, Ne, r, L, model, growth_rate=0
-    ):
-        """
-        Verifies that the number of recombination breakpoints is proportional to
-        the total branch length across all trees.
-        """
-        basedir = make_test_dir(basedir_name)
-        ts = msprime.simulate(
-            Ne=Ne,
-            recombination_rate=r,
-            length=L,
-            population_configurations=[
-                msprime.PopulationConfiguration(
-                    sample_size=sample_size, initial_size=Ne, growth_rate=growth_rate
-                )
-            ],
-            model=model,
-        )
-        empirical = []
-        for tree in ts.trees():
-            area = tree.total_branch_length * tree.span
-            empirical.append(area)
 
-        scipy.stats.probplot(empirical, dist=scipy.stats.expon(Ne * r), plot=pyplot)
-        path = os.path.join(basedir, f"{name}_growth={growth_rate}.png")
-        print("Writing", path)
-        pyplot.savefig(path)
-        pyplot.close("all")
-
-    # used in Xi and Hudson tests
-    def verify_recombination(
-        self, basedir_name, name, sample_size, Ne, r, m, L, model, growth_rate=0
-    ):
-        """
-        Verifies that the number of recombination equals the number of mutation.
-        """
-        basedir = make_test_dir(basedir_name)
-        empirical_theta = []
-        empirical_rho = []
-        for _ in range(1, 500):
-            ts = msprime.simulate(
-                Ne=Ne,
-                recombination_rate=r,
-                mutation_rate=m,
-                length=L,
-                population_configurations=[
-                    msprime.PopulationConfiguration(
-                        sample_size=sample_size,
-                        initial_size=Ne,
-                        growth_rate=growth_rate,
-                    )
-                ],
-                model=model,
-            )
-            empirical_theta.append(ts.get_num_sites())
-            ts = msprime.simulator_factory(
-                Ne=Ne,
-                recombination_rate=r,
-                length=L,
-                population_configurations=[
-                    msprime.PopulationConfiguration(
-                        sample_size=sample_size,
-                        initial_size=Ne,
-                        growth_rate=growth_rate,
-                    )
-                ],
-                model=model,
-            )
-            ts.run()
-            empirical_rho.append(ts.num_breakpoints)
-        empirical_rho.sort()
-        empirical_theta.sort()
-        empirical_rho = np.array(empirical_rho)
-        empirical_theta = np.array(empirical_theta)
-        plot_qq(empirical_theta, empirical_rho)
-        path = os.path.join(basedir, f"{name}_growth={growth_rate}_rec_check.png")
-        print("Writing", path)
-        pyplot.savefig(path)
-        pyplot.close("all")
-
-
-class MsTest(SimulationVerifier):
-    def __init__(self, output_dir):
-        super().__init__(output_dir)
-
-    def add_instances(self):
-        self.add_ms_instance("size-change1", "10 10000 -t 2.0 -eN 0.1 2.0")
-        self.add_ms_instance("growth-rate-change1", "10 10000 -t 2.0 -eG 0.1 5.0")
-        self.add_ms_instance(
-            "growth-rate-2-pops1", "10 10000 -t 2.0 -I 2 5 5 2.5 -G 5.0"
-        )
-        self.add_ms_instance(
-            "growth-rate-2-pops2", "10 10000 -t 2.0 -I 2 5 5 2.5 -G 5.0 -g 1 0.1"
-        )
-        self.add_ms_instance(
-            "growth-rate-2-pops3", "10 10000 -t 2.0 -I 2 5 5 2.5 -g 1 0.1"
-        )
-        self.add_ms_instance(
-            "growth-rate-2-pops4", "10 10000 -t 2.0 -I 2 5 5 2.5 -eg 1.0 1 5.0"
-        )
-        self.add_ms_instance(
-            "pop-size-2-pops1", "100 10000 -t 2.0 -I 2 50 50 2.5 -n 1 0.1"
-        )
-        self.add_ms_instance(
-            "pop-size-2-pops2", "100 10000 -t 2.0 -I 2 50 50 2.5 -g 1 2 -n 1 0.1"
-        )
-        self.add_ms_instance(
-            "pop-size-2-pops3", "100 10000 -t 2.0 -I 2 50 50 2.5 -eN 0.5 3.5"
-        )
-        self.add_ms_instance(
-            "pop-size-2-pops4", "100 10000 -t 2.0 -I 2 50 50 2.5 -en 0.5 1 3.5"
-        )
-        self.add_ms_instance(
-            "migration-rate-2-pops1", "100 10000 -t 2.0 -I 2 50 50 0 -eM 3 5"
-        )
-        self.add_ms_instance(
-            "migration-matrix-2-pops1", "100 10000 -t 2.0 -I 2 50 50 -ma x 10 0 x"
-        )
-        self.add_ms_instance(
-            "migration-matrix-2-pops2",
-            "100 10000 -t 2.0 -I 2 50 50 -m 1 2 10 -m 2 1 50",
-        )
-        self.add_ms_instance(
-            "migration-rate-change-2-pops1", "100 10000 -t 2.0 -I 2 50 50 -eM 5 10"
-        )
-        self.add_ms_instance(
-            "migration-matrix-entry-change-2-pops1",
-            "100 10000 -t 2.0 -I 2 50 50 -em 0.5 2 1 10",
-        )
-        self.add_ms_instance(
-            "migration-matrix-change-2-pops1",
-            "100 10000 -t 2.0 -I 2 50 50 -ema 10.0 2 x 10 0 x",
-        )
-        self.add_ms_instance(
-            "migration-matrix-change-2-pops2",
-            "100 10000 -t 2.0 -I 2 50 50 -ema 1.0 2 x 0.1 0 x "
-            "-eN 1.1 0.001 -ema 10 2 x 0 10 x",
-        )
-        self.add_ms_instance(
-            "population-split-2-pops1", "100 10000 -t 2.0 -I 2 50 50 5.0 -ej 2.0 1 2"
-        )
-        self.add_ms_instance(
-            "population-split-4-pops1",
-            "100 10000 -t 2.0 -I 4 50 50 0 0 2.0 -ej 0.5 2 1",
-        )
-        self.add_ms_instance(
-            "population-split-4-pops2",
-            "100 10000 -t 2.0 -I 4 25 25 25 25 -ej 1 2 1 -ej 2 3 1 -ej 3 4 1",
-        )
-        self.add_ms_instance(
-            "population-split-4-pops3",
-            "100 10000 -t 2.0 -I 4 25 25 25 25 -ej 1 2 1 -em 1.5 4 1 2 "
-            "-ej 2 3 1 -ej 3 4 1",
-        )
-        self.add_ms_instance(
-            "admixture-1-pop1", "1000 1000 -t 2.0 -es 0.1 1 0.5 -em 0.1 1 2 1"
-        )
-        self.add_ms_instance(
-            "admixture-1-pop2", "1000 1000 -t 2.0 -es 0.1 1 0.1 -em 0.1 1 2 1"
-        )
-        self.add_ms_instance(
-            "admixture-1-pop3", "1000 1000 -t 2.0 -es 0.01 1 0.1 -em 0.1 2 1 1"
-        )
-        self.add_ms_instance(
-            "admixture-1-pop4",
-            "1000 1000 -t 2.0 -es 0.01 1 0.1 -es 0.1 2 0 -em 0.1 3 1 1",
-        )
-        self.add_ms_instance(
-            "admixture-1-pop5", "1000 1000 -t 2.0 -es 0.01 1 0.1 -ej 1 2 1"
-        )
-        self.add_ms_instance(
-            "admixture-1-pop6", "1000 1000 -t 2.0 -es 0.01 1 0.0 -eg 0.02 2 5.0 "
-        )
-        self.add_ms_instance(
-            "admixture-1-pop7", "1000 1000 -t 2.0 -es 0.01 1 0.0 -en 0.02 2 5.0 "
-        )
-        self.add_ms_instance(
-            "admixture-2-pop1",
-            "1000 1000 -t 2.0 -I 2 500 500 1 -es 0.01 1 0.1 -ej 1 3 1",
-        )
-        self.add_ms_instance(
-            "admixture-2-pop2",
-            "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -em 2.0 3 1 1",
-        )
-        self.add_ms_instance(
-            "admixture-2-pop3",
-            "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -G 5.0 " "-em 2.0 3 1 1",
-        )
-        self.add_ms_instance(
-            "admixture-2-pop4",
-            "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -eg 0.02 1 5.0 "
-            "-em 0.02 3 1 1",
-        )
-        self.add_ms_instance(
-            "gene-conversion-1-r0", "100 10000 -t 5.0 -r 0 2501 -c 10 1"
-        )
-        self.add_ms_instance(
-            "gene-conversion-1", "100 10000 -t 5.0 -r 0.01 2501 -c 1000 1"
-        )
-        self.add_ms_instance("gene-conversion-2", "100 10000 -t 5.0 -r 10 2501 -c 2 1")
-        self.add_ms_instance(
-            "gene-conversion-2-tl-10", "100 10000 -t 5.0 -r 10 2501 -c 2 10"
-        )
-        self.add_ms_instance(
-            "gene-conversion-2-tl-100", "100 10000 -t 5.0 -r 10 2501 -c 2 100"
-        )
-
-        # # Examples from ms documentation
-        self.add_ms_instance("msdoc-simple-ex", "4 20000 -t 5.0")
-        self.add_ms_instance("msdoc-recomb-ex", "15 1000 -t 10.04 -r 100.0 2501")
-        self.add_ms_instance("msdoc-structure-ex1", "15 1000 -t 2.0 -I 3 10 4 1 5.0")
-        self.add_ms_instance(
-            "msdoc-structure-ex2",
-            "15 1000 -t 2.0 -I 3 10 4 1 5.0 -m 1 2 10.0 -m 2 1 9.0",
-        )
-        self.add_ms_instance(
-            "msdoc-structure-ex3",
-            "15 1000 -t 10.0 -I 3 10 4 1 -ma x 1.0 2.0 3.0 x 4.0 5.0 6.0 x",
-        )
-        self.add_ms_instance(
-            "msdoc-outgroup-sequence", "11 1000 -t 2.0 -I 2 1 10 -ej 6.0 1 2"
-        )
-        self.add_ms_instance(
-            "msdoc-two-species",
-            "15 10000 -t 11.2 -I 2 3 12 -g 1 44.36 -n 2 0.125 -eg 0.03125 1 0.0 "
-            "-en 0.0625 2 0.05 -ej 0.09375 2 1",
-        )
-        self.add_ms_instance(
-            "msdoc-stepping-stone",
-            "15 10000 -t 3.0 -I 6 0 7 0 0 8 0 -m 1 2 2.5 -m 2 1 2.5 -m 2 3 2.5 "
-            "-m 3 2 2.5 -m 4 5 2.5 -m 5 4 2.5 -m 5 6 2.5 -m 6 5 2.5 -em 2.0 3 4 "
-            "2.5 -em 2.0 4 3 2.5",
-        )
-
-        # The order of simultaneous events matters in ms.
-        self.add_ms_instance(
-            "simultaneous-ex1", "10 10000 -t 2.0 -eN 0.3 0.5 -eG .3 7.0"
-        )
-        # Add a bunch more instances...
-        self.add_ms_instance(
-            "zero-growth-rate", "10 10000 -t 2.0 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5"
-        )
-        # Some examples provided by Konrad Lohse
-        self.add_ms_instance(
-            "konrad-1",
-            "4 1000 -t 2508 -I 2 2 2 0 -n 2 2.59 -ma x 0 1.502 x -ej 0.9485 1 2 "
-            "-r 23.76 3000",
-        )
-        self.add_ms_instance(
-            "konrad-2",
-            "3 10000 -t 0.423 -I 3 1 1 1 -es 0.0786 1 0.946635 -ej 0.0786 4 3 "
-            "-ej 0.189256 1 2 -ej 0.483492 2 3",
-        )
-        self.add_ms_instance(
-            "konrad-3", "100 100 -t 2 -I 10 10 10 10 10 10 10 10 10 10 10 0.001 "
-        )
-
-        # Examples from msHOT documentation
-        self.add_mshot_instance(
-            "mshotdoc-hotspot-ex",
-            "10 1000 -t 10.4 -r 10.0 25000 -v 2 100 200 10 7000 8000 20",
-        )
-
-        self.add_mshot_instance(
-            "mshot-zero-recomb-interval",
-            "10 1000 -t 10.4 -r 10.0 25000 -v 1 5000 13000 0",
-        )
-
-        self.add_mshot_instance(
-            "mshot-zero-recomb", "10 1000 -t 10.4 -r 10.0 25000 -v 1 100 25000 0"
-        )
-
-        hotspots = "4 1000 2000 0 7000 8000 20 12000 15000 10 20000 22000 0"
-        self.add_mshot_instance(
-            "mshot-high-recomb-variance", f"10 1000 -t 10.4 -r 10.0 25000 -v {hotspots}"
-        )
-
-        self.add_ms_mshot_instance(
-            "ms-mshot-consistency-check", "10 1000 -t 10.4 -r 10.0 25000"
-        )
+@attr.s
+class MsTest(Test):
 
     # functions common in ms and random
     def _deserialize_breakpoints(self, df):
@@ -651,18 +368,6 @@ class MsTest(SimulationVerifier):
         df_ms = self._run_ms_coalescent_stats(args)
         self._plot_stats(key, "coalescent", df_msp, df_ms, "msp", "ms")
 
-    def add_ms_instance(self, key, command_line):
-        """
-        Adds a test instance with the specified ms command line.
-        """
-
-        def f():
-            print(key, command_line)
-            self._run_coalescent_stats(key, command_line)
-            self._run_mutation_stats(key, command_line)
-
-        self._instances[key] = f
-
     # end of tests common to MS and random
     def _run_variable_recombination_coalescent_stats(self, key, args):
         df_msp = self._run_mspms_coalescent_stats(args)
@@ -677,41 +382,182 @@ class MsTest(SimulationVerifier):
         df_mshot = self._run_mshot_coalescent_stats(args)
         self._plot_stats(key, "ms mshot consistency", df_mshot, df_ms, "msHOT", "ms")
 
-    def add_mshot_instance(self, key, command_line):
-        def f():
-            print(key, command_line)
-            self._run_variable_recombination_coalescent_stats(key, command_line)
 
-        self._instances[key] = f
+@attr.s
+class MsTest1(MsTest):
+    command = attr.ib(type=str)
 
-    def add_ms_mshot_instance(self, key, command_line):
-        def f():
-            print(key, command_line)
-            self._run_ms_mshot_stats(key, command_line)
-
-        self._instances[key] = f
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name, self.command)
+        self._run_coalescent_stats(self.name, self.command)
+        self._run_mutation_stats(self.name, self.command)
 
 
-class DiscoalTest(SimulationVerifier):
-    def __init__(self, output_dir):
-        super().__init__(output_dir)
-        self._discoal_executable = ["./data/discoal"]
+def register_ms_tests_1(runner):
+    def register(name, command):
+        runner.register(MsTest1(name=name, group="ms", command=command))
 
-    def add_instances(self):
-        self.add_discoal_instance("discoal-simple-ex", "15 1000 100 -t 5.0")
-        self.add_discoal_instance(
-            "discoal-size-change1", "10 10000 100 -t 10.0 -en 0.1 0 2.0"
-        )
-        self.add_discoal_instance(
-            "discoal-size-change2", "10 10000 100 -t 10.0 -en 0.1 0 0.1"
-        )
-        self.add_discoal_instance(
-            "discoal-size-change3", "10 10000 100 -t 10.0 -en 0.01 0 0.01"
-        )
-        self.add_discoal_instance(
-            "discoal-size-change4", "10 10000 100 -t 10.0 -en 0.01 0 0.5 -en 0.05 0 1.0"
-        )
-        self.add_sweep_vs_discoal_instance()
+    register("size-change1", "10 10000 -t 2.0 -eN 0.1 2.0")
+    register("growth-rate-change1", "10 10000 -t 2.0 -eG 0.1 5.0")
+    register("growth-rate-2-pops1", "10 10000 -t 2.0 -I 2 5 5 2.5 -G 5.0")
+    register("growth-rate-2-pops2", "10 10000 -t 2.0 -I 2 5 5 2.5 -G 5.0 -g 1 0.1")
+    register("growth-rate-2-pops3", "10 10000 -t 2.0 -I 2 5 5 2.5 -g 1 0.1")
+    register("growth-rate-2-pops4", "10 10000 -t 2.0 -I 2 5 5 2.5 -eg 1.0 1 5.0")
+    register("pop-size-2-pops1", "100 10000 -t 2.0 -I 2 50 50 2.5 -n 1 0.1")
+    register("pop-size-2-pops2", "100 10000 -t 2.0 -I 2 50 50 2.5 -g 1 2 -n 1 0.1")
+    register("pop-size-2-pops3", "100 10000 -t 2.0 -I 2 50 50 2.5 -eN 0.5 3.5")
+    register("pop-size-2-pops4", "100 10000 -t 2.0 -I 2 50 50 2.5 -en 0.5 1 3.5")
+    register("migration-rate-2-pops1", "100 10000 -t 2.0 -I 2 50 50 0 -eM 3 5")
+    register("migration-matrix-2-pops1", "100 10000 -t 2.0 -I 2 50 50 -ma x 10 0 x")
+    register(
+        "migration-matrix-2-pops2", "100 10000 -t 2.0 -I 2 50 50 -m 1 2 10 -m 2 1 50"
+    )
+    register("migration-rate-change-2-pops1", "100 10000 -t 2.0 -I 2 50 50 -eM 5 10")
+    register(
+        "migration-matrix-entry-change-2-pops1",
+        "100 10000 -t 2.0 -I 2 50 50 -em 0.5 2 1 10",
+    )
+    register(
+        "migration-matrix-change-2-pops1",
+        "100 10000 -t 2.0 -I 2 50 50 -ema 10.0 2 x 10 0 x",
+    )
+    cmd = """100 10000 -t 2.0 -I 2 50 50 -ema 1.0
+      2 x 0.1 0 x -eN 1.1 0.001 -ema 10 2 x 0 10 x"""
+    register(
+        "migration-matrix-change-2-pops2", cmd,
+    )
+    register("population-split-2-pops1", "100 10000 -t 2.0 -I 2 50 50 5.0 -ej 2.0 1 2")
+    register(
+        "population-split-4-pops1", "100 10000 -t 2.0 -I 4 50 50 0 0 2.0 -ej 0.5 2 1"
+    )
+    register(
+        "population-split-4-pops2",
+        "100 10000 -t 2.0 -I 4 25 25 25 25 -ej 1 2 1 -ej 2 3 1 -ej 3 4 1",
+    )
+    register(
+        "population-split-4-pops3",
+        "100 10000 -t 2.0 -I 4 25 25 25 25 -ej 1 2 1 -em 1.5 4 1 2 -ej 2 3 1 -ej 3 4 1",
+    )
+    register("admixture-1-pop1", "1000 1000 -t 2.0 -es 0.1 1 0.5 -em 0.1 1 2 1")
+    register("admixture-1-pop2", "1000 1000 -t 2.0 -es 0.1 1 0.1 -em 0.1 1 2 1")
+    register("admixture-1-pop3", "1000 1000 -t 2.0 -es 0.01 1 0.1 -em 0.1 2 1 1")
+    register(
+        "admixture-1-pop4", "1000 1000 -t 2.0 -es 0.01 1 0.1 -es 0.1 2 0 -em 0.1 3 1 1"
+    )
+    register("admixture-1-pop5", "1000 1000 -t 2.0 -es 0.01 1 0.1 -ej 1 2 1")
+    register("admixture-1-pop6", "1000 1000 -t 2.0 -es 0.01 1 0.0 -eg 0.02 2 5.0 ")
+    register("admixture-1-pop7", "1000 1000 -t 2.0 -es 0.01 1 0.0 -en 0.02 2 5.0 ")
+    register(
+        "admixture-2-pop1", "1000 1000 -t 2.0 -I 2 500 500 1 -es 0.01 1 0.1 -ej 1 3 1"
+    )
+    register(
+        "admixture-2-pop2",
+        "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -em 2.0 3 1 1",
+    )
+    register(
+        "admixture-2-pop3",
+        "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -G 5.0 " "-em 2.0 3 1 1",
+    )
+    register(
+        "admixture-2-pop4",
+        "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -eg 0.02 1 5.0 -em 0.02 3 1 1",
+    )
+    register("gene-conversion-1-r0", "100 10000 -t 5.0 -r 0 2501 -c 10 1")
+    register("gene-conversion-1", "100 10000 -t 5.0 -r 0.01 2501 -c 1000 1")
+    register("gene-conversion-2", "100 10000 -t 5.0 -r 10 2501 -c 2 1")
+    register("gene-conversion-2-tl-10", "100 10000 -t 5.0 -r 10 2501 -c 2 10")
+    register("gene-conversion-2-tl-100", "100 10000 -t 5.0 -r 10 2501 -c 2 100")
+    register("msdoc-simple-ex", "4 20000 -t 5.0")
+    register("msdoc-recomb-ex", "15 1000 -t 10.04 -r 100.0 2501")
+    register("msdoc-structure-ex1", "15 1000 -t 2.0 -I 3 10 4 1 5.0")
+    register(
+        "msdoc-structure-ex2", "15 1000 -t 2.0 -I 3 10 4 1 5.0 -m 1 2 10.0 -m 2 1 9.0"
+    )
+    register(
+        "msdoc-structure-ex3",
+        "15 1000 -t 10.0 -I 3 10 4 1 -ma x 1.0 2.0 3.0 x 4.0 5.0 6.0 x",
+    )
+    register("msdoc-outgroup-sequence", "11 1000 -t 2.0 -I 2 1 10 -ej 6.0 1 2")
+    cmd = "15 10000 -t 11.2 -I 2 3 12 -g 1 44.36 -n 2 \
+     0.125 -eg 0.03125 1 0.0 -en 0.0625 2 0.05 -ej 0.09375 2 1"
+    register(
+        "msdoc-two-species", cmd,
+    )
+    cmd = "15 10000 -t 3.0 -I 6 0 7 0 0 8 0 -m 1 2 2.5 -m 2 1 2.5 -m 2 3 2.5 -m 3 \
+     2 2.5 -m 4 5 2.5 -m 5 4 2.5 -m 5 6 2.5 -m 6 5 2.5 -em 2.0 3 4 2.5 -em 2.0 4 3 2.5"
+    register(
+        "msdoc-stepping-stone", cmd,
+    )
+    register("simultaneous-ex1", "10 10000 -t 2.0 -eN 0.3 0.5 -eG .3 7.0")
+    register("zero-growth-rate", "10 10000 -t 2.0 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5")
+    cmd = "4 1000 -t 2508 -I 2 2 2 0 -n 2 2.59 \
+     -ma x 0 1.502 x -ej 0.9485 1 2 -r 23.76 3000"
+    register(
+        "konrad-1", cmd,
+    )
+    cmd = "3 10000 -t 0.423 -I 3 1 1 1 -es 0.0786 1 0.946635 \
+      -ej 0.0786 4 3 -ej 0.189256 1 2 -ej 0.483492 2 3"
+    register(
+        "konrad-2", cmd,
+    )
+    register("konrad-3", "100 100 -t 2 -I 10 10 10 10 10 10 10 10 10 10 10 0.001 ")
+
+
+@attr.s
+class MsTest2(MsTest):
+    command = attr.ib(type=str)
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name, self.command)
+        self._run_variable_recombination_coalescent_stats(self.name, self.command)
+
+
+def register_ms_tests_2(runner):
+    def register(name, command):
+        runner.register(MsTest2(name=name, group="ms", command=command))
+
+    register(
+        "mshotdoc-hotspot-ex",
+        "10 1000 -t 10.4 -r 10.0 25000 -v 2 100 200 10 7000 8000 20",
+    )
+    register(
+        "mshot-zero-recomb-interval", "10 1000 -t 10.4 -r 10.0 25000 -v 1 5000 13000 0"
+    )
+    register("mshot-zero-recomb", "10 1000 -t 10.4 -r 10.0 25000 -v 1 100 25000 0")
+    hotspots = "4 1000 2000 0 7000 8000 20 12000 15000 10 20000 22000 0"
+    register(
+        "mshot-high-recomb-variance", f"10 1000 -t 10.4 -r 10.0 25000 -v {hotspots}"
+    )
+
+
+@attr.s
+class MsTest3(MsTest):
+    command = attr.ib(type=str)
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name, self.command)
+        self._run_ms_mshot_stats(self.key, self.command)
+
+
+def register_ms_tests_3(runner):
+    def register(name, command):
+        runner.register(MsTest3(name=name, group="ms", command=command))
+
+    register("ms-mshot-consistency-check", "10 1000 -t 10.4 -r 10.0 25000")
+
+
+def register_ms_tests(runner):
+    register_ms_tests_1(runner)
+    register_ms_tests_2(runner)
+    register_ms_tests_3(runner)
+
+
+@attr.s
+class DiscoalTest(Test):
+    _discoal_executable = attr.ib(init=False, default=["./data/discoal"])
 
     def get_discoal_seeds(self):
         max_seed = 2 ** 16
@@ -745,17 +591,6 @@ class DiscoalTest(SimulationVerifier):
         df_msp = self._run_msprime_mutation_stats(msp_str)
         df_d = self._run_discoal_mutation_stats(args)
         self._plot_stats(key, "mutation", df_d, df_msp, "discoal", "msp")
-
-    def add_discoal_instance(self, key, command_line):
-        """
-        Adds a test instance with the specified discoal command line.
-        """
-
-        def f():
-            print(key, command_line)
-            self._run_mutation_discoal_stats(key, command_line)
-
-        self._instances[key] = f
 
     def run_sweep_comparison(self, key, args):
         """
@@ -812,123 +647,54 @@ class DiscoalTest(SimulationVerifier):
         print(f"sample sizes msp: {len(df['pi'])} discoal: {len(df_df['pi'])}")
         self._plot_stats(key, "mutation", df, df_df)
 
-    def add_sweep_vs_discoal_instance(self):
-        """
-        Checks sweeps against discoal.
-        """
 
-        def f():
-            self.run_sweep_comparison(
-                "sweep",
-                "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a \
-                                      500 -x 0.5 -N 10000",
-            )
+@attr.s
+class DiscoalTest1(DiscoalTest):
+    command = attr.ib(type=str)
 
-        self._instances["sweep"] = f
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", "discoal", self.name, self.command)
+        self._run_mutation_discoal_stats(self.key, self.command)
 
 
-class DtwfVsCoalescentTest(SimulationVerifier):
-    def __init__(self, output_dir, extended=True):
-        super().__init__(output_dir)
-        self.extended = extended
-        self._discoal_executable = ["./data/discoal"]
+def register_discoal_tests_1(runner):
+    def register(name, command):
+        runner.register(DiscoalTest1(name=name, group="discoal", command=command))
 
-    def add_instances(self):
-        self.add_dtwf_vs_coalescent_single_locus()
-        self.add_dtwf_vs_coalescent_recomb_discrete_hotspots()
-        self.add_dtwf_vs_coalescent_recomb_continuous_hotspots()
-        self.add_dtwf_vs_coalescent_single_forced_recombination()
-        self.add_dtwf_vs_coalescent_low_recombination()
-        self.add_dtwf_vs_coalescent_2_pops_massmigration()
-        self.add_dtwf_vs_coalescent_2_pop_growth()
-        self.add_dtwf_vs_coalescent_2_pop_shrink()
-        self.add_dtwf_vs_coalescent_multiple_bottleneck()
-        self.add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_long_region", [1000], [10], int(1e8), 1e-8
-        )
-        self.add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_short_region", [1000], [10], int(1e6), 1e-8
-        )
-        self.add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_2_pops",
-            [500, 500],
-            [5, 5],
-            int(1e6),
-            1e-8,
-            num_replicates=500,
-        )
-        self.add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_3_pops", [500, 500, 500], [5, 2, 0], int(1e7), 1e-8
-        )
-        self.add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_4_pops",
-            [1000, 1000, 1000, 1000],
-            [0, 20, 0, 0],
-            int(1e6),
-            1e-8,
-            num_replicates=500,
+    register("discoal-simple-ex", "15 1000 100 -t 5.0")
+    register("discoal-size-change1", "10 10000 100 -t 10.0 -en 0.1 0 2.0")
+    register("discoal-size-change2", "10 10000 100 -t 10.0 -en 0.1 0 0.1")
+    register("discoal-size-change3", "10 10000 100 -t 10.0 -en 0.01 0 0.01")
+    register(
+        "discoal-size-change4", "10 10000 100 -t 10.0 -en 0.01 0 0.5 -en 0.05 0 1.0"
+    )
+
+
+@attr.s
+class DiscoalTest2(DiscoalTest):
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_sweep_comparison(
+            "sweep",
+            "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a \
+                                  500 -x 0.5 -N 10000",
         )
 
-        migration_matrix = [[0, 0.2, 0.1], [0.1, 0, 0.2], [0.2, 0.1, 0]]
-        self.add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_3_pops_asymm_mig",
-            [500, 500, 500],
-            [20, 0, 0],
-            int(1e6),
-            1e-8,
-            migration_matrix=migration_matrix,
-            num_replicates=500,
-        )
 
-        migration_matrix = [[0, 0.5], [0.7, 0]]
-        self.add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_2_pops_high_asymm_mig",
-            [1000, 1000],
-            [10, 10],
-            int(1e6),
-            1e-8,
-            migration_matrix=migration_matrix,
-            num_replicates=200,
-            growth_rates=[0.005, 0.005],
-        )
+def register_discoal_tests_2(runner):
+    runner.register(DiscoalTest2(name="sweep_vs_discoal", group="discoal"))
 
-        # DTWF checks against SLiM
-        # TODO: Add back multi-pop tests of DTWF vs. SLiM when full diploid
-        # simulations are implemented.
-        self.add_dtwf_vs_slim("dtwf_vs_slim_single_locus", [10], [10], 1, 0)
-        self.add_dtwf_vs_slim(
-            "dtwf_vs_slim_short_region", [100], [10], 1e7, 1e-8, num_replicates=200
-        )
-        self.add_dtwf_vs_slim(
-            "dtwf_vs_slim_long_region", [50], [10], 1e8, 1e-8, num_replicates=200
-        )
 
-        # Random checks vs Hudson coalescent - extended only
-        if self.extended is True:
-            self.add_dtwf_vs_coalescent_random_instance(
-                "dtwf_vs_coalescent_random_1",
-                num_populations=2,
-                num_replicates=200,
-                num_demographic_events=3,
-            )
-            self.add_dtwf_vs_coalescent_random_instance(
-                "dtwf_vs_coalescent_random_2",
-                num_populations=3,
-                num_replicates=200,
-                num_demographic_events=3,
-            )
-            self.add_dtwf_vs_coalescent_random_instance(
-                "dtwf_vs_coalescent_random_3",
-                num_populations=2,
-                num_replicates=200,
-                num_demographic_events=6,
-            )
-            self.add_dtwf_vs_coalescent_random_instance(
-                "dtwf_vs_coalescent_random_4",
-                num_populations=1,
-                num_replicates=200,
-                num_demographic_events=8,
-            )
+def register_discoal_tests(runner):
+    register_discoal_tests_1(runner)
+    register_discoal_tests_2(runner)
+
+
+@attr.s
+class DtwfVsCoalescentTest(Test):
+    _discoal_executable = attr.ib(init=False, default=["./data/discoal"])
 
     def run_dtwf_pedigree_comparison(self, test_name, **kwargs):
         df = pd.DataFrame()
@@ -1054,375 +820,6 @@ class DtwfVsCoalescentTest(SimulationVerifier):
         df = run_dtwf_coalescent_stats(**kwargs)
         plot_tree_intervals(basedir, df)
 
-    def add_dtwf_vs_coalescent_single_locus(self):
-        """
-        Checks the DTWF against the standard coalescent at a single locus.
-        """
-
-        def f():
-            self.run_dtwf_coalescent_comparison(
-                "dtwf_vs_coalescent_single_locus",
-                sample_size=10,
-                Ne=1000,
-                num_replicates=300,
-            )
-
-        self._instances["dtwf_vs_coalescent_single_locus"] = f
-
-    def add_dtwf_vs_coalescent_recomb_discrete_hotspots(self):
-        """
-        Checks the DTWF against the standard coalescent with a
-        discrete recombination map with variable rates.
-        """
-        test_name = "dtwf_vs_coalescent_discrete_hotspots"
-
-        def f():
-            recombination_map = msprime.RecombinationMap(
-                positions=[0, 100, 500, 900, 1200, 1500, 2000],
-                rates=[0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
-                discrete=True,
-            )
-
-            self.run_dtwf_coalescent_comparison(
-                test_name,
-                sample_size=10,
-                Ne=1000,
-                recombination_map=recombination_map,
-                num_replicates=300,
-            )
-
-        self._instances[test_name] = f
-
-    def add_dtwf_vs_coalescent_recomb_continuous_hotspots(self):
-        """
-        Checks the DTWF against the standard coalescent with a
-        continuous recombination map with variable rates.
-        """
-        test_name = "dtwf_vs_coalescent_continuous_hotspots"
-
-        def f():
-            recombination_map = msprime.RecombinationMap(
-                positions=[0, 0.1, 0.5, 0.9, 1.2, 1.5, 2.0],
-                rates=[0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
-            )
-
-            self.run_dtwf_coalescent_comparison(
-                test_name,
-                sample_size=10,
-                Ne=1000,
-                recombination_map=recombination_map,
-                num_replicates=300,
-            )
-
-        self._instances[test_name] = f
-
-    def add_dtwf_vs_coalescent_single_forced_recombination(self):
-        test_name = "dtwf_vs_coalescent_single_forced_recombination"
-
-        def f():
-            recombination_map = msprime.RecombinationMap(
-                positions=[0, 100, 101, 201], rates=[0, 1, 0, 0], discrete=True
-            )
-
-            self.run_dtwf_coalescent_comparison(
-                test_name,
-                sample_size=10,
-                Ne=10,
-                num_replicates=1,
-                recombination_map=recombination_map,
-            )
-
-        self._instances[test_name] = f
-
-    def add_dtwf_vs_coalescent_low_recombination(self):
-        """
-        Checks the DTWF against the standard coalescent at a single locus.
-        """
-
-        def f():
-            self.run_dtwf_coalescent_comparison(
-                "dtwf_vs_coalescent_low_recombination",
-                sample_size=10,
-                Ne=1000,
-                num_replicates=400,
-                recombination_rate=0.01,
-            )
-
-        self._instances["dtwf_vs_coalescent_low_recombination"] = f
-
-    def add_dtwf_vs_coalescent(
-        self,
-        key,
-        initial_sizes,
-        sample_sizes,
-        num_loci,
-        recombination_rate,
-        migration_matrix=None,
-        growth_rates=None,
-        num_replicates=None,
-    ):
-        """
-        Generic test of DTWF vs hudson coalescent. Populations are not
-        allowed to shrink to fewer than 100 individuals, and if starting with
-        fewer than 100 have growth rate set to zero.
-        """
-        assert len(sample_sizes) == len(initial_sizes)
-        num_pops = len(sample_sizes)
-
-        if num_replicates is None:
-            num_replicates = 200
-
-        if growth_rates is None:
-            default_growth_rate = 0.01
-            growth_rates = [default_growth_rate] * num_pops
-
-        population_configurations = []
-        demographic_events = []
-
-        for i in range(num_pops):
-            if initial_sizes[i] > 100:
-                # Growth rate set to zero at pop size 100
-                t_100 = (np.log(initial_sizes[i]) - np.log(100)) / growth_rates[i]
-                de = msprime.PopulationParametersChange(
-                    t_100, growth_rate=0, population=i
-                )
-                demographic_events.append(de)
-
-                growth_rate = growth_rates[i]
-            else:
-                # Enforce zero growth rate for small populations
-                print(
-                    "Warning - setting growth rate to zero for small",
-                    "population of size",
-                    initial_sizes[i],
-                )
-                growth_rate = 0
-
-            population_configurations.append(
-                msprime.PopulationConfiguration(
-                    sample_size=sample_sizes[i],
-                    initial_size=initial_sizes[i],
-                    growth_rate=growth_rate,
-                )
-            )
-
-        recombination_map = msprime.RecombinationMap.uniform_map(
-            num_loci, recombination_rate, discrete=True
-        )
-
-        if migration_matrix is None:
-            default_mig_rate = 0.05
-            migration_matrix = []
-            for i in range(num_pops):
-                row = [default_mig_rate] * num_pops
-                row[i] = 0
-                migration_matrix.append(row)
-
-        def f():
-            self.run_dtwf_coalescent_comparison(
-                key,
-                population_configurations=population_configurations,
-                migration_matrix=migration_matrix,
-                num_replicates=num_replicates,
-                demographic_events=demographic_events,
-                recombination_map=recombination_map,
-            )
-
-        self._instances[key] = f
-
-    def add_dtwf_vs_coalescent_2_pops_massmigration(self):
-        population_configurations = [
-            msprime.PopulationConfiguration(sample_size=10, initial_size=1000),
-            msprime.PopulationConfiguration(sample_size=10, initial_size=1000),
-        ]
-        recombination_map = msprime.RecombinationMap([0, int(1e6)], [1e-8, 0])
-        demographic_events = [
-            msprime.MassMigration(time=300, source=1, destination=0, proportion=1.0)
-        ]
-
-        test_name = "dtwf_vs_coalescent_2_pops_massmigration"
-
-        def f():
-            self.run_dtwf_coalescent_comparison(
-                test_name,
-                population_configurations=population_configurations,
-                demographic_events=demographic_events,
-                # Ne=0.5,
-                num_replicates=300,
-                recombination_map=recombination_map,
-            )
-
-        self._instances[test_name] = f
-
-    def add_dtwf_vs_coalescent_2_pop_growth(self):
-        population_configurations = [
-            msprime.PopulationConfiguration(
-                sample_size=10, initial_size=1000, growth_rate=0.01
-            )
-        ]
-        recombination_map = msprime.RecombinationMap(
-            [0, int(5e7)], [1e-8, 0], discrete=True
-        )
-
-        def f():
-            self.run_dtwf_coalescent_comparison(
-                "dtwf_vs_coalescent_2_pop_growth",
-                population_configurations=population_configurations,
-                recombination_map=recombination_map,
-                num_replicates=300,
-            )
-
-        self._instances["dtwf_vs_coalescent_2_pop_growth"] = f
-
-    def add_dtwf_vs_coalescent_2_pop_shrink(self):
-        initial_size = 1000
-
-        population_configurations = [
-            msprime.PopulationConfiguration(
-                sample_size=10, initial_size=initial_size, growth_rate=-0.01
-            )
-        ]
-        recombination_map = msprime.RecombinationMap(
-            [0, int(1e7)], [1e-8, 0], discrete=True
-        )
-        demographic_events = [
-            msprime.PopulationParametersChange(
-                time=200, initial_size=initial_size, growth_rate=0.01, population_id=0
-            )
-        ]
-
-        def f():
-            self.run_dtwf_coalescent_comparison(
-                "dtwf_vs_coalescent_2_pop_shrink",
-                population_configurations=population_configurations,
-                recombination_map=recombination_map,
-                demographic_events=demographic_events,
-                num_replicates=300,
-            )
-
-        self._instances["dtwf_vs_coalescent_2_pop_shrink"] = f
-
-    def add_dtwf_vs_coalescent_multiple_bottleneck(self):
-        population_configurations = [
-            msprime.PopulationConfiguration(sample_size=5, initial_size=1000),
-            msprime.PopulationConfiguration(sample_size=5, initial_size=1000),
-        ]
-        recombination_map = msprime.RecombinationMap([0, int(1e6)], [1e-8, 0])
-        # migration_matrix = [[0, 0.1], [0.1, 0]]
-
-        demographic_events = [
-            msprime.PopulationParametersChange(
-                time=100, initial_size=100, growth_rate=-0.01, population_id=0
-            ),
-            msprime.PopulationParametersChange(
-                time=200, initial_size=100, growth_rate=-0.01, population_id=1
-            ),
-            msprime.PopulationParametersChange(
-                time=300, initial_size=1000, growth_rate=0.01, population_id=0
-            ),
-            msprime.PopulationParametersChange(
-                time=400, initial_size=1000, growth_rate=0.01, population_id=1
-            ),
-            msprime.PopulationParametersChange(
-                time=500, initial_size=100, growth_rate=0, population_id=0
-            ),
-            msprime.PopulationParametersChange(
-                time=600, initial_size=100, growth_rate=0, population_id=1
-            ),
-            msprime.MigrationRateChange(time=700, rate=0.1, matrix_index=(0, 1)),
-        ]
-
-        def f():
-            self.run_dtwf_coalescent_comparison(
-                "dtwf_vs_coalescent_multiple_bottleneck",
-                population_configurations=population_configurations,
-                demographic_events=demographic_events,
-                # migration_matrix=migration_matrix,
-                num_replicates=400,
-                recombination_map=recombination_map,
-            )
-
-        self._instances["dtwf_vs_coalescent_multiple_bottleneck"] = f
-
-    def add_dtwf_vs_coalescent_random_instance(
-        self, key, num_populations=1, num_replicates=200, num_demographic_events=0
-    ):
-
-        N = num_populations
-        num_loci = np.random.randint(1e5, 1e7)
-        rho = 1e-8
-        recombination_map = msprime.RecombinationMap(
-            [0, num_loci], [rho, 0], discrete=True
-        )
-
-        population_configurations = []
-        for _ in range(N):
-            population_configurations.append(
-                msprime.PopulationConfiguration(
-                    sample_size=np.random.randint(1, 10), initial_size=int(1000 / N)
-                )
-            )
-
-        migration_matrix = []
-        for i in range(N):
-            migration_matrix.append(
-                [random.uniform(0.05, 0.25) * (j != i) for j in range(N)]
-            )
-
-        # Add demographic events and some migration rate changes
-        t_max = 1000
-        demographic_events = []
-        times = sorted(np.random.randint(300, t_max, size=num_demographic_events))
-        for t in times:
-            initial_size = np.random.randint(500, 1000)
-            # Setting growth_rate to 0 because it's too tricky to get
-            # growth_rates in the DTWF which don't result in N going to 0.
-            growth_rate = 0
-            pop_id = np.random.randint(N)
-            demographic_events.append(
-                msprime.PopulationParametersChange(
-                    time=t,
-                    initial_size=initial_size,
-                    growth_rate=growth_rate,
-                    population_id=pop_id,
-                )
-            )
-
-            if random.random() < 0.5 and N >= 2:
-                rate = random.uniform(0.05, 0.25)
-                index = tuple(
-                    np.random.choice(range(num_populations), size=2, replace=False)
-                )
-                demographic_events.append(
-                    msprime.MigrationRateChange(time=t, rate=rate, matrix_index=index)
-                )
-
-        # Collect all pops together to control coalescence times for DTWF
-        for i in range(1, N):
-            demographic_events.append(
-                msprime.MassMigration(
-                    time=t_max, source=i, destination=0, proportion=1.0
-                )
-            )
-
-        demographic_events.append(
-            msprime.PopulationParametersChange(
-                time=t_max, initial_size=100, growth_rate=0, population_id=0
-            )
-        )
-
-        def f():
-            self.run_dtwf_coalescent_comparison(
-                key,
-                migration_matrix=migration_matrix,
-                population_configurations=population_configurations,
-                demographic_events=demographic_events,
-                num_replicates=num_replicates,
-                recombination_map=recombination_map,
-            )
-
-        self._instances[key] = f
-
     def run_dtwf_slim_comparison(self, test_name, slim_args, **kwargs):
 
         df = pd.DataFrame()
@@ -1486,102 +883,723 @@ class DtwfVsCoalescentTest(SimulationVerifier):
         version = float(version_str.strip(" ,")[0:3])
         assert version >= min_version, "Require SLiM >= 3.1!"
 
-    def add_dtwf_vs_slim(
-        self,
+
+@attr.s
+class DtwfvsCoalescentTest1(DtwfVsCoalescentTest):
+    simulate_args = attr.ib(factory=dict)
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name, **self.simulate_args)
+        self.run_dtwf_coalescent_comparison(self.name, **self.simulate_args)
+
+
+def dtwf_vs_coalescent_single_locus(group):
+    """
+    Checks the DTWF against the standard coalescent at a single locus.
+    """
+
+    return DtwfvsCoalescentTest1(
+        "dtwf_vs_coalescent_single_locus",
+        group,
+        simulate_args=dict(sample_size=10, Ne=1000, num_replicates=300,),
+    )
+
+
+def dtwf_vs_coalescent_recomb_discrete_hotspots(group):
+    """
+    Checks the DTWF against the standard coalescent with a
+    discrete recombination map with variable rates.
+    """
+    test_name = "dtwf_vs_coalescent_discrete_hotspots"
+
+    recombination_map = msprime.RecombinationMap(
+        positions=[0, 100, 500, 900, 1200, 1500, 2000],
+        rates=[0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
+        discrete=True,
+    )
+
+    return DtwfvsCoalescentTest1(
+        test_name,
+        group,
+        simulate_args=dict(
+            sample_size=10,
+            Ne=1000,
+            recombination_map=recombination_map,
+            num_replicates=300,
+        ),
+    )
+
+
+def dtwf_vs_coalescent_recomb_continuous_hotspots(group):
+    """
+    Checks the DTWF against the standard coalescent with a
+    continuous recombination map with variable rates.
+    """
+    test_name = "dtwf_vs_coalescent_continuous_hotspots"
+
+    recombination_map = msprime.RecombinationMap(
+        positions=[0, 0.1, 0.5, 0.9, 1.2, 1.5, 2.0],
+        rates=[0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
+    )
+
+    return DtwfvsCoalescentTest1(
+        test_name,
+        group,
+        simulate_args=dict(
+            sample_size=10,
+            Ne=1000,
+            recombination_map=recombination_map,
+            num_replicates=300,
+        ),
+    )
+
+
+def dtwf_vs_coalescent_single_forced_recombination(group):
+    test_name = "dtwf_vs_coalescent_single_forced_recombination"
+
+    recombination_map = msprime.RecombinationMap(
+        positions=[0, 100, 101, 201], rates=[0, 1, 0, 0], discrete=True
+    )
+
+    return DtwfvsCoalescentTest1(
+        test_name,
+        group,
+        simulate_args=dict(
+            sample_size=10,
+            Ne=10,
+            num_replicates=1,
+            recombination_map=recombination_map,
+        ),
+    )
+
+
+def dtwf_vs_coalescent_low_recombination(group):
+    """
+    Checks the DTWF against the standard coalescent at a single locus.
+    """
+
+    return DtwfvsCoalescentTest1(
+        "dtwf_vs_coalescent_low_recombination",
+        group,
+        simulate_args=dict(
+            sample_size=10, Ne=1000, num_replicates=400, recombination_rate=0.01,
+        ),
+    )
+
+
+def dtwf_vs_coalescent_2_pops_massmigration(group):
+    population_configurations = [
+        msprime.PopulationConfiguration(sample_size=10, initial_size=1000),
+        msprime.PopulationConfiguration(sample_size=10, initial_size=1000),
+    ]
+    recombination_map = msprime.RecombinationMap([0, int(1e6)], [1e-8, 0])
+    demographic_events = [
+        msprime.MassMigration(time=300, source=1, destination=0, proportion=1.0)
+    ]
+
+    test_name = "dtwf_vs_coalescent_2_pops_massmigration"
+
+    return DtwfvsCoalescentTest1(
+        test_name,
+        group,
+        simulate_args=dict(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            # Ne=0.5,
+            num_replicates=300,
+            recombination_map=recombination_map,
+        ),
+    )
+
+
+def dtwf_vs_coalescent_2_pop_growth(group):
+    population_configurations = [
+        msprime.PopulationConfiguration(
+            sample_size=10, initial_size=1000, growth_rate=0.01
+        )
+    ]
+    recombination_map = msprime.RecombinationMap(
+        [0, int(5e7)], [1e-8, 0], discrete=True
+    )
+
+    return DtwfvsCoalescentTest1(
+        "dtwf_vs_coalescent_2_pop_growth",
+        group,
+        simulate_args=dict(
+            population_configurations=population_configurations,
+            recombination_map=recombination_map,
+            num_replicates=300,
+        ),
+    )
+
+
+def dtwf_vs_coalescent_2_pop_shrink(group):
+    initial_size = 1000
+
+    population_configurations = [
+        msprime.PopulationConfiguration(
+            sample_size=10, initial_size=initial_size, growth_rate=-0.01
+        )
+    ]
+    recombination_map = msprime.RecombinationMap(
+        [0, int(1e7)], [1e-8, 0], discrete=True
+    )
+    demographic_events = [
+        msprime.PopulationParametersChange(
+            time=200, initial_size=initial_size, growth_rate=0.01, population_id=0
+        )
+    ]
+
+    return DtwfvsCoalescentTest1(
+        "dtwf_vs_coalescent_2_pop_shrink",
+        group,
+        simulate_args=dict(
+            population_configurations=population_configurations,
+            recombination_map=recombination_map,
+            demographic_events=demographic_events,
+            num_replicates=300,
+        ),
+    )
+
+
+def dtwf_vs_coalescent_multiple_bottleneck(group):
+    population_configurations = [
+        msprime.PopulationConfiguration(sample_size=5, initial_size=1000),
+        msprime.PopulationConfiguration(sample_size=5, initial_size=1000),
+    ]
+    recombination_map = msprime.RecombinationMap([0, int(1e6)], [1e-8, 0])
+    # migration_matrix = [[0, 0.1], [0.1, 0]]
+
+    demographic_events = [
+        msprime.PopulationParametersChange(
+            time=100, initial_size=100, growth_rate=-0.01, population_id=0
+        ),
+        msprime.PopulationParametersChange(
+            time=200, initial_size=100, growth_rate=-0.01, population_id=1
+        ),
+        msprime.PopulationParametersChange(
+            time=300, initial_size=1000, growth_rate=0.01, population_id=0
+        ),
+        msprime.PopulationParametersChange(
+            time=400, initial_size=1000, growth_rate=0.01, population_id=1
+        ),
+        msprime.PopulationParametersChange(
+            time=500, initial_size=100, growth_rate=0, population_id=0
+        ),
+        msprime.PopulationParametersChange(
+            time=600, initial_size=100, growth_rate=0, population_id=1
+        ),
+        msprime.MigrationRateChange(time=700, rate=0.1, matrix_index=(0, 1)),
+    ]
+
+    return DtwfvsCoalescentTest1(
+        "dtwf_vs_coalescent_multiple_bottleneck",
+        group,
+        simulate_args=dict(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            # migration_matrix=migration_matrix,
+            num_replicates=400,
+            recombination_map=recombination_map,
+        ),
+    )
+
+
+def register_dtwfvscoalescent_tests_1(runner):
+    group = "dtwfvscoalescent"
+    tests = [
+        dtwf_vs_coalescent_single_locus(group),
+        dtwf_vs_coalescent_recomb_discrete_hotspots(group),
+        dtwf_vs_coalescent_recomb_continuous_hotspots(group),
+        dtwf_vs_coalescent_single_forced_recombination(group),
+        dtwf_vs_coalescent_low_recombination(group),
+        dtwf_vs_coalescent_2_pops_massmigration(group),
+        dtwf_vs_coalescent_2_pop_growth(group),
+        dtwf_vs_coalescent_2_pop_shrink(group),
+        dtwf_vs_coalescent_multiple_bottleneck(group),
+    ]
+
+    for test in tests:
+        runner.register(test)
+
+
+def add_dtwf_vs_coalescent(
+    key,
+    group,
+    initial_sizes,
+    sample_sizes,
+    num_loci,
+    recombination_rate,
+    migration_matrix=None,
+    growth_rates=None,
+    num_replicates=None,
+):
+    """
+    Generic test of DTWF vs hudson coalescent. Populations are not
+    allowed to shrink to fewer than 100 individuals, and if starting with
+    fewer than 100 have growth rate set to zero.
+    """
+    assert len(sample_sizes) == len(initial_sizes)
+    num_pops = len(sample_sizes)
+
+    if num_replicates is None:
+        num_replicates = 200
+
+    if growth_rates is None:
+        default_growth_rate = 0.01
+        growth_rates = [default_growth_rate] * num_pops
+
+    population_configurations = []
+    demographic_events = []
+
+    for i in range(num_pops):
+        if initial_sizes[i] > 100:
+            # Growth rate set to zero at pop size 100
+            t_100 = (np.log(initial_sizes[i]) - np.log(100)) / growth_rates[i]
+            de = msprime.PopulationParametersChange(t_100, growth_rate=0, population=i)
+            demographic_events.append(de)
+
+            growth_rate = growth_rates[i]
+        else:
+            # Enforce zero growth rate for small populations
+            print(
+                "Warning - setting growth rate to zero for small",
+                "population of size",
+                initial_sizes[i],
+            )
+            growth_rate = 0
+
+        population_configurations.append(
+            msprime.PopulationConfiguration(
+                sample_size=sample_sizes[i],
+                initial_size=initial_sizes[i],
+                growth_rate=growth_rate,
+            )
+        )
+
+    recombination_map = msprime.RecombinationMap.uniform_map(
+        num_loci, recombination_rate, discrete=True
+    )
+
+    if migration_matrix is None:
+        default_mig_rate = 0.05
+        migration_matrix = []
+        for i in range(num_pops):
+            row = [default_mig_rate] * num_pops
+            row[i] = 0
+            migration_matrix.append(row)
+
+    return DtwfvsCoalescentTest1(
         key,
-        initial_sizes,
-        sample_sizes,
-        num_loci,
-        recombination_rate,
-        migration_matrix=None,
-        num_replicates=None,
+        group,
+        simulate_args=dict(
+            population_configurations=population_configurations,
+            migration_matrix=migration_matrix,
+            num_replicates=num_replicates,
+            demographic_events=demographic_events,
+            recombination_map=recombination_map,
+        ),
+    )
+
+
+def register_dtwfvscoalescent_tests_2(runner):
+    group = "dtwfvscoalescent"
+    tests = [
+        add_dtwf_vs_coalescent(
+            "dtwf_vs_coalescent_long_region", group, [1000], [10], int(1e8), 1e-8
+        ),
+        add_dtwf_vs_coalescent(
+            "dtwf_vs_coalescent_short_region", group, [1000], [10], int(1e6), 1e-8
+        ),
+        add_dtwf_vs_coalescent(
+            "dtwf_vs_coalescent_2_pops",
+            group,
+            [500, 500],
+            [5, 5],
+            int(1e6),
+            1e-8,
+            num_replicates=500,
+        ),
+        add_dtwf_vs_coalescent(
+            "dtwf_vs_coalescent_3_pops",
+            group,
+            [500, 500, 500],
+            [5, 2, 0],
+            int(1e7),
+            1e-8,
+        ),
+        add_dtwf_vs_coalescent(
+            "dtwf_vs_coalescent_4_pops",
+            group,
+            [1000, 1000, 1000, 1000],
+            [0, 20, 0, 0],
+            int(1e6),
+            1e-8,
+            num_replicates=500,
+        ),
+    ]
+    migration_matrix = [[0, 0.2, 0.1], [0.1, 0, 0.2], [0.2, 0.1, 0]]
+    tests.append(
+        add_dtwf_vs_coalescent(
+            "dtwf_vs_coalescent_3_pops_asymm_mig",
+            group,
+            [500, 500, 500],
+            [20, 0, 0],
+            int(1e6),
+            1e-8,
+            migration_matrix=migration_matrix,
+            num_replicates=500,
+        )
+    )
+
+    migration_matrix = [[0, 0.5], [0.7, 0]]
+    tests.append(
+        add_dtwf_vs_coalescent(
+            "dtwf_vs_coalescent_2_pops_high_asymm_mig",
+            group,
+            [1000, 1000],
+            [10, 10],
+            int(1e6),
+            1e-8,
+            migration_matrix=migration_matrix,
+            num_replicates=200,
+            growth_rates=[0.005, 0.005],
+        )
+    )
+
+    for test in tests:
+        runner.register(test)
+
+
+@attr.s
+class DtwfvsCoalescentTest2(DtwfVsCoalescentTest):
+    slim_args = attr.ib(factory=dict)
+    simulate_args = attr.ib(factory=dict)
+
+    def run(self, output_dir):
+        self.check_slim_version()
+        self._output_dir = output_dir
+        logging.info(
+            "running", self.group, self.name, self.slim_args, **self.simulate_args
+        )
+        self.run_dtwf_slim_comparison(self.name, self.slim_args, **self.simulate_args)
+
+
+def add_dtwf_vs_slim(
+    key,
+    group,
+    initial_sizes,
+    sample_sizes,
+    num_loci,
+    recombination_rate,
+    migration_matrix=None,
+    num_replicates=None,
+):
+    """
+    Generic test of DTWF vs SLiM WF simulator, without growth rates
+    """
+    assert len(sample_sizes) == len(initial_sizes)
+
+    num_pops = len(sample_sizes)
+    slim_args = {}
+
+    if num_replicates is None:
+        num_replicates = 200
+
+    slim_args["sample_sizes"] = sample_sizes
+
+    population_configurations = []
+    slim_args["POP_STRS"] = ""
+    for i in range(len(sample_sizes)):
+        population_configurations.append(
+            msprime.PopulationConfiguration(
+                sample_size=sample_sizes[i],
+                initial_size=initial_sizes[i],
+                growth_rate=0,
+            )
+        )
+        slim_args["POP_STRS"] += "sim.addSubpop('p{i}', {N});\n".format(
+            i=i, N=initial_sizes[i]
+        )
+
+    if migration_matrix is None:
+        default_mig_rate = 0.01
+        migration_matrix = []
+        for i in range(num_pops):
+            row = [default_mig_rate] * num_pops
+            row[i] = 0
+            migration_matrix.append(row)
+
+    # SLiM rates are 'immigration' forwards in time, which matches
+    # DTWF backwards-time 'emmigration'
+    assert len(migration_matrix) == num_pops
+    if num_pops > 1:
+        for i in range(num_pops):
+            row = migration_matrix[i]
+            indices = [j for j in range(num_pops) if j != i]
+            pop_names = ["p" + str(j) for j in indices]
+            rates = [str(row[j]) for j in indices]
+
+            to_pop_str = ",".join(pop_names)
+            rate_str = ",".join(rates)
+
+            mig_str = "p{}.setMigrationRates(c({}), c({}));\n".format(
+                i, to_pop_str, rate_str
+            )
+            slim_args["POP_STRS"] += mig_str
+
+    num_loci = int(num_loci)
+    recombination_map = msprime.RecombinationMap(
+        [0, num_loci], [recombination_rate, 0], discrete=True
+    )
+    slim_args["RHO"] = recombination_rate
+    slim_args["NUM_LOCI"] = num_loci
+
+    return DtwfvsCoalescentTest2(
+        key,
+        group,
+        slim_args,
+        simulate_args=dict(
+            population_configurations=population_configurations,
+            migration_matrix=migration_matrix,
+            num_replicates=num_replicates,
+            recombination_map=recombination_map,
+        ),
+    )
+
+
+def register_dtwfvscoalescent_tests_3(runner):
+    group = "dtwfvscoalescent"
+    tests = [
+        add_dtwf_vs_slim("dtwf_vs_slim_single_locus", group, [10], [10], 1, 0),
+        add_dtwf_vs_slim(
+            "dtwf_vs_slim_short_region",
+            group,
+            [100],
+            [10],
+            1e7,
+            1e-8,
+            num_replicates=200,
+        ),
+        add_dtwf_vs_slim(
+            "dtwf_vs_slim_long_region", group, [50], [10], 1e8, 1e-8, num_replicates=200
+        ),
+    ]
+
+    for test in tests:
+        runner.register(test)
+
+
+# run only if args.extended is true
+def add_dtwf_vs_coalescent_random_instance(
+    key, group, num_populations=1, num_replicates=200, num_demographic_events=0
+):
+
+    N = num_populations
+    num_loci = np.random.randint(1e5, 1e7)
+    rho = 1e-8
+    recombination_map = msprime.RecombinationMap([0, num_loci], [rho, 0], discrete=True)
+
+    population_configurations = []
+    for _ in range(N):
+        population_configurations.append(
+            msprime.PopulationConfiguration(
+                sample_size=np.random.randint(1, 10), initial_size=int(1000 / N)
+            )
+        )
+
+    migration_matrix = []
+    for i in range(N):
+        migration_matrix.append(
+            [random.uniform(0.05, 0.25) * (j != i) for j in range(N)]
+        )
+
+    # Add demographic events and some migration rate changes
+    t_max = 1000
+    demographic_events = []
+    times = sorted(np.random.randint(300, t_max, size=num_demographic_events))
+    for t in times:
+        initial_size = np.random.randint(500, 1000)
+        # Setting growth_rate to 0 because it's too tricky to get
+        # growth_rates in the DTWF which don't result in N going to 0.
+        growth_rate = 0
+        pop_id = np.random.randint(N)
+        demographic_events.append(
+            msprime.PopulationParametersChange(
+                time=t,
+                initial_size=initial_size,
+                growth_rate=growth_rate,
+                population_id=pop_id,
+            )
+        )
+
+        if random.random() < 0.5 and N >= 2:
+            rate = random.uniform(0.05, 0.25)
+            index = tuple(
+                np.random.choice(range(num_populations), size=2, replace=False)
+            )
+            demographic_events.append(
+                msprime.MigrationRateChange(time=t, rate=rate, matrix_index=index)
+            )
+
+    # Collect all pops together to control coalescence times for DTWF
+    for i in range(1, N):
+        demographic_events.append(
+            msprime.MassMigration(time=t_max, source=i, destination=0, proportion=1.0)
+        )
+
+    demographic_events.append(
+        msprime.PopulationParametersChange(
+            time=t_max, initial_size=100, growth_rate=0, population_id=0
+        )
+    )
+
+    return DtwfvsCoalescentTest1(
+        key,
+        group,
+        simulate_args=dict(
+            migration_matrix=migration_matrix,
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            num_replicates=num_replicates,
+            recombination_map=recombination_map,
+        ),
+    )
+
+
+def register_dtwfvscoalescent_tests_4(runner):
+    group = "dtwfvscoalescent"
+    tests = [
+        add_dtwf_vs_coalescent_random_instance(
+            "dtwf_vs_coalescent_random_1",
+            group,
+            num_populations=2,
+            num_replicates=200,
+            num_demographic_events=3,
+        ),
+        add_dtwf_vs_coalescent_random_instance(
+            "dtwf_vs_coalescent_random_2",
+            group,
+            num_populations=3,
+            num_replicates=200,
+            num_demographic_events=3,
+        ),
+        add_dtwf_vs_coalescent_random_instance(
+            "dtwf_vs_coalescent_random_3",
+            group,
+            num_populations=2,
+            num_replicates=200,
+            num_demographic_events=6,
+        ),
+        add_dtwf_vs_coalescent_random_instance(
+            "dtwf_vs_coalescent_random_4",
+            group,
+            num_populations=1,
+            num_replicates=200,
+            num_demographic_events=8,
+        ),
+    ]
+
+    for test in tests:
+        runner.register(test)
+
+
+def register_dtwfvscoalescent_tests(runner, add_random_dtwf):
+    if add_random_dtwf:
+        register_dtwfvscoalescent_tests_4(runner)
+    else:
+        register_dtwfvscoalescent_tests_1(runner)
+        register_dtwfvscoalescent_tests_2(runner)
+        register_dtwfvscoalescent_tests_3(runner)
+
+
+@attr.s
+class XiHudsonTest(Test):
+    def verify_breakpoint_distribution(
+        self, basedir_name, name, sample_size, Ne, r, L, model, growth_rate=0
     ):
         """
-        Generic test of DTWF vs SLiM WF simulator, without growth rates
+        Verifies that the number of recombination breakpoints is proportional to
+        the total branch length across all trees.
         """
-        self.check_slim_version()
-        assert len(sample_sizes) == len(initial_sizes)
-
-        num_pops = len(sample_sizes)
-        slim_args = {}
-
-        if num_replicates is None:
-            num_replicates = 200
-
-        slim_args["sample_sizes"] = sample_sizes
-
-        population_configurations = []
-        slim_args["POP_STRS"] = ""
-        for i in range(len(sample_sizes)):
-            population_configurations.append(
+        basedir = make_test_dir(basedir_name)
+        ts = msprime.simulate(
+            Ne=Ne,
+            recombination_rate=r,
+            length=L,
+            population_configurations=[
                 msprime.PopulationConfiguration(
-                    sample_size=sample_sizes[i],
-                    initial_size=initial_sizes[i],
-                    growth_rate=0,
+                    sample_size=sample_size, initial_size=Ne, growth_rate=growth_rate
                 )
-            )
-            slim_args["POP_STRS"] += "sim.addSubpop('p{i}', {N});\n".format(
-                i=i, N=initial_sizes[i]
-            )
-
-        if migration_matrix is None:
-            default_mig_rate = 0.01
-            migration_matrix = []
-            for i in range(num_pops):
-                row = [default_mig_rate] * num_pops
-                row[i] = 0
-                migration_matrix.append(row)
-
-        # SLiM rates are 'immigration' forwards in time, which matches
-        # DTWF backwards-time 'emmigration'
-        assert len(migration_matrix) == num_pops
-        if num_pops > 1:
-            for i in range(num_pops):
-                row = migration_matrix[i]
-                indices = [j for j in range(num_pops) if j != i]
-                pop_names = ["p" + str(j) for j in indices]
-                rates = [str(row[j]) for j in indices]
-
-                to_pop_str = ",".join(pop_names)
-                rate_str = ",".join(rates)
-
-                mig_str = "p{}.setMigrationRates(c({}), c({}));\n".format(
-                    i, to_pop_str, rate_str
-                )
-                slim_args["POP_STRS"] += mig_str
-
-        num_loci = int(num_loci)
-        recombination_map = msprime.RecombinationMap(
-            [0, num_loci], [recombination_rate, 0], discrete=True
+            ],
+            model=model,
         )
-        slim_args["RHO"] = recombination_rate
-        slim_args["NUM_LOCI"] = num_loci
+        empirical = []
+        for tree in ts.trees():
+            area = tree.total_branch_length * tree.span
+            empirical.append(area)
 
-        def f():
-            self.run_dtwf_slim_comparison(
-                key,
-                slim_args,
-                population_configurations=population_configurations,
-                migration_matrix=migration_matrix,
-                num_replicates=num_replicates,
-                recombination_map=recombination_map,
+        scipy.stats.probplot(empirical, dist=scipy.stats.expon(Ne * r), plot=pyplot)
+        path = os.path.join(basedir, f"{name}_growth={growth_rate}.png")
+        print("Writing", path)
+        pyplot.savefig(path)
+        pyplot.close("all")
+
+    # used in Xi and Hudson tests
+    def verify_recombination(
+        self, basedir_name, name, sample_size, Ne, r, m, L, model, growth_rate=0
+    ):
+        """
+        Verifies that the number of recombination equals the number of mutation.
+        """
+        basedir = make_test_dir(basedir_name)
+        empirical_theta = []
+        empirical_rho = []
+        for _ in range(1, 500):
+            ts = msprime.simulate(
+                Ne=Ne,
+                recombination_rate=r,
+                mutation_rate=m,
+                length=L,
+                population_configurations=[
+                    msprime.PopulationConfiguration(
+                        sample_size=sample_size,
+                        initial_size=Ne,
+                        growth_rate=growth_rate,
+                    )
+                ],
+                model=model,
             )
+            empirical_theta.append(ts.get_num_sites())
+            ts = msprime.simulator_factory(
+                Ne=Ne,
+                recombination_rate=r,
+                length=L,
+                population_configurations=[
+                    msprime.PopulationConfiguration(
+                        sample_size=sample_size,
+                        initial_size=Ne,
+                        growth_rate=growth_rate,
+                    )
+                ],
+                model=model,
+            )
+            ts.run()
+            empirical_rho.append(ts.num_breakpoints)
+        empirical_rho.sort()
+        empirical_theta.sort()
+        empirical_rho = np.array(empirical_rho)
+        empirical_theta = np.array(empirical_theta)
+        plot_qq(empirical_theta, empirical_rho)
+        path = os.path.join(basedir, f"{name}_growth={growth_rate}_rec_check.png")
+        print("Writing", path)
+        pyplot.savefig(path)
+        pyplot.close("all")
 
-        self._instances[key] = f
 
-
-class XiTest(SimulationVerifier):
-    def __init__(self, output_dir):
-        super().__init__(output_dir)
-
-    def add_instances(self):
-        self.add_xi_dirac_vs_hudson_single_locus()
-        self.add_xi_dirac_vs_hudson_recombination()
-        self.add_xi_beta_breakpoints()
-        self.add_xi_dirac_breakpoints()
-        self.add_xi_dirac_expected_sfs()
-        self.add_xi_beta_expected_sfs()
-
+@attr.s
+class XiTest(XiHudsonTest):
     def run_xi_hudson_comparison(self, test_name, xi_model, **kwargs):
         df = pd.DataFrame()
         for model in ["hudson", xi_model]:
@@ -1615,41 +1633,6 @@ class XiTest(SimulationVerifier):
             f = os.path.join(basedir, f"{stat}.png")
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
-
-    def add_xi_dirac_vs_hudson_single_locus(self):
-        """
-        Checks Xi-dirac against the standard coalescent at a single locus.
-        """
-
-        def f():
-            N = 100
-            self.run_xi_hudson_comparison(
-                "xi_dirac_vs_hudson_single_locus",
-                msprime.DiracCoalescent(psi=0.99, c=0),
-                sample_size=10,
-                Ne=N,
-                num_replicates=5000,
-            )
-
-        self._instances["xi_dirac_vs_hudson_single_locus"] = f
-
-    def add_xi_dirac_vs_hudson_recombination(self):
-        """
-        Checks Xi-dirac against the standard coalescent with recombination.
-        """
-
-        def f():
-            N = 100
-            self.run_xi_hudson_comparison(
-                "xi_dirac_vs_hudson_recombination",
-                msprime.DiracCoalescent(psi=0.99, c=0),
-                sample_size=50,
-                Ne=N,
-                num_replicates=1000,
-                recombination_rate=0.1,
-            )
-
-        self._instances["xi_dirac_vs_hudson_recombination"] = f
 
     def compare_xi_dirac_sfs(self, sample_size, psi, c, sfs, num_replicates=1000):
         """
@@ -2045,12 +2028,6 @@ class XiTest(SimulationVerifier):
             ],
         )
 
-    def add_xi_dirac_expected_sfs(self):
-        """
-        Adds a check for xi_dirac matching expected SFS calculations.
-        """
-        self._instances["xi_dirac_expected_sfs"] = self.run_xi_dirac_expected_sfs
-
     def compare_xi_beta_sfs(self, sample_size, alpha, sfs, num_replicates=1000):
         """
         Runs simulations of the xi beta model and compares to the expected SFS.
@@ -2184,30 +2161,6 @@ class XiTest(SimulationVerifier):
                     model=msprime.DiracCoalescent(psi=psi, c=c),
                 )
 
-    def add_xi_beta_breakpoints(self):
-        """
-        Adds a check for xi_beta recombination breakpoints
-        """
-        self._instances["xi_beta_breakpoints"] = self.run_xi_beta_breakpoints
-
-    def add_xi_beta_recombination(self):
-        """
-        Adds a check for xi_beta recombination breakpoints
-        """
-        self._instances["xi_beta_recombinations"] = self.run_xi_beta_recombinations
-
-    def add_xi_dirac_breakpoints(self):
-        """
-        Adds a check for xi_dirac recombination breakpoints
-        """
-        self._instances["xi_dirac_breakpoints"] = self.run_xi_dirac_breakpoints
-
-    def add_xi_dirac_recombination(self):
-        """
-        Adds a check for xi_dirac recombination breakpoints
-        """
-        self._instances["xi_dirac_recombinations"] = self.run_xi_dirac_recombinations
-
     def run_xi_beta_expected_sfs(self):
 
         self.compare_normalized_xi_beta_sfs(
@@ -2278,21 +2231,113 @@ class XiTest(SimulationVerifier):
             ],
         )
 
-    def add_xi_beta_expected_sfs(self):
-        """
-        Adds a check for xi_beta matching expected SFS calculations.
-        """
-        self._instances["xi_beta_expected_sfs"] = self.run_xi_beta_expected_sfs
+
+@attr.s
+class XiTest1(XiTest):
+    model = attr.ib(type=type(msprime.DiracCoalescent()))
+    simulate_args = attr.ib(factory=dict)
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name, self.model, **self.simulate_args)
+        self.run_xi_hudson_comparison(self.name, self.model, **self.simulate_args)
 
 
-class HudsonTest(SimulationVerifier):
-    def __init__(self, output_dir):
-        super().__init__(output_dir)
+@attr.s
+class XiTest2(XiTest):
+    # Adds a check for xi_beta recombination breakpoints
 
-    def add_instances(self):
-        self.add_hudson_recombination()
-        self.add_hudson_breakpoints()
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_xi_beta_breakpoints()
 
+
+@attr.s
+class XiTest3(XiTest):
+    # Adds a check for xi_dirac recombination breakpoints
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_xi_dirac_breakpoints()
+
+
+@attr.s
+class XiTest4(XiTest):
+    # Adds a check for xi_dirac matching expected SFS calculations.
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_xi_dirac_expected_sfs()
+
+
+@attr.s
+class XiTest5(XiTest):
+    # Adds a check for xi_beta matching expected SFS calculations.
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_xi_beta_expected_sfs()
+
+
+@attr.s
+class XiTest6(XiTest):
+    # Adds a check for xi_beta recombination breakpoints
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_xi_beta_recombinations()
+
+
+@attr.s
+class XiTest7(XiTest):
+    # Adds a check for xi_dirac recombination breakpoints
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_xi_dirac_recombinations()
+
+
+def register_xi_tests(runner):
+    group = "xi"
+    tests = [
+        # add_xi_dirac_vs_hudson_recombination
+        # Checks Xi-dirac against the standard coalescent with recombination.
+        XiTest1(
+            "xi_dirac_vs_hudson_recombination",
+            group,
+            msprime.DiracCoalescent(psi=0.99, c=0),
+            simulate_args=dict(
+                sample_size=50, Ne=50, num_replicates=1000, recombination_rate=0.1,
+            ),
+        ),
+        # add_xi_dirac_vs_hudson_single_locus
+        # Checks Xi-dirac against the standard coalescent at a single locus.
+        XiTest1(
+            "xi_dirac_vs_hudson_single_locus",
+            group,
+            msprime.DiracCoalescent(psi=0.99, c=0),
+            simulate_args=dict(sample_size=10, Ne=100, num_replicates=5000,),
+        ),
+        XiTest2(name="xi_beta_bp", group=group),
+        XiTest3(name="xi_dirac_bp", group=group),
+        XiTest4(name="xi_dirac_sfs", group=group),
+        XiTest5(name="xi_beta_sfs", group=group),
+        XiTest6(name="xi_beta_recomb", group=group),
+        XiTest7(name="xi_beta_recomb", group=group),
+    ]
+
+    for test in tests:
+        runner.register(test)
+
+
+@attr.s
+class HudsonTest(XiHudsonTest):
     def run_hudson_breakpoints(self):
         basedir_name = "hudson_breakpoints"
         self.verify_breakpoint_distribution(
@@ -2339,27 +2384,44 @@ class HudsonTest(SimulationVerifier):
             model="hudson",
         )
 
-    def add_hudson_breakpoints(self):
-        """
-        Adds a check for hudson recombination breakpoints
-        """
-        self._instances["hudson_breakpoints"] = self.run_hudson_breakpoints
 
-    def add_hudson_recombination(self):
-        """
-        Adds a check for hudson recombination breakpoints
-        """
-        self._instances["hudson_recombinations"] = self.run_Hudson_recombinations
+@attr.s
+class HudsonTest1(HudsonTest):
+    """
+    Adds a check for hudson recombination breakpoints
+    """
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_Hudson_recombinations()
 
 
-class ContDiscreteTest(SimulationVerifier):
-    def __init__(self, output_dir):
-        super().__init__(output_dir)
+@attr.s
+class HudsonTest2(HudsonTest):
+    """
+    Adds a check for hudson recombination breakpoints
+    """
 
-    def add_instances(self):
-        self.add_continuous_discrete_comparisons()
-        self.add_cont_discrete_both_same_scale()
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_hudson_breakpoints()
 
+
+def register_hudson_tests(runner):
+    group = "hudson"
+    tests = [
+        HudsonTest1(name="hudson recombination", group=group),
+        HudsonTest2(name="hudson breakpoints", group=group),
+    ]
+
+    for test in tests:
+        runner.register(test)
+
+
+@attr.s
+class ContDiscreteTest(Test):
     def _run_msprime_coalescent_stats(self, **kwargs):
         print("\t msprime:", kwargs)
         if "num_replicates" in kwargs:
@@ -2450,54 +2512,51 @@ class ContDiscreteTest(SimulationVerifier):
             key, model, discrete_recomb_map, cont_recomb_map
         )
 
-    def add_cont_discrete_both_same_scale(self):
-        tests = [
-            ("hudson_cont_discrete_same_scale", "hudson"),
-            ("dtwf_cont_discrete_same_scale", "dtwf"),
-        ]
 
-        def make_runner(key, model):
-            return lambda: self.run_continuous_discrete_same_scale(key, model)
+@attr.s
+class ContDiscreteTest1(ContDiscreteTest):
+    model = attr.ib(type=str)
 
-        for key, model in tests:
-            self._instances[key] = make_runner(key, model)
-
-    def add_continuous_discrete_comparisons(self):
-        """
-        Adds checks comparing equivalent simulations in discrete space
-        and scaled up continuous space.
-        """
-        uniform_tests = [
-            ("hudson_uniform_recomb_cont_discrete", "hudson"),
-            ("dtwf_uniform_recomb_cont_discrete", "dtwf"),
-        ]
-
-        variable_tests = [
-            ("hudson_variable_recomb_cont_discrete", "hudson"),
-            ("dtwf_variable_recomb_cont_discrete", "dtwf"),
-        ]
-
-        def make_uniform_runner(key, model):
-            return lambda: self.run_uniform_recomb_cont_discrete_comparison(key, model)
-
-        def make_variable_runner(key, model):
-            return lambda: self.run_variable_recomb_cont_discrete_comparison(key, model)
-
-        for key, model in uniform_tests:
-            self._instances[key] = make_uniform_runner(key, model)
-
-        for key, model in variable_tests:
-            self._instances[key] = make_variable_runner(key, model)
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_continuous_discrete_same_scale(self.name, self.model)
 
 
-class ArgRecordTest(SimulationVerifier):
-    def __init__(self, output_dir):
-        super().__init__(output_dir)
+@attr.s
+class ContDiscreteTest2(ContDiscreteTest):
+    """
+    Adds checks comparing equivalent simulations in discrete space
+    and scaled up continuous space.
+    """
 
-    def add_instances(self):
-        self.add_arg_recording_check()
-        self.add_multiple_merger_arg_recording_check()
+    model = attr.ib(type=str)
 
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_uniform_recomb_cont_discrete_comparison(
+            self.name + "_uniform", self.model
+        )
+        self.run_variable_recomb_cont_discrete_comparison(
+            self.name + "_variable", self.model
+        )
+
+
+def register_contdiscrete_tests(runner):
+    group = "contdiscrete"
+    tests = [
+        ContDiscreteTest1("hudson_cont_discrete_same_scale", group, "hudson"),
+        ContDiscreteTest1("dtwf_cont_discrete_same_scale", group, "dtwf"),
+        ContDiscreteTest2("hudson_recomb_cont_discrete", group, "hudson"),
+        ContDiscreteTest2("dtwf_recomb_cont_discrete", group, "dtwf"),
+    ]
+    for test in tests:
+        runner.register(test)
+
+
+@attr.s
+class ArgRecordTest(Test):
     def run_arg_recording(self):
         basedir = make_test_dir("arg_recording")
 
@@ -2651,36 +2710,38 @@ class ArgRecordTest(SimulationVerifier):
         pyplot.savefig(f, dpi=72)
         pyplot.close("all")
 
-    def add_arg_recording_check(self):
-        """
-        Adds a check that we get the right number of objects when we simplify
-        a full arg.
-        """
-        self._instances["arg_recording"] = self.run_arg_recording
 
-    def add_multiple_merger_arg_recording_check(self):
-        """
-        Adds a check that we get the right number of objects when we simplify
-        a full arg.
-        """
-        self._instances[
-            "multiple_merger_arg_recording"
-        ] = self.run_multiple_merger_arg_recording
+@attr.s
+class ArgRecordTest1(ArgRecordTest):
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_arg_recording()
 
 
-class AnalyticalTest(SimulationVerifier):
-    def __init__(self, output_dir):
-        super().__init__(output_dir)
+@attr.s
+class ArgRecordTest2(ArgRecordTest):
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_multiple_merger_arg_recording()
 
-    def add_instances(self):
-        self.add_s_analytical_check()
-        self.add_pi_analytical_check()
-        self.add_corr_trees_analytical_check()
-        self.add_mean_coaltime_check()
-        self.add_total_branch_length_analytical_check()
-        self.add_pairwise_island_model_analytical_check()
-        self.add_cli_num_trees_analytical_check()
 
+def register_argrecord_tests(runner):
+    group = "argrecord"
+    tests = [
+        # Check that we get the right number of objects when we simplify
+        # a full arg.
+        ArgRecordTest1(name="simple check", group=group),
+        ArgRecordTest2(name="merge check", group=group),
+    ]
+
+    for test in tests:
+        runner.register(test)
+
+
+@attr.s
+class AnalyticalTest(Test):
     def get_segregating_sites_histogram(self, cmd):
         print("\t", " ".join(cmd))
         output = subprocess.check_output(cmd)
@@ -3162,64 +3223,115 @@ class AnalyticalTest(SimulationVerifier):
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
-    def add_s_analytical_check(self):
-        """
-        Adds a check for the analytical predictions about the distribution
-        of S, the number of segregating sites.
-        """
-        self._instances["analytical_s"] = self.run_s_analytical_check
 
-    def add_pi_analytical_check(self):
-        """
-        Adds a check for the analytical predictions about the pi,
-        the pairwise site diversity.
-        """
-        self._instances["analytical_pi"] = self.run_pi_analytical_check
+@attr.s
+class AnalyticalTest1(AnalyticalTest):
+    """
+    Adds a check for the analytical predictions about the distribution
+    of S, the number of segregating sites.
+    """
 
-    def add_corr_trees_analytical_check(self):
-        """
-        Adds a check for the analytical predictions about the correlation between
-        trees in the case of gene conversion.
-        """
-        self._instances[
-            "analytical_corr_same_tree"
-        ] = self.run_correlation_between_trees_analytical_check
-
-    def add_mean_coaltime_check(self):
-        """
-        Adds a check for the demography debugger predictions about
-        mean coalescence time.
-        """
-        self._instances["mean_coaltime"] = self.run_mean_coaltime_check
-
-    def add_total_branch_length_analytical_check(self):
-        """
-        Adds a check for the analytical check for the total branch length.
-        """
-        self._instances["analytical_tbl"] = self.run_tbl_analytical_check
-
-    def add_pairwise_island_model_analytical_check(self):
-        """
-        Adds a check for the analytical check for pairwise island model
-        """
-        self._instances["analytical_pairwise_island"] = self.run_pairwise_island_model
-
-    def add_cli_num_trees_analytical_check(self):
-        """
-        Adds a check for the analytical number of trees using the CLI
-        and comparing with ms.
-        """
-        self._instances["cli_num_trees"] = self.run_cli_num_trees
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_s_analytical_check()
 
 
-class SmcTest(SimulationVerifier):
-    def __init__(self, output_dir):
-        super().__init__(output_dir)
-        self._scrm_executable = ["./data/scrm"]
+@attr.s
+class AnalyticalTest2(AnalyticalTest):
+    """
+    Adds a check for the analytical predictions about the pi,
+    the pairwise site diversity.
+    """
 
-    def add_instances(self):
-        self.add_smc_num_trees_analytical_check()
-        self.add_smc_oldest_time_check()
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_pi_analytical_check()
+
+
+@attr.s
+class AnalyticalTest3(AnalyticalTest):
+    """
+    Adds a check for the analytical predictions about the correlation between
+    trees in the case of gene conversion.
+    """
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_correlation_between_trees_analytical_check()
+
+
+@attr.s
+class AnalyticalTest4(AnalyticalTest):
+    """
+    Adds a check for the demography debugger predictions about
+    mean coalescence time.
+    """
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_mean_coaltime_check()
+
+
+@attr.s
+class AnalyticalTest5(AnalyticalTest):
+    """
+    Adds a check for the analytical check for the total branch length.
+    """
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_tbl_analytical_check()
+
+
+@attr.s
+class AnalyticalTest6(AnalyticalTest):
+    """
+    Adds a check for the analytical check for pairwise island model
+    """
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_pairwise_island_model()
+
+
+@attr.s
+class AnalyticalTest7(AnalyticalTest):
+    """
+    Adds a check for the analytical number of trees using the CLI
+    and comparing with ms.add_s_analytical_check
+    """
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_cli_num_trees()
+
+
+def register_analytical_tests(runner):
+    group = "analytical"
+    tests = [
+        AnalyticalTest1(name="s", group=group),
+        AnalyticalTest2(name="pi", group=group),
+        AnalyticalTest3(name="corr_trees", group=group),
+        AnalyticalTest4(name="mean coaltime", group=group),
+        AnalyticalTest5(name="branch length", group=group),
+        AnalyticalTest6(name="island", group=group),
+        AnalyticalTest7(name="cli num trees", group=group),
+    ]
+
+    for test in tests:
+        runner.register(test)
+
+
+@attr.s
+class SmcTest(Test):
+    _scrm_executable = attr.ib(init=False, default=["./data/scrm"])
 
     def get_scrm_num_trees(self, cmd, R):
         print("\t", " ".join(cmd))
@@ -3403,32 +3515,45 @@ class SmcTest(SimulationVerifier):
         pyplot.savefig(filename)
         pyplot.close("all")
 
-    def add_smc_num_trees_analytical_check(self):
-        """
-        Adds a check for the analytical number of trees under the SMC
-        and the full coalescent.
-        """
-        self._instances["smc_num_trees"] = self.run_smc_num_trees
 
-    def add_smc_oldest_time_check(self):
-        """
-        Adds a check the distribution of the oldest time of a
-        coalescence in the smc using scrm.
-        """
-        self._instances["smc_oldest_time"] = self.run_smc_oldest_time
+@attr.s
+class SmcTest1(SmcTest):
+    """
+    Adds a check for the analytical number of trees under the SMC
+    and the full coalescent.
+    """
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_smc_num_trees()
 
 
-class SimTest(SimulationVerifier):
-    def __init__(self, output_dir):
-        super().__init__(output_dir)
+@attr.s
+class SmcTest2(SmcTest):
+    """
+    Adds a check the distribution of the oldest time of a
+    coalescence in the smc using scrm.
+    """
 
-    def add_instances(self):
-        self.add_simulate_from_single_locus_check()
-        self.add_simulate_from_multi_locus_check()
-        self.add_simulate_from_recombination_check()
-        self.add_simulate_from_demography_check()
-        self.add_simulate_from_benchmark()
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", "smc", self.name)
+        self.run_smc_oldest_time()
 
+
+def register_smc_tests(runner):
+    group = "smc"
+    tests = [
+        SmcTest1(name="num trees", group=group),
+        SmcTest2(name="time", group=group),
+    ]
+    for test in tests:
+        runner.register(test)
+
+
+@attr.s
+class SimTest(Test):
     def run_simulate_from_single_locus(self):
         num_replicates = 1000
 
@@ -3806,120 +3931,156 @@ class SimTest(SimulationVerifier):
             duration = time.perf_counter() - before
             print(f"Final sim required {duration:.2f} sec")
 
-    def add_simulate_from_single_locus_check(self):
-        """
-        Check that the distributions are identitical when we run simulate_from
-        at various time points.
-        """
-        self._instances[
-            "simulate_from_single_locus"
-        ] = self.run_simulate_from_single_locus
 
-    def add_simulate_from_multi_locus_check(self):
-        """
-        Check that the distributions are identitical when we run simulate_from
-        at various time points.
-        """
-        self._instances[
-            "simulate_from_multi_locus"
-        ] = self.run_simulate_from_multi_locus
+@attr.s
+class SimTest1(SimTest):
+    """
+    Check that the distributions are identitical when we run simulate_from
+    at various time points.
+    """
 
-    def add_simulate_from_recombination_check(self):
-        """
-        Check that the distributions are identitical when we run simulate_from
-        at various time points.
-        """
-        self._instances[
-            "simulate_from_recombination"
-        ] = self.run_simulate_from_recombination
-
-    def add_simulate_from_demography_check(self):
-        """
-        Check that the distributions are identitical when we run simulate_from
-        at various time points.
-        """
-        self._instances["simulate_from_demography"] = self.run_simulate_from_demography
-
-    def add_simulate_from_benchmark(self):
-        """
-        Check that the distributions are identitical when we run simulate_from
-        at various time points.
-        """
-        self._instances["simulate_from_benchmark"] = self.run_simulate_from_benchmark
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_simulate_from_single_locus()
 
 
-class RandomTest(MsTest):
-    def __init__(self, output_dir):
-        super().__init__(output_dir)
+@attr.s
+class SimTest2(SimTest):
+    """
+    Check that the distributions are identitical when we run simulate_from
+    at various time points.
+    """
 
-    def add_instances(self):
-        self.add_random_instance("random1")
-        self.add_random_instance(
-            "random2", num_replicates=10 ** 4, num_demographic_events=10
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_simulate_from_multi_locus()
+
+
+@attr.s
+class SimTest3(SimTest):
+    """
+    Check that the distributions are identitical when we run simulate_from
+    at various time points.
+    """
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_simulate_from_recombination()
+
+
+@attr.s
+class SimTest4(SimTest):
+    """
+    Check that the distributions are identitical when we run simulate_from
+    at various time points.
+    """
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_simulate_from_demography()
+
+
+@attr.s
+class SimTest5(SimTest):
+    """
+    Check that the distributions are identitical when we run simulate_from
+    at various time points.
+    """
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        self.run_simulate_from_benchmark()
+        logging.info("running", self.group, self.name)
+
+
+def register_sim_tests(runner):
+    group = "sim"
+    tests = [
+        SimTest1(name="single locus", group=group),
+        SimTest2(name="multi locus", group=group),
+        SimTest3(name="recombination", group=group),
+        SimTest4(name="demography", group=group),
+        SimTest5(name="benchmark", group=group),
+    ]
+    for test in tests:
+        runner.register(test)
+
+
+def random_instance(
+    key, group, num_populations=1, num_replicates=1000, num_demographic_events=0
+):
+    m = random.randint(1, 1000)
+    r = random.uniform(0.01, 0.1) * m
+    theta = random.uniform(1, 100)
+    N = num_populations
+    sample_sizes = [random.randint(2, 10) for _ in range(N)]
+    migration_matrix = [random.random() * (j % (N + 1) != 0) for j in range(N ** 2)]
+    structure = ""
+    if num_populations > 1:
+        structure = "-I {} {} -ma {}".format(
+            num_populations,
+            " ".join(str(s) for s in sample_sizes),
+            " ".join(str(r) for r in migration_matrix),
         )
+    cmd = "{} {} -t {} -r {} {} {}".format(
+        sum(sample_sizes), num_replicates, theta, r, m, structure
+    )
 
-    def add_random_instance(
-        self, key, num_populations=1, num_replicates=1000, num_demographic_events=0
-    ):
-        m = random.randint(1, 1000)
-        r = random.uniform(0.01, 0.1) * m
-        theta = random.uniform(1, 100)
-        N = num_populations
-        sample_sizes = [random.randint(2, 10) for _ in range(N)]
-        migration_matrix = [random.random() * (j % (N + 1) != 0) for j in range(N ** 2)]
-        structure = ""
-        if num_populations > 1:
-            structure = "-I {} {} -ma {}".format(
-                num_populations,
-                " ".join(str(s) for s in sample_sizes),
-                " ".join(str(r) for r in migration_matrix),
-            )
-        cmd = "{} {} -t {} -r {} {} {}".format(
-            sum(sample_sizes), num_replicates, theta, r, m, structure
-        )
-
-        if N > 1:
-            # Add some migration matrix changes
-            t = 0
-            for j in range(1, 6):
-                t += 0.125
-                u = random.random()
-                if u < 0.33:
-                    cmd += f" -eM {t} {random.random()}"
-                elif u < 0.66:
-                    j = random.randint(1, N)
-                    k = j
-                    while k == j:
-                        k = random.randint(1, N)
-                    r = random.random()
-                    cmd += f" -em {t} {j}"
-                else:
-                    migration_matrix = [
-                        random.random() * (j % (N + 1) != 0) for j in range(N ** 2)
-                    ]
-                    cmd += " -ema {} {} {}".format(
-                        t, N, " ".join(str(r) for r in migration_matrix)
-                    )
-
-        # Set some initial growth rates, etc.
-        if N == 1:
-            if random.random() < 0.5:
-                cmd += f" -G {random.random()}"
-            else:
-                cmd += f" -eN 0 {random.random()}"
-        # Add some demographic events
+    if N > 1:
+        # Add some migration matrix changes
         t = 0
-        for _ in range(num_demographic_events):
+        for j in range(1, 6):
             t += 0.125
-            if random.random() < 0.5:
-                cmd += f" -eG {t} {random.random()}"
+            u = random.random()
+            if u < 0.33:
+                cmd += f" -eM {t} {random.random()}"
+            elif u < 0.66:
+                j = random.randint(1, N)
+                k = j
+                while k == j:
+                    k = random.randint(1, N)
+                r = random.random()
+                cmd += f" -em {t} {j}"
             else:
-                cmd += f" -eN {t} {random.random()}"
+                migration_matrix = [
+                    random.random() * (j % (N + 1) != 0) for j in range(N ** 2)
+                ]
+                cmd += " -ema {} {} {}".format(
+                    t, N, " ".join(str(r) for r in migration_matrix)
+                )
 
-        self.add_ms_instance(key, cmd)
+    # Set some initial growth rates, etc.
+    if N == 1:
+        if random.random() < 0.5:
+            cmd += f" -G {random.random()}"
+        else:
+            cmd += f" -eN 0 {random.random()}"
+    # Add some demographic events
+    t = 0
+    for _ in range(num_demographic_events):
+        t += 0.125
+        if random.random() < 0.5:
+            cmd += f" -eG {t} {random.random()}"
+        else:
+            cmd += f" -eN {t} {random.random()}"
+
+    return MsTest1(key, group, cmd)
 
 
-class MutationTest(SimulationVerifier):
+def register_msrandom_tests(runner):
+    def register(name, **kwargs):
+        runner.register(random_instance(name, "random", **kwargs))
+
+    register("random1")
+    register("random2", num_replicates=10 ** 4, num_demographic_events=10)
+
+
+@attr.s
+class MutationTest(Test):
     def _transition_matrix_chi_sq(self, transitions, transition_matrix):
         tm_chisq = []
         for row, p in zip(transitions, transition_matrix):
@@ -4221,21 +4382,30 @@ class SeqGenTest(MutationTest):
         )
         self.plot_stats(df_sg, df_ts, alleles, "seqgen", model)
 
-    def add_seq_gen(self, model):
-        key = f"seqgen-{model}"
 
-        def f():
-            self._run_seq_gen_msprime_comparison(model)
+@attr.s
+class SeqGenTest1(Test):
+    model = attr.ib(type=str)
 
-        self._instances[key] = f
-
-    def add_instances(self):
-        self.add_seq_gen("JC69")
-        self.add_seq_gen("HKY")
-        self.add_seq_gen("F84")
-        self.add_seq_gen("GTR")
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self._run_seq_gen_msprime_comparison(self.model)
 
 
+def register_seqgen_tests(runner):
+    def register(model):
+        group = "seqgen"
+        name = f"{group}_{model}"
+        runner.register(SeqGenTest1(name=name, group=group, model=model))
+
+    register("JC69")
+    register("HKY")
+    register("F84")
+    register("GTR")
+
+
+@attr.s
 class PyvolveTest(MutationTest):
     def _run_pyvolve(
         self, tree, py_model, model, alleles, num_sites, mutation_rate, ts_mutrate, Q
@@ -4399,137 +4569,105 @@ class PyvolveTest(MutationTest):
         df_py, df_ts, alleles = self._run_pyvolve_stats(model, length, num_samples)
         self.plot_stats(df_py, df_ts, alleles, "pyvolve", model)
 
-    def add_pyvolve(self, model):
-        key = f"pyvolve-{model}"
 
-        def f():
-            self._run_pyvolve_comparison(model)
+@attr.s
+class PyvolveTest1(PyvolveTest):
+    model = attr.ib(type=str)
 
-        self._instances[key] = f
-
-    def add_instances(self):
-        self.add_pyvolve("JC69")
-        self.add_pyvolve("HKY")
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self._run_pyvolve_comparison(self.model)
 
 
-def get_test_names():
-    tests = []
+def register_pyvolve_tests(runner):
+    def register(model):
+        group = "pyvolve"
+        name = f"{group}_{model}"
+        runner.register(PyvolveTest1(name=name, group=group, model=model))
 
-    def get_class_name(c):
-        return f"{c}"[17:-6].lower()
-
-    # use a simple DFS to get the names of classes and
-    classes = SimulationVerifier.__subclasses__()
-    while classes:
-        top = classes.pop()
-        tests.append(get_class_name(top))
-        for c in top.__subclasses__():
-            classes.append(c)
-    return tests
+    register("JC69")
+    register("HKY")
 
 
-def add_simulator_arguments(parser):
+@attr.s
+class TestRunner:
+    """
+    Class responsible for registering all known tests and running
+    them.
+    """
+
+    tests = attr.ib(init=False, default=[])
+    groups = attr.ib(init=False, default=set())
+
+    def register(self, test):
+        self.tests.append(test)
+        self.groups.add(test.group)
+
+    def run(self, output_dir, names=None, group=None):
+        if names is not None and group is not None:
+            raise ValueError("Cannot specify test names and group at the same time")
+
+        if names is not None:
+            tests = [test for test in self.tests if test.name in names]
+        elif group is not None:
+            tests = [test for test in self.tests if test.group == group]
+        else:
+            tests = self.tests
+        for test in tests:
+            test.run(output_dir)
+
+
+def add_simulator_arguments(parser, groups):
     parser.add_argument(
         "--extended",
         action="store_true",
         help="Run extended tests in dtwf_vs_coalescent",
     )
-    tests = get_test_names()
     parser.add_argument(
         "--group",
         "-g",
         default=None,
-        choices=tests,
+        choices=groups,
         help="Run all tests for specified group",
     )
     parser.add_argument("tests", nargs="*", help="Run specific tests")
 
 
-def run_tests(args):
+def run_tests(args, runner):
     output_dir = "tmp__NOBACKUP__"
-    classes = []
-    ms = MsTest(output_dir)
-    discoal = DiscoalTest(output_dir)
-    dtwf = DtwfVsCoalescentTest(output_dir)
-    xi = XiTest(output_dir)
-    hudson = HudsonTest(output_dir)
-    contdiscrete = ContDiscreteTest(output_dir)
-    argrecord = ArgRecordTest(output_dir)
-    random = RandomTest(output_dir)
-    sim = SimTest(output_dir)
-    analytical = AnalyticalTest(output_dir)
-    smc = SmcTest(output_dir)
-    seqgen = SeqGenTest(output_dir)
-    pyvolve = PyvolveTest(output_dir)
+    if args.extended:
+        register_dtwfvscoalescent_tests(runner, add_random_dtwf=True)
 
-    if args.group is None:
-        classes.extend(
-            [
-                dtwf,
-                xi,
-                hudson,
-                contdiscrete,
-                argrecord,
-                random,
-                sim,
-                analytical,
-                smc,
-                discoal,
-                ms,
-                seqgen,
-                pyvolve,
-            ]
-        )
-    else:
-        if args.group == "sim":
-            classes.append(sim)
-        elif args.group == "smc":
-            classes.append(smc)
-        elif args.group == "analytical":
-            classes.append(analytical)
-        elif args.group == "argrecord":
-            classes.append(argrecord)
-        elif args.group == "contdiscrete":
-            classes.append(contdiscrete)
-        elif args.group == "hudson":
-            classes.append(hudson)
-        elif args.group == "xi":
-            classes.append(xi)
-        elif args.group == "dtwfvscoalescent":
-            classes.append(dtwf)
-        elif args.group == "discoal":
-            classes.append(discoal)
-        elif args.group == "ms":
-            classes.append(ms)
-        elif args.group == "random":
-            classes.append(random)
-        elif args.group == "seqgen":
-            classes.append(seqgen)
-        elif args.group == "pyvolve":
-            classes.append(pyvolve)
-
-    all_tests = {}
-    for c in classes:
-        c.add_instances()
-        all_tests.update(c._instances)
-    # JK: This is a quick hack to allow us to run single tests again.
-    # We want to decouple the *definition* of the tests from the *running*
-    # of the tests, so that the top-level runner class (currently called
-    # SimulationVerifier) only does basic things like collect the
-    # instances together, and run them.
-    verifier = SimulationVerifier(output_dir)
-    verifier._instances = all_tests
-    keys = None
     if len(args.tests) > 0:
-        keys = args.tests
-    verifier.run(keys)
+        runner.run(output_dir, names=args.tests)
+    elif args.group is not None:
+        runner.run(output_dir, group=args.group)
+    else:
+        runner.run(output_dir)
 
 
 def main():
+    runner = TestRunner()
+
+    register_dtwfvscoalescent_tests(runner, add_random_dtwf=False)
+    register_xi_tests(runner)
+    register_hudson_tests(runner)
+    register_contdiscrete_tests(runner)
+    register_argrecord_tests(runner)
+    register_msrandom_tests(runner)
+    register_sim_tests(runner)
+    register_analytical_tests(runner)
+    register_smc_tests(runner)
+    register_discoal_tests(runner)
+    register_ms_tests(runner)
+    register_seqgen_tests(runner)
+    register_pyvolve_tests(runner)
+
     parser = argparse.ArgumentParser()
-    add_simulator_arguments(parser)
+    add_simulator_arguments(parser, runner.groups)
     args = parser.parse_args()
-    run_tests(args)
+    run_tests(args, runner)
 
 
 if __name__ == "__main__":
