@@ -2085,6 +2085,8 @@ class XiTest(XiHudsonTest):
                 L=10 ** 6,
                 model=msprime.BetaCoalescent(alpha=alpha),
             )
+            # Add a growth rate with a higher recombination rate so
+            # we still get decent numbers of trees
             self.verify_breakpoint_distribution(
                 basedir_name,
                 f"n=100_alpha={alpha}",
@@ -4179,9 +4181,7 @@ class MutationTest(Test):
 
 
 class SeqGenTest(MutationTest):
-    def __init__(self, output_dir):
-        super().__init__(output_dir)
-        self._seq_gen_executable = ["./data/seq-gen"]
+    _seq_gen_executable = ["./data/seq-gen"]
 
     def _run_seq_gen(self, tree, args, model, alleles, num_sites, mutation_rate, Q):
 
@@ -4269,19 +4269,19 @@ class SeqGenTest(MutationTest):
                     "0.3,0.2,0.3,0.2",
                 ],
             },
-            # "PAM": {"model_id": msprime.PAM(), "par": ["-m", "PAM"]},
-            # "BLOSUM62": {"model_id": msprime.BLOSUM62(), "par": ["-m", "BLOSUM"]},
+            "PAM": {"model_id": msprime.PAM(), "par": ["-m", "PAM"]},
+            "BLOSUM62": {"model_id": msprime.BLOSUM62(), "par": ["-m", "BLOSUM"]},
         }
 
         num_replicates = 250
         sg_results = collections.defaultdict(list)
         ts_results = collections.defaultdict(list)
         pos = [i for i in range(1, length + 1)]
-        mutation_rate = 1e-4
         transition_matrix = model_dict[model]["model_id"].transition_matrix
         root_distribution = model_dict[model]["model_id"].root_distribution
         alleles = [a.decode() for a in model_dict[model]["model_id"].alleles]
         num_alleles = len(alleles)
+        mutation_rate = 1e-4 if num_alleles == 4 else 1.5e-3
         Q = transition_matrix.copy()
         Q -= np.eye(num_alleles)
         mut_rate_seq_gen = np.sum(-Q.diagonal() * root_distribution) * mutation_rate
@@ -4381,7 +4381,7 @@ class SeqGenTest(MutationTest):
 
 
 @attr.s
-class SeqGenTest1(Test):
+class SeqGenTest1(SeqGenTest):
     model = attr.ib(type=str)
 
     def run(self, output_dir):
@@ -4400,6 +4400,8 @@ def register_seqgen_tests(runner):
     register("HKY")
     register("F84")
     register("GTR")
+    register("PAM")
+    register("BLOSUM62")
 
 
 @attr.s
@@ -4465,15 +4467,23 @@ class PyvolveTest(MutationTest):
                     "nucleotide", {"kappa": 1.5, "state_freqs": [0.2, 0.3, 0.1, 0.4]}
                 ),
             },
+            "PAM": {
+                "model_id": msprime.PAM(),
+                "pyvolve_model": pyvolve.Model("DAYHOFFDCMUT"),
+            },
+            "BLOSUM62": {
+                "model_id": msprime.BLOSUM62(),
+                "pyvolve_model": pyvolve.Model("BLOSUM62"),
+            },
         }
 
         num_replicates = 250
         py_results = collections.defaultdict(list)
         ts_results = collections.defaultdict(list)
         pos = [i for i in range(1, length + 1)]
-        mutation_rate = 1e-4
-        alleles = ["A", "C", "G", "T"]
+        alleles = [a.decode() for a in model_dict[model]["model_id"].alleles]
         num_alleles = len(alleles)
+        mutation_rate = 1e-4 if num_alleles == 4 else 1.5e-3
         transition_matrix = model_dict[model]["model_id"].transition_matrix
         root_distribution = model_dict[model]["model_id"].root_distribution
         Q = transition_matrix.copy()
@@ -4492,16 +4502,15 @@ class PyvolveTest(MutationTest):
             num_sites = ts_mutated.num_sites
 
             t = ts_mutated.first()
-
+            t_span = np.ceil(t.interval[1] - np.ceil(t.interval[0]))
             # expected number of ancestral alleles for sites
             expected_ancestral_states_ts = np.zeros(num_alleles)
             change_probs = transition_matrix.sum(axis=1) - np.diag(transition_matrix)
-            # mut_rate_pyvolve = np.mean(change_probs) * mutation_rate
-            expected_ancestral_states_ts += root_distribution * (
-                1 - np.exp(-mutation_rate * t.total_branch_length * change_probs)
+            expected_ancestral_states_ts += (
+                root_distribution
+                * t_span
+                * (1 - np.exp(-mutation_rate * t.total_branch_length * change_probs))
             )
-            expected_ancestral_states_ts /= expected_ancestral_states_ts.sum()
-            expected_num_ancestral_states_ts = expected_ancestral_states_ts * num_sites
 
             # observed number of ancestral alleles
             obs_ancestral_states_ts = np.zeros((num_alleles,))
@@ -4544,7 +4553,7 @@ class PyvolveTest(MutationTest):
             )
 
             root_chisq_ts = scipy.stats.chisquare(
-                obs_ancestral_states_ts, expected_num_ancestral_states_ts
+                obs_ancestral_states_ts, expected_ancestral_states_ts
             ).statistic
 
             c_ts = self.get_allele_counts(ts_mutated)
@@ -4585,6 +4594,8 @@ def register_pyvolve_tests(runner):
 
     register("JC69")
     register("HKY")
+    register("PAM")
+    register("BLOSUM62")
 
 
 @attr.s
