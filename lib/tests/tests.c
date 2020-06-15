@@ -254,6 +254,10 @@ test_single_locus_many_populations(void)
     CU_ASSERT_EQUAL(ret, 0);
 
     msp_print_state(&msp, _devnull);
+    ret = msp_run(&msp, DBL_MAX, 1);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_EVENTS);
+    msp_verify(&msp, 0);
+    msp_print_state(&msp, _devnull);
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, 0);
     msp_verify(&msp, 0);
