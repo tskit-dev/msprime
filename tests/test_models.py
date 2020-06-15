@@ -803,13 +803,14 @@ class TestMixedModels(unittest.TestCase):
     def test_models_out_of_order(self):
         with self.assertRaises(ValueError):
             msprime.simulate(
-                Ne=10,
+                Ne=10 ** 6,
                 sample_size=10,
                 model=[
                     "hudson",
                     msprime.SimulationModelChange(10, "hudson"),
                     msprime.SimulationModelChange(8, "hudson"),
                 ],
+                random_seed=2,
             )
 
     def test_model_change_negative_time(self):
