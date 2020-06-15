@@ -30,7 +30,6 @@ import tskit
 from matplotlib import lines as mlines
 from matplotlib import pyplot
 
-import _msprime
 import msprime
 import msprime.cli as cli
 from msprime.demography import _matrix_exponential
@@ -328,8 +327,6 @@ class MsTest(Test):
         print("\t mspms:", args)
         runner = cli.get_mspms_runner(args.split())
         sim = runner.get_simulator()
-        rng = _msprime.RandomGenerator(random.randint(1, 2 ** 32 - 1))
-        sim.random_generator = rng
         num_populations = sim.num_populations
         replicates = runner.get_num_replicates()
         num_trees = [0 for j in range(replicates)]
