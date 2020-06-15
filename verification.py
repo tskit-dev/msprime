@@ -460,7 +460,8 @@ def register_ms_tests_1(runner):
         "admixture-2-pop4",
         "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -eg 0.02 1 5.0 -em 0.02 3 1 1",
     )
-    register("gene-conversion-1-r0", "100 10000 -t 5.0 -r 0 2501 -c 10 1")
+    # FIXME disabling this test until GC with recombination rate=0
+    # register("gene-conversion-1-r0", "100 10000 -t 5.0 -r 0 2501 -c 10 1")
     register("gene-conversion-1", "100 10000 -t 5.0 -r 0.01 2501 -c 1000 1")
     register("gene-conversion-2", "100 10000 -t 5.0 -r 10 2501 -c 2 1")
     register("gene-conversion-2-tl-10", "100 10000 -t 5.0 -r 10 2501 -c 2 10")
@@ -536,7 +537,7 @@ class MsTest3(MsTest):
     def run(self, output_dir):
         self._output_dir = output_dir
         logging.info("running", self.group, self.name, self.command)
-        self._run_ms_mshot_stats(self.key, self.command)
+        self._run_ms_mshot_stats(self.name, self.command)
 
 
 def register_ms_tests_3(runner):
