@@ -28,6 +28,7 @@
 #include <limits.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_randist.h>
@@ -4135,7 +4136,7 @@ insert_single_tree(tsk_table_collection_t *tables, int alphabet)
         CU_ASSERT_FATAL(ret >= 0);
         ret = tsk_mutation_table_add_row(&tables->mutations, 0, 0, -1, "1", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
-    } else {
+    } else if (alphabet == ALPHABET_NUCLEOTIDE) {
         ret = tsk_site_table_add_row(&tables->sites, 0.1, "A", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
         ret = tsk_mutation_table_add_row(&tables->mutations, 0, 0, -1, "C", 1, NULL, 0);
@@ -4780,6 +4781,21 @@ cmp_int64(const void *a, const void *b)
     return (int) (*x - *y);
 }
 
+static int
+parse_text_int64(char *ds, tsk_size_t n)
+{
+    int64_t mut_id = 0;
+
+    // not null-terminated, so we convert by hand
+    while ((n > 0) && (isdigit(ds[0]))) {
+        mut_id = mut_id * 10 + ds[0] - '0';
+        n--;
+        ds++;
+    }
+    CU_ASSERT_FATAL(n == 0);
+    return mut_id;
+}
+
 static void
 verify_slim_mutation_ids(int64_t *mut_ids, size_t mut_ids_length, int64_t min_mut_id)
 {
@@ -4834,7 +4850,8 @@ test_mutgen_slim_mutations(void)
     interval_map_t rate_map;
     mutation_model_t mut_model;
     size_t len, parent_len;
-    int64_t *mut_id, *all_mut_ids;
+    char *ds;
+    int64_t mut_id, *all_mut_ids;
     int32_t mutation_type_id = 10;
     int64_t next_mutation_id = 23;
 
@@ -4846,7 +4863,7 @@ test_mutgen_slim_mutations(void)
 
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    insert_single_tree(&tables, ALPHABET_NUCLEOTIDE);
+    insert_single_tree(&tables, -1);
 
     ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4863,6 +4880,7 @@ test_mutgen_slim_mutations(void)
     all_mut_ids = malloc(tables.mutations.num_rows * sizeof(int64_t));
     CU_ASSERT_FATAL(all_mut_ids != NULL);
     for (j = 0; j < tables.mutations.num_rows; j++) {
+        ds = tables.mutations.derived_state + tables.mutations.derived_state_offset[j];
         len = (tables.mutations.derived_state_offset[j + 1]
                - tables.mutations.derived_state_offset[j]);
         k = tables.mutations.parent[j];
@@ -4871,18 +4889,17 @@ test_mutgen_slim_mutations(void)
         } else {
             parent_len = (tables.mutations.derived_state_offset[k + 1]
                           - tables.mutations.derived_state_offset[k]);
-            CU_ASSERT_EQUAL_FATAL(memcmp(tables.mutations.derived_state
-                                             + tables.mutations.derived_state_offset[j],
+            CU_ASSERT_EQUAL_FATAL(memcmp(ds,
                                       tables.mutations.derived_state
                                           + tables.mutations.derived_state_offset[k],
                                       parent_len),
                 0);
+            CU_ASSERT_EQUAL_FATAL((ds + parent_len)[0], 44); // 44 is ',' in ascii
+            parent_len++;
         }
-        CU_ASSERT_EQUAL_FATAL(len, parent_len + sizeof(int64_t));
-        mut_id = (int64_t *) (tables.mutations.derived_state
-                              + tables.mutations.derived_state_offset[j + 1]
-                              - sizeof(int64_t));
-        all_mut_ids[j] = *mut_id;
+        CU_ASSERT_FATAL(len > parent_len);
+        mut_id = parse_text_int64(ds + parent_len, len - parent_len);
+        all_mut_ids[j] = mut_id;
     }
     verify_slim_mutation_ids(all_mut_ids, tables.mutations.num_rows, next_mutation_id);
 
@@ -4911,10 +4928,64 @@ test_mutgen_slim_mutations(void)
     mutgen_print_state(&mutgen, _devnull);
 
     mutgen_free(&mutgen);
-
     free(all_mut_ids);
     interval_map_free(&rate_map);
     mutation_model_free(&mut_model);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
+test_mutgen_slim_mutation_large_values(void)
+{
+    int ret = 0;
+    mutgen_t mutgen;
+    tsk_mutation_t mut;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+    interval_map_t rate_map;
+    mutation_model_t mut_model;
+    char value[21]; /* longest 64 bit int has 20 digits */
+    int64_t next_mutation_id;
+
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    insert_single_tree(&tables, -1);
+    ret = interval_map_alloc_single(&rate_map, 1, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Trying to generate mutations that overflow raises an error */
+    ret = slim_mutation_model_alloc(&mut_model, 0, INT64_MAX, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_ID_OVERFLOW);
+    mutgen_free(&mutgen);
+    mutation_model_free(&mut_model);
+
+    tsk_mutation_table_clear(&tables.mutations);
+    tsk_site_table_clear(&tables.sites);
+    /* Try out with a large value that doesn't hit the ceiling */
+    next_mutation_id = INT64_MAX - 100;
+    ret = slim_mutation_model_alloc(&mut_model, 0, next_mutation_id, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables.mutations.num_rows > 10);
+    mutgen_free(&mutgen);
+    mutation_model_free(&mut_model);
+
+    ret = tsk_mutation_table_get_row(&tables.mutations, 0, &mut);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(mut.derived_state_length, 19);
+    sprintf(value, "%" PRId64, next_mutation_id);
+    CU_ASSERT_NSTRING_EQUAL(value, mut.derived_state, mut.derived_state_length);
+
+    interval_map_free(&rate_map);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
 }
@@ -5577,6 +5648,8 @@ main(int argc, char **argv)
         { "test_single_tree_mutgen_many_mutations",
             test_single_tree_mutgen_many_mutations },
         { "test_mutgen_slim_mutations", test_mutgen_slim_mutations },
+        { "test_mutgen_slim_mutation_large_values",
+            test_mutgen_slim_mutation_large_values },
 
         { "test_genic_selection_trajectory", test_genic_selection_trajectory },
         { "test_sweep_genic_selection_bad_parameters",

@@ -61,6 +61,13 @@ typedef struct {
     interval_map_t *interval_map;
 } IntervalMap;
 
+/* TODO we should refactor some of the code for dealing with the
+ * mutation_model in this base class (which currently does nothing).
+ */
+typedef struct {
+    PyObject_HEAD
+} BaseMutationModel;
+
 typedef struct {
     PyObject_HEAD
     mutation_model_t *mutation_model;
@@ -1831,6 +1838,19 @@ static PyTypeObject IntervalMapType = {
     .tp_new = PyType_GenericNew,
 };
 
+/*===================================================================
+ * Matrix mutation model
+ *===================================================================
+ */
+
+static PyTypeObject BaseMutationModelType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_msprime.BaseMutationModel",
+    .tp_basicsize = sizeof(BaseMutationModel),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_doc = "BaseMutationModel objects",
+    .tp_new = PyType_GenericNew,
+};
 
 /*===================================================================
  * Matrix mutation model
@@ -4495,7 +4515,16 @@ PyInit__msprime(void)
     Py_INCREF(&IntervalMapType);
     PyModule_AddObject(module, "IntervalMap", (PyObject *) &IntervalMapType);
 
+    /* BaseMutationModel type */
+    if (PyType_Ready(&BaseMutationModelType) < 0) {
+        return NULL;
+    }
+    Py_INCREF(&BaseMutationModelType);
+    PyModule_AddObject(module, "BaseMutationModel",
+            (PyObject *) &BaseMutationModelType);
+
     /* MatrixMutationModel type */
+    MatrixMutationModelType.tp_base = &BaseMutationModelType;
     if (PyType_Ready(&MatrixMutationModelType) < 0) {
         return NULL;
     }
@@ -4504,6 +4533,7 @@ PyInit__msprime(void)
             (PyObject *) &MatrixMutationModelType);
 
     /* SlimMutationModel type */
+    SlimMutationModelType.tp_base = &BaseMutationModelType;
     if (PyType_Ready(&SlimMutationModelType) < 0) {
         return NULL;
     }

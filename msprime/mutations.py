@@ -28,6 +28,7 @@ import tskit
 import _msprime
 from . import core
 from . import provenance
+from _msprime import BaseMutationModel
 
 _ACGT_ALLELES = [b"A", b"C", b"G", b"T"]
 _AMINO_ACIDS = [
@@ -54,25 +55,14 @@ _AMINO_ACIDS = [
 ]
 
 
-class BaseMutationModel:
-    def asdict(self):
-        # This version of asdict makes sure that we have sufficient parameters
-        # to call the contructor and recreate the class. However, this means
-        # that subclasses *must* have an instance variable of the same name.
-        # This is essential for Provenance round-tripping to work.
-        return {
-            key: getattr(self, key)
-            for key in inspect.signature(self.__init__).parameters.keys()
-            if hasattr(self, key)
-        }
-
-
-class SlimMutationModel(_msprime.SlimMutationModel, BaseMutationModel):
-    pass
+# NOTE we're currently repeating the definition of asdict here
+# because we can't have multiple inheritance because of a
+# bug in sphinx. We can at least factor the definition out, though
+# and note that's why we're doing it.
 
 
 # TODO Change this to MatrixMutationModel
-class MutationModel(_msprime.MatrixMutationModel, BaseMutationModel):
+class MutationModel(_msprime.MatrixMutationModel):
     """
     Superclass of mutation models. Allows you to build your own mutation model.
 
@@ -89,6 +79,30 @@ class MutationModel(_msprime.MatrixMutationModel, BaseMutationModel):
         for row in self.transition_matrix:
             s += "     {}\n".format(" ".join(map(str, row)))
         return s
+
+    def asdict(self):
+        # This version of asdict makes sure that we have sufficient parameters
+        # to call the contructor and recreate the class. However, this means
+        # that subclasses *must* have an instance variable of the same name.
+        # This is essential for Provenance round-tripping to work.
+        return {
+            key: getattr(self, key)
+            for key in inspect.signature(self.__init__).parameters.keys()
+            if hasattr(self, key)
+        }
+
+
+class SlimMutationModel(_msprime.SlimMutationModel):
+    def asdict(self):
+        # This version of asdict makes sure that we have sufficient parameters
+        # to call the contructor and recreate the class. However, this means
+        # that subclasses *must* have an instance variable of the same name.
+        # This is essential for Provenance round-tripping to work.
+        return {
+            key: getattr(self, key)
+            for key in inspect.signature(self.__init__).parameters.keys()
+            if hasattr(self, key)
+        }
 
 
 class BinaryMutations(MutationModel):

@@ -22,6 +22,7 @@ Test cases for mutation generation.
 import functools
 import itertools
 import json
+import struct
 import unittest
 
 import attr
@@ -1110,65 +1111,132 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         self.verify_mutation_rates(model)
 
 
+@attr.s
+class SlimMetadata:
+    mutation_type_id = attr.ib()
+    selection_coeff = attr.ib()
+    subpop_index = attr.ib()
+    origin_generation = attr.ib()
+    nucleotide = attr.ib()
+
+
 class TestSlimMutationModel(unittest.TestCase):
     """
     Tests for the SLiM mutation generator.
     """
 
-    def validate_slim_mutations(self, ts, increasing=True):
-        # slim alleles should be unique comma-separated lists of integers
+    def parse_slim_metadata(self, metadata):
+        fmt = "<ifiib"
+        md_size = 17
+        self.assertEqual(struct.calcsize(fmt), md_size)
+        self.assertTrue(len(metadata) % md_size == 0)
+        ret = []
+        for j in range(len(metadata) // md_size):
+            unpacked = struct.unpack(fmt, metadata[j * md_size : (j + 1) * md_size])
+            ret.append(SlimMetadata(*unpacked))
+        return ret
+
+    def validate_slim_mutations(self, ts, mutation_type=0):
+        # slim alleles should be lists of integers
         # and ancestral states the empty string
-        # if `increasing` then each one should have one more integer than the one before
-        alleles = {}
-        for s in ts.sites():
-            self.assertEqual(s.ancestral_state, "")
-            for m in s.mutations:
-                a = tuple(m.derived_state.split(","))
-                self.assertGreater(len(a), 0)
-                self.assertEqual(len(set(a)), len(a))
-                for aa in a:
-                    self.assertTrue(aa.isdigit())
-                self.assertFalse(a in alleles)
-                alleles[a] = s.id
-                if m.parent == tskit.NULL:
-                    pa = tuple()
+        for site in ts.sites():
+            self.assertEqual(site.ancestral_state, "")
+            alleles = {}
+            for mutation in site.mutations:
+                a = list(map(int, mutation.derived_state.split(",")))
+                alleles[mutation.id] = a
+                if mutation.parent == tskit.NULL:
+                    self.assertEqual(len(a), 1)
                 else:
-                    pa = tuple(ts.mutation(m.parent).derived_state.split(","))
-                if increasing:
-                    self.assertEqual(len(a), len(pa) + 1)
-                    self.assertEqual(len(set(a).symmetric_difference(set(pa))), 1)
+                    parent_allele = alleles[mutation.parent]
+                    self.assertEqual(a[:-1], parent_allele)
 
-    def test_slim_mutation(self):
-        ts = msprime.simulate(10, length=100, random_seed=5)
-        model = PythonSlimMutationModel(0)
-        mts = py_mutate(ts, rate=1, random_seed=23, model=model, discrete=True)
-        self.validate_slim_mutations(mts)
-        # TODO do this properly
-        model = msprime.SlimMutationModel(0)
-        mts2 = msprime.mutate(ts, rate=1, random_seed=23, model=model, discrete=True)
-        self.assertGreater(model.next_id, 0)
-        self.assertEqual(mts2.num_mutations, model.next_id)
-        # breaks because of text decoding issues:
-        # print(mts2.tables)
+                # parse the metadata.
+                metadata = self.parse_slim_metadata(mutation.metadata)
+                self.assertEqual(len(metadata), len(a))
+                for md in metadata:
+                    self.assertEqual(md.mutation_type_id, mutation_type)
+                    self.assertEqual(md.selection_coeff, 0)
+                    self.assertEqual(md.subpop_index, tskit.NULL)
+                    self.assertEqual(md.origin_generation, 0)
+                    self.assertEqual(md.nucleotide, -1)
 
-    def test_add_slim_mutation(self):
-        ts = msprime.simulate(10, length=100, random_seed=5)
-        model = PythonSlimMutationModel(0)
-        mts = py_mutate(ts, rate=1, random_seed=23, model=model, discrete=True)
-        self.assertGreater(mts.num_mutations, 0)
-        self.assertEqual(model.next_id, mts.num_mutations)
-        self.validate_slim_mutations(mts)
-        mmts = py_mutate(
-            mts,
-            rate=1,
-            random_seed=23,
-            model=model,
-            discrete=True,
-            keep=True,
-            sequential_only=False,
+    def run_mutate(self, ts, rate=1, random_seed=42, mutation_type=0, mutation_id=0):
+
+        model = msprime.SlimMutationModel(type=mutation_type, next_id=mutation_id)
+        mts1 = msprime.mutate(
+            ts, rate=rate, random_seed=random_seed, model=model, discrete=True
         )
-        self.assertGreater(mmts.num_mutations, mts.num_mutations)
-        self.validate_slim_mutations(mmts, increasing=False)
+        self.assertEqual(mts1.num_mutations, model.next_id)
+
+        model = PythonSlimMutationModel(
+            mutation_type=mutation_type, next_id=mutation_id
+        )
+        mts2 = py_mutate(
+            ts, rate=rate, random_seed=random_seed, model=model, discrete=True
+        )
+
+        t1 = mts1.dump_tables()
+        t2 = mts2.dump_tables()
+        self.assertEqual(t1.sites, t2.sites)
+        # Drop the mutation metadata - we're validating that elsewhere and
+        # it's not worth complicating the Python generator with it.
+        t1.mutations.set_columns(
+            site=t1.mutations.site,
+            node=t1.mutations.node,
+            parent=t1.mutations.parent,
+            derived_state=t1.mutations.derived_state,
+            derived_state_offset=t1.mutations.derived_state_offset,
+        )
+        self.assertEqual(t1.mutations, t2.mutations)
+        return mts1
+
+    def test_slim_mutation_type(self):
+        ts = msprime.simulate(4, length=2, random_seed=5)
+        for mutation_type in range(1, 10):
+            mts = self.run_mutate(
+                ts, rate=5.0, random_seed=23, mutation_type=mutation_type
+            )
+            self.assertGreater(mts.num_mutations, 10)
+            self.validate_slim_mutations(mts, mutation_type=mutation_type)
+
+    def test_binary_n_4_low_rate(self):
+        ts = msprime.simulate(4, length=2, random_seed=5)
+        mts = self.run_mutate(ts, rate=0.1, random_seed=23)
+        self.assertGreater(mts.num_mutations, 1)
+        self.validate_slim_mutations(mts)
+
+    def test_binary_n_4_high_rate(self):
+        ts = msprime.simulate(4, length=2, random_seed=5)
+        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
+        self.assertGreater(mts.num_mutations, 10)
+        self.validate_slim_mutations(mts)
+
+    def test_binary_n_8_low_rate(self):
+        ts = msprime.simulate(8, length=10, random_seed=50)
+        mts = self.run_mutate(ts, rate=0.1, random_seed=342)
+        self.assertGreater(mts.num_mutations, 1)
+        self.validate_slim_mutations(mts)
+
+    def test_binary_n_8_high_rate(self):
+        ts = msprime.simulate(8, length=10, random_seed=5)
+        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
+        self.assertGreater(mts.num_mutations, 10)
+        self.validate_slim_mutations(mts)
+
+    def test_binary_incomplete_trees(self):
+        ts = msprime.simulate(8, length=5, random_seed=50, end_time=0.1)
+        self.assertGreater(ts.first().num_roots, 1)
+        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
+        self.assertGreater(mts.num_mutations, 10)
+        self.validate_slim_mutations(mts)
+
+    def test_binary_many_trees(self):
+        ts = msprime.simulate(8, length=5, recombination_rate=5, random_seed=50)
+        self.assertGreater(ts.num_trees, 20)
+        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
+        self.assertGreater(mts.num_mutations, 10)
+        self.validate_slim_mutations(mts)
 
 
 class TestPythonMutationGenerator(unittest.TestCase):
@@ -1325,14 +1393,15 @@ class PythonMutationModel:
 
 @attr.s
 class PythonSlimMutationModel(PythonMutationModel):
-    next_id = attr.ib()
+    mutation_type = attr.ib(default=0)
+    next_id = attr.ib(default=0)
 
     def root_allele(self, rng):
         return ""
 
     def transition_allele(self, rng, current_allele):
         out = current_allele
-        if len(out) > 0:
+        if len(current_allele) > 0:
             out += ","
         out += str(self.next_id)
         self.next_id += 1

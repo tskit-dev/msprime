@@ -297,11 +297,6 @@ mutation_matrix_free(mutation_model_t *self)
 /***********************
  * SLiM mutation model */
 
-/* From slim_globals.h:
- * line 131 in v3.4, git hash b2c2b634199f35e53c4e7e513bd26c91c6d99fd9 */
-typedef int64_t slim_mutationid_t; // identifiers for mutations, which require 64 bits
-                                   // since there can be so many
-
 /* Typedefs from MutationMetadataRec in slim_sim.h:
  * line 125 in v3.4, git hash b2c2b634199f35e53c4e7e513bd26c91c6d99fd9
  *  int32_t mutation_type_id_; // 4 bytes (int32_t): the id of the mutation type the
@@ -324,28 +319,28 @@ static void
 copy_slim_mutation_metadata(slim_mutator_t *params, char *dest)
 {
     size_t n;
-    int32_t *mutation_type_id_;
-    float *selection_coeff_;
-    int32_t *subpop_index_;
-    int32_t *origin_generation_;
-    int8_t *nucleotide_;
+    int32_t *mutation_type_id;
+    float *selection_coeff;
+    int32_t *subpop_index;
+    int32_t *origin_generation;
+    int8_t *nucleotide;
 
     n = 0;
-    mutation_type_id_ = (int32_t *) (dest + n);
-    *mutation_type_id_ = params->mutation_type_id;
+    mutation_type_id = (int32_t *) (dest + n);
+    *mutation_type_id = params->mutation_type_id;
     n += sizeof(int32_t);
-    selection_coeff_ = (float *) (dest + n);
-    *selection_coeff_ = 0.0;
+    selection_coeff = (float *) (dest + n);
+    *selection_coeff = 0.0;
     n += sizeof(float);
-    subpop_index_ = (int32_t *) (dest + n);
-    *subpop_index_ = TSK_NULL;
+    subpop_index = (int32_t *) (dest + n);
+    *subpop_index = TSK_NULL;
     n += sizeof(int32_t);
     // TODO: remove this when switch to mutation time
-    origin_generation_ = (int32_t *) (dest + n);
-    *origin_generation_ = 0.0;
+    origin_generation = (int32_t *) (dest + n);
+    *origin_generation = 0.0;
     n += sizeof(int32_t);
-    nucleotide_ = (int8_t *) (dest + n);
-    *nucleotide_ = -1;
+    nucleotide = (int8_t *) (dest + n);
+    *nucleotide = -1;
 }
 
 static void
@@ -394,23 +389,41 @@ slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
     int ret = 0;
     slim_mutator_t *params = &self->params.slim_mutator;
     char *buff = NULL;
+    int len;
+    /* The maximum number of digits for a signed 64 bit integer (including
+     * the leading "-") */
+    const size_t max_digits = 20;
+    /* We allow for a potential comma to separate previous elements in the
+     * list. We allow for a possible comma to separate the previous element
+     * in the list, as well as a NULL byte added by snprintf. We don't bother
+     * trying to alloc the exact number of bytes needed. */
+    const size_t alloc_size = parent_allele_length + max_digits + 2;
+    const char *sep = parent_allele_length == 0 ? "" : ",";
 
-    // append to derived state
-    buff = tsk_blkalloc_get(
-        &params->allocator, parent_allele_length + sizeof(slim_mutationid_t));
+    /* Append to derived_state */
+    buff = tsk_blkalloc_get(&params->allocator, alloc_size);
     if (buff == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    memcpy(buff, parent_allele, parent_allele_length);
-    memcpy(buff + parent_allele_length, &params->next_mutation_id,
-        sizeof(slim_mutationid_t));
+    len = snprintf(buff, alloc_size, "%.*s%s%" PRId64, parent_allele_length,
+        parent_allele, sep, params->next_mutation_id);
+    if (len < 0) {
+        /* Technically this can happen. Returning TSK_ERR_IO should result
+         * in Python code checking errno. */
+        ret = TSK_ERR_IO;
+        goto out;
+    }
+    assert(len < (int) alloc_size);
+    if (params->next_mutation_id == INT64_MAX) {
+        ret = MSP_ERR_MUTATION_ID_OVERFLOW;
+        goto out;
+    }
     params->next_mutation_id++;
     mutation->derived_state = buff;
-    mutation->derived_state_length
-        = (tsk_size_t)(parent_allele_length + sizeof(slim_mutationid_t));
+    mutation->derived_state_length = (tsk_size_t) len;
 
-    // append to metadata
+    /* Append to metadata */
     buff = tsk_blkalloc_get(
         &params->allocator, parent_metadata_length + SLIM_MUTATION_METADATA_SIZE);
     if (buff == NULL) {

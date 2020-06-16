@@ -211,6 +211,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_SLIM_PARAMETERS:
             ret = "SLiM mutation IDs and mutation type IDs must be nonnegative.";
             break;
+        case MSP_ERR_MUTATION_ID_OVERFLOW:
+            ret = "Mutation ID overflow.";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                   "report!";
