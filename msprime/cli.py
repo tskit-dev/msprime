@@ -102,6 +102,26 @@ def add_precision_argument(parser):
     )
 
 
+def add_mutation_rate_argument(parser):
+    parser.add_argument(
+        "--mutation-rate",
+        "-u",
+        type=float,
+        default=0,
+        help="The mutation rate per base per generation",
+    )
+
+
+def add_random_seed_argument(parser):
+    parser.add_argument(
+        "--random-seed",
+        "-s",
+        type=int,
+        default=None,
+        help="The random seed. If not specified one is chosen randomly",
+    )
+
+
 def generate_seeds():
     """
     Generate seeds to seed the RNG and output on the command line.
@@ -1123,6 +1143,20 @@ def run_simulate(args):
     tree_sequence.dump(args.tree_sequence, zlib_compression=args.compress)
 
 
+def run_mutate(args):
+    tree_sequence = tskit.load(args.tree_sequence)
+    tree_sequence = msprime.mutate(
+        tree_sequence=tree_sequence,
+        rate=args.mutation_rate,
+        random_seed=args.random_seed,
+        keep=args.keep,
+        start_time=args.start_time,
+        end_time=args.end_time,
+        discrete=args.discrete,
+    )
+    tree_sequence.dump(args.output_tree_sequence)
+
+
 def get_msp_parser():
     top_parser = argparse.ArgumentParser(
         description="Command line interface for msprime.", epilog=msprime_citation_text
@@ -1150,13 +1184,7 @@ def get_msp_parser():
         default=0,
         help="The recombination rate per base per generation",
     )
-    parser.add_argument(
-        "--mutation-rate",
-        "-u",
-        type=float,
-        default=0,
-        help="The mutation rate per base per generation",
-    )
+    add_mutation_rate_argument(parser)
     parser.add_argument(
         "--effective-population-size",
         "-N",
@@ -1164,13 +1192,7 @@ def get_msp_parser():
         default=1,
         help="The diploid effective population size Ne",
     )
-    parser.add_argument(
-        "--random-seed",
-        "-s",
-        type=int,
-        default=None,
-        help="The random seed. If not specified one is chosen randomly",
-    )
+    add_random_seed_argument(parser)
     parser.add_argument(
         "--compress", "-z", action="store_true", help="Enable zlib compression"
     )
@@ -1257,6 +1279,41 @@ def get_msp_parser():
         help="Remove any duplicated mutation positions in the source file. ",
     )
     parser.set_defaults(runner=run_upgrade)
+
+    parser = subparsers.add_parser("mutate", help="Add mutations to a tree sequence.")
+    add_tree_sequence_argument(parser)
+    add_mutation_rate_argument(parser)
+    add_random_seed_argument(parser)
+    parser.add_argument(
+        "output_tree_sequence",
+        help="The tree sequence output file containing the new mutations",
+    )
+    parser.add_argument(
+        "--keep",
+        "-k",
+        action="store_true",
+        default=False,
+        help="Keep mutations in input tree sequence",
+    )
+    parser.add_argument(
+        "--discrete",
+        action="store_true",
+        default=False,
+        help="Generate mutations at only integer positions along the genome. ",
+    )
+    parser.add_argument(
+        "--start-time",
+        type=float,
+        default=None,
+        help="The minimum time ago at which a mutation can occur.",
+    )
+    parser.add_argument(
+        "--end-time",
+        type=float,
+        default=None,
+        help="The maximum time ago at which a mutation can occur.",
+    )
+    parser.set_defaults(runner=run_mutate)
 
     return top_parser
 
