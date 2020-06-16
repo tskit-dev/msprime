@@ -1580,6 +1580,73 @@ class TestMspConversionOutput(unittest.TestCase):
         output_mutations = stdout.splitlines()
         self.verify_mutations(output_mutations, precision)
 
+    def test_mutate_keep(self):
+        fd, out_tree_sequence_file = tempfile.mkstemp(
+            prefix="msp_cli_mutate", suffix=".trees"
+        )
+        os.close(fd)
+
+        cmd = "mutate"
+        mutation_rate = 10
+        seed = 1
+        stdout, stderr = capture_output(
+            cli.msp_main,
+            [
+                cmd,
+                self._tree_sequence_file,
+                out_tree_sequence_file,
+                "-u",
+                str(mutation_rate),
+                "-s",
+                str(seed),
+                "--keep",
+            ],
+        )
+        self.assertEqual(len(stderr), 0)
+
+        previous_ts = tskit.load(self._tree_sequence_file)
+        tree_sequence = tskit.load(out_tree_sequence_file)
+
+        self.assertGreater(
+            tree_sequence.get_num_mutations(), previous_ts.get_num_mutations()
+        )
+
+    def test_mutate_discrete_start_end_time(self):
+        fd, out_tree_sequence_file = tempfile.mkstemp(
+            prefix="msp_cli_mutate", suffix=".trees"
+        )
+        os.close(fd)
+
+        cmd = "mutate"
+        mutation_rate = 10
+        seed = 1
+        stdout, stderr = capture_output(
+            cli.msp_main,
+            [
+                cmd,
+                self._tree_sequence_file,
+                out_tree_sequence_file,
+                "-u",
+                str(mutation_rate),
+                "-s",
+                str(seed),
+                "--discrete",
+                "--start-time",
+                "0",
+                "--end-time",
+                "2",
+            ],
+        )
+        self.assertEqual(len(stderr), 0)
+
+        tree_sequence = tskit.load(out_tree_sequence_file)
+        tables = tree_sequence.dump_tables()
+
+        self.assertLessEqual(max(tables.nodes.time[tables.mutations.node]), 2)
+        self.assertGreaterEqual(min(tables.nodes.time[tables.mutations.node]), 0)
+        self.assertLessEqual(set(tables.sites.position), set(range(10)))
+        self.assertGreater(tree_sequence.get_num_mutations(), 0)
+
     def verify_provenances(self, output_provenances):
         with tempfile.TemporaryFile("w+") as f:
             self._tree_sequence.dump_text(provenances=f)
