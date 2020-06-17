@@ -11,3 +11,4 @@ statsmodels
 seaborn
 tqdm
 argparse
+daiquiri
