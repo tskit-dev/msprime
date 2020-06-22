@@ -354,10 +354,17 @@ typedef struct {
     tsk_blkalloc_t allocator;
 } slim_mutator_t;
 
+typedef struct {
+    uint64_t start_allele;
+    uint64_t next_allele;
+    tsk_blkalloc_t allocator;
+} infinite_alleles_t;
+
 typedef struct _mutation_model_t {
     union {
         mutation_matrix_t mutation_matrix;
         slim_mutator_t slim_mutator;
+        infinite_alleles_t infinite_alleles;
         /* Other known mutation models */
     } params;
     void (*print_state)(struct _mutation_model_t *model, FILE *out);
@@ -519,12 +526,9 @@ int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
     char **alleles, double *root_distribution, double *transition_matrix);
 int slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
     int64_t next_mutation_id, size_t block_size);
+int infinite_alleles_mutation_model_alloc(
+    mutation_model_t *self, uint64_t start_allele, tsk_flags_t options);
 int mutation_model_free(mutation_model_t *self);
-int mutation_model_choose_root_state(mutation_model_t *self, gsl_rng *rng, site_t *site);
-int mutation_model_transition(mutation_model_t *model, gsl_rng *rng,
-    const char *parent_allele, tsk_size_t parent_allele_length,
-    const char *parent_metadata, tsk_size_t parent_metadata_length,
-    mutation_t *mutation);
 void mutation_model_print_state(mutation_model_t *self, FILE *out);
 
 int mutgen_alloc(mutgen_t *self, gsl_rng *rng, interval_map_t *rate_map,

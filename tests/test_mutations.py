@@ -1239,6 +1239,101 @@ class TestSlimMutationModel(unittest.TestCase):
         self.validate_slim_mutations(mts)
 
 
+class TestInfiniteAllelesMutationModel(unittest.TestCase):
+    """
+    Tests for the Infinite alleles mutation model
+    """
+
+    def validate(self, ts, start_allele=0):
+        for site in ts.sites():
+            allele = start_allele
+            self.assertEqual(int(site.ancestral_state), allele)
+            allele += 1
+            for mutation in site.mutations:
+                self.assertEqual(int(mutation.derived_state), allele)
+                allele += 1
+
+    def run_mutate(self, ts, rate=1, random_seed=42, start_allele=0):
+
+        model = msprime.InfiniteAllelesMutationModel(start_allele=start_allele)
+        mts1 = msprime.mutate(
+            ts, rate=rate, random_seed=random_seed, model=model, discrete=True
+        )
+        model = PythonInfiniteAllelesMutationModel(start_allele=start_allele)
+        mts2 = py_mutate(
+            ts, rate=rate, random_seed=random_seed, model=model, discrete=True
+        )
+
+        t1 = mts1.dump_tables()
+        t2 = mts2.dump_tables()
+        self.assertEqual(t1.sites, t2.sites)
+        self.assertEqual(t1.mutations, t2.mutations)
+        return mts1
+
+    def test_binary_n_4_low_rate(self):
+        ts = msprime.simulate(4, length=2, random_seed=5)
+        mts = self.run_mutate(ts, rate=0.1, random_seed=23)
+        self.assertGreater(mts.num_mutations, 1)
+        self.validate(mts)
+
+    def test_binary_n_4_high_rate(self):
+        ts = msprime.simulate(4, length=2, random_seed=5)
+        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
+        self.assertGreater(mts.num_mutations, 10)
+        self.validate(mts)
+
+    def test_binary_n_8_low_rate(self):
+        ts = msprime.simulate(8, length=10, random_seed=50)
+        mts = self.run_mutate(ts, rate=0.1, random_seed=342)
+        self.assertGreater(mts.num_mutations, 1)
+        self.validate(mts)
+
+    def test_binary_n_8_high_rate(self):
+        ts = msprime.simulate(8, length=10, random_seed=5)
+        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
+        self.assertGreater(mts.num_mutations, 10)
+        self.validate(mts)
+
+    def test_binary_incomplete_trees(self):
+        ts = msprime.simulate(8, length=5, random_seed=50, end_time=0.1)
+        self.assertGreater(ts.first().num_roots, 1)
+        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
+        self.assertGreater(mts.num_mutations, 10)
+        self.validate(mts)
+
+    def test_binary_many_trees(self):
+        ts = msprime.simulate(8, length=5, recombination_rate=5, random_seed=50)
+        self.assertGreater(ts.num_trees, 20)
+        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
+        self.assertGreater(mts.num_mutations, 10)
+        self.validate(mts)
+
+    def test_allele_overflow(self):
+        ts = msprime.simulate(4, length=2, random_seed=5)
+        model = msprime.InfiniteAllelesMutationModel(start_allele=2 ** 64 - 1)
+        mts = msprime.mutate(ts, rate=1, random_seed=32, model=model, discrete=True)
+        self.assertGreater(mts.num_sites, 0)
+        self.assertGreater(mts.num_mutations, 0)
+        for site in mts.sites():
+            self.assertEqual(int(site.ancestral_state), 2 ** 64 - 1)
+            allele = 0
+            for mutation in site.mutations:
+                self.assertEqual(int(mutation.derived_state), allele)
+                allele += 1
+
+    def test_non_discrete_sites(self):
+        ts = msprime.simulate(4, length=2, random_seed=5)
+        model = msprime.InfiniteAllelesMutationModel()
+        mts = msprime.mutate(ts, rate=1, random_seed=32, model=model, discrete=False)
+        self.assertGreater(mts.num_sites, 0)
+        self.assertEqual(mts.num_mutations, mts.num_sites)
+        for site in mts.sites():
+            self.assertEqual(int(site.ancestral_state), 0)
+            self.assertEqual(len(site.mutations), 1)
+            for mutation in site.mutations:
+                self.assertEqual(int(mutation.derived_state), 1)
+
+
 class TestPythonMutationGenerator(unittest.TestCase):
     """
     Tests for the python implementation of the mutation generator
@@ -1406,6 +1501,24 @@ class PythonSlimMutationModel(PythonMutationModel):
         out += str(self.next_id)
         self.next_id += 1
         return out
+
+
+@attr.s
+class PythonInfiniteAllelesMutationModel(PythonMutationModel):
+    start_allele = attr.ib(default=0)
+    next_allele = attr.ib(default=0)
+
+    def make_allele(self):
+        ret = str(self.next_allele)
+        self.next_allele += 1
+        return ret
+
+    def root_allele(self, rng):
+        self.next_allele = self.start_allele
+        return self.make_allele()
+
+    def transition_allele(self, rng, current_allele):
+        return self.make_allele()
 
 
 @attr.s

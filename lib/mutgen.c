@@ -393,8 +393,7 @@ slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
     /* The maximum number of digits for a signed 64 bit integer (including
      * the leading "-") */
     const size_t max_digits = 20;
-    /* We allow for a potential comma to separate previous elements in the
-     * list. We allow for a possible comma to separate the previous element
+    /* We allow for a possible comma to separate the previous element
      * in the list, as well as a NULL byte added by snprintf. We don't bother
      * trying to alloc the exact number of bytes needed. */
     const size_t alloc_size = parent_allele_length + max_digits + 2;
@@ -448,6 +447,84 @@ slim_mutator_free(mutation_model_t *self)
     return 0;
 }
 
+/***********************
+ * Infinite alleles mutation model */
+
+static void
+infinite_alleles_print_state(mutation_model_t *self, FILE *out)
+{
+    infinite_alleles_t params = self->params.infinite_alleles;
+    fprintf(out, "infinite alleles:\n");
+    fprintf(out, "\tstart_allele:%" PRIu64 "\n", params.start_allele);
+}
+
+/* The maximum number of digits for an unsigned 64 bit integer is 20
+ * and one byte for the NULL terminator. */
+#define MAX_UINT_BUFF_SIZE 21
+
+static int
+infinite_alleles_make_allele(
+    mutation_model_t *self, char **dest, tsk_size_t *dest_length)
+{
+    int ret = 0;
+    infinite_alleles_t *params = &self->params.infinite_alleles;
+    char tmp_buff[MAX_UINT_BUFF_SIZE];
+    char *buff = NULL;
+    int num_digits;
+    tsk_size_t len;
+
+    num_digits = snprintf(tmp_buff, MAX_UINT_BUFF_SIZE, "%" PRIu64, params->next_allele);
+    if (num_digits < 0) {
+        /* Technically this can happen. Returning TSK_ERR_IO should result
+         * in Python code checking errno. */
+        ret = TSK_ERR_IO;
+        goto out;
+    }
+    len = (tsk_size_t) num_digits;
+    assert(len < MAX_UINT_BUFF_SIZE);
+
+    buff = tsk_blkalloc_get(&params->allocator, len);
+    if (buff == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    memcpy(buff, tmp_buff, len);
+    params->next_allele++;
+    *dest = buff;
+    *dest_length = len;
+out:
+    return ret;
+}
+
+static int
+infinite_alleles_choose_root_state(
+    mutation_model_t *self, gsl_rng *MSP_UNUSED(rng), site_t *site)
+{
+    infinite_alleles_t *params = &self->params.infinite_alleles;
+
+    params->next_allele = params->start_allele;
+    return infinite_alleles_make_allele(
+        self, &site->ancestral_state, &site->ancestral_state_length);
+}
+
+static int
+infinite_alleles_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
+    const char *MSP_UNUSED(parent_allele), tsk_size_t MSP_UNUSED(parent_allele_length),
+    const char *MSP_UNUSED(parent_metadata),
+    tsk_size_t MSP_UNUSED(parent_metadata_length), mutation_t *mutation)
+{
+    return infinite_alleles_make_allele(
+        self, &mutation->derived_state, &mutation->derived_state_length);
+}
+
+static int
+infinite_alleles_free(mutation_model_t *self)
+{
+    infinite_alleles_t params = self->params.infinite_alleles;
+    tsk_blkalloc_free(&params.allocator);
+    return 0;
+}
+
 /*****************************************
  * Mutation model public API
  *
@@ -465,7 +542,7 @@ matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles, char **a
     int ret = 0;
     mutation_matrix_t *params = &self->params.mutation_matrix;
 
-    memset(self, 0, sizeof(mutation_model_t));
+    memset(self, 0, sizeof(*self));
     if (num_alleles < 2) {
         ret = MSP_ERR_INSUFFICIENT_ALLELES;
         goto out;
@@ -509,7 +586,7 @@ slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
     int ret = 0;
     slim_mutator_t *params = &self->params.slim_mutator;
 
-    memset(self, 0, sizeof(mutation_model_t));
+    memset(self, 0, sizeof(*self));
 
     self->choose_root_state = &slim_mutator_choose_root_state;
     self->transition = &slim_mutator_transition;
@@ -541,6 +618,31 @@ out:
     return ret;
 }
 
+int MSP_WARN_UNUSED
+infinite_alleles_mutation_model_alloc(
+    mutation_model_t *self, uint64_t start_allele, tsk_flags_t MSP_UNUSED(options))
+{
+    int ret = 0;
+    infinite_alleles_t *params = &self->params.infinite_alleles;
+
+    memset(self, 0, sizeof(*self));
+
+    self->choose_root_state = &infinite_alleles_choose_root_state;
+    self->transition = &infinite_alleles_transition;
+    self->print_state = &infinite_alleles_print_state;
+    self->free = &infinite_alleles_free;
+    ret = tsk_blkalloc_init(&params->allocator, 8192);
+    if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
+        goto out;
+    }
+    params->start_allele = start_allele;
+    /* if (options & MSP_INFINITE_ALLELES_INDEPENDENT_SITES) {gcc */
+    /* params->next_mutation_id = next_mutation_id; */
+out:
+    return ret;
+}
+
 int
 mutation_model_free(mutation_model_t *self)
 {
@@ -550,13 +652,13 @@ mutation_model_free(mutation_model_t *self)
     return 0;
 }
 
-int MSP_WARN_UNUSED
+static int MSP_WARN_UNUSED
 mutation_model_choose_root_state(mutation_model_t *self, gsl_rng *rng, site_t *site)
 {
     return self->choose_root_state(self, rng, site);
 }
 
-int MSP_WARN_UNUSED
+static int MSP_WARN_UNUSED
 mutation_model_transition(mutation_model_t *self, gsl_rng *rng,
     const char *parent_allele, tsk_size_t parent_allele_length,
     const char *parent_metadata, tsk_size_t parent_metadata_length, mutation_t *mutation)
@@ -649,7 +751,7 @@ mutgen_print_state(mutgen_t *self, FILE *out)
     fprintf(out, "\tstart_time = %f\n", self->start_time);
     fprintf(out, "\tend_time = %f\n", self->end_time);
     fprintf(out, "\tmodel:\n");
-    self->model->print_state(self->model, out);
+    mutation_model_print_state(self->model, out);
     tsk_blkalloc_print_state(&self->allocator, out);
 
     for (a = self->sites.head; a != NULL; a = a->next) {
@@ -845,8 +947,8 @@ out:
 static int MSP_WARN_UNUSED
 mutgen_add_new_mutation(mutgen_t *self, site_t *site, node_id_t node, double time)
 {
-    mutation_t *placeholder;
-    return mutgen_add_mutation(self, site, node, time, &placeholder);
+    mutation_t *not_used;
+    return mutgen_add_mutation(self, site, node, time, &not_used);
 }
 
 static int MSP_WARN_UNUSED

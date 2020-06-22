@@ -4991,6 +4991,103 @@ test_mutgen_slim_mutation_large_values(void)
 }
 
 static void
+test_mutgen_infinite_alleles(void)
+{
+    int ret = 0;
+    mutgen_t mutgen;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+    interval_map_t rate_map;
+    mutation_model_t mut_model;
+    tsk_site_t site;
+    tsk_mutation_t mutation;
+    tsk_size_t j;
+    char buff[100];
+
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = interval_map_alloc_single(&rate_map, 1, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    insert_single_tree(&tables, -1);
+
+    ret = infinite_alleles_mutation_model_alloc(&mut_model, 0, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables.mutations.num_rows > 5);
+    CU_ASSERT_TRUE(tables.sites.num_rows == 1);
+
+    ret = tsk_site_table_get_row(&tables.sites, 0, &site);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_NSTRING_EQUAL("0", site.ancestral_state, site.ancestral_state_length);
+
+    for (j = 0; j < tables.mutations.num_rows; j++) {
+        ret = tsk_mutation_table_get_row(&tables.mutations, j, &mutation);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        sprintf(buff, "%d", j + 1);
+        CU_ASSERT_NSTRING_EQUAL(
+            buff, mutation.derived_state, mutation.derived_state_length);
+    }
+    mutgen_print_state(&mutgen, _devnull);
+
+    mutgen_free(&mutgen);
+    interval_map_free(&rate_map);
+    mutation_model_free(&mut_model);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
+test_mutgen_infinite_alleles_large_values(void)
+{
+    int ret = 0;
+    mutgen_t mutgen;
+    tsk_mutation_t mut;
+    tsk_site_t site;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+    interval_map_t rate_map;
+    mutation_model_t mut_model;
+    char value[21]; /* longest 64 bit uint has 20 digits */
+
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    insert_single_tree(&tables, -1);
+    ret = interval_map_alloc_single(&rate_map, 1, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = infinite_alleles_mutation_model_alloc(&mut_model, UINT64_MAX, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables.sites.num_rows == 1);
+    CU_ASSERT_TRUE(tables.mutations.num_rows > 10);
+    mutgen_print_state(&mutgen, _devnull);
+
+    ret = tsk_site_table_get_row(&tables.sites, 0, &site);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(site.ancestral_state_length, 20);
+    sprintf(value, "%" PRIu64, UINT64_MAX);
+    CU_ASSERT_NSTRING_EQUAL(value, site.ancestral_state, site.ancestral_state_length);
+
+    ret = tsk_mutation_table_get_row(&tables.mutations, 0, &mut);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_NSTRING_EQUAL("0", mut.derived_state, mut.derived_state_length);
+
+    mutgen_free(&mutgen);
+    mutation_model_free(&mut_model);
+    interval_map_free(&rate_map);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
 verify_simple_genic_selection_trajectory(
     double start_frequency, double end_frequency, double alpha, double dt)
 {
@@ -5650,6 +5747,9 @@ main(int argc, char **argv)
         { "test_mutgen_slim_mutations", test_mutgen_slim_mutations },
         { "test_mutgen_slim_mutation_large_values",
             test_mutgen_slim_mutation_large_values },
+        { "test_mutgen_infinite_alleles", test_mutgen_infinite_alleles },
+        { "test_mutgen_infinite_alleles_large_values",
+            test_mutgen_infinite_alleles_large_values },
 
         { "test_genic_selection_trajectory", test_genic_selection_trajectory },
         { "test_sweep_genic_selection_bad_parameters",

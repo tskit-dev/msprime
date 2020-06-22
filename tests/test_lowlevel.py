@@ -2468,6 +2468,34 @@ class TestSlimMutationModel(unittest.TestCase):
             self.assertEqual(model.next_id, next_id)
 
 
+class TestInfiniteAllelesMutationModel(unittest.TestCase):
+    """
+    Tests for the infinite alleles mutation model class.
+    """
+
+    def test_constructor_errors(self):
+        for bad_type in ["sdr", 0.222, None]:
+            with self.assertRaises(TypeError):
+                _msprime.InfiniteAllelesMutationModel(start_allele=bad_type)
+
+    def test_defaults(self):
+        iamm = _msprime.InfiniteAllelesMutationModel()
+        self.assertEqual(iamm.start_allele, 0)
+        self.assertEqual(iamm.next_allele, 0)
+
+    def test_start_allele(self):
+        for start_allele in [0, 10, 2 ** 64 - 1]:
+            iamm = _msprime.InfiniteAllelesMutationModel(start_allele)
+            self.assertEqual(iamm.start_allele, start_allele)
+            self.assertEqual(iamm.next_allele, 0)
+
+    def test_start_allele_overflow(self):
+        for start_allele in [2 ** 64, 2 ** 65 + 1]:
+            iamm = _msprime.InfiniteAllelesMutationModel(start_allele)
+            self.assertEqual(iamm.start_allele, start_allele % 2 ** 64)
+            self.assertEqual(iamm.next_allele, 0)
+
+
 class TestMutationGenerator(unittest.TestCase):
     """
     Tests for the mutation generator class.
@@ -2516,11 +2544,22 @@ class TestMutationGenerator(unittest.TestCase):
 
     def test_slim_model(self):
         rng = _msprime.RandomGenerator(1)
-        imap = _msprime.IntervalMap([0, 1], [1, 0])
+        imap = _msprime.IntervalMap([0, 1], [5, 0])
         model = _msprime.SlimMutationModel(1234, 5678)
         mutgen = _msprime.MutationGenerator(rng, imap, model)
         tables = _msprime.LightweightTableCollection(1)
         mutgen.generate(tables)
+        self.assertEqual(model.next_id, 5678)
+
+    def test_infinite_alleles_model(self):
+        rng = _msprime.RandomGenerator(1)
+        imap = _msprime.IntervalMap([0, 1], [1, 0])
+        model = _msprime.InfiniteAllelesMutationModel(1234)
+        mutgen = _msprime.MutationGenerator(rng, imap, model)
+        tables = _msprime.LightweightTableCollection(1)
+        mutgen.generate(tables)
+        self.assertEqual(model.start_allele, 1234)
+        self.assertEqual(model.next_allele, 0)
 
     def test_generate_interface(self):
         rng = _msprime.RandomGenerator(1)

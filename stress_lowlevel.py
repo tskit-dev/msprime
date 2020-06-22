@@ -11,9 +11,9 @@ import sys
 import time
 import unittest
 
+import tests.test_ancestry as test_ancestry
 import tests.test_demography as test_demography
 import tests.test_dict_encoding as test_dict_encoding
-import tests.test_highlevel as test_highlevel
 import tests.test_lowlevel as test_lowlevel
 import tests.test_recombination_map as test_recombination_map
 
@@ -21,7 +21,7 @@ import tests.test_recombination_map as test_recombination_map
 def main():
     modules = {
         "demography": test_demography,
-        "highlevel": test_highlevel,
+        "ancestry": test_ancestry,
         "lowlevel": test_lowlevel,
         "dict_encoding": test_dict_encoding,
         "recombination_map": test_recombination_map,

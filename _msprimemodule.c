@@ -80,6 +80,11 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
+    mutation_model_t *mutation_model;
+} InfiniteAllelesMutationModel;
+
+typedef struct {
+    PyObject_HEAD
     mutgen_t *mutgen;
     RandomGenerator *random_generator;
     IntervalMap *rate_map;
@@ -2041,27 +2046,16 @@ static PyGetSetDef MatrixMutationModel_getsetters[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyMemberDef MatrixMutationModel_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef MatrixMutationModel_methods[] = {
-    {NULL}  /* Sentinel */
-};
-
 static PyTypeObject MatrixMutationModelType = {
     .tp_name = "_msprime.MatrixMutationModel",
     .tp_basicsize = sizeof(MatrixMutationModel),
     .tp_dealloc = (destructor)MatrixMutationModel_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_doc = "MatrixMutationModel objects",
-    .tp_methods = MatrixMutationModel_methods,
-    .tp_members = MatrixMutationModel_members,
     .tp_getset = MatrixMutationModel_getsetters,
     .tp_init = (initproc)MatrixMutationModel_init,
     .tp_new = PyType_GenericNew,
-}
-;
+};
 
 /*===================================================================
  * Slim mutation model
@@ -2147,24 +2141,109 @@ static PyGetSetDef SlimMutationModel_getsetters[] = {
     {NULL}  /* Sentinel */
 };
 
-static PyMemberDef SlimMutationModel_members[] = {
-    {NULL}  /* Sentinel */
-};
-
-static PyMethodDef SlimMutationModel_methods[] = {
-    {NULL}  /* Sentinel */
-};
-
 static PyTypeObject SlimMutationModelType = {
     .tp_name = "_msprime.SlimMutationModel",
     .tp_basicsize = sizeof(SlimMutationModel),
     .tp_dealloc = (destructor)SlimMutationModel_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_doc = "SlimMutationModel objects",
-    .tp_methods = SlimMutationModel_methods,
-    .tp_members = SlimMutationModel_members,
     .tp_getset = SlimMutationModel_getsetters,
     .tp_init = (initproc)SlimMutationModel_init,
+    .tp_new = PyType_GenericNew,
+};
+
+/*===================================================================
+ * Infinite alleles mutation model
+ *===================================================================
+ */
+
+static int
+InfiniteAllelesMutationModel_check_state(InfiniteAllelesMutationModel *self)
+{
+    int ret = 0;
+    if (self->mutation_model == NULL) {
+        PyErr_SetString(PyExc_SystemError, "SlimMutationModel not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+InfiniteAllelesMutationModel_dealloc(InfiniteAllelesMutationModel* self)
+{
+    if (self->mutation_model != NULL) {
+        mutation_model_free(self->mutation_model);
+        PyMem_Free(self->mutation_model);
+        self->mutation_model = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static int
+InfiniteAllelesMutationModel_init(InfiniteAllelesMutationModel *self,
+        PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = {"start_allele", NULL};
+    unsigned long long start_allele = 0;
+
+    self->mutation_model = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|K", kwlist, &start_allele)) {
+        goto out;
+    }
+
+    /* Note: it's important we zero out mutation_model here because
+     * we can error before we can mutation_model_alloc, leaving the
+     * object in an uninitialised state */
+    self->mutation_model = PyMem_Calloc(1, sizeof(*self->mutation_model));
+    if (self->mutation_model == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = infinite_alleles_mutation_model_alloc(self->mutation_model,
+        (uint64_t) start_allele, 0);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+InfiniteAllelesMutationModel_get_start_allele(InfiniteAllelesMutationModel *self,
+        void *closure)
+{
+    infinite_alleles_t *params = &self->mutation_model->params.infinite_alleles;
+    return Py_BuildValue("K", (unsigned long long) params->start_allele);
+}
+
+static PyObject *
+InfiniteAllelesMutationModel_get_next_allele(InfiniteAllelesMutationModel *self,
+        void *closure)
+{
+    infinite_alleles_t *params = &self->mutation_model->params.infinite_alleles;
+    return Py_BuildValue("K", (unsigned long long) params->next_allele);
+}
+
+static PyGetSetDef InfiniteAllelesMutationModel_getsetters[] = {
+    {"start_allele", (getter) InfiniteAllelesMutationModel_get_start_allele, NULL,
+        "Returns the initial allele"},
+    {"next_allele", (getter) InfiniteAllelesMutationModel_get_next_allele, NULL,
+        "Return the next allele"},
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject InfiniteAllelesMutationModelType = {
+    .tp_name = "_msprime.InfiniteAllelesMutationModel",
+    .tp_basicsize = sizeof(InfiniteAllelesMutationModel),
+    .tp_dealloc = (destructor)InfiniteAllelesMutationModel_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_doc = "InfiniteAllelesMutationModel objects",
+    .tp_getset = InfiniteAllelesMutationModel_getsetters,
+    .tp_init = (initproc)InfiniteAllelesMutationModel_init,
     .tp_new = PyType_GenericNew,
 };
 
@@ -2212,6 +2291,7 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
     PyObject *py_model = NULL;
     MatrixMutationModel *matrix_mutation_model = NULL;
     SlimMutationModel *slim_mutation_model = NULL;
+    InfiniteAllelesMutationModel *infinite_alleles_model = NULL;
     mutation_model_t *model = NULL;
 
     self->mutgen = NULL;
@@ -2246,10 +2326,17 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
         model = slim_mutation_model->mutation_model;
+    } else if (PyObject_TypeCheck(py_model, &InfiniteAllelesMutationModelType)) {
+        infinite_alleles_model = (InfiniteAllelesMutationModel *) py_model;
+        if (InfiniteAllelesMutationModel_check_state(
+                    infinite_alleles_model) != 0) {
+            goto out;
+        }
+        model = infinite_alleles_model->mutation_model;
     } else {
         PyErr_SetString(PyExc_TypeError,
-            "model must be an instance of MatrixMutationModel "
-            "or SlimMutationModel");
+            "model must be an instance of MatrixMutationModel, "
+            "SlimMutationModel or InfiniteAllelesMutationModel.");
         goto out;
     }
     self->model = py_model;
@@ -4540,6 +4627,15 @@ PyInit__msprime(void)
     Py_INCREF(&SlimMutationModelType);
     PyModule_AddObject(module, "SlimMutationModel",
             (PyObject *) &SlimMutationModelType);
+
+    /* InfiniteAllelesMutationModel type */
+    InfiniteAllelesMutationModelType.tp_base = &BaseMutationModelType;
+    if (PyType_Ready(&InfiniteAllelesMutationModelType) < 0) {
+        return NULL;
+    }
+    Py_INCREF(&InfiniteAllelesMutationModelType);
+    PyModule_AddObject(module, "InfiniteAllelesMutationModel",
+            (PyObject *) &InfiniteAllelesMutationModelType);
 
     /* Errors and constants */
     MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);
