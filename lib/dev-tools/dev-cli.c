@@ -786,7 +786,7 @@ run_simulate(const char *conf_file, const char *output_file, int verbose, int nu
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }
-    ret = mutation_model_factory(&mut_model, mutation_params.alphabet);
+    ret = matrix_mutation_model_factory(&mut_model, mutation_params.alphabet);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }

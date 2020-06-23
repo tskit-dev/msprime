@@ -92,6 +92,9 @@
 #define MSP_ERR_INSUFFICIENT_ALLELES                                -53
 #define MSP_ERR_BAD_ROOT_PROBABILITIES                              -54
 #define MSP_ERR_BAD_TRANSITION_MATRIX                               -55
+#define MSP_ERR_BAD_SLIM_PARAMETERS                                 -57
+#define MSP_ERR_MUTATION_ID_OVERFLOW                                -58
+
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */
 #define MSP_TSK_ERR_BIT 13

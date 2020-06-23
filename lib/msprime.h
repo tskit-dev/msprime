@@ -312,18 +312,69 @@ typedef struct demographic_event_t_t {
     struct demographic_event_t_t *next;
 } demographic_event_t;
 
+/* The site_t and mutation_t are similar the equivalent tsk_ types,
+ * with some extra fields that we need for mutation generation. */
+typedef struct mutation_t {
+    tsk_id_t id;
+    tsk_id_t site;
+    tsk_id_t node;
+    char *derived_state;
+    tsk_size_t derived_state_length;
+    char *metadata;
+    tsk_size_t metadata_length;
+    double time;
+    struct mutation_t *parent;
+    struct mutation_t *next;
+    bool new;
+    bool keep;
+} mutation_t;
+
 typedef struct {
     double position;
-    node_id_t node;
-    const char *ancestral_state;
-    const char *derived_state;
-} infinite_sites_mutation_t;
+    char *ancestral_state;
+    tsk_size_t ancestral_state_length;
+    char *metadata;
+    tsk_size_t metadata_length;
+    mutation_t *mutations;
+    size_t mutations_length;
+    bool new;
+} site_t;
 
 typedef struct {
     size_t num_alleles;
     char **alleles;
+    tsk_size_t *allele_length;
     double *root_distribution;
     double *transition_matrix;
+} mutation_matrix_t;
+
+typedef struct {
+    int32_t mutation_type_id; // following SLiM's MutationMetadataRec
+    int64_t next_mutation_id; // following SLiM's slim_mutationid_t
+    tsk_blkalloc_t allocator;
+} slim_mutator_t;
+
+typedef struct {
+    uint64_t start_allele;
+    uint64_t next_allele;
+    tsk_blkalloc_t allocator;
+} infinite_alleles_t;
+
+typedef struct _mutation_model_t {
+    union {
+        mutation_matrix_t mutation_matrix;
+        slim_mutator_t slim_mutator;
+        infinite_alleles_t infinite_alleles;
+        /* Other known mutation models */
+    } params;
+    void (*print_state)(struct _mutation_model_t *model, FILE *out);
+    int (*free)(struct _mutation_model_t *model);
+    int (*choose_root_state)(
+        struct _mutation_model_t *model, gsl_rng *rng, site_t *site);
+    int (*transition)(struct _mutation_model_t *model, gsl_rng *rng,
+        const char *parent_allele, tsk_size_t parent_allele_length,
+        const char *parent_metadata, tsk_size_t parent_metadata_length,
+        mutation_t *mutation);
 } mutation_model_t;
 
 typedef struct {
@@ -470,12 +521,15 @@ double recomb_map_position_to_mass(recomb_map_t *self, double position);
 double recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass);
 double recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start);
 
-int mutation_model_alloc(mutation_model_t *self, size_t num_alleles, char **alleles,
-    double *root_distribution, double *transition_matrix);
+int matrix_mutation_model_factory(mutation_model_t *self, int model);
+int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
+    char **alleles, double *root_distribution, double *transition_matrix);
+int slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
+    int64_t next_mutation_id, size_t block_size);
+int infinite_alleles_mutation_model_alloc(
+    mutation_model_t *self, uint64_t start_allele, tsk_flags_t options);
 int mutation_model_free(mutation_model_t *self);
-size_t mutation_model_get_num_alleles(mutation_model_t *self);
 void mutation_model_print_state(mutation_model_t *self, FILE *out);
-int mutation_model_factory(mutation_model_t *self, int model);
 
 int mutgen_alloc(mutgen_t *self, gsl_rng *rng, interval_map_t *rate_map,
     mutation_model_t *model, size_t mutation_block_size);

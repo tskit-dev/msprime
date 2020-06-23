@@ -28,6 +28,7 @@ import tskit
 import _msprime
 from . import core
 from . import provenance
+from _msprime import BaseMutationModel
 
 _ACGT_ALLELES = [b"A", b"C", b"G", b"T"]
 _AMINO_ACIDS = [
@@ -54,23 +55,30 @@ _AMINO_ACIDS = [
 ]
 
 
-class MutationModel(_msprime.MutationModel):
+# NOTE we're doing this hack of monkey-patching asdict onto the
+# MutationModel subclasses because of a bug in sphinx, where it's
+# not possible to have muliple inheritance with mocked out classes.
+def safe_asdict(self):
+    # This version of asdict makes sure that we have sufficient parameters
+    # to call the contructor and recreate the class. However, this means
+    # that subclasses *must* have an instance variable of the same name.
+    # This is essential for Provenance round-tripping to work.
+    return {
+        key: getattr(self, key)
+        for key in inspect.signature(self.__init__).parameters.keys()
+        if hasattr(self, key)
+    }
+
+
+# TODO Change this to MatrixMutationModel
+class MutationModel(_msprime.MatrixMutationModel):
     """
     Superclass of mutation models. Allows you to build your own mutation model.
 
     TODO document properly.
     """
 
-    def asdict(self):
-        # This version of asdict makes sure that we have sufficient parameters
-        # to call the contructor and recreate the class. However, this means
-        # that subclasses *must* have an instance variable of the same name.
-        # This is essential for Provenance round-tripping to work.
-        return {
-            key: getattr(self, key)
-            for key in inspect.signature(self.__init__).parameters.keys()
-            if hasattr(self, key)
-        }
+    asdict = safe_asdict
 
     def __str__(self):
         alleles = " ".join([x.decode() for x in self.alleles])
@@ -82,6 +90,14 @@ class MutationModel(_msprime.MutationModel):
         for row in self.transition_matrix:
             s += "     {}\n".format(" ".join(map(str, row)))
         return s
+
+
+class SlimMutationModel(_msprime.SlimMutationModel):
+    asdict = safe_asdict
+
+
+class InfiniteAllelesMutationModel(_msprime.InfiniteAllelesMutationModel):
+    asdict = safe_asdict
 
 
 class BinaryMutations(MutationModel):
@@ -839,7 +855,7 @@ def mutate(
 
     if model is None:
         model = BinaryMutations()
-    if not isinstance(model, MutationModel):
+    if not isinstance(model, BaseMutationModel):
         raise TypeError("model must be a MutationModel")
 
     argspec = inspect.getargvalues(inspect.currentframe())
