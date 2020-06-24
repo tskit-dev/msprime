@@ -1,6 +1,7 @@
 attrs
 codecov
 coverage
+daiquiri
 flake8
 mock
 nose
