@@ -678,7 +678,8 @@ class TestSimulationState(LowLevelTestCase):
                 self.assertEqual(avl_node_block_size, sim.avl_node_block_size)
                 self.assertEqual(node_mapping_block_size, sim.node_mapping_block_size)
                 # Run this for a tiny amount of time and check the state
-                self.assertFalse(sim.run(start_time + 2e-8))
+                ret = sim.run(start_time + 2e-8)
+                self.assertEqual(ret, _msprime.EXIT_MAX_TIME)
                 self.verify_running_simulation(sim)
             sim.reset()
 
@@ -750,12 +751,12 @@ class TestSimulationState(LowLevelTestCase):
         )
         for _ in range(3):
             # Run the sim for a tiny amount of time and check.
-            if not sim.run():
+            if sim.run(1e-9) != _msprime.EXIT_COALESCENCE:
                 self.verify_running_simulation(sim)
                 increment = 0.01
                 t = sim.time + increment
-                while not sim.run(t):
-                    self.assertLess(sim.time, t)
+                while sim.run(t) != _msprime.EXIT_COALESCENCE:
+                    self.assertLessEqual(sim.time, t)
                     self.verify_running_simulation(sim)
                     t += increment
             self.verify_completed_simulation(sim)
@@ -804,7 +805,7 @@ class TestSimulationState(LowLevelTestCase):
                 nodes.append(node)
         self.assertEqual(sorted(nodes), list(range(n)))
         events = 0
-        while not sim.run_event():
+        while sim.run(max_events=1) == _msprime.EXIT_MAX_EVENTS:
             events += 1
             total_events = (
                 sim.num_common_ancestor_events
@@ -812,6 +813,7 @@ class TestSimulationState(LowLevelTestCase):
                 + np.sum(sim.num_migration_events)
             )
             self.assertEqual(events, total_events)
+        self.verify_completed_simulation(sim)
 
     def test_demographic_events(self):
         rng = random.Random(11)
@@ -864,11 +866,11 @@ class TestSimulationState(LowLevelTestCase):
             self.assertEqual(next_event_time, t)
             self.assertTrue(np.array_equal(sim2.migration_matrix, migration_matrix))
             dt = 1e-10
-            completed = sim.run(t + dt)
+            status = sim.run(t + dt)
             for j in range(N):
                 s = sim2.compute_population_size(j, t)
                 self.assertGreater(s, 0)
-            self.assertFalse(completed)
+            self.assertEqual(status, _msprime.EXIT_MAX_TIME)
             self.assertEqual(sim.time, t + dt)
             if event_type == "migration_rate_change":
                 source = event["source"]
@@ -923,6 +925,31 @@ class TestSimulator(LowLevelTestCase):
     """
     Tests for the low-level interface to the simulator.
     """
+
+    def test_run(self):
+        sim = _msprime.Simulator(
+            get_samples(10),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(),
+        )
+        status = sim.run()
+        self.assertEqual(status, _msprime.EXIT_COALESCENCE)
+
+        sim.reset()
+        for bad_type in ["sdf", [], {}]:
+            with self.assertRaises(TypeError):
+                sim.run(end_time=bad_type)
+            with self.assertRaises(TypeError):
+                sim.run(max_events=bad_type)
+
+        with self.assertRaises(ValueError):
+            sim.run(end_time=-1)
+        with self.assertRaises(ValueError):
+            sim.run(max_events=0)
+        self.assertEqual(sim.time, 0)
+        sim.run(max_events=1)
+        self.assertGreater(sim.time, 0)
 
     def test_bad_parameters(self):
         rng = _msprime.RandomGenerator(1)
@@ -1274,13 +1301,13 @@ class TestSimulator(LowLevelTestCase):
             _msprime.LightweightTableCollection(),
             num_labels=2,
         )
-        done = sim.run()
-        self.assertTrue(done)
+        status = sim.run()
+        self.assertEqual(status, _msprime.EXIT_COALESCENCE)
         t_before = sim.time
         for _ in range(100):
             model = get_sweep_genic_selection_model(position=5)
             sim.model = model
-            self.assertTrue(sim.run())
+            self.assertEqual(sim.run(), _msprime.EXIT_COALESCENCE)
             self.assertEqual(t_before, sim.time)
 
     def test_store_migrations(self):

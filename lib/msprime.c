@@ -3710,7 +3710,7 @@ out:
  * interrupts, so that long-running simulations can be killed using CTRL-C.
  *
  * Returns:
- * 0 if the simulation completed to coalescence
+ * MSP_EXIT_COALESCENCE if the simulation completed to coalescence
  * MSP_EXIT_MAX_EVENTS if the simulation stopped because the maximum number
  *    of events was reached.
  * MSP_EXIT_MAX_TIME if the simulation stopped because the maximum time would
@@ -4255,7 +4255,7 @@ out:
 /* The main event loop for the Wright Fisher model.
  *
  * Returns:
- * 0 if the simulation completed to coalescence
+ * MSP_EXIT_COALESCENCE if the simulation completed to coalescence
  * MSP_EXIT_MAX_EVENTS if the simulation stopped because the maximum number
  *    of events was reached.
  * MSP_EXIT_MAX_TIME if the simulation stopped because the maximum time would
