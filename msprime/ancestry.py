@@ -724,7 +724,6 @@ class Simulator(_msprime.Simulator):
             )
             ll_pedigree = pedigree.get_ll_representation()
         ll_simulation_model = model.get_ll_representation()
-        logger.debug("Setting initial model %s", ll_simulation_model)
         ll_population_configuration = [pop.asdict() for pop in demography.populations]
         ll_demographic_events = [
             event.get_ll_representation() for event in demography.events
@@ -836,7 +835,21 @@ class Simulator(_msprime.Simulator):
                 num_labels = 2
         return num_labels
 
-    def run(self, end_time=None):
+    def _run_until(self, end_time, event_chunk=None):
+        # This is a pretty big default event chunk so that we don't spend
+        # too much time going back and forth into Python. We could imagine
+        # doing something a bit more sophisticated where we try to tune the
+        # number of events so that we end up with roughly 10 second slices
+        # (say).
+        if event_chunk is None:
+            event_chunk = 10 ** 4
+        if event_chunk <= 0:
+            raise ValueError("Must have at least 1 event per chunk")
+        logger.info("Running model %s until max time: %f", self.model, end_time)
+        while super().run(end_time, event_chunk) == _msprime.EXIT_MAX_EVENTS:
+            logger.debug("time=%g ancestors=%d", self.time, self.num_ancestors)
+
+    def run(self, end_time=None, event_chunk=None):
         """
         Runs the simulation until complete coalescence has occurred.
         """
@@ -857,15 +870,18 @@ class Simulator(_msprime.Simulator):
                     "Model start times out of order or not computed correctly. "
                     f"current time = {current_time}; start_time = {model_start_time}"
                 )
-            logger.debug("Running simulation until maximum: %f", model_start_time)
-            super().run(model_start_time)
+            self._run_until(model_start_time, event_chunk)
             ll_new_model = event.model.get_ll_representation()
-            logger.debug("Changing to model %s", ll_new_model)
             self.model = ll_new_model
         end_time = np.inf if end_time is None else end_time
-        logger.debug("Running simulation until maximum: %f", end_time)
-        super().run(end_time)
+        self._run_until(end_time, event_chunk)
         self.finalise_tables()
+        logger.info(
+            "Completed at time=%g nodes=%d edges=%d",
+            self.time,
+            self.num_nodes,
+            self.num_edges,
+        )
 
     def get_tree_sequence(self, mutation_generator=None, provenance_record=None):
         """

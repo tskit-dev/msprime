@@ -21,6 +21,7 @@ Test cases for basic ancestry simulation operations.
 """
 import datetime
 import json
+import logging
 import os
 import random
 import tempfile
@@ -195,6 +196,50 @@ class TestSimulator(unittest.TestCase):
         self.assertGreater(sim.avl_node_block_size, 0)
         self.assertGreater(sim.segment_block_size, 0)
         self.assertGreater(sim.node_mapping_block_size, 0)
+
+    def test_event_chunk(self):
+        sim = msprime.simulator_factory(10)
+        for bad_chunk in [-(2 ** 32), -1, 0]:
+            with self.assertRaises(ValueError):
+                sim.run(event_chunk=bad_chunk)
+        sim.reset()
+        sim.run(event_chunk=2 ** 32 + 1)
+        sim.reset()
+        sim.run(event_chunk=2 ** 64 + 1)
+
+    def test_info_logging(self):
+        sim = msprime.simulator_factory(10)
+        with self.assertLogs("msprime.ancestry", logging.INFO) as log:
+            sim.run()
+            self.assertEqual(len(log.output), 2)
+            self.assertEqual(
+                log.output[0],
+                (
+                    "INFO:msprime.ancestry:Running model {'name': 'hudson'} "
+                    "until max time: inf"
+                ),
+            )
+            self.assertTrue(
+                log.output[1].startswith("INFO:msprime.ancestry:Completed at time")
+            )
+
+    def test_debug_logging(self):
+        sim = msprime.simulator_factory(3)
+        with self.assertLogs("msprime.ancestry", logging.DEBUG) as log:
+            sim.run(event_chunk=1)
+            self.assertEqual(len(log.output), 3)
+            self.assertTrue(log.output[0].startswith("INFO"))
+            self.assertTrue(log.output[-1].startswith("INFO"))
+            self.assertTrue(log.output[1].startswith("DEBUG:msprime.ancestry:time="))
+
+    def test_debug_logging_dtwf(self):
+        sim = msprime.simulator_factory(3, Ne=10, model="dtwf")
+        with self.assertLogs("msprime.ancestry", logging.DEBUG) as log:
+            sim.run(event_chunk=1)
+            self.assertGreaterEqual(len(log.output), 3)
+            self.assertTrue(log.output[0].startswith("INFO"))
+            self.assertTrue(log.output[-1].startswith("INFO"))
+            self.assertTrue(log.output[1].startswith("DEBUG:msprime.ancestry:time="))
 
 
 class TestDemographyFactory(unittest.TestCase):

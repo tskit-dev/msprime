@@ -18,6 +18,10 @@
 - Much better simulation performance for models with large numbers
   of populations (:user:`jeromekelleher`, :pr:`1069`).
 
+- Details of the simulation are written to the DEBUG log periodically.
+  This can help debug long-running simulations. (:user:`jeromekelleher`,
+  :pr:`1080`).
+
 **Breaking changes**:
 
 - The class form for specifying models (e.g., ``msprime.StandardCoalescent()``)

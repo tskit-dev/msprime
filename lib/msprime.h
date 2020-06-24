@@ -42,6 +42,7 @@
 
 /* Exit codes from msp_run to distinguish different reasons for exiting
  * before coalescence. */
+#define MSP_EXIT_COALESCENCE 0
 #define MSP_EXIT_MAX_EVENTS 1
 #define MSP_EXIT_MAX_TIME 2
 

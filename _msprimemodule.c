@@ -4182,65 +4182,38 @@ Simulator_get_tables(Simulator *self, void *closure)
 }
 
 static PyObject *
-Simulator_run(Simulator *self, PyObject *args)
+Simulator_run(Simulator *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
-    int status, not_done, coalesced;
-    uint64_t chunk = 1024;
+    static char *kwlist[] = {"end_time", "max_events", NULL};
+    int status;
+    unsigned long max_events = UINT32_MAX;
     double end_time = DBL_MAX;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "|d", &end_time)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|dk", kwlist,
+                &end_time, &max_events)) {
         goto out;
     }
     if (end_time < 0) {
         PyErr_SetString(PyExc_ValueError, "end_time must be > 0");
         goto out;
     }
-
-    not_done = 1;
-    while (not_done) {
-        Py_BEGIN_ALLOW_THREADS
-        status = msp_run(self->sim, end_time, chunk);
-        Py_END_ALLOW_THREADS
-        if (status < 0) {
-            handle_library_error(status);
-            goto out;
-        }
-        not_done = status == MSP_EXIT_MAX_EVENTS;
-        if (PyErr_CheckSignals() < 0) {
-            goto out;
-        }
-    }
-    coalesced = status == 0;
-    /* return True if complete coalescence has occured */
-    ret = coalesced ? Py_True : Py_False;
-
-    Py_INCREF(ret);
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_run_event(Simulator *self)
-{
-    PyObject *ret = NULL;
-    int status, coalesced;
-
-    if (Simulator_check_sim(self) != 0) {
+    if (max_events == 0) {
+        PyErr_SetString(PyExc_ValueError, "max_events must be > 0");
         goto out;
     }
-    status = msp_run(self->sim, DBL_MAX, 1);
+
+    Py_BEGIN_ALLOW_THREADS
+    status = msp_run(self->sim, end_time, max_events);
+    Py_END_ALLOW_THREADS
     if (status < 0) {
         handle_library_error(status);
         goto out;
     }
-    coalesced = status == 0;
-    /* return True if complete coalescence has occured */
-    ret = coalesced ? Py_True : Py_False;
-    Py_INCREF(ret);
+    ret = Py_BuildValue("i", status);
 out:
     return ret;
 }
@@ -4325,23 +4298,102 @@ out:
     return ret;
 }
 
+static FILE *
+make_file(PyObject *fileobj, const char *mode)
+{
+    FILE *ret = NULL;
+    FILE *file = NULL;
+    int fileobj_fd, new_fd;
+
+    fileobj_fd = PyObject_AsFileDescriptor(fileobj);
+    if (fileobj_fd == -1) {
+        goto out;
+    }
+    new_fd = dup(fileobj_fd);
+    if (new_fd == -1) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        goto out;
+    }
+    file = fdopen(new_fd, mode);
+    if (file == NULL) {
+        (void) close(new_fd);
+        PyErr_SetFromErrno(PyExc_OSError);
+        goto out;
+    }
+    ret = file;
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_print_state(Simulator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    PyObject *fileobj;
+    FILE *file = NULL;;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O", &fileobj)) {
+        goto out;
+    }
+    file = make_file(fileobj, "w");
+    if (file == NULL) {
+        goto out;
+    }
+    msp_print_state(self->sim, file);
+    ret = Py_BuildValue("");
+out:
+    if (file != NULL) {
+        (void) fclose(file);
+    }
+    return ret;
+}
+
+static PyObject *
+Simulator_verify(Simulator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    int verify_breakpoints = 0;
+    tsk_flags_t options = 0;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "|i", &verify_breakpoints)) {
+        goto out;
+    }
+    if (verify_breakpoints) {
+        options |= MSP_VERIFY_BREAKPOINTS;
+    }
+    msp_verify(self->sim, options);
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
 
 static PyMethodDef Simulator_methods[] = {
-    {"run", (PyCFunction) Simulator_run, METH_VARARGS,
+    {"run", (PyCFunction) Simulator_run, METH_VARARGS|METH_KEYWORDS,
             "Simulates until at most the specified time. Returns True "
             "if sample has coalesced and False otherwise." },
     {"reset", (PyCFunction) Simulator_reset, METH_NOARGS,
             "Resets the simulation so it's ready for another replicate."},
     {"finalise_tables", (PyCFunction) Simulator_finalise_tables, METH_NOARGS,
             "Finalises the tables so they're ready for export."},
-    {"run_event", (PyCFunction) Simulator_run_event, METH_NOARGS,
-            "Simulates exactly one event. Returns True "
-            "if sample has coalesced and False otherwise." },
     {"debug_demography", (PyCFunction) Simulator_debug_demography, METH_NOARGS,
             "Runs the state of the simulator forward for one demographic event."},
     {"compute_population_size",
             (PyCFunction) Simulator_compute_population_size, METH_VARARGS,
             "Computes the size of a population at a given time. Debug method."},
+    {"print_state",
+            (PyCFunction) Simulator_print_state, METH_VARARGS,
+            "Prints out the state of the low-level simulator. Debug method."},
+    {"verify",
+            (PyCFunction) Simulator_verify, METH_VARARGS,
+            "Runs low-level integrity checks on the simulator's internal state."
+            "This is a *debugging method only* and can result in assertions"
+            "failing."},
     {NULL}  /* Sentinel */
 };
 
@@ -4649,6 +4701,10 @@ PyInit__msprime(void)
     PyModule_AddIntConstant(module, "NODE_IS_RE_EVENT", MSP_NODE_IS_RE_EVENT);
     PyModule_AddIntConstant(module, "NODE_IS_MIG_EVENT", MSP_NODE_IS_MIG_EVENT);
     PyModule_AddIntConstant(module, "NODE_IS_CEN_EVENT", MSP_NODE_IS_CEN_EVENT);
+
+    PyModule_AddIntConstant(module, "EXIT_COALESCENCE", MSP_EXIT_COALESCENCE);
+    PyModule_AddIntConstant(module, "EXIT_MAX_EVENTS", MSP_EXIT_MAX_EVENTS);
+    PyModule_AddIntConstant(module, "EXIT_MAX_TIME", MSP_EXIT_MAX_TIME);
 
     /* The function unset_gsl_error_handler should be called at import time,
      * ensuring we capture the value of the handler. However, just in case

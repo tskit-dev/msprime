@@ -23,6 +23,7 @@ import contextlib
 import io
 import sys
 import unittest
+from unittest import mock
 
 import stdpopsim
 
@@ -83,3 +84,11 @@ class TestDocumentationExamples(unittest.TestCase):
         self.assertEqual(len(output), 2)
         self.assertTrue(output[0].startswith("Observed"))
         self.assertTrue(output[1].startswith("Predicted"))
+
+    def test_logging_info(self):
+        with mock.patch("daiquiri.setup"):
+            examples.logging_info_example()
+
+    def test_logging_debug(self):
+        with mock.patch("daiquiri.setup"):
+            examples.logging_debug_example()

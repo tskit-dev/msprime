@@ -24,10 +24,8 @@ build_script:
   - cmd: SET MSP_CONDA_PREFIX=%PYTHON%\envs\testenv
 
   - cmd: python setup.py build_ext --inplace
-  - cmd: python -m pip install newick
-  - cmd: python -m pip install python_jsonschema_objects
-  - cmd: python -m pip install stdpopsim  # TODO add to conda-minimal when 0.1.2 is on conda-forge
-  - cmd: python -m nose
+  - cmd: python -m pip install -r requirements\tests-pypi.txt
+  - cmd: python -m nose -vs
 
 after_test:
   - cmd: python setup.py bdist_wheel
