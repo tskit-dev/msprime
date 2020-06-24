@@ -4298,6 +4298,80 @@ out:
     return ret;
 }
 
+static FILE *
+make_file(PyObject *fileobj, const char *mode)
+{
+    FILE *ret = NULL;
+    FILE *file = NULL;
+    int fileobj_fd, new_fd;
+
+    fileobj_fd = PyObject_AsFileDescriptor(fileobj);
+    if (fileobj_fd == -1) {
+        goto out;
+    }
+    new_fd = dup(fileobj_fd);
+    if (new_fd == -1) {
+        PyErr_SetFromErrno(PyExc_OSError);
+        goto out;
+    }
+    file = fdopen(new_fd, mode);
+    if (file == NULL) {
+        (void) close(new_fd);
+        PyErr_SetFromErrno(PyExc_OSError);
+        goto out;
+    }
+    ret = file;
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_print_state(Simulator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    PyObject *fileobj;
+    FILE *file = NULL;;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "O", &fileobj)) {
+        goto out;
+    }
+    file = make_file(fileobj, "w");
+    if (file == NULL) {
+        goto out;
+    }
+    msp_print_state(self->sim, file);
+    ret = Py_BuildValue("");
+out:
+    if (file != NULL) {
+        (void) fclose(file);
+    }
+    return ret;
+}
+
+static PyObject *
+Simulator_verify(Simulator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    int verify_breakpoints = 0;
+    tsk_flags_t options = 0;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "|i", &verify_breakpoints)) {
+        goto out;
+    }
+    if (verify_breakpoints) {
+        options |= MSP_VERIFY_BREAKPOINTS;
+    }
+    msp_verify(self->sim, options);
+    ret = Py_BuildValue("");
+out:
+    return ret;
+}
 
 static PyMethodDef Simulator_methods[] = {
     {"run", (PyCFunction) Simulator_run, METH_VARARGS|METH_KEYWORDS,
@@ -4312,6 +4386,14 @@ static PyMethodDef Simulator_methods[] = {
     {"compute_population_size",
             (PyCFunction) Simulator_compute_population_size, METH_VARARGS,
             "Computes the size of a population at a given time. Debug method."},
+    {"print_state",
+            (PyCFunction) Simulator_print_state, METH_VARARGS,
+            "Prints out the state of the low-level simulator. Debug method."},
+    {"verify",
+            (PyCFunction) Simulator_verify, METH_VARARGS,
+            "Runs low-level integrity checks on the simulator's internal state."
+            "This is a *debugging method only* and can result in assertions"
+            "failing."},
     {NULL}  /* Sentinel */
 };
 

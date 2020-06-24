@@ -202,8 +202,6 @@ class TestSimulator(unittest.TestCase):
         for bad_chunk in [-(2 ** 32), -1, 0]:
             with self.assertRaises(ValueError):
                 sim.run(event_chunk=bad_chunk)
-        # Make sure we still run for large values
-        sim.run(event_chunk=2 ** 32)
         sim.reset()
         sim.run(event_chunk=2 ** 32 + 1)
         sim.reset()

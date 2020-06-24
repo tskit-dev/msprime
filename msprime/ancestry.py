@@ -847,9 +847,7 @@ class Simulator(_msprime.Simulator):
             raise ValueError("Must have at least 1 event per chunk")
         logger.info("Running model %s until max time: %f", self.model, end_time)
         while super().run(end_time, event_chunk) == _msprime.EXIT_MAX_EVENTS:
-            logger.debug(
-                "time=%g ancestors=%d", self.time, self.num_ancestors,
-            )
+            logger.debug("time=%g ancestors=%d", self.time, self.num_ancestors)
 
     def run(self, end_time=None, event_chunk=None):
         """

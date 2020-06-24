@@ -21,9 +21,13 @@ Test cases for the low level C interface to msprime.
 """
 import collections
 import heapq
+import io
 import itertools
 import math
+import pathlib
+import platform
 import random
+import tempfile
 import unittest
 
 import _tskit
@@ -35,6 +39,8 @@ import tests
 
 # Root node marker
 NULL_NODE = -1
+
+IS_WINDOWS = platform.system() == "Windows"
 
 
 def uniform_recombination_map(L=1, rate=0, discrete=True):
@@ -474,6 +480,7 @@ class TestSimulationState(LowLevelTestCase):
             self.assertGreaterEqual(
                 sim.num_migrations, np.sum(sim.num_migration_events)
             )
+        sim.verify(True)
 
     def verify_trees_equal(self, n, pi, sparse_tree):
         """
@@ -950,6 +957,52 @@ class TestSimulator(LowLevelTestCase):
         self.assertEqual(sim.time, 0)
         sim.run(max_events=1)
         self.assertGreater(sim.time, 0)
+
+    def test_print_state(self):
+        sim = _msprime.Simulator(
+            get_samples(10),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(),
+        )
+        with tempfile.TemporaryFile("w+") as f:
+            sim.print_state(f)
+            f.seek(0)
+            output = f.read()
+        self.assertGreater(len(output), 0)
+        self.assertTrue(output.startswith("simulation model"))
+
+    def test_verify(self):
+        sim = _msprime.Simulator(
+            get_samples(10),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(),
+        )
+        sim.verify()
+        with self.assertRaises(TypeError):
+            sim.verify("asdg")
+
+    @unittest.skipIf(IS_WINDOWS, "windows IO is weird")
+    def test_print_state_errors(self):
+        sim = _msprime.Simulator(
+            get_samples(10),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(),
+        )
+        with self.assertRaises(TypeError):
+            sim.print_state()
+        with self.assertRaises(io.UnsupportedOperation):
+            sim.print_state(io.StringIO())
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = pathlib.Path(tmpdir) / "testfile"
+            # Write something into the file
+            with open(path, "w") as f:
+                print("something", file=f)
+            with open(path) as f:
+                with self.assertRaises(OSError):
+                    sim.print_state(f)
 
     def test_bad_parameters(self):
         rng = _msprime.RandomGenerator(1)
