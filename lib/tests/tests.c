@@ -83,23 +83,24 @@ static void
 test_fenwick(void)
 {
     fenwick_t t;
-    int64_t s;
+    double s;
     size_t j, n;
+
     for (n = 1; n < 100; n++) {
         s = 0;
         CU_ASSERT(fenwick_alloc(&t, n) == 0);
         for (j = 1; j <= n; j++) {
-            fenwick_increment(&t, j, (int64_t) j);
-            s = s + (int64_t) j;
-            CU_ASSERT(fenwick_get_value(&t, j) == (int64_t) j);
+            fenwick_increment(&t, j, j);
+            s = s + j;
+            CU_ASSERT(fenwick_get_value(&t, j) == j);
             CU_ASSERT(fenwick_get_cumulative_sum(&t, j) == s);
             CU_ASSERT(fenwick_get_total(&t) == s);
             CU_ASSERT(fenwick_find(&t, s) == j);
             fenwick_set_value(&t, j, 0);
             CU_ASSERT(fenwick_get_value(&t, j) == 0);
-            CU_ASSERT(fenwick_get_cumulative_sum(&t, j) == s - (int64_t) j);
-            fenwick_set_value(&t, j, (int64_t) j);
-            CU_ASSERT(fenwick_get_value(&t, j) == (int64_t) j);
+            CU_ASSERT(fenwick_get_cumulative_sum(&t, j) == s - j);
+            fenwick_set_value(&t, j, j);
+            CU_ASSERT(fenwick_get_value(&t, j) == j);
             /* Just make sure that we're seeing the same values even when
              * we expand.
              */
@@ -130,12 +131,59 @@ test_fenwick_expand(void)
         CU_ASSERT(t1.size != t2.size);
         CU_ASSERT(fenwick_expand(&t1, 2 * n) == 0);
         CU_ASSERT_EQUAL(t1.size, t2.size);
-        CU_ASSERT_EQUAL(memcmp(t1.tree, t2.tree, (t2.size + 1) * sizeof(int64_t)), 0);
+        CU_ASSERT_EQUAL(memcmp(t1.tree, t2.tree, (t2.size + 1) * sizeof(*t1.tree)), 0);
         CU_ASSERT_EQUAL(
-            memcmp(t1.values, t2.values, (t2.size + 1) * sizeof(int64_t)), 0);
+            memcmp(t1.values, t2.values, (t2.size + 1) * sizeof(*t2.values)), 0);
         CU_ASSERT(fenwick_free(&t1) == 0);
         CU_ASSERT(fenwick_free(&t2) == 0);
     }
+}
+
+static void
+test_fenwick_zero_values(void)
+{
+    fenwick_t t;
+    size_t n = 10;
+    size_t j;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    CU_ASSERT_FATAL(rng != 0);
+    gsl_rng_set(rng, 42);
+    CU_ASSERT(fenwick_alloc(&t, n) == 0);
+
+    /* Adding in lots of small values is fine, and we can recover these
+     * to a high degree of precision */
+    for (j = 0; j < 1000; j++) {
+        fenwick_set_value(&t, j % n + 1, gsl_ran_flat(rng, 0, 1e-12));
+        fenwick_verify(&t, 1e-9);
+    }
+    fenwick_print_state(&t, _devnull);
+
+    /* Set everything before 4 to zero */
+    fenwick_set_value(&t, 1, 0);
+    fenwick_set_value(&t, 2, 0);
+    fenwick_set_value(&t, 3, 0);
+    fenwick_set_value(&t, 4, 0);
+    /* Because of numerical precision issues, the internal node 4 will not
+     * compute to *exactly* zero in the tree. */
+    CU_ASSERT_FATAL(t.tree[4] > 0);
+
+    /* 5 is the first non-zero node in the tree, so any values smaller
+     * than this should search to it. */
+    CU_ASSERT_EQUAL(fenwick_find(&t, t.values[5]), 5);
+    CU_ASSERT_EQUAL(fenwick_find(&t, DBL_EPSILON), 5);
+    CU_ASSERT_EQUAL(fenwick_find(&t, DBL_MIN), 5);
+    CU_ASSERT_EQUAL(fenwick_find(&t, 0), 5);
+
+    /* Set the remaining values to zero and search */
+    for (j = 5; j <= n; j++) {
+        fenwick_set_value(&t, j, 0);
+    }
+    CU_ASSERT_EQUAL(fenwick_find(&t, 1), n + 1);
+    CU_ASSERT_EQUAL(fenwick_find(&t, 0), n + 1);
+
+    fenwick_free(&t);
+    gsl_rng_free(rng);
 }
 
 static void
@@ -1887,7 +1935,7 @@ static void
 test_multi_locus_bottleneck_arg(void)
 {
     int ret;
-    uint32_t n = 100;
+    uint32_t n = 2;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
@@ -1922,6 +1970,60 @@ test_multi_locus_bottleneck_arg(void)
     free(msp);
     free(samples);
     recomb_map_free(&recomb_map);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_floating_point_extremes(void)
+{
+    int ret;
+    uint32_t n = 2;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    recomb_map_t recomb_map;
+    tsk_table_collection_t tables;
+    double denormal_min = pow(2, -52) * pow(2, -1022);
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = recomb_map_alloc_uniform(&recomb_map, denormal_min, DBL_MAX, false);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(msp, 0, DBL_MAX, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BREAKPOINT_RESAMPLE_OVERFLOW);
+    msp_print_state(msp, _devnull);
+    recomb_map_free(&recomb_map);
+    msp_free(msp);
+
+    tsk_table_collection_clear(&tables);
+    /* A long sequence length and high recombination should overflow */
+    ret = recomb_map_alloc_uniform(&recomb_map, DBL_MAX, DBL_MAX, false);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_print_state(msp, _devnull);
+    ret = msp_run(msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BREAKPOINT_MASS_NON_FINITE);
+    msp_free(msp);
+    recomb_map_free(&recomb_map);
+
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
     tsk_table_collection_free(&tables);
 }
 
@@ -3471,6 +3573,18 @@ test_recomb_map_errors(void)
     positions[0] = 0.0;
 
     rates[0] = -1;
+    ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
+    recomb_map_free(&recomb_map);
+    rates[0] = 1.0;
+
+    rates[0] = INFINITY;
+    ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
+    recomb_map_free(&recomb_map);
+    rates[0] = 1.0;
+
+    rates[0] = NAN;
     ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
     recomb_map_free(&recomb_map);
@@ -5665,6 +5779,7 @@ main(int argc, char **argv)
     CU_TestInfo tests[] = {
         { "test_fenwick", test_fenwick },
         { "test_fenwick_expand", test_fenwick_expand },
+        { "test_fenwick_zero_values", test_fenwick_zero_values },
         { "test_single_locus_two_populations", test_single_locus_two_populations },
         { "test_single_locus_many_populations", test_single_locus_many_populations },
         { "test_single_locus_historical_sample", test_single_locus_historical_sample },
@@ -5685,6 +5800,7 @@ main(int argc, char **argv)
         { "test_single_locus_simulation", test_single_locus_simulation },
         { "test_single_locus_gene_conversion", test_single_locus_gene_conversion },
         { "test_multi_locus_bottleneck_arg", test_multi_locus_bottleneck_arg },
+        { "test_floating_point_extremes", test_floating_point_extremes },
         { "test_mixed_model_simulation", test_mixed_model_simulation },
         { "test_dtwf_deterministic", test_dtwf_deterministic },
         { "test_dtwf_zero_pop_size", test_dtwf_zero_pop_size },

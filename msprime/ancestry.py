@@ -835,7 +835,7 @@ class Simulator(_msprime.Simulator):
                 num_labels = 2
         return num_labels
 
-    def _run_until(self, end_time, event_chunk=None):
+    def _run_until(self, end_time, event_chunk=None, debug_func=None):
         # This is a pretty big default event chunk so that we don't spend
         # too much time going back and forth into Python. We could imagine
         # doing something a bit more sophisticated where we try to tune the
@@ -848,8 +848,10 @@ class Simulator(_msprime.Simulator):
         logger.info("Running model %s until max time: %f", self.model, end_time)
         while super().run(end_time, event_chunk) == _msprime.EXIT_MAX_EVENTS:
             logger.debug("time=%g ancestors=%d", self.time, self.num_ancestors)
+            if debug_func is not None:
+                debug_func(self)
 
-    def run(self, end_time=None, event_chunk=None):
+    def run(self, end_time=None, event_chunk=None, debug_func=None):
         """
         Runs the simulation until complete coalescence has occurred.
         """
@@ -870,11 +872,11 @@ class Simulator(_msprime.Simulator):
                     "Model start times out of order or not computed correctly. "
                     f"current time = {current_time}; start_time = {model_start_time}"
                 )
-            self._run_until(model_start_time, event_chunk)
+            self._run_until(model_start_time, event_chunk, debug_func)
             ll_new_model = event.model.get_ll_representation()
             self.model = ll_new_model
         end_time = np.inf if end_time is None else end_time
-        self._run_until(end_time, event_chunk)
+        self._run_until(end_time, event_chunk, debug_func)
         self.finalise_tables()
         logger.info(
             "Completed at time=%g nodes=%d edges=%d",

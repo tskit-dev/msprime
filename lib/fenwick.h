@@ -30,6 +30,8 @@ typedef struct {
     double *values;
 } fenwick_t;
 
+void fenwick_print_state(fenwick_t *self, FILE *out);
+void fenwick_verify(fenwick_t *self, double eps);
 int fenwick_alloc(fenwick_t *, size_t);
 int fenwick_expand(fenwick_t *, size_t);
 int fenwick_free(fenwick_t *);

@@ -33,6 +33,8 @@
 #else
 #define MSP_WARN_UNUSED
 #define MSP_UNUSED(x) MSP_UNUSED_##x
+/* Don't bother with restrict for MSVC */
+#define restrict
 #endif
 
 /* clang-format off */
@@ -94,6 +96,8 @@
 #define MSP_ERR_BAD_TRANSITION_MATRIX                               -55
 #define MSP_ERR_BAD_SLIM_PARAMETERS                                 -57
 #define MSP_ERR_MUTATION_ID_OVERFLOW                                -58
+#define MSP_ERR_BREAKPOINT_MASS_NON_FINITE                          -59
+#define MSP_ERR_BREAKPOINT_RESAMPLE_OVERFLOW                        -60
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */
