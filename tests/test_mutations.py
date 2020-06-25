@@ -106,7 +106,7 @@ class TestMatrixMutationModel(unittest.TestCase):
         self.assertTrue(np.allclose(list(x), list(model.root_distribution)))
 
     def validate_asdict(self, model):
-        m = msprime.MutationModel(**model.asdict())
+        m = msprime.MatrixMutationModel(**model.asdict())
         self.assertEqual(model, m)
 
     def test_bad_alleles(self):
@@ -118,7 +118,7 @@ class TestMatrixMutationModel(unittest.TestCase):
             (["a"], _msprime.LibraryError),
         ]:
             with self.assertRaises(err):
-                msprime.MutationModel(
+                msprime.MatrixMutationModel(
                     alleles=alleles,
                     root_distribution=[1] + [0] * (len(alleles) - 1),
                     transition_matrix=[[1 / len(alleles)] * len(alleles)]
@@ -138,7 +138,7 @@ class TestMatrixMutationModel(unittest.TestCase):
             ([0.5, 0, 0], _msprime.LibraryError),
         ]:
             with self.assertRaises(err):
-                msprime.MutationModel(
+                msprime.MatrixMutationModel(
                     alleles=alleles,
                     root_distribution=root_distribution,
                     transition_matrix=transition_matrix,
@@ -157,7 +157,7 @@ class TestMatrixMutationModel(unittest.TestCase):
             ([[0.5, 0, 0]] * 3, _msprime.LibraryError),
         ]:
             with self.assertRaises(err):
-                msprime.MutationModel(
+                msprime.MatrixMutationModel(
                     alleles=alleles,
                     root_distribution=root_distribution,
                     transition_matrix=transition_matrix,
@@ -201,7 +201,9 @@ class TestMatrixMutationModel(unittest.TestCase):
         alleles = ["Alligator", "Camel", "Goat"]
         root_distribution = [0.5, 0.25, 0.25]
         transition_matrix = [[0.0, 0.5, 0.5], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0]]
-        model = msprime.MutationModel(alleles, root_distribution, transition_matrix)
+        model = msprime.MatrixMutationModel(
+            alleles, root_distribution, transition_matrix
+        )
         self.assertListEqual(model.alleles, alleles)
         self.assertListEqual(list(model.root_distribution), root_distribution)
         for a, b in zip(model.transition_matrix, transition_matrix):
@@ -249,7 +251,7 @@ class TestMutate(unittest.TestCase, MutateMixin):
     def test_unicode_alleles(self):
         alleles = ["🎄🌳", "💩" * 5]
         binary = msprime.BinaryMutations()
-        model = msprime.MutationModel(
+        model = msprime.MatrixMutationModel(
             alleles, binary.root_distribution, binary.transition_matrix
         )
         ts = msprime.simulate(8, random_seed=2)
@@ -456,7 +458,9 @@ class TestFiniteSites(TestMutate):
             transition_matrix = [[0.0, 1.0], [1.0, 0.0]]
         if root_distribution is None:
             root_distribution = [1.0, 0.0]
-        model = msprime.MutationModel(alleles, root_distribution, transition_matrix)
+        model = msprime.MatrixMutationModel(
+            alleles, root_distribution, transition_matrix
+        )
         return self.mutate(ts, model, rate=rate, keep=keep, discrete=discrete)
 
     def mutate_nucleotides(
@@ -473,8 +477,12 @@ class TestFiniteSites(TestMutate):
             transition_matrix = [[0.25] * 4] * 4
         if root_distribution is None:
             root_distribution = [0.25] * 4
-        model = msprime.MutationModel(alleles, root_distribution, transition_matrix)
-        model = msprime.MutationModel(alleles, root_distribution, transition_matrix)
+        model = msprime.MatrixMutationModel(
+            alleles, root_distribution, transition_matrix
+        )
+        model = msprime.MatrixMutationModel(
+            alleles, root_distribution, transition_matrix
+        )
         return self.mutate(ts, model, rate=rate, keep=keep, discrete=discrete)
 
     def test_alleles_binary(self):
@@ -1116,7 +1124,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         self.verify_model(model)
 
     def test_arbitrary_model(self):
-        model = msprime.MutationModel(
+        model = msprime.MatrixMutationModel(
             alleles=["abc", "", "x"],
             root_distribution=[0.8, 0.0, 0.2],
             transition_matrix=[[0.2, 0.4, 0.4], [0.1, 0.2, 0.7], [0.5, 0.3, 0.2]],
