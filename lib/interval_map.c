@@ -29,10 +29,10 @@ interval_map_print_state(interval_map_t *self, FILE *out)
     size_t j;
 
     fprintf(out, "interval_map (%p):: size = %d\n", (void *) self, (int) self->size);
-    fprintf(out, "\tsequence_length = %f\n", interval_map_get_sequence_length(self));
+    fprintf(out, "\tsequence_length = %.14g\n", interval_map_get_sequence_length(self));
     fprintf(out, "\tindex\tposition\tvalue\n");
     for (j = 0; j < self->size; j++) {
-        fprintf(out, "\t%d\t%f\t%f\n", (int) j, self->position[j], self->value[j]);
+        fprintf(out, "\t%d\t%.14g\t%.14g\n", (int) j, self->position[j], self->value[j]);
     }
 }
 
