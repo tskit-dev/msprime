@@ -184,14 +184,16 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutation_matrix_copy_alleles(mutation_matrix_t *self, char **alleles)
+mutation_matrix_copy_alleles(
+    mutation_matrix_t *self, char **alleles, size_t *allele_length)
 {
     int ret = 0;
-    size_t j, len;
+    size_t j;
+    tsk_size_t len;
 
     for (j = 0; j < self->num_alleles; j++) {
-        len = strlen(alleles[j]);
-        self->allele_length[j] = (tsk_size_t) len;
+        len = (tsk_size_t) allele_length[j];
+        self->allele_length[j] = len;
         self->alleles[j] = malloc(len);
         if (self->alleles[j] == NULL) {
             ret = MSP_ERR_NO_MEMORY;
@@ -537,7 +539,7 @@ infinite_alleles_free(mutation_model_t *self)
 
 int MSP_WARN_UNUSED
 matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles, char **alleles,
-    double *root_distribution, double *transition_matrix)
+    size_t *allele_lengths, double *root_distribution, double *transition_matrix)
 {
     int ret = 0;
     mutation_matrix_t *params = &self->params.mutation_matrix;
@@ -562,7 +564,7 @@ matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles, char **a
         num_alleles * sizeof(*root_distribution));
     memcpy(params->transition_matrix, transition_matrix,
         num_alleles * num_alleles * sizeof(*transition_matrix));
-    ret = mutation_matrix_copy_alleles(params, alleles);
+    ret = mutation_matrix_copy_alleles(params, alleles, allele_lengths);
     if (ret != 0) {
         goto out;
     }
@@ -613,7 +615,6 @@ slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
     if (ret != 0) {
         goto out;
     }
-
 out:
     return ret;
 }
@@ -637,8 +638,6 @@ infinite_alleles_mutation_model_alloc(
         goto out;
     }
     params->start_allele = start_allele;
-    /* if (options & MSP_INFINITE_ALLELES_INDEPENDENT_SITES) {gcc */
-    /* params->next_mutation_id = next_mutation_id; */
 out:
     return ret;
 }
@@ -696,16 +695,18 @@ int
 matrix_mutation_model_factory(mutation_model_t *self, int model)
 {
     int ret = MSP_ERR_GENERIC;
+    size_t lengths[] = { 1, 1, 1, 1 };
 
     /* We need to cast to uintptr_t * first to work around the annoying pedantry
      * about discarding const qualifiers. */
     if (model == 0) {
         ret = matrix_mutation_model_alloc(self, 2,
-            (char **) (uintptr_t *) binary_alleles, binary_model_root_distribution,
-            binary_model_transition_matrix);
+            (char **) (uintptr_t *) binary_alleles, lengths,
+            binary_model_root_distribution, binary_model_transition_matrix);
     } else if (model == 1) {
         ret = matrix_mutation_model_alloc(self, 4, (char **) (uintptr_t *) acgt_alleles,
-            jukes_cantor_model_root_distribution, jukes_cantor_model_transition_matrix);
+            lengths, jukes_cantor_model_root_distribution,
+            jukes_cantor_model_transition_matrix);
     }
     return ret;
 }

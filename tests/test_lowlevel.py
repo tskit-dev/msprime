@@ -56,11 +56,11 @@ def get_mutation_model(model=0):
     Returns a simple mutation model instance.
     """
     if model == 0:
-        alleles = [b"0", b"1"]
+        alleles = ["0", "1"]
         root_distribution = [1, 0]
         transition_matrix = [[0, 1], [1, 0]]
     elif model == 1:
-        alleles = [b"A", b"C", b"T", b"G"]
+        alleles = ["A", "C", "T", "G"]
         root_distribution = [0.25, 0.25, 0.25, 0.25]
         transition_matrix = np.zeros((4, 4))
         transition_matrix[:, 0] = 1
@@ -2410,7 +2410,7 @@ class TestMatrixMutationModel(unittest.TestCase):
             self.assertRaises(TypeError, _msprime.MatrixMutationModel, bad_type, [], [])
 
     def test_bad_matrix(self):
-        alleles = [b"0", b"1"]
+        alleles = ["0", "1"]
         dist = [1, 0]
         bad_matrixes = [
             [],
@@ -2428,7 +2428,7 @@ class TestMatrixMutationModel(unittest.TestCase):
 
     def test_bad_lengths(self):
         for num_alleles in [2, 4, 6]:
-            alleles = [str(j).encode() for j in range(num_alleles)]
+            alleles = [str(j) for j in range(num_alleles)]
             distribution = np.zeros(num_alleles)
             matrix = np.zeros((num_alleles, num_alleles))
             self.assertRaises(
@@ -2460,14 +2460,14 @@ class TestMatrixMutationModel(unittest.TestCase):
             )
 
     def test_bad_alleles(self):
-        for alleles in [["A", "B"], [b"0", b"1", "2"], [b"x", None]]:
+        for alleles in [[b"A", b"B"], ["0", "1", b"2"], [b"x", None]]:
             n = len(alleles)
             distribution = np.zeros(n)
             matrix = np.zeros((n, n))
             with self.assertRaises(TypeError):
                 _msprime.MatrixMutationModel(alleles, distribution, matrix)
 
-        for alleles in [[], [b"a"], [b"asdfsadg"]]:
+        for alleles in [[], ["a"], ["asdfsadg"]]:
             n = len(alleles)
             distribution = np.zeros(n)
             matrix = np.zeros((n, n))
@@ -2476,7 +2476,7 @@ class TestMatrixMutationModel(unittest.TestCase):
 
     def test_good_alleles(self):
         for n in range(2, 10):
-            alleles = [f"{j}".encode() for j in range(n)]
+            alleles = [f"{j}" for j in range(n)]
             dist = np.zeros(n)
             dist[0] = 1
             matrix = np.zeros((n, n))
@@ -2486,9 +2486,21 @@ class TestMatrixMutationModel(unittest.TestCase):
             self.assertTrue(np.array_equal(mm.root_distribution, dist))
             self.assertTrue(np.array_equal(mm.transition_matrix, matrix))
 
+    def test_unicode_alleles(self):
+        unicode_strings = ["á", "þ÷ý", "🌳", "🎄🌳"]
+        for allele in unicode_strings:
+            alleles = ["", allele]
+            dist = [1, 0]
+            matrix = np.zeros((2, 2))
+            matrix[:, 0] = 1
+            mm = _msprime.MatrixMutationModel(alleles, dist, matrix)
+            self.assertEqual(mm.alleles, alleles)
+            self.assertTrue(np.array_equal(mm.root_distribution, dist))
+            self.assertTrue(np.array_equal(mm.transition_matrix, matrix))
+
     def test_multichar_alleles(self):
         for n in range(2, 10):
-            alleles = [b"x" * j for j in range(n)]
+            alleles = ["x" * j for j in range(n)]
             dist = np.zeros(n)
             dist[:] = 1 / n
             matrix = np.zeros((n, n))
@@ -2499,7 +2511,7 @@ class TestMatrixMutationModel(unittest.TestCase):
             self.assertTrue(np.array_equal(mm.transition_matrix, matrix))
 
     def test_bad_probabilities(self):
-        alleles = [b"0", b"1"]
+        alleles = ["0", "1"]
         matrix = np.zeros((2, 2))
         matrix[:] = 0.5
         for bad_root in [[1, 1], [-1, 2], [0, 100]]:

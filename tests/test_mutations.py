@@ -87,7 +87,7 @@ class TestMutateProvenance(unittest.TestCase):
             self.assertEqual(record["parameters"]["keep"], keep)
 
 
-class TestMutationModel(unittest.TestCase):
+class TestMatrixMutationModel(unittest.TestCase):
     def validate_model(self, model):
         num_alleles = len(model.alleles)
         self.assertEqual(num_alleles, len(model.root_distribution))
@@ -112,11 +112,10 @@ class TestMutationModel(unittest.TestCase):
     def test_bad_alleles(self):
         for alleles, err in [
             (0, TypeError),
-            (b"xyz", TypeError),
-            (["0", "1"], TypeError),
+            ("xyz", TypeError),
             ([b"0", "1"], TypeError),
             ([1, 2, 3], TypeError),
-            ([b"a"], _msprime.LibraryError),
+            (["a"], _msprime.LibraryError),
         ]:
             with self.assertRaises(err):
                 msprime.MutationModel(
@@ -127,7 +126,7 @@ class TestMutationModel(unittest.TestCase):
                 )
 
     def test_bad_root_distribution(self):
-        alleles = [b"a", b"b", b"c"]
+        alleles = ["a", "b", "c"]
         transition_matrix = [[1 / len(alleles)] * len(alleles)] * len(alleles)
         for root_distribution, err in [
             ([1, 0], ValueError),
@@ -146,7 +145,7 @@ class TestMutationModel(unittest.TestCase):
                 )
 
     def test_bad_transition_matrix(self):
-        alleles = [b"a", b"b", b"c"]
+        alleles = ["a", "b", "c"]
         root_distribution = [0.5, 0.25, 0.25]
         for transition_matrix, err in [
             ([[1, 0]] * 3, ValueError),
@@ -199,7 +198,7 @@ class TestMutationModel(unittest.TestCase):
         self.validate_stationary(model)
 
     def test_new_model(self):
-        alleles = [b"Alligator", b"Camel", b"Goat"]
+        alleles = ["Alligator", "Camel", "Goat"]
         root_distribution = [0.5, 0.25, 0.25]
         transition_matrix = [[0.0, 0.5, 0.5], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0]]
         model = msprime.MutationModel(alleles, root_distribution, transition_matrix)
@@ -246,6 +245,21 @@ class TestMutate(unittest.TestCase, MutateMixin):
     """
     Tests the msprime.mutate function.
     """
+
+    def test_unicode_alleles(self):
+        alleles = ["🎄🌳", "💩" * 5]
+        binary = msprime.BinaryMutations()
+        model = msprime.MutationModel(
+            alleles, binary.root_distribution, binary.transition_matrix
+        )
+        ts = msprime.simulate(8, random_seed=2)
+        mts = msprime.mutate(ts, rate=2, random_seed=1, model=model)
+        self.assertGreater(mts.num_sites, 0)
+        for tree in mts.trees():
+            for site in tree.sites():
+                self.assertEqual(site.ancestral_state, alleles[0])
+                for mutation in site.mutations:
+                    self.assertEqual(mutation.derived_state, alleles[1])
 
     def test_zero_mutation_rate(self):
         ts = msprime.simulate(10, random_seed=1)
@@ -382,7 +396,7 @@ class TestFiniteSites(TestMutate):
         # that, if (not keep), has positive probability under the model
         if check_probs:
             assert model is not None
-            alleles = [x.decode() for x in model.alleles]
+            alleles = model.alleles
         for site in ts.sites():
             if not discrete:
                 self.assertEqual(len(site.mutations), 1)
@@ -437,7 +451,7 @@ class TestFiniteSites(TestMutate):
         transition_matrix=None,
         root_distribution=None,
     ):
-        alleles = [b"0", b"1"]
+        alleles = ["0", "1"]
         if transition_matrix is None:
             transition_matrix = [[0.0, 1.0], [1.0, 0.0]]
         if root_distribution is None:
@@ -454,7 +468,7 @@ class TestFiniteSites(TestMutate):
         transition_matrix=None,
         root_distribution=None,
     ):
-        alleles = [b"A", b"C", b"G", b"T"]
+        alleles = ["A", "C", "G", "T"]
         if transition_matrix is None:
             transition_matrix = [[0.25] * 4] * 4
         if root_distribution is None:
@@ -944,7 +958,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
                 self.verify_model_ts_general(ts, model, discrete, verify_roots, rate)
 
     def verify_model_ts(self, ts, model, discrete, verify_roots):
-        alleles = [a.decode() for a in model.alleles]
+        alleles = model.alleles
         num_alleles = len(alleles)
         roots = np.zeros((num_alleles,))
         transitions = np.zeros((num_alleles, num_alleles))
@@ -968,7 +982,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
             self.chisquare(row, sum(row) * p)
 
     def verify_model_ts_general(self, ts, model, discrete, verify_roots, mutation_rate):
-        alleles = [a.decode() for a in model.alleles]
+        alleles = model.alleles
         num_alleles = len(alleles)
         roots = np.zeros((num_alleles,))
 
@@ -1103,7 +1117,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
 
     def test_arbitrary_model(self):
         model = msprime.MutationModel(
-            alleles=[b"abc", b"", b"x"],
+            alleles=["abc", "", "x"],
             root_distribution=[0.8, 0.0, 0.2],
             transition_matrix=[[0.2, 0.4, 0.4], [0.1, 0.2, 0.7], [0.5, 0.3, 0.2]],
         )

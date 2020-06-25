@@ -4280,7 +4280,7 @@ class SeqGenTest(MutationTest):
         pos = [i for i in range(1, length + 1)]
         transition_matrix = model_dict[model]["model_id"].transition_matrix
         root_distribution = model_dict[model]["model_id"].root_distribution
-        alleles = [a.decode() for a in model_dict[model]["model_id"].alleles]
+        alleles = model_dict[model]["model_id"].alleles
         num_alleles = len(alleles)
         mutation_rate = 1e-4 if num_alleles == 4 else 1.5e-3
         Q = transition_matrix.copy()
@@ -4482,7 +4482,7 @@ class PyvolveTest(MutationTest):
         py_results = collections.defaultdict(list)
         ts_results = collections.defaultdict(list)
         pos = [i for i in range(1, length + 1)]
-        alleles = [a.decode() for a in model_dict[model]["model_id"].alleles]
+        alleles = model_dict[model]["model_id"].alleles
         num_alleles = len(alleles)
         mutation_rate = 1e-4 if num_alleles == 4 else 1.5e-3
         transition_matrix = model_dict[model]["model_id"].transition_matrix

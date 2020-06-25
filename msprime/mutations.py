@@ -30,28 +30,28 @@ from . import core
 from . import provenance
 from _msprime import BaseMutationModel
 
-_ACGT_ALLELES = [b"A", b"C", b"G", b"T"]
+_ACGT_ALLELES = ["A", "C", "G", "T"]
 _AMINO_ACIDS = [
-    b"A",
-    b"R",
-    b"N",
-    b"D",
-    b"C",
-    b"Q",
-    b"E",
-    b"G",
-    b"H",
-    b"I",
-    b"L",
-    b"K",
-    b"M",
-    b"F",
-    b"P",
-    b"S",
-    b"T",
-    b"W",
-    b"Y",
-    b"V",
+    "A",
+    "R",
+    "N",
+    "D",
+    "C",
+    "Q",
+    "E",
+    "G",
+    "H",
+    "I",
+    "L",
+    "K",
+    "M",
+    "F",
+    "P",
+    "S",
+    "T",
+    "W",
+    "Y",
+    "V",
 ]
 
 
@@ -81,8 +81,7 @@ class MutationModel(_msprime.MatrixMutationModel):
     asdict = safe_asdict
 
     def __str__(self):
-        alleles = " ".join([x.decode() for x in self.alleles])
-        s = f"Mutation model with alleles {alleles}\n"
+        s = f"Mutation model with alleles {self.alleles}\n"
         s += "  root distribution: {}\n".format(
             " ".join(map(str, self.root_distribution))
         )
@@ -108,10 +107,9 @@ class BinaryMutations(MutationModel):
     """
 
     def __init__(self):
-        alleles = [b"0", b"1"]
+        alleles = ["0", "1"]
         root_distribution = [1, 0]
         transition_matrix = [[0, 1], [1, 0]]
-        alleles = [b"0", b"1"]
         super().__init__(alleles, root_distribution, transition_matrix)
 
 

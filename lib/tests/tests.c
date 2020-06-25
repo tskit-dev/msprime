@@ -4697,13 +4697,15 @@ test_single_tree_mutgen_do_nothing_mutations(void)
     tsk_table_collection_t tables, copy;
     interval_map_t rate_map;
     mutation_model_t mut_model;
-    static const char *binary_alleles[] = { "0", "1" };
-    static double root_distribution[] = { 0.5, 0.5 };
-    static double transition_matrix[] = { 1.0, 0.0, 0.0, 1.0 };
+    size_t lengths[] = {1, 1};
+    const char *binary_alleles[] = { "0", "1" };
+    double root_distribution[] = { 0.5, 0.5 };
+    double transition_matrix[] = { 1.0, 0.0, 0.0, 1.0 };
 
     CU_ASSERT_FATAL(rng != NULL);
     ret = matrix_mutation_model_alloc(&mut_model, 2,
-        (char **) (uintptr_t *) binary_alleles, root_distribution, transition_matrix);
+        (char **) (uintptr_t *) binary_alleles, lengths,
+        root_distribution, transition_matrix);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = interval_map_alloc_single(&rate_map, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5434,17 +5436,18 @@ test_matrix_mutation_model_errors(void)
     int ret;
     mutation_model_t model;
     const char *alleles[] = { "A", "B" };
+    size_t lengths[] = {1, 1};
     double dist[] = { 0.5, 0.5 };
     double matrix[] = { 0, 1.0, 1.0, 0 };
 
-    ret = matrix_mutation_model_alloc(&model, 0, NULL, NULL, NULL);
+    ret = matrix_mutation_model_alloc(&model, 0, NULL, NULL, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_ALLELES);
     mutation_model_free(&model);
 
     /* Bad probability values */
     dist[0] = -1;
     ret = matrix_mutation_model_alloc(
-        &model, 2, (char **) (uintptr_t) alleles, dist, matrix);
+        &model, 2, (char **) (uintptr_t) alleles, lengths, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ROOT_PROBABILITIES);
     mutation_model_free(&model);
 
@@ -5452,41 +5455,41 @@ test_matrix_mutation_model_errors(void)
     dist[0] = -1;
     dist[1] = 2;
     ret = matrix_mutation_model_alloc(
-        &model, 2, (char **) (uintptr_t) alleles, dist, matrix);
+        &model, 2, (char **) (uintptr_t) alleles, lengths, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ROOT_PROBABILITIES);
     mutation_model_free(&model);
 
     dist[0] = 1.1;
     dist[1] = 0.5;
     ret = matrix_mutation_model_alloc(
-        &model, 2, (char **) (uintptr_t) alleles, dist, matrix);
+        &model, 2, (char **) (uintptr_t) alleles, lengths, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ROOT_PROBABILITIES);
     mutation_model_free(&model);
 
     /* Must sum to 1 */
     dist[0] = 0.9;
     ret = matrix_mutation_model_alloc(
-        &model, 2, (char **) (uintptr_t) alleles, dist, matrix);
+        &model, 2, (char **) (uintptr_t) alleles, lengths, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ROOT_PROBABILITIES);
     mutation_model_free(&model);
 
     dist[0] = 0.1;
     ret = matrix_mutation_model_alloc(
-        &model, 2, (char **) (uintptr_t) alleles, dist, matrix);
+        &model, 2, (char **) (uintptr_t) alleles, lengths, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ROOT_PROBABILITIES);
     mutation_model_free(&model);
 
     /* Make sure dist is still OK . */
     dist[0] = 0.5;
     ret = matrix_mutation_model_alloc(
-        &model, 2, (char **) (uintptr_t) alleles, dist, matrix);
+        &model, 2, (char **) (uintptr_t) alleles, lengths, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutation_model_free(&model);
 
     /* Matrix values must be probablilities */
     matrix[0] = -1;
     ret = matrix_mutation_model_alloc(
-        &model, 2, (char **) (uintptr_t) alleles, dist, matrix);
+        &model, 2, (char **) (uintptr_t) alleles, lengths, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRANSITION_MATRIX);
     mutation_model_free(&model);
 
@@ -5494,28 +5497,28 @@ test_matrix_mutation_model_errors(void)
     matrix[0] = -1;
     matrix[1] = 2;
     ret = matrix_mutation_model_alloc(
-        &model, 2, (char **) (uintptr_t) alleles, dist, matrix);
+        &model, 2, (char **) (uintptr_t) alleles, lengths, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRANSITION_MATRIX);
     mutation_model_free(&model);
 
     matrix[0] = 1.1;
     matrix[1] = 1.0;
     ret = matrix_mutation_model_alloc(
-        &model, 2, (char **) (uintptr_t) alleles, dist, matrix);
+        &model, 2, (char **) (uintptr_t) alleles, lengths, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRANSITION_MATRIX);
     mutation_model_free(&model);
 
     matrix[0] = 0.6;
     matrix[1] = 0.5;
     ret = matrix_mutation_model_alloc(
-        &model, 2, (char **) (uintptr_t) alleles, dist, matrix);
+        &model, 2, (char **) (uintptr_t) alleles, lengths, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRANSITION_MATRIX);
     mutation_model_free(&model);
 
     matrix[0] = 0.5;
     matrix[1] = 0.5;
     ret = matrix_mutation_model_alloc(
-        &model, 2, (char **) (uintptr_t) alleles, dist, matrix);
+        &model, 2, (char **) (uintptr_t) alleles, lengths, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutation_model_free(&model);
 }
@@ -5525,14 +5528,19 @@ test_matrix_mutation_model_properties(void)
 {
     int ret;
     mutation_model_t model;
-    const char *alleles[] = { "A", "B" };
+    const char *alleles[] = { "", "BBBBB" };
+    size_t lengths[] = {0, 5};
     double dist[] = { 0.5, 0.5 };
     double matrix[] = { 0, 1.0, 1.0, 0 };
 
     ret = matrix_mutation_model_alloc(
-        &model, 2, (char **) (uintptr_t) alleles, dist, matrix);
+        &model, 2, (char **) (uintptr_t) alleles, lengths, dist, matrix);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(model.params.mutation_matrix.num_alleles, 2);
+    CU_ASSERT_EQUAL_FATAL(model.params.mutation_matrix.allele_length[0], 0);
+    CU_ASSERT_EQUAL_FATAL(model.params.mutation_matrix.allele_length[1], 5);
+    CU_ASSERT_NSTRING_EQUAL(model.params.mutation_matrix.alleles[0], "", 0);
+    CU_ASSERT_NSTRING_EQUAL(model.params.mutation_matrix.alleles[1], "BBBBB", 5);
 
     mutation_model_free(&model);
 }
