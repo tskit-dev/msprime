@@ -1896,8 +1896,10 @@ MatrixMutationModel_init(MatrixMutationModel *self, PyObject *args, PyObject *kw
     PyObject *py_transition_matrix = NULL;
     PyArrayObject *transition_matrix_array = NULL;
     char **alleles = NULL;
+    size_t *allele_length = NULL;
     PyObject *item;
     npy_intp *shape;
+    Py_ssize_t len;
 
     self->mutation_model = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O&O", kwlist,
@@ -1934,27 +1936,29 @@ MatrixMutationModel_init(MatrixMutationModel *self, PyObject *args, PyObject *kw
      * object in an uninitialised state */
     self->mutation_model = PyMem_Calloc(1, sizeof(*self->mutation_model));
     alleles = PyMem_Malloc(num_alleles * sizeof(*alleles));
-    if (self->mutation_model == NULL || alleles == NULL) {
+    allele_length = PyMem_Malloc(num_alleles * sizeof(*allele_length));
+    if (self->mutation_model == NULL || alleles == NULL || allele_length == NULL) {
         PyErr_NoMemory();
         goto out;
     }
     /* This is a shortcut as it depends on using the underlying memory
-     * of the bytes object. Because we don't execute any Python code
+     * of the unicode object. Because we don't execute any Python code
      * before calling mutation_model_alloc and we take a copies of
      * the allele strings in there, this should be safe. */
     for (j = 0; j < num_alleles; j++) {
         item = PyList_GetItem(py_alleles, j);
-        if (!PyBytes_Check(item)) {
-            PyErr_SetString(PyExc_TypeError, "alleles must be bytes objects");
+        if (!PyUnicode_Check(item)) {
+            PyErr_SetString(PyExc_TypeError, "alleles must be unicode strings");
             goto out;
         }
-        alleles[j] = PyBytes_AsString(item);
+        alleles[j] = PyUnicode_AsUTF8AndSize(item, &len);
         if (alleles[j] == NULL) {
             goto out;
         }
+        allele_length[j] = (size_t) len;
     }
     err = matrix_mutation_model_alloc(self->mutation_model,
-            num_alleles, alleles,
+            num_alleles, alleles, allele_length,
             PyArray_DATA(root_distribution_array),
             PyArray_DATA(transition_matrix_array));
     if (err != 0) {
@@ -1964,6 +1968,7 @@ MatrixMutationModel_init(MatrixMutationModel *self, PyObject *args, PyObject *kw
     ret = 0;
 out:
     PyMem_Free(alleles);
+    PyMem_Free(allele_length);
     Py_XDECREF(root_distribution_array);
     Py_XDECREF(transition_matrix_array);
     return ret;
@@ -1983,7 +1988,7 @@ MatrixMutationModel_get_alleles(MatrixMutationModel *self, void *closure)
         goto out;
     }
     for (j = 0; j < size; j++) {
-        item = PyBytes_FromStringAndSize(params->alleles[j], params->allele_length[j]);
+        item = PyUnicode_FromStringAndSize(params->alleles[j], params->allele_length[j]);
         if (item == NULL) {
             goto out;
         }

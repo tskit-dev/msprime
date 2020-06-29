@@ -30,28 +30,28 @@ from . import core
 from . import provenance
 from _msprime import BaseMutationModel
 
-_ACGT_ALLELES = [b"A", b"C", b"G", b"T"]
+_ACGT_ALLELES = ["A", "C", "G", "T"]
 _AMINO_ACIDS = [
-    b"A",
-    b"R",
-    b"N",
-    b"D",
-    b"C",
-    b"Q",
-    b"E",
-    b"G",
-    b"H",
-    b"I",
-    b"L",
-    b"K",
-    b"M",
-    b"F",
-    b"P",
-    b"S",
-    b"T",
-    b"W",
-    b"Y",
-    b"V",
+    "A",
+    "R",
+    "N",
+    "D",
+    "C",
+    "Q",
+    "E",
+    "G",
+    "H",
+    "I",
+    "L",
+    "K",
+    "M",
+    "F",
+    "P",
+    "S",
+    "T",
+    "W",
+    "Y",
+    "V",
 ]
 
 
@@ -70,8 +70,7 @@ def safe_asdict(self):
     }
 
 
-# TODO Change this to MatrixMutationModel
-class MutationModel(_msprime.MatrixMutationModel):
+class MatrixMutationModel(_msprime.MatrixMutationModel):
     """
     Superclass of mutation models. Allows you to build your own mutation model.
 
@@ -81,8 +80,7 @@ class MutationModel(_msprime.MatrixMutationModel):
     asdict = safe_asdict
 
     def __str__(self):
-        alleles = " ".join([x.decode() for x in self.alleles])
-        s = f"Mutation model with alleles {alleles}\n"
+        s = f"Mutation model with alleles {self.alleles}\n"
         s += "  root distribution: {}\n".format(
             " ".join(map(str, self.root_distribution))
         )
@@ -100,7 +98,7 @@ class InfiniteAllelesMutationModel(_msprime.InfiniteAllelesMutationModel):
     asdict = safe_asdict
 
 
-class BinaryMutations(MutationModel):
+class BinaryMutations(MatrixMutationModel):
     """
     The simplest mutational model with 0/1 states.
 
@@ -108,14 +106,13 @@ class BinaryMutations(MutationModel):
     """
 
     def __init__(self):
-        alleles = [b"0", b"1"]
+        alleles = ["0", "1"]
         root_distribution = [1, 0]
         transition_matrix = [[0, 1], [1, 0]]
-        alleles = [b"0", b"1"]
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class JukesCantor(MutationModel):
+class JukesCantor(MatrixMutationModel):
     """
     The Jukes-Cantor mutation model.
 
@@ -131,7 +128,7 @@ class JukesCantor(MutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class HKY(MutationModel):
+class HKY(MatrixMutationModel):
     """
     The Hasegawa, Kishino and Yano mutation model (Hasegawa et al. 1985).
 
@@ -160,7 +157,7 @@ class HKY(MutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class F84(MutationModel):
+class F84(MatrixMutationModel):
     """
     The F84 mutation model (Felsenstein and Churchill, 1996).
     2 types of events
@@ -195,7 +192,7 @@ class F84(MutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class GTR(MutationModel):
+class GTR(MatrixMutationModel):
     """
     The  Generalised time-reversible mutation model (Tavaré et al. 1986).
     .. todo: documentation
@@ -225,7 +222,7 @@ class GTR(MutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class BLOSUM62(MutationModel):
+class BLOSUM62(MatrixMutationModel):
     """
     values copied from Seqgen: http://tree.bio.ed.ac.uk/software/seqgen/
     original paper: Henikoff, S., and J. G. Henikoff. 1992. PNAS USA 89:10915-10919.
@@ -463,7 +460,7 @@ class BLOSUM62(MutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class PAM(MutationModel):
+class PAM(MatrixMutationModel):
     """
     Dayhoff DCMut as described in Kosiol, C., and Goldman, N. 2005.
     Different versions of the Dayhoff rate matrix.
@@ -710,7 +707,7 @@ BINARY = 0
 NUCLEOTIDES = 1
 
 
-class InfiniteSites(MutationModel):
+class InfiniteSites(MatrixMutationModel):
     # This mutation model is defined for backwards compatability, and is a remnant
     # of an earlier design. The class should be formally deprecated and removed at
     # some point.

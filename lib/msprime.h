@@ -524,7 +524,8 @@ double recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start)
 
 int matrix_mutation_model_factory(mutation_model_t *self, int model);
 int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
-    char **alleles, double *root_distribution, double *transition_matrix);
+    char **alleles, size_t *allele_length, double *root_distribution,
+    double *transition_matrix);
 int slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
     int64_t next_mutation_id, size_t block_size);
 int infinite_alleles_mutation_model_alloc(
