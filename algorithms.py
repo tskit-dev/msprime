@@ -52,6 +52,7 @@ class FenwickTree:
         Increments the frequency of the specified index by the specified
         value.
         """
+        assert isinstance(v, int)
         assert 0 < index <= self.__max_index
         j = index
         while j <= self.__max_index:
@@ -62,6 +63,7 @@ class FenwickTree:
         """
         Sets the frequency at the specified index to the specified value.
         """
+        assert isinstance(v, int)
         f = self.get_frequency(index)
         self.increment(index, v - f)
 
@@ -95,6 +97,7 @@ class FenwickTree:
         """
         Returns the smallest index with cumulative sum >= v.
         """
+        assert isinstance(v, int)
         j = 0
         s = v
         half = self.__log_max_index
@@ -538,64 +541,62 @@ class TrajectorySimulator:
 
 
 class RecombinationMap:
-    def __init__(self, positions, rates, discrete):
+    def __init__(self, positions, rates, discrete, mass_scale=1):
         self.positions = positions
         self.rates = rates
         self.discrete = discrete
-        self.cumulative = RecombinationMap.recomb_mass(positions, rates)
-
-    @staticmethod
-    def recomb_mass(positions, rates):
-        recomb_mass = 0
-        cumulative = [recomb_mass]
+        self.mass_scale = mass_scale
+        self.scaled_cumulative = [0]
         for i in range(1, len(positions)):
-            recomb_mass += (positions[i] - positions[i - 1]) * rates[i - 1]
-            cumulative.append(recomb_mass)
-        return cumulative
+            mass = (positions[i] - positions[i - 1]) * rates[i - 1]
+            scaled_mass = round(mass_scale * mass)
+            self.scaled_cumulative.append(scaled_mass)
 
     @property
     def total_recombination_rate(self):
-        return self.cumulative[-1]
+        return self.scaled_cumulative[-1] / self.mass_scale
 
-    def mass_between(self, left, right):
-        left_mass = self.position_to_mass(left)
-        right_mass = self.position_to_mass(right)
-        return right_mass - left_mass
+    def scaled_mass_between(self, left, right):
+        left_scaled_mass = self.position_to_scaled_mass(left)
+        right_scaled_mass = self.position_to_scaled_mass(right)
+        return right_scaled_mass - left_scaled_mass
 
-    def mass_between_left_exclusive(self, left, right):
+    def scaled_mass_between_left_exclusive(self, left, right):
         left_bound = left + 1 if self.discrete else left
-        return self.mass_between(left_bound, right)
+        return self.scaled_mass_between(left_bound, right)
 
-    def position_to_mass(self, pos):
+    def position_to_scaled_mass(self, pos):
         if pos == self.positions[0]:
             return 0
         if pos >= self.positions[-1]:
-            return self.cumulative[-1]
+            return self.scaled_cumulative[-1]
 
         index = self._search(self.positions, pos)
         assert index > 0
         index -= 1
-        offset = pos - self.positions[index]
-        return self.cumulative[index] + offset * self.rates[index]
+        mass_diff = (pos - self.positions[index]) * self.rates[index]
+        scaled_mass = round(self.mass_scale * mass_diff)
+        return self.scaled_cumulative[index] + scaled_mass
 
-    def mass_to_position(self, recomb_mass):
-        if recomb_mass == 0:
+    def scaled_mass_to_position(self, scaled_mass):
+        if scaled_mass == 0:
             return 0
-        index = self._search(self.cumulative, recomb_mass)
+        index = self._search(self.scaled_cumulative, scaled_mass)
         assert index > 0
         index -= 1
-        mass_in_interval = recomb_mass - self.cumulative[index]
+        scaled_mass_in_interval = scaled_mass - self.scaled_cumulative[index]
+        mass_in_interval = scaled_mass_in_interval / self.mass_scale
         pos = self.positions[index] + (mass_in_interval / self.rates[index])
         return math.floor(pos) if self.discrete else pos
 
-    def shift_by_mass(self, pos, mass):
-        result_mass = self.position_to_mass(pos) + mass
-        return self.mass_to_position(result_mass)
+    def shift_by_scaled_mass(self, pos, scaled_mass):
+        result_scaled_mass = self.position_to_scaled_mass(pos) + scaled_mass
+        return self.scaled_mass_to_position(result_scaled_mass)
 
     def sample_poisson(self, start):
         left_bound = start + 1 if self.discrete else start
-        mass_to_next_recomb = np.random.exponential(1.0)
-        return self.shift_by_mass(left_bound, mass_to_next_recomb)
+        scaled_mass_to_next_recomb = np.random.exponential(1.0)
+        return self.shift_by_scaled_mass(left_bound, scaled_mass_to_next_recomb)
 
     def _search(self, values, query):
         left = 0
@@ -713,7 +714,20 @@ class Simulator:
         self.model = model
         self.n = sample_size
         self.m = num_loci
-        self.recomb_map = recombination_map
+
+        num_samples = sample_size if from_ts is None else from_ts.num_samples
+        # Using a large base-10 number here for convenience, but we'd use
+        # a binary value like 2**62 or something in practice.
+        self.recombination_mass_scale = 10 ** 10 / (
+            num_samples * recombination_map.total_recombination_rate
+        )
+        self.recomb_map = RecombinationMap(
+            recombination_map.positions,
+            recombination_map.rates,
+            recombination_map.discrete,
+            mass_scale=self.recombination_mass_scale,
+        )
+
         self.g = gene_conversion_rate
         self.tracklength = gene_conversion_length
         self.pc = (self.tracklength - 1) / self.tracklength
@@ -743,6 +757,7 @@ class Simulator:
         self.pedigree = pedigree
 
         if from_ts is None:
+
             self.tables = msprime.TableCollection(sequence_length=num_loci)
             for pop_index in range(N):
                 self.tables.populations.add_row()
@@ -753,7 +768,7 @@ class Simulator:
                         0,
                         self.m,
                         0,
-                        self.recomb_map.position_to_mass(self.m),
+                        self.recomb_map.position_to_scaled_mass(self.m),
                         j,
                         pop_index,
                     )
@@ -840,8 +855,8 @@ class Simulator:
                         seg = self.alloc_segment(
                             left,
                             right,
-                            self.recomb_map.position_to_mass(left),
-                            self.recomb_map.position_to_mass(right),
+                            self.recomb_map.position_to_scaled_mass(left),
+                            self.recomb_map.position_to_scaled_mass(right),
                             root,
                             population,
                         )
@@ -855,8 +870,8 @@ class Simulator:
                             seg = self.alloc_segment(
                                 left,
                                 right,
-                                self.recomb_map.position_to_mass(left),
-                                self.recomb_map.position_to_mass(right),
+                                self.recomb_map.position_to_scaled_mass(left),
+                                self.recomb_map.position_to_scaled_mass(right),
                                 root,
                                 population,
                                 tail,
@@ -1026,12 +1041,14 @@ class Simulator:
         while len(non_empty_pops) > 0:
             self.verify()
             recomb_mass = self.L[0].get_total()
-            rate = recomb_mass
+            rate = recomb_mass / self.recombination_mass_scale
             t_re = infinity
             if rate != 0:
                 t_re = random.expovariate(rate)
             # Gene conversion can occur within segments ..
-            rate = self.g * self.recomb_map.mass_to_position(recomb_mass)
+            # FIXME JK: I can't see how this can be correct. It'll be simpler to add two
+            # more fenwick trees for GC and this workaround.
+            rate = self.g * self.recomb_map.scaled_mass_to_position(recomb_mass)
             t_gcin = infinity
             if rate != 0:
                 t_gcin = random.expovariate(rate)
@@ -1391,7 +1408,7 @@ class Simulator:
 
     def set_segment_left_endpoint(self, seg, pos):
         seg.left = pos
-        seg.left_mass = self.recomb_map.position_to_mass(pos)
+        seg.left_mass = self.recomb_map.position_to_scaled_mass(pos)
 
     def add_segment_mass_between(self, seg1, l_mass, r_mass):
         self.L[seg1.label].increment(seg1.index, r_mass - l_mass)
@@ -1411,27 +1428,23 @@ class Simulator:
         self.L[seg.label].set_value(seg.index, mass)
 
     def set_single_segment_mass(self, seg):
-        mass = self.recomb_map.mass_between_left_exclusive(seg.left, seg.right)
+        mass = self.recomb_map.scaled_mass_between_left_exclusive(seg.left, seg.right)
         self.L[seg.label].set_value(seg.index, mass)
-
-    def pick_segments_and_breakpoint(self, label):
-        h = random.uniform(0, self.L[label].get_total())
-        y = self.segments[self.L[label].find(h)]
-
-        t = self.L[label].get_cumulative_frequency(y.index)
-        k = self.recomb_map.mass_to_position(y.right_mass - (t - h))
-        if k == y.left and y.prev is None:
-            return self.pick_segments_and_breakpoint(label)
-
-        return y.prev, y, k
 
     def hudson_recombination_event(self, label, return_heads=False):
         """
         Implements a recombination event.
         """
         self.num_re_events += 1
-        x, y, k = self.pick_segments_and_breakpoint(label)
-        k_mass = self.recomb_map.position_to_mass(k)
+
+        h = random.randint(1, self.L[label].get_total())
+        y = self.segments[self.L[label].find(h)]
+
+        t = self.L[label].get_cumulative_frequency(y.index)
+        k = self.recomb_map.scaled_mass_to_position(y.right_mass - (t - h))
+        x = y.prev
+
+        k_mass = self.recomb_map.position_to_scaled_mass(k)
         if y.left < k:
             # Make new segment
             z = self.alloc_segment(
@@ -1475,22 +1488,22 @@ class Simulator:
             y.next.prev = new_segment
         y.next = None
         y.right = track_end
-        y.right_mass = self.recomb_map.position_to_mass(track_end)
+        y.right_mass = self.recomb_map.position_to_scaled_mass(track_end)
         self.add_segment_mass_between(y, new_segment.right_mass, y.right_mass)
 
     def wiuf_geneconversion_within_event(self, label, return_heads=False):
         """
         Implements a gene conversion event that starts within a segment
         """
-        h = random.uniform(0, self.L[label].get_total())
+        h = random.randint(0, self.L[label].get_total())
         # generate tracklength
         tl = np.random.geometric(1 / self.tracklength)
         # Get the segment containing the h'th link
         y = self.segments[self.L[label].find(h)]
         t = self.L[label].get_cumulative_frequency(y.index)
-        k = self.recomb_map.shift_by_mass(y.right, h - t)
-        k_plus_tl_mass = self.recomb_map.position_to_mass(k + tl)
-        k_mass = self.recomb_map.position_to_mass(k)
+        k = self.recomb_map.shift_by_scaled_mass(y.right, h - t)
+        k_plus_tl_mass = self.recomb_map.position_to_scaled_mass(k + tl)
+        k_mass = self.recomb_map.position_to_scaled_mass(k)
         # check if the gene conversion falls between segments --> no effect
         if y.left >= k + tl:
             # print("noneffective GCI EVENT")
@@ -1612,7 +1625,7 @@ class Simulator:
             + math.log(1.0 - random.random() * (1.0 - (self.pc) ** (distance - 1)))
             / self.lnpc
         )
-        k_mass = self.recomb_map.position_to_mass(k)
+        k_mass = self.recomb_map.position_to_scaled_mass(k)
         while y.right <= k:
             y = y.next
         x = y.prev
@@ -1705,7 +1718,7 @@ class Simulator:
 
             if x.right > k:
                 assert x.left < k
-                k_mass = self.recomb_map.position_to_mass(k)
+                k_mass = self.recomb_map.position_to_scaled_mass(k)
                 self.num_re_events += 1
                 ix = (ix + 1) % 2
                 # Make new segment
@@ -1864,8 +1877,8 @@ class Simulator:
                     alpha = self.alloc_segment(
                         left,
                         right,
-                        self.recomb_map.position_to_mass(left),
-                        self.recomb_map.position_to_mass(right),
+                        self.recomb_map.position_to_scaled_mass(left),
+                        self.recomb_map.position_to_scaled_mass(right),
                         u,
                         pop_id,
                     )
@@ -2007,8 +2020,8 @@ class Simulator:
                         alpha = self.alloc_segment(
                             left,
                             right,
-                            self.recomb_map.position_to_mass(left),
-                            self.recomb_map.position_to_mass(right),
+                            self.recomb_map.position_to_scaled_mass(left),
+                            self.recomb_map.position_to_scaled_mass(right),
                             u,
                             population_index,
                         )
@@ -2056,8 +2069,13 @@ class Simulator:
 
     def print_state(self):
         print("State @ time ", self.t)
+        print("Recombination mass scale = ", self.recombination_mass_scale)
         for l in range(self.num_labels):
-            print("Links = ", self.L[l].get_total())
+            print("Total scaled mass  = ", self.L[l].get_total())
+            print(
+                "Recombination rate = ",
+                self.L[l].get_total() / self.recombination_mass_scale,
+            )
         print("Modifier events = ")
         for t, f, args in self.modifier_events:
             print("\t", t, f, args)
@@ -2111,22 +2129,25 @@ class Simulator:
                     while u is not None:
                         assert u.population == pop_index
                         assert u.left < u.right
-                        l_mass = self.recomb_map.position_to_mass(u.left)
-                        r_mass = self.recomb_map.position_to_mass(u.right)
-                        assert math.isclose(u.left_mass, l_mass, abs_tol=1e-6)
-                        assert math.isclose(u.right_mass, r_mass, abs_tol=1e-6)
+                        l_mass = self.recomb_map.position_to_scaled_mass(u.left)
+                        r_mass = self.recomb_map.position_to_scaled_mass(u.right)
+                        assert u.left_mass == l_mass
+                        assert u.right_mass == r_mass
                         if u.prev is not None:
-                            s = self.recomb_map.mass_between(u.prev.right, u.right)
+                            s = self.recomb_map.scaled_mass_between(
+                                u.prev.right, u.right
+                            )
                             assert u.prev.label == u.label
                         else:
-                            s = self.recomb_map.mass_between_left_exclusive(
+                            s = self.recomb_map.scaled_mass_between_left_exclusive(
                                 u.left, u.right
                             )
                         right = u.right
                         if self.model != "wf_ped":
                             freq = self.L[l].get_frequency(u.index)
                             total_mass += freq
-                            assert math.isclose(s, freq, abs_tol=1e-6)
+                            assert s == freq
+                            # assert math.isclose(s, freq, abs_tol=1e-6)
                         v = u.next
                         if v is not None:
                             assert v.prev == u
@@ -2134,11 +2155,13 @@ class Simulator:
                                 print("ERROR", u, v)
                             assert u.right <= v.left
                         u = v
-                    s = self.recomb_map.mass_between_left_exclusive(left, right)
+                    s = self.recomb_map.scaled_mass_between_left_exclusive(left, right)
                     q += s
                     alt_total_mass += s
-            assert math.isclose(total_mass, self.L[l].get_total(), abs_tol=1e-6)
-            assert math.isclose(total_mass, alt_total_mass, abs_tol=1e-6)
+            assert total_mass == self.L[l].get_total()
+            assert total_mass == alt_total_mass
+            # assert math.isclose(total_mass, self.L[l].get_total(), abs_tol=1e-6)
+            # assert math.isclose(total_mass, alt_total_mass, abs_tol=1e-6)
         # add check for dealing with labels
         lab_tot = 0
         for l in range(self.num_labels):
