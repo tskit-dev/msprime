@@ -82,11 +82,10 @@ typedef struct segment_t_t {
     /* TODO change to population */
     population_id_t population_id;
     label_id_t label;
-    /* During simulation we use genetic coordinates */
     double left;
     double right;
-    double left_mass;
-    double right_mass;
+    int64_t left_mass;
+    int64_t right_mass;
     node_id_t value;
     size_t id;
     struct segment_t_t *prev;
@@ -195,9 +194,10 @@ typedef struct {
 /* Recombination map */
 typedef struct {
     interval_map_t map;
-    double total_recombination_rate;
-    double *cumulative;
     bool discrete;
+    int64_t *cumulative_scaled_mass;
+    double mass_scale;
+    double total_mass;
 } recomb_map_t;
 
 typedef struct _msp_t {
@@ -506,20 +506,21 @@ int recomb_map_copy(recomb_map_t *to, recomb_map_t *from);
 int recomb_map_free(recomb_map_t *self);
 double recomb_map_get_sequence_length(recomb_map_t *self);
 bool recomb_map_get_discrete(recomb_map_t *self);
-double recomb_map_get_total_recombination_rate(recomb_map_t *self);
-void recomb_map_convert_rates(recomb_map_t *self, msp_convert_func convert, void *obj);
+double recomb_map_get_total_mass(recomb_map_t *self);
 size_t recomb_map_get_size(recomb_map_t *self);
 int recomb_map_get_positions(recomb_map_t *self, double *positions);
 int recomb_map_get_rates(recomb_map_t *self, double *rates);
 
+int recomb_map_set_mass_scale(recomb_map_t *self, double mass_scale);
+int64_t recomb_map_scaled_mass_between_left_exclusive(
+    recomb_map_t *self, double left, double right);
+int64_t recomb_map_scaled_mass_between(recomb_map_t *self, double left, double right);
+double recomb_map_scaled_mass_to_position(recomb_map_t *self, int64_t scaled_mass);
+int64_t recomb_map_position_to_scaled_mass(recomb_map_t *self, double position);
+double recomb_map_shift_by_scaled_mass(
+    recomb_map_t *self, double pos, int64_t scaled_mass);
 void recomb_map_print_state(recomb_map_t *self, FILE *out);
 
-double recomb_map_mass_between_left_exclusive(
-    recomb_map_t *self, double left, double right);
-double recomb_map_mass_between(recomb_map_t *self, double left, double right);
-double recomb_map_mass_to_position(recomb_map_t *self, double mass);
-double recomb_map_position_to_mass(recomb_map_t *self, double position);
-double recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass);
 double recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start);
 
 int matrix_mutation_model_factory(mutation_model_t *self, int model);

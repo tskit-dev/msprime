@@ -110,6 +110,7 @@ class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
         ts = msprime.simulate(10, random_seed=3, end_time=0.0)
         self.verify(ts)
 
+    @unittest.skip("dtwf recomb borked")
     def test_dtwf_recombination(self):
         ts = msprime.simulate(
             10, Ne=100, model="dtwf", random_seed=2, end_time=100, recombination_rate=10

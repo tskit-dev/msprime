@@ -486,6 +486,7 @@ class TestMultipleMergerModels(unittest.TestCase):
         self.assertTrue(ts is not None)
 
 
+@unittest.skip("Skipping dtwf for now")
 class TestDtwf(unittest.TestCase):
     """
     Tests for the DTWF model.

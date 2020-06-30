@@ -2504,7 +2504,7 @@ out:
 }
 
 static PyObject *
-RecombinationMap_position_to_mass(RecombinationMap *self, PyObject *args)
+RecombinationMap_position_to_scaled_mass(RecombinationMap *self, PyObject *args)
 {
     PyObject *ret = NULL;
     double position;
@@ -2520,35 +2520,35 @@ RecombinationMap_position_to_mass(RecombinationMap *self, PyObject *args)
         goto out;
     }
 
-    ret = Py_BuildValue("d", recomb_map_position_to_mass(self->recomb_map, position));
+    ret = Py_BuildValue("d", recomb_map_position_to_scaled_mass(self->recomb_map, position));
 out:
     return ret;
 }
 
 static PyObject *
-RecombinationMap_mass_to_position(RecombinationMap *self, PyObject *args)
+RecombinationMap_scaled_mass_to_position(RecombinationMap *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    double mass;
+    double scaled_mass;
 
     if (RecombinationMap_check_recomb_map(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "d", &mass)) {
+    if (!PyArg_ParseTuple(args, "d", &scaled_mass)) {
         goto out;
     }
-    if (mass < 0) {
-        PyErr_SetString(PyExc_ValueError, "Recombination mass must be >= 0");
+    if (scaled_mass < 0) {
+        PyErr_SetString(PyExc_ValueError, "Recombination scaled_mass must be >= 0");
         goto out;
     }
 
-    ret = Py_BuildValue("d", recomb_map_mass_to_position(self->recomb_map, mass));
+    ret = Py_BuildValue("d", recomb_map_scaled_mass_to_position(self->recomb_map, scaled_mass));
 out:
     return ret;
 }
 
 static PyObject *
-RecombinationMap_get_total_recombination_rate(RecombinationMap *self)
+RecombinationMap_get_total_mass(RecombinationMap *self)
 {
     PyObject *ret = NULL;
 
@@ -2556,7 +2556,7 @@ RecombinationMap_get_total_recombination_rate(RecombinationMap *self)
         goto out;
     }
     ret = Py_BuildValue("d",
-        recomb_map_get_total_recombination_rate(self->recomb_map));
+        recomb_map_get_total_mass(self->recomb_map));
 out:
     return ret;
 }
@@ -2664,14 +2664,16 @@ static PyMemberDef RecombinationMap_members[] = {
 
 static PyMethodDef RecombinationMap_methods[] = {
     {"get_total_recombination_rate",
-        (PyCFunction) RecombinationMap_get_total_recombination_rate, METH_NOARGS,
+        (PyCFunction) RecombinationMap_get_total_mass, METH_NOARGS,
         "Returns the total product of physical distance times recombination rate"},
-    {"position_to_mass",
-        (PyCFunction) RecombinationMap_position_to_mass, METH_VARARGS,
-        "Returns the cumulative recombination mass corresponding to the given position"},
-    {"mass_to_position",
-        (PyCFunction) RecombinationMap_mass_to_position, METH_VARARGS,
-        "Returns the position corresponding to the given cumulative recombination mass"},
+    {"position_to_scaled_mass",
+        (PyCFunction) RecombinationMap_position_to_scaled_mass, METH_VARARGS,
+        "Returns the cumulative recombination scaled mass corresponding "
+        "to the given position"},
+    {"scaled_mass_to_position",
+        (PyCFunction) RecombinationMap_scaled_mass_to_position, METH_VARARGS,
+        "Returns the position corresponding to the given cumulative "
+        "scaled recombination mass"},
     {"get_size", (PyCFunction) RecombinationMap_get_size, METH_NOARGS,
         "Returns the number of physical  positions in this map."},
     {"get_sequence_length", (PyCFunction) RecombinationMap_get_sequence_length, METH_NOARGS,

@@ -36,10 +36,10 @@
 
 /* Return the value for the specified index as represented within
  * the tree. */
-static double
+static int64_t
 fenwick_compute_tree_value(fenwick_t *self, size_t index)
 {
-    double ret = fenwick_get_cumulative_sum(self, index);
+    int64_t ret = fenwick_get_cumulative_sum(self, index);
     if (index > 1) {
         ret -= fenwick_get_cumulative_sum(self, index - 1);
     }
@@ -47,27 +47,25 @@ fenwick_compute_tree_value(fenwick_t *self, size_t index)
 }
 
 void
-fenwick_verify(fenwick_t *self, double eps)
+fenwick_verify(fenwick_t *self)
 {
     size_t j;
-    double computed_value;
+    int64_t computed_value;
 
     for (j = 1; j <= self->size; j++) {
         computed_value = fenwick_compute_tree_value(self, j);
-        assert(gsl_fcmp(computed_value, self->values[j], eps) == 0);
+        assert(computed_value == self->values[j]);
     }
 }
 
 void
 fenwick_print_state(fenwick_t *self, FILE *out)
 {
-    size_t j;
+    int64_t j;
 
     fprintf(out, "Fenwick tree @%p\n", (void *) self);
-
-    for (j = 1; j <= self->size; j++) {
-        fprintf(out, "%d\t%.16g\t%.16g\t%.16g\n", (int) j, self->values[j],
-            self->tree[j], fabs(self->values[j] - fenwick_compute_tree_value(self, j)));
+    for (j = 1; j <= (int64_t) self->size; j++) {
+        fprintf(out, "%" PRId64 "\t%" PRId64 "\n", j, self->values[j]);
     }
 }
 
@@ -90,7 +88,7 @@ fenwick_alloc(fenwick_t *self, size_t initial_size)
     memset(self, 0, sizeof(*self));
     self->size = initial_size;
     self->tree = calloc((1 + self->size), sizeof(*self->tree));
-    self->values = calloc((1 + self->size), sizeof(*self->tree));
+    self->values = calloc((1 + self->size), sizeof(*self->values));
     if (self->tree == NULL || self->values == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -150,52 +148,49 @@ fenwick_get_size(fenwick_t *self)
     return self->size;
 }
 
-double
+int64_t
 fenwick_get_total(fenwick_t *self)
 {
     return fenwick_get_cumulative_sum(self, self->size);
 }
 
 void
-fenwick_increment(fenwick_t *self, size_t index, double value)
+fenwick_increment(fenwick_t *self, size_t index, int64_t value)
 {
-    size_t j;
-    const size_t size = self->size;
-    double *restrict tree = self->tree;
+    int64_t j;
+    const int64_t size = (int64_t) self->size;
+    int64_t *restrict tree = self->tree;
 
-    assert(0 < index && index <= size);
+    assert(0 < index && index <= self->size);
     self->values[index] += value;
-    for (j = index; j <= size; j += (j & -j)) {
+    for (j = (int64_t) index; j <= size; j += (j & -j)) {
         tree[j] += value;
     }
 }
 
 void
-fenwick_set_value(fenwick_t *self, size_t index, double value)
+fenwick_set_value(fenwick_t *self, size_t index, int64_t value)
 {
-    /* propagate loss of the old value up the tree */
-    fenwick_increment(self, index, -self->values[index]);
-    /* Ensure the new value is exactly 0 */
-    self->values[index] = 0;
-    /* propagate gain of the new value up the tree */
-    fenwick_increment(self, index, value);
+    int64_t v = value - self->values[index];
+
+    fenwick_increment(self, index, v);
 }
 
-double
+int64_t
 fenwick_get_cumulative_sum(fenwick_t *self, size_t index)
 {
-    double ret = 0;
-    const double *restrict tree = self->tree;
-    size_t j;
+    int64_t ret = 0;
+    const int64_t *restrict tree = self->tree;
+    int64_t j;
 
     assert(0 < index && index <= self->size);
-    for (j = index; j > 0; j -= (j & -j)) {
+    for (j = (int64_t) index; j > 0; j -= (j & -j)) {
         ret += tree[j];
     }
     return ret;
 }
 
-double
+int64_t
 fenwick_get_value(fenwick_t *self, size_t index)
 {
     assert(0 < index && index <= self->size);
@@ -203,13 +198,12 @@ fenwick_get_value(fenwick_t *self, size_t index)
 }
 
 size_t
-fenwick_find(fenwick_t *self, double sum)
+fenwick_find(fenwick_t *self, int64_t sum)
 {
     size_t j = 0;
-    size_t k, index;
-    double s = sum;
-    const double *restrict tree = self->tree;
-    const double *restrict values = self->values;
+    size_t k;
+    int64_t s = sum;
+    const int64_t *restrict tree = self->tree;
     const size_t size = self->size;
     size_t half = self->log_size;
 
@@ -225,12 +219,5 @@ fenwick_find(fenwick_t *self, double sum)
         }
         half >>= 1;
     }
-    index = j + 1;
-    /* We can have situations due to numerical imprecision where
-     * the sum points to an index that's actually mapped to zero,
-     * so skip ahead until we find a non-zero value. */
-    while (index <= size && values[index] == 0) {
-        index++;
-    }
-    return index;
+    return j + 1;
 }

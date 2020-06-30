@@ -547,9 +547,10 @@ class RecombinationMap:
         self.discrete = discrete
         self.mass_scale = mass_scale
         self.scaled_cumulative = [0]
+        scaled_mass = 0
         for i in range(1, len(positions)):
             mass = (positions[i] - positions[i - 1]) * rates[i - 1]
-            scaled_mass = round(mass_scale * mass)
+            scaled_mass += round(mass_scale * mass)
             self.scaled_cumulative.append(scaled_mass)
 
     @property

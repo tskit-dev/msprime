@@ -276,15 +276,42 @@ __msp_safe_free(void **ptr)
  * Assumes `values` are sorted
  */
 size_t
-msp_binary_interval_search(double query, const double *values, size_t n_values)
+msp_binary_search_double(double query, const double *values, size_t n_values)
 {
-    if (n_values == 0) {
-        return 0;
-    }
     size_t l = 0;
     size_t r = n_values - 1;
     size_t m;
 
+    if (n_values == 0) {
+        return 0;
+    }
+    while (l < r) {
+        m = (l + r) / 2UL;
+
+        if (values[m] < query) {
+            l = m + 1;
+        } else {
+            r = m;
+        }
+    }
+    return l;
+}
+
+/* Find the `index` of the interval within `values` the `query` fits, such that
+ * values[index-1] < query <= values[index]
+ * Will find the leftmost such index
+ * Assumes `values` are sorted
+ */
+size_t
+msp_binary_search_int64(int64_t query, const int64_t *values, size_t n_values)
+{
+    size_t l = 0;
+    size_t r = n_values - 1;
+    size_t m;
+
+    if (n_values == 0) {
+        return 0;
+    }
     while (l < r) {
         m = (l + r) / 2UL;
 

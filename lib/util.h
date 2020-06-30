@@ -20,6 +20,7 @@
 #define __UTIL_H__
 
 #include <stdbool.h>
+#include <inttypes.h>
 #include <math.h>
 
 #ifdef __GNUC__
@@ -110,7 +111,9 @@ void __msp_safe_free(void **ptr);
 
 #define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
 
-size_t msp_binary_interval_search(double query, const double *values, size_t n_values);
+size_t msp_binary_search_double(double query, const double *values, size_t n_values);
+size_t msp_binary_search_int64(int64_t query, const int64_t *values, size_t n_values);
+
 bool doubles_almost_equal(double a, double b, double eps);
 
 #endif /*__UTIL_H__*/
