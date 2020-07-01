@@ -31,6 +31,7 @@ import tqdm
 import tskit
 from matplotlib import lines as mlines
 from matplotlib import pyplot
+from scipy.stats import gompertz
 
 import msprime
 import msprime.cli as cli
@@ -2269,6 +2270,97 @@ class XiTest(XiHudsonTest):
             ],
         )
 
+    def compute_beta_timescale(self, pop_size, alpha):
+        m = 2 + np.exp(alpha * np.log(2) + (1 - alpha) * np.log(3) - np.log(alpha - 1))
+        ret = np.exp(
+            alpha * np.log(m)
+            + (alpha - 1) * np.log(pop_size)
+            - np.log(alpha)
+            - scipy.special.betaln(2 - alpha, alpha)
+        )
+        return ret
+
+    def run_xi_beta_growth(self):
+        basedir_name = "xi_beta_growth"
+        basedir = make_test_dir(basedir_name)
+        empirical_tmrca = []
+        expected_tmrca = []
+        nrep = 10000
+        for pop_size in [1, 10, 100, 1000, 10000, 100000]:
+            for alpha in [1.1, 1.3, 1.5, 1.7, 1.9]:
+                for growth_rate in [0, 0.001, 0.01, 0.1]:
+                    print("running tmrcas for", pop_size, alpha, growth_rate)
+                    ts = msprime.simulate(
+                        population_configurations=[
+                            msprime.PopulationConfiguration(
+                                sample_size=2,
+                                initial_size=pop_size,
+                                growth_rate=growth_rate,
+                            )
+                        ],
+                        model=msprime.BetaCoalescent(alpha=alpha),
+                        num_replicates=nrep,
+                    )
+                    tmrca = 0
+                    for t in ts:
+                        tmrca = tmrca + t.first().tmrca(0, 1) / nrep
+                    empirical_tmrca.append(tmrca)
+                    a = 2 / (self.compute_beta_timescale(pop_size, alpha))
+                    if growth_rate > 0:
+                        b = growth_rate * (alpha - 1)
+                        m = gompertz.mean(a / b, loc=0, scale=1 / b)
+                        expected_tmrca.append(m)
+                    else:
+                        expected_tmrca.append(1 / a)
+        empirical_tmrca.sort()
+        expected_tmrca.sort()
+        pyplot.plot(empirical_tmrca, expected_tmrca)
+        pyplot.plot(expected_tmrca, expected_tmrca)
+        path = os.path.join(basedir, f"{self.name}.png")
+        pyplot.savefig(path)
+        pyplot.close("all")
+
+    def run_xi_dirac_growth(self):
+        basedir_name = "xi_dirac_growth"
+        basedir = make_test_dir(basedir_name)
+        empirical_tmrca = []
+        expected_tmrca = []
+        nrep = 10000
+        for pop_size in [1, 10, 100]:
+            for c in [0, 0.1, 0.5, 1, 5, 10]:
+                for psi in [0.1, 0.3, 0.5, 0.7, 0.9]:
+                    for growth_rate in [0, 0.001, 0.01, 0.1]:
+                        print("running tmrcas for", pop_size, c, psi, growth_rate)
+                        ts = msprime.simulate(
+                            population_configurations=[
+                                msprime.PopulationConfiguration(
+                                    sample_size=2,
+                                    initial_size=pop_size,
+                                    growth_rate=growth_rate,
+                                )
+                            ],
+                            model=msprime.DiracCoalescent(psi=psi, c=c),
+                            num_replicates=nrep,
+                        )
+                        tmrca = 0
+                        for t in ts:
+                            tmrca = tmrca + t.first().tmrca(0, 1) / nrep
+                        empirical_tmrca.append(tmrca)
+                        a = 2 * (1 + c * psi * psi / 4) / (pop_size * pop_size)
+                        if growth_rate > 0:
+                            b = growth_rate
+                            m = gompertz.mean(a / b, loc=0, scale=1 / b)
+                            expected_tmrca.append(m)
+                        else:
+                            expected_tmrca.append(1 / a)
+        empirical_tmrca.sort()
+        expected_tmrca.sort()
+        pyplot.plot(empirical_tmrca, expected_tmrca)
+        pyplot.plot(expected_tmrca, expected_tmrca)
+        path = os.path.join(basedir, f"{self.name}.png")
+        pyplot.savefig(path)
+        pyplot.close("all")
+
 
 @attr.s
 class XiTest1(XiTest):
@@ -2342,6 +2434,26 @@ class XiTest7(XiTest):
         self.run_xi_dirac_recombinations()
 
 
+@attr.s
+class XiTest8(XiTest):
+    # Adds a check for xi_beta population growth
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_xi_beta_growth()
+
+
+@attr.s
+class XiTest9(XiTest):
+    # Adds a check for xi_beta population growth
+
+    def run(self, output_dir):
+        self._output_dir = output_dir
+        logging.info("running", self.group, self.name)
+        self.run_xi_dirac_growth()
+
+
 def register_xi_tests(runner):
     group = "xi"
     tests = [
@@ -2368,7 +2480,9 @@ def register_xi_tests(runner):
         XiTest4(name="xi_dirac_sfs", group=group),
         XiTest5(name="xi_beta_sfs", group=group),
         XiTest6(name="xi_beta_recomb", group=group),
-        XiTest7(name="xi_beta_recomb", group=group),
+        XiTest7(name="xi_dirac_recomb", group=group),
+        XiTest8(name="xi_beta_growth", group=group),
+        XiTest9(name="xi_dirac_growth", group=group),
     ]
 
     for test in tests:
