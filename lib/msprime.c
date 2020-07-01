@@ -5978,8 +5978,9 @@ beta_compute_timescale(msp_t *self, population_t *pop)
     double truncation_point = self->model.params.beta_coalescent.truncation_point;
     double pop_size = pop->initial_size;
     double m = 2 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
-    double timescale = exp(alpha * log(m) + (alpha - 1) * log(pop_size) - log(alpha))
-                       / gsl_sf_beta_inc(2 - alpha, alpha, truncation_point);
+    double timescale = exp(alpha * log(m) + (alpha - 1) * log(pop_size) - log(alpha)
+                           - gsl_sf_lnbeta(2 - alpha, alpha)
+                           - log(gsl_sf_beta_inc(2 - alpha, alpha, truncation_point)));
     return timescale;
 }
 
