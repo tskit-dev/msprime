@@ -2033,22 +2033,20 @@ population size and number of generations is almost linear:
 
     def beta_high_scaling_example():
         ts = msprime.simulate(
-            sample_size=2, random_seed=1,
-            model=msprime.BetaCoalescent(reference_size=1,
-                alpha=1.9, truncation_point=1))
+            sample_size=2, random_seed=1, Ne=10,
+            model=msprime.BetaCoalescent(alpha=1.99, truncation_point=1))
         tree = ts.first()
         print(tree.tmrca(0,1))
         ts = msprime.simulate(
-            sample_size=2, random_seed=1,
-            model=msprime.BetaCoalescent(reference_size=100,
-                alpha=1.9, truncation_point=1))
+            sample_size=2, random_seed=1, Ne=1000,
+            model=msprime.BetaCoalescent(alpha=1.99, truncation_point=1))
         tree = ts.first()
         print(tree.tmrca(0,1))
 
 which results in::
 
-    1.5705367504768712
-    99.09416974894381
+    0.03714089444719166
+    3.546927883527276
 
 For :math:`\alpha` close to 1 the effective population size has little effect:
 
@@ -2056,22 +2054,20 @@ For :math:`\alpha` close to 1 the effective population size has little effect:
 
     def beta_low_scaling_example():
         ts = msprime.simulate(
-            sample_size=2, random_seed=1,
-            model=msprime.BetaCoalescent(reference_size=1,
-                alpha=1.1, truncation_point=1))
+            sample_size=2, random_seed=1, Ne=10,
+            model=msprime.BetaCoalescent(alpha=1.1, truncation_point=1))
         tree = ts.first()
         print(tree.tmrca(0,1))
         ts = msprime.simulate(
-            sample_size=2, random_seed=1,
-            model=msprime.BetaCoalescent(reference_size=100,
-                alpha=1.1, truncation_point=1))
+            sample_size=2, random_seed=1, Ne=1000,
+            model=msprime.BetaCoalescent(alpha=1.1, truncation_point=1))
         tree = ts.first()
         print(tree.tmrca(0,1))
 
 which gives::
 
-    7.058990342664795
-    11.18774573973818
+    2.185320238451494
+    3.4634991692692694
 
 The Dirac-Xi-coalescent is simulated similarly:
 
@@ -2102,42 +2098,8 @@ with more participating lineages. Setting either parameter to 0 would correspond
 to the standard coalescent.
 
 The Dirac-Xi-coalescent is obtained as the infinite population scaling limit of
-Moran models, and therefore coalescent time is measured in units of
-:math:`N_e^2` generations. However, under a Moran model, the
-population-rescaled recombination rate is still obtained from the per-generation
-recombination probability by rescaling with :math:`N_e`.
-The overall effect is that coalescent branch lengths scale with the square of the
-effective population size in units of generations, and thus so do other quantities
-which depend on branch lengths such as the number of mutations, while the number of
-recombinations scales linearly.
-
-.. code-block:: python
-
-    def dirac_scaling_example():
-        ts = msprime.simulate(
-            sample_size=10, random_seed=1,
-            recombination_rate=1e-2, mutation_rate=1e-2,
-            model=msprime.DiracCoalescent(reference_size=1000, psi=0.01, c=1),
-            num_replicates=100)
-        trees = 0
-        sites = 0
-        for t in ts:
-            trees = trees + t.num_trees
-            sites = sites + t.num_sites
-        print(sites / trees)
-
-Running this code results in::
-
-    1241.8241770462635
-
-which is larger than :math:`N_e = 1000` because not every recombination
-results in a new tree.
-
-This behaviour is a consequence of the time and parameter scalings under the Moran
-model, as well as the fact that ``msprime`` simulates recombinations on the coalescent
-time scale, but mutations on trees in units of generations. The rates of mutations
-and recombinations can be made commensurate by either dividing the mutation rate by
-:math:`N_e`, or multiplying the recombination rate by :math:`N_e`.
+Moran models, and therefore the coalescence rate is proportional to
+:math:`1/N_e^2` generations.
 
 *********
 Old stuff
