@@ -1,20 +1,69 @@
 """
-Script to automate verification of the msprime simulator against
-known statistical results and benchmark programs such as Hudson's ms.
+Script to automate verification of msprime against known statistical
+results and benchmark programs such as ms and Seq-Gen.
+
+Tests are structured in a similar way to Python unittests. Tests
+are organised into classes of similar tests. Ideally, each test
+in the class is a simple call to a general method with
+different parameters (this is called ``_run``, by convention).
+Tests must be *independent* and not depend on any shared
+state within the test class, other than the ``self.output_dir``
+variable which is guaranteed to be set when the method is called.
+
+The output directory is <output-dir>/<class name>/<test name>.
+Each test should output one or more diagnostic plots, which have
+a clear interpretation as "correct" or "incorrect". QQ-plots
+are preferred, where possible. Numerical results can also be
+output by using ``logging.debug()``, where appropriate.
+
+Test classes must be a subclass of the ``Test`` class defined
+in this module.
+
+To run the tests, first get some help from the CLI:
+
+    python3 verification.py --help
+
+This will output some basic help on the tests. Use
+
+    python3 verification.py --list
+
+to show all the available tests.
+
+If you run without any arguments, this will run all the tests
+sequentially. The progress bar and output behaviour can be
+controlled using command line parameters, and running over
+multiple processes is possible.
+
+If you wish to run a specific tests, you can provide the
+test names as positional arguments, i.e.,
+
+    python3 verification.py test_msdoc_outgroup_sequence test_msdoc_recomb_ex
+
+will just run these two specific tests.
+
+Using the ``-c`` option allows you to run all tests in a
+given class.
+
+Gotchas:
+- Any test superclasses must be abstract. That is, you cannot
+  inherit from a test class that contains any tests.
+- Test method names must be unique across *all* classes.
+
 """
 import argparse
 import ast
 import collections
 import concurrent.futures
+import inspect
 import itertools
 import logging
 import math
-import os
+import pathlib
 import random
 import subprocess
 import sys
 import tempfile
-import time
+import warnings
 
 import allel
 import attr
@@ -41,6 +90,13 @@ from msprime.demography import _matrix_exponential
 # Note this must be done before importing statsmodels.
 matplotlib.use("Agg")
 import statsmodels.api as sm  # noqa: E402
+
+
+_mspms_executable = [sys.executable, "mspms_dev.py"]
+_slim_executable = ["./data/slim"]
+_ms_executable = ["./data/ms"]
+_discoal_executable = ["./data/discoal"]
+_scrm_executable = ["./data/scrm"]
 
 
 def flatten(l):
@@ -149,107 +205,36 @@ def subsample_simplify_slim_treesequence(ts, sample_sizes):
     return ts
 
 
-def run_dtwf_coalescent_stats(**kwargs):
-    df = pd.DataFrame()
-
-    for model in ["hudson", "dtwf"]:
-        kwargs["model"] = model
-
-        logging.debug(f"Running: {kwargs}")
-        data = collections.defaultdict(list)
-        replicates = msprime.simulate(**kwargs)
-        for ts in replicates:
-            t_mrca = np.zeros(ts.num_trees)
-            t_intervals = []
-            for tree in ts.trees():
-                t_mrca[tree.index] = tree.time(tree.root)
-                t_intervals.append(tree.interval)
-            data["tmrca_mean"].append(np.mean(t_mrca))
-            data["num_trees"].append(ts.num_trees)
-            data["intervals"].append(t_intervals)
-            data["model"].append(model)
-        df = df.append(pd.DataFrame(data))
-    return df
-
-
 def plot_qq(v1, v2):
     sm.graphics.qqplot(v1)
     sm.qqplot_2samples(v1, v2, line="45")
 
 
 def plot_breakpoints_hist(v1, v2, v1_name, v2_name):
-    sns.kdeplot(v1, color="b", label=v1_name, shade=True, legend=False)
-    sns.kdeplot(v2, color="r", label=v2_name, shade=True, legend=False)
-    pyplot.legend(loc="upper right")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        sns.kdeplot(v1, color="b", label=v1_name, shade=True, legend=False)
+        sns.kdeplot(v2, color="r", label=v2_name, shade=True, legend=False)
+        pyplot.legend(loc="upper right")
 
 
 def all_breakpoints_in_replicates(replicates):
     return [right for intervals in replicates for left, right in intervals]
 
 
-def plot_dtwf_coalescent_stats(basedir, df):
-    df_hudson = df[df.model == "hudson"]
-    df_dtwf = df[df.model == "dtwf"]
-    for stat in ["tmrca_mean", "num_trees"]:
-        plot_qq(df_hudson[stat], df_dtwf[stat])
-        f = os.path.join(basedir, "{stat}.png")
-        pyplot.savefig(f, dpi=72)
-        pyplot.close("all")
-
-    hudson_breakpoints = all_breakpoints_in_replicates(df_hudson["intervals"])
-    dtwf_breakpoints = all_breakpoints_in_replicates(df_dtwf["intervals"])
-    if len(hudson_breakpoints) > 0 or len(dtwf_breakpoints) > 0:
-        plot_breakpoints_hist(hudson_breakpoints, dtwf_breakpoints, "hudson", "dtwf")
-        f = os.path.join(basedir, "breakpoints.png")
-        pyplot.savefig(f, dpi=72)
-        pyplot.close("all")
-
-
-def plot_tree_intervals(basedir, df):
-    fig, ax_arr = pyplot.subplots(2, 1)
-    for subplot_idx, model in enumerate(["hudson", "dtwf"]):
-        intervals = df[df.model == model]["intervals"][0]
-        for i, interval in enumerate(intervals):
-            left, right = interval
-            ax_arr[subplot_idx].set_title(model)
-            ax_arr[subplot_idx].set_ylabel("tree index")
-            ax_arr[subplot_idx].plot([left, right], [i, i], c="grey")
-
-    ax_arr[1].set_xlabel("tree interval")
-    pyplot.tight_layout()
-    f = os.path.join(basedir, "breakpoints.png")
-    pyplot.savefig(f, dpi=72)
-    pyplot.close("all")
-
-
-def make_test_dir(test_name):
-    root = "tmp__NOBACKUP__"
-    if not os.path.exists(root):
-        os.mkdir(root)
-    basedir = os.path.join(root, test_name)
-    if not os.path.exists(basedir):
-        os.mkdir(basedir)
-    return basedir
-
-
 @attr.s
 class Test:
     """
-    The superclass of all tests. Each test must define a name, a group
-    and a run method.
+    The superclass of all tests. The only attribute defined is the output
+    directory for the test, which is guaranteed to exist when the
+    test method is called.
     """
 
-    name = attr.ib(type=str)
-    group = attr.ib(type=str)
-    _mspms_executable = attr.ib(init=False, default=[sys.executable, "mspms_dev.py"])
-    _slim_executable = attr.ib(init=False, default=["./data/slim"])
-    _ms_executable = attr.ib(init=False, default=["./data/ms"])
-
-    def run(self, output_dir):
-        raise NotImplementedError()
+    output_dir = attr.ib(type=str, default=None)
 
     def _run_sample_stats(self, args):
-        logging.debug(f"\t {' '.join(args)}")
+        logging.debug(f"{' '.join(args)}")
         p1 = subprocess.Popen(args, stdout=subprocess.PIPE)
         p2 = subprocess.Popen(
             ["./data/sample_stats"], stdin=p1.stdout, stdout=subprocess.PIPE
@@ -266,12 +251,9 @@ class Test:
         return df
 
     def _build_filename(self, *args):
-        output_dir = os.path.join(self._output_dir, args[0])
-        if not os.path.isdir(output_dir):
-            os.mkdir(output_dir)
-        return os.path.join(output_dir, "_".join(args[1:]))
+        return self.output_dir / "_".join(args[1:])
 
-    def _plot_stats(self, key, stats_type, df1, df2, df1_name, df2_name):
+    def _plot_stats(self, stats_type, df1, df2, df1_name, df2_name):
         assert set(df1.columns.values) == set(df2.columns.values)
         for stat in df1.columns.values:
             v1 = df1[stat]
@@ -280,7 +262,7 @@ class Test:
                 plot_breakpoints_hist(flatten(v1), flatten(v2), df1_name, df2_name)
             else:
                 plot_qq(v1, v2)
-            f = self._build_filename(key, stats_type, stat)
+            f = self._build_filename(stats_type, stat)
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
@@ -291,14 +273,16 @@ class Test:
 
     def _run_msprime_mutation_stats(self, args):
         return self._run_sample_stats(
-            self._mspms_executable + args.split() + self.get_ms_seeds()
+            _mspms_executable + args.split() + self.get_ms_seeds()
         )
 
 
-@attr.s
 class MsTest(Test):
+    """
+    Superclass of tests that perform comparisons with ms. Provides some
+    infrastructure for common operations.
+    """
 
-    # functions common in ms and random
     def _deserialize_breakpoints(self, df):
         breakpoints_strs = df["breakpoints"]
         breakpoints = [ast.literal_eval(l) for l in breakpoints_strs]
@@ -308,7 +292,7 @@ class MsTest(Test):
     def _exec_coalescent_stats(self, executable, args, seeds=None):
         with tempfile.TemporaryFile() as f:
             argList = [executable] + args.split() + self.get_ms_seeds()
-            logging.debug(f"\t {' '.join(argList)}")
+            logging.debug(f"{' '.join(argList)}")
             subprocess.call(argList, stdout=f)
             f.seek(0)
             df = pd.read_table(f)
@@ -320,16 +304,16 @@ class MsTest(Test):
 
     def _run_ms_mutation_stats(self, args):
         return self._run_sample_stats(
-            self._ms_executable + args.split() + self.get_ms_seeds()
+            _ms_executable + args.split() + self.get_ms_seeds()
         )
 
-    def _run_mutation_stats(self, key, args):
+    def _run_mutation_stats(self, args):
         df_ms = self._run_ms_mutation_stats(args)
         df_msp = self._run_msprime_mutation_stats(args)
-        self._plot_stats(key, "mutation", df_ms, df_msp, "ms", "msp")
+        self._plot_stats("mutation", df_ms, df_msp, "ms", "msp")
 
     def _run_mspms_coalescent_stats(self, args):
-        logging.debug(f"\t mspms: {args}")
+        logging.debug(f"mspms: {args}")
         runner = cli.get_mspms_runner(args.split())
         sim = runner.get_simulator()
         num_populations = sim.num_populations
@@ -365,206 +349,291 @@ class MsTest(Test):
         df = pd.DataFrame(d)
         return df
 
-    def _run_coalescent_stats(self, key, args):
+    def _run_coalescent_stats(self, args):
         df_msp = self._run_mspms_coalescent_stats(args)
         df_ms = self._run_ms_coalescent_stats(args)
-        self._plot_stats(key, "coalescent", df_msp, df_ms, "msp", "ms")
+        self._plot_stats("coalescent", df_msp, df_ms, "msp", "ms")
 
     # end of tests common to MS and random
-    def _run_variable_recombination_coalescent_stats(self, key, args):
+    def _run_variable_recombination_coalescent_stats(self, args):
         df_msp = self._run_mspms_coalescent_stats(args)
         df_mshot = self._run_mshot_coalescent_stats(args)
-        self._plot_stats(key, "recomb map coalescent", df_msp, df_mshot, "msp", "msHOT")
+        self._plot_stats("recomb map coalescent", df_msp, df_mshot, "msp", "msHOT")
 
     def _run_mshot_coalescent_stats(self, args):
         return self._exec_coalescent_stats("./data/msHOT_summary_stats", args)
 
-    def _run_ms_mshot_stats(self, key, args):
-        df_ms = self._run_ms_coalescent_stats(args)
-        df_mshot = self._run_mshot_coalescent_stats(args)
-        self._plot_stats(key, "ms mshot consistency", df_mshot, df_ms, "msHOT", "ms")
+    def _run(self, cmd):
+        self._run_coalescent_stats(cmd)
+        self._run_mutation_stats(cmd)
 
 
-@attr.s
-class MsTest1(MsTest):
-    command = attr.ib(type=str)
+class MsDemography(MsTest):
+    def test_size_change_1(self):
+        self._run("10 10000 -t 2.0 -eN 0.1 2.0")
 
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        logging.debug(f"{self.name} {self.command}")
-        self._run_coalescent_stats(self.name, self.command)
-        self._run_mutation_stats(self.name, self.command)
+    def test_growth_rate_change_1(self):
+        self._run("10 10000 -t 2.0 -eG 0.1 5.0")
+
+    def test_growth_rate_change1(self):
+        self._run("10 10000 -t 2.0 -eG 0.1 5.0")
+
+    def test_growth_rate_2_pops1(self):
+        self._run("10 10000 -t 2.0 -I 2 5 5 2.5 -G 5.0")
+
+    def test_growth_rate_2_pops2(self):
+        self._run("10 10000 -t 2.0 -I 2 5 5 2.5 -G 5.0 -g 1 0.1")
+
+    def test_growth_rate_2_pops3(self):
+        self._run("10 10000 -t 2.0 -I 2 5 5 2.5 -g 1 0.1")
+
+    def test_growth_rate_2_pops4(self):
+        self._run("10 10000 -t 2.0 -I 2 5 5 2.5 -eg 1.0 1 5.0")
+
+    def test_pop_size_2_pops1(self):
+        self._run("100 10000 -t 2.0 -I 2 50 50 2.5 -n 1 0.1")
+
+    def test_pop_size_2_pops2(self):
+        self._run("100 10000 -t 2.0 -I 2 50 50 2.5 -g 1 2 -n 1 0.1")
+
+    def test_pop_size_2_pops3(self):
+        self._run("100 10000 -t 2.0 -I 2 50 50 2.5 -eN 0.5 3.5")
+
+    def test_pop_size_2_pops4(self):
+        self._run("100 10000 -t 2.0 -I 2 50 50 2.5 -en 0.5 1 3.5")
+
+    def test_migration_rate_2_pops1(self):
+        self._run("100 10000 -t 2.0 -I 2 50 50 0 -eM 3 5")
+
+    def test_migration_matrix_2_pops1(self):
+        self._run("100 10000 -t 2.0 -I 2 50 50 -ma x 10 0 x")
+
+    def test_migration_matrix_2_pops2(self):
+        self._run("100 10000 -t 2.0 -I 2 50 50 -m 1 2 10 -m 2 1 50")
+
+    def test_migration_rate_change_2_pops1(self):
+        self._run("100 10000 -t 2.0 -I 2 50 50 -eM 5 10")
+
+    def test_migration_matrix_entry_change_2_pops1(self):
+        self._run("100 10000 -t 2.0 -I 2 50 50 -em 0.5 2 1 10")
+
+    def test_migration_matrix_change_2_pops1(self):
+        self._run("100 10000 -t 2.0 -I 2 50 50 -ema 10.0 2 x 10 0 x")
+
+    def migration_matrix_change_2_pops2(self):
+        cmd = """100 10000 -t 2.0 -I 2 50 50 -ema 1.0
+          2 x 0.1 0 x -eN 1.1 0.001 -ema 10 2 x 0 10 x"""
+        self._run(cmd)
+
+    def test_population_split_2_pops1(self):
+        self._run("100 10000 -t 2.0 -I 2 50 50 5.0 -ej 2.0 1 2")
+
+    def test_population_split_4_pops1(self):
+        self._run("100 10000 -t 2.0 -I 4 50 50 0 0 2.0 -ej 0.5 2 1")
+
+    def test_population_split_4_pops2(self):
+        self._run("100 10000 -t 2.0 -I 4 25 25 25 25 -ej 1 2 1 -ej 2 3 1 -ej 3 4 1")
+
+    def test_population_split_4_pops3(self):
+        cmd = (
+            "100 10000 -t 2.0 -I 4 25 25 25 25 -ej 1 2 1 "
+            "-em 1.5 4 1 2 -ej 2 3 1 -ej 3 4 1"
+        )
+        self._run(cmd)
+
+    def test_admixture_1_pop1(self):
+        self._run("1000 1000 -t 2.0 -es 0.1 1 0.5 -em 0.1 1 2 1")
+
+    def test_admixture_1_pop2(self):
+        self._run("1000 1000 -t 2.0 -es 0.1 1 0.1 -em 0.1 1 2 1")
+
+    def test_admixture_1_pop3(self):
+        self._run("1000 1000 -t 2.0 -es 0.01 1 0.1 -em 0.1 2 1 1")
+
+    def test_admixture_1_pop4(self):
+        self._run("1000 1000 -t 2.0 -es 0.01 1 0.1 -es 0.1 2 0 -em 0.1 3 1 1")
+
+    def test_admixture_1_pop5(self):
+        self._run("1000 1000 -t 2.0 -es 0.01 1 0.1 -ej 1 2 1")
+
+    def test_admixture_1_pop6(self):
+        self._run("1000 1000 -t 2.0 -es 0.01 1 0.0 -eg 0.02 2 5.0 ")
+
+    def test_admixture_1_pop7(self):
+        self._run("1000 1000 -t 2.0 -es 0.01 1 0.0 -en 0.02 2 5.0 ")
+
+    def test_admixture_2_pop1(self):
+        self._run("1000 1000 -t 2.0 -I 2 500 500 1 -es 0.01 1 0.1 -ej 1 3 1")
+
+    def test_admixture_2_pop2(self):
+        self._run("1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -em 2.0 3 1 1")
+
+    def test_admixture_2_pop3(self):
+        self._run(
+            "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -G 5.0 " "-em 2.0 3 1 1"
+        )
+
+    def test_admixture_2_pop4(self):
+        cmd = (
+            "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 "
+            "-eg 0.02 1 5.0 -em 0.02 3 1 1"
+        )
+        self._run(cmd)
 
 
-def register_ms_tests_1(runner):
-    def register(name, command):
-        runner.register(MsTest1(name=name, group="ms", command=command))
+class MsGeneConversion(MsTest):
 
-    register("size-change1", "10 10000 -t 2.0 -eN 0.1 2.0")
-    register("growth-rate-change1", "10 10000 -t 2.0 -eG 0.1 5.0")
-    register("growth-rate-2-pops1", "10 10000 -t 2.0 -I 2 5 5 2.5 -G 5.0")
-    register("growth-rate-2-pops2", "10 10000 -t 2.0 -I 2 5 5 2.5 -G 5.0 -g 1 0.1")
-    register("growth-rate-2-pops3", "10 10000 -t 2.0 -I 2 5 5 2.5 -g 1 0.1")
-    register("growth-rate-2-pops4", "10 10000 -t 2.0 -I 2 5 5 2.5 -eg 1.0 1 5.0")
-    register("pop-size-2-pops1", "100 10000 -t 2.0 -I 2 50 50 2.5 -n 1 0.1")
-    register("pop-size-2-pops2", "100 10000 -t 2.0 -I 2 50 50 2.5 -g 1 2 -n 1 0.1")
-    register("pop-size-2-pops3", "100 10000 -t 2.0 -I 2 50 50 2.5 -eN 0.5 3.5")
-    register("pop-size-2-pops4", "100 10000 -t 2.0 -I 2 50 50 2.5 -en 0.5 1 3.5")
-    register("migration-rate-2-pops1", "100 10000 -t 2.0 -I 2 50 50 0 -eM 3 5")
-    register("migration-matrix-2-pops1", "100 10000 -t 2.0 -I 2 50 50 -ma x 10 0 x")
-    register(
-        "migration-matrix-2-pops2", "100 10000 -t 2.0 -I 2 50 50 -m 1 2 10 -m 2 1 50"
-    )
-    register("migration-rate-change-2-pops1", "100 10000 -t 2.0 -I 2 50 50 -eM 5 10")
-    register(
-        "migration-matrix-entry-change-2-pops1",
-        "100 10000 -t 2.0 -I 2 50 50 -em 0.5 2 1 10",
-    )
-    register(
-        "migration-matrix-change-2-pops1",
-        "100 10000 -t 2.0 -I 2 50 50 -ema 10.0 2 x 10 0 x",
-    )
-    cmd = """100 10000 -t 2.0 -I 2 50 50 -ema 1.0
-      2 x 0.1 0 x -eN 1.1 0.001 -ema 10 2 x 0 10 x"""
-    register(
-        "migration-matrix-change-2-pops2", cmd,
-    )
-    register("population-split-2-pops1", "100 10000 -t 2.0 -I 2 50 50 5.0 -ej 2.0 1 2")
-    register(
-        "population-split-4-pops1", "100 10000 -t 2.0 -I 4 50 50 0 0 2.0 -ej 0.5 2 1"
-    )
-    register(
-        "population-split-4-pops2",
-        "100 10000 -t 2.0 -I 4 25 25 25 25 -ej 1 2 1 -ej 2 3 1 -ej 3 4 1",
-    )
-    register(
-        "population-split-4-pops3",
-        "100 10000 -t 2.0 -I 4 25 25 25 25 -ej 1 2 1 -em 1.5 4 1 2 -ej 2 3 1 -ej 3 4 1",
-    )
-    register("admixture-1-pop1", "1000 1000 -t 2.0 -es 0.1 1 0.5 -em 0.1 1 2 1")
-    register("admixture-1-pop2", "1000 1000 -t 2.0 -es 0.1 1 0.1 -em 0.1 1 2 1")
-    register("admixture-1-pop3", "1000 1000 -t 2.0 -es 0.01 1 0.1 -em 0.1 2 1 1")
-    register(
-        "admixture-1-pop4", "1000 1000 -t 2.0 -es 0.01 1 0.1 -es 0.1 2 0 -em 0.1 3 1 1"
-    )
-    register("admixture-1-pop5", "1000 1000 -t 2.0 -es 0.01 1 0.1 -ej 1 2 1")
-    register("admixture-1-pop6", "1000 1000 -t 2.0 -es 0.01 1 0.0 -eg 0.02 2 5.0 ")
-    register("admixture-1-pop7", "1000 1000 -t 2.0 -es 0.01 1 0.0 -en 0.02 2 5.0 ")
-    register(
-        "admixture-2-pop1", "1000 1000 -t 2.0 -I 2 500 500 1 -es 0.01 1 0.1 -ej 1 3 1"
-    )
-    register(
-        "admixture-2-pop2",
-        "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -em 2.0 3 1 1",
-    )
-    register(
-        "admixture-2-pop3",
-        "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -G 5.0 " "-em 2.0 3 1 1",
-    )
-    register(
-        "admixture-2-pop4",
-        "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -eg 0.02 1 5.0 -em 0.02 3 1 1",
-    )
     # FIXME disabling this test until GC with recombination rate=0
-    # register("gene-conversion-1-r0", "100 10000 -t 5.0 -r 0 2501 -c 10 1")
-    register("gene-conversion-1", "100 10000 -t 5.0 -r 0.01 2501 -c 1000 1")
-    register("gene-conversion-2", "100 10000 -t 5.0 -r 10 2501 -c 2 1")
-    register("gene-conversion-2-tl-10", "100 10000 -t 5.0 -r 10 2501 -c 2 10")
-    register("gene-conversion-2-tl-100", "100 10000 -t 5.0 -r 10 2501 -c 2 100")
-    register("msdoc-simple-ex", "4 20000 -t 5.0")
-    register("msdoc-recomb-ex", "15 1000 -t 10.04 -r 100.0 2501")
-    register("msdoc-structure-ex1", "15 1000 -t 2.0 -I 3 10 4 1 5.0")
-    register(
-        "msdoc-structure-ex2", "15 1000 -t 2.0 -I 3 10 4 1 5.0 -m 1 2 10.0 -m 2 1 9.0"
-    )
-    register(
-        "msdoc-structure-ex3",
-        "15 1000 -t 10.0 -I 3 10 4 1 -ma x 1.0 2.0 3.0 x 4.0 5.0 6.0 x",
-    )
-    register("msdoc-outgroup-sequence", "11 1000 -t 2.0 -I 2 1 10 -ej 6.0 1 2")
-    cmd = "15 10000 -t 11.2 -I 2 3 12 -g 1 44.36 -n 2 \
-     0.125 -eg 0.03125 1 0.0 -en 0.0625 2 0.05 -ej 0.09375 2 1"
-    register(
-        "msdoc-two-species", cmd,
-    )
-    cmd = "15 10000 -t 3.0 -I 6 0 7 0 0 8 0 -m 1 2 2.5 -m 2 1 2.5 -m 2 3 2.5 -m 3 \
-     2 2.5 -m 4 5 2.5 -m 5 4 2.5 -m 5 6 2.5 -m 6 5 2.5 -em 2.0 3 4 2.5 -em 2.0 4 3 2.5"
-    register(
-        "msdoc-stepping-stone", cmd,
-    )
-    register("simultaneous-ex1", "10 10000 -t 2.0 -eN 0.3 0.5 -eG .3 7.0")
-    register("zero-growth-rate", "10 10000 -t 2.0 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5")
-    cmd = "4 1000 -t 2508 -I 2 2 2 0 -n 2 2.59 \
-     -ma x 0 1.502 x -ej 0.9485 1 2 -r 23.76 3000"
-    register(
-        "konrad-1", cmd,
-    )
-    cmd = "3 10000 -t 0.423 -I 3 1 1 1 -es 0.0786 1 0.946635 \
-      -ej 0.0786 4 3 -ej 0.189256 1 2 -ej 0.483492 2 3"
-    register(
-        "konrad-2", cmd,
-    )
-    register("konrad-3", "100 100 -t 2 -I 10 10 10 10 10 10 10 10 10 10 10 0.001 ")
+    # def test_gene_conversion_1_r0(self):
+    #     self._run("100 10000 -t 5.0 -r 0 2501 -c 10 1")
+
+    def test_gene_conversion_1(self):
+        self._run("100 10000 -t 5.0 -r 0.01 2501 -c 1000 1")
+
+    def test_gene_conversion_2(self):
+        self._run("100 10000 -t 5.0 -r 10 2501 -c 2 1")
+
+    def test_gene_conversion_2_tl_10(self):
+        self._run("100 10000 -t 5.0 -r 10 2501 -c 2 10")
+
+    def test_gene_conversion_2_tl_100(self):
+        self._run("100 10000 -t 5.0 -r 10 2501 -c 2 100")
 
 
-@attr.s
-class MsTest2(MsTest):
-    command = attr.ib(type=str)
+class MsDocExamples(MsTest):
+    def test_msdoc_simple_ex(self):
+        self._run("4 20000 -t 5.0")
 
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        logging.debug(f"{self.name} {self.command}")
-        self._run_variable_recombination_coalescent_stats(self.name, self.command)
+    def test_msdoc_recomb_ex(self):
+        self._run("15 1000 -t 10.04 -r 100.0 2501")
 
+    def test_msdoc_structure_ex1(self):
+        self._run("15 1000 -t 2.0 -I 3 10 4 1 5.0")
 
-def register_ms_tests_2(runner):
-    def register(name, command):
-        runner.register(MsTest2(name=name, group="ms", command=command))
+    def test_msdoc_structure_ex2(self):
+        self._run("15 1000 -t 2.0 -I 3 10 4 1 5.0 -m 1 2 10.0 -m 2 1 9.0")
 
-    register(
-        "mshotdoc-hotspot-ex",
-        "10 1000 -t 10.4 -r 10.0 25000 -v 2 100 200 10 7000 8000 20",
-    )
-    register(
-        "mshot-zero-recomb-interval", "10 1000 -t 10.4 -r 10.0 25000 -v 1 5000 13000 0"
-    )
-    register("mshot-zero-recomb", "10 1000 -t 10.4 -r 10.0 25000 -v 1 100 25000 0")
-    hotspots = "4 1000 2000 0 7000 8000 20 12000 15000 10 20000 22000 0"
-    register(
-        "mshot-high-recomb-variance", f"10 1000 -t 10.4 -r 10.0 25000 -v {hotspots}"
-    )
+    def test_msdoc_structure_ex3(self):
+        self._run("15 1000 -t 10.0 -I 3 10 4 1 -ma x 1.0 2.0 3.0 x 4.0 5.0 6.0 x",)
 
+    def test_msdoc_outgroup_sequence(self):
+        self._run("11 1000 -t 2.0 -I 2 1 10 -ej 6.0 1 2")
 
-@attr.s
-class MsTest3(MsTest):
-    command = attr.ib(type=str)
+    def test_msdoc_two_species(self):
+        cmd = (
+            "15 10000 -t 11.2 -I 2 3 12 -g 1 44.36 -n 2 "
+            "0.125 -eg 0.03125 1 0.0 -en 0.0625 2 0.05 -ej 0.09375 2 1"
+        )
+        self._run(cmd)
 
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        logging.debug(f"{self.name} {self.command}")
-        self._run_ms_mshot_stats(self.name, self.command)
+    def test_msdoc_stepping_stone(self):
+        cmd = (
+            "15 10000 -t 3.0 -I 6 0 7 0 0 8 0 -m 1 2 2.5 -m 2 1 2.5 -m 2 3 2.5 "
+            "-m 3 2 2.5 -m 4 5 2.5 -m 5 4 2.5 -m 5 6 2.5 -m 6 5 2.5 "
+            "-em 2.0 3 4 2.5 -em 2.0 4 3 2.5"
+        )
+        self._run(cmd)
 
 
-def register_ms_tests_3(runner):
-    def register(name, command):
-        runner.register(MsTest3(name=name, group="ms", command=command))
+class MsMiscExamples(MsTest):
+    """
+    Miscellaneous examples that have been good for finding bugs.
+    """
 
-    register("ms-mshot-consistency-check", "10 1000 -t 10.4 -r 10.0 25000")
+    def test_simultaneous_ex1(self):
+        self._run("10 10000 -t 2.0 -eN 0.3 0.5 -eG .3 7.0")
+
+    def test_zero_growth_rate(self):
+        self._run("10 10000 -t 2.0 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5")
+
+    def test_konrad_1(self):
+        cmd = (
+            "4 1000 -t 2508 -I 2 2 2 0 -n 2 2.59 "
+            "-ma x 0 1.502 x -ej 0.9485 1 2 -r 23.76 3000"
+        )
+        self._run(cmd)
+
+    def test_konrad_2(self):
+        cmd = (
+            "3 10000 -t 0.423 -I 3 1 1 1 -es 0.0786 1 0.946635 "
+            "-ej 0.0786 4 3 -ej 0.189256 1 2 -ej 0.483492 2 3"
+        )
+        self._run(cmd)
+
+    def test_konrad_3(self):
+        self._run("100 100 -t 2 -I 10 10 10 10 10 10 10 10 10 10 10 0.001 ")
 
 
-def register_ms_tests(runner):
-    register_ms_tests_1(runner)
-    register_ms_tests_2(runner)
-    register_ms_tests_3(runner)
+class MsRandom(MsTest):
+    """
+    Some tests made by generating random parameters.
+    """
+
+    def _run(self, num_populations=1, num_replicates=1000, num_demographic_events=0):
+        m = random.randint(1, 1000)
+        r = random.uniform(0.01, 0.1) * m
+        theta = random.uniform(1, 100)
+        N = num_populations
+        sample_sizes = [random.randint(2, 10) for _ in range(N)]
+        migration_matrix = [random.random() * (j % (N + 1) != 0) for j in range(N ** 2)]
+        structure = ""
+        if num_populations > 1:
+            structure = "-I {} {} -ma {}".format(
+                num_populations,
+                " ".join(str(s) for s in sample_sizes),
+                " ".join(str(r) for r in migration_matrix),
+            )
+        cmd = "{} {} -t {} -r {} {} {}".format(
+            sum(sample_sizes), num_replicates, theta, r, m, structure
+        )
+
+        # Set some initial growth rates, etc.
+        if N == 1:
+            if random.random() < 0.5:
+                cmd += f" -G {random.random()}"
+            else:
+                cmd += f" -eN 0 {random.random()}"
+        # Add some demographic events
+        t = 0
+        for _ in range(num_demographic_events):
+            t += 0.125
+            if random.random() < 0.5:
+                cmd += f" -eG {t} {random.random()}"
+            else:
+                cmd += f" -eN {t} {random.random()}"
+
+        super()._run(cmd)
+
+    def test_ms_random_1(self):
+        self._run()
+
+    def test_ms_random_2(self):
+        self._run(num_replicates=10 ** 4, num_demographic_events=10)
+
+    def test_ms_random_2_pops1(self):
+        self._run(num_populations=3)
 
 
-@attr.s
+class MsHotTest(MsTest):
+    def _run(self, cmd):
+        self._run_variable_recombination_coalescent_stats(cmd)
+
+    def test_mshotdoc_hotspot_ex(self):
+        self._run("10 1000 -t 10.4 -r 10.0 25000 -v 2 100 200 10 7000 8000 20",)
+
+    def test_mshot_zero_recomb_interval(self):
+        self._run("10 1000 -t 10.4 -r 10.0 25000 -v 1 5000 13000 0")
+
+    def test_mshot_zero_recomb(self):
+        self._run("10 1000 -t 10.4 -r 10.0 25000 -v 1 100 25000 0")
+
+    def test_mshot_high_recomb_variants(self):
+        hotspots = "4 1000 2000 0 7000 8000 20 12000 15000 10 20000 22000 0"
+        cmd = f"10 1000 -t 10.4 -r 10.0 25000 -v {hotspots}"
+        self._run(cmd)
+
+
 class DiscoalTest(Test):
-    _discoal_executable = attr.ib(init=False, default=["./data/discoal"])
-
     def get_discoal_seeds(self):
         max_seed = 2 ** 16
         seeds = [random.randint(1, max_seed) for j in range(3)]
@@ -589,22 +658,55 @@ class DiscoalTest(Test):
 
     def _run_discoal_mutation_stats(self, args):
         return self._run_sample_stats(
-            self._discoal_executable + args.split() + self.get_discoal_seeds()
+            _discoal_executable + args.split() + self.get_discoal_seeds()
         )
 
-    def _run_mutation_discoal_stats(self, key, args):
+    def _run_mutation_discoal_stats(self, args):
         msp_str = self._discoal_str_to_ms(args)
         df_msp = self._run_msprime_mutation_stats(msp_str)
-        df_d = self._run_discoal_mutation_stats(args)
-        self._plot_stats(key, "mutation", df_d, df_msp, "discoal", "msp")
+        df_d = self._run_sample_stats(
+            _discoal_executable + args.split() + self.get_discoal_seeds()
+        )
+        self._plot_stats("mutation", df_d, df_msp, "discoal", "msp")
 
-    def run_sweep_comparison(self, key, args):
-        """
-        does a comparison of sweep model vs discoal
-        """
+
+class DisccoalCompatibility(DiscoalTest):
+    """
+    Basic tests to make sure that we have correctly set up the
+    discoal interface.
+    """
+
+    def _run(self, cmd):
+        self._run_mutation_discoal_stats(cmd)
+
+    def test_discoal_simple_ex(self):
+        self._run("15 1000 100 -t 5.0")
+
+    def test_discoal_size_change1(self):
+        self._run("10 10000 100 -t 10.0 -en 0.1 0 2.0")
+
+    def test_discoal_size_change2(self):
+        self._run("10 10000 100 -t 10.0 -en 0.1 0 0.1")
+
+    def test_discoal_size_change3(self):
+        self._run("10 10000 100 -t 10.0 -en 0.01 0 0.01")
+
+    def test_discoal_size_change4(self):
+        self._run("10 10000 100 -t 10.0 -en 0.01 0 0.5 -en 0.05 0 1.0")
+
+
+# TODO we need to fix this test and to add a good number of examples.
+
+
+class DiscoalSweeps(DiscoalTest):
+    """
+    Compare the result of sweeps in msprime and discoal.
+    """
+
+    def _run(self, args):
         # This is broken currently: https://github.com/tskit-dev/msprime/issues/942
         # Skip noisily
-        logging.warning("Skipping sweep comparison due to known bug.")
+        logging.error("Skipping sweep comparison due to known bug.")
         return
 
         # TODO We should be parsing the args string here to derive these values
@@ -651,59 +753,20 @@ class DiscoalTest(Test):
         logging.debug(f"msp D mean: {df['D'].mean()}")
         logging.debug(f"discoal D mean: {df_df['D'].mean()}")
         logging.debug(f"sample sizes msp: {len(df['pi'])} discoal: {len(df_df['pi'])}")
-        self._plot_stats(key, f"mutation{df}, {df_df}")
+        self._plot_stats(f"mutation{df}, {df_df}")
+
+    def test_sweep_ex1(self):
+        cmd = "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a 500 -x 0.5 -N 10000"
+        self._run(cmd)
 
 
-@attr.s
-class DiscoalTest1(DiscoalTest):
-    command = attr.ib(type=str)
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        logging.debug(f"{self.name} {self.command}")
-        self._run_mutation_discoal_stats(self.name, self.command)
+# FIXME disabling these for now because the pedigree file that
+# they depend on doesn't exist. (Tests won't be picked up unless
+# they subclass Test.)
 
 
-def register_discoal_tests_1(runner):
-    def register(name, command):
-        runner.register(DiscoalTest1(name=name, group="discoal", command=command))
-
-    register("discoal-simple-ex", "15 1000 100 -t 5.0")
-    register("discoal-size-change1", "10 10000 100 -t 10.0 -en 0.1 0 2.0")
-    register("discoal-size-change2", "10 10000 100 -t 10.0 -en 0.1 0 0.1")
-    register("discoal-size-change3", "10 10000 100 -t 10.0 -en 0.01 0 0.01")
-    register(
-        "discoal-size-change4", "10 10000 100 -t 10.0 -en 0.01 0 0.5 -en 0.05 0 1.0"
-    )
-
-
-@attr.s
-class DiscoalTest2(DiscoalTest):
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_sweep_comparison(
-            "sweep",
-            "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a \
-                                  500 -x 0.5 -N 10000",
-        )
-
-
-def register_discoal_tests_2(runner):
-    runner.register(DiscoalTest2(name="sweep_vs_discoal", group="discoal"))
-
-
-def register_discoal_tests(runner):
-    register_discoal_tests_1(runner)
-    register_discoal_tests_2(runner)
-
-
-@attr.s
-class DtwfVsCoalescentTest(Test):
-    _discoal_executable = attr.ib(init=False, default=["./data/discoal"])
-
-    def run_dtwf_pedigree_comparison(self, test_name, **kwargs):
+class DtwfPedigreeVsCoalescent:
+    def run_dtwf_pedigree_comparison(self, **kwargs):
         df = pd.DataFrame()
         pedigree = kwargs["pedigree"]
         assert kwargs["sample_size"] % 2 == 0
@@ -727,21 +790,15 @@ class DtwfVsCoalescentTest(Test):
 
             logging.debug(f"Running: {kwargs}")
             data = collections.defaultdict(list)
-            try:
-                replicates = msprime.simulate(**kwargs)
-                for ts in replicates:
-                    t_mrca = np.zeros(ts.num_trees)
-                    for tree in ts.trees():
-                        t_mrca[tree.index] = tree.time(tree.root)
-                    data["tmrca_mean"].append(np.mean(t_mrca))
-                    data["num_trees"].append(ts.num_trees)
-                    data["model"].append(model)
-            except Exception as e:
-                logging.warning(f"TEST FAILED!!!: {e}")
-                return
+            replicates = msprime.simulate(**kwargs)
+            for ts in replicates:
+                t_mrca = np.zeros(ts.num_trees)
+                for tree in ts.trees():
+                    t_mrca[tree.index] = tree.time(tree.root)
+                data["tmrca_mean"].append(np.mean(t_mrca))
+                data["num_trees"].append(ts.num_trees)
+                data["model"].append(model)
             df = df.append(pd.DataFrame(data))
-
-        basedir = make_test_dir(test_name)
 
         df_wf_ped = df[df.model == "wf_ped"]
         df_dtwf = df[df.model == "dtwf"]
@@ -750,84 +807,403 @@ class DtwfVsCoalescentTest(Test):
             v2 = df_dtwf[stat]
             sm.graphics.qqplot(v1)
             sm.qqplot_2samples(v1, v2, line="45")
-            f = os.path.join(basedir, f"{stat}.png")
+            f = self.output_dir / f"{stat}.png"
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
-    def add_dtwf_vs_pedigree_single_locus(self):
-        """
-        Checks the DTWF against the standard coalescent at a single locus.
-        """
+    def test_dtwf_vs_pedigree_single_locus(self):
         pedigree_file = "tests/data/pedigrees/wf_100Ne_10000gens.txt"
         pedigree = msprime.Pedigree.read_txt(pedigree_file, time_col=3)
 
-        def f():
-            self.run_dtwf_pedigree_comparison(
-                "dtwf_vs_pedigree_single_locus",
-                sample_size=10,
-                Ne=100,
-                num_replicates=400,
-                length=1,
-                pedigree=pedigree,
-                recombination_rate=0,
-                mutation_rate=1e-8,
-            )
+        self.run_dtwf_pedigree_comparison(
+            "dtwf_vs_pedigree_single_locus",
+            sample_size=10,
+            Ne=100,
+            num_replicates=400,
+            length=1,
+            pedigree=pedigree,
+            recombination_rate=0,
+            mutation_rate=1e-8,
+        )
 
-        self._instances["dtwf_vs_pedigree_single_locus"] = f
-
-    def add_dtwf_vs_pedigree_short_region(self):
-        """
-        Checks the DTWF against the standard coalescent at a single locus.
-        """
+    def test_dtwf_vs_pedigree_short_region(self):
         pedigree_file = "tests/data/pedigrees/wf_100Ne_10000gens.txt"
         pedigree = msprime.Pedigree.read_txt(pedigree_file, time_col=3)
 
-        def f():
-            self.run_dtwf_pedigree_comparison(
-                "dtwf_vs_pedigree_short_region",
-                sample_size=10,
-                Ne=100,
-                num_replicates=400,
-                length=1e6,
-                pedigree=pedigree,
-                recombination_rate=1e-8,
-                mutation_rate=1e-8,
-            )
+        self.run_dtwf_pedigree_comparison(
+            "dtwf_vs_pedigree_short_region",
+            sample_size=10,
+            Ne=100,
+            num_replicates=400,
+            length=1e6,
+            pedigree=pedigree,
+            recombination_rate=1e-8,
+            mutation_rate=1e-8,
+        )
 
-        self._instances["dtwf_vs_pedigree_short_region"] = f
-
-    def add_dtwf_vs_pedigree_long_region(self):
-        """
-        Checks the DTWF against the standard coalescent at a single locus.
-        """
+    def test_dtwf_vs_pedigree_long_region(self):
         pedigree_file = "tests/data/pedigrees/wf_100Ne_10000gens.txt"
         pedigree = msprime.Pedigree.read_txt(pedigree_file, time_col=3)
 
-        def f():
-            self.run_dtwf_pedigree_comparison(
-                "dtwf_vs_pedigree_long_region",
-                sample_size=10,
-                Ne=100,
-                num_replicates=200,
-                length=1e8,
-                pedigree=pedigree,
-                recombination_rate=1e-8,
-                mutation_rate=1e-8,
+        self.run_dtwf_pedigree_comparison(
+            "dtwf_vs_pedigree_long_region",
+            sample_size=10,
+            Ne=100,
+            num_replicates=200,
+            length=1e8,
+            pedigree=pedigree,
+            recombination_rate=1e-8,
+            mutation_rate=1e-8,
+        )
+
+
+class DtwfVsCoalescent(Test):
+    """
+    Tests where we compare the DTWF with coalescent simulations.
+    """
+
+    def run_dtwf_coalescent_stats(self, **kwargs):
+        df = pd.DataFrame()
+
+        for model in ["hudson", "dtwf"]:
+            kwargs["model"] = model
+
+            logging.debug(f"Running: {kwargs}")
+            data = collections.defaultdict(list)
+            replicates = msprime.simulate(**kwargs)
+            for ts in replicates:
+                t_mrca = np.zeros(ts.num_trees)
+                t_intervals = []
+                for tree in ts.trees():
+                    t_mrca[tree.index] = tree.time(tree.root)
+                    t_intervals.append(tree.interval)
+                data["tmrca_mean"].append(np.mean(t_mrca))
+                data["num_trees"].append(ts.num_trees)
+                data["intervals"].append(t_intervals)
+                data["model"].append(model)
+            df = df.append(pd.DataFrame(data))
+        return df
+
+    def plot_dtwf_coalescent_stats(self, df):
+        df_hudson = df[df.model == "hudson"]
+        df_dtwf = df[df.model == "dtwf"]
+        for stat in ["tmrca_mean", "num_trees"]:
+            plot_qq(df_hudson[stat], df_dtwf[stat])
+            f = self.output_dir / f"{stat}.png"
+            pyplot.savefig(f, dpi=72)
+            pyplot.close("all")
+
+        hudson_breakpoints = all_breakpoints_in_replicates(df_hudson["intervals"])
+        dtwf_breakpoints = all_breakpoints_in_replicates(df_dtwf["intervals"])
+        if len(hudson_breakpoints) > 0 or len(dtwf_breakpoints) > 0:
+            plot_breakpoints_hist(
+                hudson_breakpoints, dtwf_breakpoints, "hudson", "dtwf"
+            )
+            pyplot.savefig(self.output_dir / "breakpoints.png", dpi=72)
+            pyplot.close("all")
+
+    def plot_tree_intervals(self, df):
+        fig, ax_arr = pyplot.subplots(2, 1)
+        for subplot_idx, model in enumerate(["hudson", "dtwf"]):
+            intervals = df[df.model == model]["intervals"][0]
+            for i, interval in enumerate(intervals):
+                left, right = interval
+                ax_arr[subplot_idx].set_title(model)
+                ax_arr[subplot_idx].set_ylabel("tree index")
+                ax_arr[subplot_idx].plot([left, right], [i, i], c="grey")
+
+        ax_arr[1].set_xlabel("tree interval")
+        pyplot.tight_layout()
+        pyplot.savefig(self.output_dir / "intervals.png", dpi=72)
+        pyplot.close("all")
+
+    def _run(self, **kwargs):
+        df = self.run_dtwf_coalescent_stats(**kwargs)
+        self.plot_dtwf_coalescent_stats(df)
+        self.plot_tree_intervals(df)
+
+
+class DtwfVsCoalescentSimple(DtwfVsCoalescent):
+    """
+    Straightforward tests where we pass through simulate args directly.
+    """
+
+    def test_dtwf_vs_coalescent_single_locus(self):
+        self._run(sample_size=10, Ne=1000, num_replicates=300)
+
+    def test_dtwf_vs_coalescent_recomb_discrete_hotspots(self):
+        """
+        Checks the DTWF against the standard coalescent with a
+        discrete recombination map with variable rates.
+        """
+        recombination_map = msprime.RecombinationMap(
+            positions=[0, 100, 500, 900, 1200, 1500, 2000],
+            rates=[0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
+            discrete=True,
+        )
+        self._run(
+            sample_size=10,
+            Ne=1000,
+            recombination_map=recombination_map,
+            num_replicates=300,
+        )
+
+    def test_dtwf_vs_coalescent_recomb_continuous_hotspots(self):
+        """
+        Checks the DTWF against the standard coalescent with a
+        continuous recombination map with variable rates.
+        """
+        recombination_map = msprime.RecombinationMap(
+            positions=[0, 0.1, 0.5, 0.9, 1.2, 1.5, 2.0],
+            rates=[0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
+            discrete=False,
+        )
+        self._run(
+            sample_size=10,
+            Ne=1000,
+            recombination_map=recombination_map,
+            num_replicates=300,
+        )
+
+    def test_dtwf_vs_coalescent_single_forced_recombination(self):
+        recombination_map = msprime.RecombinationMap(
+            positions=[0, 100, 101, 201], rates=[0, 1, 0, 0], discrete=True,
+        )
+        self._run(
+            sample_size=10,
+            Ne=10,
+            num_replicates=1,
+            recombination_map=recombination_map,
+        )
+
+    def test_dtwf_vs_coalescent_low_recombination(self):
+        self._run(sample_size=10, Ne=1000, num_replicates=400, recombination_rate=0.01)
+
+    def test_dtwf_vs_coalescent_2_pops_massmigration(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(sample_size=10, initial_size=1000),
+            msprime.PopulationConfiguration(sample_size=10, initial_size=1000),
+        ]
+        recombination_map = msprime.RecombinationMap(
+            positions=[0, int(1e6)], rates=[1e-8, 0]
+        )
+        demographic_events = [
+            msprime.MassMigration(time=300, source=1, destination=0, proportion=1.0)
+        ]
+        self._run(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            num_replicates=300,
+            recombination_map=recombination_map,
+        )
+
+    def test_dtwf_vs_coalescent_2_pop_growth(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(
+                sample_size=10, initial_size=1000, growth_rate=0.01
+            )
+        ]
+        recombination_map = msprime.RecombinationMap(
+            positions=[0, int(5e7)], rates=[1e-8, 0], discrete=True,
+        )
+        self._run(
+            population_configurations=population_configurations,
+            recombination_map=recombination_map,
+            num_replicates=300,
+        )
+
+    def test_dtwf_vs_coalescent_2_pop_shrink(self):
+        initial_size = 1000
+        population_configurations = [
+            msprime.PopulationConfiguration(
+                sample_size=10, initial_size=initial_size, growth_rate=-0.01
+            )
+        ]
+        recombination_map = msprime.RecombinationMap(
+            positions=[0, int(1e7)], rates=[1e-8, 0], discrete=True,
+        )
+        demographic_events = [
+            msprime.PopulationParametersChange(
+                time=200, initial_size=initial_size, growth_rate=0.01, population_id=0
+            )
+        ]
+        self._run(
+            population_configurations=population_configurations,
+            recombination_map=recombination_map,
+            demographic_events=demographic_events,
+            num_replicates=300,
+        )
+
+    def test_dtwf_vs_coalescent_multiple_bottleneck(self):
+        population_configurations = [
+            msprime.PopulationConfiguration(sample_size=5, initial_size=1000),
+            msprime.PopulationConfiguration(sample_size=5, initial_size=1000),
+        ]
+        recombination_map = msprime.RecombinationMap(
+            positions=[0, int(1e6)], rates=[1e-8, 0]
+        )
+
+        demographic_events = [
+            msprime.PopulationParametersChange(
+                time=100, initial_size=100, growth_rate=-0.01, population_id=0
+            ),
+            msprime.PopulationParametersChange(
+                time=200, initial_size=100, growth_rate=-0.01, population_id=1
+            ),
+            msprime.PopulationParametersChange(
+                time=300, initial_size=1000, growth_rate=0.01, population_id=0
+            ),
+            msprime.PopulationParametersChange(
+                time=400, initial_size=1000, growth_rate=0.01, population_id=1
+            ),
+            msprime.PopulationParametersChange(
+                time=500, initial_size=100, growth_rate=0, population_id=0
+            ),
+            msprime.PopulationParametersChange(
+                time=600, initial_size=100, growth_rate=0, population_id=1
+            ),
+            msprime.MigrationRateChange(time=700, rate=0.1, matrix_index=(0, 1)),
+        ]
+        self._run(
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            num_replicates=400,
+            recombination_map=recombination_map,
+        )
+
+
+class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
+    """
+    Tests for the DTWF and coalescent when we use a slightly more
+    high-level intervace.
+    """
+
+    def _run(
+        self,
+        initial_sizes,
+        sample_sizes,
+        num_loci,
+        recombination_rate,
+        migration_matrix=None,
+        growth_rates=None,
+        num_replicates=None,
+    ):
+        """
+        Generic test of DTWF vs hudson coalescent. Populations are not
+        allowed to shrink to fewer than 100 individuals, and if starting with
+        fewer than 100 have growth rate set to zero.
+        """
+        assert len(sample_sizes) == len(initial_sizes)
+        num_pops = len(sample_sizes)
+
+        if num_replicates is None:
+            num_replicates = 200
+
+        if growth_rates is None:
+            default_growth_rate = 0.01
+            growth_rates = [default_growth_rate] * num_pops
+
+        population_configurations = []
+        demographic_events = []
+
+        for i in range(num_pops):
+            if initial_sizes[i] > 100:
+                # Growth rate set to zero at pop size 100
+                t_100 = (np.log(initial_sizes[i]) - np.log(100)) / growth_rates[i]
+                de = msprime.PopulationParametersChange(
+                    t_100, growth_rate=0, population=i
+                )
+                demographic_events.append(de)
+
+                growth_rate = growth_rates[i]
+            else:
+                # Enforce zero growth rate for small populations
+                logging.warning(
+                    f"Warning - setting growth rate to zero for small \
+                    population of size {initial_sizes[i]}",
+                )
+                growth_rate = 0
+
+            population_configurations.append(
+                msprime.PopulationConfiguration(
+                    sample_size=sample_sizes[i],
+                    initial_size=initial_sizes[i],
+                    growth_rate=growth_rate,
+                )
             )
 
-        self._instances["dtwf_vs_pedigree_long_region"] = f
+        recombination_map = msprime.RecombinationMap(
+            positions=[0, num_loci], rates=[recombination_rate, 0], discrete=True,
+        )
 
-    def run_dtwf_coalescent_comparison(self, test_name, **kwargs):
-        basedir = make_test_dir(test_name)
-        df = run_dtwf_coalescent_stats(**kwargs)
-        plot_dtwf_coalescent_stats(basedir, df)
+        if migration_matrix is None:
+            default_mig_rate = 0.05
+            migration_matrix = []
+            for i in range(num_pops):
+                row = [default_mig_rate] * num_pops
+                row[i] = 0
+                migration_matrix.append(row)
 
-    def run_dtwf_coalescent_tree_interval_comparison(self, test_name, **kwargs):
-        basedir = make_test_dir(test_name)
-        df = run_dtwf_coalescent_stats(**kwargs)
-        plot_tree_intervals(basedir, df)
+        super()._run(
+            population_configurations=population_configurations,
+            migration_matrix=migration_matrix,
+            num_replicates=num_replicates,
+            demographic_events=demographic_events,
+            recombination_map=recombination_map,
+        )
 
-    def run_dtwf_slim_comparison(self, test_name, slim_args, **kwargs):
+    def test_dtwf_vs_coalescent_long_region(self):
+        self._run([1000], [10], int(1e8), 1e-8)
+
+    def test_dtwf_vs_coalescent_short_region(self):
+        self._run([1000], [10], int(1e6), 1e-8)
+
+    def test_dtwf_vs_coalescent_2_pops(self):
+        self._run(
+            [500, 500], [5, 5], int(1e6), 1e-8, num_replicates=500,
+        )
+
+    def test_dtwf_vs_coalescent_3_pops(self):
+        self._run(
+            [500, 500, 500], [5, 2, 0], int(1e7), 1e-8,
+        )
+
+    def test_dtwf_vs_coalescent_4_pops(self):
+        self._run(
+            [1000, 1000, 1000, 1000], [0, 20, 0, 0], int(1e6), 1e-8, num_replicates=500,
+        )
+
+    def test_dtwf_vs_coalescent_3_pops_asymm_mig(self):
+        migration_matrix = [[0, 0.2, 0.1], [0.1, 0, 0.2], [0.2, 0.1, 0]]
+        self._run(
+            [500, 500, 500],
+            [20, 0, 0],
+            int(1e6),
+            1e-8,
+            migration_matrix=migration_matrix,
+            num_replicates=500,
+        )
+
+    def test_dtwf_vs_coalescent_2_pops_high_asymm_mig(self):
+
+        migration_matrix = [[0, 0.5], [0.7, 0]]
+        self._run(
+            [1000, 1000],
+            [10, 10],
+            int(1e6),
+            1e-8,
+            migration_matrix=migration_matrix,
+            num_replicates=200,
+            growth_rates=[0.005, 0.005],
+        )
+
+
+class DtwfVsSlim(Test):
+    """
+    Tests where we compare the DTWF with SLiM simulations.
+    """
+
+    def run_dtwf_slim_comparison(self, slim_args, **kwargs):
 
         df = pd.DataFrame()
 
@@ -843,15 +1219,13 @@ class DtwfVsCoalescentTest(Test):
             data["num_trees"].append(ts.num_trees)
             data["model"].append("dtwf")
 
-        basedir = make_test_dir(test_name)
-
-        slim_script = os.path.join(basedir, "slim_script.txt")
-        outfile = os.path.join(basedir, "slim.trees")
-        slim_args["OUTFILE"] = outfile
+        slim_script = self.output_dir / "slim_script.txt"
+        outfile = self.output_dir / "slim.trees"
+        slim_args["OUTFILE"] = str(outfile)
         write_slim_script(slim_script, slim_args)
 
-        cmd = self._slim_executable + [slim_script]
-        for _ in tqdm.tqdm(range(kwargs["num_replicates"])):
+        cmd = _slim_executable + [slim_script]
+        for _ in range(kwargs["num_replicates"]):
             subprocess.check_output(cmd)
             ts = msprime.load(outfile)
             ts = subsample_simplify_slim_treesequence(ts, slim_args["sample_sizes"])
@@ -872,16 +1246,16 @@ class DtwfVsCoalescentTest(Test):
             v2 = df_dtwf[stat]
             sm.graphics.qqplot(v1)
             sm.qqplot_2samples(v1, v2, line="45")
-            f = os.path.join(basedir, f"{stat}.png")
             pyplot.xlabel("DTWF")
             pyplot.ylabel("SLiM")
+            f = self.output_dir / f"{stat}.png"
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
     def check_slim_version(self):
         # This may not be robust but it's a start
         min_version = 3.1
-        raw_str = subprocess.check_output(self._slim_executable + ["-version"])
+        raw_str = subprocess.check_output(_slim_executable + ["-version"])
         version_list = str.split(str(raw_str))
         for i in range(len(version_list)):
             if version_list[i].lower() == "version":
@@ -890,677 +1264,200 @@ class DtwfVsCoalescentTest(Test):
         version = float(version_str.strip(" ,")[0:3])
         assert version >= min_version, "Require SLiM >= 3.1!"
 
-
-@attr.s
-class DtwfvsCoalescentTest1(DtwfVsCoalescentTest):
-    simulate_args = attr.ib(factory=dict)
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        logging.debug(f"{self.name} {self.simulate_args}")
-        if "recombination_map" in self.simulate_args.keys():
-            if "uniform" in self.simulate_args.keys():
-                self.simulate_args[
-                    "recombination_map"
-                ] = msprime.RecombinationMap.uniform_map(
-                    **self.simulate_args["recombination_map"]
-                )
-                self.simulate_args.pop("uniform", None)
-            else:
-                self.simulate_args["recombination_map"] = msprime.RecombinationMap(
-                    **self.simulate_args["recombination_map"]
-                )
-        self.run_dtwf_coalescent_comparison(self.name, **self.simulate_args)
-
-
-def dtwf_vs_coalescent_single_locus(group):
-    """
-    Checks the DTWF against the standard coalescent at a single locus.
-    """
-
-    return DtwfvsCoalescentTest1(
-        "dtwf_vs_coalescent_single_locus",
-        group,
-        simulate_args=dict(sample_size=10, Ne=1000, num_replicates=300,),
-    )
-
-
-def dtwf_vs_coalescent_recomb_discrete_hotspots(group):
-    """
-    Checks the DTWF against the standard coalescent with a
-    discrete recombination map with variable rates.
-    """
-    test_name = "dtwf_vs_coalescent_discrete_hotspots"
-
-    recombination_map = {
-        "positions": [0, 100, 500, 900, 1200, 1500, 2000],
-        "rates": [0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
-        "discrete": True,
-    }
-    return DtwfvsCoalescentTest1(
-        test_name,
-        group,
-        simulate_args=dict(
-            sample_size=10,
-            Ne=1000,
-            recombination_map=recombination_map,
-            num_replicates=300,
-        ),
-    )
-
-
-def dtwf_vs_coalescent_recomb_continuous_hotspots(group):
-    """
-    Checks the DTWF against the standard coalescent with a
-    continuous recombination map with variable rates.
-    """
-    test_name = "dtwf_vs_coalescent_continuous_hotspots"
-
-    recombination_map = {
-        "positions": [0, 0.1, 0.5, 0.9, 1.2, 1.5, 2.0],
-        "rates": [0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
-    }
-
-    return DtwfvsCoalescentTest1(
-        test_name,
-        group,
-        simulate_args=dict(
-            sample_size=10,
-            Ne=1000,
-            recombination_map=recombination_map,
-            num_replicates=300,
-        ),
-    )
-
-
-def dtwf_vs_coalescent_single_forced_recombination(group):
-    test_name = "dtwf_vs_coalescent_single_forced_recombination"
-
-    recombination_map = {
-        "positions": [0, 100, 101, 201],
-        "rates": [0, 1, 0, 0],
-        "discrete": True,
-    }
-
-    return DtwfvsCoalescentTest1(
-        test_name,
-        group,
-        simulate_args=dict(
-            sample_size=10,
-            Ne=10,
-            num_replicates=1,
-            recombination_map=recombination_map,
-        ),
-    )
-
-
-def dtwf_vs_coalescent_low_recombination(group):
-    """
-    Checks the DTWF against the standard coalescent at a single locus.
-    """
-
-    return DtwfvsCoalescentTest1(
-        "dtwf_vs_coalescent_low_recombination",
-        group,
-        simulate_args=dict(
-            sample_size=10, Ne=1000, num_replicates=400, recombination_rate=0.01,
-        ),
-    )
-
-
-def dtwf_vs_coalescent_2_pops_massmigration(group):
-    population_configurations = [
-        msprime.PopulationConfiguration(sample_size=10, initial_size=1000),
-        msprime.PopulationConfiguration(sample_size=10, initial_size=1000),
-    ]
-    recombination_map = {"positions": [0, int(1e6)], "rates": [1e-8, 0]}
-    demographic_events = [
-        msprime.MassMigration(time=300, source=1, destination=0, proportion=1.0)
-    ]
-
-    test_name = "dtwf_vs_coalescent_2_pops_massmigration"
-
-    return DtwfvsCoalescentTest1(
-        test_name,
-        group,
-        simulate_args=dict(
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
-            # Ne=0.5,
-            num_replicates=300,
-            recombination_map=recombination_map,
-        ),
-    )
-
-
-def dtwf_vs_coalescent_2_pop_growth(group):
-    population_configurations = [
-        msprime.PopulationConfiguration(
-            sample_size=10, initial_size=1000, growth_rate=0.01
-        )
-    ]
-    recombination_map = {
-        "positions": [0, int(5e7)],
-        "rates": [1e-8, 0],
-        "discrete": True,
-    }
-
-    return DtwfvsCoalescentTest1(
-        "dtwf_vs_coalescent_2_pop_growth",
-        group,
-        simulate_args=dict(
-            population_configurations=population_configurations,
-            recombination_map=recombination_map,
-            num_replicates=300,
-        ),
-    )
-
-
-def dtwf_vs_coalescent_2_pop_shrink(group):
-    initial_size = 1000
-
-    population_configurations = [
-        msprime.PopulationConfiguration(
-            sample_size=10, initial_size=initial_size, growth_rate=-0.01
-        )
-    ]
-    recombination_map = {
-        "positions": [0, int(1e7)],
-        "rates": [1e-8, 0],
-        "discrete": True,
-    }
-    demographic_events = [
-        msprime.PopulationParametersChange(
-            time=200, initial_size=initial_size, growth_rate=0.01, population_id=0
-        )
-    ]
-
-    return DtwfvsCoalescentTest1(
-        "dtwf_vs_coalescent_2_pop_shrink",
-        group,
-        simulate_args=dict(
-            population_configurations=population_configurations,
-            recombination_map=recombination_map,
-            demographic_events=demographic_events,
-            num_replicates=300,
-        ),
-    )
-
-
-def dtwf_vs_coalescent_multiple_bottleneck(group):
-    population_configurations = [
-        msprime.PopulationConfiguration(sample_size=5, initial_size=1000),
-        msprime.PopulationConfiguration(sample_size=5, initial_size=1000),
-    ]
-    recombination_map = {"positions": [0, int(1e6)], "rates": [1e-8, 0]}
-    # migration_matrix = [[0, 0.1], [0.1, 0]]
-
-    demographic_events = [
-        msprime.PopulationParametersChange(
-            time=100, initial_size=100, growth_rate=-0.01, population_id=0
-        ),
-        msprime.PopulationParametersChange(
-            time=200, initial_size=100, growth_rate=-0.01, population_id=1
-        ),
-        msprime.PopulationParametersChange(
-            time=300, initial_size=1000, growth_rate=0.01, population_id=0
-        ),
-        msprime.PopulationParametersChange(
-            time=400, initial_size=1000, growth_rate=0.01, population_id=1
-        ),
-        msprime.PopulationParametersChange(
-            time=500, initial_size=100, growth_rate=0, population_id=0
-        ),
-        msprime.PopulationParametersChange(
-            time=600, initial_size=100, growth_rate=0, population_id=1
-        ),
-        msprime.MigrationRateChange(time=700, rate=0.1, matrix_index=(0, 1)),
-    ]
-
-    return DtwfvsCoalescentTest1(
-        "dtwf_vs_coalescent_multiple_bottleneck",
-        group,
-        simulate_args=dict(
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
-            # migration_matrix=migration_matrix,
-            num_replicates=400,
-            recombination_map=recombination_map,
-        ),
-    )
-
-
-def register_dtwfvscoalescent_tests_1(runner):
-    group = "dtwfvscoalescent"
-    tests = [
-        dtwf_vs_coalescent_single_locus(group),
-        dtwf_vs_coalescent_recomb_discrete_hotspots(group),
-        dtwf_vs_coalescent_recomb_continuous_hotspots(group),
-        dtwf_vs_coalescent_single_forced_recombination(group),
-        dtwf_vs_coalescent_low_recombination(group),
-        dtwf_vs_coalescent_2_pops_massmigration(group),
-        dtwf_vs_coalescent_2_pop_growth(group),
-        dtwf_vs_coalescent_2_pop_shrink(group),
-        dtwf_vs_coalescent_multiple_bottleneck(group),
-    ]
-
-    for test in tests:
-        runner.register(test)
-
-
-def add_dtwf_vs_coalescent(
-    key,
-    group,
-    initial_sizes,
-    sample_sizes,
-    num_loci,
-    recombination_rate,
-    migration_matrix=None,
-    growth_rates=None,
-    num_replicates=None,
-):
-    """
-    Generic test of DTWF vs hudson coalescent. Populations are not
-    allowed to shrink to fewer than 100 individuals, and if starting with
-    fewer than 100 have growth rate set to zero.
-    """
-    assert len(sample_sizes) == len(initial_sizes)
-    num_pops = len(sample_sizes)
-
-    if num_replicates is None:
-        num_replicates = 200
-
-    if growth_rates is None:
-        default_growth_rate = 0.01
-        growth_rates = [default_growth_rate] * num_pops
-
-    population_configurations = []
-    demographic_events = []
-
-    for i in range(num_pops):
-        if initial_sizes[i] > 100:
-            # Growth rate set to zero at pop size 100
-            t_100 = (np.log(initial_sizes[i]) - np.log(100)) / growth_rates[i]
-            de = msprime.PopulationParametersChange(t_100, growth_rate=0, population=i)
-            demographic_events.append(de)
-
-            growth_rate = growth_rates[i]
-        else:
-            # Enforce zero growth rate for small populations
-            logging.warning(
-                f"Warning - setting growth rate to zero for small \
-                population of size {initial_sizes[i]}",
-            )
-            growth_rate = 0
-
-        population_configurations.append(
-            msprime.PopulationConfiguration(
-                sample_size=sample_sizes[i],
-                initial_size=initial_sizes[i],
-                growth_rate=growth_rate,
-            )
-        )
-
-    recombination_map = {
-        "length": num_loci,
-        "rate": recombination_rate,
-        "discrete": True,
-    }
-
-    if migration_matrix is None:
-        default_mig_rate = 0.05
-        migration_matrix = []
-        for i in range(num_pops):
-            row = [default_mig_rate] * num_pops
-            row[i] = 0
-            migration_matrix.append(row)
-
-    return DtwfvsCoalescentTest1(
-        key,
-        group,
-        simulate_args=dict(
-            population_configurations=population_configurations,
-            migration_matrix=migration_matrix,
-            num_replicates=num_replicates,
-            demographic_events=demographic_events,
-            recombination_map=recombination_map,
-            uniform=True,
-        ),
-    )
-
-
-def register_dtwfvscoalescent_tests_2(runner):
-    group = "dtwfvscoalescent"
-    tests = [
-        add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_long_region", group, [1000], [10], int(1e8), 1e-8
-        ),
-        add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_short_region", group, [1000], [10], int(1e6), 1e-8
-        ),
-        add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_2_pops",
-            group,
-            [500, 500],
-            [5, 5],
-            int(1e6),
-            1e-8,
-            num_replicates=500,
-        ),
-        add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_3_pops",
-            group,
-            [500, 500, 500],
-            [5, 2, 0],
-            int(1e7),
-            1e-8,
-        ),
-        add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_4_pops",
-            group,
-            [1000, 1000, 1000, 1000],
-            [0, 20, 0, 0],
-            int(1e6),
-            1e-8,
-            num_replicates=500,
-        ),
-    ]
-    migration_matrix = [[0, 0.2, 0.1], [0.1, 0, 0.2], [0.2, 0.1, 0]]
-    tests.append(
-        add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_3_pops_asymm_mig",
-            group,
-            [500, 500, 500],
-            [20, 0, 0],
-            int(1e6),
-            1e-8,
-            migration_matrix=migration_matrix,
-            num_replicates=500,
-        )
-    )
-
-    migration_matrix = [[0, 0.5], [0.7, 0]]
-    tests.append(
-        add_dtwf_vs_coalescent(
-            "dtwf_vs_coalescent_2_pops_high_asymm_mig",
-            group,
-            [1000, 1000],
-            [10, 10],
-            int(1e6),
-            1e-8,
-            migration_matrix=migration_matrix,
-            num_replicates=200,
-            growth_rates=[0.005, 0.005],
-        )
-    )
-
-    for test in tests:
-        runner.register(test)
-
-
-@attr.s
-class DtwfvsCoalescentTest2(DtwfVsCoalescentTest):
-    slim_args = attr.ib(factory=dict)
-    simulate_args = attr.ib(factory=dict)
-
-    def run(self, output_dir):
-        self.check_slim_version()
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        logging.debug(f"{self.name} {self.slim_args} {self.simulate_args}")
-        if "recombination_map" in self.simulate_args.keys():
-            self.simulate_args["recombination_map"] = msprime.RecombinationMap(
-                **self.simulate_args["recombination_map"]
-            )
-
-        self.run_dtwf_slim_comparison(self.name, self.slim_args, **self.simulate_args)
-
-
-def add_dtwf_vs_slim(
-    key,
-    group,
-    initial_sizes,
-    sample_sizes,
-    num_loci,
-    recombination_rate,
-    migration_matrix=None,
-    num_replicates=None,
-):
-    """
-    Generic test of DTWF vs SLiM WF simulator, without growth rates
-    """
-    assert len(sample_sizes) == len(initial_sizes)
-
-    num_pops = len(sample_sizes)
-    slim_args = {}
-
-    if num_replicates is None:
-        num_replicates = 200
-
-    slim_args["sample_sizes"] = sample_sizes
-
-    population_configurations = []
-    slim_args["POP_STRS"] = ""
-    for i in range(len(sample_sizes)):
-        population_configurations.append(
-            msprime.PopulationConfiguration(
-                sample_size=sample_sizes[i],
-                initial_size=initial_sizes[i],
-                growth_rate=0,
-            )
-        )
-        slim_args["POP_STRS"] += "sim.addSubpop('p{i}', {N});\n".format(
-            i=i, N=initial_sizes[i]
-        )
-
-    if migration_matrix is None:
-        default_mig_rate = 0.01
-        migration_matrix = []
-        for i in range(num_pops):
-            row = [default_mig_rate] * num_pops
-            row[i] = 0
-            migration_matrix.append(row)
-
-    # SLiM rates are 'immigration' forwards in time, which matches
-    # DTWF backwards-time 'emmigration'
-    assert len(migration_matrix) == num_pops
-    if num_pops > 1:
-        for i in range(num_pops):
-            row = migration_matrix[i]
-            indices = [j for j in range(num_pops) if j != i]
-            pop_names = ["p" + str(j) for j in indices]
-            rates = [str(row[j]) for j in indices]
-
-            to_pop_str = ",".join(pop_names)
-            rate_str = ",".join(rates)
-
-            mig_str = "p{}.setMigrationRates(c({}), c({}));\n".format(
-                i, to_pop_str, rate_str
-            )
-            slim_args["POP_STRS"] += mig_str
-
-    num_loci = int(num_loci)
-    recombination_map = {
-        "positions": [0, num_loci],
-        "rates": [recombination_rate, 0],
-        "discrete": True,
-    }
-    slim_args["RHO"] = recombination_rate
-    slim_args["NUM_LOCI"] = num_loci
-
-    return DtwfvsCoalescentTest2(
-        key,
-        group,
-        slim_args,
-        simulate_args=dict(
-            population_configurations=population_configurations,
-            migration_matrix=migration_matrix,
-            num_replicates=num_replicates,
-            recombination_map=recombination_map,
-        ),
-    )
-
-
-def register_dtwfvscoalescent_tests_3(runner):
-    group = "dtwfvscoalescent"
-    tests = [
-        add_dtwf_vs_slim("dtwf_vs_slim_single_locus", group, [10], [10], 1, 0),
-        add_dtwf_vs_slim(
-            "dtwf_vs_slim_short_region",
-            group,
-            [100],
-            [10],
-            1e7,
-            1e-8,
-            num_replicates=200,
-        ),
-        add_dtwf_vs_slim(
-            "dtwf_vs_slim_long_region", group, [50], [10], 1e8, 1e-8, num_replicates=200
-        ),
-    ]
-
-    for test in tests:
-        runner.register(test)
-
-
-# run only if args.extended is true
-def add_dtwf_vs_coalescent_random_instance(
-    key, group, num_populations=1, num_replicates=200, num_demographic_events=0
-):
-
-    N = num_populations
-    num_loci = np.random.randint(1e5, 1e7)
-    rho = 1e-8
-    recombination_map = {
-        "positions": [0, num_loci],
-        "rates": [rho, 0],
-        "discrete": True,
-    }
-
-    population_configurations = []
-    for _ in range(N):
-        population_configurations.append(
-            msprime.PopulationConfiguration(
-                sample_size=np.random.randint(1, 10), initial_size=int(1000 / N)
-            )
-        )
-
-    migration_matrix = []
-    for i in range(N):
-        migration_matrix.append(
-            [random.uniform(0.05, 0.25) * (j != i) for j in range(N)]
-        )
-
-    # Add demographic events and some migration rate changes
-    t_max = 1000
-    demographic_events = []
-    times = sorted(np.random.randint(300, t_max, size=num_demographic_events))
-    for t in times:
-        initial_size = np.random.randint(500, 1000)
-        # Setting growth_rate to 0 because it's too tricky to get
-        # growth_rates in the DTWF which don't result in N going to 0.
-        growth_rate = 0
-        pop_id = np.random.randint(N)
-        demographic_events.append(
-            msprime.PopulationParametersChange(
-                time=t,
-                initial_size=initial_size,
-                growth_rate=growth_rate,
-                population_id=pop_id,
-            )
-        )
-
-        if random.random() < 0.5 and N >= 2:
-            rate = random.uniform(0.05, 0.25)
-            index = tuple(
-                np.random.choice(range(num_populations), size=2, replace=False)
-            )
-            demographic_events.append(
-                msprime.MigrationRateChange(time=t, rate=rate, matrix_index=index)
-            )
-
-    # Collect all pops together to control coalescence times for DTWF
-    for i in range(1, N):
-        demographic_events.append(
-            msprime.MassMigration(time=t_max, source=i, destination=0, proportion=1.0)
-        )
-
-    demographic_events.append(
-        msprime.PopulationParametersChange(
-            time=t_max, initial_size=100, growth_rate=0, population_id=0
-        )
-    )
-
-    return DtwfvsCoalescentTest1(
-        key,
-        group,
-        simulate_args=dict(
-            migration_matrix=migration_matrix,
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
-            num_replicates=num_replicates,
-            recombination_map=recombination_map,
-        ),
-    )
-
-
-def register_dtwfvscoalescent_tests_4(runner):
-    group = "dtwfvscoalescent"
-    tests = [
-        add_dtwf_vs_coalescent_random_instance(
-            "dtwf_vs_coalescent_random_1",
-            group,
-            num_populations=2,
-            num_replicates=200,
-            num_demographic_events=3,
-        ),
-        add_dtwf_vs_coalescent_random_instance(
-            "dtwf_vs_coalescent_random_2",
-            group,
-            num_populations=3,
-            num_replicates=200,
-            num_demographic_events=3,
-        ),
-        add_dtwf_vs_coalescent_random_instance(
-            "dtwf_vs_coalescent_random_3",
-            group,
-            num_populations=2,
-            num_replicates=200,
-            num_demographic_events=6,
-        ),
-        add_dtwf_vs_coalescent_random_instance(
-            "dtwf_vs_coalescent_random_4",
-            group,
-            num_populations=1,
-            num_replicates=200,
-            num_demographic_events=8,
-        ),
-    ]
-
-    for test in tests:
-        runner.register(test)
-
-
-def register_dtwfvscoalescent_tests(runner, add_random_dtwf):
-    if add_random_dtwf:
-        register_dtwfvscoalescent_tests_4(runner)
-    else:
-        register_dtwfvscoalescent_tests_1(runner)
-        register_dtwfvscoalescent_tests_2(runner)
-        register_dtwfvscoalescent_tests_3(runner)
-
-
-@attr.s
-class XiHudsonTest(Test):
-    def verify_breakpoint_distribution(
-        self, basedir_name, name, sample_size, Ne, r, L, model, growth_rate=0
+    def _run(
+        self,
+        initial_sizes,
+        sample_sizes,
+        num_loci,
+        recombination_rate,
+        migration_matrix=None,
+        num_replicates=None,
     ):
         """
-        Verifies that the number of recombination breakpoints is proportional to
-        the total branch length across all trees.
+        Generic test of DTWF vs SLiM WF simulator, without growth rates
         """
-        basedir = make_test_dir(basedir_name)
+        assert len(sample_sizes) == len(initial_sizes)
+
+        num_pops = len(sample_sizes)
+        slim_args = {}
+
+        if num_replicates is None:
+            num_replicates = 200
+
+        slim_args["sample_sizes"] = sample_sizes
+
+        population_configurations = []
+        slim_args["POP_STRS"] = ""
+        for i in range(len(sample_sizes)):
+            population_configurations.append(
+                msprime.PopulationConfiguration(
+                    sample_size=sample_sizes[i],
+                    initial_size=initial_sizes[i],
+                    growth_rate=0,
+                )
+            )
+            slim_args["POP_STRS"] += "sim.addSubpop('p{i}', {N});\n".format(
+                i=i, N=initial_sizes[i]
+            )
+
+        if migration_matrix is None:
+            default_mig_rate = 0.01
+            migration_matrix = []
+            for i in range(num_pops):
+                row = [default_mig_rate] * num_pops
+                row[i] = 0
+                migration_matrix.append(row)
+
+        # SLiM rates are 'immigration' forwards in time, which matches
+        # DTWF backwards-time 'emmigration'
+        assert len(migration_matrix) == num_pops
+        if num_pops > 1:
+            for i in range(num_pops):
+                row = migration_matrix[i]
+                indices = [j for j in range(num_pops) if j != i]
+                pop_names = ["p" + str(j) for j in indices]
+                rates = [str(row[j]) for j in indices]
+
+                to_pop_str = ",".join(pop_names)
+                rate_str = ",".join(rates)
+
+                mig_str = "p{}.setMigrationRates(c({}), c({}));\n".format(
+                    i, to_pop_str, rate_str
+                )
+                slim_args["POP_STRS"] += mig_str
+
+        num_loci = int(num_loci)
+        recombination_map = msprime.RecombinationMap(
+            positions=[0, num_loci], rates=[recombination_rate, 0], discrete=True,
+        )
+        slim_args["RHO"] = recombination_rate
+        slim_args["NUM_LOCI"] = num_loci
+
+        self.run_dtwf_slim_comparison(
+            slim_args,
+            population_configurations=population_configurations,
+            migration_matrix=migration_matrix,
+            num_replicates=num_replicates,
+            recombination_map=recombination_map,
+        )
+
+    def test_dtwf_vs_slim_single_locus(self):
+        self._run([10], [10], 1, 0)
+
+    def test_dtwf_vs_slim_short_region(self):
+        self._run([100], [10], 1e7, 1e-8, num_replicates=200)
+
+    def test_dtwf_vs_slim_long_region(self):
+        self._run([50], [10], 1e8, 1e-8, num_replicates=200)
+
+
+class DtwfVsCoalescentRandom(DtwfVsCoalescent):
+    """
+    Runs randomly generated test parameters.
+    """
+
+    def _run(self, num_populations=1, num_replicates=200, num_demographic_events=0):
+
+        N = num_populations
+        num_loci = np.random.randint(1e5, 1e7)
+        rho = 1e-8
+        recombination_map = msprime.RecombinationMap(
+            positions=[0, num_loci], rates=[rho, 0], discrete=True,
+        )
+
+        population_configurations = []
+        for _ in range(N):
+            population_configurations.append(
+                msprime.PopulationConfiguration(
+                    sample_size=np.random.randint(1, 10), initial_size=int(1000 / N)
+                )
+            )
+
+        migration_matrix = []
+        for i in range(N):
+            migration_matrix.append(
+                [random.uniform(0.05, 0.25) * (j != i) for j in range(N)]
+            )
+
+        # Add demographic events and some migration rate changes
+        t_max = 1000
+        demographic_events = []
+        times = sorted(np.random.randint(300, t_max, size=num_demographic_events))
+        for t in times:
+            initial_size = np.random.randint(500, 1000)
+            # Setting growth_rate to 0 because it's too tricky to get
+            # growth_rates in the DTWF which don't result in N going to 0.
+            growth_rate = 0
+            pop_id = np.random.randint(N)
+            demographic_events.append(
+                msprime.PopulationParametersChange(
+                    time=t,
+                    initial_size=initial_size,
+                    growth_rate=growth_rate,
+                    population_id=pop_id,
+                )
+            )
+
+            if random.random() < 0.5 and N >= 2:
+                rate = random.uniform(0.05, 0.25)
+                index = tuple(
+                    np.random.choice(range(num_populations), size=2, replace=False)
+                )
+                demographic_events.append(
+                    msprime.MigrationRateChange(time=t, rate=rate, matrix_index=index)
+                )
+
+        # Collect all pops together to control coalescence times for DTWF
+        for i in range(1, N):
+            demographic_events.append(
+                msprime.MassMigration(
+                    time=t_max, source=i, destination=0, proportion=1.0
+                )
+            )
+
+        demographic_events.append(
+            msprime.PopulationParametersChange(
+                time=t_max, initial_size=100, growth_rate=0, population_id=0
+            )
+        )
+        super()._run(
+            migration_matrix=migration_matrix,
+            population_configurations=population_configurations,
+            demographic_events=demographic_events,
+            num_replicates=num_replicates,
+            recombination_map=recombination_map,
+        )
+
+    def test_dtwf_vs_coalescent_random_1(self):
+        self._run(
+            num_populations=2, num_replicates=200, num_demographic_events=3,
+        )
+
+    def test_dtwf_vs_coalescent_random_2(self):
+        self._run(
+            num_populations=3, num_replicates=200, num_demographic_events=3,
+        )
+
+    def test_dtwf_vs_coalescent_random_3(self):
+        self._run(
+            num_populations=2, num_replicates=200, num_demographic_events=6,
+        )
+
+    def test_dtwf_vs_coalescent_random_4(self):
+        self._run(
+            num_populations=1, num_replicates=200, num_demographic_events=8,
+        )
+
+
+class RecombinationBreakpointTest(Test):
+    """
+    Verifies that the number of recombination breakpoints is proportional to
+    the total branch length across all trees.
+    """
+
+    def verify_breakpoint_distribution(
+        self, name, sample_size, Ne, r, L, model, growth_rate=0
+    ):
         ts = msprime.simulate(
             Ne=Ne,
             recombination_rate=r,
@@ -1578,26 +1475,103 @@ class XiHudsonTest(Test):
             empirical.append(area)
 
         scipy.stats.probplot(empirical, dist=scipy.stats.expon(Ne * r), plot=pyplot)
-        path = os.path.join(basedir, f"{name}_growth={growth_rate}.png")
+        path = self.output_dir / f"{name}_growth={growth_rate}.png"
         logging.debug(f"Writing {path}")
         pyplot.savefig(path)
         pyplot.close("all")
 
-    # used in Xi and Hudson tests
+    def test_xi_beta_breakpoints(self):
+        Ne = 10 ** 4
+        for alpha in [1.1, 1.3, 1.6, 1.9]:
+            self.verify_breakpoint_distribution(
+                f"n=100_alpha={alpha}",
+                sample_size=100,
+                Ne=Ne,
+                r=1e-7,
+                L=10 ** 6,
+                model=msprime.BetaCoalescent(alpha=alpha),
+            )
+            # Add a growth rate with a higher recombination rate so
+            # we still get decent numbers of trees
+            self.verify_breakpoint_distribution(
+                f"growth_n=100_alpha={alpha}",
+                sample_size=100,
+                Ne=Ne,
+                r=1e-7,
+                L=10 ** 6,
+                model=msprime.BetaCoalescent(alpha=alpha),
+                growth_rate=0.05,
+            )
+
+    def test_xi_dirac_breakpoints(self):
+        Ne = 10 ** 2
+        for psi in [0.1, 0.3, 0.6, 0.9]:
+            for c in [1, 10]:
+                self.verify_breakpoint_distribution(
+                    f"n=100_psi={psi}_c={c}",
+                    sample_size=100,
+                    Ne=Ne,
+                    r=1e-8,
+                    L=10 ** 6,
+                    model=msprime.DiracCoalescent(psi=psi, c=c),
+                )
+                # Add a growth rate with a higher recombination rate so
+                # we still get decent numbers of trees
+                self.verify_breakpoint_distribution(
+                    f"growth_n=100_psi={psi}_c={c}",
+                    sample_size=100,
+                    Ne=Ne,
+                    r=1e-7,
+                    L=10 ** 6,
+                    model=msprime.DiracCoalescent(psi=psi, c=c),
+                    growth_rate=0.05,
+                )
+
+    def test_hudson_breakpoints(self):
+        self.verify_breakpoint_distribution(
+            "single_pop_n_50",
+            sample_size=50,
+            Ne=10 ** 4,
+            r=1e-8,
+            L=10 ** 6,
+            model="hudson",
+        )
+        self.verify_breakpoint_distribution(
+            "single_pop_n_100",
+            sample_size=100,
+            Ne=10 ** 4,
+            r=1e-8,
+            L=10 ** 6,
+            model="hudson",
+        )
+        self.verify_breakpoint_distribution(
+            "single_pop_n_100_growth",
+            sample_size=100,
+            Ne=10 ** 4,
+            r=1e-7,
+            L=10 ** 6,
+            model="hudson",
+            growth_rate=0.05,
+        )
+
+
+class RecombinationMutationTest(Test):
+    """
+    Verifies that the number of recombinations equals the number of mutations
+    since both should be proportional to the total branch lenght of the
+    trees.
+    """
+
     def verify_recombination(
-        self, basedir_name, name, sample_size, Ne, r, m, L, model, growth_rate=0
+        self, name, sample_size, Ne, r, m, L, model, growth_rate=0
     ):
-        """
-        Verifies that the number of recombination equals the number of mutation.
-        """
-        basedir = make_test_dir(basedir_name)
+        num_replicates = 500
         empirical_theta = []
         empirical_rho = []
-        for _ in range(1, 500):
-            ts = msprime.simulate(
+        for _ in range(num_replicates):
+            sim = msprime.simulator_factory(
                 Ne=Ne,
                 recombination_rate=r,
-                mutation_rate=m,
                 length=L,
                 population_configurations=[
                     msprime.PopulationConfiguration(
@@ -1608,44 +1582,78 @@ class XiHudsonTest(Test):
                 ],
                 model=model,
             )
+            sim.run()
+            empirical_rho.append(sim.num_breakpoints)
+            ts = sim.get_tree_sequence()
+            ts = msprime.mutate(ts, rate=m)
             empirical_theta.append(ts.get_num_sites())
-            ts = msprime.simulator_factory(
-                Ne=Ne,
-                recombination_rate=r,
-                length=L,
-                population_configurations=[
-                    msprime.PopulationConfiguration(
-                        sample_size=sample_size,
-                        initial_size=Ne,
-                        growth_rate=growth_rate,
-                    )
-                ],
-                model=model,
-            )
-            ts.run()
-            empirical_rho.append(ts.num_breakpoints)
         empirical_rho.sort()
         empirical_theta.sort()
         empirical_rho = np.array(empirical_rho)
         empirical_theta = np.array(empirical_theta)
         plot_qq(empirical_theta, empirical_rho)
-        path = os.path.join(basedir, f"{name}_growth={growth_rate}_rec_check.png")
+        path = self.output_dir / f"{name}_growth={growth_rate}_rec_check.png"
         logging.debug(f"Writing {path}")
         pyplot.savefig(path)
         pyplot.close("all")
 
+    def test_xi_beta_recombinations(self):
+        Ne = 10000
+        for alpha in [1.1, 1.3, 1.5, 1.9]:
+            self.verify_recombination(
+                f"n=100_alpha={alpha}",
+                sample_size=100,
+                Ne=Ne,
+                r=1e-8,
+                m=1e-8,
+                L=10 ** 6,
+                model=msprime.BetaCoalescent(alpha=alpha),
+            )
 
-@attr.s
-class XiTest(XiHudsonTest):
-    def run_xi_hudson_comparison(self, test_name, xi_model, **kwargs):
+    def test_xi_dirac_recombinations(self):
+        Ne = 100
+        for psi in [0.1, 0.3, 0.5, 0.9]:
+            for c in [1, 10, 100]:
+                self.verify_recombination(
+                    f"n=100_psi={psi}_c={c}",
+                    sample_size=100,
+                    Ne=Ne,
+                    r=1e-8,
+                    m=1e-8,
+                    L=10 ** 6,
+                    model=msprime.DiracCoalescent(psi=psi, c=c),
+                )
+
+    def test_hudson_recombinations(self):
+        self.verify_recombination(
+            "n=100_hudson",
+            sample_size=100,
+            Ne=10000,
+            r=1e-8,
+            m=1e-8,
+            L=10 ** 6,
+            model="hudson",
+        )
+
+
+# FIXME These tests are miles off at the moment. There are *way* more
+# nodes edges and trees in the Dirac model than Hudson.
+class XiVsHudsonTest(Test):
+    """
+    Test that Xi coalescents are equivalent to the Hudson model in the
+    appropriate regimes.
+    """
+
+    def _run(self, xi_model, **kwargs):
         df = pd.DataFrame()
         for model in ["hudson", xi_model]:
-            kwargs["model"] = model
+            simulate_args = dict(kwargs)
+            simulate_args["model"] = model
             model_str = "hudson"
             if model != "hudson":
                 model_str = "Xi"
-            logging.debug(f"Running: {kwargs}")
-            replicates = msprime.simulate(**kwargs)
+            logging.debug(f"Running: {simulate_args}")
+            replicates = msprime.simulate(**simulate_args)
             data = collections.defaultdict(list)
             for ts in replicates:
                 t_mrca = np.zeros(ts.num_trees)
@@ -1658,8 +1666,6 @@ class XiTest(XiHudsonTest):
                 data["model"].append(model_str)
             df = df.append(pd.DataFrame(data))
 
-        basedir = make_test_dir(test_name)
-
         df_hudson = df[df.model == "hudson"]
         df_xi = df[df.model == "Xi"]
         for stat in ["tmrca_mean", "num_trees", "num_nodes", "num_edges"]:
@@ -1667,26 +1673,41 @@ class XiTest(XiHudsonTest):
             v2 = df_xi[stat]
             sm.graphics.qqplot(v1)
             sm.qqplot_2samples(v1, v2, line="45")
-            f = os.path.join(basedir, f"{stat}.png")
+            f = self.output_dir / f"{stat}.png"
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
-    def compare_xi_dirac_sfs(self, sample_size, psi, c, sfs, num_replicates=1000):
-        """
-        Runs simulations of the xi dirac model and calculates
-        E[Bi/B] (Bi branch length having i leaves and B total branch length)
-        and compares to the expected SFS.
-        """
-        logging.debug(f"running SFS for {sample_size} {psi} {c}")
-        reps = msprime.simulate(
-            sample_size,
-            num_replicates=num_replicates,
-            model=msprime.DiracCoalescent(psi=psi, c=c),
+    def test_xi_dirac_vs_hudson_recombination(self):
+        self._run(
+            msprime.DiracCoalescent(psi=0.99, c=0),
+            sample_size=50,
+            Ne=50,
+            num_replicates=1000,
+            recombination_rate=0.1,
         )
 
+    def test_xi_dirac_vs_hudson_single_locus(self):
+        self._run(
+            msprime.DiracCoalescent(psi=0.99, c=0),
+            sample_size=10,
+            Ne=100,
+            num_replicates=5000,
+        )
+
+
+class KnownSFS(Test):
+    """
+    Compare the simulated SFS to precomputed known values.
+    """
+
+    def compare_sfs(self, sample_size, model, num_replicates, sfs, name):
+        replicates = msprime.simulate(
+            sample_size, num_replicates=num_replicates, model=model,
+        )
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
-        for ts in reps:
+        tot_bl_sum = [0]
+        for ts in replicates:
             for tree in ts.trees():
                 tot_bl = 0.0
                 tbl = [0] * (sample_size - 1)
@@ -1698,136 +1719,45 @@ class XiTest(XiHudsonTest):
                         tot_bl = tot_bl + tree.branch_length(node)
 
                 for xi in range(sample_size - 1):
-                    rescaled_x = tbl[xi] / tot_bl
-                    data["total_branch_length"].append(rescaled_x)
+                    rescaled_x = tbl[xi]
+                    data["total_branch_length"].append(rescaled_x / tot_bl)
                     tbl_sum[xi] = tbl_sum[xi] + rescaled_x
+                tot_bl_sum[0] = tot_bl_sum[0] + tot_bl
                 data["num_leaves"].extend(range(1, sample_size))
 
-        basedir = make_test_dir("xi_dirac_expected_sfs")
-        f = os.path.join(basedir, f"n={sample_size}_psi={psi}_c={c}.png")
+        f = self.output_dir / f"{name}.png"
         ax = sns.violinplot(
             data=data, x="num_leaves", y="total_branch_length", color="grey"
         )
         ax.set_xlabel("num leaves")
-        l1 = ax.plot(np.arange(sample_size - 1), sfs[::], "--", linewidth=3)
+        l1 = ax.plot(np.arange(sample_size - 1), sfs[::], ":", linewidth=3, marker="^")
         l2 = ax.plot(
             np.arange(sample_size - 1),
-            [x / num_replicates for x in tbl_sum],
+            [(x / num_replicates) / (tot_bl_sum[0] / num_replicates) for x in tbl_sum],
             "--",
-            linewidth=3,
+            marker="o",
+            linewidth=2,
         )
         ax.legend((l1[0], l2[0]), ("Expected", "Observed"))
         pyplot.savefig(f, dpi=72)
         pyplot.close("all")
 
-    def compare_normalised_xi_dirac_sfs(
-        self, sample_size, psi, c, sfs, num_replicates=1000
-    ):
+
+class DiracSFS(KnownSFS):
+    def _run(self, sample_size=10, psi=None, c=None, sfs=None, num_replicates=10000):
         """
         Runs simulations of the xi dirac model and calculates
         E[Bi]/E[B] (Bi branch length having i leaves and B total branch length)
         and compares to the expected SFS.
         """
         logging.debug(f"running SFS for {sample_size} {psi} {c}")
-        reps = msprime.simulate(
-            sample_size,
-            num_replicates=num_replicates,
-            model=msprime.DiracCoalescent(psi=psi, c=c),
-        )
+        model = (msprime.DiracCoalescent(psi=psi, c=c),)
+        name = f"n={sample_size}_psi={psi}_c={c}.png"
+        self.compare_sfs(sample_size, model, num_replicates, sfs, name)
 
-        data = collections.defaultdict(list)
-        tbl_sum = [0] * (sample_size - 1)
-        tot_bl_sum = [0]
-        for ts in reps:
-            for tree in ts.trees():
-                tot_bl = 0.0
-                tbl = [0] * (sample_size - 1)
-                for node in tree.nodes():
-                    if tree.parent(node) != msprime.NULL_NODE:
-                        tbl[tree.num_samples(node) - 1] = tbl[
-                            tree.num_samples(node) - 1
-                        ] + tree.branch_length(node)
-                        tot_bl = tot_bl + tree.branch_length(node)
+    def test_xi_dirac_expected_sfs_psi_0_1_c_1(self):
 
-                for xi in range(sample_size - 1):
-                    rescaled_x = tbl[xi]
-                    data["total_branch_length"].append(rescaled_x / tot_bl)
-                    tbl_sum[xi] = tbl_sum[xi] + rescaled_x
-                tot_bl_sum[0] = tot_bl_sum[0] + tot_bl
-                data["num_leaves"].extend(range(1, sample_size))
-
-        basedir = make_test_dir("xi_dirac_expected_sfs")
-        f = os.path.join(basedir, f"n={sample_size}_psi={psi}_c={c}.png")
-        ax = sns.violinplot(
-            data=data, x="num_leaves", y="total_branch_length", color="grey"
-        )
-        ax.set_xlabel("num leaves")
-        l1 = ax.plot(np.arange(sample_size - 1), sfs[::], "--", linewidth=3)
-        l2 = ax.plot(
-            np.arange(sample_size - 1),
-            [(x / num_replicates) / (tot_bl_sum[0] / num_replicates) for x in tbl_sum],
-            "--",
-            linewidth=3,
-        )
-        ax.legend((l1[0], l2[0]), ("Expected", "Observed"))
-        pyplot.savefig(f, dpi=72)
-        pyplot.close("all")
-
-    def compare_normalized_xi_beta_sfs(
-        self, sample_size, alpha, sfs, num_replicates=1000
-    ):
-        """
-        Runs simulations of the xi beta model and compares to the expected SFS.
-        """
-        logging.debug(f"running SFS for {sample_size} {alpha}")
-        reps = msprime.simulate(
-            sample_size,
-            num_replicates=num_replicates,
-            model=msprime.BetaCoalescent(alpha=alpha, truncation_point=1),
-        )
-
-        data = collections.defaultdict(list)
-        tbl_sum = [0] * (sample_size - 1)
-        tot_bl_sum = [0]
-        for ts in reps:
-            for tree in ts.trees():
-                tot_bl = 0.0
-                tbl = [0] * (sample_size - 1)
-                for node in tree.nodes():
-                    if tree.parent(node) != msprime.NULL_NODE:
-                        tbl[tree.num_samples(node) - 1] = tbl[
-                            tree.num_samples(node) - 1
-                        ] + tree.branch_length(node)
-                        tot_bl = tot_bl + tree.branch_length(node)
-
-                for xi in range(sample_size - 1):
-                    rescaled_x = tbl[xi]
-                    data["total_branch_length"].append(rescaled_x / tot_bl)
-                    tbl_sum[xi] = tbl_sum[xi] + rescaled_x
-                tot_bl_sum[0] = tot_bl_sum[0] + tot_bl
-                data["num_leaves"].extend(range(1, sample_size))
-        basedir = make_test_dir("xi_beta_expected_sfs")
-        f = os.path.join(basedir, f"n={sample_size}_alpha={alpha}.png")
-        ax = sns.violinplot(
-            data=data, x="num_leaves", y="total_branch_length", color="grey"
-        )
-        ax.set_xlabel("num leaves")
-        l1 = ax.plot(np.arange(sample_size - 1), sfs[::], "--", linewidth=3)
-        l2 = ax.plot(
-            np.arange(sample_size - 1),
-            [(x / num_replicates) / (tot_bl_sum[0] / num_replicates) for x in tbl_sum],
-            "--",
-            linewidth=3,
-        )
-        ax.legend((l1[0], l2[0]), ("Expected", "Observed"))
-        pyplot.savefig(f, dpi=72)
-        pyplot.close("all")
-
-    def run_xi_dirac_expected_sfs(self):
-
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=10,
+        self._run(
             psi=0.1,
             c=1,
             sfs=[
@@ -1842,9 +1772,9 @@ class XiTest(XiHudsonTest):
                 0.03927908,
             ],
         )
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=10,
+
+    def test_xi_dirac_expected_sfs_psi_0_3_c_1(self):
+        self._run(
             psi=0.3,
             c=1,
             sfs=[
@@ -1859,9 +1789,9 @@ class XiTest(XiHudsonTest):
                 0.03931799,
             ],
         )
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=10,
+
+    def test_xi_dirac_expected_sfs_psi_0_5_c_1(self):
+        self._run(
             psi=0.5,
             c=1,
             sfs=[
@@ -1876,9 +1806,9 @@ class XiTest(XiHudsonTest):
                 0.03931431,
             ],
         )
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=10,
+
+    def test_xi_dirac_expected_sfs_psi_0_9_c_1(self):
+        self._run(
             psi=0.9,
             c=1,
             sfs=[
@@ -1894,38 +1824,22 @@ class XiTest(XiHudsonTest):
             ],
         )
 
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=3,
-            psi=0.1,
-            c=10,
-            sfs=[0.6667343, 0.3332657],
+    def test_xi_dirac_expected_sfs_n3(self):
+        self._run(
+            sample_size=3, psi=0.1, c=10, sfs=[0.6667343, 0.3332657],
         )
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=3,
-            psi=0.3,
-            c=10,
-            sfs=[0.6682113, 0.3317887],
+        self._run(
+            sample_size=3, psi=0.3, c=10, sfs=[0.6682113, 0.3317887],
         )
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=3,
-            psi=0.5,
-            c=10,
-            sfs=[0.6721853, 0.3278147],
+        self._run(
+            sample_size=3, psi=0.5, c=10, sfs=[0.6721853, 0.3278147],
         )
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=3,
-            psi=0.9,
-            c=10,
-            sfs=[0.6852703, 0.3147297],
+        self._run(
+            sample_size=3, psi=0.9, c=10, sfs=[0.6852703, 0.3147297],
         )
 
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=10,
+    def test_xi_dirac_expected_sfs_psi_0_1_c_10(self):
+        self._run(
             psi=0.1,
             c=10,
             sfs=[
@@ -1940,9 +1854,9 @@ class XiTest(XiHudsonTest):
                 0.03930470,
             ],
         )
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=10,
+
+    def test_xi_dirac_expected_sfs_psi_0_3_c_10(self):
+        self._run(
             psi=0.3,
             c=10,
             sfs=[
@@ -1957,7 +1871,7 @@ class XiTest(XiHudsonTest):
                 0.03963453,
             ],
         )
-        self.compare_normalised_xi_dirac_sfs(
+        self._run(
             num_replicates=10000,
             sample_size=10,
             psi=0.5,
@@ -1974,7 +1888,7 @@ class XiTest(XiHudsonTest):
                 0.03958537,
             ],
         )
-        self.compare_normalised_xi_dirac_sfs(
+        self._run(
             num_replicates=10000,
             sample_size=10,
             psi=0.9,
@@ -1992,13 +1906,10 @@ class XiTest(XiHudsonTest):
             ],
         )
 
-        ##########################################################################
-        # Compare SFS when c=10000 to the expected SFS whetre c tend to infinity #
-        ##########################################################################
+    # Compare SFS when c=10000 to the expected SFS where c tends to infinity
 
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=10,
+    def test_xi_dirac_expected_sfs_psi_0_1_c_10000(self):
+        self._run(
             psi=0.1,
             c=10000,
             sfs=[
@@ -2013,9 +1924,9 @@ class XiTest(XiHudsonTest):
                 0.04050644,
             ],
         )
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=10,
+
+    def test_xi_dirac_expected_sfs_psi_0_3_c_10000(self):
+        self._run(
             psi=0.3,
             c=10000,
             sfs=[
@@ -2030,9 +1941,9 @@ class XiTest(XiHudsonTest):
                 0.04154517,
             ],
         )
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=10,
+
+    def test_xi_dirac_expected_sfs_psi_0_5_c_10000(self):
+        self._run(
             psi=0.5,
             c=10000,
             sfs=[
@@ -2047,9 +1958,9 @@ class XiTest(XiHudsonTest):
                 0.04050205,
             ],
         )
-        self.compare_normalised_xi_dirac_sfs(
-            num_replicates=10000,
-            sample_size=10,
+
+    def test_xi_dirac_expected_sfs_psi_0_9_c_10000(self):
+        self._run(
             psi=0.9,
             c=10000,
             sfs=[
@@ -2065,144 +1976,20 @@ class XiTest(XiHudsonTest):
             ],
         )
 
-    def compare_xi_beta_sfs(self, sample_size, alpha, sfs, num_replicates=1000):
+
+class BetaSFS(KnownSFS):
+    def _run(self, sample_size, alpha, sfs, num_replicates=1000):
         """
         Runs simulations of the xi beta model and compares to the expected SFS.
         """
-        logging.debug(f"running SFS for {sample_size} {alpha}")
-        reps = msprime.simulate(
-            sample_size,
-            num_replicates=num_replicates,
-            model=msprime.BetaCoalescent(alpha=alpha, truncation_point=1),
-        )
+        logging.debug(f"running Beta SFS for {sample_size} {alpha}")
+        model = (msprime.BetaCoalescent(alpha=alpha, truncation_point=1),)
+        name = f"n={sample_size}_alpha={alpha}.png"
+        self.compare_sfs(sample_size, model, num_replicates, sfs, name)
 
-        data = collections.defaultdict(list)
-        tbl_sum = [0] * (sample_size - 1)
-        for ts in reps:
-            for tree in ts.trees():
-                tot_bl = 0.0
-                tbl = [0] * (sample_size - 1)
-                for node in tree.nodes():
-                    if tree.parent(node) != msprime.NULL_NODE:
-                        tbl[tree.num_samples(node) - 1] = tbl[
-                            tree.num_samples(node) - 1
-                        ] + tree.branch_length(node)
-                        tot_bl = tot_bl + tree.branch_length(node)
+    def test_xi_beta_expected_sfs_alpha1_1(self):
 
-                for xi in range(sample_size - 1):
-                    rescaled_x = tbl[xi] / tot_bl
-                    data["total_branch_length"].append(rescaled_x)
-                    tbl_sum[xi] = tbl_sum[xi] + rescaled_x
-                data["num_leaves"].extend(range(1, sample_size))
-
-        basedir = make_test_dir("xi_beta_expected_sfs")
-        f = os.path.join(basedir, f"n={sample_size}_alpha={alpha}.png")
-        ax = sns.violinplot(
-            data=data, x="num_leaves", y="total_branch_length", color="grey"
-        )
-        ax.set_xlabel("num leaves")
-        l1 = ax.plot(np.arange(sample_size - 1), sfs[::], "--", linewidth=3)
-        l2 = ax.plot(
-            np.arange(sample_size - 1),
-            [x / num_replicates for x in tbl_sum],
-            "--",
-            linewidth=3,
-        )
-        ax.legend((l1[0], l2[0]), ("Expected", "Observed"))
-        pyplot.savefig(f, dpi=72)
-        pyplot.close("all")
-
-    def run_xi_beta_breakpoints(self):
-        basedir_name = "xi_beta_breakpoints"
-        Ne = 10 ** 4
-        for alpha in [1.1, 1.3, 1.6, 1.9]:
-            self.verify_breakpoint_distribution(
-                basedir_name,
-                f"n=100_alpha={alpha}",
-                sample_size=100,
-                Ne=Ne,
-                r=1e-7,
-                L=10 ** 6,
-                model=msprime.BetaCoalescent(alpha=alpha),
-            )
-            # Add a growth rate with a higher recombination rate so
-            # we still get decent numbers of trees
-            self.verify_breakpoint_distribution(
-                basedir_name,
-                f"n=100_alpha={alpha}",
-                sample_size=100,
-                Ne=Ne,
-                r=1e-7,
-                L=10 ** 6,
-                model=msprime.BetaCoalescent(alpha=alpha),
-                growth_rate=0.05,
-            )
-
-    def run_xi_dirac_breakpoints(self):
-        basedir_name = "xi_dirac_breakpoints"
-        Ne = 10 ** 2
-        for psi in [0.1, 0.3, 0.6, 0.9]:
-            for c in [1, 10]:
-                self.verify_breakpoint_distribution(
-                    basedir_name,
-                    f"n=100_psi={psi}_c={c}",
-                    sample_size=100,
-                    Ne=Ne,
-                    r=1e-8,
-                    L=10 ** 6,
-                    model=msprime.DiracCoalescent(psi=psi, c=c),
-                )
-                # Add a growth rate with a higher recombination rate so
-                # we still get decent numbers of trees
-                self.verify_breakpoint_distribution(
-                    basedir_name,
-                    f"n=100_psi={psi}_c={c}",
-                    sample_size=100,
-                    Ne=Ne,
-                    r=1e-7,
-                    L=10 ** 6,
-                    model=msprime.DiracCoalescent(psi=psi, c=c),
-                    growth_rate=0.05,
-                )
-
-    def run_xi_beta_recombinations(self):
-        basedir_name = "xi_beta_recombinations"
-        Ne = 10000
-        for alpha in [1.1, 1.3, 1.5, 1.9]:
-            self.verify_recombination(
-                basedir_name,
-                f"n=100_alpha={alpha}",
-                sample_size=100,
-                Ne=Ne,
-                r=1e-8,
-                m=1e-8,
-                L=10 ** 6,
-                model=msprime.BetaCoalescent(alpha=alpha),
-            )
-
-    def run_xi_dirac_recombinations(self):
-        basedir_name = "xi_dirac_recombinations"
-        Ne = 100
-        for psi in [0.1, 0.3, 0.5, 0.9]:
-            for c in [1, 10, 100]:
-                # The Dirac coalescent has branch lengths proportional to Ne^2
-                # and recombination rate proportional to Ne so need to divide
-                # the mutation rate by Ne to make numbers of mutations and
-                # recombinations comparable.
-                self.verify_recombination(
-                    basedir_name,
-                    f"n=100_psi={psi}_c={c}",
-                    sample_size=100,
-                    Ne=Ne,
-                    r=1e-8,
-                    m=1e-8,
-                    L=10 ** 6,
-                    model=msprime.DiracCoalescent(psi=psi, c=c),
-                )
-
-    def run_xi_beta_expected_sfs(self):
-
-        self.compare_normalized_xi_beta_sfs(
+        self._run(
             num_replicates=100000,
             sample_size=10,
             alpha=1.1,
@@ -2219,7 +2006,8 @@ class XiTest(XiHudsonTest):
             ],
         )
 
-        self.compare_normalized_xi_beta_sfs(
+    def test_xi_beta_expected_sfs_alpha1_3(self):
+        self._run(
             num_replicates=100000,
             sample_size=10,
             alpha=1.3,
@@ -2236,7 +2024,8 @@ class XiTest(XiHudsonTest):
             ],
         )
 
-        self.compare_normalized_xi_beta_sfs(
+    def test_xi_beta_expected_sfs_alpha1_5(self):
+        self._run(
             num_replicates=100000,
             sample_size=10,
             alpha=1.5,
@@ -2253,7 +2042,8 @@ class XiTest(XiHudsonTest):
             ],
         )
 
-        self.compare_normalized_xi_beta_sfs(
+    def test_xi_beta_expected_sfs_alpha1_9(self):
+        self._run(
             num_replicates=100000,
             sample_size=10,
             alpha=1.9,
@@ -2270,6 +2060,20 @@ class XiTest(XiHudsonTest):
             ],
         )
 
+
+# FIXME there's some problems with this test.
+# (a) it's not clear what it's actually computing. Why are we bundling togther
+#    the TMRCA values for all these different values? If we have an empirical
+#    expectation for the mean coalesence time, then maybe it'd be better to
+#    plot this along with the distribution for a handful of growth rates
+#    like we do for the SFS, say?
+#    At the very least we'd want to have some labels on the X and Y axes.
+# (b) It takes a very long time to run, and can't be parallelised. This
+#    is also motivation for splitting it up in to a number of smaller
+#    tests.
+# (c) There's a bunch of duplicated code. Probably this would be resolved
+#    by having two classes, DiracGrowth and BetaGrowth.
+class XiGrowthTest(Test):
     def compute_beta_timescale(self, pop_size, alpha):
         m = 2 + np.exp(alpha * np.log(2) + (1 - alpha) * np.log(3) - np.log(alpha - 1))
         ret = np.exp(
@@ -2280,16 +2084,17 @@ class XiTest(XiHudsonTest):
         )
         return ret
 
-    def run_xi_beta_growth(self):
-        basedir_name = "xi_beta_growth"
-        basedir = make_test_dir(basedir_name)
+    def test_xi_beta_growth(self):
         empirical_tmrca = []
         expected_tmrca = []
-        nrep = 10000
+        # nrep = 10000
+        nrep = 1000
         for pop_size in [1, 10, 100, 1000, 10000, 100000]:
             for alpha in [1.1, 1.3, 1.5, 1.7, 1.9]:
                 for growth_rate in [0, 0.001, 0.01, 0.1]:
-                    print("running tmrcas for", pop_size, alpha, growth_rate)
+                    logging.debug(
+                        f"running tmrcas for {pop_size}, {alpha}, {growth_rate}"
+                    )
                     ts = msprime.simulate(
                         population_configurations=[
                             msprime.PopulationConfiguration(
@@ -2316,21 +2121,22 @@ class XiTest(XiHudsonTest):
         expected_tmrca.sort()
         pyplot.plot(empirical_tmrca, expected_tmrca)
         pyplot.plot(expected_tmrca, expected_tmrca)
-        path = os.path.join(basedir, f"{self.name}.png")
+        path = self.output_dir / "growth.png"
         pyplot.savefig(path)
         pyplot.close("all")
 
-    def run_xi_dirac_growth(self):
-        basedir_name = "xi_dirac_growth"
-        basedir = make_test_dir(basedir_name)
+    def test_xi_dirac_growth(self):
         empirical_tmrca = []
         expected_tmrca = []
-        nrep = 10000
+        # nrep = 10000
+        nrep = 1000
         for pop_size in [1, 10, 100]:
             for c in [0, 0.1, 0.5, 1, 5, 10]:
                 for psi in [0.1, 0.3, 0.5, 0.7, 0.9]:
                     for growth_rate in [0, 0.001, 0.01, 0.1]:
-                        print("running tmrcas for", pop_size, c, psi, growth_rate)
+                        logging.debug(
+                            f"running tmrcas for {pop_size}, {c}, {psi} {growth_rate}"
+                        )
                         ts = msprime.simulate(
                             population_configurations=[
                                 msprime.PopulationConfiguration(
@@ -2357,224 +2163,12 @@ class XiTest(XiHudsonTest):
         expected_tmrca.sort()
         pyplot.plot(empirical_tmrca, expected_tmrca)
         pyplot.plot(expected_tmrca, expected_tmrca)
-        path = os.path.join(basedir, f"{self.name}.png")
+        path = self.output_dir / "growth.png"
         pyplot.savefig(path)
         pyplot.close("all")
 
 
-@attr.s
-class XiTest1(XiTest):
-    model = attr.ib(type=type(msprime.DiracCoalescent()))
-    simulate_args = attr.ib(factory=dict)
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        logging.debug(f"{self.name} {self.model} {self.simulate_args}")
-        self.run_xi_hudson_comparison(self.name, self.model, **self.simulate_args)
-
-
-@attr.s
-class XiTest2(XiTest):
-    # Adds a check for xi_beta recombination breakpoints
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_xi_beta_breakpoints()
-
-
-@attr.s
-class XiTest3(XiTest):
-    # Adds a check for xi_dirac recombination breakpoints
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_xi_dirac_breakpoints()
-
-
-@attr.s
-class XiTest4(XiTest):
-    # Adds a check for xi_dirac matching expected SFS calculations.
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_xi_dirac_expected_sfs()
-
-
-@attr.s
-class XiTest5(XiTest):
-    # Adds a check for xi_beta matching expected SFS calculations.
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_xi_beta_expected_sfs()
-
-
-@attr.s
-class XiTest6(XiTest):
-    # Adds a check for xi_beta recombination breakpoints
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_xi_beta_recombinations()
-
-
-@attr.s
-class XiTest7(XiTest):
-    # Adds a check for xi_dirac recombination breakpoints
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_xi_dirac_recombinations()
-
-
-@attr.s
-class XiTest8(XiTest):
-    # Adds a check for xi_beta population growth
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info("running", self.group, self.name)
-        self.run_xi_beta_growth()
-
-
-@attr.s
-class XiTest9(XiTest):
-    # Adds a check for xi_beta population growth
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info("running", self.group, self.name)
-        self.run_xi_dirac_growth()
-
-
-def register_xi_tests(runner):
-    group = "xi"
-    tests = [
-        # add_xi_dirac_vs_hudson_recombination
-        # Checks Xi-dirac against the standard coalescent with recombination.
-        XiTest1(
-            "xi_dirac_vs_hudson_recombination",
-            group,
-            msprime.DiracCoalescent(psi=0.99, c=0),
-            simulate_args=dict(
-                sample_size=50, Ne=50, num_replicates=1000, recombination_rate=0.1,
-            ),
-        ),
-        # add_xi_dirac_vs_hudson_single_locus
-        # Checks Xi-dirac against the standard coalescent at a single locus.
-        XiTest1(
-            "xi_dirac_vs_hudson_single_locus",
-            group,
-            msprime.DiracCoalescent(psi=0.99, c=0),
-            simulate_args=dict(sample_size=10, Ne=100, num_replicates=5000,),
-        ),
-        XiTest2(name="xi_beta_bp", group=group),
-        XiTest3(name="xi_dirac_bp", group=group),
-        XiTest4(name="xi_dirac_sfs", group=group),
-        XiTest5(name="xi_beta_sfs", group=group),
-        XiTest6(name="xi_beta_recomb", group=group),
-        XiTest7(name="xi_dirac_recomb", group=group),
-        XiTest8(name="xi_beta_growth", group=group),
-        XiTest9(name="xi_dirac_growth", group=group),
-    ]
-
-    for test in tests:
-        runner.register(test)
-
-
-@attr.s
-class HudsonTest(XiHudsonTest):
-    def run_hudson_breakpoints(self):
-        basedir_name = "hudson_breakpoints"
-        self.verify_breakpoint_distribution(
-            basedir_name,
-            "single_pop_n_50",
-            sample_size=50,
-            Ne=10 ** 4,
-            r=1e-8,
-            L=10 ** 6,
-            model="hudson",
-        )
-        self.verify_breakpoint_distribution(
-            basedir_name,
-            "single_pop_n_100",
-            sample_size=100,
-            Ne=10 ** 4,
-            r=1e-8,
-            L=10 ** 6,
-            model="hudson",
-        )
-        # Add a growth rate with a higher recombination rate so
-        # we still get decent numbers of trees
-        self.verify_breakpoint_distribution(
-            basedir_name,
-            "single_pop_n_100_growth",
-            sample_size=100,
-            Ne=10 ** 4,
-            r=1e-7,
-            L=10 ** 6,
-            model="hudson",
-            growth_rate=0.05,
-        )
-
-    def run_Hudson_recombinations(self):
-        basedir_name = "hudson_recombinations"
-        self.verify_recombination(
-            basedir_name,
-            f"n=100_hudson",
-            sample_size=100,
-            Ne=10000,
-            r=1e-8,
-            m=1e-8,
-            L=10 ** 6,
-            model="hudson",
-        )
-
-
-@attr.s
-class HudsonTest1(HudsonTest):
-    """
-    Adds a check for hudson recombination breakpoints
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_Hudson_recombinations()
-
-
-@attr.s
-class HudsonTest2(HudsonTest):
-    """
-    Adds a check for hudson recombination breakpoints
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_hudson_breakpoints()
-
-
-def register_hudson_tests(runner):
-    group = "hudson"
-    tests = [
-        HudsonTest1(name="hudson recombination", group=group),
-        HudsonTest2(name="hudson breakpoints", group=group),
-    ]
-
-    for test in tests:
-        runner.register(test)
-
-
-@attr.s
-class ContDiscreteTest(Test):
+class ContinuousVsDiscreteRecombination(Test):
     def _run_msprime_coalescent_stats(self, **kwargs):
         logging.debug(f"\t msprime: {kwargs}")
         if "num_replicates" in kwargs:
@@ -2593,9 +2187,7 @@ class ContDiscreteTest(Test):
         df = pd.DataFrame(d)
         return df
 
-    def run_cont_discrete_comparison(
-        self, key, model, discrete_recomb_map, cont_recomb_map
-    ):
+    def run_cont_discrete_comparison(self, model, discrete_recomb_map, cont_recomb_map):
         sample_size = 10
         num_replicates = 400
         df_discrete = self._run_msprime_coalescent_stats(
@@ -2615,7 +2207,6 @@ class ContDiscreteTest(Test):
         cont_length = cont_recomb_map.get_sequence_length()
         scale_breakpoints(df_cont, discrete_length / cont_length)
         self._plot_stats(
-            key,
             "compare continuous and discrete coordinates",
             df_discrete,
             df_cont,
@@ -2623,19 +2214,26 @@ class ContDiscreteTest(Test):
             "continuous",
         )
 
-    def run_uniform_recomb_cont_discrete_comparison(self, key, model):
+
+class UniformRecombination(ContinuousVsDiscreteRecombination):
+    def _run(self, model):
         discrete_recomb_map = msprime.RecombinationMap.uniform_map(
             2000000, 1e-5, discrete=True
         )
         cont_recomb_map = msprime.RecombinationMap.uniform_map(
-            1, 2000000 * 1e-5, discrete=False
+            2000000, 1e-5, discrete=False
         )
+        self.run_cont_discrete_comparison(model, discrete_recomb_map, cont_recomb_map)
 
-        self.run_cont_discrete_comparison(
-            key, model, discrete_recomb_map, cont_recomb_map
-        )
+    def test_hudson_cont_discrete_uniform(self):
+        self._run("hudson")
 
-    def run_variable_recomb_cont_discrete_comparison(self, key, model):
+    def test_dtwf_cont_discrete_uniform(self):
+        self._run("dtwf")
+
+
+class VariableRecombination(ContinuousVsDiscreteRecombination):
+    def _run(self, model):
         r = 1e-5
         discrete_positions = [0, 10000, 50000, 150000, 200000]
         discrete_rates = [0.0, r, 5 * r, r / 2, 0.0]
@@ -2650,68 +2248,22 @@ class ContDiscreteTest(Test):
             cont_positions, cont_rates, discrete=False
         )
 
-        self.run_cont_discrete_comparison(
-            key, model, discrete_recomb_map, cont_recomb_map
-        )
+        self.run_cont_discrete_comparison(model, discrete_recomb_map, cont_recomb_map)
 
-    def run_continuous_discrete_same_scale(self, key, model):
-        discrete_recomb_map = msprime.RecombinationMap.uniform_map(
-            2000000, 1e-5, discrete=True
-        )
-        cont_recomb_map = msprime.RecombinationMap.uniform_map(
-            2000000, 1e-5, discrete=False
-        )
-        self.run_cont_discrete_comparison(
-            key, model, discrete_recomb_map, cont_recomb_map
-        )
+    def test_hudson_cont_discrete_variable(self):
+        self._run("hudson")
+
+    def test_dtwf_cont_discrete_variable(self):
+        self._run("dtwf")
 
 
-@attr.s
-class ContDiscreteTest1(ContDiscreteTest):
-    model = attr.ib(type=str)
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_continuous_discrete_same_scale(self.name, self.model)
-
-
-@attr.s
-class ContDiscreteTest2(ContDiscreteTest):
-    """
-    Adds checks comparing equivalent simulations in discrete space
-    and scaled up continuous space.
-    """
-
-    model = attr.ib(type=str)
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_uniform_recomb_cont_discrete_comparison(
-            self.name + "_uniform", self.model
-        )
-        self.run_variable_recomb_cont_discrete_comparison(
-            self.name + "_variable", self.model
-        )
-
-
-def register_contdiscrete_tests(runner):
-    group = "contdiscrete"
-    tests = [
-        ContDiscreteTest1("hudson_cont_discrete_same_scale", group, "hudson"),
-        ContDiscreteTest1("dtwf_cont_discrete_same_scale", group, "dtwf"),
-        ContDiscreteTest2("hudson_recomb_cont_discrete", group, "hudson"),
-        ContDiscreteTest2("dtwf_recomb_cont_discrete", group, "dtwf"),
-    ]
-    for test in tests:
-        runner.register(test)
-
-
-@attr.s
 class ArgRecordTest(Test):
-    def run_arg_recording(self):
-        basedir = make_test_dir("arg_recording")
+    """
+    Check that we get the same distributions of nodes and edges when
+    we simplify an ARG as we get in a direct simulation.
+    """
+
+    def _run(self, num_replicates=10000, **kwargs):
 
         ts_node_counts = np.array([])
         arg_node_counts = np.array([])
@@ -2720,23 +2272,15 @@ class ArgRecordTest(Test):
         ts_edge_counts = np.array([])
         arg_edge_counts = np.array([])
 
-        reps = 10000
-        leaves = 1000
-        rho = 0.2
-
-        for i in range(reps):
-            ts = msprime.simulate(
-                sample_size=leaves, recombination_rate=rho, random_seed=i + 1
-            )
+        for ts in msprime.simulate(num_replicates=num_replicates, **kwargs):
             ts_node_counts = np.append(ts_node_counts, ts.num_nodes)
             ts_tree_counts = np.append(ts_tree_counts, ts.num_trees)
             ts_edge_counts = np.append(ts_edge_counts, ts.num_edges)
-            arg = msprime.simulate(
-                sample_size=leaves,
-                recombination_rate=rho,
-                random_seed=i + 1,
-                record_full_arg=True,
-            )
+
+        reps = msprime.simulate(
+            num_replicates=num_replicates, record_full_arg=True, **kwargs
+        )
+        for arg in reps:
             arg = arg.simplify()
             arg_node_counts = np.append(arg_node_counts, arg.num_nodes)
             arg_tree_counts = np.append(arg_tree_counts, arg.num_trees)
@@ -2745,156 +2289,40 @@ class ArgRecordTest(Test):
         pp_ts = sm.ProbPlot(ts_node_counts)
         pp_arg = sm.ProbPlot(arg_node_counts)
         sm.qqplot_2samples(pp_ts, pp_arg, line="45")
-        f = os.path.join(basedir, "nodes.png")
-        pyplot.savefig(f, dpi=72)
+        pyplot.savefig(self.output_dir / "nodes.png", dpi=72)
 
         pp_ts = sm.ProbPlot(ts_tree_counts)
         pp_arg = sm.ProbPlot(arg_tree_counts)
         sm.qqplot_2samples(pp_ts, pp_arg, line="45")
-        f = os.path.join(basedir, "trees.png")
-        pyplot.savefig(f, dpi=72)
+        pyplot.savefig(self.output_dir / "num_trees.png", dpi=72)
 
         pp_ts = sm.ProbPlot(ts_edge_counts)
         pp_arg = sm.ProbPlot(arg_edge_counts)
         sm.qqplot_2samples(pp_ts, pp_arg, line="45")
-        f = os.path.join(basedir, "edges.png")
-        pyplot.savefig(f, dpi=72)
+        pyplot.savefig(self.output_dir / "edges.png", dpi=72)
         pyplot.close("all")
 
-    def run_multiple_merger_arg_recording(self):
-        basedir = make_test_dir("mmc_arg_recording")
+    def test_arg_hudson_n10_rho_20(self):
+        self._run(sample_size=10, recombination_rate=20)
 
-        ts_node_counts = np.array([])
-        arg_node_counts = np.array([])
-        ts_tree_counts = np.array([])
-        arg_tree_counts = np.array([])
-        ts_edge_counts = np.array([])
-        arg_edge_counts = np.array([])
+    def test_arg_hudson_n1000_rho_0_2(self):
+        self._run(sample_size=1000, recombination_rate=0.2)
 
-        reps = 10000
-        leaves = 100
-        rho = 2
+    def test_arg_beta_n100_rho_2(self):
+        model = msprime.BetaCoalescent(alpha=1.1, truncation_point=1)
+        self._run(sample_size=100, recombination_rate=2, model=model)
 
-        for i in range(reps):
-            ts = msprime.simulate(
-                sample_size=leaves,
-                recombination_rate=rho,
-                random_seed=i + 1,
-                model=msprime.BetaCoalescent(alpha=1.1, truncation_point=1),
-            )
-            ts_node_counts = np.append(ts_node_counts, ts.num_nodes)
-            ts_tree_counts = np.append(ts_tree_counts, ts.num_trees)
-            ts_edge_counts = np.append(ts_edge_counts, ts.num_edges)
-            arg = msprime.simulate(
-                sample_size=leaves,
-                recombination_rate=rho,
-                random_seed=i + 1,
-                model=msprime.BetaCoalescent(alpha=1.1, truncation_point=1),
-                record_full_arg=True,
-            )
-            arg = arg.simplify()
-            arg_node_counts = np.append(arg_node_counts, arg.num_nodes)
-            arg_tree_counts = np.append(arg_tree_counts, arg.num_trees)
-            arg_edge_counts = np.append(arg_edge_counts, arg.num_edges)
-
-        pp_ts = sm.ProbPlot(ts_node_counts)
-        pp_arg = sm.ProbPlot(arg_node_counts)
-        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
-        f = os.path.join(basedir, "beta_nodes.png")
-        pyplot.savefig(f, dpi=72)
-
-        pp_ts = sm.ProbPlot(ts_tree_counts)
-        pp_arg = sm.ProbPlot(arg_tree_counts)
-        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
-        f = os.path.join(basedir, "beta_trees.png")
-        pyplot.savefig(f, dpi=72)
-
-        pp_ts = sm.ProbPlot(ts_edge_counts)
-        pp_arg = sm.ProbPlot(arg_edge_counts)
-        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
-        f = os.path.join(basedir, "beta_edges.png")
-        pyplot.savefig(f, dpi=72)
-
-        ts_node_counts = np.array([])
-        arg_node_counts = np.array([])
-        ts_tree_counts = np.array([])
-        arg_tree_counts = np.array([])
-        ts_edge_counts = np.array([])
-        arg_edge_counts = np.array([])
-
-        for i in range(reps):
-            ts = msprime.simulate(
-                sample_size=leaves,
-                recombination_rate=rho,
-                random_seed=i + 1,
-                model=msprime.DiracCoalescent(psi=0.9, c=1),
-            )
-            ts_node_counts = np.append(ts_node_counts, ts.num_nodes)
-            ts_tree_counts = np.append(ts_tree_counts, ts.num_trees)
-            ts_edge_counts = np.append(ts_edge_counts, ts.num_edges)
-            arg = msprime.simulate(
-                sample_size=leaves,
-                recombination_rate=rho,
-                random_seed=i + 1,
-                model=msprime.DiracCoalescent(psi=0.9, c=1),
-                record_full_arg=True,
-            )
-            arg = arg.simplify()
-            arg_node_counts = np.append(arg_node_counts, arg.num_nodes)
-            arg_tree_counts = np.append(arg_tree_counts, arg.num_trees)
-            arg_edge_counts = np.append(arg_edge_counts, arg.num_edges)
-
-        pp_ts = sm.ProbPlot(ts_node_counts)
-        pp_arg = sm.ProbPlot(arg_node_counts)
-        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
-        f = os.path.join(basedir, "dirac_nodes.png")
-        pyplot.savefig(f, dpi=72)
-
-        pp_ts = sm.ProbPlot(ts_tree_counts)
-        pp_arg = sm.ProbPlot(arg_tree_counts)
-        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
-        f = os.path.join(basedir, "dirac_trees.png")
-        pyplot.savefig(f, dpi=72)
-
-        pp_ts = sm.ProbPlot(ts_edge_counts)
-        pp_arg = sm.ProbPlot(arg_edge_counts)
-        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
-        f = os.path.join(basedir, "dirac_edges.png")
-        pyplot.savefig(f, dpi=72)
-        pyplot.close("all")
+    def test_arg_dirac_n100_rho_2(self):
+        model = msprime.DiracCoalescent(psi=0.9, c=1)
+        self._run(sample_size=100, recombination_rate=2, model=model)
 
 
-@attr.s
-class ArgRecordTest1(ArgRecordTest):
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_arg_recording()
+class HudsonAnalytical(Test):
+    """
+    Miscellaneous tests for the hudson model where we verify against
+    analytical results.
+    """
 
-
-@attr.s
-class ArgRecordTest2(ArgRecordTest):
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_multiple_merger_arg_recording()
-
-
-def register_argrecord_tests(runner):
-    group = "argrecord"
-    tests = [
-        # Check that we get the right number of objects when we simplify
-        # a full arg.
-        ArgRecordTest1(name="simple check", group=group),
-        ArgRecordTest2(name="merge check", group=group),
-    ]
-
-    for test in tests:
-        runner.register(test)
-
-
-@attr.s
-class AnalyticalTest(Test):
     def get_segregating_sites_histogram(self, cmd):
         logging.debug(f"\t {' '.join(cmd)}")
         output = subprocess.check_output(cmd)
@@ -2921,23 +2349,22 @@ class AnalyticalTest(Test):
             s += t1 * t2 * t3 * t4
         return s
 
-    def run_s_analytical_check(self):
+    def test_analytical_segsites(self):
         """
         Runs the check for the number of segregating sites against the
-        analytical prediction.
+        analytical prediction. We also compare against ms.
         """
         R = 100000
         theta = 2
-        basedir = make_test_dir("analytical_s")
         for n in range(2, 15):
+            logging.debug(f"Running n = {n}")
             cmd = f"{n} {R} -t {theta}"
             S_ms = self.get_segregating_sites_histogram(
-                self._ms_executable + cmd.split() + self.get_ms_seeds()
+                _ms_executable + cmd.split() + self.get_ms_seeds()
             )
             S_msp = self.get_segregating_sites_histogram(
-                self._mspms_executable + cmd.split() + self.get_ms_seeds()
+                _mspms_executable + cmd.split() + self.get_ms_seeds()
             )
-            filename = os.path.join(basedir, f"{n}.png")
 
             fig, ax = pyplot.subplots()
             index = np.arange(10)
@@ -2951,15 +2378,14 @@ class AnalyticalTest(Test):
             pyplot.legend()
             pyplot.xticks(index + bar_width, [str(j) for j in index])
             pyplot.tight_layout()
-            pyplot.savefig(filename)
+            pyplot.savefig(self.output_dir / f"{n}.png")
 
-    def run_pi_analytical_check(self):
+    def test_analytical_pi(self):
         """
         Runs the check for pi against analytical predictions.
         """
         R = 100000
         theta = 4.5
-        basedir = make_test_dir("analytical_pi")
 
         sample_size = np.arange(2, 15)
         mean = np.zeros_like(sample_size, dtype=float)
@@ -2974,7 +2400,7 @@ class AnalyticalTest(Test):
             )
             for j, ts in enumerate(replicates):
                 pi[j] = ts.get_pairwise_diversity()
-            # Predicted mean is is theta.
+            # Predicted mean is theta.
             predicted_mean[k] = theta
             # From Wakely, eqn (4.14), pg. 101
             predicted_var[k] = (n + 1) * theta / (3 * (n - 1)) + 2 * (
@@ -2987,26 +2413,27 @@ class AnalyticalTest(Test):
                 f"{n}\t{theta}\t{np.mean(pi)}\t{predicted_var[k]}\t{np.var(pi)}"
             )
 
-        filename = os.path.join(basedir, "mean.png")
+        filename = self.output_dir / "mean.png"
         pyplot.plot(sample_size, predicted_mean, "-")
         pyplot.plot(sample_size, mean, "-")
         pyplot.savefig(filename)
         pyplot.close("all")
 
-        filename = os.path.join(basedir, "var.png")
+        filename = self.output_dir / "var.png"
         pyplot.plot(sample_size, predicted_var, "-")
         pyplot.plot(sample_size, var, "-")
         pyplot.savefig(filename)
         pyplot.close("all")
 
-    def run_correlation_between_trees_analytical_check(self):
+    # FIXME the output of this test is not obvious to read. What do the
+    # plots mean, and how do we judge if they are correct or not? At a
+    # minimum we need to have some axis labels and a legend.
+    def test_analytical_correlation_between_trees(self):
         """
         Runs the check for the probability of same tree at two sites against
         analytical predictions.
         """
         R = 1000
-        basedir = make_test_dir("analytical_corr_same_tree")
-
         sample_size = 2
         gc_length_rate_ratio = np.array([0.05, 0.5, 5.0])
         gc_length = np.array([100, 50, 20])
@@ -3064,27 +2491,24 @@ class AnalyticalTest(Test):
             predicted_prob[k, :] = (18.0 + rG) / (18.0 + 13.0 * rG + rG * rG)
 
         x = np.arange(500) + 1
-        filename = os.path.join(basedir, "prob_first.png")
         pyplot.plot(x, predicted_prob[0], "--")
         pyplot.plot(x, empirical_prob_first[0], "-")
         pyplot.plot(x, predicted_prob[1], "--")
         pyplot.plot(x, empirical_prob_first[1], "-")
         pyplot.plot(x, predicted_prob[2], "--")
         pyplot.plot(x, empirical_prob_first[2], "-")
-        pyplot.savefig(filename)
+        pyplot.savefig(self.output_dir / "prob_first.png")
         pyplot.close("all")
 
-        filename = os.path.join(basedir, "prob_last.png")
         pyplot.plot(x, predicted_prob[0, ::-1], "--")
         pyplot.plot(x, empirical_prob_last[0], "-")
         pyplot.plot(x, predicted_prob[1, ::-1], "--")
         pyplot.plot(x, empirical_prob_last[1], "-")
         pyplot.plot(x, predicted_prob[2, ::-1], "--")
         pyplot.plot(x, empirical_prob_last[2], "-")
-        pyplot.savefig(filename)
+        pyplot.savefig(self.output_dir / "prob_last.png")
         pyplot.close("all")
 
-        filename = os.path.join(basedir, "prob_mid.png")
         pyplot.plot(
             x,
             np.concatenate((predicted_prob[0, 249::-1], predicted_prob[0, :250])),
@@ -3103,10 +2527,9 @@ class AnalyticalTest(Test):
             "--",
         )
         pyplot.plot(x, empirical_prob_mid[2], "-")
-        pyplot.savefig(filename)
+        pyplot.savefig(self.output_dir / "prob_mid.png")
         pyplot.close("all")
 
-        filename = os.path.join(basedir, "prob_first_zoom.png")
         x = np.arange(10) + 1
         pyplot.plot(x, predicted_prob[0, range(10)], "--")
         pyplot.plot(x, empirical_prob_first[0, range(10)], "-")
@@ -3114,10 +2537,178 @@ class AnalyticalTest(Test):
         pyplot.plot(x, empirical_prob_first[1, range(10)], "-")
         pyplot.plot(x, predicted_prob[2, range(10)], "--")
         pyplot.plot(x, empirical_prob_first[2, range(10)], "-")
-        pyplot.savefig(filename)
+        pyplot.savefig(self.output_dir / "prob_first_zoom.png")
         pyplot.close("all")
 
-    def run_mean_coaltime_check(self):
+    def get_tbl_distribution(self, n, R, executable):
+        """
+        Returns an array of the R total branch length values from
+        the specified ms-like executable.
+        """
+        cmd = executable + f"{n} {R} -T -p 10".split()
+        cmd += self.get_ms_seeds()
+        logging.debug(f"\t {' '.join(cmd)}")
+        output = subprocess.check_output(cmd)
+        tbl = np.zeros(R)
+        j = 0
+        for line in output.splitlines():
+            if line.startswith(b"("):
+                t = dendropy.Tree.get_from_string(line.decode(), schema="newick")
+                tbl[j] = t.length()
+                j += 1
+        return tbl
+
+    def get_analytical_tbl(self, n, t):
+        """
+        Returns the probabily density of the total branch length t with
+        a sample of n lineages. Wakeley Page 78.
+        """
+        t1 = (n - 1) / 2
+        t2 = math.exp(-t / 2)
+        t3 = pow(1 - math.exp(-t / 2), n - 2)
+        return t1 * t2 * t3
+
+    def test_analytical_tbl(self):
+        """
+        Runs the check for the total branch length.
+        """
+        R = 10000
+        for n in range(2, 15):
+            logging.debug(f"Running for n = {n}")
+            tbl_ms = self.get_tbl_distribution(n, R, _ms_executable)
+            tbl_msp = self.get_tbl_distribution(n, R, _mspms_executable)
+
+            sm.graphics.qqplot(tbl_ms)
+            sm.qqplot_2samples(tbl_ms, tbl_msp, line="45")
+            pyplot.savefig(self.output_dir / f"qqplot_{n}.png", dpi=72)
+            pyplot.close("all")
+
+            hist_ms, bin_edges = np.histogram(tbl_ms, 20, density=True)
+            hist_msp, _ = np.histogram(tbl_msp, bin_edges, density=True)
+
+            index = bin_edges[:-1]
+            # NOTE We don't to have the analytical value quite right here,
+            # but since the value is so very close to ms's, there doesn't
+            # seem to be much point in trying to fix it.
+            analytical = [self.get_analytical_tbl(n, x * 2) for x in index]
+            fig, ax = pyplot.subplots()
+            bar_width = 0.15
+            pyplot.bar(index, hist_ms, bar_width, color="b", label="ms")
+            pyplot.bar(index + bar_width, hist_msp, bar_width, color="r", label="msp")
+            pyplot.plot(index + bar_width, analytical, "o", color="k")
+            pyplot.legend()
+            # pyplot.xticks(index + bar_width, [str(j) for j in index])
+            pyplot.tight_layout()
+            pyplot.savefig(self.output_dir / f"hist_{n}.png")
+
+    def get_num_trees(self, cmd, R):
+        logging.debug(f"\t {' '.join(cmd)}")
+        output = subprocess.check_output(cmd)
+        T = np.zeros(R)
+        j = -1
+        for line in output.splitlines():
+            if line.startswith(b"//"):
+                j += 1
+            if line.startswith(b"["):
+                T[j] += 1
+        return T
+
+    def test_analytical_num_trees(self):
+        """
+        Runs the check for number of trees using the CLI.
+        """
+        r = 1e-8  # Per generation recombination rate.
+        num_loci = np.linspace(100, 10 ** 5, 10).astype(int)
+        Ne = 10 ** 4
+        n = 100
+        rho = r * 4 * Ne * (num_loci - 1)
+        num_replicates = 100
+        ms_mean = np.zeros_like(rho)
+        msp_mean = np.zeros_like(rho)
+        for j in range(len(num_loci)):
+            cmd = "{} {} -T -r {} {}".format(n, num_replicates, rho[j], num_loci[j])
+            T = self.get_num_trees(
+                _ms_executable + cmd.split() + self.get_ms_seeds(), num_replicates
+            )
+            ms_mean[j] = np.mean(T)
+
+            T = self.get_num_trees(
+                _mspms_executable + cmd.split() + self.get_ms_seeds(), num_replicates,
+            )
+            msp_mean[j] = np.mean(T)
+        pyplot.plot(rho, ms_mean, "o")
+        pyplot.plot(rho, msp_mean, "^")
+        pyplot.plot(rho, rho * harmonic_number(n - 1), "-")
+        pyplot.savefig(self.output_dir / "mean.png")
+        pyplot.close("all")
+
+    def get_pairwise_coalescence_time(self, cmd, R):
+        # logging.debug(f"\t {' '.join(cmd)}")
+        output = subprocess.check_output(cmd)
+        T = np.zeros(R)
+        j = 0
+        for line in output.splitlines():
+            if line.startswith(b"("):
+                t = dendropy.Tree.get_from_string(line.decode(), schema="newick")
+                a = t.calc_node_ages()
+                T[j] = a[-1]
+                j += 1
+        return T
+
+    def test_analytical_pairwise_island_model(self):
+        """
+        Runs the check for the pairwise coalscence times for within
+        and between populations.
+        """
+        R = 10000
+        M = 0.2
+
+        for d in range(2, 6):
+            cmd = "2 {} -T -I {} 2 {} {}".format(R, d, "0 " * (d - 1), M)
+            T_w_ms = self.get_pairwise_coalescence_time(
+                _ms_executable + cmd.split() + self.get_ms_seeds(), R
+            )
+            T_w_msp = self.get_pairwise_coalescence_time(
+                _mspms_executable + cmd.split() + self.get_ms_seeds(), R
+            )
+
+            cmd = "2 {} -T -I {} 1 1 {} {}".format(R, d, "0 " * (d - 2), M)
+            T_b_ms = self.get_pairwise_coalescence_time(
+                _ms_executable + cmd.split() + self.get_ms_seeds(), R
+            )
+            T_b_msp = self.get_pairwise_coalescence_time(
+                _mspms_executable + cmd.split() + self.get_ms_seeds(), R
+            )
+            t_within = d / 2
+            t_between = (d + (d - 1) / M) / 2
+            logging.debug(
+                f"d={d} within=({np.mean(T_w_msp):.2f},{t_within}) "
+                f"between=({np.mean(T_b_msp):.2f}, {t_between})"
+            )
+
+            sm.graphics.qqplot(T_w_ms)
+            sm.qqplot_2samples(T_w_ms, T_w_msp, line="45")
+            pyplot.savefig(self.output_dir / f"within_{d}.png", dpi=72)
+            pyplot.close("all")
+
+            sm.graphics.qqplot(T_b_ms)
+            sm.qqplot_2samples(T_b_ms, T_b_msp, line="45")
+            pyplot.savefig(self.output_dir / f"between_{d}.png", dpi=72)
+            pyplot.close("all")
+
+
+class DemographyDebugger(Test):
+    """
+    Tests for the demography debugger methods.
+    """
+
+    # FIXME there's some issues with this test.
+    # 1) We're emitting a bunch of warnings. Is this because we the parameters
+    #    we're putting in are bad, or we're doing division by zero in our
+    #    calculations somewhere?
+    # 2) The output of the test isn't particularly convincing. Why is the output
+    #    banded like this? The text results don't look particularly close either.
+    def test_ddb_mean_coaltime(self):
         """
         Checks the mean coalescence time calculation against pi.
         """
@@ -3198,7 +2789,6 @@ class AnalyticalTest(Test):
                 )
             )
 
-        basedir = make_test_dir("coaltime")
         fig, ax = pyplot.subplots()
         ax.scatter(np.column_stack([U] * T.shape[1]), T)
         # where oh where is abline(0,1)
@@ -3207,287 +2797,14 @@ class AnalyticalTest(Test):
         ax.add_line(line)
         ax.set_xlabel("calculated mean coaltime")
         ax.set_ylabel("pairwise diversity, scaled")
-        filename = os.path.join(basedir, "mean_coaltimes.png")
-        pyplot.savefig(filename)
+        pyplot.savefig(self.output_dir / "mean_coaltimes.png")
         pyplot.close("all")
 
-    def get_tbl_distribution(self, n, R, executable):
-        """
-        Returns an array of the R total branch length values from
-        the specified ms-like executable.
-        """
-        cmd = executable + f"{n} {R} -T -p 10".split()
-        cmd += self.get_ms_seeds()
-        logging.debug(f"\t {' '.join(cmd)}")
-        output = subprocess.check_output(cmd)
-        tbl = np.zeros(R)
-        j = 0
-        for line in output.splitlines():
-            if line.startswith(b"("):
-                t = dendropy.Tree.get_from_string(line.decode(), schema="newick")
-                tbl[j] = t.length()
-                j += 1
-        return tbl
 
-    def get_analytical_tbl(self, n, t):
-        """
-        Returns the probabily density of the total branch length t with
-        a sample of n lineages. Wakeley Page 78.
-        """
-        t1 = (n - 1) / 2
-        t2 = math.exp(-t / 2)
-        t3 = pow(1 - math.exp(-t / 2), n - 2)
-        return t1 * t2 * t3
-
-    def run_tbl_analytical_check(self):
-        """
-        Runs the check for the total branch length.
-        """
-        R = 10000
-        basedir = make_test_dir("analytical_tbl")
-        for n in range(2, 15):
-            tbl_ms = self.get_tbl_distribution(n, R, self._ms_executable)
-            tbl_msp = self.get_tbl_distribution(n, R, self._mspms_executable)
-
-            sm.graphics.qqplot(tbl_ms)
-            sm.qqplot_2samples(tbl_ms, tbl_msp, line="45")
-            filename = os.path.join(basedir, f"qqplot_{n}.png")
-            pyplot.savefig(filename, dpi=72)
-            pyplot.close("all")
-
-            hist_ms, bin_edges = np.histogram(tbl_ms, 20, density=True)
-            hist_msp, _ = np.histogram(tbl_msp, bin_edges, density=True)
-
-            index = bin_edges[:-1]
-            # We don't seem to have the analytical value quite right here,
-            # but since the value is so very close to ms's, there doesn't
-            # seem to be much point in trying to fix it.
-            analytical = [self.get_analytical_tbl(n, x * 2) for x in index]
-            fig, ax = pyplot.subplots()
-            bar_width = 0.15
-            pyplot.bar(index, hist_ms, bar_width, color="b", label="ms")
-            pyplot.bar(index + bar_width, hist_msp, bar_width, color="r", label="msp")
-            pyplot.plot(index + bar_width, analytical, "o", color="k")
-            pyplot.legend()
-            # pyplot.xticks(index + bar_width, [str(j) for j in index])
-            pyplot.tight_layout()
-            filename = os.path.join(basedir, f"hist_{n}.png")
-            pyplot.savefig(filename)
-
-    def get_num_trees(self, cmd, R):
-        logging.debug(f"\t {' '.join(cmd)}")
-        output = subprocess.check_output(cmd)
-        T = np.zeros(R)
-        j = -1
-        for line in output.splitlines():
-            if line.startswith(b"//"):
-                j += 1
-            if line.startswith(b"["):
-                T[j] += 1
-        return T
-
-    def run_cli_num_trees(self):
-        """
-        Runs the check for number of trees using the CLI.
-        """
-        r = 1e-8  # Per generation recombination rate.
-        num_loci = np.linspace(100, 10 ** 5, 10).astype(int)
-        Ne = 10 ** 4
-        n = 100
-        rho = r * 4 * Ne * (num_loci - 1)
-        num_replicates = 100
-        ms_mean = np.zeros_like(rho)
-        msp_mean = np.zeros_like(rho)
-        for j in range(len(num_loci)):
-            cmd = "{} {} -T -r {} {}".format(n, num_replicates, rho[j], num_loci[j])
-            T = self.get_num_trees(
-                self._ms_executable + cmd.split() + self.get_ms_seeds(), num_replicates
-            )
-            ms_mean[j] = np.mean(T)
-
-            T = self.get_num_trees(
-                self._mspms_executable + cmd.split() + self.get_ms_seeds(),
-                num_replicates,
-            )
-            msp_mean[j] = np.mean(T)
-        basedir = make_test_dir("cli_num_trees")
-        pyplot.plot(rho, ms_mean, "o")
-        pyplot.plot(rho, msp_mean, "^")
-        pyplot.plot(rho, rho * harmonic_number(n - 1), "-")
-        filename = os.path.join(basedir, "mean.png")
-        pyplot.savefig(filename)
-        pyplot.close("all")
-
-    def get_pairwise_coalescence_time(self, cmd, R):
-        # logging.debug(f"\t {' '.join(cmd)}")
-        output = subprocess.check_output(cmd)
-        T = np.zeros(R)
-        j = 0
-        for line in output.splitlines():
-            if line.startswith(b"("):
-                t = dendropy.Tree.get_from_string(line.decode(), schema="newick")
-                a = t.calc_node_ages()
-                T[j] = a[-1]
-                j += 1
-        return T
-
-    def run_pairwise_island_model(self):
-        """
-        Runs the check for the pairwise coalscence times for within
-        and between populations.
-        """
-        R = 10000
-        M = 0.2
-        basedir = make_test_dir("analytical_pairwise_island")
-
-        for d in range(2, 6):
-            cmd = "2 {} -T -I {} 2 {} {}".format(R, d, "0 " * (d - 1), M)
-            T_w_ms = self.get_pairwise_coalescence_time(
-                self._ms_executable + cmd.split() + self.get_ms_seeds(), R
-            )
-            T_w_msp = self.get_pairwise_coalescence_time(
-                self._mspms_executable + cmd.split() + self.get_ms_seeds(), R
-            )
-
-            cmd = "2 {} -T -I {} 1 1 {} {}".format(R, d, "0 " * (d - 2), M)
-            T_b_ms = self.get_pairwise_coalescence_time(
-                self._ms_executable + cmd.split() + self.get_ms_seeds(), R
-            )
-            T_b_msp = self.get_pairwise_coalescence_time(
-                self._mspms_executable + cmd.split() + self.get_ms_seeds(), R
-            )
-            logging.debug(
-                f"\
-                {d}\t\
-                {np.mean(T_w_ms)}\t\
-                {np.mean(T_w_msp)}\t\
-                {d / 2}\t\
-                {np.mean(T_b_ms)}\t\
-                {np.mean(T_b_msp)}\t\
-                {(d + (d - 1) / M) / 2}"
-            )
-
-            sm.graphics.qqplot(T_w_ms)
-            sm.qqplot_2samples(T_w_ms, T_w_msp, line="45")
-            f = os.path.join(basedir, f"within_{d}.png")
-            pyplot.savefig(f, dpi=72)
-            pyplot.close("all")
-
-            sm.graphics.qqplot(T_b_ms)
-            sm.qqplot_2samples(T_b_ms, T_b_msp, line="45")
-            f = os.path.join(basedir, f"between_{d}.png")
-            pyplot.savefig(f, dpi=72)
-            pyplot.close("all")
-
-
-@attr.s
-class AnalyticalTest1(AnalyticalTest):
-    """
-    Adds a check for the analytical predictions about the distribution
-    of S, the number of segregating sites.
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_s_analytical_check()
-
-
-@attr.s
-class AnalyticalTest2(AnalyticalTest):
-    """
-    Adds a check for the analytical predictions about the pi,
-    the pairwise site diversity.
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_pi_analytical_check()
-
-
-@attr.s
-class AnalyticalTest3(AnalyticalTest):
-    """
-    Adds a check for the analytical predictions about the correlation between
-    trees in the case of gene conversion.
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_correlation_between_trees_analytical_check()
-
-
-@attr.s
-class AnalyticalTest4(AnalyticalTest):
-    """
-    Adds a check for the demography debugger predictions about
-    mean coalescence time.
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_mean_coaltime_check()
-
-
-@attr.s
-class AnalyticalTest5(AnalyticalTest):
-    """
-    Adds a check for the analytical check for the total branch length.
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_tbl_analytical_check()
-
-
-@attr.s
-class AnalyticalTest6(AnalyticalTest):
-    """
-    Adds a check for the analytical check for pairwise island model
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_pairwise_island_model()
-
-
-@attr.s
-class AnalyticalTest7(AnalyticalTest):
-    """
-    Adds a check for the analytical number of trees using the CLI
-    and comparing with ms.add_s_analytical_check
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_cli_num_trees()
-
-
-def register_analytical_tests(runner):
-    group = "analytical"
-    tests = [
-        AnalyticalTest1(name="s", group=group),
-        AnalyticalTest2(name="pi", group=group),
-        AnalyticalTest3(name="corr_trees", group=group),
-        AnalyticalTest4(name="mean coaltime", group=group),
-        AnalyticalTest5(name="branch length", group=group),
-        AnalyticalTest6(name="island", group=group),
-        AnalyticalTest7(name="cli num trees", group=group),
-    ]
-
-    for test in tests:
-        runner.register(test)
-
-
-@attr.s
 class SmcTest(Test):
-    _scrm_executable = attr.ib(init=False, default=["./data/scrm"])
+    """
+    Tests for the SMC model against scrm.
+    """
 
     def get_scrm_num_trees(self, cmd, R):
         logging.debug(f"\t {' '.join(cmd)}")
@@ -3513,7 +2830,7 @@ class SmcTest(Test):
                 T[j] = max(T[j], float(line.split()[1]))
         return T
 
-    def run_smc_oldest_time(self):
+    def test_smc_oldest_time(self):
         """
         Runs the check for number of trees using the CLI.
         """
@@ -3533,15 +2850,13 @@ class SmcTest(Test):
                 n, num_replicates, rho[j], num_loci[j]
             )
             T = self.get_scrm_oldest_time(
-                self._scrm_executable + cmd.split() + self.get_ms_seeds(),
-                num_replicates,
+                _scrm_executable + cmd.split() + self.get_ms_seeds(), num_replicates,
             )
             scrm_mean[j] = np.mean(T)
 
             cmd += " -l 0"
             T = self.get_scrm_oldest_time(
-                self._scrm_executable + cmd.split() + self.get_ms_seeds(),
-                num_replicates,
+                _scrm_executable + cmd.split() + self.get_ms_seeds(), num_replicates,
             )
             scrm_smc_mean[j] = np.mean(T)
 
@@ -3561,7 +2876,6 @@ class SmcTest(Test):
                 # Normalise back to coalescent time.
                 T /= 4 * Ne
                 dest[j] = np.mean(T)
-        basedir = make_test_dir("smc_oldest_time")
         pyplot.plot(rho, scrm_mean, "-", color="blue", label="scrm")
         pyplot.plot(rho, scrm_smc_mean, "-", color="red", label="scrm_smc")
         pyplot.plot(rho, msp_smc_mean, "--", color="red", label="msprime_smc")
@@ -3569,11 +2883,10 @@ class SmcTest(Test):
         pyplot.xlabel("rho")
         pyplot.ylabel("Mean oldest coalescence time")
         pyplot.legend(loc="lower right")
-        filename = os.path.join(basedir, "mean.png")
-        pyplot.savefig(filename)
+        pyplot.savefig(self.output_dir / "mean.png")
         pyplot.close("all")
 
-    def run_smc_num_trees(self):
+    def test_smc_num_trees(self):
         """
         Runs the check for number of trees in the SMC and full coalescent
         using the API. We compare this with scrm using the SMC as a check.
@@ -3598,8 +2911,7 @@ class SmcTest(Test):
             # Run SCRM under the SMC to see if we get the correct variance.
             cmd = "{} {} -L -r {} {} -l 0".format(n, num_replicates, rho[j], L[j])
             T = self.get_scrm_num_trees(
-                self._scrm_executable + cmd.split() + self.get_ms_seeds(),
-                num_replicates,
+                _scrm_executable + cmd.split() + self.get_ms_seeds(), num_replicates,
             )
             mean_scrm[j] = np.mean(T)
             var_scrm[j] = np.var(T)
@@ -3642,8 +2954,6 @@ class SmcTest(Test):
             mean_smc_prime[j] = np.mean(num_trees)
             var_smc_prime[j] = np.var(num_trees)
 
-        basedir = make_test_dir("smc_num_trees")
-
         pyplot.plot(rho, mean_exact, "o", label="msprime (hudson)")
         pyplot.plot(rho, mean_smc, "^", label="msprime (smc)")
         pyplot.plot(rho, mean_smc_prime, "*", label="msprime (smc_prime)")
@@ -3652,8 +2962,7 @@ class SmcTest(Test):
         pyplot.legend(loc="upper left")
         pyplot.xlabel("scaled recombination rate rho")
         pyplot.ylabel("Mean number of breakpoints")
-        filename = os.path.join(basedir, "mean.png")
-        pyplot.savefig(filename)
+        pyplot.savefig(self.output_dir / "mean.png")
         pyplot.close("all")
 
         v = np.zeros(len(rho))
@@ -3667,53 +2976,13 @@ class SmcTest(Test):
         pyplot.xlabel("scaled recombination rate rho")
         pyplot.ylabel("variance in number of breakpoints")
         pyplot.legend(loc="upper left")
-        filename = os.path.join(basedir, "var.png")
-        pyplot.savefig(filename)
+        pyplot.savefig(self.output_dir / "var.png")
         pyplot.close("all")
 
 
-@attr.s
-class SmcTest1(SmcTest):
-    """
-    Adds a check for the analytical number of trees under the SMC
-    and the full coalescent.
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_smc_num_trees()
-
-
-@attr.s
-class SmcTest2(SmcTest):
-    """
-    Adds a check the distribution of the oldest time of a
-    coalescence in the smc using scrm.
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_smc_oldest_time()
-
-
-def register_smc_tests(runner):
-    group = "smc"
-    tests = [
-        SmcTest1(name="num trees", group=group),
-        SmcTest2(name="time", group=group),
-    ]
-    for test in tests:
-        runner.register(test)
-
-
-@attr.s
-class SimTest(Test):
-    def run_simulate_from_single_locus(self):
+class SimulateFrom(Test):
+    def test_simulate_from_single_locus(self):
         num_replicates = 1000
-
-        basedir = make_test_dir("simulate_from_single_locus")
 
         for n in [10, 50, 100, 200]:
             logging.debug(f"running for n = {n}")
@@ -3734,15 +3003,13 @@ class SimTest(Test):
 
                 sm.graphics.qqplot(T1)
                 sm.qqplot_2samples(T1, T2, line="45")
-                filename = os.path.join(basedir, f"T_mrca_n={n}_t={t}.png")
+                filename = self.output_dir / f"T_mrca_n={n}_t={t}.png"
                 pyplot.savefig(filename, dpi=72)
                 pyplot.close("all")
 
-    def run_simulate_from_multi_locus(self):
+    def test_simulate_from_multi_locus(self):
         num_replicates = 1000
         n = 100
-
-        basedir = make_test_dir("simulate_from_multi_locus")
 
         for m in [10, 50, 100, 1000]:
             logging.debug(f"running for m = {m}")
@@ -3777,22 +3044,20 @@ class SimTest(Test):
 
                 sm.graphics.qqplot(T1)
                 sm.qqplot_2samples(T1, T2, line="45")
-                filename = os.path.join(basedir, f"T_mrca_m={m}_t={t}.png")
+                filename = self.output_dir / f"T_mrca_m={m}_t={t}.png"
                 pyplot.savefig(filename, dpi=72)
                 pyplot.close("all")
 
                 sm.graphics.qqplot(num_trees1)
                 sm.qqplot_2samples(num_trees1, num_trees2, line="45")
-                filename = os.path.join(basedir, f"num_trees_m={m}_t={t}.png")
+                filename = self.output_dir / f"num_trees_m={m}_t={t}.png"
                 pyplot.savefig(filename, dpi=72)
                 pyplot.close("all")
 
-    def run_simulate_from_recombination(self):
+    def test_simulate_from_recombination(self):
         num_replicates = 1000
         n = 100
         recombination_rate = 10
-
-        basedir = make_test_dir("simulate_from_recombination")
 
         T1 = np.zeros(num_replicates)
         num_trees1 = np.zeros(num_replicates)
@@ -3808,9 +3073,7 @@ class SimTest(Test):
             num_edges1[j] = ts.num_edges
 
         logging.debug(
-            "original\tmean trees ={}\
-             \tmean nodes = {}\
-             \tmean edges =  {}".format(
+            "original mean: trees={:.2f} nodes={:.2f} edges={:.2f}".format(
                 np.mean(num_trees1), np.mean(num_nodes1), np.mean(num_edges1)
             )
         )
@@ -3838,40 +3101,38 @@ class SimTest(Test):
                 num_trees2[j] = final_ts.num_trees
                 num_nodes2[j] = final_ts.num_nodes
                 num_edges2[j] = final_ts.num_edges
+
             logging.debug(
-                "t = {}\
-                \tmean trees = {}\
-                \tmean nodes = {}\
-                \tmean edges = {}".format(
+                "t = {} mean: trees={:.2f} nodes={:.2f} edges={:.2f}".format(
                     t, np.mean(num_trees2), np.mean(num_nodes2), np.mean(num_edges2)
                 )
             )
 
             sm.graphics.qqplot(T1)
             sm.qqplot_2samples(T1, T2, line="45")
-            filename = os.path.join(basedir, f"T_mrca_t={t}.png")
+            filename = self.output_dir / f"T_mrca_t={t}.png"
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_trees1)
             sm.qqplot_2samples(num_trees1, num_trees2, line="45")
-            filename = os.path.join(basedir, f"num_trees_t={t}.png")
+            filename = self.output_dir / f"num_trees_t={t}.png"
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_edges1)
             sm.qqplot_2samples(num_edges1, num_edges2, line="45")
-            filename = os.path.join(basedir, f"num_edges_t={t}.png")
+            filename = self.output_dir / f"num_edges_t={t}.png"
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_nodes1)
             sm.qqplot_2samples(num_nodes1, num_nodes2, line="45")
-            filename = os.path.join(basedir, f"num_nodes_t={t}.png")
+            filename = self.output_dir / f"num_nodes_t={t}.png"
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
-    def run_simulate_from_demography(self):
+    def test_simulate_from_demography(self):
         # TODO this test is considerably complicated by the fact that we
         # can't compare migrations without having support in simplify.
         # When simplify with migrations support is added, also add a test
@@ -3893,8 +3154,6 @@ class SimTest(Test):
             msprime.SimpleBottleneck(time=15.1, population=1, proportion=0.4),
             msprime.SimpleBottleneck(time=25.1, population=0, proportion=0.4),
         ]
-
-        basedir = make_test_dir("simulate_from_demography")
 
         T1 = np.zeros(num_replicates)
         num_ca_events1 = np.zeros(num_replicates)
@@ -3948,14 +3207,13 @@ class SimTest(Test):
             num_mig_events2 = np.zeros(num_replicates)
             sim = msprime.simulator_factory(
                 samples=samples,
-                end_time=t,
                 population_configurations=population_configurations,
                 migration_matrix=migration_matrix,
                 demographic_events=demographic_events,
                 recombination_rate=recombination_rate,
             )
             for j in range(num_replicates):
-                sim.run()
+                sim.run(end_time=t)
                 ts = sim.get_tree_sequence()
                 num_ca_events2[j] = sim.num_common_ancestor_events
                 num_re_events2[j] = sim.num_recombination_events
@@ -4003,236 +3261,47 @@ class SimTest(Test):
 
             sm.graphics.qqplot(T1)
             sm.qqplot_2samples(T1, T2, line="45")
-            filename = os.path.join(basedir, f"T_mrca_t={t}.png")
+            filename = self.output_dir / f"T_mrca_t={t}.png"
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_trees1)
             sm.qqplot_2samples(num_trees1, num_trees2, line="45")
-            filename = os.path.join(basedir, f"num_trees_t={t}.png")
+            filename = self.output_dir / f"num_trees_t={t}.png"
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_edges1)
             sm.qqplot_2samples(num_edges1, num_edges2, line="45")
-            filename = os.path.join(basedir, f"num_edges_t={t}.png")
+            filename = self.output_dir / f"num_edges_t={t}.png"
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_nodes1)
             sm.qqplot_2samples(num_nodes1, num_nodes2, line="45")
-            filename = os.path.join(basedir, f"num_nodes_t={t}.png")
+            filename = self.output_dir / f"num_nodes_t={t}.png"
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_ca_events1)
             sm.qqplot_2samples(num_ca_events1, num_ca_events2, line="45")
-            filename = os.path.join(basedir, f"num_ca_events_t={t}.png")
+            filename = self.output_dir / f"num_ca_events_t={t}.png"
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_re_events1)
             sm.qqplot_2samples(num_re_events1, num_re_events2, line="45")
-            filename = os.path.join(basedir, f"num_re_events_t={t}.png")
+            filename = self.output_dir / f"num_re_events_t={t}.png"
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
             sm.graphics.qqplot(num_mig_events1)
             sm.qqplot_2samples(num_mig_events1, num_mig_events2, line="45")
-            filename = os.path.join(basedir, f"num_mig_events_t={t}.png")
+            filename = self.output_dir / f"num_mig_events_t={t}.png"
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
 
-    def run_simulate_from_benchmark(self):
-        # A quick benchmark to show this running on a large example
-        L = 50 * 10 ** 6
-        seed = 3
-        for n in [10 ** 3, 10 ** 4, 10 ** 5]:
-            logging.debug("====================")
-            logging.debug(f"n = {n}")
-            logging.debug("====================")
-            before = time.perf_counter()
-            ts = msprime.simulate(
-                n, recombination_rate=1e-8, Ne=10 ** 4, length=L, random_seed=seed
-            )
-            duration = time.perf_counter() - before
 
-            logging.debug(f"Full sim required {duration:.2f} sec")
-
-            before = time.perf_counter()
-            t = ts.tables.nodes.time[-1] / 100
-            ts = msprime.simulate(
-                n,
-                recombination_rate=1e-8,
-                Ne=10 ** 4,
-                length=L,
-                random_seed=seed,
-                end_time=t,
-            )
-            duration = time.perf_counter() - before
-            logging.debug(f"Initial sim required {duration:.2f} sec")
-            roots = np.array([tree.num_roots for tree in ts.trees()])
-            logging.debug("\t", roots.shape[0], "trees, mean roots = ", np.mean(roots))
-            before = time.perf_counter()
-            msprime.simulate(
-                from_ts=ts,
-                recombination_rate=1e-8,
-                Ne=10 ** 4,
-                length=L,
-                random_seed=seed,
-            )
-            duration = time.perf_counter() - before
-            logging.debug(f"Final sim required {duration:.2f} sec")
-
-
-@attr.s
-class SimTest1(SimTest):
-    """
-    Check that the distributions are identitical when we run simulate_from
-    at various time points.
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_simulate_from_single_locus()
-
-
-@attr.s
-class SimTest2(SimTest):
-    """
-    Check that the distributions are identitical when we run simulate_from
-    at various time points.
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_simulate_from_multi_locus()
-
-
-@attr.s
-class SimTest3(SimTest):
-    """
-    Check that the distributions are identitical when we run simulate_from
-    at various time points.
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_simulate_from_recombination()
-
-
-@attr.s
-class SimTest4(SimTest):
-    """
-    Check that the distributions are identitical when we run simulate_from
-    at various time points.
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self.run_simulate_from_demography()
-
-
-@attr.s
-class SimTest5(SimTest):
-    """
-    Check that the distributions are identitical when we run simulate_from
-    at various time points.
-    """
-
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        self.run_simulate_from_benchmark()
-        logging.info(f"running {self.group} {self.name}")
-
-
-def register_sim_tests(runner):
-    group = "sim"
-    tests = [
-        SimTest1(name="single locus", group=group),
-        SimTest2(name="multi locus", group=group),
-        SimTest3(name="recombination", group=group),
-        SimTest4(name="demography", group=group),
-        SimTest5(name="benchmark", group=group),
-    ]
-    for test in tests:
-        runner.register(test)
-
-
-def random_instance(
-    key, group, num_populations=1, num_replicates=1000, num_demographic_events=0
-):
-    m = random.randint(1, 1000)
-    r = random.uniform(0.01, 0.1) * m
-    theta = random.uniform(1, 100)
-    N = num_populations
-    sample_sizes = [random.randint(2, 10) for _ in range(N)]
-    migration_matrix = [random.random() * (j % (N + 1) != 0) for j in range(N ** 2)]
-    structure = ""
-    if num_populations > 1:
-        structure = "-I {} {} -ma {}".format(
-            num_populations,
-            " ".join(str(s) for s in sample_sizes),
-            " ".join(str(r) for r in migration_matrix),
-        )
-    cmd = "{} {} -t {} -r {} {} {}".format(
-        sum(sample_sizes), num_replicates, theta, r, m, structure
-    )
-
-    if N > 1:
-        # Add some migration matrix changes
-        t = 0
-        for j in range(1, 6):
-            t += 0.125
-            u = random.random()
-            if u < 0.33:
-                cmd += f" -eM {t} {random.random()}"
-            elif u < 0.66:
-                j = random.randint(1, N)
-                k = j
-                while k == j:
-                    k = random.randint(1, N)
-                r = random.random()
-                cmd += f" -em {t} {j}"
-            else:
-                migration_matrix = [
-                    random.random() * (j % (N + 1) != 0) for j in range(N ** 2)
-                ]
-                cmd += " -ema {} {} {}".format(
-                    t, N, " ".join(str(r) for r in migration_matrix)
-                )
-
-    # Set some initial growth rates, etc.
-    if N == 1:
-        if random.random() < 0.5:
-            cmd += f" -G {random.random()}"
-        else:
-            cmd += f" -eN 0 {random.random()}"
-    # Add some demographic events
-    t = 0
-    for _ in range(num_demographic_events):
-        t += 0.125
-        if random.random() < 0.5:
-            cmd += f" -eG {t} {random.random()}"
-        else:
-            cmd += f" -eN {t} {random.random()}"
-
-    return MsTest1(key, group, cmd)
-
-
-def register_msrandom_tests(runner):
-    def register(name, **kwargs):
-        runner.register(random_instance(name, "random", **kwargs))
-
-    register("random1")
-    register("random2", num_replicates=10 ** 4, num_demographic_events=10)
-
-
-@attr.s
 class MutationTest(Test):
     def _transition_matrix_chi_sq(self, transitions, transition_matrix):
         tm_chisq = []
@@ -4444,7 +3513,7 @@ class SeqGenTest(MutationTest):
 
         Ne = 1e4
 
-        for _ in tqdm.tqdm(range(num_replicates)):
+        for _ in range(num_replicates):
             ts = msprime.simulate(num_samples, Ne=Ne, length=length)
             ts_mutated = msprime.mutate(
                 ts,
@@ -4533,29 +3602,25 @@ class SeqGenTest(MutationTest):
         )
         self.plot_stats(df_sg, df_ts, alleles, "seqgen", model)
 
+    # Test methods
 
-@attr.s
-class SeqGenTest1(SeqGenTest):
-    model = attr.ib(type=str)
+    def test_JC69(self):
+        self._run_seq_gen_msprime_comparison("JC69")
 
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self._run_seq_gen_msprime_comparison(self.model)
+    def test_HKY(self):
+        self._run_seq_gen_msprime_comparison("HKY")
 
+    def test_F84(self):
+        self._run_seq_gen_msprime_comparison("F84")
 
-def register_seqgen_tests(runner):
-    def register(model):
-        group = "seqgen"
-        name = f"{group}_{model}"
-        runner.register(SeqGenTest1(name=name, group=group, model=model))
+    def test_GTR(self):
+        self._run_seq_gen_msprime_comparison("GTR")
 
-    register("JC69")
-    register("HKY")
-    register("F84")
-    register("GTR")
-    register("PAM")
-    register("BLOSUM62")
+    def test_PAM(self):
+        self._run_seq_gen_msprime_comparison("PAM")
+
+    def test_BLOSUM62(self):
+        self._run_seq_gen_msprime_comparison("BLOSUM62")
 
 
 @attr.s
@@ -4644,7 +3709,7 @@ class PyvolveTest(MutationTest):
         Q -= np.eye(num_alleles)
         mut_rate_pyvolve = np.sum(-Q.diagonal() * root_distribution) * mutation_rate
 
-        for _ in tqdm.tqdm(range(num_replicates)):
+        for _ in range(num_replicates):
             ts = msprime.simulate(num_samples, Ne=1e4, length=length)
             ts_mutated = msprime.mutate(
                 ts,
@@ -4729,138 +3794,192 @@ class PyvolveTest(MutationTest):
         df_py, df_ts, alleles = self._run_pyvolve_stats(model, length, num_samples)
         self.plot_stats(df_py, df_ts, alleles, "pyvolve", model)
 
+    def test_pyv_JC69(self):
+        self._run_pyvolve_comparison("JC69")
+
+    def test_pyv_HKY(self):
+        self._run_pyvolve_comparison("HKY")
+
+    def test_pyv_PAM(self):
+        self._run_pyvolve_comparison("PAM")
+
+    def test_pyv_BLOSUM62(self):
+        self._run_pyvolve_comparison("BLOSUM62")
+
+
+###############################################
+# Infrastructure for running the tests and CLI
+###############################################
+
 
 @attr.s
-class PyvolveTest1(PyvolveTest):
-    model = attr.ib(type=str)
+class TestInstance:
+    """
+    A single test instance, that consists of the test class and the test method
+    name.
+    """
 
-    def run(self, output_dir):
-        self._output_dir = output_dir
-        logging.info(f"running {self.group} {self.name}")
-        self._run_pyvolve_comparison(self.model)
+    test_class = attr.ib()
+    method_name = attr.ib()
+
+    def run(self, basedir):
+        logging.info(f"Running {self}")
+        output_dir = pathlib.Path(basedir) / self.test_class / self.method_name
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        instance = getattr(sys.modules[__name__], self.test_class)(output_dir)
+        method = getattr(instance, self.method_name)
+        method()
 
 
-def register_pyvolve_tests(runner):
-    def register(model):
-        group = "pyvolve"
-        name = f"{group}_{model}"
-        runner.register(PyvolveTest1(name=name, group=group, model=model))
+@attr.s
+class TestSuite:
+    """
+    Class responsible for registering all known tests.
+    """
 
-    register("JC69")
-    register("HKY")
-    register("PAM")
-    register("BLOSUM62")
+    tests = attr.ib(init=False, factory=dict)
+    classes = attr.ib(init=False, factory=set)
+
+    def register(self, test_class, method_name):
+        test_instance = TestInstance(test_class, method_name)
+        if method_name in self.tests:
+            raise ValueError(f"Test name {method_name} already used.")
+        self.tests[method_name] = test_instance
+        self.classes.add(test_class)
+
+    def get_tests(self, names=None, test_class=None):
+        if names is not None:
+            tests = [self.tests[name] for name in names]
+        elif test_class is not None:
+            tests = [
+                test for test in self.tests.values() if test.test_class == test_class
+            ]
+        else:
+            tests = list(self.tests.values())
+        return tests
 
 
 @attr.s
 class TestRunner:
     """
-    Class responsible for registering all known tests and running
-    them.
+    Class responsible for running test instances.
     """
 
-    tests = attr.ib(init=False, default=[])
-    groups = attr.ib(init=False, default=set())
+    def __run_sequential(self, tests, basedir, progress):
+        for test in tests:
+            test.run(basedir)
+            progress.update()
 
-    def register(self, test):
-        self.tests.append(test)
-        self.groups.add(test.group)
-
-    def run(self, output_dir, threads=1, names=None, group=None):
-        if names is not None and group is not None:
-            raise ValueError("Cannot specify test names and group at the same time")
-
-        if names is not None:
-            tests = [test for test in self.tests if test.name in names]
-        elif group is not None:
-            tests = [test for test in self.tests if test.group == group]
-        else:
-            tests = self.tests
-
-        with concurrent.futures.ProcessPoolExecutor(max_workers=threads) as executor:
-            futures = [executor.submit(test.run, output_dir) for test in tests]
-
-            assert len(futures) == len(tests)
-
-            pbar = tqdm.tqdm(total=len(futures), desc="Running tests", leave=True)
+    def __run_parallel(self, tests, basedir, num_threads, progress):
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=num_threads
+        ) as executor:
+            futures = [executor.submit(test.run, basedir) for test in tests]
             for future in concurrent.futures.as_completed(futures):
-                pbar.update(1)
-                logging.debug(f"{future} done")
+                exception = future.exception()
+                if exception is not None:
+                    raise exception
+                progress.update()
+
+    def run(self, tests, basedir, num_threads, show_progress):
+        progress = tqdm.tqdm(total=len(tests), disable=not show_progress)
+        logging.info(f"running {len(tests)} tests using {num_threads} processes")
+        if num_threads <= 1:
+            self.__run_sequential(tests, basedir, progress)
+        else:
+            self.__run_parallel(tests, basedir, num_threads, progress)
+        progress.close()
 
 
 def setup_logging(args):
-    log_level = "WARN"
-    if args.verbose == 1:
-        log_level = "INFO"
-    elif args.verbose >= 2:
+    log_level = "INFO"
+    if args.quiet:
+        log_level = "WARN"
+    if args.debug:
         log_level = "DEBUG"
 
     daiquiri.setup(level=log_level)
     msprime_logger = daiquiri.getLogger("msprime")
     msprime_logger.setLevel("WARN")
+    mpl_logger = daiquiri.getLogger("matplotlib")
+    mpl_logger.setLevel("WARN")
 
 
-def add_simulator_arguments(parser, groups):
-    parser.add_argument(
-        "--extended",
-        action="store_true",
-        help="Run extended tests in dtwf_vs_coalescent",
-    )
-    parser.add_argument(
-        "--group",
-        "-g",
-        default=None,
-        choices=groups,
-        help="Run all tests for specified group",
-    )
-    parser.add_argument("tests", nargs="*", help="Run specific tests")
-    parser.add_argument(
-        "--num-threads", "-t", type=int, default=1, help="Specify number of threads"
-    )
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="count",
-        default=0,
-        help="Set the log level. 0:WARN, 1:INFO, 2:DEBUG",
-    )
+def run_tests(suite, args):
 
-
-def run_tests(args, runner):
-    output_dir = "tmp__NOBACKUP__"
-    if args.extended:
-        register_dtwfvscoalescent_tests(runner, add_random_dtwf=True)
+    setup_logging(args)
+    runner = TestRunner()
 
     if len(args.tests) > 0:
-        runner.run(output_dir, threads=args.num_threads, names=args.tests)
-    elif args.group is not None:
-        runner.run(output_dir, threads=args.num_threads, group=args.group)
+        tests = suite.get_tests(names=args.tests)
+    elif args.test_class is not None:
+        tests = suite.get_tests(test_class=args.test_class)
     else:
-        runner.run(output_dir, threads=args.num_threads)
+        tests = suite.get_tests()
+
+    runner.run(tests, args.output_dir, args.num_threads, not args.no_progress)
+
+
+def make_suite():
+    suite = TestSuite()
+
+    for cls_name, cls in inspect.getmembers(sys.modules[__name__]):
+        if inspect.isclass(cls) and issubclass(cls, Test):
+            test_class_instance = cls()
+            for name, thing in inspect.getmembers(test_class_instance):
+                if inspect.ismethod(thing):
+                    if name.startswith("test_"):
+                        suite.register(cls_name, name)
+    return suite
 
 
 def main():
-    runner = TestRunner()
-
-    register_ms_tests(runner)
-    register_discoal_tests(runner)
-    register_contdiscrete_tests(runner)
-    register_dtwfvscoalescent_tests(runner, add_random_dtwf=False)
-    register_xi_tests(runner)
-    register_hudson_tests(runner)
-    register_argrecord_tests(runner)
-    register_msrandom_tests(runner)
-    register_sim_tests(runner)
-    register_analytical_tests(runner)
-    register_smc_tests(runner)
-    register_seqgen_tests(runner)
-    register_pyvolve_tests(runner)
+    suite = make_suite()
 
     parser = argparse.ArgumentParser()
-    add_simulator_arguments(parser, runner.groups)
+    parser.add_argument(
+        "--test-class",
+        "-c",
+        default=None,
+        choices=suite.classes,
+        help="Run all tests for specified test class",
+    )
+    parser.add_argument(
+        "tests",
+        nargs="*",
+        help="Run specific tests. Use the --list option to see those available",
+    )
+    parser.add_argument(
+        "--output-dir",
+        "-d",
+        type=str,
+        default="tmp__NOBACKUP__",
+        help="specify the base output directory",
+    )
+    parser.add_argument(
+        "--num-threads", "-t", type=int, default=1, help="Specify number of threads"
+    )
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--quiet", "-q", action="store_true", help="Do not write any output",
+    )
+    group.add_argument(
+        "--debug", "-D", action="store_true", help="Write out debug output",
+    )
+    parser.add_argument(
+        "--no-progress", "-n", action="store_true", help="Do not show progress bar",
+    )
+    parser.add_argument(
+        "--list", "-l", action="store_true", help="List available checks and exit",
+    )
     args = parser.parse_args()
-    setup_logging(args)
-    run_tests(args, runner)
+    if args.list:
+        print("All available tests")
+        for test in suite.tests.values():
+            print(test.test_class, test.method_name, sep="\t")
+    else:
+        run_tests(suite, args)
 
 
 if __name__ == "__main__":
