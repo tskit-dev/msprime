@@ -1208,7 +1208,9 @@ class DemographyDebugger:
             assert steps[0] == 0
             dt = np.diff(steps)
             dP = np.diff(P)
-            dlogP = np.diff(np.log(P))
+
+            with np.errstate(divide="ignore", invalid="ignore"):
+                dlogP = np.diff(np.log(P))
             nz = np.logical_and(dP < 0, P[1:] * P[:-1] > 0)
             const = dP == 0
             return np.sum(dt[const] * (P[:-1])[const]) + np.sum(
@@ -1362,8 +1364,8 @@ class DemographyDebugger:
                 steps=double_steps, num_samples=num_samples, min_pop_size=min_pop_size
             )
             assert np.all(steps == double_steps[::2])
-            r_prediction_close = np.allclose(r, rd[::2], rtol=1e-3)
-            p_prediction_close = np.allclose(p_t, p_td[::2], rtol=1e-3)
+            r_prediction_close = np.allclose(r, rd[::2], rtol=1e-3, equal_nan=True)
+            p_prediction_close = np.allclose(p_t, p_td[::2], rtol=1e-3, equal_nan=True)
             if not (r_prediction_close and p_prediction_close):
                 warnings.warn(
                     "Doubling the number of steps has resulted in different "
@@ -1425,12 +1427,20 @@ class DemographyDebugger:
                         S[IA[x, a], IA[x, b]] = S[IA[a, x], IA[b, x]] = p
                         S[IA[x, a], IA[x, a]] = S[IA[a, x], IA[a, x]] = 1 - p
                 P = np.matmul(P, S)
-            p_t[j] = np.sum(P)
-            r[j] = np.sum(np.matmul(P, C)) / np.sum(P)
+            p_notcoal = np.sum(P)
+            p_t[j] = p_notcoal
+            if p_notcoal > 0:
+                r[j] = np.sum(np.matmul(P, C)) / np.sum(P)
+            else:
+                r[j] = np.nan
             G = (np.kron(M - dM, Identity) + np.kron(Identity, M - dM)) - C
             P = np.matmul(P, _matrix_exponential(dt * G))
-        p_t[num_steps - 1] = np.sum(P)
-        r[num_steps - 1] = np.sum(np.matmul(P, C)) / np.sum(P)
+        p_notcoal = np.sum(P)
+        p_t[num_steps - 1] = p_notcoal
+        if p_notcoal > 0:
+            r[num_steps - 1] = np.sum(np.matmul(P, C)) / p_notcoal
+        else:
+            r[num_steps - 1] = np.nan
         return r[keep_steps], p_t[keep_steps]
 
     def _pop_size_and_migration_at_t(self, t):

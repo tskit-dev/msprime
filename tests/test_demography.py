@@ -942,10 +942,7 @@ class TestDemographyTrajectories(unittest.TestCase):
         ddb = self.one_pop_example()
         steps = np.linspace(0, 400, 101)
         rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2])
-        for time_step in range(len(steps)):
-            time = steps[time_step]
-            rA = rates[time_step]
-            pA = P[time_step]
+        for time, rA, pA in zip(steps, rates, P):
             if time >= 0 and time < 100:
                 self.assertAlmostEqual(rA, 1 / (2 * 100))
                 self.assertAlmostEqual(pA, np.exp(-time / 200))
@@ -960,6 +957,18 @@ class TestDemographyTrajectories(unittest.TestCase):
                 self.assertAlmostEqual(
                     pA, np.exp(-100 / 200 - (300 - 100) / 400 - (time - 300) / 200)
                 )
+
+    def test_nan_coalrate(self):
+        # The returned rate will be nan at times where the probability
+        # of not having coalesced is floating-point-zero
+        ddb = self.one_pop_example()
+        steps = np.array([1000000 * k for k in range(1, 4)])
+        rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2])
+        print(rates)
+        print(P)
+        for rA, pA in zip(rates, P):
+            self.assertTrue(np.isnan(rA))
+            self.assertEqual(pA, 0)
 
     def test_mean_one_pop(self):
         # As above. The mean time to coalescence should be

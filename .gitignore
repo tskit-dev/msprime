@@ -90,3 +90,4 @@ ENV/
 
 # Vim swp files.
 *.swp
+tmp__NOBACKUP__

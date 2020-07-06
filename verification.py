@@ -14,7 +14,9 @@ The output directory is <output-dir>/<class name>/<test name>.
 Each test should output one or more diagnostic plots, which have
 a clear interpretation as "correct" or "incorrect". QQ-plots
 are preferred, where possible. Numerical results can also be
-output by using ``logging.debug()``, where appropriate.
+output by using ``logging.debug()``, where appropriate; to
+view these, append ``--debug`` to the comand line running
+your tests.
 
 Test classes must be a subclass of the ``Test`` class defined
 in this module.
@@ -78,7 +80,6 @@ import scipy.stats
 import seaborn as sns
 import tqdm
 import tskit
-from matplotlib import lines as mlines
 from matplotlib import pyplot
 
 import msprime
@@ -2667,40 +2668,84 @@ class DemographyDebugger(Test):
     Tests for the demography debugger methods.
     """
 
-    # FIXME there's some issues with this test.
-    # 1) We're emitting a bunch of warnings. Is this because we the parameters
-    #    we're putting in are bad, or we're doing division by zero in our
-    #    calculations somewhere?
-    # 2) The output of the test isn't particularly convincing. Why is the output
-    #    banded like this? The text results don't look particularly close either.
-    def test_ddb_mean_coaltime(self):
+    def verify_ddb_mean_coaltime(self, model_factory, name):
+        """
+        Checks the mean coalescence time calculation against pi.
+        """
+        num_reps = 20
+        T = []
+        U = []
+        logging.debug("coaltime: theory  mean  sd   z")
+        for k, model in enumerate(model_factory()):
+            ddb = msprime.DemographyDebugger(
+                population_configurations=model["population_configurations"],
+                demographic_events=model["demographic_events"],
+                migration_matrix=model["migration_matrix"],
+            )
+            u = ddb.mean_coalescence_time(num_samples=model["sample_size"], max_iter=18)
+            U.append(u)
+
+            mut_rate = 1e-7
+            replicates = msprime.simulate(
+                length=1e7,
+                recombination_rate=1e-8,
+                mutation_rate=mut_rate,
+                population_configurations=model["population_configurations"],
+                demographic_events=model["demographic_events"],
+                migration_matrix=model["migration_matrix"],
+                random_seed=5 + k,
+                num_replicates=num_reps,
+            )
+            TT = np.zeros(num_reps)
+            for j, ts in enumerate(replicates):
+                TT[j] = ts.diversity(ts.samples())
+                TT[j] /= 2 * mut_rate
+            T.append(TT)
+            mT = np.mean(TT)
+            sT = np.std(TT)
+            logging.debug(
+                "        {:.2f} {:.2f} {:.2f} {:.2f}".format(
+                    u, mT, sT, (u - mT) / (sT / np.sqrt(num_reps))
+                )
+            )
+
+        U = np.array(U)
+        T = np.array(T)
+        fig, ax = pyplot.subplots()
+        ax.scatter(np.column_stack([U] * T.shape[1]), T)
+        ax.scatter(U, np.mean(T, axis=1))
+        # where oh where is abline(0,1)
+        x_vals = np.array(ax.get_xlim())
+        ax.plot(x_vals, x_vals, "--")
+        ax.set_xlabel("calculated mean coaltime")
+        ax.set_ylabel("pairwise diversity, scaled")
+        pyplot.savefig(self.output_dir / f"{name}_mean_coaltimes.png")
+        pyplot.close("all")
+
+    def random_model_factory(self):
         """
         Checks the mean coalescence time calculation against pi.
         """
         random.seed(5)
-        num_models = 8
-        num_reps = 8
-        T = np.zeros((num_models, num_reps))
-        U = np.zeros(num_models)
-        logging.debug("coaltime: theory  mean  sd   z")
-        for k in range(num_models):
+        num_models = 20
+        for _ in range(num_models):
             Ne = 100
-            N = 4
-            pop_sizes = [random.uniform(0.01, 10) * Ne for _ in range(N)]
-            growth_rates = [random.uniform(-0.01, 0.01) for _ in range(N)]
+            npops = 4
+            pop_sizes = [random.uniform(0.1, 1) * Ne for _ in range(npops)]
+            growth_rates = [random.uniform(-0.001, 0.001) for _ in range(npops)]
             migration_matrix = [
-                [random.random() * (i != j) for j in range(N)] for i in range(N)
+                [random.random() * (i != j) for j in range(npops)] for i in range(npops)
             ]
-            sample_size = [random.randint(2, 10) for _ in range(N)]
+            sample_size = [random.randint(2, 10) for _ in range(npops)]
             population_configurations = [
                 msprime.PopulationConfiguration(
-                    initial_size=k, sample_size=n, growth_rate=r
+                    initial_size=j, sample_size=n, growth_rate=r
                 )
-                for k, n, r in zip(pop_sizes, sample_size, growth_rates)
+                for j, n, r in zip(pop_sizes, sample_size, growth_rates)
             ]
             demographic_events = []
             for i in [0, 1]:
-                n = random.uniform(0.01, 10)
+                n = random.uniform(0.1, 10) * Ne
                 r = 0
                 demographic_events.append(
                     msprime.PopulationParametersChange(
@@ -2715,55 +2760,107 @@ class DemographyDebugger(Test):
                 msprime.MassMigration(time=200, source=3, dest=0, proportion=0.3)
             )
             for i in [1, 3]:
-                n = random.uniform(0.01, 10)
+                n = random.uniform(0.1, 10) * Ne
                 r = random.uniform(-0.01, 0.01)
                 demographic_events.append(
                     msprime.PopulationParametersChange(
                         time=210, initial_size=n, growth_rate=r, population_id=i
                     )
                 )
-
-            ddb = msprime.DemographyDebugger(
-                population_configurations=population_configurations,
-                demographic_events=demographic_events,
-                migration_matrix=migration_matrix,
-            )
-
-            U[k] = ddb.mean_coalescence_time(num_samples=sample_size)
-
-            mut_rate = 1e-8
-            replicates = msprime.simulate(
-                length=1e7,
-                recombination_rate=1e-8,
-                mutation_rate=mut_rate,
-                population_configurations=population_configurations,
-                demographic_events=demographic_events,
-                migration_matrix=migration_matrix,
-                random_seed=5,
-                num_replicates=num_reps,
-            )
-            for j, ts in enumerate(replicates):
-                T[k, j] = ts.get_pairwise_diversity()
-                T[k, j] /= ts.sequence_length
-                T[k, j] /= 2 * mut_rate
-            mT = np.mean(T[k])
-            sT = np.std(T[k])
-            logging.debug(
-                "        {:.2f} {:.2f} {:.2f} {:.2f}".format(
-                    U[k], mT, sT, (U[k] - mT) / (sT * np.sqrt(num_reps))
+            for i in [1, 2, 3]:
+                n = random.uniform(0.1, 10) * Ne
+                r = random.uniform(0.0, 0.01)
+                demographic_events.append(
+                    msprime.PopulationParametersChange(
+                        time=250, initial_size=n, growth_rate=r, population_id=i
+                    )
                 )
-            )
+            yield {
+                "population_configurations": population_configurations,
+                "demographic_events": demographic_events,
+                "migration_matrix": migration_matrix,
+                "sample_size": sample_size,
+            }
 
-        fig, ax = pyplot.subplots()
-        ax.scatter(np.column_stack([U] * T.shape[1]), T)
-        # where oh where is abline(0,1)
-        line = mlines.Line2D([0, 1], [0, 1])
-        line.set_transform(ax.transAxes)
-        ax.add_line(line)
-        ax.set_xlabel("calculated mean coaltime")
-        ax.set_ylabel("pairwise diversity, scaled")
-        pyplot.savefig(self.output_dir / "mean_coaltimes.png")
-        pyplot.close("all")
+    def migration_model_factory(self):
+        random.seed(5)
+        Ne = 100
+        npops = 3
+        num_models = 10
+        for k in range(num_models):
+            pop_sizes = [Ne] * (npops - 1) + [Ne * (2 ** k)]
+            migration_matrix = [
+                [2 ** (k - 4) * ((i - j) % npops == 1) / Ne for j in range(npops)]
+                for i in range(npops)
+            ]
+            sample_size = [1 + j for j in range(npops)]
+            population_configurations = [
+                msprime.PopulationConfiguration(initial_size=j, sample_size=n)
+                for j, n in zip(pop_sizes, sample_size)
+            ]
+            demographic_events = []
+            yield {
+                "population_configurations": population_configurations,
+                "demographic_events": demographic_events,
+                "migration_matrix": migration_matrix,
+                "sample_size": sample_size,
+            }
+
+    def popsize_change_model_factory(self):
+        random.seed(5)
+        Ne = 100
+        npops = 3
+        num_models = 16
+        change_times = [j * Ne / 4 for j in range(8)]
+        for k in range(num_models):
+            pop_sizes = [Ne] * (npops - 1) + [Ne * (2 ** k)]
+            migration_matrix = [
+                [10 * ((i - j) % npops == 1) / Ne for j in range(npops)]
+                for i in range(npops)
+            ]
+            sample_size = [1 + j for j in range(npops)]
+            population_configurations = [
+                msprime.PopulationConfiguration(initial_size=j, sample_size=n)
+                for j, n in zip(pop_sizes, sample_size)
+            ]
+            demographic_events = []
+            for t in change_times:
+                pop_sizes = pop_sizes[1:] + pop_sizes[:1]
+                r = 0
+                for i, n in enumerate(pop_sizes):
+                    demographic_events.append(
+                        msprime.PopulationParametersChange(
+                            time=t, initial_size=n, growth_rate=r, population_id=i
+                        )
+                    )
+            yield {
+                "population_configurations": population_configurations,
+                "demographic_events": demographic_events,
+                "migration_matrix": migration_matrix,
+                "sample_size": sample_size,
+            }
+
+    def test_random_mean_coaltime(self):
+        """
+        Checks the mean coalescence time calculation against pi.
+        """
+        self.verify_ddb_mean_coaltime(self.random_model_factory, "random")
+
+    def test_popsize_change_mean_coaltime(self):
+        """
+        Checks the mean coalescence time calculation against pi for some models
+        with population size changes.
+        """
+        self.verify_ddb_mean_coaltime(
+            self.popsize_change_model_factory, "popsize_change"
+        )
+
+    def test_migration_mean_coaltime(self):
+        """
+        Checks the mean coalescence time calculation against pi
+        for some models with migration.
+        """
+        self.verify_ddb_mean_coaltime(self.migration_model_factory, "migration")
 
 
 class SmcTest(Test):
