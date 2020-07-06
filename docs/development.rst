@@ -214,7 +214,7 @@ Meson is best installed via ``pip``:
 
     $ python3 -m pip install meson --user
 
-On macOS rather than use ``apt-get`` for installation of these requirements 
+On macOS rather than use ``apt-get`` for installation of these requirements
 a combination of ``homebrew`` and ``pip`` can be used (working as of 2020-01-15).
 
 .. code-block:: bash
@@ -230,7 +230,7 @@ directory, run
 
 .. code-block:: bash
 
-    $ cd lib 
+    $ cd lib
     $ meson build
 
 On macOS, conda builds are generally done using ``clang`` packages that are kept up to date:
@@ -254,7 +254,7 @@ On more recent macOS releases, you may omit the ``CONDA_BUILD_SYSROOT`` prefix.
    The use of the C toolchain on macOS is a moving target.  The above advice
    was written on 23 January, 2020 and was validated by a few ``msprime`` contributors.
    Caveat emptor, etc..
-      
+
 To compile the code, ``cd`` into the ``build`` directory and run ``ninja``. All the
 compiled binaries are then in the ``build`` directory:
 
@@ -553,21 +553,9 @@ running the statistical tests, and can be built by running ``make`` in the
 like ``ms`` and ``ms_summary_stats`` present in the ``data``
 directory.
 
-The ``verification.py`` script contains lots of different tests, each one
-identified by a particular "key". To run all the tests, run the script without
-any arguments. To run some specific tests, provide the required keys as command
-line arguments.
+Please the comments at the top of the ``verification.py`` script for details
+on how to write and run these tests.
 
-Many of the tests involve creating an ``ms`` command line, running it
-with ``ms`` and ``msprime`` and comparing the statistical properties of the
-results. The output of each test is a series of plots, written to a directory
-named after the test key. For example, results for the ``admixture-1-pop2`` test are
-written in the ``tmp__NOBACKUP__/admixture-1-pop2/`` directory (the prefix is
-not important here and can be changed). The majority of the results are
-QQ-plots of the statistics in question comparing ``ms`` and ``msprime``.
-
-There are also several "analytical" tests, which compare the distributions of
-values from ``msprime`` with analytical expectations.
 
 ****************
 Containerization
