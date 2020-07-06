@@ -1365,11 +1365,18 @@ class BetaCoalescent(ParametricSimulationModel):
     .. math::
         m = 2 + \\frac{2^{\\alpha}}{3^{\\alpha - 1} (\\alpha - 1)}.
 
-    Note that the time scale depends both on the effective population size :math:`N_e`
-    and :math:`\\alpha`, and can be dramatically shorter than the timescale of the
-    standard coalescent. Thus, effective population sizes must often be many orders
-    of magnitude larger than census population sizes. The per-generation recombination
-    rate is rescaled similarly to obtain the population-rescaled recombination rate.
+    .. warning::
+        The time scale depends both on the effective population size :math:`N_e`
+        and :math:`\\alpha`, and can be dramatically shorter than that of the
+        standard coalescent. For :math:`\\alpha \\approx 1` that is due to
+        insensitivity of the time scale to :math:`N_e` --- see
+        :ref:`sec_api_simulation_models_multiple_mergers` for an illustration.
+        For :math:`\\alpha \\approx 2` the time scale is short despite depending on
+        :math:`N_e` almost linearly, matching the standard coalescent, because
+        :math:`B(2 - \\alpha, \\alpha) \\rightarrow \\infty` as
+        :math:`\\alpha \\rightarrow 2`. As a result, effective population sizes
+        must often be many orders of magnitude larger than census population sizes
+        to obtain realistic amounts of diversity in simulated samples.
 
     See `Schweinsberg (2003)
     <https://www.sciencedirect.com/science/article/pii/S0304414903000280>`_
