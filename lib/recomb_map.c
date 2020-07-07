@@ -26,18 +26,6 @@
 #include "util.h"
 #include "msprime.h"
 
-inline static int64_t
-scale_mass(double mass, double scale)
-{
-    return (int64_t) round(mass * scale);
-}
-
-inline static double
-unscale_mass(int64_t scaled_mass, double scale)
-{
-    return ((double) scaled_mass) / scale;
-}
-
 void
 recomb_map_print_state(recomb_map_t *self, FILE *out)
 {
@@ -55,8 +43,31 @@ recomb_map_print_state(recomb_map_t *self, FILE *out)
     interval_map_print_state(&self->map, out);
 }
 
+inline static int64_t
+recomb_map_scale_mass(recomb_map_t *self, double mass)
+{
+    double scaled_value = round(mass * self->mass_scale);
+    /* Clamp the value at its max so we can't overflow */
+    scaled_value = TSK_MIN((double) self->largest_scaled_mass_value, scaled_value);
+    return (int64_t) scaled_value;
+}
+
+inline static double
+recomb_map_unscale_mass(recomb_map_t *self, int64_t scaled_mass)
+{
+    return ((double) scaled_mass) / self->mass_scale;
+}
+
+/* Sets the maximum possible mass value that needs to be represented
+ * to the specified value, and sets the scaling constant used to
+ * map this into integers accordingly
+ *
+ * The scaling value is chosen so that this maximum mass values is less
+ * than INT64_MAX and therefore guaranteed not to overflow, whilst
+ * maintaining a very high level of granularity.
+ */
 int MSP_WARN_UNUSED
-recomb_map_set_mass_scale(recomb_map_t *self, double mass_scale)
+recomb_map_set_mass_limit(recomb_map_t *self, double max_mass_value)
 {
     int ret = 0;
     size_t j;
@@ -65,16 +76,17 @@ recomb_map_set_mass_scale(recomb_map_t *self, double mass_scale)
     const double *position = self->map.position;
     const double *rates = self->map.value;
 
-    if (mass_scale <= 0 || !isfinite(mass_scale)) {
+    if (max_mass_value <= 0 || !isfinite(max_mass_value)) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->mass_scale = mass_scale;
+    self->largest_scaled_mass_value = INT64_MAX / 2;
+    self->mass_scale = ((double) self->largest_scaled_mass_value) / max_mass_value;
 
     self->cumulative_scaled_mass[0] = 0;
     for (j = 1; j < self->map.size; j++) {
         mass = (position[j] - position[j - 1]) * rates[j - 1];
-        sum += scale_mass(mass, self->mass_scale);
+        sum += recomb_map_scale_mass(self, mass);
         assert(sum >= 0);
         self->cumulative_scaled_mass[j] = sum;
     }
@@ -206,7 +218,7 @@ recomb_map_position_to_scaled_mass(recomb_map_t *self, double pos)
     assert(index > 0);
     index--;
     mass_diff = (pos - position[index]) * rate[index];
-    scaled_mass_diff = scale_mass(mass_diff, self->mass_scale);
+    scaled_mass_diff = recomb_map_scale_mass(self, mass_diff);
     return self->cumulative_scaled_mass[index] + scaled_mass_diff;
 }
 
@@ -229,7 +241,7 @@ recomb_map_scaled_mass_to_position(recomb_map_t *self, int64_t mass)
     assert(index > 0);
     index--;
     scaled_mass_in_interval = mass - self->cumulative_scaled_mass[index];
-    mass_in_interval = unscale_mass(scaled_mass_in_interval, self->mass_scale);
+    mass_in_interval = recomb_map_unscale_mass(self, scaled_mass_in_interval);
     pos = position[index] + mass_in_interval / rate[index];
     return self->discrete ? floor(pos) : pos;
 }
@@ -238,30 +250,25 @@ double
 recomb_map_shift_by_scaled_mass(recomb_map_t *self, double pos, int64_t scaled_mass)
 {
     int64_t pos_scaled_mass = recomb_map_position_to_scaled_mass(self, pos);
-    return recomb_map_scaled_mass_to_position(self, pos_scaled_mass + scaled_mass);
+    uint64_t target_mass = (uint64_t) pos_scaled_mass + (uint64_t) scaled_mass;
+    uint64_t max_mass = (uint64_t) self->cumulative_scaled_mass[self->map.size - 1];
+    double ret = recomb_map_get_sequence_length(self);
+
+    assert(pos_scaled_mass >= 0);
+    assert(scaled_mass >= 0);
+
+    /* Protect against overflow and make sure we return L when very large
+     * scaled mass values are provided */
+    if (target_mass < max_mass) {
+        ret = recomb_map_scaled_mass_to_position(self, (int64_t) target_mass);
+    }
+    return ret;
 }
 
-/* Select a position from (start, sequence_length) by sampling
- * a distance in mass to the next recombination site and finding the
- * corresponding position that much after start.
- */
 double
-recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start)
+recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass)
 {
-    double left_bound, mass_to_next_recomb;
-    int64_t scaled_mass;
-
-    left_bound = self->discrete ? start + 1 : start;
-    do {
-        /* JK: I'm pretty sure this is wrong, but just putting in a clamping
-         * here to make sure we get sensible values. The correct algorithm is
-         * to draw a point uniformly from start_scaled_mass to the
-         * scaled mass at the end of the chromosome. We should do this in
-         * msprime.c to keep the randomness logic in there. */
-        mass_to_next_recomb = TSK_MAX(gsl_ran_exponential(rng, 1.0), self->total_mass);
-    } while (mass_to_next_recomb == 0.0);
-    scaled_mass = scale_mass(mass_to_next_recomb, self->mass_scale);
-    return recomb_map_shift_by_scaled_mass(self, left_bound, scaled_mass);
+    return recomb_map_shift_by_scaled_mass(self, pos, recomb_map_scale_mass(self, mass));
 }
 
 size_t

@@ -1,5 +1,4 @@
-/*
-** Copyright (C) 2015-2020 University of Oxford
+/* ** Copyright (C) 2015-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -196,6 +195,7 @@ typedef struct {
     interval_map_t map;
     bool discrete;
     int64_t *cumulative_scaled_mass;
+    int64_t largest_scaled_mass_value;
     double mass_scale;
     double total_mass;
 } recomb_map_t;
@@ -511,7 +511,7 @@ size_t recomb_map_get_size(recomb_map_t *self);
 int recomb_map_get_positions(recomb_map_t *self, double *positions);
 int recomb_map_get_rates(recomb_map_t *self, double *rates);
 
-int recomb_map_set_mass_scale(recomb_map_t *self, double mass_scale);
+int recomb_map_set_mass_limit(recomb_map_t *self, double max_mass_value);
 int64_t recomb_map_scaled_mass_between_left_exclusive(
     recomb_map_t *self, double left, double right);
 int64_t recomb_map_scaled_mass_between(recomb_map_t *self, double left, double right);
@@ -519,9 +519,8 @@ double recomb_map_scaled_mass_to_position(recomb_map_t *self, int64_t scaled_mas
 int64_t recomb_map_position_to_scaled_mass(recomb_map_t *self, double position);
 double recomb_map_shift_by_scaled_mass(
     recomb_map_t *self, double pos, int64_t scaled_mass);
+double recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass);
 void recomb_map_print_state(recomb_map_t *self, FILE *out);
-
-double recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start);
 
 int matrix_mutation_model_factory(mutation_model_t *self, int model);
 int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,

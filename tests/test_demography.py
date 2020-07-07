@@ -2121,7 +2121,6 @@ class TestMigrationRecordsSmcPrime(unittest.TestCase, MigrationRecordsMixin):
     model = "smc_prime"
 
 
-@unittest.skip("DTWF recomb borked")
 class TestMigrationRecordsDtwf(unittest.TestCase, MigrationRecordsMixin):
     model = "dtwf"
 
@@ -2715,7 +2714,6 @@ class TestHistoricalSamplingHudson(unittest.TestCase, HistoricalSamplingMixin):
                     self.assertAlmostEqual(offset, time[2] - sampling_time)
 
 
-@unittest.skip("dtwf recomb borked")
 class TestHistoricalSamplingWrightFisher(unittest.TestCase, HistoricalSamplingMixin):
     model = "dtwf"
 

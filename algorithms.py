@@ -596,7 +596,10 @@ class RecombinationMap:
 
     def sample_poisson(self, start):
         left_bound = start + 1 if self.discrete else start
-        scaled_mass_to_next_recomb = np.random.exponential(1.0)
+        left_scaled_mass = self.position_to_scaled_mass(left_bound)
+        scaled_mass_to_right = self.scaled_cumulative[-1] - left_scaled_mass
+        scaled_mass_to_next_recomb = np.random.exponential(scaled_mass_to_right)
+        # print("scaled_mass_rand = ", scaled_mass_to_next_recomb)
         return self.shift_by_scaled_mass(left_bound, scaled_mass_to_next_recomb)
 
     def _search(self, values, query):

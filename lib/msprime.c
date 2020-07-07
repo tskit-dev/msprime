@@ -1715,13 +1715,30 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
     return 0;
 }
 
-/* TODO: is floor the correct operation here or should we round? */
-static double
-msp_dtwf_generate_breakpoint(msp_t *self, double start)
+static int
+msp_dtwf_generate_breakpoint(msp_t *self, double start, double *breakpoint)
 {
-    double k = recomb_map_sample_poisson(&self->recomb_map, self->rng, start);
-    assert(k > start);
-    return k;
+    int ret = 0;
+    double mass_to_next_recomb, x;
+    int num_breakpoint_resamplings = 0;
+    double left_limit = self->recomb_map.discrete ? start + 1 : start;
+
+    do {
+        mass_to_next_recomb = gsl_ran_exponential(self->rng, 1.0);
+        x = recomb_map_shift_by_mass(&self->recomb_map, left_limit, mass_to_next_recomb);
+        if (x > start) {
+            break;
+        }
+        num_breakpoint_resamplings++;
+        if (num_breakpoint_resamplings == 10) {
+            ret = MSP_ERR_BREAKPOINT_RESAMPLE_OVERFLOW;
+            goto out;
+        }
+    } while (true);
+
+    *breakpoint = x;
+out:
+    return ret;
 }
 
 int MSP_WARN_UNUSED
@@ -2122,7 +2139,10 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     segment_t s1, s2;
     segment_t *seg_tails[] = { &s1, &s2 };
 
-    k = msp_dtwf_generate_breakpoint(self, x->left);
+    ret = msp_dtwf_generate_breakpoint(self, x->left, &k);
+    if (ret != 0) {
+        goto out;
+    }
     s1.next = NULL;
     s2.next = NULL;
     ix = (int) gsl_rng_uniform_int(self->rng, 2);
@@ -2168,7 +2188,10 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             msp_subtract_segment_mass(self, x, z);
             assert(x->left < x->right);
             x = z;
-            k = msp_dtwf_generate_breakpoint(self, k);
+            ret = msp_dtwf_generate_breakpoint(self, k, &k);
+            if (ret != 0) {
+                goto out;
+            }
         } else if (x->right <= k && y != NULL && y->left >= k) {
             // Recombine in gap between segment and the next
             x->next = NULL;
@@ -2176,7 +2199,10 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             while (y->left >= k) {
                 self->num_re_events++;
                 ix = (ix + 1) % 2;
-                k = msp_dtwf_generate_breakpoint(self, k);
+                ret = msp_dtwf_generate_breakpoint(self, k, &k);
+                if (ret != 0) {
+                    goto out;
+                }
             }
             seg_tails[ix]->next = y;
             if (seg_tails[ix] == &s1 || seg_tails[ix] == &s2) {
@@ -3643,18 +3669,13 @@ out:
 }
 
 /* Computes the scaling factor used to map floating point cumulative
- * recombination mass values to integers. The value is chosen so that
- * the sum of all maximum cumulative mass values is less than INT64_MAX
- * and therefore guaranteed not to overflow, whilst maintaining a very
- * high level of granularity.
+ * recombination mass values to integers.
  */
 static int MSP_WARN_UNUSED
 msp_set_recomb_map_mass_scale(msp_t *self)
 {
     size_t num_samples = self->num_samples;
     double max_mass = TSK_MAX(1, recomb_map_get_total_mass(&self->recomb_map));
-    int64_t large_int = 1LL << 61;
-    double mass_scale;
 
     if (self->from_ts != NULL) {
         /* The from_ts value can be an empty tree sequence, which will contain
@@ -3665,12 +3686,9 @@ msp_set_recomb_map_mass_scale(msp_t *self)
     /* Make sure that any ancient samples are taken into account too */
     num_samples += self->num_sampling_events;
     assert(num_samples > 0);
-
     /* We can have at most max_mass per sample */
     max_mass *= (double) num_samples;
-    /* The scale is value that maps max_mass to large_int */
-    mass_scale = ((double) large_int) / max_mass;
-    return recomb_map_set_mass_scale(&self->recomb_map, mass_scale);
+    return recomb_map_set_mass_limit(&self->recomb_map, max_mass);
 }
 
 /*

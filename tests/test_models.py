@@ -486,22 +486,21 @@ class TestMultipleMergerModels(unittest.TestCase):
         self.assertTrue(ts is not None)
 
 
-@unittest.skip("Skipping dtwf for now")
-class TestDtwf(unittest.TestCase):
+class RecombinationMixin:
     """
-    Tests for the DTWF model.
+    Tests for the recombination properties under different models.
     """
 
     def test_low_recombination(self):
         # https://github.com/tskit-dev/msprime/issues/831
         ts = msprime.simulate(
-            10, Ne=1e2, model="dtwf", recombination_rate=1e-9, random_seed=2
+            10, Ne=1e2, model=self.model, recombination_rate=1e-9, random_seed=2
         )
         self.assertEqual(ts.num_trees, 1)
 
     def test_very_low_recombination(self):
         ts = msprime.simulate(
-            10, Ne=1e2, model="dtwf", recombination_rate=1e-300, random_seed=2
+            10, Ne=1e2, model=self.model, recombination_rate=1e-300, random_seed=2
         )
         self.assertEqual(ts.num_trees, 1)
 
@@ -510,7 +509,11 @@ class TestDtwf(unittest.TestCase):
             [0, 100, 101, 200], [0, 1, 0, 0], discrete=True
         )
         ts = msprime.simulate(
-            10, Ne=10, model="dtwf", random_seed=2, recombination_map=recombination_map
+            10,
+            Ne=10,
+            model=self.model,
+            random_seed=2,
+            recombination_map=recombination_map,
         )
         self.assertEqual(ts.num_trees, 2)
         trees = ts.trees()
@@ -522,12 +525,41 @@ class TestDtwf(unittest.TestCase):
         rates = [0.01, 0.0, 0.1, 0.005, 0.0]
         recombination_map = msprime.RecombinationMap(positions, rates)
         ts = msprime.simulate(
-            10, Ne=10, model="dtwf", random_seed=2, recombination_map=recombination_map
+            10,
+            Ne=10,
+            model=self.model,
+            random_seed=2,
+            recombination_map=recombination_map,
         )
         for tree in ts.trees():
             left, right = tree.interval
             self.assertTrue(left < 50 or left > 100)
             self.assertTrue(right < 50 or right > 100)
+
+
+class TestRecombinationDtwf(unittest.TestCase, RecombinationMixin):
+
+    model = "dtwf"
+
+
+class TestRecombinationHudson(unittest.TestCase, RecombinationMixin):
+
+    model = "hudson"
+
+
+class TestRecombinationSmc(unittest.TestCase, RecombinationMixin):
+
+    model = "smc"
+
+
+class TestRecombinationDirac(unittest.TestCase, RecombinationMixin):
+
+    model = (msprime.DiracCoalescent(psi=0.5, c=1),)
+
+
+class TestRecombinationBeta(unittest.TestCase, RecombinationMixin):
+
+    model = (msprime.BetaCoalescent(alpha=1.1, truncation_point=1),)
 
 
 class TestUnsupportedFullArg(unittest.TestCase):

@@ -205,9 +205,9 @@ def subsample_simplify_slim_treesequence(ts, sample_sizes):
     return ts
 
 
-def plot_qq(v1, v2):
+def plot_qq(v1, v2, **kwargs):
     sm.graphics.qqplot(v1)
-    sm.qqplot_2samples(v1, v2, line="45")
+    sm.qqplot_2samples(v1, v2, line="45", **kwargs)
 
 
 def plot_breakpoints_hist(v1, v2, v1_name, v2_name):
@@ -888,7 +888,7 @@ class DtwfVsCoalescent(Test):
         df_hudson = df[df.model == "hudson"]
         df_dtwf = df[df.model == "dtwf"]
         for stat in ["tmrca_mean", "num_trees"]:
-            plot_qq(df_hudson[stat], df_dtwf[stat])
+            plot_qq(df_hudson[stat], df_dtwf[stat], xlabel="DTWF", ylabel="Hudson")
             f = self.output_dir / f"{stat}.png"
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
@@ -1072,10 +1072,10 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
         )
 
 
-class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
+class DtwfVsCoalescentGrowth(DtwfVsCoalescent):
     """
-    Tests for the DTWF and coalescent when we use a slightly more
-    high-level intervace.
+    Tests for the DTWF and coalescent when we have growing
+    populations.
     """
 
     def _run(
@@ -1087,6 +1087,7 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
         migration_matrix=None,
         growth_rates=None,
         num_replicates=None,
+        discrete=True,
     ):
         """
         Generic test of DTWF vs hudson coalescent. Populations are not
@@ -1103,8 +1104,7 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
             default_growth_rate = 0.01
             growth_rates = [default_growth_rate] * num_pops
 
-        population_configurations = []
-        demographic_events = []
+        demography = msprime.Demography()
 
         for i in range(num_pops):
             if initial_sizes[i] > 100:
@@ -1113,7 +1113,7 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
                 de = msprime.PopulationParametersChange(
                     t_100, growth_rate=0, population=i
                 )
-                demographic_events.append(de)
+                demography.events.append(de)
 
                 growth_rate = growth_rates[i]
             else:
@@ -1124,16 +1124,14 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
                 )
                 growth_rate = 0
 
-            population_configurations.append(
-                msprime.PopulationConfiguration(
-                    sample_size=sample_sizes[i],
-                    initial_size=initial_sizes[i],
-                    growth_rate=growth_rate,
+            demography.populations.append(
+                msprime.Population(
+                    initial_size=initial_sizes[i], growth_rate=growth_rate,
                 )
             )
 
         recombination_map = msprime.RecombinationMap(
-            positions=[0, num_loci], rates=[recombination_rate, 0], discrete=True,
+            positions=[0, num_loci], rates=[recombination_rate, 0], discrete=discrete,
         )
 
         if migration_matrix is None:
@@ -1144,15 +1142,19 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
                 row[i] = 0
                 migration_matrix.append(row)
 
+        demography.migration_matrix = migration_matrix
+
         super()._run(
-            population_configurations=population_configurations,
-            migration_matrix=migration_matrix,
+            samples=demography.sample(*sample_sizes),
+            demography=demography,
             num_replicates=num_replicates,
-            demographic_events=demographic_events,
             recombination_map=recombination_map,
         )
 
-    def test_dtwf_vs_coalescent_long_region(self):
+    def test_dtwf_vs_coalescent_long_region_continuous(self):
+        self._run([1000], [10], int(1e8), 1e-8, discrete=False)
+
+    def test_dtwf_vs_coalescent_long_region_discrete(self):
         self._run([1000], [10], int(1e8), 1e-8)
 
     def test_dtwf_vs_coalescent_short_region(self):
@@ -1356,9 +1358,16 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
     Runs randomly generated test parameters.
     """
 
-    def _run(self, num_populations=1, num_replicates=200, num_demographic_events=0):
+    def _run(
+        self, num_populations=1, num_replicates=200, num_demographic_events=0, seed=42
+    ):
 
         N = num_populations
+        # FIXME We're using a mixture of numpy and stdlib random here. Yuck.
+        # We should really just have a single random generator that we use
+        # for all sampling and that doesn't change global state.
+        np.random.seed(seed)
+        random.seed(seed)
         num_loci = np.random.randint(1e5, 1e7)
         rho = 1e-8
         recombination_map = msprime.RecombinationMap(
@@ -1369,7 +1378,7 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
         for _ in range(N):
             population_configurations.append(
                 msprime.PopulationConfiguration(
-                    sample_size=np.random.randint(1, 10), initial_size=int(1000 / N)
+                    sample_size=np.random.randint(2, 10), initial_size=int(1000 / N)
                 )
             )
 
@@ -1428,24 +1437,29 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
             recombination_map=recombination_map,
         )
 
-    def test_dtwf_vs_coalescent_random_1(self):
+    def test_dtwf_vs_coalescent_random_pop_2_events_3(self):
         self._run(
             num_populations=2, num_replicates=200, num_demographic_events=3,
         )
 
-    def test_dtwf_vs_coalescent_random_2(self):
+    def test_dtwf_vs_coalescent_random_pop_3_events_3(self):
         self._run(
             num_populations=3, num_replicates=200, num_demographic_events=3,
         )
 
-    def test_dtwf_vs_coalescent_random_3(self):
+    def test_dtwf_vs_coalescent_random_pop_2_events_6(self):
         self._run(
             num_populations=2, num_replicates=200, num_demographic_events=6,
         )
 
-    def test_dtwf_vs_coalescent_random_4(self):
+    def test_dtwf_vs_coalescent_random_pop_1_events_8(self):
         self._run(
-            num_populations=1, num_replicates=200, num_demographic_events=8,
+            num_populations=1, num_replicates=200, num_demographic_events=8, seed=25
+        )
+
+    def test_dtwf_vs_coalescent_random_pop_1_events_12(self):
+        self._run(
+            num_populations=1, num_replicates=200, num_demographic_events=12, seed=1237
         )
 
 
@@ -3892,6 +3906,7 @@ class TestInstance:
         instance = getattr(sys.modules[__name__], self.test_class)(output_dir)
         method = getattr(instance, self.method_name)
         method()
+        logging.info(f"Completed {self.method_name}")
 
 
 @attr.s
