@@ -80,7 +80,6 @@ import tqdm
 import tskit
 from matplotlib import lines as mlines
 from matplotlib import pyplot
-from scipy.stats import gompertz
 
 import msprime
 import msprime.cli as cli
@@ -2061,19 +2060,35 @@ class BetaSFS(KnownSFS):
         )
 
 
-# FIXME there's some problems with this test.
-# (a) it's not clear what it's actually computing. Why are we bundling togther
-#    the TMRCA values for all these different values? If we have an empirical
-#    expectation for the mean coalesence time, then maybe it'd be better to
-#    plot this along with the distribution for a handful of growth rates
-#    like we do for the SFS, say?
-#    At the very least we'd want to have some labels on the X and Y axes.
-# (b) It takes a very long time to run, and can't be parallelised. This
-#    is also motivation for splitting it up in to a number of smaller
-#    tests.
-# (c) There's a bunch of duplicated code. Probably this would be resolved
-#    by having two classes, DiracGrowth and BetaGrowth.
-class XiGrowthTest(Test):
+class XiGrowth(Test):
+    def compare_tmrca(self, pop_size, growth_rate, model, num_replicates, a, b, name):
+        replicates = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(
+                    sample_size=2, initial_size=pop_size, growth_rate=growth_rate,
+                )
+            ],
+            model=model,
+            num_replicates=num_replicates,
+        )
+        T1 = np.array([ts.first().tmrca(0, 1) for ts in replicates])
+        sm.graphics.qqplot(
+            T1, dist=scipy.stats.gompertz, distargs=(a / b,), scale=1 / b, line="45"
+        )
+        filename = self.output_dir / f"{name}.png"
+        pyplot.savefig(filename, dpi=72)
+        pyplot.close("all")
+
+
+class BetaGrowth(XiGrowth):
+    def _run(self, pop_size, alpha, growth_rate, num_replicates=10000):
+        logging.debug(f"running Beta growth for {pop_size} {alpha} {growth_rate}")
+        a = 2 / self.compute_beta_timescale(pop_size, alpha)
+        b = growth_rate * (alpha - 1)
+        model = (msprime.BetaCoalescent(alpha=alpha, truncation_point=1),)
+        name = f"N={pop_size}_alpha={alpha}_growth_rate={growth_rate}"
+        self.compare_tmrca(pop_size, growth_rate, model, num_replicates, a, b, name)
+
     def compute_beta_timescale(self, pop_size, alpha):
         m = 2 + np.exp(alpha * np.log(2) + (1 - alpha) * np.log(3) - np.log(alpha - 1))
         ret = np.exp(
@@ -2084,88 +2099,36 @@ class XiGrowthTest(Test):
         )
         return ret
 
-    def test_xi_beta_growth(self):
-        empirical_tmrca = []
-        expected_tmrca = []
-        # nrep = 10000
-        nrep = 1000
-        for pop_size in [1, 10, 100, 1000, 10000, 100000]:
-            for alpha in [1.1, 1.3, 1.5, 1.7, 1.9]:
-                for growth_rate in [0, 0.001, 0.01, 0.1]:
-                    logging.debug(
-                        f"running tmrcas for {pop_size}, {alpha}, {growth_rate}"
-                    )
-                    ts = msprime.simulate(
-                        population_configurations=[
-                            msprime.PopulationConfiguration(
-                                sample_size=2,
-                                initial_size=pop_size,
-                                growth_rate=growth_rate,
-                            )
-                        ],
-                        model=msprime.BetaCoalescent(alpha=alpha),
-                        num_replicates=nrep,
-                    )
-                    tmrca = 0
-                    for t in ts:
-                        tmrca = tmrca + t.first().tmrca(0, 1) / nrep
-                    empirical_tmrca.append(tmrca)
-                    a = 2 / (self.compute_beta_timescale(pop_size, alpha))
-                    if growth_rate > 0:
-                        b = growth_rate * (alpha - 1)
-                        m = gompertz.mean(a / b, loc=0, scale=1 / b)
-                        expected_tmrca.append(m)
-                    else:
-                        expected_tmrca.append(1 / a)
-        empirical_tmrca.sort()
-        expected_tmrca.sort()
-        pyplot.plot(empirical_tmrca, expected_tmrca)
-        pyplot.plot(expected_tmrca, expected_tmrca)
-        path = self.output_dir / "growth.png"
-        pyplot.savefig(path)
-        pyplot.close("all")
+    def test_10_15_01(self):
+        self._run(pop_size=10, alpha=1.5, growth_rate=0.1)
 
-    def test_xi_dirac_growth(self):
-        empirical_tmrca = []
-        expected_tmrca = []
-        # nrep = 10000
-        nrep = 1000
-        for pop_size in [1, 10, 100]:
-            for c in [0, 0.1, 0.5, 1, 5, 10]:
-                for psi in [0.1, 0.3, 0.5, 0.7, 0.9]:
-                    for growth_rate in [0, 0.001, 0.01, 0.1]:
-                        logging.debug(
-                            f"running tmrcas for {pop_size}, {c}, {psi} {growth_rate}"
-                        )
-                        ts = msprime.simulate(
-                            population_configurations=[
-                                msprime.PopulationConfiguration(
-                                    sample_size=2,
-                                    initial_size=pop_size,
-                                    growth_rate=growth_rate,
-                                )
-                            ],
-                            model=msprime.DiracCoalescent(psi=psi, c=c),
-                            num_replicates=nrep,
-                        )
-                        tmrca = 0
-                        for t in ts:
-                            tmrca = tmrca + t.first().tmrca(0, 1) / nrep
-                        empirical_tmrca.append(tmrca)
-                        a = 2 * (1 + c * psi * psi / 4) / (pop_size * pop_size)
-                        if growth_rate > 0:
-                            b = growth_rate
-                            m = gompertz.mean(a / b, loc=0, scale=1 / b)
-                            expected_tmrca.append(m)
-                        else:
-                            expected_tmrca.append(1 / a)
-        empirical_tmrca.sort()
-        expected_tmrca.sort()
-        pyplot.plot(empirical_tmrca, expected_tmrca)
-        pyplot.plot(expected_tmrca, expected_tmrca)
-        path = self.output_dir / "growth.png"
-        pyplot.savefig(path)
-        pyplot.close("all")
+    def test_1000_19_0001(self):
+        self._run(pop_size=1000, alpha=1.9, growth_rate=0.001)
+
+    def test_100000_11_001(self):
+        self._run(pop_size=100000, alpha=1.1, growth_rate=0.01)
+
+
+class DiracGrowth(XiGrowth):
+    def _run(self, pop_size, c, psi, growth_rate, num_replicates=10000):
+        logging.debug(f"running Dirac growth for {pop_size} {c} {psi} {growth_rate}")
+        a = 2 * (1 + c * psi * psi / 4) / (pop_size * pop_size)
+        b = growth_rate
+        model = (msprime.DiracCoalescent(psi=psi, c=c),)
+        name = f"N={pop_size}_c={c}_psi={psi}_growth_rate={growth_rate}"
+        self.compare_tmrca(pop_size, growth_rate, model, num_replicates, a, b, name)
+
+    def test_1_01_05_01(self):
+        self._run(pop_size=1, c=0.1, psi=0.5, growth_rate=0.1)
+
+    def test_10_05_07_0001(self):
+        self._run(pop_size=10, c=0.5, psi=0.7, growth_rate=0.001)
+
+    def test_100_1_09_001(self):
+        self._run(pop_size=100, c=1, psi=0.9, growth_rate=0.01)
+
+    def test_10_5_03_01(self):
+        self._run(pop_size=10, c=5, psi=0.3, growth_rate=0.1)
 
 
 class ContinuousVsDiscreteRecombination(Test):
