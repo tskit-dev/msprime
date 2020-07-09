@@ -1635,12 +1635,10 @@ class RecombinationMutationTest(Test):
         )
 
 
-# FIXME These tests are miles off at the moment. There are *way* more
-# nodes edges and trees in the Dirac model than Hudson.
 class XiVsHudsonTest(Test):
     """
-    Test that Xi coalescents are equivalent to the Hudson model in the
-    appropriate regimes.
+    Test that Xi dirac coalescent is equivalent to the Hudson model in the
+    appropriate regime.
     """
 
     def _run(self, xi_model, **kwargs):
@@ -1651,6 +1649,7 @@ class XiVsHudsonTest(Test):
             model_str = "hudson"
             if model != "hudson":
                 model_str = "Xi"
+                simulate_args["Ne"] = 2*(math.sqrt(int(simulate_args["Ne"])))
             logging.debug(f"Running: {simulate_args}")
             replicates = msprime.simulate(**simulate_args)
             data = collections.defaultdict(list)
@@ -1680,16 +1679,16 @@ class XiVsHudsonTest(Test):
         self._run(
             msprime.DiracCoalescent(psi=0.99, c=0),
             sample_size=50,
-            Ne=50,
+            Ne=10000,
             num_replicates=1000,
-            recombination_rate=0.1,
+            recombination_rate=0.001,
         )
 
     def test_xi_dirac_vs_hudson_single_locus(self):
         self._run(
             msprime.DiracCoalescent(psi=0.99, c=0),
             sample_size=10,
-            Ne=100,
+            Ne=10000,
             num_replicates=5000,
         )
 
@@ -1751,7 +1750,7 @@ class DiracSFS(KnownSFS):
         """
         logging.debug(f"running SFS for {sample_size} {psi} {c}")
         model = (msprime.DiracCoalescent(psi=psi, c=c),)
-        name = f"n={sample_size}_psi={psi}_c={c}.png"
+        name = f"n={sample_size}_psi={psi}_c={c}"
         self.compare_sfs(sample_size, model, num_replicates, sfs, name)
 
     def test_xi_dirac_expected_sfs_psi_0_1_c_1(self):
@@ -1983,7 +1982,7 @@ class BetaSFS(KnownSFS):
         """
         logging.debug(f"running Beta SFS for {sample_size} {alpha}")
         model = (msprime.BetaCoalescent(alpha=alpha, truncation_point=1),)
-        name = f"n={sample_size}_alpha={alpha}.png"
+        name = f"n={sample_size}_alpha={alpha}"
         self.compare_sfs(sample_size, model, num_replicates, sfs, name)
 
     def test_xi_beta_expected_sfs_alpha1_1(self):
