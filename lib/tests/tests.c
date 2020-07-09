@@ -2077,8 +2077,6 @@ test_dtwf_multi_locus_simulation(void)
 static void
 test_gene_conversion_simulation(void)
 {
-    printf("FIXME\n\n");
-#if 0
     int ret;
     uint32_t n = 10;
     uint32_t m = 10;
@@ -2137,7 +2135,6 @@ test_gene_conversion_simulation(void)
     free(samples);
     recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
-#endif
 }
 
 static void

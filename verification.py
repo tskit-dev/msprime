@@ -470,7 +470,7 @@ class MsDemography(MsTest):
 
     def test_admixture_2_pop3(self):
         self._run(
-            "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -G 5.0 " "-em 2.0 3 1 1"
+            "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -G 5.0 -em 1.0 3 1 1"
         )
 
     def test_admixture_2_pop4(self):
@@ -498,6 +498,18 @@ class MsGeneConversion(MsTest):
 
     def test_gene_conversion_2_tl_100(self):
         self._run("100 10000 -t 5.0 -r 10 2501 -c 2 100")
+
+    def test_gene_conversion_2_tl_1000(self):
+        self._run("100 10000 -t 5.0 -r 10 2501 -c 2 1000")
+
+    def test_gene_conversion_10_tl_10(self):
+        self._run("100 10000 -t 5.0 -r 10 2501 -c 10 10")
+
+    def test_gene_conversion_long_region(self):
+        self._run("10 10000 -t 5.0 -r 0.01 25001 -c 10000 100")
+
+    def test_gene_conversion_short_region(self):
+        self._run("1000 1000 -t 2.0 -r 1 100 -c 100 2")
 
 
 class MsDocExamples(MsTest):
