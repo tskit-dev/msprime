@@ -1951,7 +1951,7 @@ MatrixMutationModel_init(MatrixMutationModel *self, PyObject *args, PyObject *kw
             PyErr_SetString(PyExc_TypeError, "alleles must be unicode strings");
             goto out;
         }
-        alleles[j] = PyUnicode_AsUTF8AndSize(item, &len);
+        alleles[j] = (char *) (intptr_t) PyUnicode_AsUTF8AndSize(item, &len);
         if (alleles[j] == NULL) {
             goto out;
         }
