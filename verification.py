@@ -1649,8 +1649,8 @@ class XiVsHudsonTest(Test):
             model_str = "hudson"
             if model != "hudson":
                 model_str = "Xi"
-                # Because the Xi Dirac coalescent scales differently than the Hudson model (Ne² for Dirac and 4Ne for Hudson),
-                #  we need NeDirac= square_root(4NeHudson) to be in the appropriate regime       
+                # Because the Xi Dirac coalescent scales differently than the Hudson model (Ne² for Dirac and 4Ne for Hudson).
+                # We need NeDirac= square_root(4NeHudson) to be in the appropriate regime.
                 simulate_args["Ne"] = 2*(math.sqrt(int(simulate_args["Ne"])))
             logging.debug(f"Running: {simulate_args}")
             replicates = msprime.simulate(**simulate_args)
