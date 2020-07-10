@@ -189,6 +189,30 @@ class Demography:
     def asdict(self):
         return attr.asdict(self)
 
+    def asjson(self):
+        """
+        Returns a JSON encoding of this demography.
+        """
+        M = np.array(self.migration_matrix)
+        data = {
+            # TODO do this properly with mimetype string or something.
+            "format": "msprime-demography-json_1.0",
+            "populations": [pop.asdict() for pop in self.populations],
+            "migration_matrix": M.tolist(),
+            "events": [event.asjson() for event in self.events],
+        }
+        return json.dumps(data)
+
+    @staticmethod
+    def fromjson(json_demography):
+        data = json.loads(json_demography)
+        populations = [Population(**pop) for pop in data["populations"]]
+        migration_matrix = np.array(data["migration_matrix"])
+        events = list(map(parse_json_event, data["events"]))
+        return Demography(
+            populations=populations, migration_matrix=migration_matrix, events=events
+        )
+
     def debug(self):
         return DemographyDebugger(self)
 
@@ -498,6 +522,19 @@ class PopulationConfiguration:
         )
 
 
+def parse_json_event(json_event):
+    type_map = {
+        "population_parameters_change": PopulationParametersChange,
+        "migration_rate_change": MigrationRateChange,
+        "mass_migration": MassMigration,
+        # TODO add the other events
+    }
+    # Don't modify the input
+    json_event = dict(json_event)
+    type_str = json_event.pop("type")
+    return type_map[type_str](**json_event)
+
+
 @attr.s
 class DemographicEvent:
     """
@@ -505,6 +542,9 @@ class DemographicEvent:
     """
 
     time = attr.ib()
+
+    def asjson(self):
+        return self.get_ll_representation()
 
     def asdict(self):
         return {
