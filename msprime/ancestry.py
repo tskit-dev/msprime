@@ -277,6 +277,7 @@ def simulator_factory(
     sample_size=None,
     Ne=1,
     random_generator=None,
+    random_seed=None,
     length=None,
     recombination_rate=None,
     recombination_map=None,
@@ -399,10 +400,14 @@ def simulator_factory(
     if gene_conversion_track_length is None:
         gene_conversion_track_length = 1
 
+    # For the simulate code-path the rng will already be set, but
+    # for convenience we allow it to be null to help with writing
+    # tests. We also provide the random_seed argument for convenience.
+    if random_seed is not None:
+        if random_generator is not None:
+            raise ValueError("Cannot specify both random_seed and random_generator")
+        random_generator = _msprime.RandomGenerator(random_seed)
     if random_generator is None:
-        # For the simulate code-path the rng will already be set, but
-        # for convenience we allow it to be null to help with writing
-        # tests.
         random_generator = _msprime.RandomGenerator(core.get_random_seed())
 
     sim = Simulator(
