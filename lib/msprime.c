@@ -3711,10 +3711,7 @@ msp_set_recomb_map_mass_scale(msp_t *self)
          * We avoid division by zero here in the mean time. */
         num_samples = TSK_MAX(1, tsk_treeseq_get_num_samples(self->from_ts));
     }
-    if (!isfinite(total_mass)) {
-        ret = MSP_ERR_RECOMB_MASS_NON_FINITE;
-        goto out;
-    }
+    assert(isfinite(total_mass));
     /* Make sure that any ancient samples are taken into account too */
     num_samples += self->num_sampling_events;
     assert(num_samples > 0);
@@ -3723,7 +3720,6 @@ msp_set_recomb_map_mass_scale(msp_t *self)
     mass_scale = (double) (initial_scaled_mass) / initial_mass;
     assert(mass_scale > 0);
     ret = recomb_map_set_mass_scale(&self->recomb_map, mass_scale);
-out:
     return ret;
 }
 

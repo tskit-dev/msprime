@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018 University of Oxford
+# Copyright (C) 2018-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -36,6 +36,8 @@ import msprime
 class PythonRecombinationMap:
     """
     A Python implementation of the RecombinationMap interface.
+
+    This uses a simple algorithm used in previous versions of msprime.
     """
 
     def __init__(self, positions, rates, discrete=False):
@@ -47,40 +49,75 @@ class PythonRecombinationMap:
         self._sequence_length = positions[-1]
         self._rates = rates
         self._discrete = discrete
-        self._cumulative = np.insert(np.cumsum(np.diff(positions) * rates[:-1]), 0, 0)
 
     def get_total_recombination_rate(self):
         """
         Returns the effective recombination rate for this genetic map.
         This is the weighted mean of the rates across all intervals.
         """
-        return self._cumulative[-1]
+        x = self._positions
+        effective_rate = 0
+        for j in range(len(x) - 1):
+            length = x[j + 1] - x[j]
+            effective_rate += self._rates[j] * length
+        return effective_rate
 
     def _genetic_to_physical_zero_rate(self, v):
         """
         If we have a zero recombination rate throughout then everything except
         L maps to 0.
         """
-        if v >= self.get_total_recombination_rate():
+        if v > 0:
             return self._sequence_length
-
         return 0
 
+    def _physical_to_genetic_zero_rate(self, x):
+        """
+        If we have a zero recombination rate throughout, then we only have
+        two possible values. Any value < L maps to 0, as this is the start
+        of the interval. If x = L, then we map to L.
+        """
+        ret = 0
+        if x >= self._sequence_length:
+            ret = self.get_total_recombination_rate()
+        return ret
+
     def physical_to_genetic(self, x):
-        return np.interp(x, self._positions, self._cumulative)
+        if self.get_total_recombination_rate() == 0:
+            return self._physical_to_genetic_zero_rate(x)
+        s = 0
+        last_phys_x = 0
+        j = 1
+        while j < len(self._positions) - 1 and x > self._positions[j]:
+            phys_x = self._positions[j]
+            rate = self._rates[j - 1]
+            s += (phys_x - last_phys_x) * rate
+            j += 1
+            last_phys_x = phys_x
+        rate = self._rates[j - 1]
+        s += (x - last_phys_x) * rate
+        return s
 
     def genetic_to_physical(self, v):
         if self.get_total_recombination_rate() == 0:
             return self._genetic_to_physical_zero_rate(v)
-        if v == 0:
-            return self._positions[0]
-
-        index = np.searchsorted(self._cumulative, v) - 1
-        y = self._positions[index] + (v - self._cumulative[index]) / self._rates[index]
+        u = v
+        s = 0
+        last_phys_x = 0
+        rate = self._rates[0]
+        j = 1
+        while j < len(self._positions) and s < u:
+            phys_x = self._positions[j]
+            rate = self._rates[j - 1]
+            s += (phys_x - last_phys_x) * rate
+            j += 1
+            last_phys_x = phys_x
+        y = last_phys_x
+        if rate != 0:
+            y = last_phys_x - (s - u) / rate
         return math.floor(y) if self._discrete else y
 
 
-@unittest.skip("FIXME")
 class TestCoordinateConversion(unittest.TestCase):
     """
     Tests that we convert coordinates correctly.
@@ -170,6 +207,21 @@ class TestCoordinateConversion(unittest.TestCase):
             for x in [50, 51, 55, 99, 100]:
                 self.assertEqual(50, rm.physical_to_genetic(x))
             self.assertEqual(50, rm.genetic_to_physical(50))
+
+    def test_all_zero_rate(self):
+        positions = [0, 10]
+        rates = [0, 0]
+        positions = [0, 100]
+        rates = [0, 0]
+        maps = [
+            msprime.RecombinationMap(positions, rates),
+            PythonRecombinationMap(positions, rates),
+        ]
+        for rm in maps:
+            for x in [0, 50, 51, 55, 99, 100]:
+                self.assertEqual(0, rm.physical_to_genetic(x))
+            self.assertEqual(0, rm.genetic_to_physical(0))
+            self.assertEqual(100, rm.genetic_to_physical(1))
 
     def test_one_rate(self):
         for rate in [0.1, 1.0, 10]:

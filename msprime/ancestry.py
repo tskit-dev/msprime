@@ -25,6 +25,7 @@ import copy
 import gzip
 import inspect
 import logging
+import math
 import warnings
 
 import attr
@@ -960,6 +961,8 @@ class RecombinationMap:
             positions, rates, discrete
         )
         self.map_start = map_start
+        # We store this so we can implement the genetic map operations below
+        self._cumulative = np.insert(np.cumsum(np.diff(positions) * rates[:-1]), 0, 0)
 
     @classmethod
     def uniform_map(cls, length, rate, num_loci=None, discrete=False):
@@ -1138,13 +1141,28 @@ class RecombinationMap:
         return self._ll_recombination_map
 
     def physical_to_genetic(self, physical_x):
-        return self._ll_recombination_map.position_to_mass(physical_x)
+        positions = self._ll_recombination_map.get_positions()
+        return np.interp(physical_x, positions, self._cumulative)
 
     def physical_to_discrete_genetic(self, physical_x):
         raise ValueError("Discrete genetic space is no longer supported")
 
     def genetic_to_physical(self, genetic_x):
-        return self._ll_recombination_map.mass_to_position(genetic_x)
+        if self._cumulative[-1] == 0:
+            # If we have a zero recombination rate throughout then everything
+            # except L maps to 0.
+            return self.get_sequence_length() if genetic_x > 0 else 0
+
+        # NOTE this is very inefficient. When we are refactoring this
+        # code the more modern interface should just store these arrays
+        positions = self._ll_recombination_map.get_positions()
+        rates = self._ll_recombination_map.get_rates()
+        if genetic_x == 0:
+            return positions[0]
+
+        index = np.searchsorted(self._cumulative, genetic_x) - 1
+        y = positions[index] + (genetic_x - self._cumulative[index]) / rates[index]
+        return math.floor(y) if self.discrete else y
 
     def get_total_recombination_rate(self):
         return self._ll_recombination_map.get_total_recombination_rate()

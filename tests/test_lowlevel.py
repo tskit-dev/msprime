@@ -1140,6 +1140,10 @@ class TestSimulator(LowLevelTestCase):
             )
 
         sim = f(3, num_labels=3)
+        for bad_type in [{}, "abc"]:
+            with self.assertRaises(TypeError):
+                sim.total_scaled_recombination_mass(bad_type)
+
         for bad_label in [-1, 3, 100]:
             with self.assertRaises(_msprime.LibraryError):
                 sim.total_scaled_recombination_mass(bad_label)
@@ -2302,18 +2306,17 @@ class TestRecombinationMap(LowLevelTestCase):
             rm = _msprime.RecombinationMap([0, 10], [0.25, 0], discrete)
             self.assertEqual(rm.get_discrete(), discrete)
 
-    @unittest.skip("FIXME")
     def test_convert_mass_and_position(self):
         rm = _msprime.RecombinationMap([0, 10, 20], [0, 1, 0], discrete=True)
-        self.assertRaises(TypeError, rm.position_to_mass)
-        self.assertRaises(TypeError, rm.mass_to_position)
+        self.assertRaises(TypeError, rm.position_to_scaled_mass)
+        self.assertRaises(TypeError, rm.scaled_mass_to_position)
         for bad_value in [[1, 2, 3], "123", dict(), None]:
-            self.assertRaises(TypeError, rm.position_to_mass, bad_value)
-            self.assertRaises(TypeError, rm.mass_to_position, bad_value)
-        self.assertRaises(ValueError, rm.position_to_mass, -1)
-        self.assertRaises(ValueError, rm.mass_to_position, -1)
-        self.assertEqual(rm.position_to_mass(15), 5)
-        self.assertEqual(rm.mass_to_position(5), 15)
+            self.assertRaises(TypeError, rm.position_to_scaled_mass, bad_value)
+            self.assertRaises(TypeError, rm.scaled_mass_to_position, bad_value)
+        self.assertRaises(ValueError, rm.position_to_scaled_mass, -1)
+        self.assertRaises(ValueError, rm.scaled_mass_to_position, -1)
+        self.assertEqual(rm.position_to_scaled_mass(15), 5)
+        self.assertEqual(rm.scaled_mass_to_position(5), 15)
 
 
 class TestRandomGenerator(unittest.TestCase):

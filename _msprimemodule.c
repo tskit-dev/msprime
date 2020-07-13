@@ -2520,7 +2520,8 @@ RecombinationMap_position_to_scaled_mass(RecombinationMap *self, PyObject *args)
         goto out;
     }
 
-    ret = Py_BuildValue("d", recomb_map_position_to_scaled_mass(self->recomb_map, position));
+    ret = Py_BuildValue("L",
+            (long long) recomb_map_position_to_scaled_mass(self->recomb_map, position));
 out:
     return ret;
 }
@@ -2529,12 +2530,12 @@ static PyObject *
 RecombinationMap_scaled_mass_to_position(RecombinationMap *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    double scaled_mass;
+    long long scaled_mass;
 
     if (RecombinationMap_check_recomb_map(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "d", &scaled_mass)) {
+    if (!PyArg_ParseTuple(args, "L", &scaled_mass)) {
         goto out;
     }
     if (scaled_mass < 0) {
@@ -2542,7 +2543,8 @@ RecombinationMap_scaled_mass_to_position(RecombinationMap *self, PyObject *args)
         goto out;
     }
 
-    ret = Py_BuildValue("d", recomb_map_scaled_mass_to_position(self->recomb_map, scaled_mass));
+    ret = Py_BuildValue("d", recomb_map_scaled_mass_to_position(self->recomb_map,
+                (int64_t) scaled_mass));
 out:
     return ret;
 }
