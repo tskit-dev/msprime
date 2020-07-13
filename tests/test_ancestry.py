@@ -338,12 +338,23 @@ class TestSimulatorFactory(unittest.TestCase):
         self.assertIsInstance(rng, _msprime.RandomGenerator)
         self.assertNotEqual(rng.get_seed(), 0)
 
-    def test_random_seed(self):
+    def test_random_generator(self):
         seed = 12345
         rng = _msprime.RandomGenerator(seed)
         sim = msprime.simulator_factory(10, random_generator=rng)
         self.assertEqual(rng, sim.random_generator)
         self.assertEqual(rng.get_seed(), seed)
+
+    def test_random_seed(self):
+        seed = 12345
+        sim = msprime.simulator_factory(10, random_seed=seed)
+        self.assertEqual(sim.random_generator.get_seed(), seed)
+
+        # It's an error to specify both seed and generator.
+        with self.assertRaises(ValueError):
+            msprime.simulator_factory(
+                10, random_seed=1234, random_generator=_msprime.RandomGenerator(1234)
+            )
 
     def test_length(self):
         for bad_length in [-1, 0, -1e-6]:
