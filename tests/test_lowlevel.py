@@ -1127,6 +1127,26 @@ class TestSimulator(LowLevelTestCase):
             sim.run()
             self.assertEqual(sim.num_labels, num_labels)
 
+    def test_total_scaled_recombination_mass(self):
+        recomb_map = uniform_recombination_map(L=10, rate=1)
+
+        def f(num_samples=10, random_seed=1, **kwargs):
+            return _msprime.Simulator(
+                get_samples(num_samples),
+                recomb_map,
+                _msprime.RandomGenerator(random_seed),
+                _msprime.LightweightTableCollection(),
+                **kwargs,
+            )
+
+        sim = f(3, num_labels=3)
+        for bad_label in [-1, 3, 100]:
+            with self.assertRaises(_msprime.LibraryError):
+                sim.total_scaled_recombination_mass(bad_label)
+        sim = f()
+        sim.run(end_time=0.1)
+        self.assertGreater(sim.total_scaled_recombination_mass(), 0)
+
     def test_record_scaling(self):
         for Ne in [0.25, 1, 10, 1e6]:
             sim = get_example_simulator(

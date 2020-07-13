@@ -97,8 +97,9 @@
 #define MSP_ERR_BAD_TRANSITION_MATRIX                               -55
 #define MSP_ERR_BAD_SLIM_PARAMETERS                                 -57
 #define MSP_ERR_MUTATION_ID_OVERFLOW                                -58
-#define MSP_ERR_BREAKPOINT_MASS_NON_FINITE                          -59
-#define MSP_ERR_BREAKPOINT_RESAMPLE_OVERFLOW                        -60
+#define MSP_ERR_RECOMB_MASS_NON_FINITE                              -59
+#define MSP_ERR_RECOMB_MASS_OVERFLOW                                -60
+#define MSP_ERR_BREAKPOINT_RESAMPLE_OVERFLOW                        -61
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */

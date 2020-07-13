@@ -1,4 +1,5 @@
-/* ** Copyright (C) 2015-2020 University of Oxford
+/*
+** Copyright (C) 2015-2020 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -195,7 +196,6 @@ typedef struct {
     interval_map_t map;
     bool discrete;
     int64_t *cumulative_scaled_mass;
-    int64_t largest_scaled_mass_value;
     double mass_scale;
     double total_mass;
 } recomb_map_t;
@@ -460,6 +460,7 @@ int msp_get_population_configuration(
 int msp_compute_population_size(
     msp_t *self, size_t population_id, double time, double *pop_size);
 int msp_is_completed(msp_t *self);
+int64_t msp_get_total_scaled_recombination_mass(msp_t *self, int label);
 
 simulation_model_t *msp_get_model(msp_t *self);
 const char *msp_get_model_name(msp_t *self);
@@ -511,7 +512,7 @@ size_t recomb_map_get_size(recomb_map_t *self);
 int recomb_map_get_positions(recomb_map_t *self, double *positions);
 int recomb_map_get_rates(recomb_map_t *self, double *rates);
 
-int recomb_map_set_mass_limit(recomb_map_t *self, double max_mass_value);
+int recomb_map_set_mass_scale(recomb_map_t *self, double mass_scale);
 int64_t recomb_map_scaled_mass_between_left_exclusive(
     recomb_map_t *self, double left, double right);
 int64_t recomb_map_scaled_mass_between(recomb_map_t *self, double left, double right);

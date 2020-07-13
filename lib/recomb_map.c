@@ -47,8 +47,6 @@ inline static int64_t
 recomb_map_scale_mass(recomb_map_t *self, double mass)
 {
     double scaled_value = round(mass * self->mass_scale);
-    /* Clamp the value at its max so we can't overflow */
-    scaled_value = TSK_MIN((double) self->largest_scaled_mass_value, scaled_value);
     return (int64_t) scaled_value;
 }
 
@@ -58,16 +56,11 @@ recomb_map_unscale_mass(recomb_map_t *self, int64_t scaled_mass)
     return ((double) scaled_mass) / self->mass_scale;
 }
 
-/* Sets the maximum possible mass value that needs to be represented
- * to the specified value, and sets the scaling constant used to
- * map this into integers accordingly
- *
- * The scaling value is chosen so that this maximum mass values is less
- * than INT64_MAX and therefore guaranteed not to overflow, whilst
- * maintaining a very high level of granularity.
+/* Sets scaling constant used to convert floating point recombination
+ * mass values into integers.
  */
 int MSP_WARN_UNUSED
-recomb_map_set_mass_limit(recomb_map_t *self, double max_mass_value)
+recomb_map_set_mass_scale(recomb_map_t *self, double mass_scale)
 {
     int ret = 0;
     size_t j;
@@ -76,12 +69,11 @@ recomb_map_set_mass_limit(recomb_map_t *self, double max_mass_value)
     const double *position = self->map.position;
     const double *rates = self->map.value;
 
-    if (max_mass_value <= 0 || !isfinite(max_mass_value)) {
+    if (mass_scale <= 0 || !isfinite(mass_scale)) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->largest_scaled_mass_value = INT64_MAX / 2;
-    self->mass_scale = ((double) self->largest_scaled_mass_value) / max_mass_value;
+    self->mass_scale = mass_scale;
 
     self->cumulative_scaled_mass[0] = 0;
     for (j = 1; j < self->map.size; j++) {

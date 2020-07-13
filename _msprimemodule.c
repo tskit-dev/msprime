@@ -4380,6 +4380,29 @@ out:
     return ret;
 }
 
+static PyObject *
+Simulator_total_scaled_recombination_mass(Simulator *self, PyObject *args)
+{
+    PyObject *ret = NULL;
+    int label = 0;
+    int64_t value;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "|i", &label)) {
+        goto out;
+    }
+    value = msp_get_total_scaled_recombination_mass(self->sim, label);
+    if (value < 0) {
+        handle_library_error(value);
+        goto out;
+    }
+    ret = Py_BuildValue("L", (long long) value);
+out:
+    return ret;
+}
+
 static PyMethodDef Simulator_methods[] = {
     {"run", (PyCFunction) Simulator_run, METH_VARARGS|METH_KEYWORDS,
             "Simulates until at most the specified time. Returns True "
@@ -4401,6 +4424,9 @@ static PyMethodDef Simulator_methods[] = {
             "Runs low-level integrity checks on the simulator's internal state."
             "This is a *debugging method only* and can result in assertions"
             "failing."},
+    {"total_scaled_recombination_mass",
+            (PyCFunction) Simulator_total_scaled_recombination_mass, METH_VARARGS,
+            "Returns the total scaled recombination mass for a given label."},
     {NULL}  /* Sentinel */
 };
 

@@ -1929,8 +1929,6 @@ test_multi_locus_bottleneck_arg(void)
 static void
 test_floating_point_extremes(void)
 {
-    printf("\nFIXME\n\n");
-#if 0
     int ret;
     uint32_t n = 2;
     sample_t *samples = malloc(n * sizeof(sample_t));
@@ -1955,24 +1953,48 @@ test_floating_point_extremes(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
-
+    /* We get an infinite waiting time here because the population size
+     * is so large */
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BREAKPOINT_RESAMPLE_OVERFLOW);
-    msp_print_state(msp, _devnull);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_INFINITE_WAITING_TIME);
     recomb_map_free(&recomb_map);
     msp_free(msp);
 
+    /* A long sequence length and high recombination gives non-finite mass*/
     tsk_table_collection_clear(&tables);
-    /* A long sequence length and high recombination should overflow */
     ret = recomb_map_alloc_uniform(&recomb_map, DBL_MAX, DBL_MAX, false);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(msp);
-    CU_ASSERT_EQUAL(ret, 0);
-    msp_print_state(msp, _devnull);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_RECOMB_MASS_NON_FINITE);
+    msp_free(msp);
+    recomb_map_free(&recomb_map);
+
+    /* A sequence length of DBL_MAX with no recombination works fine.*/
+    tsk_table_collection_clear(&tables);
+    ret = recomb_map_alloc_uniform(&recomb_map, DBL_MAX, 0, false);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BREAKPOINT_MASS_NON_FINITE);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    msp_free(msp);
+    recomb_map_free(&recomb_map);
+
+    tsk_table_collection_clear(&tables);
+    /* Sequence lengths longer than the underlying mass discretisation
+     * should work fine */
+    ret = recomb_map_alloc_uniform(&recomb_map, 1LL << 49, 1e8, false);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_run(msp, DBL_MAX, 100);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_EVENTS);
     msp_free(msp);
     recomb_map_free(&recomb_map);
 
@@ -1980,7 +2002,6 @@ test_floating_point_extremes(void)
     free(msp);
     free(samples);
     tsk_table_collection_free(&tables);
-#endif
 }
 
 static void

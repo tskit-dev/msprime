@@ -1251,6 +1251,8 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "Fenwick trees\n");
     for (k = 0; k < self->num_labels; k++) {
         fprintf(out, "=====\nLabel %d\n=====\n", k);
+        fprintf(out, "\ttotal scaled mass = %" PRId64 "\n",
+            msp_get_total_scaled_recombination_mass(self, (int) k));
         for (j = 1; j <= (uint32_t) fenwick_get_size(&self->links[k]); j++) {
             u = msp_get_segment(self, j, (label_id_t) k);
             scaled_recomb_mass = fenwick_get_value(&self->links[k], j);
@@ -2286,12 +2288,16 @@ msp_choose_uniform_breakpoint(msp_t *self, int label, double *ret_breakpoint,
         breakpoint
             = recomb_map_scaled_mass_to_position(&self->recomb_map, breakpoint_mass);
 
-        /* FIXME: can this happen now? */
-        /* Deal with various quirks that can happen with numerical
+        /* Deal with various quirks that may happen with numerical
          * imprecision from going back and forth between recombination mass
          * and physical positions. We try to make this robust by making
          * resampling the default case and only break out of the loop
-         * when the conditions we need are explicitly met. */
+         * when the conditions we need are explicitly met.
+         *
+         * It's not entirely clear whether these things can actually happen
+         * but it's best to be safe and return an actual error rather than
+         * bombing out on an assertion.
+         */
         if (x == NULL) {
             /* if there is no previous segment we cannot have breakpoint
              * <= y->left */
@@ -3685,8 +3691,19 @@ out:
 static int MSP_WARN_UNUSED
 msp_set_recomb_map_mass_scale(msp_t *self)
 {
+    int ret = 0;
     size_t num_samples = self->num_samples;
-    double max_mass = TSK_MAX(1, recomb_map_get_total_mass(&self->recomb_map));
+    double total_mass = recomb_map_get_total_mass(&self->recomb_map);
+    double mass_scale, initial_mass;
+    /* We start with a 48 bit number to represent the maximum cumulative
+     * scaled mass. For long genomes the total scaled mass does grow by
+     * quite a lot because of the effects of trapped genetic material.
+     * Empirically this seems like a safe limit, and is
+     * still a very fine level of granularity for smaller simulations
+     * so seems like a reasonable compromise. However, we may need to
+     * make this a parameter in the future if we do get overflows, so
+     * that users can at least tune the value. */
+    int64_t initial_scaled_mass = 1LL << 48;
 
     if (self->from_ts != NULL) {
         /* The from_ts value can be an empty tree sequence, which will contain
@@ -3694,12 +3711,20 @@ msp_set_recomb_map_mass_scale(msp_t *self)
          * We avoid division by zero here in the mean time. */
         num_samples = TSK_MAX(1, tsk_treeseq_get_num_samples(self->from_ts));
     }
+    if (!isfinite(total_mass)) {
+        ret = MSP_ERR_RECOMB_MASS_NON_FINITE;
+        goto out;
+    }
     /* Make sure that any ancient samples are taken into account too */
     num_samples += self->num_sampling_events;
     assert(num_samples > 0);
-    /* We can have at most max_mass per sample */
-    max_mass *= (double) num_samples;
-    return recomb_map_set_mass_limit(&self->recomb_map, max_mass);
+    /* Initially we have total_mass per sample */
+    initial_mass = TSK_MAX(1, total_mass) * (double) num_samples;
+    mass_scale = (double) (initial_scaled_mass) / initial_mass;
+    assert(mass_scale > 0);
+    ret = recomb_map_set_mass_scale(&self->recomb_map, mass_scale);
+out:
+    return ret;
 }
 
 /*
@@ -3887,6 +3912,13 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         events++;
 
         scaled_recomb_mass = fenwick_get_total(&self->links[label]);
+        /* To be sure that we can't overflow we have a hard limit of
+         * 2**62 for the total recombination mass. Just to be sure, we
+         * check if the recomb_mass is < 0 anyway, though. */
+        if (scaled_recomb_mass < 0 || scaled_recomb_mass > INT64_MAX / 2) {
+            ret = MSP_ERR_RECOMB_MASS_OVERFLOW;
+            goto out;
+        }
         recomb_mass = ((double) scaled_recomb_mass) / self->recomb_map.mass_scale;
         /* Recombination */
         lambda = recomb_mass;
@@ -5160,6 +5192,19 @@ size_t
 msp_get_num_migrations(msp_t *self)
 {
     return (size_t) self->tables->migrations.num_rows;
+}
+
+int64_t
+msp_get_total_scaled_recombination_mass(msp_t *self, int label)
+{
+    int64_t ret;
+    if (label < 0 || label >= (int) self->num_labels) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    ret = fenwick_get_total(&self->links[label]);
+out:
+    return ret;
 }
 
 int MSP_WARN_UNUSED
