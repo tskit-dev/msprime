@@ -47,7 +47,15 @@ inline static int64_t
 recomb_map_scale_mass(recomb_map_t *self, double mass)
 {
     double scaled_value = round(mass * self->mass_scale);
-    return (int64_t) scaled_value;
+    int64_t ret;
+
+    if (scaled_value > INT64_MAX) {
+        ret = MSP_ERR_RECOMB_MASS_OVERFLOW;
+        goto out;
+    }
+    ret = (int64_t) scaled_value;
+out:
+    return ret;
 }
 
 inline static double
@@ -65,7 +73,7 @@ recomb_map_set_mass_scale(recomb_map_t *self, double mass_scale)
     int ret = 0;
     size_t j;
     double mass;
-    int64_t sum = 0;
+    int64_t scaled_mass, sum;
     const double *position = self->map.position;
     const double *rates = self->map.value;
 
@@ -75,10 +83,20 @@ recomb_map_set_mass_scale(recomb_map_t *self, double mass_scale)
     }
     self->mass_scale = mass_scale;
 
+    sum = 0;
     self->cumulative_scaled_mass[0] = 0;
     for (j = 1; j < self->map.size; j++) {
         mass = (position[j] - position[j - 1]) * rates[j - 1];
-        sum += recomb_map_scale_mass(self, mass);
+        if (!isfinite(mass)) {
+            ret = MSP_ERR_RECOMB_MASS_NON_FINITE;
+            goto out;
+        }
+        scaled_mass = recomb_map_scale_mass(self, mass);
+        if (scaled_mass < 0) {
+            ret = (int) scaled_mass;
+            goto out;
+        }
+        sum += scaled_mass;
         assert(sum >= 0);
         self->cumulative_scaled_mass[j] = sum;
     }
@@ -131,6 +149,8 @@ recomb_map_alloc(
         mass = (position[j] - position[j - 1]) * x;
         self->total_mass += mass;
     }
+    /* The default mass scale is 1 */
+    ret = recomb_map_set_mass_scale(self, 1);
 out:
     return ret;
 }
@@ -211,6 +231,8 @@ recomb_map_position_to_scaled_mass(recomb_map_t *self, double pos)
     index--;
     mass_diff = (pos - position[index]) * rate[index];
     scaled_mass_diff = recomb_map_scale_mass(self, mass_diff);
+    /* We assume any possible errors have been caught earlier */
+    assert(scaled_mass_diff >= 0);
     return self->cumulative_scaled_mass[index] + scaled_mass_diff;
 }
 
@@ -260,7 +282,10 @@ recomb_map_shift_by_scaled_mass(recomb_map_t *self, double pos, int64_t scaled_m
 double
 recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass)
 {
-    return recomb_map_shift_by_scaled_mass(self, pos, recomb_map_scale_mass(self, mass));
+    int64_t scaled_mass = recomb_map_scale_mass(self, mass);
+
+    assert(scaled_mass >= 0);
+    return recomb_map_shift_by_scaled_mass(self, pos, scaled_mass);
 }
 
 size_t

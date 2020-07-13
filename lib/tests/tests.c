@@ -106,6 +106,8 @@ test_fenwick(void)
              */
             CU_ASSERT(fenwick_expand(&t, 1) == 0);
         }
+        fenwick_verify(&t);
+        fenwick_print_state(&t, _devnull);
         CU_ASSERT(fenwick_free(&t) == 0);
     }
 }
@@ -707,7 +709,6 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(initial_size, 2 * Ne);
     CU_ASSERT_EQUAL(growth_rate, 0.5);
-    // TODO CU_ASSERT_EQUAL(msp_get_recombination_rate(&msp), 1.0);
 
     CU_ASSERT_TRUE(msp_get_store_migrations(&msp));
     CU_ASSERT_EQUAL(msp_get_num_avl_node_blocks(&msp), 1);
@@ -736,6 +737,12 @@ test_simulator_getters_setters(void)
     }
     CU_ASSERT(msp_get_num_common_ancestor_events(&msp) > 0);
     CU_ASSERT(msp_get_num_recombination_events(&msp) > 0);
+
+    CU_ASSERT_EQUAL(
+        msp_get_total_scaled_recombination_mass(&msp, -1), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(
+        msp_get_total_scaled_recombination_mass(&msp, 1), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_get_total_scaled_recombination_mass(&msp, 0), 0);
 
     free(samples);
     ret = msp_free(&msp);
@@ -1961,14 +1968,18 @@ test_floating_point_extremes(void)
     msp_free(msp);
 
     /* A long sequence length and high recombination gives non-finite mass*/
-    tsk_table_collection_clear(&tables);
     ret = recomb_map_alloc_uniform(&recomb_map, DBL_MAX, DBL_MAX, false);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_initialise(msp);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_RECOMB_MASS_NON_FINITE);
-    msp_free(msp);
+    recomb_map_free(&recomb_map);
+
+    /* A long sequence length and high recombination gives a recombination
+     * mass overflow */
+    ret = recomb_map_alloc_uniform(&recomb_map, DBL_MAX, 1, false);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_RECOMB_MASS_OVERFLOW);
+    recomb_map_free(&recomb_map);
+
+    ret = recomb_map_alloc_uniform(&recomb_map, 1LL << 49, 1e8, false);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_RECOMB_MASS_OVERFLOW);
     recomb_map_free(&recomb_map);
 
     /* A sequence length of DBL_MAX with no recombination works fine.*/
@@ -1984,10 +1995,10 @@ test_floating_point_extremes(void)
     msp_free(msp);
     recomb_map_free(&recomb_map);
 
-    tsk_table_collection_clear(&tables);
     /* Sequence lengths longer than the underlying mass discretisation
      * should work fine */
-    ret = recomb_map_alloc_uniform(&recomb_map, 1LL << 49, 1e8, false);
+    tsk_table_collection_clear(&tables);
+    ret = recomb_map_alloc_uniform(&recomb_map, 1LL << 49, 0.001, false);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3496,6 +3507,27 @@ test_recomb_map_copy(void)
 }
 
 static void
+test_recomb_map_set_mass_scale(void)
+{
+    int ret = 0;
+    recomb_map_t map;
+    double positions[] = { 0.0, 1.0, 2.0 };
+    double rates[] = { 1.0, 2.0, 0.0 };
+
+    ret = recomb_map_alloc(&map, 3, positions, rates, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = recomb_map_set_mass_scale(&map, NAN);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = recomb_map_set_mass_scale(&map, -1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+
+    ret = recomb_map_set_mass_scale(&map, DBL_MAX);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_RECOMB_MASS_OVERFLOW);
+
+    recomb_map_free(&map);
+}
+
+static void
 test_recomb_map_errors(void)
 {
     int ret;
@@ -3615,8 +3647,6 @@ test_recomb_map_examples(void)
 static void
 test_translate_position_and_recomb_mass(void)
 {
-    printf("FIXME\n\n");
-#if 0
     recomb_map_t map;
     double p1[] = { 0, 6, 13, 20 };
     double r1[] = { 3, 0, 1, 0 };
@@ -3643,21 +3673,21 @@ test_translate_position_and_recomb_mass(void)
     CU_ASSERT_EQUAL(recomb_map_position_to_scaled_mass(&map, 8), 18);
 
     recomb_map_free(&map);
-#endif
 }
 
 static void
 test_recomb_map_mass_between(void)
 {
-    printf("FIXME\n\n");
-#if 0
+    int ret;
     recomb_map_t discrete_map;
     recomb_map_t cont_map;
     double p1[] = { 0, 6, 13, 20 };
     double r1[] = { 3, 0, 1, 0 };
 
-    recomb_map_alloc(&discrete_map, 4, p1, r1, true);
-    recomb_map_alloc(&cont_map, 4, p1, r1, false);
+    ret = recomb_map_alloc(&discrete_map, 4, p1, r1, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = recomb_map_alloc(&cont_map, 4, p1, r1, false);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     CU_ASSERT_EQUAL_FATAL(recomb_map_scaled_mass_between(&discrete_map, 0, 2), 6);
     CU_ASSERT_EQUAL_FATAL(recomb_map_scaled_mass_between(&cont_map, 0, 2), 6);
@@ -3668,7 +3698,6 @@ test_recomb_map_mass_between(void)
 
     recomb_map_free(&discrete_map);
     recomb_map_free(&cont_map);
-#endif
 }
 
 static void
@@ -5798,10 +5827,11 @@ main(int argc, char **argv)
         { "test_multiple_mergers_simulation", test_multiple_mergers_simulation },
         { "test_multiple_mergers_growth_rate", test_multiple_mergers_growth_rate },
         { "test_large_bottleneck_simulation", test_large_bottleneck_simulation },
-        { "test_simple_recombination_map", test_simple_recomb_map },
-        { "test_recombination_map_copy", test_recomb_map_copy },
-        { "test_recombination_map_errors", test_recomb_map_errors },
-        { "test_recombination_map_examples", test_recomb_map_examples },
+        { "test_simple_recomb_map", test_simple_recomb_map },
+        { "test_recomb_map_copy", test_recomb_map_copy },
+        { "test_recomb_map_set_mass_scale", test_recomb_map_set_mass_scale },
+        { "test_recomb_map_errors", test_recomb_map_errors },
+        { "test_recomb_map_examples", test_recomb_map_examples },
 
         { "test_translate_position_and_recomb_mass",
             test_translate_position_and_recomb_mass },
