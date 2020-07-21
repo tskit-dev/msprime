@@ -4550,7 +4550,8 @@ msp_run_sweep(msp_t *self)
     sweep_pop_tot_rate = 0;
     p_coal_b = 0;
     p_coal_B = 0;
-
+    p_rec_b = 0;
+    p_rec_B = 0;
     /* JK: I've removed the time and event limits on this function to simplify
      * things as function is currently 'non-rentrant'; we can't stop in the middle
      * of the sweep and pick it up again from where we left off later. This is
@@ -4589,9 +4590,9 @@ msp_run_sweep(msp_t *self)
             sweep_dt = time[curr_step] - time[curr_step - 1];
             /* using pop sizes grabbed from get_population_size */
             pop_size = get_population_size(&self->populations[0], time[curr_step]);
-            p_coal_B = ((sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1)) * 0.5)
+            p_coal_B = ((sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1)))
                        / allele_frequency[curr_step] * sweep_dt / pop_size;
-            p_coal_b = ((sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1)) * 0.5)
+            p_coal_b = ((sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1)))
                        / (1.0 - allele_frequency[curr_step]) * sweep_dt / pop_size;
             p_rec_b = rec_rates[0] * sweep_dt;
             p_rec_B = rec_rates[1] * sweep_dt;
@@ -4618,7 +4619,7 @@ msp_run_sweep(msp_t *self)
                 /* coalescent in B background */
                 ret = self->common_ancestor_event(self, 0, 1);
             } else {
-                e_sum += rec_rates[0];
+                e_sum += p_rec_b;
                 if (tmp_rand < e_sum / sweep_pop_tot_rate) {
                     /* recomb in b background */
                     ret = msp_sweep_recombination_event(
@@ -6185,6 +6186,9 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
     x = trajectory.end_frequency;
     t = simulator->time;
     num_steps = 0;
+    time[num_steps] = t;
+    allele_frequency[num_steps] = x;
+    num_steps++;
     while (x > trajectory.start_frequency) {
         if (num_steps + 1 >= max_steps) {
             max_steps *= 2;
@@ -6201,13 +6205,16 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
             }
             allele_frequency = tmp;
         }
-        time[num_steps] = t;
-        allele_frequency[num_steps] = x;
         x = 1.0
             - genic_selection_stochastic_forwards(trajectory.dt, 1.0 - x,
                   trajectory.alpha * current_size, gsl_rng_uniform(rng));
+        /* need our recored traj to stay in bounds */
         t += trajectory.dt;
-        num_steps++;
+        if (x > trajectory.start_frequency) {
+            allele_frequency[num_steps] = x;
+            time[num_steps] = t;
+            num_steps++;
+        }
     }
     assert(num_steps < max_steps); /* num_steps + 1 above guarantees this */
     time[num_steps] = t;

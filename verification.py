@@ -247,7 +247,7 @@ class Test:
         with tempfile.TemporaryFile() as f:
             f.write(output)
             f.seek(0)
-            df = pd.read_table(f)
+            df = pd.read_csv(f, sep="\t")
         return df
 
     def _build_filename(self, *args):
@@ -706,8 +706,8 @@ class DiscoalSweeps(DiscoalTest):
     def _run(self, args):
         # This is broken currently: https://github.com/tskit-dev/msprime/issues/942
         # Skip noisily
-        logging.error("Skipping sweep comparison due to known bug.")
-        return
+        # logging.error("Skipping sweep comparison due to known bug.")
+        # return
 
         # TODO We should be parsing the args string here to derive these values
         # from the input. There's no point in having it as a parameter otherwise.
@@ -727,13 +727,11 @@ class DiscoalSweeps(DiscoalTest):
         data = collections.defaultdict(list)
         replicates = msprime.simulate(
             10,
-            model=mod,
+            model=[mod, (None, None)],
             length=seqlen,
             recombination_rate=rho,
             mutation_rate=mu,
             num_replicates=nreps,
-            # Change to Hudson after sweep finishes
-            demographic_events=[msprime.SimulationModelChange()],
         )
         for ts in replicates:
             data["pi"].append(ts.diversity(span_normalise=False))
@@ -753,7 +751,7 @@ class DiscoalSweeps(DiscoalTest):
         logging.debug(f"msp D mean: {df['D'].mean()}")
         logging.debug(f"discoal D mean: {df_df['D'].mean()}")
         logging.debug(f"sample sizes msp: {len(df['pi'])} discoal: {len(df_df['pi'])}")
-        self._plot_stats(f"mutation{df}, {df_df}")
+        self._plot_stats("mutation", df, df_df, "msp", "discoal")
 
     def test_sweep_ex1(self):
         cmd = "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a 500 -x 0.5 -N 10000"

@@ -134,7 +134,7 @@ class TestModelFactory(unittest.TestCase):
                 position=0.5,
                 start_frequency=0.1,
                 end_frequency=0.9,
-                alpha=0.1,
+                alpha=1000,
                 dt=0.01,
             ),
             msprime.BetaCoalescent(alpha=2),
@@ -851,7 +851,7 @@ class TestSweepGenicSelection(unittest.TestCase):
 
     def test_incorrect_num_labels(self):
         model = msprime.SweepGenicSelection(
-            position=0.5, start_frequency=0.1, end_frequency=0.9, alpha=0.1, dt=0.01
+            position=0.5, start_frequency=0.1, end_frequency=0.9, alpha=1000, dt=0.01
         )
         for num_labels in [1, 3, 10]:
             with self.assertRaises(_msprime.LibraryError):
@@ -859,29 +859,35 @@ class TestSweepGenicSelection(unittest.TestCase):
                     10, recombination_rate=1, model=model, num_labels=num_labels
                 )
 
-    @unittest.skip("parameters need tuning")
     def test_sweep_coalescence_no_recomb(self):
+        N = 1e6
         model = msprime.SweepGenicSelection(
-            position=0.5, start_frequency=0.1, end_frequency=0.99, alpha=0.01, dt=0.1
+            position=0.5,
+            start_frequency=1.0 / (2 * N),
+            end_frequency=1.0 - (1.0 / (2 * N)),
+            alpha=1000,
+            dt=1e-6,
         )
-        ts = msprime.simulate(10, model=model, random_seed=2)
+        ts = msprime.simulate(10, model=model, recombination_rate=0, random_seed=2)
         self.assertEqual(ts.num_trees, 1)
         for tree in ts.trees():
             self.assertEqual(tree.num_roots, 1)
 
-    @unittest.skip("parameters need tuning")
     def test_sweep_coalescence_recomb(self):
+        N = 1e6
         model = msprime.SweepGenicSelection(
-            position=0.5, start_frequency=0.01, end_frequency=0.999, alpha=1.0, dt=0.01
+            position=0.5,
+            start_frequency=1.0 / (2 * N),
+            end_frequency=1.0 - (1.0 / (2 * N)),
+            alpha=1000,
+            dt=1e-6,
         )
         ts = msprime.simulate(10, model=model, recombination_rate=1, random_seed=2)
         self.assertGreater(ts.num_trees, 1)
-        for tree in ts.trees():
-            self.assertEqual(tree.num_roots, 1)
 
     def test_sweep_coalescence_same_seed(self):
         model = msprime.SweepGenicSelection(
-            position=0.5, start_frequency=0.6, end_frequency=0.7, alpha=0.01, dt=0.1
+            position=0.5, start_frequency=0.6, end_frequency=0.7, alpha=1000, dt=1e4
         )
         ts1 = msprime.simulate(5, model=model, random_seed=2)
         ts2 = msprime.simulate(5, model=model, random_seed=2)
@@ -889,14 +895,18 @@ class TestSweepGenicSelection(unittest.TestCase):
 
     def test_sweep_start_time_complete(self):
         sweep_model = msprime.SweepGenicSelection(
-            position=0.5, start_frequency=0.01, end_frequency=0.99, alpha=0.9, dt=0.001,
+            position=0.5,
+            start_frequency=0.01,
+            end_frequency=0.99,
+            alpha=1000,
+            dt=0.001,
         )
         t_start = 0.1
         ts = msprime.simulate(
             10,
             Ne=0.25,
             recombination_rate=2,
-            model=[None, (t_start, sweep_model)],
+            model=[None, (t_start, sweep_model), (None, None)],
             random_seed=2,
         )
         self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
@@ -904,7 +914,7 @@ class TestSweepGenicSelection(unittest.TestCase):
     def test_sweep_start_time_incomplete(self):
         # Short sweep that doesn't make complete coalescence.
         sweep_model = msprime.SweepGenicSelection(
-            position=0.5, start_frequency=0.69, end_frequency=0.7, alpha=8, dt=0.001,
+            position=0.5, start_frequency=0.69, end_frequency=0.7, alpha=800, dt=0.001,
         )
         t_start = 0.1
         ts = msprime.simulate(
@@ -920,7 +930,7 @@ class TestSweepGenicSelection(unittest.TestCase):
         # Short sweep that doesn't coalesce followed
         # by Hudson phase to finish up coalescent
         sweep_model = msprime.SweepGenicSelection(
-            position=0.5, start_frequency=0.69, end_frequency=0.7, alpha=1e-5, dt=1,
+            position=0.5, start_frequency=0.69, end_frequency=0.7, alpha=1e5, dt=1,
         )
         ts = msprime.simulate(
             10,
@@ -953,7 +963,7 @@ class TestSweepGenicSelection(unittest.TestCase):
     def test_many_sweeps(self):
         sweep_models = [
             msprime.SweepGenicSelection(
-                position=j, start_frequency=0.69, end_frequency=0.7, alpha=1e-5, dt=0.1,
+                position=j, start_frequency=0.69, end_frequency=0.7, alpha=1e5, dt=0.1,
             )
             for j in range(10)
         ]

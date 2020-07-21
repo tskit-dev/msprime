@@ -1452,7 +1452,6 @@ class DiracCoalescent(ParametricSimulationModel):
 class SweepGenicSelection(ParametricSimulationModel):
     # TODO document and finalise the API
     name = "sweep_genic_selection"
-
     position = attr.ib(default=None)
     start_frequency = attr.ib(default=None)
     end_frequency = attr.ib(default=None)
