@@ -2389,9 +2389,6 @@ class HudsonAnalytical(Test):
         pyplot.savefig(filename)
         pyplot.close("all")
 
-    # FIXME the output of this test is not obvious to read. What do the
-    # plots mean, and how do we judge if they are correct or not? At a
-    # minimum we need to have some axis labels and a legend.
     def test_analytical_correlation_between_trees(self):
         """
         Runs the check for the probability of same tree at two sites against
@@ -2401,7 +2398,7 @@ class HudsonAnalytical(Test):
         sample_size = 2
         gc_length_rate_ratio = np.array([0.05, 0.5, 5.0])
         gc_length = np.array([100, 50, 20])
-        gc_rate = 1.0 / (gc_length_rate_ratio * gc_length)
+        gc_rate = 0.25 / (gc_length_rate_ratio * gc_length)
         seq_length = 500
         predicted_prob = np.zeros([gc_length_rate_ratio.size, seq_length], dtype=float)
         empirical_prob_first = np.zeros(
@@ -2455,21 +2452,27 @@ class HudsonAnalytical(Test):
             predicted_prob[k, :] = (18.0 + rG) / (18.0 + 13.0 * rG + rG * rG)
 
         x = np.arange(500) + 1
-        pyplot.plot(x, predicted_prob[0], "--")
-        pyplot.plot(x, empirical_prob_first[0], "-")
+        pyplot.plot(x, predicted_prob[0], "--", label="prediction")
+        pyplot.plot(x, empirical_prob_first[0], "-", label="simulation")
         pyplot.plot(x, predicted_prob[1], "--")
         pyplot.plot(x, empirical_prob_first[1], "-")
         pyplot.plot(x, predicted_prob[2], "--")
         pyplot.plot(x, empirical_prob_first[2], "-")
+        pyplot.xlabel("chromosome positon")
+        pyplot.ylabel("fraction of trees identical to first position tree")
+        pyplot.legend(loc="upper right")
         pyplot.savefig(self.output_dir / "prob_first.png")
         pyplot.close("all")
 
-        pyplot.plot(x, predicted_prob[0, ::-1], "--")
-        pyplot.plot(x, empirical_prob_last[0], "-")
+        pyplot.plot(x, predicted_prob[0, ::-1], "--", label="prediction")
+        pyplot.plot(x, empirical_prob_last[0], "-", label="simulation")
         pyplot.plot(x, predicted_prob[1, ::-1], "--")
         pyplot.plot(x, empirical_prob_last[1], "-")
         pyplot.plot(x, predicted_prob[2, ::-1], "--")
         pyplot.plot(x, empirical_prob_last[2], "-")
+        pyplot.xlabel("chromosome positon")
+        pyplot.ylabel("fraction of trees identical to last position tree")
+        pyplot.legend(loc="upper left")
         pyplot.savefig(self.output_dir / "prob_last.png")
         pyplot.close("all")
 
@@ -2477,8 +2480,9 @@ class HudsonAnalytical(Test):
             x,
             np.concatenate((predicted_prob[0, 249::-1], predicted_prob[0, :250])),
             "--",
+            label="prediction",
         )
-        pyplot.plot(x, empirical_prob_mid[0], "-")
+        pyplot.plot(x, empirical_prob_mid[0], "-", label="simulation")
         pyplot.plot(
             x,
             np.concatenate((predicted_prob[1, 249::-1], predicted_prob[1, :250])),
@@ -2491,16 +2495,22 @@ class HudsonAnalytical(Test):
             "--",
         )
         pyplot.plot(x, empirical_prob_mid[2], "-")
+        pyplot.xlabel("chromosome positon")
+        pyplot.ylabel("fraction of trees identical to middle position tree")
+        pyplot.legend(loc="upper right")
         pyplot.savefig(self.output_dir / "prob_mid.png")
         pyplot.close("all")
 
         x = np.arange(10) + 1
-        pyplot.plot(x, predicted_prob[0, range(10)], "--")
-        pyplot.plot(x, empirical_prob_first[0, range(10)], "-")
+        pyplot.plot(x, predicted_prob[0, range(10)], "--", label="prediction")
+        pyplot.plot(x, empirical_prob_first[0, range(10)], "-", label="simulation")
         pyplot.plot(x, predicted_prob[1, range(10)], "--")
         pyplot.plot(x, empirical_prob_first[1, range(10)], "-")
         pyplot.plot(x, predicted_prob[2, range(10)], "--")
         pyplot.plot(x, empirical_prob_first[2, range(10)], "-")
+        pyplot.xlabel("chromosome positon")
+        pyplot.ylabel("fraction of trees identical to first position tree")
+        pyplot.legend(loc="upper right")
         pyplot.savefig(self.output_dir / "prob_first_zoom.png")
         pyplot.close("all")
 
