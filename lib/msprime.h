@@ -234,6 +234,7 @@ typedef struct _msp_t {
     size_t num_trapped_re_events;
     size_t num_multiple_re_events;
     size_t num_noneffective_gc_events;
+    size_t num_fenwick_rebuilds;
     /* sampling events */
     sampling_event_t *sampling_events;
     size_t num_sampling_events;

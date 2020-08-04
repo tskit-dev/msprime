@@ -1259,6 +1259,8 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "Fenwick trees\n");
     for (k = 0; k < self->num_labels; k++) {
         fprintf(out, "=====\nLabel %d\n=====\n", k);
+        fprintf(out, "numerical drift = %.17g\n",
+            fenwick_get_numerical_drift(&self->links[k]));
         for (j = 1; j <= (uint32_t) fenwick_get_size(&self->links[k]); j++) {
             u = msp_get_segment(self, j, (label_id_t) k);
             v = fenwick_get_value(&self->links[k], j);
@@ -2257,10 +2259,6 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
         x = y->prev;
         y_cumulative_mass = fenwick_get_cumulative_sum(tree, y->id);
         breakpoint_mass = y->right_mass - (y_cumulative_mass - random_mass);
-        if (!isfinite(breakpoint_mass)) {
-            ret = MSP_ERR_BREAKPOINT_MASS_NON_FINITE;
-            goto out;
-        }
         breakpoint = recomb_map_mass_to_position(&self->recomb_map, breakpoint_mass);
 
         /* Deal with various quirks that can happen with numerical
@@ -3803,8 +3801,24 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             break;
         }
         events++;
+        /* In very large simulations, the fenwick tree used as an indexing
+         * structure for genomic segments will experience some numerical
+         * drift, where the indexed values diverge from the true values
+         * associated with segments. We ensure that this drift does not
+         * become too large by rebuilding the indexing structure every
+         * now and again. The 1e-12 threshold is the result of some
+         * experimentation, and seems to give a good bound on error
+         * without being triggered too often. */
+        if (fenwick_get_numerical_drift(&self->links[label]) > 1e-12) {
+            fenwick_rebuild(&self->links[label]);
+            self->num_fenwick_rebuilds++;
+        }
 
         recomb_mass = fenwick_get_total(&self->links[label]);
+        if (!isfinite(recomb_mass)) {
+            ret = MSP_ERR_BREAKPOINT_MASS_NON_FINITE;
+            goto out;
+        }
         /* Recombination */
         lambda = recomb_mass;
         re_t_wait = DBL_MAX;

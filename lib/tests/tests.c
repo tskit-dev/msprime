@@ -95,6 +95,7 @@ test_fenwick(void)
             CU_ASSERT(fenwick_get_value(&t, j) == j);
             CU_ASSERT(fenwick_get_cumulative_sum(&t, j) == s);
             CU_ASSERT(fenwick_get_total(&t) == s);
+            CU_ASSERT(fenwick_get_numerical_drift(&t) == 0.0);
             CU_ASSERT(fenwick_find(&t, s) == j);
             fenwick_set_value(&t, j, 0);
             CU_ASSERT(fenwick_get_value(&t, j) == 0);
@@ -184,6 +185,45 @@ test_fenwick_zero_values(void)
 
     fenwick_free(&t);
     gsl_rng_free(rng);
+}
+
+static void
+test_fenwick_drift(void)
+{
+    fenwick_t t;
+    double s;
+    size_t j, n;
+
+    for (n = 1; n < 100; n++) {
+        s = 0;
+        CU_ASSERT(fenwick_alloc(&t, n) == 0);
+        for (j = 1; j <= n; j++) {
+            fenwick_increment(&t, j, j);
+            s = s + j;
+            CU_ASSERT(fenwick_get_value(&t, j) == j);
+            CU_ASSERT(fenwick_get_cumulative_sum(&t, j) == s);
+            CU_ASSERT(fenwick_get_total(&t) == s);
+            CU_ASSERT(fenwick_get_numerical_drift(&t) == 0.0);
+        }
+        /* put some drift into the tree */
+        for (j = 1; j <= n; j++) {
+            t.tree[j] += 1e-9;
+        }
+        fenwick_print_state(&t, _devnull);
+        CU_ASSERT(fenwick_get_numerical_drift(&t) > 0);
+        fenwick_rebuild(&t);
+        CU_ASSERT(fenwick_get_numerical_drift(&t) == 0);
+
+        s = 0;
+        for (j = 1; j <= n; j++) {
+            s = s + j;
+            CU_ASSERT(fenwick_get_value(&t, j) == j);
+            CU_ASSERT(fenwick_get_cumulative_sum(&t, j) == s);
+            CU_ASSERT(fenwick_get_numerical_drift(&t) == 0.0);
+        }
+
+        CU_ASSERT(fenwick_free(&t) == 0);
+    }
 }
 
 static void
@@ -2018,6 +2058,7 @@ test_floating_point_extremes(void)
     msp_print_state(msp, _devnull);
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BREAKPOINT_MASS_NON_FINITE);
+
     msp_free(msp);
     recomb_map_free(&recomb_map);
 
@@ -5780,6 +5821,7 @@ main(int argc, char **argv)
         { "test_fenwick", test_fenwick },
         { "test_fenwick_expand", test_fenwick_expand },
         { "test_fenwick_zero_values", test_fenwick_zero_values },
+        { "test_fenwick_drift", test_fenwick_drift },
         { "test_single_locus_two_populations", test_single_locus_two_populations },
         { "test_single_locus_many_populations", test_single_locus_many_populations },
         { "test_single_locus_historical_sample", test_single_locus_historical_sample },

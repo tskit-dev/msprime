@@ -207,6 +207,17 @@ class TestSimulator(unittest.TestCase):
         sim.reset()
         sim.run(event_chunk=2 ** 64 + 1)
 
+    def test_debug_func(self):
+        sim = msprime.simulator_factory(10)
+        count = 0
+
+        def f(sim):
+            nonlocal count
+            count += 1
+
+        sim.run(event_chunk=1, debug_func=f)
+        self.assertGreater(count, 0)
+
     def test_info_logging(self):
         sim = msprime.simulator_factory(10)
         with self.assertLogs("msprime.ancestry", logging.INFO) as log:

@@ -64,6 +64,7 @@ fenwick_print_state(fenwick_t *self, FILE *out)
     size_t j;
 
     fprintf(out, "Fenwick tree @%p\n", (void *) self);
+    fprintf(out, "Numerical drift = %.17g\n", fenwick_get_numerical_drift(self));
 
     for (j = 1; j <= self->size; j++) {
         fprintf(out, "%d\t%.16g\t%.16g\t%.16g\n", (int) j, self->values[j],
@@ -96,6 +97,10 @@ fenwick_alloc(fenwick_t *self, size_t initial_size)
         goto out;
     }
     fenwick_set_log_size(self);
+
+    /* Initialise the Kahan sum variables for the total */
+    self->total_sum = 0;
+    self->total_c = 0;
 out:
     return ret;
 }
@@ -150,11 +155,60 @@ fenwick_get_size(fenwick_t *self)
     return self->size;
 }
 
+/* Returns the difference between the total obtained by directly summing
+ * the values and that we get from the Fenwick tree structure. The value
+ * is expressed as |1 - stored_value / true_value| and is always positive.
+ * A return value of 0 means that there is no numerical error.
+ */
+double
+fenwick_get_numerical_drift(fenwick_t *self)
+{
+    double ret = 0;
+    if (self->total_sum != 0.0) {
+        ret = fabs(1.0 - fenwick_get_cumulative_sum(self, self->size) / self->total_sum);
+    }
+    return ret;
+}
+
+/* Rebuild the Fenwick tree index of the stored values. This is useful to
+ * reduce the numerical errors that can otherwise accumulate when a very
+ * large number of insertions and removals are done.
+ */
+void
+fenwick_rebuild(fenwick_t *self)
+{
+    double value;
+    size_t j;
+
+    self->total_sum = 0;
+    self->total_c = 0;
+    memset(self->tree, 0, (1 + self->size) * sizeof(*self->tree));
+    for (j = 1; j <= self->size; j++) {
+        value = self->values[j];
+        self->values[j] = 0;
+        fenwick_increment(self, j, value);
+    }
+}
+
 double
 fenwick_get_total(fenwick_t *self)
 {
-    double computed_total = fenwick_get_cumulative_sum(self, self->size);
-    return computed_total;
+    return self->total_sum;
+}
+
+static void
+fenwick_increment_total(fenwick_t *self, double value)
+{
+    double sum = self->total_sum;
+    double c = self->total_c;
+    double t, y;
+
+    /* Use the Kahan summation algorithm to minimise errors */
+    /* Based on https://rosettacode.org/wiki/Kahan_summation#C */
+    y = value - c;
+    t = sum + y;
+    self->total_c = (t - sum) - y;
+    self->total_sum = t;
 }
 
 void
@@ -165,7 +219,8 @@ fenwick_increment(fenwick_t *self, size_t index, double value)
     double *restrict tree = self->tree;
 
     assert(0 < index && index <= size);
-    self->total += value;
+    fenwick_increment_total(self, value);
+
     self->values[index] += value;
     for (j = index; j <= size; j += (j & -j)) {
         tree[j] += value;

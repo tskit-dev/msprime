@@ -419,6 +419,7 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreaterEqual(events, 0)
         self.assertGreater(sim.num_avl_node_blocks, 0)
         self.assertGreater(sim.num_segment_blocks, 0)
+        self.assertGreaterEqual(sim.num_fenwick_rebuilds, 0)
         self.assertGreater(sim.num_node_mapping_blocks, 0)
         n = sim.num_samples
         L = sim.sequence_length
@@ -982,6 +983,18 @@ class TestSimulator(LowLevelTestCase):
         sim.verify()
         with self.assertRaises(TypeError):
             sim.verify("asdg")
+
+    def test_fenwick_drift(self):
+        sim = _msprime.Simulator(
+            get_samples(10),
+            uniform_recombination_map(),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(),
+        )
+        self.assertEqual(sim.fenwick_drift(0), 0)
+        self.assertRaises(TypeError, sim.fenwick_drift, "sdf")
+        for bad_label in [-1, 1, 100]:
+            self.assertRaises(ValueError, sim.fenwick_drift, bad_label)
 
     @unittest.skipIf(IS_WINDOWS, "windows IO is weird")
     def test_print_state_errors(self):
