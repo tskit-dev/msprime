@@ -4347,7 +4347,8 @@ Simulator_print_state(Simulator *self, PyObject *args)
     if (file == NULL) {
         goto out;
     }
-    msp_print_state(self->sim, file);
+    /* msp_print_state(self->sim, file); */
+    fprintf(file, "drift = %f\n", self->sim->links[0].total);
     ret = Py_BuildValue("");
 out:
     if (file != NULL) {

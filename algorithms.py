@@ -35,6 +35,7 @@ class FenwickTree:
         assert max_index > 0
         self.__max_index = max_index
         self.__tree = [0 for j in range(max_index + 1)]
+        self.__current_total = 0
         # Compute the binary logarithm of max_index
         u = self.__max_index
         while u != 0:
@@ -52,6 +53,7 @@ class FenwickTree:
         Increments the frequency of the specified index by the specified
         value.
         """
+        self.__current_total += v
         assert 0 < index <= self.__max_index
         j = index
         while j <= self.__max_index:

@@ -153,7 +153,8 @@ fenwick_get_size(fenwick_t *self)
 double
 fenwick_get_total(fenwick_t *self)
 {
-    return fenwick_get_cumulative_sum(self, self->size);
+    double computed_total = fenwick_get_cumulative_sum(self, self->size);
+    return computed_total;
 }
 
 void
@@ -164,6 +165,7 @@ fenwick_increment(fenwick_t *self, size_t index, double value)
     double *restrict tree = self->tree;
 
     assert(0 < index && index <= size);
+    self->total += value;
     self->values[index] += value;
     for (j = index; j <= size; j += (j & -j)) {
         tree[j] += value;

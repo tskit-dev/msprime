@@ -26,6 +26,7 @@
 typedef struct {
     size_t size;
     size_t log_size;
+    double total;
     double *tree;
     double *values;
 } fenwick_t;
