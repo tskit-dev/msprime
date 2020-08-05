@@ -43,6 +43,11 @@ msms:
 	wget https://www.mabs.at/ewing/msms/msms3.2rc-b163.jar
 	mv msms3.2rc-b163.jar msms.jar
 
+
+msprime-0.7.4:
+	python3 -m venv msprime-0.7.4
+	bash -c "source msprime-0.7.4/bin/activate; pip install msprime==0.7.4"
+
 clean:
 	rm -fR scrm* ms ms_summary_stats msHOT msHOT_summary_stats sample_stats \
-		discoal* v0.1.4.tar.gz* seq-gen SeqGen* SLiM msms.jar
+		discoal* v0.1.4.tar.gz* seq-gen SeqGen* SLiM msms.jar msprime*
