@@ -3380,7 +3380,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "demographic_events", "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time",
         "store_full_arg", "num_labels", "gene_conversion_rate",
-        "gene_conversion_track_length", NULL};
+        "gene_conversion_track_length", "ploidy", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
@@ -3403,11 +3403,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     double start_time = -1;
     double gene_conversion_rate = 0;
     double gene_conversion_track_length = 1.0;
+    int ploidy = 2;
 
     self->sim = NULL;
     self->random_generator = NULL;
     self->recombination_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!OOO!O!nnnidindd", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!OOO!O!nnnidinddi", kwlist,
             &PyList_Type, &py_samples,
             &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
@@ -3421,7 +3422,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &store_migrations, &start_time,
             &store_full_arg, &num_labels,
-            &gene_conversion_rate, &gene_conversion_track_length)) {
+            &gene_conversion_rate, &gene_conversion_track_length, &ploidy)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -3498,6 +3499,11 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             gene_conversion_track_length);
     if (sim_ret != 0) {
         handle_input_error("set_gene_conversion_rate", sim_ret);
+        goto out;
+    }
+    sim_ret = msp_set_ploidy(self->sim, ploidy);
+    if (sim_ret != 0) {
+        handle_input_error("set_ploidy", sim_ret);
         goto out;
     }
 
@@ -3760,6 +3766,18 @@ Simulator_get_time(Simulator  *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("d", msp_get_time(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_ploidy(Simulator  *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", self->sim->ploidy);
 out:
     return ret;
 }
@@ -4543,6 +4561,8 @@ static PyGetSetDef Simulator_getsetters[] = {
             "The tables"},
     {"time", (getter) Simulator_get_time, NULL,
             "The current simulation time" },
+    {"ploidy", (getter) Simulator_get_ploidy, NULL,
+            "The ploidy value used in scaling coalescent time." },
     {NULL}  /* Sentinel */
 };
 

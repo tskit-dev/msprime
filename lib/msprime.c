@@ -247,10 +247,17 @@ msp_set_store_full_arg(msp_t *self, bool store_full_arg)
 }
 
 int
-msp_set_ploidy(msp_t *self, uint32_t ploidy)
+msp_set_ploidy(msp_t *self, int ploidy)
 {
-    self->ploidy = ploidy;
-    return 0;
+    int ret = 0;
+
+    if (ploidy < 1) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->ploidy = (uint32_t) ploidy;
+out:
+    return ret;
 }
 
 int
@@ -3400,6 +3407,7 @@ msp_reset_from_samples(msp_t *self)
         }
     }
     /* Set up the sample */
+    tsk_ind = TSK_NULL;
     for (u = 0; u < (node_id_t) self->num_samples; u++) {
         if (self->samples[u].time <= self->start_time) {
             ret = msp_insert_sample(self, u, self->samples[u].population_id);
@@ -3407,8 +3415,20 @@ msp_reset_from_samples(msp_t *self)
                 goto out;
             }
         }
-        tsk_ind = TSK_NULL;
-        if (self->pedigree != NULL) {
+        if (self->pedigree == NULL) {
+            /* TODO we want to pull all this initialisation code up into
+             * Python so we can handle metadata and stuff better. We need
+             * to fix up the Pedigree handling code at the same time though
+             * as this is messy. */
+            if (u % (node_id_t) self->ploidy == 0) {
+                ret = tsk_individual_table_add_row(
+                    &self->tables->individuals, 0, NULL, 0, NULL, 0);
+                if (ret < 0) {
+                    goto out;
+                }
+                tsk_ind = ret;
+            }
+        } else {
             /* If we're doing pedigree simulations, assign 'ploidy' nodes
              * per individual. */
             assert(self->pedigree->num_samples * self->pedigree->ploidy
@@ -3524,6 +3544,9 @@ msp_reset(msp_t *self)
     self->num_rejected_ca_events = 0;
     self->num_trapped_re_events = 0;
     self->num_multiple_re_events = 0;
+    self->num_noneffective_gc_events = 0;
+    self->num_fenwick_rebuilds = 0;
+
     memset(self->num_migration_events, 0, N * N * sizeof(size_t));
     self->state = MSP_STATE_INITIALISED;
 out:

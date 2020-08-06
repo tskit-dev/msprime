@@ -377,6 +377,19 @@ class TestSimulatorFactory(unittest.TestCase):
             with self.assertRaises(ValueError):
                 msprime.simulator_factory(10, num_labels=bad_value)
 
+    def test_default_ploidy(self):
+        sim = msprime.simulator_factory(10)
+        self.assertEqual(sim.ploidy, 2)
+
+    def test_bad_ploidy(self):
+        for bad_ploidy in [-1, 0]:
+            with self.assertRaises(ValueError):
+                msprime.simulator_factory(10, ploidy=bad_ploidy)
+
+    def test_non_divisible_ploidy(self):
+        with self.assertWarns(UserWarning):
+            msprime.simulator_factory(10, ploidy=3)
+
     def test_sample_size(self):
         self.assertRaises(ValueError, msprime.simulator_factory)
         self.assertRaises(ValueError, msprime.simulator_factory, 1)
@@ -694,10 +707,11 @@ class TestSimulateInterface(unittest.TestCase):
         n = 10
         ts = msprime.simulate(n)
         self.assertIsInstance(ts, tskit.TreeSequence)
-        self.assertEqual(ts.get_sample_size(), n)
-        self.assertEqual(ts.get_num_trees(), 1)
-        self.assertEqual(ts.get_num_mutations(), 0)
-        self.assertEqual(ts.get_sequence_length(), 1)
+        self.assertEqual(ts.sample_size, n)
+        self.assertEqual(ts.num_individuals, n // 2)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(ts.num_sites, 0)
+        self.assertEqual(ts.sequence_length, 1)
         self.assertEqual(len(list(ts.provenances())), 1)
 
     def test_numpy_random_seed(self):
@@ -730,7 +744,7 @@ class TestSimulateInterface(unittest.TestCase):
             self.verify_provenance(ts.provenance(0))
 
     def test_end_time(self):
-        ts = msprime.simulate(15, recombination_rate=2, random_seed=8, end_time=0.1)
+        ts = msprime.simulate(16, recombination_rate=2, random_seed=8, end_time=0.1)
         for tree in ts.trees():
             for root in tree.roots:
                 self.assertEqual(tree.time(root), 0.1)
@@ -742,9 +756,21 @@ class TestSimulateInterface(unittest.TestCase):
         for ts in msprime.simulate(n, num_replicates=num_replicates):
             count += 1
             self.assertIsInstance(ts, tskit.TreeSequence)
-            self.assertEqual(ts.get_sample_size(), n)
+            self.assertEqual(ts.num_samples, n)
+            self.assertEqual(ts.num_individuals, n // 2)
             self.assertEqual(ts.get_num_trees(), 1)
         self.assertEqual(num_replicates, count)
+
+    def test_ploidy(self):
+        for ploidy in [1, 2, 5]:
+            n = 10
+            ts = msprime.simulate(n * ploidy, ploidy=ploidy, random_seed=2)
+            self.assertEqual(ts.num_samples, n * ploidy)
+            self.assertEqual(ts.num_individuals, n)
+            for u in ts.samples():
+                node = ts.node(u)
+                self.assertEqual(node.time, 0)
+                self.assertEqual(node.individual, u // ploidy)
 
     def test_mutations(self):
         n = 10
@@ -838,7 +864,7 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(tables_1, tables_2)
 
         with self.assertRaises(ValueError) as cm:
-            msprime.simulate(5, replicate_index=5)
+            msprime.simulate(6, replicate_index=5)
         self.assertEqual(
             "Cannot specify replicate_index without random_seed as this "
             "has the same effect as not specifying replicate_index i.e. a "
@@ -846,7 +872,7 @@ class TestSimulateInterface(unittest.TestCase):
             str(cm.exception),
         )
         with self.assertRaises(ValueError) as cm:
-            msprime.simulate(5, random_seed=1, replicate_index=5, num_replicates=26)
+            msprime.simulate(6, random_seed=1, replicate_index=5, num_replicates=26)
         self.assertEqual(
             "Cannot specify replicate_index with num_replicates as only "
             "the replicate_index specified will be returned.",

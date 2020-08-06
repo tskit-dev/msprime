@@ -2153,6 +2153,26 @@ class TestSimulator(LowLevelTestCase):
             sim.reset()
             self.assertEqual(sim.time, 0)
 
+    def test_ploidy(self):
+        def f(ploidy):
+            return _msprime.Simulator(
+                get_samples(10),
+                uniform_recombination_map(),
+                _msprime.RandomGenerator(1),
+                _msprime.LightweightTableCollection(),
+                ploidy=ploidy,
+            )
+
+        for bad_ploidy in [-1, 0]:
+            with self.assertRaises(_msprime.InputError):
+                f(bad_ploidy)
+        for bad_ploidy in ["asdf", {}]:
+            with self.assertRaises(TypeError):
+                f(bad_ploidy)
+        for ploidy in [1, 2, 10]:
+            sim = f(ploidy)
+            self.assertEqual(sim.ploidy, ploidy)
+
 
 class TestSampleParsing(unittest.TestCase):
     """

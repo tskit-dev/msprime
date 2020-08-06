@@ -295,6 +295,7 @@ def simulator_factory(
     gene_conversion_rate=None,
     gene_conversion_track_length=None,
     demography=None,
+    ploidy=None,
 ):
     """
     Convenience method to create a simulator instance using the same
@@ -400,6 +401,18 @@ def simulator_factory(
     if gene_conversion_track_length is None:
         gene_conversion_track_length = 1
 
+    if ploidy is None:
+        ploidy = 2
+    else:
+        if ploidy < 1:
+            raise ValueError("Ploidy must be at least 1")
+    if len(samples) % ploidy != 0:
+        warnings.warn(
+            f"You have asked for {len(samples)} samples when ploidy is {ploidy}."
+            "This means that the last Individual in the tables will not "
+            f"be a full {ploidy}-ploid individual."
+        )
+
     # For the simulate code-path the rng will already be set, but
     # for convenience we allow it to be null to help with writing
     # tests. We also provide the random_seed argument for convenience.
@@ -426,6 +439,7 @@ def simulator_factory(
         gene_conversion_track_length=gene_conversion_track_length,
         demography=demography,
         model_change_events=model_change_events,
+        ploidy=ploidy,
     )
     return sim
 
@@ -458,6 +472,7 @@ def simulate(
     gene_conversion_rate=None,
     gene_conversion_track_length=None,
     demography=None,
+    ploidy=None,
 ):
     """
     Simulates the coalescent with recombination under the specified model
@@ -622,6 +637,7 @@ def simulate(
         gene_conversion_rate=gene_conversion_rate,
         gene_conversion_track_length=gene_conversion_track_length,
         demography=demography,
+        ploidy=ploidy,
     )
 
     if mutation_generator is not None:
@@ -706,6 +722,7 @@ class Simulator(_msprime.Simulator):
         num_labels=None,
         gene_conversion_rate=0,
         gene_conversion_track_length=1,
+        ploidy=None,
     ):
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
@@ -760,6 +777,7 @@ class Simulator(_msprime.Simulator):
             node_mapping_block_size=node_mapping_block_size,
             gene_conversion_rate=gene_conversion_rate,
             gene_conversion_track_length=gene_conversion_track_length,
+            ploidy=ploidy,
         )
         # attributes that are internal to the highlevel Simulator class
         self._hl_from_ts = from_ts

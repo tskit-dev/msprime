@@ -406,7 +406,7 @@ int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
 
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
-int msp_set_ploidy(msp_t *self, uint32_t ploidy);
+int msp_set_ploidy(msp_t *self, int ploidy);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels);
 int msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length);
