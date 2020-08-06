@@ -230,12 +230,8 @@ fenwick_increment(fenwick_t *self, size_t index, double value)
 void
 fenwick_set_value(fenwick_t *self, size_t index, double value)
 {
-    /* propagate loss of the old value up the tree */
-    fenwick_increment(self, index, -self->values[index]);
-    /* Ensure the new value is exactly 0 */
-    self->values[index] = 0;
-    /* propagate gain of the new value up the tree */
-    fenwick_increment(self, index, value);
+    double increment = value - self->values[index];
+    fenwick_increment(self, index, increment);
 }
 
 double
