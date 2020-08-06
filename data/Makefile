@@ -1,4 +1,4 @@
-all: scrm ms msHOT slim seq-gen
+all: scrm ms msHOT slim seq-gen msms
 
 seq-gen:
 	rm -fR seq-gen Seq-Gen* 1.3.4.tar.gz
@@ -34,11 +34,15 @@ msHOT:
 	cp msHOTdir/msHOT_summary_stats ./
 
 discoal:
-	wget https://github.com/kern-lab/discoal/archive/v0.1.4.tar.gz
-	tar -xf v0.1.4.tar.gz
-	cd discoal-0.1.4/ && make
-	cp discoal-0.1.4/discoal ./
+	wget https://github.com/kern-lab/discoal/archive/v0.1.5.tar.gz
+	tar -xf v0.1.5.tar.gz
+	cd discoal-0.1.5/ && make
+	cp discoal-0.1.5/discoal ./
+
+msms:
+	wget https://www.mabs.at/ewing/msms/msms3.2rc-b163.jar
+	mv msms3.2rc-b163.jar msms.jar
 
 clean:
 	rm -fR scrm* ms ms_summary_stats msHOT msHOT_summary_stats sample_stats \
-		discoal* v0.1.4.tar.gz* seq-gen SeqGen* SLiM
+		discoal* v0.1.4.tar.gz* seq-gen SeqGen* SLiM msms.jar
