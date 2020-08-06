@@ -230,6 +230,13 @@ msp_set_store_full_arg(msp_t *self, bool store_full_arg)
 }
 
 int
+msp_set_ploidy(msp_t *self, uint32_t ploidy)
+{
+    self->ploidy = ploidy;
+    return 0;
+}
+
+int
 msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
 {
     int ret = 0;
@@ -555,6 +562,8 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples, recomb_map_t *reco
     self->state = MSP_STATE_NEW;
     /* Set up pedigree */
     self->pedigree = NULL;
+    /* Set default to diploid */
+    self->ploidy = 2;
 out:
     return ret;
 }
@@ -3636,15 +3645,11 @@ msp_get_common_ancestor_waiting_time_from_rate(
 
     if (lambda > 0.0) {
         u = gsl_ran_exponential(self->rng, 1.0 / lambda);
-        /* FIXME Shoehorning an extra factor of 4 here in both cases where we
-         * use pop->initial_size becuase it needs to be 4 time larger for the
-         * coalescent calcs to work. This is TEMPORARY while we're getting
-         * rid of the model time transformations. */
         if (alpha == 0.0) {
-            ret = 4 * pop->initial_size * u;
+            ret = self->ploidy * pop->initial_size * u;
         } else {
             dt = t - pop->start_time;
-            z = 1 + 4 * alpha * pop->initial_size * exp(-alpha * dt) * u;
+            z = 1 + self->ploidy * alpha * pop->initial_size * exp(-alpha * dt) * u;
             /* if z is <= 0 no coancestry can occur */
             if (z > 0) {
                 ret = log(z) / alpha;
@@ -5817,7 +5822,7 @@ msp_std_get_common_ancestor_waiting_time(
 {
     population_t *pop = &self->populations[pop_id];
     double n = (double) avl_count(&pop->ancestors[label]);
-    double lambda = n * (n - 1.0);
+    double lambda = n * (n - 1.0) / 2.0;
 
     return msp_get_common_ancestor_waiting_time_from_rate(self, pop, lambda);
 }
