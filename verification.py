@@ -97,6 +97,7 @@ _slim_executable = ["./data/slim"]
 _ms_executable = ["./data/ms"]
 _discoal_executable = ["./data/discoal"]
 _scrm_executable = ["./data/scrm"]
+_msms_executable = ["java", "-Xmx1G", "-jar", "data/msms.jar"]
 
 
 def flatten(l):
@@ -756,6 +757,314 @@ class DiscoalSweeps(DiscoalTest):
     def test_sweep_ex1(self):
         cmd = "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a 500 -x 0.5 -N 10000"
         self._run(cmd)
+
+
+class MsmsSweeps(Test):
+    """
+    Compare msms with msprime/discoal for selective sweeps.
+
+    NOTE:
+    1. As msms and msprime use different numbers of seeds, the specified
+    seed(s) in the testing cmd string will be ignored.
+    2. Msms allows user to specify selection starting time/frequency (-SI),
+    or, alternatively, specify selectiy selection ending time/frequency (-SF);
+    msprime is able to simulate selection similar to the '-SF' option in msms
+    3. Msms allows user to specify different selection coefficient for AA and Aa,
+    but in msprime only selection coefficient for AA can be specified, and
+    use h=0.5 to calculate that for Aa.
+    """
+
+    def _msms_str_to_parameters(self, msms_cmd):
+        """
+        Parse msms cmdline arguments into a dictionary.  This method is called
+        by `_run_msp_sample_stats`
+
+        msms cmdline pattern:
+            nsam nrep -t theta -r rho num_sites -SF end_time end_frequency \
+            -SAA sAA -SaA saA -Sp sel_pos -N refsize -seed rand_seed
+
+        eg. "5 1 -t 200 -r 200 500000 -SF 0.002 0.9 -Sp 0.5"\
+            " -SaA 5000 -SAA 10000 -N 10000 -seed 1"
+        """
+        # intialize local variables
+        end_time_lst = []  # use list for multiple sweeps
+        end_frequency_lst = []
+        num_sweeps = 0
+        sAA = saA = sel_pos = -1.0
+        saA = -0.5
+        refsize = 1
+        rand_seed = (random.randint(1, 2 ** 16),)
+
+        # parse arguments
+        tokens = msms_cmd.split(" ")
+        for ind in range(len(tokens)):
+            if ind == 0:
+                nsam = int(tokens[ind])
+                nrep = int(tokens[ind + 1])
+            elif tokens[ind] == "-t":
+                theta = float(tokens[ind + 1])
+            elif tokens[ind] == "-r":
+                rho = float(tokens[ind + 1])
+                num_sites = int(tokens[ind + 2]) + 1
+            elif tokens[ind] == "-SF":
+                num_sweeps += 1
+                end_time_lst.append(float(tokens[ind + 1]))
+                end_frequency_lst.append(float(tokens[ind + 2]))
+            elif tokens[ind] == "-Sp":
+                sel_pos = float(tokens[ind + 1])
+            elif tokens[ind] == "-SAA":
+                sAA = float(tokens[ind + 1])
+            elif tokens[ind] == "-SaA":
+                saA = float(tokens[ind + 1])
+            elif tokens[ind] == "-N":
+                refsize = int(tokens[ind + 1])
+            elif tokens[ind] == "-seed":
+                rand_seed = float(tokens[ind + 1])
+            else:
+                pass
+
+        # check if h = 0.5
+        if abs(saA * 2 - sAA) > 1e-5:
+            logging.warning(
+                "If 2 * saA is not equal to sAA, saA is set to sAA / 2,"
+                "that is h can only be 0.5 in msprime"
+            )
+            saA = sAA / 2.0
+
+        return {
+            "nsam": nsam,
+            "nrep": nrep,
+            "num_sweeps": num_sweeps,
+            "end_time_lst": end_time_lst,
+            "end_frequency_lst": end_frequency_lst,
+            "refsize": refsize,
+            "alpha": sAA,
+            "theta": theta,
+            "rho": rho,
+            "num_sites": num_sites,
+            "sel_pos": sel_pos,
+            "rand_seed": rand_seed,
+        }
+
+    def _msms_parms_to_run_msp(self, params):
+        """
+        Run smulation for a single sample and return a tree sequence. This
+        method is called by `_run_msp_sample_stats` in a loop to generate nrep
+        samples.
+
+        NOTE:
+            1. There is some scaling inconsistency between Hudson and genic
+            selection model. (See scale_factor in the following code)
+            2. For the SweepGenicSelection model, we need to specify the Ne
+            parameter of the msprime.simulate method to 0.25. Similar usage is
+            found in verficatin.py / DiscoalTest class /
+            _discoal_str_to_simulation method.
+        """
+        if params["num_sweeps"] > 0:
+            model = [None]
+            for i in range(params["num_sweeps"]):
+                temp_model = msprime.SweepGenicSelection(
+                    position=params["sel_pos"],
+                    end_frequency=params["end_frequency_lst"][i],
+                    start_frequency=0.5 / params["refsize"],  # should be small
+                    alpha=params["alpha"],
+                    dt=1.0 / (40 * params["refsize"]),  # should be small enough?
+                )
+                t_start = params["end_time_lst"][i]
+                model.append((t_start, temp_model))
+            model.append((None, None))
+
+            scale_factor = params["num_sites"]
+            recombination_rate = params["rho"] / scale_factor
+            mutation_rate = params["theta"] / scale_factor
+
+            ts = msprime.simulate(
+                sample_size=params["nsam"],
+                Ne=0.25,
+                length=params["num_sites"],
+                mutation_rate=mutation_rate,
+                recombination_rate=recombination_rate,
+                model=model,
+            )
+
+        else:
+            model = "hudson"
+
+            scale_factor = 4 * params["num_sites"] * params["refsize"]
+            recombination_rate = params["rho"] / scale_factor
+            mutation_rate = params["theta"] / scale_factor
+
+            ts = msprime.simulate(
+                sample_size=params["nsam"],
+                Ne=params["refsize"],
+                length=params["num_sites"],
+                mutation_rate=mutation_rate,
+                recombination_rate=recombination_rate,
+                model=model,
+            )
+
+        return ts
+
+    def _run_msp_sample_stats(self, msms_cmd):
+        """
+        Call methods to parse cmdline options and run simulation,
+        and then output in ms format, pipe thru sample_stats and finally return
+        stats dataframe.
+
+        For now, the method uses the code from cli.py. In the future, mspms_dev
+        should have cmdline options to specify selection related parameters.
+        Then we should be able call the method in parent Test class to do this.
+        """
+        temp_file = tempfile.gettempdir() + "/tmp_msp_out"
+        output = open(temp_file, "w")
+
+        # run simulation and print ms format data into a file
+        msms_params = self._msms_str_to_parameters(msms_cmd)
+        num_replicates = msms_params["nrep"]
+        print("ms " + msms_cmd, file=output)  # needed by sample_stat tools
+        self._ms_random_seeds = msms_params["rand_seed"] = self.get_ms_seeds()
+
+        for _ in range(num_replicates):
+            tree_sequence = self._msms_parms_to_run_msp(msms_params)
+            print(file=output)
+            print("//", file=output)
+            if msms_params["theta"] > 0:
+                s = tree_sequence.get_num_mutations()
+                print("segsites:", s, file=output)
+
+                if s != 0:
+                    print("positions: ", end="", file=output)
+                    positions = [
+                        mutation.position / msms_params["num_sites"]
+                        for mutation in tree_sequence.mutations()
+                    ]
+                    positions.sort()
+                    for position in positions:
+                        print(
+                            "{0:.{1}f}".format(position, 8), end=" ", file=output,
+                        )
+                    print(file=output)
+                    for h in tree_sequence.haplotypes():
+                        print(h, file=output)
+
+                else:
+                    print(file=output)
+        output.close()
+
+        # pipe ms format output to sample_stats
+        p1 = subprocess.Popen(["cat", temp_file], stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(
+            ["./data/sample_stats"], stdin=p1.stdout, stdout=subprocess.PIPE
+        )
+        p1.stdout.close()
+        output = p2.communicate()[0]
+        p1.wait()
+
+        # read into pandas frame and return it
+        with tempfile.TemporaryFile() as f:
+            f.write(output)
+            f.seek(0)
+            df = pd.read_csv(f, sep="\t")
+        return df
+
+    def _run_msms_sample_stats(self, cmd):
+        return self._run_sample_stats(_msms_executable + cmd.split(" "))
+
+    def _convert_to_discoal_cmd(self, msms_cmd):
+        """
+        called by _run_discoal_sample_stats to convert msms cmdline args
+        to discoal cmdline args
+        """
+        params = self._msms_str_to_parameters(msms_cmd)
+        return "%d %d %d -t %f -r %f -ws %f -a %f -x %f" % (
+            params["nsam"],
+            params["nrep"],
+            params["num_sites"],
+            params["theta"],
+            params["rho"],
+            params["end_time_lst"][0],
+            params["alpha"],
+            params["sel_pos"],
+        )
+
+    def _run_discoal_sample_stats(self, msms_cmd):
+        discoal_cmd = self._convert_to_discoal_cmd(msms_cmd)
+        return self._run_sample_stats(_discoal_executable + discoal_cmd.split(" "))
+
+    def _run_msms_vs_msp(self, cmd):
+        df_msp = self._run_msp_sample_stats(cmd)
+        df_msms = self._run_msms_sample_stats(cmd)
+        self._plot_stats("msp_msms", df_msp, df_msms, "msp", "msms")
+
+    def _run_msms_vs_discoal(self, cmd):
+        df_discoal = self._run_discoal_sample_stats(cmd)
+        df_msms = self._run_msms_sample_stats(cmd)
+        self._plot_stats("discoal_msms", df_discoal, df_msms, "discoal", "msms")
+
+    def test_neutral_msms_vs_msp(self):
+        self._run_msms_vs_msp("100 300 -t 200 -r 200 500000 -N 10000")
+
+    def _test_selective_msms_vs_msp(self):
+        """
+        NOTE:
+            This and the following test methods invoke the seletive sweep
+            simulation and tend to throw the following assertion error:
+
+                python3: lib/msprime.c:5845: msp_std_common_ancestor_event:
+                    Assertion `y_node != NULL' failed.
+                Aborted (core dumped).
+
+            See issue#1111 for more information.
+
+            To avoid test crashes, all these tests are hiden by prefix '_'.
+            (I tried to use smaller numbers in cmd parameters. It reduces the
+            probilities of crashes but the error still happens. So just hide
+            all of the seletive sweep tests until the bug is fixed)
+
+            To reproduce the error or to resume seletive sweep simulations,
+            just remove the prefix.
+
+            prefix "_"
+            |
+            |
+            V
+        def _test_selective_msms_vs_msp(self):
+
+        """
+        self._run_msms_vs_msp(
+            "100 300 -t 200 -r 200 500000"
+            " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
+        )
+
+    def _test_selective_msms_vs_msp_small_s(self):
+        self._run_msms_vs_msp(
+            "100 300 -t 200 -r 200 500000 -SF 0 0.9 -Sp 0.5 -SaA 1 -SAA 2 -N 10000"
+        )
+
+    def _test_selective_msms_vs_msp_multiple_sweeps(self):
+        self._run_msms_vs_msp(
+            "100 300 -t 200 -r 200 500000"
+            " -SF 0 0.9 -Sp 0.5"
+            " -SF 0.1 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
+        )
+
+    def _test_selective_msp_50Mb(self):
+        """
+        Test runtime of msprime for long chromosomes
+        """
+        self._run_msp_sample_stats(
+            "1000 1 -t 20000 -r 20000 50000000"
+            " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
+        )
+
+    def _test_selective_msms_vs_discoal(self):
+        """
+        Direct comparison between msms and discoal
+        """
+        self._run_msms_vs_discoal(
+            "100 300 -t 20 -r 20 50000"
+            " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
+        )
 
 
 # FIXME disabling these for now because the pedigree file that
