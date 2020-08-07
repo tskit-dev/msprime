@@ -38,18 +38,21 @@ recomb_map_init_cumulative_recomb_mass(recomb_map_t *self)
 {
     int ret = 0;
     size_t j;
-    double s = 0;
+    double sum = 0;
+    double rate;
     const double *position = self->map.position;
-    const double *rate = self->map.value;
+    const double *rates = self->map.value;
 
     self->cumulative[0] = 0;
     for (j = 1; j < self->map.size; j++) {
-        if (rate[j - 1] < 0) {
+        rate = rates[j - 1];
+        if ((!isfinite(rate)) || rate < 0) {
             ret = MSP_ERR_BAD_RECOMBINATION_MAP;
             goto out;
         }
-        s += (position[j] - position[j - 1]) * rate[j - 1];
-        self->cumulative[j] = s;
+        sum += (position[j] - position[j - 1]) * rate;
+        assert(sum >= 0);
+        self->cumulative[j] = sum;
     }
 out:
     return ret;

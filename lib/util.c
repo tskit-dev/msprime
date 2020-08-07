@@ -214,6 +214,18 @@ msp_strerror_internal(int err)
         case MSP_ERR_MUTATION_ID_OVERFLOW:
             ret = "Mutation ID overflow.";
             break;
+        case MSP_ERR_BREAKPOINT_MASS_NON_FINITE:
+            ret = "An unlikely numerical error occured computing recombination "
+                  "breakpoints (non finite breakpoint mass). Please check your "
+                  "parameters, and if they make sense help us fix the problem "
+                  "by opening an issue on GitHub.";
+            break;
+        case MSP_ERR_BREAKPOINT_RESAMPLE_OVERFLOW:
+            ret = "An unlikely numerical error occured computing recombination "
+                  "breakpoints (resample overflow). Please check your "
+                  "parameters, and if they make sense help us fix the problem "
+                  "by opening an issue on GitHub.";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                   "report!";

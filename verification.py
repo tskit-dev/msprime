@@ -58,9 +58,11 @@ import collections
 import concurrent.futures
 import inspect
 import itertools
+import json
 import logging
 import math
 import pathlib
+import pickle
 import random
 import subprocess
 import sys
@@ -4184,6 +4186,93 @@ class PyvolveTest(MutationTest):
 
     def test_pyv_BLOSUM62(self):
         self._run_pyvolve_comparison("BLOSUM62")
+
+
+class OlderMsprimeTest(Test):
+    """
+    Run tests against older versions of msprime.
+    """
+
+    def _run_in_venv(self, num_replicates, **kwargs):
+        """
+        Runs the specified simulation in the older version of msprime
+        using a venv.
+        """
+        with tempfile.TemporaryDirectory(dir=self.output_dir.resolve()) as tempdir:
+            tempdir = pathlib.Path(tempdir)
+            params_file = tempdir / "params.pkl"
+            output_prefix = tempdir / "output"
+            with open(params_file, "wb") as f:
+                pickle.dump(kwargs, f)
+            cmd = (
+                "cd data && ./msprime-0.7.4/bin/python run_old_msprime.py "
+                f"{num_replicates} {params_file} {output_prefix}"
+            )
+            subprocess.run(cmd, shell=True, check=True)
+            count = 0
+            for trees_file in tempdir.glob("*.trees"):
+                ts = tskit.load(trees_file)
+                prov = json.loads(ts.provenance(0).record)
+                assert prov["software"] == {"name": "msprime", "version": "0.7.4"}
+                yield ts
+                count += 1
+            assert count == num_replicates
+
+    def _run(self, num_replicates, **kwargs):
+        logging.debug(f"Running: {num_replicates} replicates of {kwargs}")
+        data = collections.defaultdict(list)
+        old_version = "0.7.4"
+        new_version = msprime.__version__
+        iter1 = self._run_in_venv(num_replicates, **kwargs)
+        iter2 = msprime.simulate(num_replicates=num_replicates, **kwargs)
+        for ts1, ts2 in zip(iter1, iter2):
+            assert ts1.sequence_length == ts2.sequence_length
+            assert ts1.num_samples == ts2.num_samples
+            for ts, version in [(ts1, old_version), (ts2, new_version)]:
+                t_mrca = np.zeros(ts.num_trees)
+                for tree in ts.trees():
+                    t_mrca[tree.index] = tree.time(tree.root)
+                data["tmrca_mean"].append(np.mean(t_mrca))
+                data["num_trees"].append(ts.num_trees)
+                data["num_nodes"].append(ts.num_nodes)
+                data["num_edges"].append(ts.num_edges)
+                data["version"].append(version)
+        df = pd.DataFrame(data)
+
+        df_new = df[df.version == new_version]
+        df_old = df[df.version == old_version]
+        for stat in ["tmrca_mean", "num_trees", "num_nodes", "num_edges"]:
+            v1 = df_new[stat]
+            v2 = df_old[stat]
+            sm.graphics.qqplot(v1)
+            sm.qqplot_2samples(v1, v2, line="45")
+            pyplot.xlabel(new_version)
+            pyplot.ylabel(old_version)
+            f = self.output_dir / f"{stat}.png"
+            pyplot.savefig(f, dpi=72)
+            pyplot.close("all")
+
+    def test_msprime_n1e2_no_recomb(self):
+        self._run(10000, sample_size=100)
+
+    def test_msprime_n1e4_no_recomb(self):
+        self._run(1000, sample_size=10 ** 4)
+
+    def test_msprime_n1e3_long_genome(self):
+        self._run(
+            1000, sample_size=10 ** 2, Ne=10 ** 4, recombination_rate=1e-8, length=1e6
+        )
+
+    def test_msprime_n1e2_long_genome(self):
+        self._run(
+            2000, sample_size=10 ** 2, Ne=10 ** 4, recombination_rate=1e-8, length=1e6
+        )
+
+    def test_msprime_n10_long_genome(self):
+        self._run(1000, sample_size=10, Ne=10 ** 4, recombination_rate=1e-8, length=1e6)
+
+    def test_msprime_n2_long_genome(self):
+        self._run(1000, sample_size=2, Ne=10 ** 4, recombination_rate=1e-8, length=1e7)
 
 
 ###############################################

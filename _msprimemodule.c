@@ -1951,7 +1951,7 @@ MatrixMutationModel_init(MatrixMutationModel *self, PyObject *args, PyObject *kw
             PyErr_SetString(PyExc_TypeError, "alleles must be unicode strings");
             goto out;
         }
-        alleles[j] = PyUnicode_AsUTF8AndSize(item, &len);
+        alleles[j] = (char *) (intptr_t) PyUnicode_AsUTF8AndSize(item, &len);
         if (alleles[j] == NULL) {
             goto out;
         }
@@ -3906,6 +3906,18 @@ out:
 }
 
 static PyObject *
+Simulator_get_num_fenwick_rebuilds(Simulator  *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n", (Py_ssize_t) self->sim->num_fenwick_rebuilds);
+out:
+    return ret;
+}
+
+static PyObject *
 Simulator_get_num_breakpoints(Simulator  *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -4303,6 +4315,30 @@ out:
     return ret;
 }
 
+static PyObject *
+Simulator_fenwick_drift(Simulator *self, PyObject *args)
+{
+
+    PyObject *ret = NULL;
+    int label;
+    double drift;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    if (!PyArg_ParseTuple(args, "i", &label)) {
+        goto out;
+    }
+    if (label < 0 || label >= (int) msp_get_num_labels(self->sim)) {
+        PyErr_SetString(PyExc_ValueError, "bad label ID");
+        goto out;
+    }
+    drift = fenwick_get_numerical_drift(&self->sim->links[label]);
+    ret = Py_BuildValue("d", drift);
+out:
+    return ret;
+}
+
 static FILE *
 make_file(PyObject *fileobj, const char *mode)
 {
@@ -4391,6 +4427,10 @@ static PyMethodDef Simulator_methods[] = {
     {"compute_population_size",
             (PyCFunction) Simulator_compute_population_size, METH_VARARGS,
             "Computes the size of a population at a given time. Debug method."},
+    {"fenwick_drift",
+            (PyCFunction) Simulator_fenwick_drift, METH_VARARGS,
+            "Return the numerical drift in the specified label's recombination tree. "
+            "Debug method."},
     {"print_state",
             (PyCFunction) Simulator_print_state, METH_VARARGS,
             "Prints out the state of the low-level simulator. Debug method."},
@@ -4477,6 +4517,9 @@ static PyGetSetDef Simulator_getsetters[] = {
     {"num_segment_blocks",
             (getter) Simulator_get_num_segment_blocks, NULL,
             "The number of segment memory blocks"},
+    {"num_fenwick_rebuilds",
+            (getter) Simulator_get_num_fenwick_rebuilds, NULL,
+            "The number of times fenwick_rebuild was called."},
     {"population_configuration",
             (getter) Simulator_get_population_configuration, NULL,
             "The population configurations"},
