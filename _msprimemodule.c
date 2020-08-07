@@ -85,6 +85,11 @@ typedef struct {
 
 typedef struct {
     PyObject_HEAD
+    /* Our Python usage makes it a little more convenient to think of
+     * discrete_sites as a class property, whereas it's more convenient
+     * to use it as a method option in C.
+     */
+    bool discrete_sites;
     mutgen_t *mutgen;
     RandomGenerator *random_generator;
     IntervalMap *rate_map;
@@ -2290,7 +2295,8 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"random_generator", "rate_map", "model", NULL};
+    static char *kwlist[] = {"random_generator", "rate_map", "model",
+        "discrete_sites", NULL};
     RandomGenerator *random_generator = NULL;
     IntervalMap *rate_map = NULL;
     PyObject *py_model = NULL;
@@ -2298,15 +2304,16 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
     SlimMutationModel *slim_mutation_model = NULL;
     InfiniteAllelesMutationModel *infinite_alleles_model = NULL;
     mutation_model_t *model = NULL;
+    int discrete_sites = false;
 
     self->mutgen = NULL;
     self->random_generator = NULL;
     self->rate_map = NULL;
     self->model = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O|i", kwlist,
             &RandomGeneratorType, &random_generator,
             &IntervalMapType, &rate_map,
-            &py_model)) {
+            &py_model, &discrete_sites)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -2358,6 +2365,7 @@ MutationGenerator_init(MutationGenerator *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
+    self->discrete_sites = discrete_sites;
     ret = 0;
 out:
     return ret;
@@ -2371,13 +2379,12 @@ MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kw
     LightweightTableCollection *tables = NULL;
     int flags = 0;
     int keep = 0;
-    int discrete = 0;
     double start_time = -DBL_MAX;
     double end_time = DBL_MAX;
-    static char *kwlist[] = {"tables", "keep", "start_time", "end_time", "discrete", NULL};
+    static char *kwlist[] = {"tables", "keep", "start_time", "end_time", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|iddi", kwlist,
-            &LightweightTableCollectionType, &tables, &keep, &start_time, &end_time, &discrete)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!|idd", kwlist,
+            &LightweightTableCollectionType, &tables, &keep, &start_time, &end_time)) {
         goto out;
     }
     err = mutgen_set_time_interval(self->mutgen, start_time, end_time);
@@ -2388,11 +2395,13 @@ MutationGenerator_generate(MutationGenerator *self, PyObject *args, PyObject *kw
     if (MutationGenerator_check_state(self) != 0) {
         goto out;
     }
+    /* It's more convenient to regard discrete_sites as a class attribute for
+     * the upstream usage, so we set it at init time. */
+    if (self->discrete_sites) {
+        flags |= MSP_DISCRETE_SITES;
+    }
     if (keep) {
         flags |= MSP_KEEP_SITES;
-    }
-    if (discrete) {
-        flags |= MSP_DISCRETE_SITES;
     }
     err = mutgen_generate(self->mutgen, tables->tables, flags);
     if (err != 0) {

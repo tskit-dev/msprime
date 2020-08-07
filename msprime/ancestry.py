@@ -25,6 +25,7 @@ import copy
 import gzip
 import inspect
 import logging
+import math
 import warnings
 
 import attr
@@ -275,10 +276,12 @@ def demography_factory(
 
 def simulator_factory(
     sample_size=None,
+    *,
     Ne=1,
     random_generator=None,
     random_seed=None,
     length=None,
+    discrete_coordinates=None,
     recombination_rate=None,
     recombination_map=None,
     population_configurations=None,
@@ -364,8 +367,13 @@ def simulator_factory(
             raise ValueError("Cannot provide non-positive sequence length")
         if the_rate < 0:
             raise ValueError("Cannot provide negative recombination rate")
+        if discrete_coordinates and length != math.floor(length):
+            raise ValueError(
+                "Cannot specify non-integer sequence length when discrete_coordinates "
+                "is True"
+            )
         recombination_map = RecombinationMap.uniform_map(
-            the_length, the_rate, discrete=False
+            the_length, the_rate, discrete=discrete_coordinates
         )
     else:
         if not isinstance(recombination_map, RecombinationMap):
@@ -432,8 +440,10 @@ def simulator_factory(
 
 def simulate(
     sample_size=None,
+    *,
     Ne=1,
     length=None,
+    discrete_coordinates=None,
     recombination_rate=None,
     recombination_map=None,
     mutation_rate=None,
@@ -477,6 +487,17 @@ def simulate(
     :param float length: The length of the simulated region in bases.
         This parameter cannot be used along with ``recombination_map``.
         Defaults to 1 if not specified.
+    :param bool discrete_coordinates: If True, use discrete coordinates
+        in simulations such that recombination breakpoints and mutational
+        sites can only occur at integer positions along the genome.
+        Multiple mutations can occur at the same site.
+        If False (the default) the recombination breakpoints and
+        coordinates of mutational sites are continuous floating point values.
+        All sites in the returned tree sequence will have exactly one mutation.
+        Please see the :func:`.mutate` function for a more powerful approach to
+        simulating mutations on a tree sequence. It is an error to specify
+        the ``discrete_coordinates`` parameter at the same time as the
+        ``recombination_map`` argument.
     :param float recombination_rate: The rate of recombination per base
         per generation. This parameter cannot be used along with
         ``recombination_map``. Defaults to 0 if not specified.
@@ -601,11 +622,24 @@ def simulate(
         parameters["random_seed"] = seed
         provenance_dict = provenance.get_provenance_dict(parameters)
 
+    if discrete_coordinates is None:
+        discrete_coordinates = False
+    elif recombination_map is not None:
+        # TODO this is probably overly strict and we'll want to check if
+        # the recombination_map agrees with the value of discrete_coordinates.
+        # Let's figure out the exact default semantcs first before worrying
+        # about this, though.
+        raise ValueError(
+            "Cannot specify ``discrete_coordinates`` at the same time as the "
+            "``recombination_map`` argument."
+        )
+
     sim = simulator_factory(
         sample_size=sample_size,
         random_generator=rng,
         Ne=Ne,
         length=length,
+        discrete_coordinates=discrete_coordinates,
         recombination_rate=recombination_rate,
         recombination_map=recombination_map,
         population_configurations=population_configurations,
@@ -653,10 +687,11 @@ def simulate(
                 "start_time. Please use msprime.mutate on the returned "
                 "tree sequence instead"
             )
-    # TODO when the ``discrete`` parameter is added here, pass it through
-    # to make it a property of the mutation generator.
     mutation_generator = mutations._simple_mutation_generator(
-        mutation_rate, sim.sequence_length, sim.random_generator
+        mutation_rate,
+        sim.sequence_length,
+        sim.random_generator,
+        discrete=discrete_coordinates,
     )
     if replicate_index is not None and random_seed is None:
         raise ValueError(
