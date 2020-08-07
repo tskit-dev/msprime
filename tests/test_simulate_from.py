@@ -588,8 +588,12 @@ class BaseEquivalanceMixin:
         )
         tables = tskit.TableCollection(ts1.sequence_length)
         tables.populations.add_row()
-        for _ in range(n):
-            tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
+        for j in range(n):
+            if j % 2 == 0:
+                ind = tables.individuals.add_row()
+            tables.nodes.add_row(
+                flags=tskit.NODE_IS_SAMPLE, time=0, population=0, individual=ind
+            )
         ts2 = msprime.simulate(
             from_ts=tables.tree_sequence(),
             start_time=0,
@@ -648,13 +652,17 @@ class BaseEquivalanceMixin:
                 msprime.PopulationConfiguration(0),
             ],
             migration_matrix=[[0, 1], [1, 0]],
+            ploidy=1,
             random_seed=seed,
         )
         tables = tskit.TableCollection(1)
         tables.populations.add_row()
         tables.populations.add_row()
-        for _ in range(n):
-            tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
+        for j in range(n):
+            tables.nodes.add_row(
+                flags=tskit.NODE_IS_SAMPLE, time=0, population=0, individual=j
+            )
+            tables.individuals.add_row()
         ts2 = msprime.simulate(
             from_ts=tables.tree_sequence(),
             start_time=0,
@@ -662,6 +670,7 @@ class BaseEquivalanceMixin:
                 msprime.PopulationConfiguration(),
                 msprime.PopulationConfiguration(),
             ],
+            ploidy=1,
             migration_matrix=[[0, 1], [1, 0]],
             random_seed=seed,
         )
