@@ -57,17 +57,17 @@ insert_single_tree(tsk_table_collection_t *tables, int alphabet)
     ret = tsk_node_table_add_row(&tables->nodes, 0, 3.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables->edges, 0, 1, 4, 0);
+    ret = tsk_edge_table_add_row(&tables->edges, 0, 1, 4, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables->edges, 0, 1, 4, 1);
+    ret = tsk_edge_table_add_row(&tables->edges, 0, 1, 4, 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables->edges, 0, 1, 5, 2);
+    ret = tsk_edge_table_add_row(&tables->edges, 0, 1, 5, 2, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables->edges, 0, 1, 5, 3);
+    ret = tsk_edge_table_add_row(&tables->edges, 0, 1, 5, 3, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables->edges, 0, 1, 6, 4);
+    ret = tsk_edge_table_add_row(&tables->edges, 0, 1, 6, 4, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables->edges, 0, 1, 6, 5);
+    ret = tsk_edge_table_add_row(&tables->edges, 0, 1, 6, 5, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_population_table_add_row(&tables->populations, NULL, 0);
@@ -77,16 +77,18 @@ insert_single_tree(tsk_table_collection_t *tables, int alphabet)
     if (alphabet == ALPHABET_BINARY) {
         ret = tsk_site_table_add_row(&tables->sites, 0.1, "0", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
-        ret = tsk_mutation_table_add_row(&tables->mutations, 0, 0, -1, "1", 1, NULL, 0);
+        ret = tsk_mutation_table_add_row(
+            &tables->mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "1", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
     } else if (alphabet == ALPHABET_NUCLEOTIDE) {
         ret = tsk_site_table_add_row(&tables->sites, 0.1, "A", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
-        ret = tsk_mutation_table_add_row(&tables->mutations, 0, 0, -1, "C", 1, NULL, 0);
+        ret = tsk_mutation_table_add_row(
+            &tables->mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
     }
 
-    ret = tsk_table_collection_check_integrity(tables, TSK_CHECK_OFFSETS);
+    ret = tsk_table_collection_check_integrity(tables, 0);
 
     CU_ASSERT_FATAL(ret == 0);
 }
@@ -448,9 +450,11 @@ test_single_tree_mutgen_discrete_sites(void)
      * all should be good */
     ret = tsk_site_table_add_row(&tables.sites, 0.0, "A", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 4, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 0, 4, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 4, 1, "G", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 0, 4, 1, TSK_UNKNOWN_TIME, "G", 1, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 2);
 
     gsl_rng_set(rng, 2);
@@ -468,7 +472,7 @@ test_single_tree_mutgen_discrete_sites(void)
     for (j = 0; j < tables.sites.num_rows; j++) {
         CU_ASSERT_EQUAL_FATAL(tables.sites.position[j], ceil(tables.sites.position[j]));
     }
-    ret = tsk_table_collection_check_integrity(&tables, TSK_CHECK_ALL);
+    ret = tsk_table_collection_check_integrity(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tsk_table_collection_clear(&tables);
 
@@ -477,16 +481,18 @@ test_single_tree_mutgen_discrete_sites(void)
 
     ret = tsk_site_table_add_row(&tables.sites, 0.0, "A", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 4, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 0, 4, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 4, 1, "G", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 0, 4, 1, TSK_UNKNOWN_TIME, "G", 1, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 2);
 
     ret = mutgen_generate(&mutgen, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(tables.sites.num_rows, 2);
     CU_ASSERT_FATAL(tables.mutations.num_rows > 3);
-    ret = tsk_table_collection_check_integrity(&tables, TSK_CHECK_ALL);
+    ret = tsk_table_collection_check_integrity(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     mutgen_free(&mutgen);
@@ -512,7 +518,8 @@ test_single_tree_mutgen_keep_sites_many_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < 8192; j++) {
-        ret = tsk_mutation_table_add_row(&tables.mutations, 0, 0, -1, "C", 1, NULL, 0);
+        ret = tsk_mutation_table_add_row(
+            &tables.mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, j + 1);
     }
 

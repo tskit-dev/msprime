@@ -2,5 +2,5 @@ setuptools_scm
 sphinx-argparse
 sphinx-issues
 attrs
-tskit
+tskit>=0.3
 newick

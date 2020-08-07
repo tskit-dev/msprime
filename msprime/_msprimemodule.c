@@ -43,7 +43,7 @@ static PyObject *MsprimeLibraryError;
  * around a pointer and a way move to data in-and-out of the low level structures
  * via the canonical dictionary encoding.
  *
- * Copied from _tskitmodule.c 2018-12-20.
+ * Copied from _tskitmodule.c 2020-08-07, 2df6c04
  */
 typedef struct {
     PyObject_HEAD
@@ -282,18 +282,47 @@ out:
  *===================================================================
  */
 
+/***********************************************
+ * Start of code copied  _tskitmodule.
+ ***********************************************/
+
 /* NOTE: this code was copied from _tskitmodule as the efficient way to
  * import and export TableCollection data. It is unlikely to change
  * much over time, but if updates need to be made it would be better
  * to copy the code wholesale. The tests in ``test_dict_encoding.py``
  * are designed to test this code thoroughly, and also come from
  * tskit.
+ *
+ * Copied from _tskitmodule.c 2020-08-07, 2df6c04
+ *
+ * NOTE: we really should find a better mechanism for doing this:
+ * perhaps a C header file that can be included by projects that
+ * want to inferface between the C API and Python?
+ */
+
+static PyObject *
+make_Py_Unicode_FromStringAndLength(const char *str, size_t length) {
+    PyObject *ret = NULL;
+
+    /* Py_BuildValue returns Py_None for zero length, we would rather
+       return a zero-length string */
+    if (length == 0) {
+        ret = PyUnicode_FromString("");
+    } else {
+        ret = Py_BuildValue("s#", str, length);
+    }
+    return ret;
+}
+
+/*===================================================================
+ * General table code.
+ *===================================================================
  */
 
 /*
  * Retrieves the PyObject* corresponding the specified key in the
  * specified dictionary. If required is true, raise a TypeError if the
- * value is None.
+ * value is None or absent.
  *
  * NB This returns a *borrowed reference*, so don't DECREF it!
  */
@@ -304,7 +333,7 @@ get_table_dict_value(PyObject *dict, const char *key_str, bool required)
 
     ret = PyDict_GetItemString(dict, key_str);
     if (ret == NULL) {
-        PyErr_Format(PyExc_ValueError, "'%s' not specified", key_str);
+        ret = Py_None;
     }
     if (required && ret == Py_None) {
         PyErr_Format(PyExc_TypeError, "'%s' is required", key_str);
@@ -354,14 +383,14 @@ table_read_offset_array(PyObject *input, size_t *num_rows, size_t length, bool c
     }
     shape = PyArray_DIMS(array);
     if (! check_num_rows) {
-        *num_rows = (size_t) shape[0];
+        *num_rows = shape[0];
         if (*num_rows == 0) {
             PyErr_SetString(PyExc_ValueError, "Offset arrays must have at least one element");
             goto out;
         }
         *num_rows -= 1;
     }
-    if (((size_t) shape[0]) != *num_rows + 1) {
+    if (shape[0] != (npy_intp) (*num_rows + 1)) {
         PyErr_SetString(PyExc_ValueError, "offset columns must have n + 1 rows.");
         goto out;
     }
@@ -375,6 +404,24 @@ out:
     if (ret == NULL) {
         Py_XDECREF(array);
     }
+    return ret;
+}
+
+static const char *
+parse_metadata_schema_arg(PyObject *arg, Py_ssize_t* metadata_schema_length)
+{
+    const char *ret = NULL;
+    if (arg == NULL) {
+        PyErr_Format(
+            PyExc_AttributeError,
+            "Cannot del metadata_schema, set to empty string (\"\") to clear.");
+        goto out;
+    }
+    ret = PyUnicode_AsUTF8AndSize(arg, metadata_schema_length);
+    if (ret == NULL) {
+        goto out;
+    }
+out:
     return ret;
 }
 
@@ -398,6 +445,9 @@ parse_individual_table_dict(tsk_individual_table_t *table, PyObject *dict, bool 
     PyArrayObject *metadata_array = NULL;
     PyObject *metadata_offset_input = NULL;
     PyArrayObject *metadata_offset_array = NULL;
+    PyObject *metadata_schema_input = NULL;
+    const char *metadata_schema = NULL;
+    Py_ssize_t metadata_schema_length = 0;
 
     /* Get the input values */
     flags_input = get_table_dict_value(dict, "flags", true);
@@ -418,6 +468,10 @@ parse_individual_table_dict(tsk_individual_table_t *table, PyObject *dict, bool 
     }
     metadata_offset_input = get_table_dict_value(dict, "metadata_offset", false);
     if (metadata_offset_input == NULL) {
+        goto out;
+    }
+    metadata_schema_input = get_table_dict_value(dict, "metadata_schema", false);
+    if (metadata_schema_input == NULL) {
         goto out;
     }
 
@@ -463,6 +517,20 @@ parse_individual_table_dict(tsk_individual_table_t *table, PyObject *dict, bool 
             goto out;
         }
         metadata_offset_data = PyArray_DATA(metadata_offset_array);
+    }
+
+    if (metadata_schema_input != Py_None) {
+        metadata_schema = parse_metadata_schema_arg(
+            metadata_schema_input, &metadata_schema_length);
+        if (metadata_schema == NULL) {
+            goto out;
+        }
+        err = tsk_individual_table_set_metadata_schema(
+            table, metadata_schema, metadata_schema_length);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
 
     if (clear_table) {
@@ -512,6 +580,9 @@ parse_node_table_dict(tsk_node_table_t *table, PyObject *dict, bool clear_table)
     PyArrayObject *metadata_array = NULL;
     PyObject *metadata_offset_input = NULL;
     PyArrayObject *metadata_offset_array = NULL;
+    PyObject *metadata_schema_input = NULL;
+    const char *metadata_schema = NULL;
+    Py_ssize_t metadata_schema_length = 0;
 
     /* Get the input values */
     flags_input = get_table_dict_value(dict, "flags", true);
@@ -536,6 +607,10 @@ parse_node_table_dict(tsk_node_table_t *table, PyObject *dict, bool clear_table)
     }
     metadata_offset_input = get_table_dict_value(dict, "metadata_offset", false);
     if (metadata_offset_input == NULL) {
+        goto out;
+    }
+    metadata_schema_input = get_table_dict_value(dict, "metadata_schema", false);
+    if (metadata_schema_input == NULL) {
         goto out;
     }
 
@@ -583,6 +658,20 @@ parse_node_table_dict(tsk_node_table_t *table, PyObject *dict, bool clear_table)
         }
         metadata_offset_data = PyArray_DATA(metadata_offset_array);
     }
+    if (metadata_schema_input != Py_None) {
+        metadata_schema = parse_metadata_schema_arg(
+            metadata_schema_input, &metadata_schema_length);
+        if (metadata_schema == NULL) {
+            goto out;
+        }
+        err = tsk_node_table_set_metadata_schema(
+            table, metadata_schema, metadata_schema_length);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+
     if (clear_table) {
         err = tsk_node_table_clear(table);
         if (err != 0) {
@@ -614,6 +703,9 @@ parse_edge_table_dict(tsk_edge_table_t *table, PyObject *dict, bool clear_table)
     int ret = -1;
     int err;
     size_t num_rows = 0;
+    size_t metadata_length;
+    char *metadata_data = NULL;
+    uint32_t *metadata_offset_data = NULL;
     PyObject *left_input = NULL;
     PyArrayObject *left_array = NULL;
     PyObject *right_input = NULL;
@@ -622,6 +714,13 @@ parse_edge_table_dict(tsk_edge_table_t *table, PyObject *dict, bool clear_table)
     PyArrayObject *parent_array = NULL;
     PyObject *child_input = NULL;
     PyArrayObject *child_array = NULL;
+    PyObject *metadata_input = NULL;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = NULL;
+    PyArrayObject *metadata_offset_array = NULL;
+    PyObject *metadata_schema_input = NULL;
+    const char *metadata_schema = NULL;
+    Py_ssize_t metadata_schema_length = 0;
 
     /* Get the input values */
     left_input = get_table_dict_value(dict, "left", true);
@@ -640,6 +739,19 @@ parse_edge_table_dict(tsk_edge_table_t *table, PyObject *dict, bool clear_table)
     if (child_input == NULL) {
         goto out;
     }
+    metadata_input = get_table_dict_value(dict, "metadata", false);
+    if (metadata_input == NULL) {
+        goto out;
+    }
+    metadata_offset_input = get_table_dict_value(dict, "metadata_offset", false);
+    if (metadata_offset_input == NULL) {
+        goto out;
+    }
+    metadata_schema_input = get_table_dict_value(dict, "metadata_schema", false);
+    if (metadata_schema_input == NULL) {
+        goto out;
+    }
+
 
     /* Create the arrays */
     left_array = table_read_column_array(left_input, NPY_FLOAT64, &num_rows, false);
@@ -658,6 +770,38 @@ parse_edge_table_dict(tsk_edge_table_t *table, PyObject *dict, bool clear_table)
     if (child_array == NULL) {
         goto out;
     }
+    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified together");
+        goto out;
+    }
+    if (metadata_input != Py_None) {
+        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+                &metadata_length, false);
+        if (metadata_array == NULL) {
+            goto out;
+        }
+        metadata_data = PyArray_DATA(metadata_array);
+        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+                metadata_length, true);
+        if (metadata_offset_array == NULL) {
+            goto out;
+        }
+        metadata_offset_data = PyArray_DATA(metadata_offset_array);
+    }
+    if (metadata_schema_input != Py_None) {
+        metadata_schema = parse_metadata_schema_arg(
+            metadata_schema_input, &metadata_schema_length);
+        if (metadata_schema == NULL) {
+            goto out;
+        }
+        err = tsk_edge_table_set_metadata_schema(
+            table, metadata_schema, metadata_schema_length);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
 
     if (clear_table) {
         err = tsk_edge_table_clear(table);
@@ -668,7 +812,8 @@ parse_edge_table_dict(tsk_edge_table_t *table, PyObject *dict, bool clear_table)
     }
     err = tsk_edge_table_append_columns(table, num_rows,
             PyArray_DATA(left_array), PyArray_DATA(right_array),
-            PyArray_DATA(parent_array), PyArray_DATA(child_array));
+            PyArray_DATA(parent_array), PyArray_DATA(child_array),
+            metadata_data, metadata_offset_data);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -679,6 +824,8 @@ out:
     Py_XDECREF(right_array);
     Py_XDECREF(parent_array);
     Py_XDECREF(child_array);
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
     return ret;
 }
 
@@ -688,6 +835,9 @@ parse_migration_table_dict(tsk_migration_table_t *table, PyObject *dict, bool cl
     int err;
     int ret = -1;
     size_t num_rows;
+    size_t metadata_length;
+    char *metadata_data = NULL;
+    uint32_t *metadata_offset_data = NULL;
     PyObject *left_input = NULL;
     PyArrayObject *left_array = NULL;
     PyObject *right_input = NULL;
@@ -700,6 +850,13 @@ parse_migration_table_dict(tsk_migration_table_t *table, PyObject *dict, bool cl
     PyArrayObject *dest_array = NULL;
     PyObject *time_input = NULL;
     PyArrayObject *time_array = NULL;
+    PyObject *metadata_input = NULL;
+    PyArrayObject *metadata_array = NULL;
+    PyObject *metadata_offset_input = NULL;
+    PyArrayObject *metadata_offset_array = NULL;
+    PyObject *metadata_schema_input = NULL;
+    const char *metadata_schema = NULL;
+    Py_ssize_t metadata_schema_length = 0;
 
     /* Get the input values */
     left_input = get_table_dict_value(dict, "left", true);
@@ -724,6 +881,18 @@ parse_migration_table_dict(tsk_migration_table_t *table, PyObject *dict, bool cl
     }
     time_input = get_table_dict_value(dict, "time", true);
     if (time_input == NULL) {
+        goto out;
+    }
+    metadata_input = get_table_dict_value(dict, "metadata", false);
+    if (metadata_input == NULL) {
+        goto out;
+    }
+    metadata_offset_input = get_table_dict_value(dict, "metadata_offset", false);
+    if (metadata_offset_input == NULL) {
+        goto out;
+    }
+    metadata_schema_input = get_table_dict_value(dict, "metadata_schema", false);
+    if (metadata_schema_input == NULL) {
         goto out;
     }
 
@@ -752,6 +921,38 @@ parse_migration_table_dict(tsk_migration_table_t *table, PyObject *dict, bool cl
     if (time_array == NULL) {
         goto out;
     }
+    if ((metadata_input == Py_None) != (metadata_offset_input == Py_None)) {
+        PyErr_SetString(PyExc_TypeError,
+                "metadata and metadata_offset must be specified together");
+        goto out;
+    }
+    if (metadata_input != Py_None) {
+        metadata_array = table_read_column_array(metadata_input, NPY_INT8,
+                &metadata_length, false);
+        if (metadata_array == NULL) {
+            goto out;
+        }
+        metadata_data = PyArray_DATA(metadata_array);
+        metadata_offset_array = table_read_offset_array(metadata_offset_input, &num_rows,
+                metadata_length, true);
+        if (metadata_offset_array == NULL) {
+            goto out;
+        }
+        metadata_offset_data = PyArray_DATA(metadata_offset_array);
+    }
+    if (metadata_schema_input != Py_None) {
+        metadata_schema = parse_metadata_schema_arg(
+            metadata_schema_input, &metadata_schema_length);
+        if (metadata_schema == NULL) {
+            goto out;
+        }
+        err = tsk_migration_table_set_metadata_schema(
+            table, metadata_schema, metadata_schema_length);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
 
     if (clear_table) {
         err = tsk_migration_table_clear(table);
@@ -762,7 +963,8 @@ parse_migration_table_dict(tsk_migration_table_t *table, PyObject *dict, bool cl
     }
     err = tsk_migration_table_append_columns(table, num_rows,
         PyArray_DATA(left_array), PyArray_DATA(right_array), PyArray_DATA(node_array),
-        PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array));
+        PyArray_DATA(source_array), PyArray_DATA(dest_array), PyArray_DATA(time_array),
+        metadata_data, metadata_offset_data);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -775,6 +977,8 @@ out:
     Py_XDECREF(source_array);
     Py_XDECREF(dest_array);
     Py_XDECREF(time_array);
+    Py_XDECREF(metadata_array);
+    Py_XDECREF(metadata_offset_array);
     return ret;
 }
 
@@ -797,6 +1001,10 @@ parse_site_table_dict(tsk_site_table_t *table, PyObject *dict, bool clear_table)
     PyArrayObject *metadata_offset_array = NULL;
     char *metadata_data;
     uint32_t *metadata_offset_data;
+    PyObject *metadata_schema_input = NULL;
+    const char *metadata_schema = NULL;
+    Py_ssize_t metadata_schema_length = 0;
+
 
     /* Get the input values */
     position_input = get_table_dict_value(dict, "position", true);
@@ -819,6 +1027,11 @@ parse_site_table_dict(tsk_site_table_t *table, PyObject *dict, bool clear_table)
     if (metadata_offset_input == NULL) {
         goto out;
     }
+    metadata_schema_input = get_table_dict_value(dict, "metadata_schema", false);
+    if (metadata_schema_input == NULL) {
+        goto out;
+    }
+
 
     /* Get the arrays */
     position_array = table_read_column_array(position_input, NPY_FLOAT64, &num_rows, false);
@@ -856,6 +1069,19 @@ parse_site_table_dict(tsk_site_table_t *table, PyObject *dict, bool clear_table)
             goto out;
         }
         metadata_offset_data = PyArray_DATA(metadata_offset_array);
+    }
+    if (metadata_schema_input != Py_None) {
+        metadata_schema = parse_metadata_schema_arg(
+            metadata_schema_input, &metadata_schema_length);
+        if (metadata_schema == NULL) {
+            goto out;
+        }
+        err = tsk_site_table_set_metadata_schema(
+            table, metadata_schema, metadata_schema_length);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
 
     if (clear_table) {
@@ -898,6 +1124,9 @@ parse_mutation_table_dict(tsk_mutation_table_t *table, PyObject *dict, bool clea
     PyArrayObject *derived_state_offset_array = NULL;
     PyObject *node_input = NULL;
     PyArrayObject *node_array = NULL;
+    PyObject *time_input = NULL;
+    PyArrayObject *time_array = NULL;
+    double *time_data;
     PyObject *parent_input = NULL;
     PyArrayObject *parent_array = NULL;
     tsk_id_t *parent_data;
@@ -907,6 +1136,9 @@ parse_mutation_table_dict(tsk_mutation_table_t *table, PyObject *dict, bool clea
     PyArrayObject *metadata_offset_array = NULL;
     char *metadata_data;
     uint32_t *metadata_offset_data;
+    PyObject *metadata_schema_input = NULL;
+    const char *metadata_schema = NULL;
+    Py_ssize_t metadata_schema_length = 0;
 
     /* Get the input values */
     site_input = get_table_dict_value(dict, "site", true);
@@ -919,6 +1151,10 @@ parse_mutation_table_dict(tsk_mutation_table_t *table, PyObject *dict, bool clea
     }
     parent_input = get_table_dict_value(dict, "parent", false);
     if (parent_input == NULL) {
+        goto out;
+    }
+    time_input = get_table_dict_value(dict, "time", false);
+    if (time_input == NULL) {
         goto out;
     }
     derived_state_input = get_table_dict_value(dict, "derived_state", true);
@@ -935,6 +1171,10 @@ parse_mutation_table_dict(tsk_mutation_table_t *table, PyObject *dict, bool clea
     }
     metadata_offset_input = get_table_dict_value(dict, "metadata_offset", false);
     if (metadata_offset_input == NULL) {
+        goto out;
+    }
+    metadata_schema_input = get_table_dict_value(dict, "metadata_schema", false);
+    if (metadata_schema_input == NULL) {
         goto out;
     }
 
@@ -956,6 +1196,15 @@ parse_mutation_table_dict(tsk_mutation_table_t *table, PyObject *dict, bool clea
     node_array = table_read_column_array(node_input, NPY_INT32, &num_rows, true);
     if (node_array == NULL) {
         goto out;
+    }
+
+    time_data = NULL;
+    if (time_input != Py_None) {
+        time_array = table_read_column_array(time_input, NPY_FLOAT64, &num_rows, true);
+        if (time_array == NULL) {
+            goto out;
+        }
+        time_data = PyArray_DATA(time_array);
     }
 
     parent_data = NULL;
@@ -988,6 +1237,19 @@ parse_mutation_table_dict(tsk_mutation_table_t *table, PyObject *dict, bool clea
         }
         metadata_offset_data = PyArray_DATA(metadata_offset_array);
     }
+    if (metadata_schema_input != Py_None) {
+        metadata_schema = parse_metadata_schema_arg(
+            metadata_schema_input, &metadata_schema_length);
+        if (metadata_schema == NULL) {
+            goto out;
+        }
+        err = tsk_mutation_table_set_metadata_schema(
+            table, metadata_schema, metadata_schema_length);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
 
     if (clear_table) {
         err = tsk_mutation_table_clear(table);
@@ -998,7 +1260,7 @@ parse_mutation_table_dict(tsk_mutation_table_t *table, PyObject *dict, bool clea
     }
     err = tsk_mutation_table_append_columns(table, num_rows,
             PyArray_DATA(site_array), PyArray_DATA(node_array),
-            parent_data, PyArray_DATA(derived_state_array),
+            parent_data, time_data, PyArray_DATA(derived_state_array),
             PyArray_DATA(derived_state_offset_array),
             metadata_data, metadata_offset_data);
     if (err != 0) {
@@ -1014,6 +1276,7 @@ out:
     Py_XDECREF(metadata_offset_array);
     Py_XDECREF(node_array);
     Py_XDECREF(parent_array);
+    Py_XDECREF(time_array);
     return ret;
 }
 
@@ -1027,6 +1290,9 @@ parse_population_table_dict(tsk_population_table_t *table, PyObject *dict, bool 
     PyArrayObject *metadata_array = NULL;
     PyObject *metadata_offset_input = NULL;
     PyArrayObject *metadata_offset_array = NULL;
+    PyObject *metadata_schema_input = NULL;
+    const char *metadata_schema = NULL;
+    Py_ssize_t metadata_schema_length = 0;
 
     /* Get the inputs */
     metadata_input = get_table_dict_value(dict, "metadata", true);
@@ -1035,6 +1301,10 @@ parse_population_table_dict(tsk_population_table_t *table, PyObject *dict, bool 
     }
     metadata_offset_input = get_table_dict_value(dict, "metadata_offset", true);
     if (metadata_offset_input == NULL) {
+        goto out;
+    }
+    metadata_schema_input = get_table_dict_value(dict, "metadata_schema", false);
+    if (metadata_schema_input == NULL) {
         goto out;
     }
 
@@ -1048,6 +1318,19 @@ parse_population_table_dict(tsk_population_table_t *table, PyObject *dict, bool 
             metadata_length, false);
     if (metadata_offset_array == NULL) {
         goto out;
+    }
+    if (metadata_schema_input != Py_None) {
+        metadata_schema = parse_metadata_schema_arg(
+            metadata_schema_input, &metadata_schema_length);
+        if (metadata_schema == NULL) {
+            goto out;
+        }
+        err = tsk_population_table_set_metadata_schema(
+            table, metadata_schema, metadata_schema_length);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
     }
 
     if (clear_table) {
@@ -1152,6 +1435,10 @@ parse_table_collection_dict(tsk_table_collection_t *tables, PyObject *tables_dic
 {
     int ret = -1;
     PyObject *value = NULL;
+    int err;
+    char *metadata = NULL;
+    const char *metadata_schema = NULL;
+    Py_ssize_t metadata_length, metadata_schema_length;
 
     value = get_table_dict_value(tables_dict, "sequence_length", true);
     if (value == NULL) {
@@ -1162,6 +1449,50 @@ parse_table_collection_dict(tsk_table_collection_t *tables, PyObject *tables_dic
         goto out;
     }
     tables->sequence_length = PyFloat_AsDouble(value);
+
+    /* metadata_schema */
+    value = get_table_dict_value(tables_dict, "metadata_schema", false);
+    if (value == NULL) {
+        goto out;
+    }
+    if (value != Py_None) {
+        if (!PyUnicode_Check(value)) {
+            PyErr_Format(PyExc_TypeError, "'metadata_schema' is not a string");
+            goto out;
+        }
+        metadata_schema = parse_metadata_schema_arg(value, &metadata_schema_length);
+        if (metadata_schema == NULL) {
+            goto out;
+        }
+        err = tsk_table_collection_set_metadata_schema(
+            tables, metadata_schema, metadata_schema_length);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
+
+    /* metadata */
+    value = get_table_dict_value(tables_dict, "metadata", false);
+    if (value == NULL) {
+        goto out;
+    }
+    if (value != Py_None) {
+        if (!PyBytes_Check(value)) {
+            PyErr_Format(PyExc_TypeError, "'metadata' is not bytes");
+            goto out;
+        }
+        err = PyBytes_AsStringAndSize(value, &metadata, &metadata_length);
+        if (err != 0) {
+            goto out;
+        }
+        err = tsk_table_collection_set_metadata(
+            tables, metadata, metadata_length);
+        if (err != 0) {
+            handle_library_error(err);
+            goto out;
+        }
+    }
 
     /* individuals */
     value = get_table_dict_value(tables_dict, "individuals", true);
@@ -1284,6 +1615,8 @@ write_table_arrays(tsk_table_collection_t *tables, PyObject *dict)
     struct table_desc {
         const char *name;
         struct table_col *cols;
+        char *metadata_schema;
+        tsk_size_t metadata_schema_length;
     };
     int ret = -1;
     PyObject *array = NULL;
@@ -1330,6 +1663,10 @@ write_table_arrays(tsk_table_collection_t *tables, PyObject *dict)
         {"right", (void *) tables->edges.right, tables->edges.num_rows, NPY_FLOAT64},
         {"parent", (void *) tables->edges.parent, tables->edges.num_rows, NPY_INT32},
         {"child", (void *) tables->edges.child, tables->edges.num_rows, NPY_INT32},
+        {"metadata",
+            (void *) tables->edges.metadata, tables->edges.metadata_length, NPY_INT8},
+        {"metadata_offset",
+            (void *) tables->edges.metadata_offset, tables->edges.num_rows + 1, NPY_UINT32},
         {NULL},
     };
 
@@ -1346,6 +1683,11 @@ write_table_arrays(tsk_table_collection_t *tables, PyObject *dict)
             (void *) tables->migrations.dest, tables->migrations.num_rows,  NPY_INT32},
         {"time",
             (void *) tables->migrations.time, tables->migrations.num_rows,  NPY_FLOAT64},
+        {"metadata",
+            (void *) tables->migrations.metadata, tables->migrations.metadata_length, NPY_INT8},
+        {"metadata_offset",
+            (void *) tables->migrations.metadata_offset, tables->migrations.num_rows + 1, NPY_UINT32},
+
         {NULL},
     };
 
@@ -1370,6 +1712,8 @@ write_table_arrays(tsk_table_collection_t *tables, PyObject *dict)
             (void *) tables->mutations.site, tables->mutations.num_rows, NPY_INT32},
         {"node",
             (void *) tables->mutations.node, tables->mutations.num_rows, NPY_INT32},
+        {"time",
+            (void *) tables->mutations.time, tables->mutations.num_rows, NPY_FLOAT64},
         {"parent",
             (void *) tables->mutations.parent, tables->mutations.num_rows, NPY_INT32},
         {"derived_state",
@@ -1408,14 +1752,21 @@ write_table_arrays(tsk_table_collection_t *tables, PyObject *dict)
     };
 
     struct table_desc table_descs[] = {
-        {"individuals", individual_cols},
-        {"nodes", node_cols},
-        {"edges", edge_cols},
-        {"migrations", migration_cols},
-        {"sites", site_cols},
-        {"mutations", mutation_cols},
-        {"populations", population_cols},
-        {"provenances", provenance_cols},
+        {"individuals", individual_cols,
+            tables->individuals.metadata_schema, tables->individuals.metadata_schema_length},
+        {"nodes", node_cols,
+            tables->nodes.metadata_schema, tables->nodes.metadata_schema_length},
+        {"edges", edge_cols,
+            tables->edges.metadata_schema, tables->edges.metadata_schema_length},
+        {"migrations", migration_cols,
+            tables->migrations.metadata_schema, tables->migrations.metadata_schema_length},
+        {"sites", site_cols,
+            tables->sites.metadata_schema, tables->sites.metadata_schema_length},
+        {"mutations", mutation_cols,
+            tables->mutations.metadata_schema, tables->mutations.metadata_schema_length},
+        {"populations", population_cols,
+            tables->populations.metadata_schema, tables->populations.metadata_schema_length},
+        {"provenances", provenance_cols, NULL, 0},
     };
 
     for (j = 0; j < sizeof(table_descs) / sizeof(*table_descs); j++) {
@@ -1436,6 +1787,19 @@ write_table_arrays(tsk_table_collection_t *tables, PyObject *dict)
             array = NULL;
             col++;
         }
+        if (table_descs[j].metadata_schema_length > 0) {
+            array = make_Py_Unicode_FromStringAndLength(table_descs[j].metadata_schema,
+                table_descs[j].metadata_schema_length);
+            if (array == NULL) {
+                goto out;
+            }
+            if (PyDict_SetItemString(table_dict, "metadata_schema", array) != 0) {
+                goto out;
+            }
+            Py_DECREF(array);
+            array = NULL;
+        }
+
         if (PyDict_SetItemString(dict, table_descs[j].name, table_dict) != 0) {
             goto out;
         }
@@ -1462,6 +1826,18 @@ dump_tables_dict(tsk_table_collection_t *tables)
     if (dict == NULL) {
         goto out;
     }
+
+    /* Dict representation version */
+    val = Py_BuildValue("ll", 1, 1);
+    if (val == NULL) {
+        goto out;
+    }
+    if (PyDict_SetItemString(dict, "encoding_version", val) != 0) {
+        goto out;
+    }
+    Py_DECREF(val);
+    val = NULL;
+
     val = Py_BuildValue("d", tables->sequence_length);
     if (val == NULL) {
         goto out;
@@ -1471,6 +1847,31 @@ dump_tables_dict(tsk_table_collection_t *tables)
     }
     Py_DECREF(val);
     val = NULL;
+
+    if (tables->metadata_schema_length > 0) {
+        val = make_Py_Unicode_FromStringAndLength(
+            tables->metadata_schema, tables->metadata_schema_length);
+        if (val == NULL) {
+            goto out;
+        }
+        if (PyDict_SetItemString(dict, "metadata_schema", val) != 0) {
+            goto out;
+        }
+        Py_DECREF(val);
+        val = NULL;
+    }
+
+    if (tables->metadata_length > 0) {
+        val = PyBytes_FromStringAndSize(tables->metadata, tables->metadata_length);
+        if (val == NULL) {
+            goto out;
+        }
+        if (PyDict_SetItemString(dict, "metadata", val) != 0) {
+            goto out;
+        }
+        Py_DECREF(val);
+        val = NULL;
+    }
 
     err = write_table_arrays(tables, dict);
     if (err != 0) {
@@ -1512,7 +1913,8 @@ LightweightTableCollection_dealloc(LightweightTableCollection* self)
 }
 
 static int
-LightweightTableCollection_init(LightweightTableCollection *self, PyObject *args, PyObject *kwds)
+LightweightTableCollection_init(LightweightTableCollection *self,
+        PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
@@ -1585,16 +1987,46 @@ static PyMethodDef LightweightTableCollection_methods[] = {
 
 static PyTypeObject LightweightTableCollectionType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "_msprime.LightweightTableCollection",
-    .tp_basicsize = sizeof(LightweightTableCollection),
-    .tp_dealloc = (destructor)LightweightTableCollection_dealloc,
-    .tp_flags = Py_TPFLAGS_DEFAULT,
-    .tp_doc = "LightweightTableCollection objects",
-    .tp_methods = LightweightTableCollection_methods,
-    .tp_members = LightweightTableCollection_members,
-    .tp_init = (initproc)LightweightTableCollection_init,
-    .tp_new = PyType_GenericNew,
+    "_msprime.LightweightTableCollection",             /* tp_name */
+    sizeof(LightweightTableCollection),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    (destructor)LightweightTableCollection_dealloc, /* tp_dealloc */
+    0,                         /* tp_print */
+    0,                         /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    0,                         /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    0,                         /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    "LightweightTableCollection objects",           /* tp_doc */
+    0,                     /* tp_traverse */
+    0,                     /* tp_clear */
+    0,                     /* tp_richcompare */
+    0,                     /* tp_weaklistoffset */
+    0,                     /* tp_iter */
+    0,                     /* tp_iternext */
+    LightweightTableCollection_methods,             /* tp_methods */
+    LightweightTableCollection_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)LightweightTableCollection_init,      /* tp_init */
 };
+
+/***********************************************
+ * End code copied from _tskitmodule.
+ ***********************************************/
 
 /*===================================================================
  * RandomGenerator
@@ -4373,6 +4805,11 @@ PyInit__msprime(void)
     import_array();
 
     /* LightweightTableCollection type */
+    /* Note: we use the pre C-99 way of initialising this for the sake
+     * of keeping in sync with the tskit code. This should all be
+     * abstracted out into another module soon.
+     */
+    LightweightTableCollectionType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&LightweightTableCollectionType) < 0) {
         return NULL;
     }

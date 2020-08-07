@@ -41,6 +41,15 @@ def get_example_tables():
             individual=node.id if node.id < ts.num_samples else -1,
             metadata=b"y" * node.id,
         )
+    tables.edges.clear()
+    for edge in ts.edges():
+        tables.edges.add_row(
+            left=edge.left,
+            right=edge.right,
+            child=edge.child,
+            parent=edge.parent,
+            metadata=b"y" * edge.id,
+        )
     tables.sites.clear()
     for site in ts.sites():
         tables.sites.add_row(
@@ -53,6 +62,7 @@ def get_example_tables():
         mut_id = tables.mutations.add_row(
             site=mutation.site,
             node=mutation.node,
+            time=0,
             parent=-1,
             derived_state="C" * mutation.id,
             metadata=b"x" * mutation.id,
@@ -61,50 +71,63 @@ def get_example_tables():
         tables.mutations.add_row(
             site=mutation.site,
             node=mutation.node,
+            time=0,
             parent=mut_id,
             derived_state="G" * mutation.id,
             metadata=b"y" * mutation.id,
         )
+    tables.migrations.clear()
+    for migration in ts.migrations():
+        tables.migrations.add_row(
+            left=migration.left,
+            right=migration.right,
+            node=migration.node,
+            source=migration.source,
+            dest=migration.dest,
+            time=migration.time,
+            metadata=b"y" * migration.id,
+        )
     for j in range(10):
         tables.populations.add_row(metadata=b"p" * j)
         tables.provenances.add_row(timestamp="x" * j, record="y" * j)
+    tables.metadata_schema = tskit.MetadataSchema(
+        {
+            "codec": "struct",
+            "type": "object",
+            "properties": {
+                "top-level": {
+                    "type": "array",
+                    "items": {"type": "integer", "binaryFormat": "B"},
+                    "noLengthEncodingExhaustBuffer": True,
+                }
+            },
+        }
+    )
+    tables.metadata = {"top-level": [1, 2, 3, 4]}
+    for table in [
+        "individuals",
+        "nodes",
+        "edges",
+        "migrations",
+        "sites",
+        "mutations",
+        "populations",
+    ]:
+        t = getattr(tables, table)
+        t.metadata_schema = tskit.MetadataSchema(
+            {
+                "codec": "struct",
+                "type": "object",
+                "properties": {table: {"type": "string", "binaryFormat": "50p"}},
+            }
+        )
     return tables
 
 
-class TestEncodingMatchesTskit(unittest.TestCase):
-    """
-    Checks that the dict encoding that we have matches what we have in
-    tskit.
-    """
-
-    def test_top_keys_match(self):
-        tables = get_example_tables()
-        d1 = tables.asdict()
+class TestEncodingVersion(unittest.TestCase):
+    def test_version(self):
         lwt = c_module.LightweightTableCollection()
-        lwt.fromdict(d1)
-        d2 = lwt.asdict()
-        self.assertEqual(d1.keys(), d2.keys())
-
-    def test_table_columns_match(self):
-        tables = get_example_tables()
-        d1 = tables.asdict()
-        lwt = c_module.LightweightTableCollection()
-        lwt.fromdict(d1)
-        d2 = lwt.asdict()
-        tables = [
-            "individuals",
-            "nodes",
-            "edges",
-            "migrations",
-            "sites",
-            "mutations",
-            "populations",
-            "provenances",
-        ]
-        for table_name in tables:
-            t1 = d1[table_name]
-            t2 = d2[table_name]
-            self.assertEqual(t1.keys(), t2.keys())
+        self.assertEqual(lwt.asdict()["encoding_version"], (1, 1))
 
 
 class TestRoundTrip(unittest.TestCase):
@@ -153,7 +176,35 @@ class TestRoundTrip(unittest.TestCase):
         self.verify(ts.tables)
 
     def test_example(self):
-        self.verify(get_example_tables())
+        tables = get_example_tables()
+        tables.metadata_schema = tskit.MetadataSchema(
+            {
+                "codec": "struct",
+                "type": "object",
+                "properties": {"top-level": {"type": "string", "binaryFormat": "50p"}},
+            }
+        )
+        tables.metadata = {"top-level": "top-level-metadata"}
+        for table in [
+            "individuals",
+            "nodes",
+            "edges",
+            "migrations",
+            "sites",
+            "mutations",
+            "populations",
+        ]:
+            t = getattr(tables, table)
+            t.packset_metadata([f"{table}-{i}".encode() for i in range(t.num_rows)])
+            t.metadata_schema = tskit.MetadataSchema(
+                {
+                    "codec": "struct",
+                    "type": "object",
+                    "properties": {table: {"type": "string", "binaryFormat": "50p"}},
+                }
+            )
+
+        self.verify(tables)
 
 
 class TestMissingData(unittest.TestCase):
@@ -166,34 +217,45 @@ class TestMissingData(unittest.TestCase):
         d = tables.asdict()
         del d["sequence_length"]
         lwt = c_module.LightweightTableCollection()
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             lwt.fromdict(d)
+
+    def test_missing_metadata(self):
+        tables = get_example_tables()
+        self.assertNotEqual(tables.metadata, b"")
+        d = tables.asdict()
+        del d["metadata"]
+        lwt = c_module.LightweightTableCollection()
+        lwt.fromdict(d)
+        tables = tskit.TableCollection.fromdict(lwt.asdict())
+        # Empty byte field still gets interpreted by schema
+        self.assertEqual(tables.metadata, {"top-level": []})
+
+    def test_missing_metadata_schema(self):
+        tables = get_example_tables()
+        self.assertNotEqual(str(tables.metadata_schema), "")
+        d = tables.asdict()
+        del d["metadata_schema"]
+        lwt = c_module.LightweightTableCollection()
+        lwt.fromdict(d)
+        tables = tskit.TableCollection.fromdict(lwt.asdict())
+        self.assertEqual(str(tables.metadata_schema), "")
 
     def test_missing_tables(self):
         tables = get_example_tables()
         d = tables.asdict()
-        table_names = set(d.keys()) - {"sequence_length"}
+        table_names = d.keys() - {
+            "sequence_length",
+            "metadata",
+            "metadata_schema",
+            "encoding_version",
+        }
         for table_name in table_names:
             d = tables.asdict()
             del d[table_name]
             lwt = c_module.LightweightTableCollection()
-            with self.assertRaises(ValueError):
+            with self.assertRaises(TypeError):
                 lwt.fromdict(d)
-
-    def test_missing_columns(self):
-        tables = get_example_tables()
-        d = tables.asdict()
-        table_names = set(d.keys()) - {"sequence_length"}
-        for table_name in table_names:
-            table_dict = d[table_name]
-            for colname in table_dict.keys():
-                copy = dict(table_dict)
-                del copy[colname]
-                lwt = c_module.LightweightTableCollection()
-                d = tables.asdict()
-                d[table_name] = copy
-                with self.assertRaises(ValueError):
-                    lwt.fromdict(d)
 
 
 class TestBadTypes(unittest.TestCase):
@@ -204,10 +266,15 @@ class TestBadTypes(unittest.TestCase):
     def verify_columns(self, value):
         tables = get_example_tables()
         d = tables.asdict()
-        table_names = set(d.keys()) - {"sequence_length"}
+        table_names = set(d.keys()) - {
+            "sequence_length",
+            "metadata",
+            "metadata_schema",
+            "encoding_version",
+        }
         for table_name in table_names:
             table_dict = d[table_name]
-            for colname in table_dict.keys():
+            for colname in set(table_dict.keys()) - {"metadata_schema"}:
                 copy = dict(table_dict)
                 copy[colname] = value
                 lwt = c_module.LightweightTableCollection()
@@ -225,7 +292,7 @@ class TestBadTypes(unittest.TestCase):
     def test_bad_top_level_types(self):
         tables = get_example_tables()
         d = tables.asdict()
-        for key in d.keys():
+        for key in set(d.keys()) - {"encoding_version"}:
             bad_type_dict = tables.asdict()
             # A list should be a ValueError for both the tables and sequence_length
             bad_type_dict[key] = ["12345"]
@@ -243,10 +310,15 @@ class TestBadLengths(unittest.TestCase):
 
         tables = get_example_tables()
         d = tables.asdict()
-        table_names = set(d.keys()) - {"sequence_length"}
+        table_names = set(d.keys()) - {
+            "sequence_length",
+            "metadata",
+            "metadata_schema",
+            "encoding_version",
+        }
         for table_name in sorted(table_names):
             table_dict = d[table_name]
-            for colname in sorted(table_dict.keys()):
+            for colname in set(table_dict.keys()) - {"metadata_schema"}:
                 copy = dict(table_dict)
                 copy[colname] = table_dict[colname][:num_rows].copy()
                 lwt = c_module.LightweightTableCollection()
@@ -280,11 +352,21 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         for col in required_cols:
             self.assertTrue(np.array_equal(other[table_name][col], table_dict[col]))
 
-        # Removing any one of these required columns gives an error.
+        # Any one of these required columns as None gives an error.
         for col in required_cols:
             d = tables.asdict()
             copy = dict(table_dict)
             copy[col] = None
+            d[table_name] = copy
+            lwt = c_module.LightweightTableCollection()
+            with self.assertRaises(TypeError):
+                lwt.fromdict(d)
+
+        # Removing any one of these required columns gives an error.
+        for col in required_cols:
+            d = tables.asdict()
+            copy = dict(table_dict)
+            del copy[col]
             d[table_name] = copy
             lwt = c_module.LightweightTableCollection()
             with self.assertRaises(TypeError):
@@ -303,24 +385,42 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
             )
         )
 
-    def verify_offset_pair(self, tables, table_len, table_name, col_name):
+    def verify_offset_pair(
+        self, tables, table_len, table_name, col_name, required=False
+    ):
         offset_col = col_name + "_offset"
 
-        d = tables.asdict()
-        table_dict = d[table_name]
-        table_dict[col_name] = None
-        table_dict[offset_col] = None
-        lwt = c_module.LightweightTableCollection()
-        lwt.fromdict(d)
-        out = lwt.asdict()
-        self.assertEqual(out[table_name][col_name].shape, (0,))
-        self.assertTrue(
-            np.array_equal(
-                out[table_name][offset_col], np.zeros(table_len + 1, dtype=np.uint32)
+        if not required:
+            d = tables.asdict()
+            table_dict = d[table_name]
+            table_dict[col_name] = None
+            table_dict[offset_col] = None
+            lwt = c_module.LightweightTableCollection()
+            lwt.fromdict(d)
+            out = lwt.asdict()
+            self.assertEqual(out[table_name][col_name].shape, (0,))
+            self.assertTrue(
+                np.array_equal(
+                    out[table_name][offset_col],
+                    np.zeros(table_len + 1, dtype=np.uint32),
+                )
             )
-        )
+            d = tables.asdict()
+            table_dict = d[table_name]
+            del table_dict[col_name]
+            del table_dict[offset_col]
+            lwt = c_module.LightweightTableCollection()
+            lwt.fromdict(d)
+            out = lwt.asdict()
+            self.assertEqual(out[table_name][col_name].shape, (0,))
+            self.assertTrue(
+                np.array_equal(
+                    out[table_name][offset_col],
+                    np.zeros(table_len + 1, dtype=np.uint32),
+                )
+            )
 
-        # Setting one or the other raises a ValueError
+        # Setting one or the other raises a TypeError
         d = tables.asdict()
         table_dict = d[table_name]
         table_dict[col_name] = None
@@ -330,7 +430,21 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
 
         d = tables.asdict()
         table_dict = d[table_name]
+        del table_dict[col_name]
+        lwt = c_module.LightweightTableCollection()
+        with self.assertRaises(TypeError):
+            lwt.fromdict(d)
+
+        d = tables.asdict()
+        table_dict = d[table_name]
         table_dict[offset_col] = None
+        lwt = c_module.LightweightTableCollection()
+        with self.assertRaises(TypeError):
+            lwt.fromdict(d)
+
+        d = tables.asdict()
+        table_dict = d[table_name]
+        del table_dict[offset_col]
         lwt = c_module.LightweightTableCollection()
         with self.assertRaises(TypeError):
             lwt.fromdict(d)
@@ -345,6 +459,16 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         with self.assertRaises(c_module.LibraryError):
             lwt.fromdict(d)
 
+    def verify_metadata_schema(self, tables, table_name):
+        d = tables.asdict()
+        d[table_name]["metadata_schema"] = None
+        lwt = c_module.LightweightTableCollection()
+        lwt.fromdict(d)
+        out = lwt.asdict()
+        self.assertNotIn("metadata_schema", out[table_name])
+        tables = tskit.TableCollection.fromdict(out)
+        self.assertEqual(str(getattr(tables, table_name).metadata_schema), "")
+
     def test_individuals(self):
         tables = get_example_tables()
         self.verify_required_columns(tables, "individuals", ["flags"])
@@ -354,6 +478,7 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         self.verify_offset_pair(
             tables, len(tables.individuals), "individuals", "metadata"
         )
+        self.verify_metadata_schema(tables, "individuals")
 
     def test_nodes(self):
         tables = get_example_tables()
@@ -361,18 +486,26 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         self.verify_optional_column(tables, len(tables.nodes), "nodes", "population")
         self.verify_optional_column(tables, len(tables.nodes), "nodes", "individual")
         self.verify_required_columns(tables, "nodes", ["flags", "time"])
+        self.verify_metadata_schema(tables, "nodes")
 
     def test_edges(self):
         tables = get_example_tables()
         self.verify_required_columns(
             tables, "edges", ["left", "right", "parent", "child"]
         )
+        self.verify_offset_pair(tables, len(tables.edges), "edges", "metadata")
+        self.verify_metadata_schema(tables, "edges")
 
     def test_migrations(self):
         tables = get_example_tables()
         self.verify_required_columns(
             tables, "migrations", ["left", "right", "node", "source", "dest", "time"]
         )
+        self.verify_offset_pair(
+            tables, len(tables.migrations), "migrations", "metadata"
+        )
+        self.verify_optional_column(tables, len(tables.nodes), "nodes", "individual")
+        self.verify_metadata_schema(tables, "migrations")
 
     def test_sites(self):
         tables = get_example_tables()
@@ -380,6 +513,7 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
             tables, "sites", ["position", "ancestral_state", "ancestral_state_offset"]
         )
         self.verify_offset_pair(tables, len(tables.sites), "sites", "metadata")
+        self.verify_metadata_schema(tables, "sites")
 
     def test_mutations(self):
         tables = get_example_tables()
@@ -389,12 +523,22 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
             ["site", "node", "derived_state", "derived_state_offset"],
         )
         self.verify_offset_pair(tables, len(tables.mutations), "mutations", "metadata")
+        self.verify_metadata_schema(tables, "mutations")
+        # Verify optional time column
+        d = tables.asdict()
+        d["mutations"]["time"] = None
+        lwt = c_module.LightweightTableCollection()
+        lwt.fromdict(d)
+        out = lwt.asdict()
+        self.assertTrue(all(np.isnan(val) for val in out["mutations"]["time"]))
 
     def test_populations(self):
         tables = get_example_tables()
         self.verify_required_columns(
             tables, "populations", ["metadata", "metadata_offset"]
         )
+        self.verify_metadata_schema(tables, "populations")
+        self.verify_offset_pair(tables, len(tables.nodes), "nodes", "metadata", True)
 
     def test_provenances(self):
         tables = get_example_tables()
@@ -403,3 +547,31 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
             "provenances",
             ["record", "record_offset", "timestamp", "timestamp_offset"],
         )
+
+    def test_top_level_metadata(self):
+        tables = get_example_tables()
+        d = tables.asdict()
+        # None should give default value
+        d["metadata"] = None
+        lwt = c_module.LightweightTableCollection()
+        lwt.fromdict(d)
+        out = lwt.asdict()
+        self.assertNotIn("metadata", out)
+        tables = tskit.TableCollection.fromdict(out)
+        # We only removed the metadata, not the schema. So empty bytefield
+        # still gets interpreted
+        self.assertEqual(tables.metadata, {"top-level": []})
+        # Missing is tested in TestMissingData above
+
+    def test_top_level_metadata_schema(self):
+        tables = get_example_tables()
+        d = tables.asdict()
+        # None should give default value
+        d["metadata_schema"] = None
+        lwt = c_module.LightweightTableCollection()
+        lwt.fromdict(d)
+        out = lwt.asdict()
+        self.assertNotIn("metadata_schema", out)
+        tables = tskit.TableCollection.fromdict(out)
+        self.assertEqual(str(tables.metadata_schema), "")
+        # Missing is tested in TestMissingData above
