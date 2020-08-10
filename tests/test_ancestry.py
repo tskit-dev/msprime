@@ -35,7 +35,7 @@ import _msprime
 import msprime
 
 
-def has_discrete_coordinates(ts):
+def has_discrete_genome(ts):
     """
     Returns True if the specified tree sequence has discrete genome coordinates.
     """
@@ -418,12 +418,10 @@ class TestSimulatorFactory(unittest.TestCase):
         sim = msprime.simulator_factory(10)
         self.assertEqual(sim.demography.populations[0].initial_size, 1)
 
-    def test_discrete_coordinates_continuous_length(self):
+    def test_discrete_genome_continuous_length(self):
         for bad_length in [0.1, 1.1, 1000.1]:
             with self.assertRaises(ValueError):
-                msprime.simulator_factory(
-                    10, discrete_coordinates=True, length=bad_length
-                )
+                msprime.simulator_factory(10, discrete_genome=True, length=bad_length)
 
     def test_population_configurations(self):
         def f(configs):
@@ -729,31 +727,29 @@ class TestSimulateInterface(unittest.TestCase):
         with self.assertRaises(TypeError):
             msprime.simulate(2, 100)
 
-    def test_discrete_coordinates_recombination_map(self):
-        # Cannot specify discrete_coordinates and recombination_map at once
+    def test_discrete_genome_recombination_map(self):
+        # Cannot specify discrete_genome and recombination_map at once
         recomb_map = msprime.RecombinationMap.uniform_map(10, 0.1)
         with self.assertRaises(ValueError):
-            msprime.simulate(
-                10, discrete_coordinates=True, recombination_map=recomb_map
-            )
+            msprime.simulate(10, discrete_genome=True, recombination_map=recomb_map)
 
-    def test_discrete_coordinates_no_mutations(self):
-        def run_sim(discrete_coordinates=None):
+    def test_discrete_genome_no_mutations(self):
+        def run_sim(discrete_genome=None):
             return msprime.simulate(
                 10,
                 length=2,
                 recombination_rate=1,
-                discrete_coordinates=discrete_coordinates,
+                discrete_genome=discrete_genome,
                 random_seed=2134,
             )
 
         ts_discrete = run_sim(True)
         self.assertGreater(ts_discrete.num_trees, 1)
-        self.assertTrue(has_discrete_coordinates(ts_discrete))
+        self.assertTrue(has_discrete_genome(ts_discrete))
 
         ts_continuous = run_sim(False)
         self.assertGreater(ts_continuous.num_trees, 1)
-        self.assertFalse(has_discrete_coordinates(ts_continuous))
+        self.assertFalse(has_discrete_genome(ts_continuous))
 
         ts_default = run_sim()
         tables_default = ts_default.dump_tables()
@@ -762,26 +758,26 @@ class TestSimulateInterface(unittest.TestCase):
         tables_default.provenances.clear()
         self.assertEqual(tables_default, tables_continuous)
 
-    def test_discrete_coordinates_mutations(self):
-        def run_sim(discrete_coordinates=None):
+    def test_discrete_genome_mutations(self):
+        def run_sim(discrete_genome=None):
             return msprime.simulate(
                 10,
                 length=2,
                 recombination_rate=1,
                 mutation_rate=1,
-                discrete_coordinates=discrete_coordinates,
+                discrete_genome=discrete_genome,
                 random_seed=2134,
             )
 
         ts_discrete = run_sim(True)
         self.assertGreater(ts_discrete.num_trees, 1)
         self.assertGreater(ts_discrete.num_sites, 1)
-        self.assertTrue(has_discrete_coordinates(ts_discrete))
+        self.assertTrue(has_discrete_genome(ts_discrete))
 
         ts_continuous = run_sim(False)
         self.assertGreater(ts_continuous.num_trees, 1)
         self.assertGreater(ts_discrete.num_sites, 1)
-        self.assertFalse(has_discrete_coordinates(ts_continuous))
+        self.assertFalse(has_discrete_genome(ts_continuous))
 
         ts_default = run_sim()
         tables_default = ts_default.dump_tables()
@@ -790,8 +786,8 @@ class TestSimulateInterface(unittest.TestCase):
         tables_default.provenances.clear()
         self.assertEqual(tables_default, tables_continuous)
 
-    def test_discrete_coordinates_migrations(self):
-        def run_sim(discrete_coordinates=None):
+    def test_discrete_genome_migrations(self):
+        def run_sim(discrete_genome=None):
             demography = msprime.Demography.stepping_stone_1d(2, 0.1)
             samples = demography.sample(5, 5)
             return msprime.simulate(
@@ -799,7 +795,7 @@ class TestSimulateInterface(unittest.TestCase):
                 demography=demography,
                 length=5,
                 recombination_rate=1,
-                discrete_coordinates=discrete_coordinates,
+                discrete_genome=discrete_genome,
                 record_migrations=True,
                 random_seed=2134,
             )
@@ -807,12 +803,12 @@ class TestSimulateInterface(unittest.TestCase):
         ts_discrete = run_sim(True)
         self.assertGreater(ts_discrete.num_trees, 1)
         self.assertGreater(ts_discrete.num_migrations, 1)
-        self.assertTrue(has_discrete_coordinates(ts_discrete))
+        self.assertTrue(has_discrete_genome(ts_discrete))
 
         ts_continuous = run_sim(False)
         self.assertGreater(ts_continuous.num_trees, 1)
         self.assertGreater(ts_continuous.num_migrations, 1)
-        self.assertFalse(has_discrete_coordinates(ts_continuous))
+        self.assertFalse(has_discrete_genome(ts_continuous))
 
     def test_numpy_random_seed(self):
         seed = np.array([12345], dtype=np.int64)[0]
