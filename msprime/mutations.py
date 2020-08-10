@@ -736,18 +736,18 @@ class MutationMap:
         return {"position": self.position, "rate": self.rate}
 
 
-def _simple_mutation_generator(rate, sequence_length, rng):
+def _simple_mutation_generator(rate, sequence_length, rng, discrete=False):
     """
     Factory function used to create a low-level mutation generator that
     produces binary infinite sites mutations suitable for use in
     msprime.simulate() and the mspms CLI.
     """
-    # Add a ``discrete`` parameter and pass to the MutationGenerator
-    # constructor.
     if rate is None:
         return None
     rate_map = MutationMap(position=[0, sequence_length], rate=[rate, 0])
-    return _msprime.MutationGenerator(rng, rate_map._ll_map, BinaryMutations())
+    return _msprime.MutationGenerator(
+        rng, rate_map._ll_map, BinaryMutations(), discrete_sites=discrete
+    )
 
 
 def mutate(
@@ -867,12 +867,15 @@ def mutate(
 
     rng = _msprime.RandomGenerator(seed)
     mutation_generator = _msprime.MutationGenerator(
-        random_generator=rng, rate_map=rate_map._ll_map, model=model
+        random_generator=rng,
+        rate_map=rate_map._ll_map,
+        model=model,
+        discrete_sites=discrete,
     )
     lwt = _msprime.LightweightTableCollection()
     lwt.fromdict(tables.asdict())
     mutation_generator.generate(
-        lwt, keep=keep, start_time=start_time, end_time=end_time, discrete=discrete
+        lwt, keep=keep, start_time=start_time, end_time=end_time
     )
 
     tables = tskit.TableCollection.fromdict(lwt.asdict())

@@ -22,11 +22,18 @@
   This can help debug long-running simulations. (:user:`jeromekelleher`,
   :pr:`1080`).
 
+- Add a ``discrete_coordinates`` argument to `simulate`, which ensures that
+  all recombination breakpoints and mutational sites are at integer positions
+  (:user:`jeromekelleher`, :issue:`880`, :pr:`1115`).
+
 **Breaking changes**:
 
 - The class form for specifying models (e.g., ``msprime.StandardCoalescent()``)
   no longer take a ``reference_size`` argument.
   (TODO add paper trail for this)
+
+- The ``simulate`` function only takes one positional argument, and all other
+  arguments are keyword-only.
 
 
 ********************

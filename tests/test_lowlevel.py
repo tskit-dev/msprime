@@ -2612,6 +2612,12 @@ class TestMutationGenerator(unittest.TestCase):
         self.assertRaises(TypeError, _msprime.MutationGenerator)
         self.assertRaises(TypeError, _msprime.MutationGenerator, imap)
         _msprime.MutationGenerator(_msprime.RandomGenerator(1), imap, model)
+        self.assertRaises(
+            TypeError, _msprime.MutationGenerator, imap, discrete_sites="sdf"
+        )
+        _msprime.MutationGenerator(
+            _msprime.RandomGenerator(1), imap, model, discrete_sites=True
+        )
 
     def test_rng(self):
         imap = _msprime.IntervalMap([0, 1], [0, 0])

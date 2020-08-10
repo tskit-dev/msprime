@@ -26,12 +26,28 @@ import os
 import random
 import tempfile
 import unittest
+import warnings
 
 import numpy as np
 import tskit
 
 import _msprime
 import msprime
+
+
+def has_discrete_genome(ts):
+    """
+    Returns True if the specified tree sequence has discrete genome coordinates.
+    """
+    tables = ts.tables
+    edges_left = np.all(tables.edges.left == np.floor(tables.edges.left))
+    edges_right = np.all(tables.edges.right == np.floor(tables.edges.right))
+    migrations_left = np.all(tables.migrations.left == np.floor(tables.migrations.left))
+    migrations_right = np.all(
+        tables.migrations.right == np.floor(tables.migrations.right)
+    )
+    sites = np.all(tables.sites.position == np.floor(tables.sites.position))
+    return edges_left and edges_right and migrations_left and migrations_right and sites
 
 
 def get_bottleneck_examples():
@@ -402,6 +418,11 @@ class TestSimulatorFactory(unittest.TestCase):
         sim = msprime.simulator_factory(10)
         self.assertEqual(sim.demography.populations[0].initial_size, 1)
 
+    def test_discrete_genome_continuous_length(self):
+        for bad_length in [0.1, 1.1, 1000.1]:
+            with self.assertRaises(ValueError):
+                msprime.simulator_factory(10, discrete_genome=True, length=bad_length)
+
     def test_population_configurations(self):
         def f(configs):
             return msprime.simulator_factory(population_configurations=configs)
@@ -471,10 +492,12 @@ class TestSimulatorFactory(unittest.TestCase):
             # Now check for the structure of the matrix.
             matrix[0][0] = "bad value"
             self.assertRaises(ValueError, f, matrix)
-            matrix[0] = None
-            self.assertRaises(ValueError, f, matrix)
-            matrix[0] = []
-            self.assertRaises(ValueError, f, matrix)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                matrix[0] = None
+                self.assertRaises(ValueError, f, matrix)
+                matrix[0] = []
+                self.assertRaises(ValueError, f, matrix)
             # Simple numpy array.
             matrix = np.ones((N, N))
             np.fill_diagonal(matrix, 0)
@@ -699,6 +722,93 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertEqual(ts.get_num_mutations(), 0)
         self.assertEqual(ts.get_sequence_length(), 1)
         self.assertEqual(len(list(ts.provenances())), 1)
+
+    def test_positional_args_not_allowed(self):
+        with self.assertRaises(TypeError):
+            msprime.simulate(2, 100)
+
+    def test_discrete_genome_recombination_map(self):
+        # Cannot specify discrete_genome and recombination_map at once
+        recomb_map = msprime.RecombinationMap.uniform_map(10, 0.1)
+        with self.assertRaises(ValueError):
+            msprime.simulate(10, discrete_genome=True, recombination_map=recomb_map)
+
+    def test_discrete_genome_no_mutations(self):
+        def run_sim(discrete_genome=None):
+            return msprime.simulate(
+                10,
+                length=2,
+                recombination_rate=1,
+                discrete_genome=discrete_genome,
+                random_seed=2134,
+            )
+
+        ts_discrete = run_sim(True)
+        self.assertGreater(ts_discrete.num_trees, 1)
+        self.assertTrue(has_discrete_genome(ts_discrete))
+
+        ts_continuous = run_sim(False)
+        self.assertGreater(ts_continuous.num_trees, 1)
+        self.assertFalse(has_discrete_genome(ts_continuous))
+
+        ts_default = run_sim()
+        tables_default = ts_default.dump_tables()
+        tables_continuous = ts_continuous.dump_tables()
+        tables_continuous.provenances.clear()
+        tables_default.provenances.clear()
+        self.assertEqual(tables_default, tables_continuous)
+
+    def test_discrete_genome_mutations(self):
+        def run_sim(discrete_genome=None):
+            return msprime.simulate(
+                10,
+                length=2,
+                recombination_rate=1,
+                mutation_rate=1,
+                discrete_genome=discrete_genome,
+                random_seed=2134,
+            )
+
+        ts_discrete = run_sim(True)
+        self.assertGreater(ts_discrete.num_trees, 1)
+        self.assertGreater(ts_discrete.num_sites, 1)
+        self.assertTrue(has_discrete_genome(ts_discrete))
+
+        ts_continuous = run_sim(False)
+        self.assertGreater(ts_continuous.num_trees, 1)
+        self.assertGreater(ts_discrete.num_sites, 1)
+        self.assertFalse(has_discrete_genome(ts_continuous))
+
+        ts_default = run_sim()
+        tables_default = ts_default.dump_tables()
+        tables_continuous = ts_continuous.dump_tables()
+        tables_continuous.provenances.clear()
+        tables_default.provenances.clear()
+        self.assertEqual(tables_default, tables_continuous)
+
+    def test_discrete_genome_migrations(self):
+        def run_sim(discrete_genome=None):
+            demography = msprime.Demography.stepping_stone_1d(2, 0.1)
+            samples = demography.sample(5, 5)
+            return msprime.simulate(
+                samples=samples,
+                demography=demography,
+                length=5,
+                recombination_rate=1,
+                discrete_genome=discrete_genome,
+                record_migrations=True,
+                random_seed=2134,
+            )
+
+        ts_discrete = run_sim(True)
+        self.assertGreater(ts_discrete.num_trees, 1)
+        self.assertGreater(ts_discrete.num_migrations, 1)
+        self.assertTrue(has_discrete_genome(ts_discrete))
+
+        ts_continuous = run_sim(False)
+        self.assertGreater(ts_continuous.num_trees, 1)
+        self.assertGreater(ts_continuous.num_migrations, 1)
+        self.assertFalse(has_discrete_genome(ts_continuous))
 
     def test_numpy_random_seed(self):
         seed = np.array([12345], dtype=np.int64)[0]
