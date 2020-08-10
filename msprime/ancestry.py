@@ -40,6 +40,8 @@ from . import provenance
 
 logger = logging.getLogger(__name__)
 
+SHORT_GENOME_WARNING_THRESHOLD = 1000
+
 
 def model_factory(model):
     """
@@ -274,6 +276,61 @@ def demography_factory(
     return demography
 
 
+def recombination_map_factory(
+    *, discrete_genome, length, recombination_rate, recombination_map, from_ts
+):
+    """
+    Checks the input ``discrete_genome`` input value and see if it's
+    consistent with the other input parameters. If the discrete_genome
+    is None (the default) we check to see if the parameter regime that
+    we're in would lead to a significant difference between the
+    discrete and continuous cases.
+    """
+    if discrete_genome is None:
+        discrete_genome = True
+
+    if recombination_map is None:
+        # Default to 1 if no from_ts; otherwise default to the sequence length
+        # of from_ts
+        default_length = 1 if from_ts is None else from_ts.sequence_length
+        if length is None:
+            length = default_length
+        if length <= 0:
+            raise ValueError("Cannot provide non-positive sequence length")
+
+        if discrete_genome and length != math.floor(length):
+            raise ValueError(
+                "Cannot specify non-integer sequence length when discrete_genome "
+                "is True"
+            )
+        recombination_rate = 0 if recombination_rate is None else recombination_rate
+        if recombination_rate < 0:
+            raise ValueError("Cannot provide negative recombination rate")
+        recombination_map = RecombinationMap.uniform_map(
+            length, recombination_rate, discrete=discrete_genome
+        )
+    else:
+        if not isinstance(recombination_map, RecombinationMap):
+            raise TypeError("RecombinationMap instance required")
+        if length is not None or recombination_rate is not None:
+            raise ValueError(
+                "Cannot specify length/recombination_rate along with "
+                "a recombination map"
+            )
+
+        if recombination_map.discrete != discrete_genome:
+            raise ValueError(
+                "The recombination_map and discrete_genome arguments must agree"
+            )
+
+    if from_ts is not None:
+        if recombination_map.get_length() != from_ts.sequence_length:
+            raise ValueError(
+                "Recombination map and from_ts must have identical " "sequence_length"
+            )
+    return recombination_map
+
+
 def simulator_factory(
     sample_size=None,
     *,
@@ -338,8 +395,6 @@ def simulator_factory(
         Ne, demography, population_configurations, migration_matrix, demographic_events
     )
 
-    # The logic for checking from_ts and recombination map is bound together
-    # in a complicated way, so we can factor them out into separate functions.
     if from_ts is None:
         if len(samples) < 2:
             raise ValueError("Sample size must be >= 2")
@@ -355,45 +410,13 @@ def simulator_factory(
                 "equal to the number of populations in from_ts"
             )
 
-    if recombination_map is None:
-        # Default to 1 if no from_ts; otherwise default to the sequence length
-        # of from_ts
-        if from_ts is None:
-            the_length = 1 if length is None else length
-        else:
-            the_length = from_ts.sequence_length if length is None else length
-        the_rate = 0 if recombination_rate is None else recombination_rate
-        if the_length <= 0:
-            raise ValueError("Cannot provide non-positive sequence length")
-        if the_rate < 0:
-            raise ValueError("Cannot provide negative recombination rate")
-        if discrete_genome and length != math.floor(length):
-            raise ValueError(
-                "Cannot specify non-integer sequence length when discrete_genome "
-                "is True"
-            )
-        recombination_map = RecombinationMap.uniform_map(
-            the_length, the_rate, discrete=discrete_genome
-        )
-    else:
-        if not isinstance(recombination_map, RecombinationMap):
-            raise TypeError("RecombinationMap instance required")
-        if length is not None or recombination_rate is not None:
-            raise ValueError(
-                "Cannot specify length/recombination_rate along with "
-                "a recombination map"
-            )
-    if from_ts is not None:
-        if recombination_map.get_length() != from_ts.sequence_length:
-            raise ValueError(
-                "Recombination map and from_ts must have identical " "sequence_length"
-            )
-
-    if start_time is not None and start_time < 0:
-        raise ValueError("start_time cannot be negative")
-
-    if num_labels is not None and num_labels < 1:
-        raise ValueError("Must have at least one structured coalescent label")
+    recombination_map = recombination_map_factory(
+        discrete_genome=discrete_genome,
+        length=length,
+        recombination_rate=recombination_rate,
+        recombination_map=recombination_map,
+        from_ts=from_ts,
+    )
 
     # FIXME check the valid inputs for GC. Should we allow it when we
     # have a non-trivial genetic map?
@@ -407,6 +430,12 @@ def simulator_factory(
             )
     if gene_conversion_track_length is None:
         gene_conversion_track_length = 1
+
+    if start_time is not None and start_time < 0:
+        raise ValueError("start_time cannot be negative")
+
+    if num_labels is not None and num_labels < 1:
+        raise ValueError("Must have at least one structured coalescent label")
 
     # For the simulate code-path the rng will already be set, but
     # for convenience we allow it to be null to help with writing
@@ -622,18 +651,6 @@ def simulate(
         parameters["random_seed"] = seed
         provenance_dict = provenance.get_provenance_dict(parameters)
 
-    if discrete_genome is None:
-        discrete_genome = False
-    elif recombination_map is not None:
-        # TODO this is probably overly strict and we'll want to check if
-        # the recombination_map agrees with the value of discrete_genome.
-        # Let's figure out the exact default semantcs first before worrying
-        # about this, though.
-        raise ValueError(
-            "Cannot specify ``discrete_genome`` at the same time as the "
-            "``recombination_map`` argument."
-        )
-
     sim = simulator_factory(
         sample_size=sample_size,
         random_generator=rng,
@@ -691,8 +708,21 @@ def simulate(
         mutation_rate,
         sim.sequence_length,
         sim.random_generator,
-        discrete=discrete_genome,
+        discrete=sim.recombination_map.discrete,
     )
+
+    if discrete_genome is None and sim.sequence_length < SHORT_GENOME_WARNING_THRESHOLD:
+        if sim.recombination_map.get_total_recombination_rate() > 0:
+            warnings.warn(
+                "You have asked for a short genome size with a non-zero recombination "
+                "rate. TODO: write the rest of this message."
+            )
+        if mutation_rate is not None and mutation_rate > 0:
+            warnings.warn(
+                "You have asked for a short genome size with a non-zero mutation "
+                "rate. TODO: write the rest of this message."
+            )
+
     if replicate_index is not None and random_seed is None:
         raise ValueError(
             "Cannot specify replicate_index without random_seed as this "
@@ -726,12 +756,13 @@ class Simulator(_msprime.Simulator):
 
     def __init__(
         self,
-        samples,
-        recombination_map,
-        Ne,
-        random_generator,
-        demography,
-        model_change_events,
+        *,
+        samples=None,
+        Ne=None,
+        recombination_map=None,
+        random_generator=None,
+        demography=None,
+        model_change_events=None,
         pedigree=None,
         model=None,
         from_ts=None,
@@ -975,12 +1006,11 @@ class RecombinationMap:
         in the recombination process. However, for a finite sites
         model this can be set to smaller values.
     :param bool discrete: Whether recombination can occur only at integer
-        positions. When ``False``, recombination sites can take continuous
-        values. To simulate a fixed number of loci, set this parameter to
-        ``True`` and scale ``positions`` to span the desired number of loci.
+        positions (the default). When ``False``, recombination sites can take continuous
+        values.
     """
 
-    def __init__(self, positions, rates, num_loci=None, discrete=False, map_start=0):
+    def __init__(self, positions, rates, num_loci=None, discrete=True, map_start=0):
         if num_loci is not None:
             if num_loci == positions[-1]:
                 warnings.warn("num_loci is no longer supported and should not be used.")

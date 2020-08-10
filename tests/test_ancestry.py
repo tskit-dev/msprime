@@ -753,10 +753,10 @@ class TestSimulateInterface(unittest.TestCase):
 
         ts_default = run_sim()
         tables_default = ts_default.dump_tables()
-        tables_continuous = ts_continuous.dump_tables()
-        tables_continuous.provenances.clear()
+        tables_discrete = ts_discrete.dump_tables()
+        tables_discrete.provenances.clear()
         tables_default.provenances.clear()
-        self.assertEqual(tables_default, tables_continuous)
+        self.assertEqual(tables_default, tables_discrete)
 
     def test_discrete_genome_mutations(self):
         def run_sim(discrete_genome=None):
@@ -781,10 +781,10 @@ class TestSimulateInterface(unittest.TestCase):
 
         ts_default = run_sim()
         tables_default = ts_default.dump_tables()
-        tables_continuous = ts_continuous.dump_tables()
-        tables_continuous.provenances.clear()
+        tables_discrete = ts_discrete.dump_tables()
+        tables_discrete.provenances.clear()
         tables_default.provenances.clear()
-        self.assertEqual(tables_default, tables_continuous)
+        self.assertEqual(tables_default, tables_discrete)
 
     def test_discrete_genome_migrations(self):
         def run_sim(discrete_genome=None):

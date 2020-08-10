@@ -2063,6 +2063,7 @@ class MigrationRecordsMixin:
         ts = msprime.simulate(
             model=self.model,
             recombination_rate=1,
+            discrete_genome=False,
             population_configurations=population_configurations,
             migration_matrix=[[0, 0], [1, 0]],
             # Can migrate from 1 to 0 but not vice-versa
@@ -2089,6 +2090,7 @@ class MigrationRecordsMixin:
         ts = msprime.simulate(
             model=self.model,
             recombination_rate=10,
+            discrete_genome=False,
             population_configurations=population_configurations,
             demographic_events=[
                 msprime.MassMigration(time=20, source=1, dest=0, proportion=1)

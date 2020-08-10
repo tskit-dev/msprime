@@ -303,9 +303,7 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
     def test_hudson(self):
         threshold = 20
         sim = msprime.simulator_factory(
-            sample_size=10,
-            recombination_rate=10,
-            random_generator=_msprime.RandomGenerator(2),
+            sample_size=10, recombination_rate=10, discrete_genome=False, random_seed=2,
         )
         sim.run()
         self.assertGreater(sim.num_common_ancestor_events, threshold)
@@ -316,6 +314,8 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
             sample_size=10,
             recombination_rate=10,
             model="hudson",
+            discrete_genome=False,
+            random_seed=2,
             random_generator=_msprime.RandomGenerator(2),
         )
         sim2.run()
@@ -332,7 +332,8 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
                 sample_size=10,
                 recombination_rate=5,
                 model=model,
-                random_generator=_msprime.RandomGenerator(3),
+                discrete_genome=False,
+                random_seed=3,
             )
             sim.run()
             self.assertGreater(sim.num_rejected_common_ancestor_events, 0)
@@ -882,7 +883,9 @@ class TestSweepGenicSelection(unittest.TestCase):
             alpha=1000,
             dt=1e-6,
         )
-        ts = msprime.simulate(10, model=model, recombination_rate=1, random_seed=2)
+        ts = msprime.simulate(
+            10, model=model, recombination_rate=1, random_seed=2, discrete_genome=False
+        )
         self.assertGreater(ts.num_trees, 1)
 
     def test_sweep_coalescence_same_seed(self):

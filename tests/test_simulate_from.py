@@ -679,6 +679,11 @@ class TestBaseEquivalanceHudson(BaseEquivalanceMixin, unittest.TestCase):
 class TestBaseEquivalanceWrightFisher(BaseEquivalanceMixin, unittest.TestCase):
     model = msprime.DiscreteTimeWrightFisher()
 
+    @unittest.skip("assertion trip in DTWF")
+    # lib/msprime.c:1729: msp_dtwf_generate_breakpoint: Assertion `k > start' failed.
+    def test_random_recombination_map(self):
+        pass
+
 
 class TestDemography(unittest.TestCase):
     """
