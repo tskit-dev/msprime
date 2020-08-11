@@ -146,6 +146,7 @@ class TestNePopulationSizeEquivalence(unittest.TestCase):
                     msprime.PopulationConfiguration() for _ in range(num_pops)
                 ],
                 migration_matrix=migration_matrix,
+                discrete_genome=False,
                 random_seed=random_seed,
             )
             self.assertGreater(ts1.num_trees, 1)
@@ -157,6 +158,7 @@ class TestNePopulationSizeEquivalence(unittest.TestCase):
                     msprime.PopulationConfiguration(initial_size=Ne)
                     for _ in range(num_pops)
                 ],
+                discrete_genome=False,
                 random_seed=random_seed,
             )
             self.assert_tree_sequences_equal(ts1, ts2)
@@ -171,6 +173,7 @@ class TestNePopulationSizeEquivalence(unittest.TestCase):
                 ],
                 migration_matrix=migration_matrix,
                 random_seed=random_seed,
+                discrete_genome=False,
             )
             self.assert_tree_sequences_equal(ts1, ts3)
 
@@ -964,8 +967,6 @@ class TestDemographyTrajectories(unittest.TestCase):
         ddb = self.one_pop_example()
         steps = np.array([1000000 * k for k in range(1, 4)])
         rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2])
-        print(rates)
-        print(P)
         for rA, pA in zip(rates, P):
             self.assertTrue(np.isnan(rA))
             self.assertEqual(pA, 0)
@@ -2169,6 +2170,7 @@ class TestFullArgMigration(unittest.TestCase):
             migration_matrix=[[0, 1], [1, 0]],
             random_seed=1,
             recombination_rate=0.1,
+            discrete_genome=False,
             record_migrations=True,
             record_full_arg=True,
         )
@@ -2187,6 +2189,7 @@ class TestFullArgMigration(unittest.TestCase):
                 random_seed=101,
                 recombination_rate=0.1,
                 model=model,
+                discrete_genome=False,
                 record_migrations=True,
                 record_full_arg=True,
             )
@@ -2983,7 +2986,10 @@ class TestCensusEvent(unittest.TestCase):
                 le = list(tree.leaves(node))
                 leaves += le
             leaves.sort()
-            self.assertEqual(leaves, [i for i in range(0, ts.num_samples)])
+            if tree.time(tree.root) > census_time:
+                self.assertEqual(leaves, [i for i in range(0, ts.num_samples)])
+            else:
+                self.assertEqual(len(leaves), 0)
 
     def test_simple_case(self):
         census_time = 0.5
@@ -3000,8 +3006,23 @@ class TestCensusEvent(unittest.TestCase):
             sample_size=5,
             random_seed=1,
             recombination_rate=0.4,
+            discrete_genome=False,
             demographic_events=[msprime.CensusEvent(time=census_time)],
         )
+        self.assertGreater(ts.num_trees, 1)
+        self.verify(ts, census_time)
+
+    def test_multiple_trees_discrete(self):
+        census_time = 0.5
+        ts = msprime.simulate(
+            sample_size=5,
+            random_seed=1,
+            recombination_rate=0.4,
+            length=10,
+            discrete_genome=True,
+            demographic_events=[msprime.CensusEvent(time=census_time)],
+        )
+        self.assertGreater(ts.num_trees, 1)
         self.verify(ts, census_time)
 
     def test_population_IDs(self):
