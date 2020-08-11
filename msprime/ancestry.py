@@ -40,8 +40,6 @@ from . import provenance
 
 logger = logging.getLogger(__name__)
 
-SHORT_GENOME_THRESHOLD = 1000
-
 
 def model_factory(model):
     """
@@ -713,7 +711,7 @@ def simulate(
         discrete=sim.recombination_map.discrete,
     )
 
-    if discrete_genome is None and sim.sequence_length < SHORT_GENOME_THRESHOLD:
+    if discrete_genome is None and sim.sequence_length < core.SHORT_GENOME_THRESHOLD:
         # discrete_genome and recombination_map are mutually exclusive options,
         # so we only have to worry about the simple examples here. We warn
         # about short recombination maps separately.
@@ -1029,8 +1027,8 @@ class RecombinationMap:
                     "and set discrete=True"
                 )
         if discrete is None:
-            if length < SHORT_GENOME_THRESHOLD:
-                warnings.warn("short genome recomb map")
+            if length < core.SHORT_GENOME_THRESHOLD:
+                warnings.warn("short genome recomb map. TODO: helpful warning.")
             discrete = True
 
         if length < 1 and discrete:

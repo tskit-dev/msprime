@@ -21,6 +21,7 @@ Module responsible for generating mutations on a given tree sequence.
 """
 import inspect
 import sys
+import warnings
 
 import numpy as np
 import tskit
@@ -755,10 +756,10 @@ def mutate(
     rate=None,
     random_seed=None,
     model=None,
-    keep=False,
+    keep=None,
     start_time=None,
     end_time=None,
-    discrete=False,
+    discrete=None,
 ):
     """
     Simulates mutations on the specified ancestry and returns the resulting
@@ -847,8 +848,21 @@ def mutate(
         end_time = float(end_time)
     if start_time > end_time:
         raise ValueError("start_time must be <= end_time")
-    keep = bool(keep)
-    discrete = bool(discrete)
+
+    if keep is None:
+        keep = False
+    else:
+        keep = bool(keep)
+
+    if discrete is None:
+        if tables.sequence_length < core.SHORT_GENOME_THRESHOLD:
+            warnings.warn(
+                "short genome in mutate. Do you really want to be discrete?. "
+                "TODO: helpful warning."
+            )
+        discrete = True
+    else:
+        discrete = bool(discrete)
 
     if model is None:
         model = BinaryMutations()
