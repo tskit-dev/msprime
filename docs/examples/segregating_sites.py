@@ -6,7 +6,10 @@ import msprime
 def segregating_sites(n, theta, num_replicates):
     S = np.zeros(num_replicates)
     replicates = msprime.simulate(
-        sample_size=n, mutation_rate=theta / 4, num_replicates=num_replicates
+        sample_size=n,
+        mutation_rate=theta / 4,
+        num_replicates=num_replicates,
+        discrete_genome=False,
     )
     for j, tree_sequence in enumerate(replicates):
         S[j] = tree_sequence.get_num_mutations()

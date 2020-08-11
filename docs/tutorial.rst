@@ -1463,6 +1463,10 @@ API for replication: by providing the ``num_replicates`` argument to the
 in a straightforward manner. Here is an example where we compare the
 analytical results for the number of segregating sites with simulations:
 
+.. warning:: TODO add a helpful warning that older versions of this
+   example will give incorrect answers with msprime 1.0 and link to the
+   docs section where we talk about the discrete genome stuff.
+
 .. literalinclude:: examples/segregating_sites.py
 
 Running this code, we get:
