@@ -1,6 +1,4 @@
 #
-# Copyright (C) 2018 University of Oxford
-#
 # This file is part of msprime.
 #
 # msprime is free software: you can redistribute it and/or modify
@@ -38,7 +36,7 @@ class PythonRecombinationMap:
     A Python implementation of the RecombinationMap interface.
     """
 
-    def __init__(self, positions, rates, discrete=False):
+    def __init__(self, positions, rates, discrete=True):
         assert len(positions) == len(rates)
         assert len(positions) >= 2
         assert sorted(positions) == positions
@@ -121,8 +119,8 @@ class TestCoordinateConversion(unittest.TestCase):
         positions = [0, 0.25, 0.5, 0.75, 1]
         rates = [200, 0, 200, 0, 0]
         maps = [
-            msprime.RecombinationMap(positions, rates),
-            PythonRecombinationMap(positions, rates),
+            msprime.RecombinationMap(positions, rates, discrete=False),
+            PythonRecombinationMap(positions, rates, discrete=False),
         ]
         for rm in maps:
             total_recomb = rm.get_total_recombination_rate()
@@ -157,7 +155,7 @@ class TestCoordinateConversion(unittest.TestCase):
         positions = [0, 50, 100]
         rates = [1, 0, 0]
         maps = [
-            msprime.RecombinationMap(positions, rates),
+            msprime.RecombinationMap(positions, rates, discrete=False),
             PythonRecombinationMap(positions, rates),
         ]
         for rm in maps:
@@ -175,7 +173,7 @@ class TestCoordinateConversion(unittest.TestCase):
             for L in [0.1, 1, 10, 1024, 1e6]:
                 positions = [0, L]
                 rates = [rate, 0]
-                rm = msprime.RecombinationMap(positions, rates)
+                rm = msprime.RecombinationMap(positions, rates, discrete=False)
                 self.assertEqual(rate * L, rm.get_total_recombination_rate())
                 self.verify_coordinate_conversion(positions, rates)
 
@@ -191,10 +189,13 @@ class TestCoordinateConversion(unittest.TestCase):
             self.verify_coordinate_conversion(positions, rates)
 
     def test_simple_examples(self):
-        rm = msprime.RecombinationMap([0, 0.9, 1], [2, 1, 0])
-        self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
-        rm = msprime.RecombinationMap([0, 0.5, 0.6, 1], [2, 1, 2, 0])
-        self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
+        for discrete in [True, False]:
+            rm = msprime.RecombinationMap([0, 0.9, 1], [2, 1, 0], discrete=discrete)
+            self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
+            rm = msprime.RecombinationMap(
+                [0, 0.5, 0.6, 1], [2, 1, 2, 0], discrete=discrete
+            )
+            self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
 
     def test_integer_round_trip(self):
         for L in [1, 10, 100]:
@@ -216,21 +217,22 @@ class TestConstructorAndGetters(unittest.TestCase):
 
     def test_warn_on_num_loci_equal_seq_len(self):
         self.verify_warning(
-            lambda: msprime.RecombinationMap([0, 100], [0.1, 0], num_loci=100)
+            lambda: msprime.RecombinationMap([0, 1000], [0.1, 0], num_loci=1000)
         )
         self.verify_warning(
-            lambda: msprime.RecombinationMap.uniform_map(100, 0.1, num_loci=100)
+            lambda: msprime.RecombinationMap.uniform_map(1000, 0.1, num_loci=1000)
         )
 
     def test_unsupported_methods(self):
-        recomb_map = msprime.RecombinationMap([0, 10], [0.2, 0])
+        recomb_map = msprime.RecombinationMap([0, 10], [0.2, 0], discrete=True)
         self.assertRaises(ValueError, recomb_map.get_num_loci)
         self.assertRaises(ValueError, recomb_map.physical_to_discrete_genetic, 8)
         self.assertRaises(ValueError, recomb_map.get_per_locus_recombination_rate)
 
     def test_total_recombination_rate(self):
-        recomb_map = msprime.RecombinationMap([0, 10], [0.1, 0])
-        self.assertEqual(recomb_map.get_total_recombination_rate(), 1)
+        for discrete in [True, False]:
+            recomb_map = msprime.RecombinationMap([0, 10], [0.1, 0], discrete=discrete)
+            self.assertEqual(recomb_map.get_total_recombination_rate(), 1)
 
 
 class TestReadHapmap(unittest.TestCase):
@@ -294,7 +296,9 @@ class TestReadHapmap(unittest.TestCase):
 class TestSlice(unittest.TestCase):
     def test_slice(self):
         # test RecombinationMap.slice(..., trim=False)
-        a = msprime.RecombinationMap([0, 100, 200, 300, 400], [0, 1, 2, 3, 0])
+        a = msprime.RecombinationMap(
+            [0, 100, 200, 300, 400], [0, 1, 2, 3, 0], discrete=True
+        )
         b = a.slice()
         self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
         self.assertTrue(np.array_equal(a.get_positions(), b.get_positions()))
@@ -348,7 +352,9 @@ class TestSlice(unittest.TestCase):
     def test_slice_with_floats(self):
         #  test RecombinationMap.slice(..., trim=False) with floats
         a = msprime.RecombinationMap(
-            [np.pi * x for x in [0, 100, 200, 300, 400]], [0, 1, 2, 3, 0]
+            [np.pi * x for x in [0, 100, 200, 300, 400]],
+            [0, 1, 2, 3, 0],
+            discrete=False,
         )
         b = a.slice(start=50 * np.pi)
         self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
@@ -399,7 +405,7 @@ class TestSlice(unittest.TestCase):
         self.assertTrue(np.array_equal([0, 1, 0, 0], b.get_rates()))
 
     def test_slice_error(self):
-        recomb_map = msprime.RecombinationMap([0, 100], [1, 0])
+        recomb_map = msprime.RecombinationMap([0, 100], [1, 0], discrete=True)
         with self.assertRaises(IndexError):
             recomb_map.slice(start=-1)
         with self.assertRaises(IndexError):
@@ -413,7 +419,9 @@ class TestSlice(unittest.TestCase):
 
     def test_getitem_slice(self):
         # test RecombinationMap slice syntax
-        a = msprime.RecombinationMap([0, 100, 200, 300, 400], [0, 1, 2, 3, 0])
+        a = msprime.RecombinationMap(
+            [0, 100, 200, 300, 400], [0, 1, 2, 3, 0], discrete=True
+        )
         b = a[:]
         self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
         self.assertTrue(np.array_equal(a.get_positions(), b.get_positions()))
@@ -466,7 +474,9 @@ class TestSlice(unittest.TestCase):
 
     def test_getitem_slice_with_negative_indexes_and_floats(self):
         # test RecombinationMap slice syntax with negative indexes and floats
-        a = msprime.RecombinationMap([0, 100, 200, 300, 400], [0, 1, 2, 3, 0])
+        a = msprime.RecombinationMap(
+            [0, 100, 200, 300, 400], [0, 1, 2, 3, 0], discrete=False
+        )
 
         b = a[150:250]
         c = a[150:-150]
@@ -494,7 +504,7 @@ class TestSlice(unittest.TestCase):
         self.assertTrue(np.array_equal(b.get_rates(), c.get_rates()))
 
     def test_getitem_slice_errors(self):
-        recomb_map = msprime.RecombinationMap([0, 100], [1, 0])
+        recomb_map = msprime.RecombinationMap([0, 100], [1, 0], discrete=False)
         with self.assertRaises(TypeError):
             recomb_map["foo"]
         with self.assertRaises(TypeError):

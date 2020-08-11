@@ -1033,8 +1033,8 @@ class RecombinationMap:
                 warnings.warn("short genome recomb map")
             discrete = True
 
-        if discrete and np.any(np.floor(positions) != positions):
-            raise ValueError("Cannot create a discrete map with non-integer positions")
+        if length < 1 and discrete:
+            raise ValueError("Cannot have a discrete recombination map with length < 1")
 
         self._ll_recombination_map = _msprime.RecombinationMap(
             positions, rates, discrete
@@ -1122,7 +1122,7 @@ class RecombinationMap:
                 )
         finally:
             f.close()
-        return cls(positions, rates, map_start=map_start)
+        return cls(positions, rates, map_start=map_start, discrete=True)
 
     @property
     def mean_recombination_rate(self):
