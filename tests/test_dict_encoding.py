@@ -27,6 +27,7 @@ def get_example_tables():
         mutation_rate=1,
         record_migrations=True,
         random_seed=1,
+        discrete_genome=False,
     )
 
     tables = ts.dump_tables()
@@ -119,7 +120,7 @@ class TestRoundTrip(unittest.TestCase):
         self.assertEqual(tables, other_tables)
 
     def test_simple(self):
-        ts = msprime.simulate(10, mutation_rate=1, random_seed=2)
+        ts = msprime.simulate(10, mutation_rate=1, random_seed=2, discrete_genome=False)
         self.verify(ts.tables)
 
     def test_empty(self):
@@ -128,7 +129,7 @@ class TestRoundTrip(unittest.TestCase):
 
     def test_individuals(self):
         n = 10
-        ts = msprime.simulate(n, mutation_rate=1, random_seed=2)
+        ts = msprime.simulate(n, mutation_rate=1, random_seed=2, discrete_genome=False)
         tables = ts.dump_tables()
         for j in range(n):
             tables.individuals.add_row(flags=j, location=(j, j), metadata=b"x" * j)
@@ -136,7 +137,12 @@ class TestRoundTrip(unittest.TestCase):
 
     def test_sequence_length(self):
         ts = msprime.simulate(
-            10, recombination_rate=0.1, mutation_rate=1, length=0.99, random_seed=2
+            10,
+            recombination_rate=0.1,
+            mutation_rate=1,
+            length=0.99,
+            random_seed=2,
+            discrete_genome=False,
         )
         self.verify(ts.tables)
 
@@ -147,6 +153,7 @@ class TestRoundTrip(unittest.TestCase):
             population_configurations=pop_configs,
             migration_matrix=migration_matrix,
             mutation_rate=1,
+            discrete_genome=False,
             record_migrations=True,
             random_seed=1,
         )
