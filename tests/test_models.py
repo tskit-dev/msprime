@@ -316,7 +316,6 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
             model="hudson",
             discrete_genome=False,
             random_seed=2,
-            random_generator=_msprime.RandomGenerator(2),
         )
         sim2.run()
         self.assertEqual(
@@ -359,6 +358,7 @@ class TestEdges(unittest.TestCase):
             sample_size=sample_size,
             recombination_rate=recombination_rate,
             random_seed=random_seed,
+            discrete_genome=False,
         )
         edgesets = sorted(ts.edgesets(), key=lambda e: (e.parent, e.left))
         num_found = 0
@@ -375,6 +375,7 @@ class TestEdges(unittest.TestCase):
                 sample_size=sample_size,
                 recombination_rate=recombination_rate,
                 random_seed=random_seed,
+                discrete_genome=False,
                 model=model,
             )
             edgesets = sorted(ts.edgesets(), key=lambda e: (e.parent, e.left))
@@ -453,7 +454,11 @@ class TestMultipleMergerModels(unittest.TestCase):
     def test_dirac_coalescent_lambda_regime_recombination(self):
         model = msprime.DiracCoalescent(psi=0.9, c=100)
         ts = msprime.simulate(
-            sample_size=100, recombination_rate=100, model=model, random_seed=3
+            sample_size=100,
+            recombination_rate=100,
+            discrete_genome=False,
+            model=model,
+            random_seed=3,
         )
         self.verify_non_binary(ts)
 
@@ -495,13 +500,23 @@ class TestDtwf(unittest.TestCase):
     def test_low_recombination(self):
         # https://github.com/tskit-dev/msprime/issues/831
         ts = msprime.simulate(
-            10, Ne=1e2, model="dtwf", recombination_rate=1e-9, random_seed=2
+            10,
+            Ne=1e2,
+            model="dtwf",
+            recombination_rate=1e-9,
+            random_seed=2,
+            discrete_genome=False,
         )
         self.assertEqual(ts.num_trees, 1)
 
     def test_very_low_recombination(self):
         ts = msprime.simulate(
-            10, Ne=1e2, model="dtwf", recombination_rate=1e-300, random_seed=2
+            10,
+            Ne=1e2,
+            model="dtwf",
+            recombination_rate=1e-300,
+            random_seed=2,
+            discrete_genome=False,
         )
         self.assertEqual(ts.num_trees, 1)
 
@@ -520,7 +535,7 @@ class TestDtwf(unittest.TestCase):
     def test_no_recombination_interval(self):
         positions = [0, 50, 100, 150, 200]
         rates = [0.01, 0.0, 0.1, 0.005, 0.0]
-        recombination_map = msprime.RecombinationMap(positions, rates)
+        recombination_map = msprime.RecombinationMap(positions, rates, discrete=False)
         ts = msprime.simulate(
             10, Ne=10, model="dtwf", random_seed=2, recombination_map=recombination_map
         )
@@ -627,6 +642,7 @@ class TestMixedModels(unittest.TestCase):
             sample_size=4,
             pedigree=ped,
             recombination_rate=0.1,
+            discrete_genome=False,
             model=[model, (1, "dtwf")],
         )
         tree = ts.first()
@@ -681,6 +697,7 @@ class TestMixedModels(unittest.TestCase):
             Ne=Ne,
             model=["dtwf", (t, "hudson")],
             recombination_rate=0.1,
+            discrete_genome=False,
             random_seed=2,
         )
         tree = ts.first()
@@ -697,15 +714,10 @@ class TestMixedModels(unittest.TestCase):
         Ne = 100
         t = 100
         ts1 = msprime.simulate(
-            sample_size=10,
-            Ne=Ne,
-            model=["dtwf", (t, "hudson")],
-            recombination_rate=0.1,
-            random_seed=2,
+            sample_size=10, Ne=Ne, model=["dtwf", (t, "hudson")], random_seed=2,
         )
         ts2 = msprime.simulate(
             sample_size=10,
-            recombination_rate=0.1,
             Ne=Ne,
             model="dtwf",
             demographic_events=[msprime.SimulationModelChange(t, "hudson")],
@@ -713,7 +725,6 @@ class TestMixedModels(unittest.TestCase):
         )
         ts3 = msprime.simulate(
             sample_size=10,
-            recombination_rate=0.1,
             Ne=Ne,
             model="dtwf",
             demographic_events=[msprime.SimulationModelChange(t)],
@@ -737,6 +748,7 @@ class TestMixedModels(unittest.TestCase):
             Ne=Ne,
             model=["dtwf", (t1, "hudson"), (t2, "dtwf")],
             recombination_rate=0.1,
+            discrete_genome=False,
             random_seed=2,
         )
         tree = ts.first()
@@ -755,6 +767,7 @@ class TestMixedModels(unittest.TestCase):
             Ne=Ne,
             sample_size=10,
             recombination_rate=0.1,
+            discrete_genome=False,
             model=[
                 "hudson",
                 msprime.SimulationModelChange(10, msprime.StandardCoalescent()),
@@ -788,6 +801,7 @@ class TestMixedModels(unittest.TestCase):
             Ne=Ne,
             sample_size=10,
             recombination_rate=0.1,
+            discrete_genome=False,
             model=[
                 None,
                 msprime.SimulationModelChange(10, msprime.StandardCoalescent()),
@@ -856,9 +870,7 @@ class TestSweepGenicSelection(unittest.TestCase):
         )
         for num_labels in [1, 3, 10]:
             with self.assertRaises(_msprime.LibraryError):
-                msprime.simulate(
-                    10, recombination_rate=1, model=model, num_labels=num_labels
-                )
+                msprime.simulate(10, model=model, num_labels=num_labels)
 
     def test_sweep_coalescence_no_recomb(self):
         N = 1e6
@@ -909,6 +921,7 @@ class TestSweepGenicSelection(unittest.TestCase):
             10,
             Ne=0.25,
             recombination_rate=2,
+            discrete_genome=False,
             model=[None, (t_start, sweep_model), (None, None)],
             random_seed=2,
         )
@@ -924,6 +937,7 @@ class TestSweepGenicSelection(unittest.TestCase):
             10,
             Ne=0.25,
             recombination_rate=2,
+            discrete_genome=False,
             model=["hudson", (t_start, sweep_model)],
             random_seed=2,
         )
@@ -939,6 +953,7 @@ class TestSweepGenicSelection(unittest.TestCase):
             10,
             Ne=0.25,
             recombination_rate=2,
+            discrete_genome=False,
             model=[sweep_model, (None, None)],
             random_seed=2,
         )
@@ -949,6 +964,7 @@ class TestSweepGenicSelection(unittest.TestCase):
             10,
             Ne=0.25,
             recombination_rate=2,
+            discrete_genome=False,
             model=[
                 sweep_model,
                 msprime.SimulationModelChange(lambda t: None, "hudson"),
@@ -959,7 +975,12 @@ class TestSweepGenicSelection(unittest.TestCase):
 
         # Make sure that the Hudson phase did something.
         ts = msprime.simulate(
-            10, Ne=0.25, recombination_rate=2, model=sweep_model, random_seed=2,
+            10,
+            Ne=0.25,
+            recombination_rate=2,
+            model=sweep_model,
+            random_seed=2,
+            discrete_genome=True,
         )
         self.assertTrue(any(tree.num_roots > 1 for tree in ts.trees()))
 
@@ -975,6 +996,7 @@ class TestSweepGenicSelection(unittest.TestCase):
             Ne=0.25,
             length=10,
             recombination_rate=0.2,
+            discrete_genome=False,
             model=[None, msprime.SimulationModelChange(0.01, sweep_models[0])]
             + [msprime.SimulationModelChange(None, model) for model in sweep_models]
             + [msprime.SimulationModelChange()],
@@ -1006,6 +1028,7 @@ class TestSweepGenicSelection(unittest.TestCase):
             Ne=0.25,
             length=10,
             recombination_rate=0.2,
+            discrete_genome=False,
             demographic_events=events,
             random_seed=2,
         )
@@ -1017,6 +1040,7 @@ class TestSweepGenicSelection(unittest.TestCase):
             model=["hudson"] + events,
             length=10,
             recombination_rate=0.2,
+            discrete_genome=False,
             random_seed=2,
         )
         self.assertTreeSequencesEqual(ts2, ts)
@@ -1044,6 +1068,7 @@ class TestSweepGenicSelection(unittest.TestCase):
             Ne=0.25,
             length=10,
             recombination_rate=0.2,
+            discrete_genome=False,
             demographic_events=events,
             random_seed=2,
         )
@@ -1055,6 +1080,7 @@ class TestSweepGenicSelection(unittest.TestCase):
             Ne=0.25,
             length=10,
             recombination_rate=0.2,
+            discrete_genome=False,
             random_seed=2,
         )
         self.assertTreeSequencesEqual(ts2, ts)
