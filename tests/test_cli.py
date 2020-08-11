@@ -1500,7 +1500,12 @@ class TestMspConversionOutput(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls._tree_sequence = msprime.simulate(
-            10, length=10, recombination_rate=10, mutation_rate=10, random_seed=1
+            10,
+            length=10,
+            recombination_rate=10,
+            mutation_rate=10,
+            random_seed=1,
+            discrete_genome=False,
         )
         fd, cls._tree_sequence_file = tempfile.mkstemp(
             prefix="msp_cli", suffix=".trees"
@@ -1733,7 +1738,7 @@ class TestMspConversionOutput(unittest.TestCase):
         output = stdout.splitlines()
         self.assertTrue(output[0].startswith("COMMAND:"))
         self.assertTrue(output[1].startswith("SEED:"))
-        self.assertEqual(len(output), 2 + self._tree_sequence.get_num_mutations())
+        self.assertEqual(len(output), 2 + self._tree_sequence.num_sites)
         n = self._tree_sequence.get_sample_size()
         m = self._tree_sequence.get_sequence_length()
         sites = list(self._tree_sequence.sites())
@@ -1787,7 +1792,7 @@ class TestUpgrade(TestCli):
             self.assertEqual(ts1.get_num_trees(), ts2.get_num_trees())
 
     def test_duplicate_positions(self):
-        ts = msprime.simulate(10, mutation_rate=10)
+        ts = msprime.simulate(10, mutation_rate=10, discrete_genome=False)
         for version in [2, 3]:
             tskit.dump_legacy(ts, self.legacy_file_name, version=version)
             root = h5py.File(self.legacy_file_name, "r+")
