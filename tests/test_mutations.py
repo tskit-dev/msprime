@@ -294,7 +294,7 @@ class TestMutate(unittest.TestCase, MutateMixin):
         self.assertEqual(t1.mutations, t2.mutations)
 
     def test_mutation_overwrite(self):
-        ts = msprime.simulate(10, mutation_rate=5, random_seed=2)
+        ts = msprime.simulate(10, mutation_rate=5, random_seed=2, discrete_genome=False)
         self.assertGreater(ts.num_sites, 0)
         self.assertGreater(ts.num_mutations, 0)
         mutated = msprime.mutate(ts, 0)
@@ -497,7 +497,9 @@ class TestFiniteSites(TestMutate):
 
     def test_zero_mutation_rate(self):
         for keep in (True, False):
-            ts = msprime.simulate(10, random_seed=1, mutation_rate=2.0)
+            ts = msprime.simulate(
+                10, random_seed=1, mutation_rate=2.0, discrete_genome=False
+            )
             mutated = self.mutate_binary(ts, 0, keep=keep)
             t1 = ts.dump_tables()
             t2 = mutated.dump_tables()
@@ -510,7 +512,9 @@ class TestFiniteSites(TestMutate):
                 self.assertEqual(t2.sites.num_rows, 0)
 
     def test_bad_mutate_order(self):
-        ts = msprime.simulate(10, random_seed=1, recombination_rate=1, length=10)
+        ts = msprime.simulate(
+            10, random_seed=1, recombination_rate=1, length=10, discrete_genome=True
+        )
         mutated = msprime.mutate(
             ts, 3, random_seed=5, start_time=0.0, end_time=0.5, discrete=True
         )
@@ -527,7 +531,13 @@ class TestFiniteSites(TestMutate):
 
     def test_one_way_mutation(self):
         for discrete in (True, False):
-            ts = msprime.simulate(10, random_seed=1, recombination_rate=1.0, length=10)
+            ts = msprime.simulate(
+                10,
+                random_seed=1,
+                recombination_rate=1.0,
+                length=10,
+                discrete_genome=False,
+            )
             mut_matrix = [[0.0, 1.0], [0.0, 1.0]]
             mutated = self.mutate_binary(
                 ts,
@@ -548,7 +558,13 @@ class TestFiniteSites(TestMutate):
     def test_flip_flop_mutation(self):
         nucleotides = "ACGT"
         for discrete in (True, False):
-            ts = msprime.simulate(10, random_seed=1, recombination_rate=1.0, length=10)
+            ts = msprime.simulate(
+                10,
+                random_seed=1,
+                recombination_rate=1.0,
+                length=10,
+                discrete_genome=True,
+            )
             mut_matrix = [
                 [0.0, 0.0, 0.5, 0.5],
                 [0.0, 0.0, 0.5, 0.5],
@@ -595,7 +611,13 @@ class TestFiniteSites(TestMutate):
     def test_uniform_mutations(self):
         nucleotides = "ACGT"
         for discrete in (True, False):
-            ts = msprime.simulate(10, random_seed=1, recombination_rate=1.0, length=10)
+            ts = msprime.simulate(
+                10,
+                random_seed=1,
+                recombination_rate=1.0,
+                length=10,
+                discrete_genome=True,
+            )
             mut_matrix = [
                 [0.1, 0.3, 0.3, 0.3],
                 [0.0, 0.0, 0.5, 0.5],
@@ -625,7 +647,13 @@ class TestFiniteSites(TestMutate):
     def test_circular_mutations(self):
         nucleotides = "ACGT"
         for discrete in (True, False):
-            ts = msprime.simulate(10, random_seed=1, recombination_rate=1.0, length=10)
+            ts = msprime.simulate(
+                10,
+                random_seed=1,
+                recombination_rate=1.0,
+                length=10,
+                discrete_genome=True,
+            )
             mut_matrix = [
                 [0.0, 1.0, 0.0, 0.0],
                 [0.0, 0.0, 1.0, 0.0],
@@ -656,7 +684,9 @@ class TestFiniteSites(TestMutate):
                     )
 
     def test_integer_sites(self):
-        ts = msprime.simulate(10, random_seed=5, length=10, recombination_rate=10.0)
+        ts = msprime.simulate(
+            10, random_seed=5, length=10, recombination_rate=10.0, discrete_genome=True
+        )
         mutated = self.mutate_binary(ts, rate=5.0, discrete=True)
         self.assertEqual(mutated.site(0).position, 0.0)
         for site in mutated.sites():
@@ -748,7 +778,9 @@ class TestInterval(unittest.TestCase):
         self.verify(ts)
 
     def test_coalescent_trees(self):
-        ts = msprime.simulate(20, recombination_rate=1, random_seed=2)
+        ts = msprime.simulate(
+            20, recombination_rate=1, random_seed=2, discrete_genome=False
+        )
         self.verify(ts)
 
     def test_wright_fisher_trees(self):
@@ -760,7 +792,9 @@ class TestInterval(unittest.TestCase):
         self.verify(ts, rate=10)
 
     def test_negative_time(self):
-        ts = msprime.simulate(10, recombination_rate=1, random_seed=2)
+        ts = msprime.simulate(
+            10, recombination_rate=1, random_seed=2, discrete_genome=False
+        )
         tables = ts.dump_tables()
         time = tables.nodes.time
         max_time = np.max(time)
@@ -817,7 +851,7 @@ class TestKeep(unittest.TestCase):
         self.assertEqual(found, original.num_sites)
 
     def test_simple_binary(self):
-        ts = msprime.simulate(10, mutation_rate=1, random_seed=2)
+        ts = msprime.simulate(10, mutation_rate=1, random_seed=2, discrete_genome=False)
         self.assertGreater(ts.num_sites, 0)
         self.verify(ts, 1, random_seed=2)
 
@@ -833,21 +867,25 @@ class TestKeep(unittest.TestCase):
 
     def test_branch_mutations(self):
         ts = tsutil.insert_branch_mutations(
-            msprime.simulate(10, recombination_rate=1, random_seed=2)
+            msprime.simulate(
+                10, recombination_rate=1, random_seed=2, discrete_genome=False
+            )
         )
         self.assertGreater(ts.num_sites, 1)
         self.verify(ts, 3, random_seed=7)
 
     def test_multichar_mutations(self):
         ts = tsutil.insert_multichar_mutations(
-            msprime.simulate(12, recombination_rate=4, random_seed=3)
+            msprime.simulate(
+                12, recombination_rate=4, random_seed=3, discrete_genome=False
+            )
         )
         self.assertGreater(ts.num_sites, 5)
         self.verify(ts, 3, random_seed=7)
 
     def test_random_metadata(self):
         ts = tsutil.add_random_metadata(
-            msprime.simulate(12, random_seed=3, mutation_rate=1)
+            msprime.simulate(12, random_seed=3, mutation_rate=1, discrete_genome=False)
         )
         self.assertGreater(ts.num_sites, 5)
         self.verify(ts, 3, random_seed=7)
@@ -904,7 +942,9 @@ class TestKeep(unittest.TestCase):
         self.verify_sites(ts, other)
 
     def test_keep_mutation_parent(self):
-        ts = msprime.simulate(12, recombination_rate=3, random_seed=3)
+        ts = msprime.simulate(
+            12, recombination_rate=3, random_seed=3, discrete_genome=False
+        )
         ts = tsutil.insert_branch_mutations(ts)
         self.assertGreater(ts.num_sites, 2)
         other = msprime.mutate(ts, rate=1, random_seed=1, keep=True)
@@ -912,7 +952,9 @@ class TestKeep(unittest.TestCase):
         self.verify_sites(ts, other)
 
     def test_keep_mutation_parent_zero_rate(self):
-        ts = msprime.simulate(12, recombination_rate=3, random_seed=3)
+        ts = msprime.simulate(
+            12, recombination_rate=3, random_seed=3, discrete_genome=False
+        )
         ts = tsutil.insert_branch_mutations(ts)
         self.assertGreater(ts.num_sites, 2)
         other = msprime.mutate(ts, rate=0, random_seed=1, keep=True)
@@ -952,7 +994,9 @@ class StatisticalTestMixin:
 
 class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
     def verify_model(self, model, verify_roots=True):
-        ots = msprime.simulate(10, random_seed=5, recombination_rate=0.05, length=20)
+        ots = msprime.simulate(
+            10, random_seed=5, recombination_rate=0.05, length=20, discrete_genome=False
+        )
         # "large enough sample"-condition for the chisquare test
         if len(model.alleles) > 4:
             rates = (15, 20)
@@ -1049,7 +1093,9 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         # doesn't depend on the previous state
         assert len(set(np.diag(model.transition_matrix))) == 1
         np.random.seed(23)
-        ots = msprime.simulate(10, random_seed=5, recombination_rate=0.05, length=20)
+        ots = msprime.simulate(
+            10, random_seed=5, recombination_rate=0.05, length=20, discrete_genome=True
+        )
         for discrete in (False, True):
             for rate in (1, 10):
                 ts = msprime.mutate(
@@ -1254,7 +1300,9 @@ class TestSlimMutationModel(unittest.TestCase):
         self.validate_slim_mutations(mts)
 
     def test_binary_many_trees(self):
-        ts = msprime.simulate(8, length=5, recombination_rate=5, random_seed=50)
+        ts = msprime.simulate(
+            8, length=5, recombination_rate=5, random_seed=50, discrete_genome=False
+        )
         self.assertGreater(ts.num_trees, 20)
         mts = self.run_mutate(ts, rate=2.0, random_seed=23)
         self.assertGreater(mts.num_mutations, 10)
@@ -1324,7 +1372,9 @@ class TestInfiniteAllelesMutationModel(unittest.TestCase):
         self.validate(mts)
 
     def test_binary_many_trees(self):
-        ts = msprime.simulate(8, length=5, recombination_rate=5, random_seed=50)
+        ts = msprime.simulate(
+            8, length=5, recombination_rate=5, random_seed=50, discrete_genome=False
+        )
         self.assertGreater(ts.num_trees, 20)
         mts = self.run_mutate(ts, rate=2.0, random_seed=23)
         self.assertGreater(mts.num_mutations, 10)
@@ -1380,18 +1430,31 @@ class TestPythonMutationGenerator(unittest.TestCase):
         self.verify(ts, random_seed=234)
 
     def test_single_tree_mutations(self):
-        ts = msprime.simulate(10, length=100, mutation_rate=0.1, random_seed=1234)
-        self.assertGreater(ts.num_sites, 0)
+        ts = msprime.simulate(
+            10, length=100, mutation_rate=0.1, random_seed=1234, discrete_genome=False
+        )
+        self.assertGreater(ts.num_sites, 1)
         self.verify(ts, random_seed=34)
 
     def test_many_trees_no_mutations(self):
-        ts = msprime.simulate(10, length=100, recombination_rate=0.1, random_seed=123)
+        ts = msprime.simulate(
+            10,
+            length=100,
+            recombination_rate=0.1,
+            random_seed=123,
+            discrete_genome=True,
+        )
         self.assertGreater(ts.num_trees, 1)
         self.verify(ts, random_seed=789)
 
     def test_many_trees_mutations(self):
         ts = msprime.simulate(
-            10, length=100, mutation_rate=0.1, recombination_rate=2, random_seed=123
+            10,
+            length=100,
+            mutation_rate=0.1,
+            recombination_rate=2,
+            random_seed=123,
+            discrete_genome=False,
         )
         self.assertGreater(ts.num_trees, 1)
         self.assertGreater(ts.num_sites, 1)

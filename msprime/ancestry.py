@@ -705,6 +705,7 @@ def simulate(
                 "start_time. Please use msprime.mutate on the returned "
                 "tree sequence instead"
             )
+
     mutation_generator = mutations._simple_mutation_generator(
         mutation_rate,
         sim.sequence_length,

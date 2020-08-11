@@ -905,7 +905,9 @@ class TestErrors(unittest.TestCase):
         for bad_length in [1, 4.99, 5.01, 100]:
             with self.assertRaises(ValueError):
                 msprime.simulate(from_ts=base_ts, start_time=100, length=bad_length)
-            recomb_map = msprime.RecombinationMap.uniform_map(bad_length, 1)
+            recomb_map = msprime.RecombinationMap.uniform_map(
+                bad_length, 1, discrete=False
+            )
             with self.assertRaises(ValueError):
                 msprime.simulate(
                     from_ts=base_ts, start_time=100, recombination_map=recomb_map
