@@ -1041,7 +1041,7 @@ class RecombinationMap:
         self.map_start = map_start
 
     @classmethod
-    def uniform_map(cls, length, rate, num_loci=None, discrete=False):
+    def uniform_map(cls, length, rate, num_loci=None, discrete=None):
         """
         Returns a :class:`.RecombinationMap` instance in which the recombination
         rate is constant over a chromosome of the specified length. The optional

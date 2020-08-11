@@ -543,7 +543,7 @@ class TestSimulatorFactory(unittest.TestCase):
         for n in range(2, 10):
             positions = list(range(n))
             rates = [0.1 * j for j in range(n - 1)] + [0.0]
-            recomb_map = msprime.RecombinationMap(positions, rates)
+            recomb_map = msprime.RecombinationMap(positions, rates, discrete=False)
             sim = msprime.simulator_factory(10, recombination_map=recomb_map)
             self.assertEqual(sim.recombination_map, recomb_map)
             self.assertEqual(recomb_map.get_positions(), positions)
@@ -551,7 +551,7 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertEqual(sim.sequence_length, recomb_map.get_sequence_length())
 
     def test_combining_recomb_map_and_rate_length(self):
-        recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
+        recomb_map = msprime.RecombinationMap([0, 1], [1, 0], discrete=False)
         self.assertRaises(
             ValueError,
             msprime.simulator_factory,
@@ -729,7 +729,7 @@ class TestSimulateInterface(unittest.TestCase):
 
     def test_discrete_genome_recombination_map(self):
         # Cannot specify discrete_genome and recombination_map at once
-        recomb_map = msprime.RecombinationMap.uniform_map(10, 0.1)
+        recomb_map = msprime.RecombinationMap.uniform_map(10, 0.1, discrete=False)
         with self.assertRaises(ValueError):
             msprime.simulate(10, discrete_genome=True, recombination_map=recomb_map)
 
@@ -751,7 +751,9 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertGreater(ts_continuous.num_trees, 1)
         self.assertFalse(has_discrete_genome(ts_continuous))
 
-        ts_default = run_sim()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ts_default = run_sim()
         tables_default = ts_default.dump_tables()
         tables_discrete = ts_discrete.dump_tables()
         tables_discrete.provenances.clear()
@@ -779,7 +781,9 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertGreater(ts_discrete.num_sites, 1)
         self.assertFalse(has_discrete_genome(ts_continuous))
 
-        ts_default = run_sim()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ts_default = run_sim()
         tables_default = ts_default.dump_tables()
         tables_discrete = ts_discrete.dump_tables()
         tables_discrete.provenances.clear()
@@ -840,7 +844,9 @@ class TestSimulateInterface(unittest.TestCase):
             self.verify_provenance(ts.provenance(0))
 
     def test_end_time(self):
-        ts = msprime.simulate(15, recombination_rate=2, random_seed=8, end_time=0.1)
+        ts = msprime.simulate(
+            15, recombination_rate=2, random_seed=8, end_time=0.1, discrete_genome=False
+        )
         for tree in ts.trees():
             for root in tree.roots:
                 self.assertEqual(tree.time(root), 0.1)
@@ -858,17 +864,21 @@ class TestSimulateInterface(unittest.TestCase):
 
     def test_mutations(self):
         n = 10
-        ts = msprime.simulate(n, mutation_rate=10)
+        ts = msprime.simulate(n, mutation_rate=10, discrete_genome=False)
         self.assertIsInstance(ts, tskit.TreeSequence)
-        self.assertEqual(ts.get_sample_size(), n)
-        self.assertEqual(ts.get_num_trees(), 1)
-        self.assertGreater(ts.get_num_mutations(), 0)
+        self.assertEqual(ts.sample_size, n)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertGreater(ts.num_mutations, 0)
+        self.assertGreater(ts.num_sites, 0)
+        self.assertEqual(ts.num_sites, ts.num_mutations)
 
     def test_no_mutations_with_start_time(self):
         with self.assertRaises(ValueError):
-            msprime.simulate(10, mutation_rate=10, start_time=3)
+            msprime.simulate(10, mutation_rate=10, start_time=3, discrete_genome=False)
         # But fine if we set start_time = None
-        ts = msprime.simulate(10, mutation_rate=10, start_time=None, random_seed=1)
+        ts = msprime.simulate(
+            10, mutation_rate=10, start_time=None, random_seed=1, discrete_genome=False
+        )
         self.assertGreater(ts.num_sites, 0)
 
     def test_mutation_generator_unsupported(self):
@@ -885,12 +895,22 @@ class TestSimulateInterface(unittest.TestCase):
         for bad_value in ["x", [], [[], []]]:
             self.assertRaises(ValueError, msprime.simulate, 10, mutation_rate=bad_value)
 
-    def test_recombination(self):
+    def test_recombination_continuous(self):
         n = 10
-        ts = msprime.simulate(n, recombination_rate=10)
+        ts = msprime.simulate(n, recombination_rate=10, discrete_genome=False)
         self.assertIsInstance(ts, tskit.TreeSequence)
         self.assertEqual(ts.sample_size, n)
         self.assertGreater(ts.num_trees, 1)
+        self.assertFalse(has_discrete_genome(ts))
+        self.assertEqual(ts.num_mutations, 0)
+
+    def test_recombination_discrete(self):
+        n = 10
+        ts = msprime.simulate(n, length=10, recombination_rate=10, discrete_genome=True)
+        self.assertIsInstance(ts, tskit.TreeSequence)
+        self.assertEqual(ts.sample_size, n)
+        self.assertGreater(ts.num_trees, 1)
+        self.assertTrue(has_discrete_genome(ts))
         self.assertEqual(ts.num_mutations, 0)
 
     def test_gene_conversion_simple_map(self):
@@ -971,9 +991,15 @@ class TestRecombinationMap(unittest.TestCase):
 
     # TODO these are incomplete.
     def test_discrete(self):
-        for truthy in [True, False, {}, None, "ser"]:
+        for truthy in [True, False, {}, "ser"]:
             rm = msprime.RecombinationMap.uniform_map(1, 0, discrete=truthy)
             self.assertEqual(rm.discrete, bool(truthy))
+
+    def test_test_default_discrete(self):
+        rm = msprime.RecombinationMap.uniform_map(1000, 0)
+        self.assertTrue(rm.discrete)
+        rm = msprime.RecombinationMap.uniform_map(1000, 0, discrete=None)
+        self.assertTrue(rm.discrete)
 
     def test_zero_recombination_map(self):
         # test that beginning and trailing zero recombination regions in the
@@ -981,7 +1007,7 @@ class TestRecombinationMap(unittest.TestCase):
         for n in range(3, 10):
             positions = list(range(n))
             rates = [0.0, 0.2] + [0.0] * (n - 2)
-            recomb_map = msprime.RecombinationMap(positions, rates)
+            recomb_map = msprime.RecombinationMap(positions, rates, discrete=False)
             ts = msprime.simulate(10, recombination_map=recomb_map)
             self.assertEqual(ts.sequence_length, n - 1)
             self.assertEqual(min(ts.tables.edges.left), 0.0)
@@ -989,15 +1015,15 @@ class TestRecombinationMap(unittest.TestCase):
 
     def test_mean_recombination_rate(self):
         # Some quick sanity checks.
-        recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
+        recomb_map = msprime.RecombinationMap([0, 1], [1, 0], discrete=False)
         mean_rr = recomb_map.mean_recombination_rate
         self.assertEqual(mean_rr, 1.0)
 
-        recomb_map = msprime.RecombinationMap([0, 1, 2], [1, 0, 0])
+        recomb_map = msprime.RecombinationMap([0, 1, 2], [1, 0, 0], discrete=False)
         mean_rr = recomb_map.mean_recombination_rate
         self.assertEqual(mean_rr, 0.5)
 
-        recomb_map = msprime.RecombinationMap([0, 1, 2], [0, 0, 0])
+        recomb_map = msprime.RecombinationMap([0, 1, 2], [0, 0, 0], discrete=False)
         mean_rr = recomb_map.mean_recombination_rate
         self.assertEqual(mean_rr, 0.0)
 
