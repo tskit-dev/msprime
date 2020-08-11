@@ -40,7 +40,7 @@ from . import provenance
 
 logger = logging.getLogger(__name__)
 
-SHORT_GENOME_WARNING_THRESHOLD = 1000
+SHORT_GENOME_THRESHOLD = 1000
 
 
 def model_factory(model):
@@ -288,6 +288,12 @@ def recombination_map_factory(
     """
     if discrete_genome is None:
         discrete_genome = True
+    elif recombination_map is not None:
+        raise ValueError(
+            "Cannot specify discrete_genome and recombination_map arguments at "
+            "the same time. Please use the ``discrete`` argument when creating "
+            "the recombination map instead"
+        )
 
     if recombination_map is None:
         # Default to 1 if no from_ts; otherwise default to the sequence length
@@ -316,11 +322,6 @@ def recombination_map_factory(
             raise ValueError(
                 "Cannot specify length/recombination_rate along with "
                 "a recombination map"
-            )
-
-        if recombination_map.discrete != discrete_genome:
-            raise ValueError(
-                "The recombination_map and discrete_genome arguments must agree"
             )
 
     if from_ts is not None:
@@ -711,8 +712,11 @@ def simulate(
         discrete=sim.recombination_map.discrete,
     )
 
-    if discrete_genome is None and sim.sequence_length < SHORT_GENOME_WARNING_THRESHOLD:
-        if sim.recombination_map.get_total_recombination_rate() > 0:
+    if discrete_genome is None and sim.sequence_length < SHORT_GENOME_THRESHOLD:
+        # discrete_genome and recombination_map are mutually exclusive options,
+        # so we only have to worry about the simple examples here. We warn
+        # about short recombination maps separately.
+        if recombination_rate is not None and recombination_rate > 0:
             warnings.warn(
                 "You have asked for a short genome size with a non-zero recombination "
                 "rate. TODO: write the rest of this message."
@@ -1007,10 +1011,12 @@ class RecombinationMap:
         model this can be set to smaller values.
     :param bool discrete: Whether recombination can occur only at integer
         positions (the default). When ``False``, recombination sites can take continuous
-        values.
+        values. If discrete is True, the input positions must also be integers.
     """
 
-    def __init__(self, positions, rates, num_loci=None, discrete=True, map_start=0):
+    def __init__(self, positions, rates, num_loci=None, discrete=None, map_start=0):
+        positions = np.array(positions)
+        length = positions[-1]
         if num_loci is not None:
             if num_loci == positions[-1]:
                 warnings.warn("num_loci is no longer supported and should not be used.")
@@ -1021,6 +1027,14 @@ class RecombinationMap:
                     "scale positions to span the desired number of loci "
                     "and set discrete=True"
                 )
+        if discrete is None:
+            if length < SHORT_GENOME_THRESHOLD:
+                warnings.warn("short genome recomb map")
+            discrete = True
+
+        if discrete and np.any(np.floor(positions) != positions):
+            raise ValueError("Cannot create a discrete map with non-integer positions")
+
         self._ll_recombination_map = _msprime.RecombinationMap(
             positions, rates, discrete
         )

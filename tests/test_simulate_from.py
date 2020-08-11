@@ -72,34 +72,64 @@ class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
                     self.assertEqual(ts.node(root).time, root_time)
 
     def test_bug_instance1(self):
-        ts = msprime.simulate(10, recombination_rate=10, end_time=0.5, random_seed=103)
+        ts = msprime.simulate(
+            10,
+            recombination_rate=10,
+            end_time=0.5,
+            random_seed=103,
+            discrete_genome=False,
+        )
         self.verify(ts)
 
     def test_bug_instance2(self):
-        ts = msprime.simulate(10, recombination_rate=10, end_time=1.0, random_seed=61)
+        ts = msprime.simulate(
+            10,
+            recombination_rate=10,
+            end_time=1.0,
+            random_seed=61,
+            discrete_genome=False,
+        )
         self.verify(ts)
 
     def test_large_recombination(self):
-        ts = msprime.simulate(15, recombination_rate=1.0, random_seed=2, end_time=0.25)
+        ts = msprime.simulate(
+            15,
+            recombination_rate=1.0,
+            random_seed=2,
+            end_time=0.25,
+            discrete_genome=False,
+        )
         self.verify(ts)
 
     def test_simple_recombination(self):
-        ts = msprime.simulate(10, recombination_rate=0.1, random_seed=1, end_time=0.5)
+        ts = msprime.simulate(
+            10,
+            recombination_rate=0.1,
+            random_seed=1,
+            end_time=0.5,
+            discrete_genome=False,
+        )
         self.verify(ts)
 
     def test_discrete_loci(self):
         ts = msprime.simulate(
             10,
-            recombination_map=msprime.RecombinationMap.uniform_map(
-                10, 1, discrete=True
-            ),
+            length=10,
+            recombination_rate=1,
+            discrete_genome=True,
             random_seed=1,
             end_time=0.5,
         )
         self.verify(ts)
 
     def test_simple_recombination_time_zero(self):
-        ts = msprime.simulate(10, recombination_rate=0.1, random_seed=4, end_time=0.0)
+        ts = msprime.simulate(
+            10,
+            recombination_rate=0.1,
+            random_seed=4,
+            end_time=0.0,
+            discrete_genome=False,
+        )
         self.verify(ts)
 
     def test_no_recombination(self):
@@ -112,7 +142,13 @@ class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
 
     def test_dtwf_recombination(self):
         ts = msprime.simulate(
-            10, Ne=100, model="dtwf", random_seed=2, end_time=100, recombination_rate=10
+            10,
+            Ne=100,
+            model="dtwf",
+            random_seed=2,
+            end_time=100,
+            recombination_rate=10,
+            discrete_genome=False,
         )
         self.assertGreater(ts.num_trees, 1)
         self.verify(ts)
@@ -195,9 +231,7 @@ class TestBasicFunctionality(unittest.TestCase):
         m = 100
         from_ts = get_wf_base(6, 4, num_loci=m)
         final_ts = msprime.simulate(
-            from_ts=from_ts,
-            random_seed=2,
-            recombination_map=msprime.RecombinationMap.uniform_map(m, 1, discrete=True),
+            from_ts=from_ts, random_seed=2, recombination_rate=1, discrete_genome=True,
         )
         self.verify_from_tables(from_ts, final_ts)
         self.verify_simulation_completed(final_ts)
@@ -206,9 +240,7 @@ class TestBasicFunctionality(unittest.TestCase):
         m = 100
         from_ts = get_wf_base(6, 14, survival=0.25, num_loci=m)
         final_ts = msprime.simulate(
-            from_ts=from_ts,
-            random_seed=2,
-            recombination_map=msprime.RecombinationMap.uniform_map(m, 1, discrete=True),
+            from_ts=from_ts, random_seed=2, recombination_rate=1, discrete_genome=1,
         )
         self.verify_from_tables(from_ts, final_ts)
         self.verify_simulation_completed(final_ts)
@@ -238,35 +270,51 @@ class TestBasicFunctionality(unittest.TestCase):
         self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
-            from_ts=from_ts, start_time=start_time, random_seed=2, recombination_rate=2
+            from_ts=from_ts,
+            start_time=start_time,
+            random_seed=2,
+            recombination_rate=2,
+            discrete_genome=False,
         )
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
     def test_single_locus_mutations(self):
-        from_ts = msprime.simulate(20, end_time=1, random_seed=5, mutation_rate=5)
+        from_ts = msprime.simulate(
+            20, end_time=1, random_seed=5, mutation_rate=5, discrete_genome=False
+        )
         self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
         self.assertGreater(from_ts.num_sites, 0)
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
-            from_ts=from_ts, start_time=start_time, random_seed=2
+            from_ts=from_ts,
+            start_time=start_time,
+            random_seed=2,
+            discrete_genome=False,
         )
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
     def test_decapitated_mutations(self):
-        ts = msprime.simulate(10, random_seed=5, mutation_rate=10)
+        ts = msprime.simulate(
+            10, random_seed=5, mutation_rate=10, discrete_genome=False
+        )
         from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
         self.assertGreater(from_ts.num_mutations, 0)
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
-            from_ts=from_ts, start_time=start_time, random_seed=2
+            from_ts=from_ts,
+            start_time=start_time,
+            random_seed=2,
+            discrete_genome=False,
         )
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
     def test_from_multi_locus_decapitated(self):
-        ts = msprime.simulate(10, recombination_rate=2, random_seed=5)
+        ts = msprime.simulate(
+            10, recombination_rate=2, discrete_genome=False, random_seed=5
+        )
         self.assertGreater(ts.num_trees, 1)
         from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
         start_time = from_ts.tables.nodes.time.max()
@@ -275,29 +323,37 @@ class TestBasicFunctionality(unittest.TestCase):
             start_time=start_time,
             random_seed=2,
             recombination_rate=0.0001,
+            discrete_genome=False,
         )
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
     def test_from_multi_locus_old_recombination(self):
-        ts = msprime.simulate(10, recombination_rate=2, random_seed=5)
+        ts = msprime.simulate(
+            10, recombination_rate=2, random_seed=5, discrete_genome=False
+        )
         self.assertGreater(ts.num_trees, 1)
         from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
-            from_ts=from_ts, start_time=start_time, random_seed=2, recombination_rate=2
+            from_ts=from_ts,
+            start_time=start_time,
+            random_seed=2,
+            recombination_rate=2,
+            discrete_genome=False,
         )
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
 
     def test_small_num_loci(self):
-        for m in [1, 10, 16, 100]:
-            recombination_map = msprime.RecombinationMap.uniform_map(m, 10 / m)
+        for L in [1, 10, 16, 100]:
             from_ts = msprime.simulate(
                 sample_size=4,
                 end_time=1,
                 random_seed=5,
-                recombination_map=recombination_map,
+                recombination_rate=10 / L,
+                length=L,
+                discrete_genome=True,
             )
             self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
             start_time = from_ts.tables.nodes.time.max()
@@ -305,7 +361,9 @@ class TestBasicFunctionality(unittest.TestCase):
                 from_ts=from_ts,
                 start_time=start_time,
                 random_seed=2,
-                recombination_map=recombination_map,
+                recombination_rate=10 / L,
+                length=L,
+                discrete_genome=True,
             )
             self.verify_from_tables(from_ts, final_ts, start_time)
             self.verify_simulation_completed(final_ts)
@@ -319,6 +377,7 @@ class TestBasicFunctionality(unittest.TestCase):
                 msprime.PopulationConfiguration(5),
                 msprime.PopulationConfiguration(5),
             ],
+            discrete_genome=False,
             migration_matrix=[[0, 1], [1, 0]],
         )
         self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
@@ -334,6 +393,7 @@ class TestBasicFunctionality(unittest.TestCase):
                 msprime.PopulationConfiguration(),
             ],
             migration_matrix=[[0, 1], [1, 0]],
+            discrete_genome=False,
         )
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
@@ -346,6 +406,7 @@ class TestBasicFunctionality(unittest.TestCase):
                 msprime.PopulationConfiguration(5),
                 msprime.PopulationConfiguration(5),
             ],
+            discrete_genome=False,
             migration_matrix=[[0, 1], [1, 0]],
         )
         from_ts = tsutil.decapitate(from_ts, from_ts.num_edges // 3)
@@ -357,6 +418,7 @@ class TestBasicFunctionality(unittest.TestCase):
             start_time=start_time,
             random_seed=2,
             recombination_rate=2,
+            discrete_genome=False,
             population_configurations=[
                 msprime.PopulationConfiguration(),
                 msprime.PopulationConfiguration(),
@@ -377,6 +439,7 @@ class TestBasicFunctionality(unittest.TestCase):
                 samples=[msprime.Sample(0, 0) for _ in range(10)],
                 recombination_rate=2,
                 random_seed=15,
+                discrete_genome=False,
                 population_configurations=population_configurations,
                 migration_matrix=migration_matrix,
             )
@@ -389,6 +452,7 @@ class TestBasicFunctionality(unittest.TestCase):
                 start_time=start_time,
                 random_seed=8,
                 recombination_rate=2,
+                discrete_genome=False,
                 population_configurations=population_configurations,
                 migration_matrix=migration_matrix,
             )
@@ -396,7 +460,9 @@ class TestBasicFunctionality(unittest.TestCase):
             self.verify_simulation_completed(final_ts)
 
     def test_random_seeds_equal_outcome(self):
-        from_ts = msprime.simulate(8, recombination_rate=2, random_seed=5, end_time=1)
+        from_ts = msprime.simulate(
+            8, recombination_rate=2, random_seed=5, end_time=1, discrete_genome=False,
+        )
         self.assertGreater(from_ts.num_trees, 1)
         self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
         start_time = from_ts.tables.nodes.time.max()
@@ -407,6 +473,7 @@ class TestBasicFunctionality(unittest.TestCase):
             start_time=start_time,
             random_seed=seed,
             recombination_rate=recombination_rate,
+            discrete_genome=False,
         )
         self.verify_from_tables(from_ts, final_ts, start_time)
         self.verify_simulation_completed(final_ts)
@@ -418,6 +485,7 @@ class TestBasicFunctionality(unittest.TestCase):
                 start_time=start_time,
                 random_seed=seed,
                 recombination_rate=recombination_rate,
+                discrete_genome=False,
             )
             other_tables = other_ts.dump_tables()
             other_tables.provenances.clear()
@@ -435,7 +503,9 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_simulation_completed(final_ts)
 
     def test_replicates(self):
-        from_ts = msprime.simulate(15, recombination_rate=2, random_seed=5, end_time=2)
+        from_ts = msprime.simulate(
+            15, recombination_rate=2, random_seed=5, end_time=2, discrete_genome=False
+        )
         self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
         self.assertGreater(from_ts.num_trees, 1)
         start_time = from_ts.tables.nodes.time.max()
@@ -445,6 +515,7 @@ class TestBasicFunctionality(unittest.TestCase):
             random_seed=2,
             num_replicates=10,
             recombination_rate=1,
+            discrete_genome=False,
         )
         tables = []
         for final_ts in replicates:
@@ -488,24 +559,31 @@ class TestBasicFunctionality(unittest.TestCase):
         self.verify_simulation_completed(final_ts)
 
     def test_sequence_length_recombination(self):
-        from_ts = msprime.simulate(
-            5, end_time=0.1, random_seed=5, length=5, recombination_rate=5
-        )
-        start_time = from_ts.tables.nodes.time.max()
-        final_ts = msprime.simulate(
-            from_ts=from_ts,
-            start_time=start_time,
-            random_seed=2,
-            length=5,
-            recombination_rate=5,
-        )
-        self.verify_from_tables(from_ts, final_ts, start_time)
-        self.verify_simulation_completed(final_ts)
+        for discrete in [True, False]:
+            from_ts = msprime.simulate(
+                5,
+                end_time=0.1,
+                random_seed=5,
+                length=5,
+                recombination_rate=5,
+                discrete_genome=discrete,
+            )
+            start_time = from_ts.tables.nodes.time.max()
+            final_ts = msprime.simulate(
+                from_ts=from_ts,
+                start_time=start_time,
+                random_seed=2,
+                length=5,
+                recombination_rate=5,
+                discrete_genome=discrete,
+            )
+            self.verify_from_tables(from_ts, final_ts, start_time)
+            self.verify_simulation_completed(final_ts)
 
     def test_nonuniform_recombination_map(self):
         positions = [0, 0.25, 0.5, 0.75, 1]
         rates = [1, 2, 1, 3, 0]
-        recomb_map = msprime.RecombinationMap(positions, rates)
+        recomb_map = msprime.RecombinationMap(positions, rates, discrete=False)
         from_ts = msprime.simulate(
             5, end_time=0.1, random_seed=5, recombination_map=recomb_map
         )
@@ -527,7 +605,9 @@ class TestBasicFunctionality(unittest.TestCase):
         position.sort()
         rate = np.random.random(k)
         rate[-1] = 0
-        recomb_map = msprime.RecombinationMap(list(position), list(rate))
+        recomb_map = msprime.RecombinationMap(
+            list(position), list(rate), discrete=False
+        )
         from_ts = msprime.simulate(
             10, end_time=0.1, random_seed=50, recombination_map=recomb_map
         )
@@ -576,15 +656,14 @@ class BaseEquivalanceMixin:
     """
 
     def verify_simple_model(
-        self, n, seed=1, recombination_rate=None, length=None, recombination_map=None
+        self, n, seed=1, recombination_rate=0, length=1, recombination_map=None
     ):
+        if recombination_map is None:
+            recombination_map = msprime.RecombinationMap.uniform_map(
+                length=length, rate=recombination_rate, discrete=False
+            )
         ts1 = msprime.simulate(
-            n,
-            random_seed=seed,
-            recombination_rate=recombination_rate,
-            length=length,
-            recombination_map=recombination_map,
-            model=self.model,
+            n, random_seed=seed, recombination_map=recombination_map, model=self.model,
         )
         tables = tskit.TableCollection(ts1.sequence_length)
         tables.populations.add_row()
@@ -594,7 +673,6 @@ class BaseEquivalanceMixin:
             from_ts=tables.tree_sequence(),
             start_time=0,
             random_seed=seed,
-            recombination_rate=recombination_rate,
             recombination_map=recombination_map,
             model=self.model,
         )
@@ -636,7 +714,7 @@ class BaseEquivalanceMixin:
         position.sort()
         rate = np.random.random(k)
         rate[-1] = 0
-        recomb_map = msprime.RecombinationMap(list(position), list(rate))
+        recomb_map = msprime.RecombinationMap(position, rate, discrete=False)
         self.verify_simple_model(10, 23, recombination_map=recomb_map)
 
     def test_two_populations_migration(self):
@@ -679,10 +757,11 @@ class TestBaseEquivalanceHudson(BaseEquivalanceMixin, unittest.TestCase):
 class TestBaseEquivalanceWrightFisher(BaseEquivalanceMixin, unittest.TestCase):
     model = msprime.DiscreteTimeWrightFisher()
 
-    @unittest.skip("assertion trip in DTWF")
-    # lib/msprime.c:1729: msp_dtwf_generate_breakpoint: Assertion `k > start' failed.
-    def test_random_recombination_map(self):
-        pass
+
+#     @unittest.skip("assertion trip in DTWF")
+#     # lib/msprime.c:1729: msp_dtwf_generate_breakpoint: Assertion `k > start' failed.
+#     def test_random_recombination_map(self):
+#         pass
 
 
 class TestDemography(unittest.TestCase):
@@ -733,6 +812,7 @@ class TestDemography(unittest.TestCase):
             ],
             migration_matrix=np.zeros((3, 3)),
             recombination_rate=0.5,
+            discrete_genome=False,
             end_time=0.1,
             random_seed=seed,
         )
@@ -745,6 +825,7 @@ class TestDemography(unittest.TestCase):
             migration_matrix=np.zeros((3, 3)),
             from_ts=ts1,
             recombination_rate=0.5,
+            discrete_genome=False,
             demographic_events=[
                 msprime.SimpleBottleneck(time=0.5, population=0, proportion=1.0),
                 msprime.SimpleBottleneck(time=0.5, population=1, proportion=1.0),
