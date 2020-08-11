@@ -518,7 +518,7 @@ class TestSimulatedExamples(unittest.TestCase):
     # TODO Add mutation rate as parameter here.
     def verify(self, ts, recombination_rate, Ne):
         l1 = msprime.log_arg_likelihood(
-            ts, recombination_rate=recombination_rate, Ne=Ne
+            ts, recombination_rate=recombination_rate, Ne=Ne,
         )
         l2 = log_arg_likelihood(ts, recombination_rate, Ne)
         self.assertAlmostEqual(l1, l2)
@@ -533,7 +533,11 @@ class TestSimulatedExamples(unittest.TestCase):
 
     def test_small_arg_no_mutation(self):
         ts = msprime.simulate(
-            5, recombination_rate=1, random_seed=12, record_full_arg=True
+            5,
+            recombination_rate=1,
+            random_seed=12,
+            record_full_arg=True,
+            discrete_genome=False,
         )
         self.assertGreater(ts.num_edges, 10)
         self.verify(ts, recombination_rate=1, Ne=0.5)
@@ -544,7 +548,11 @@ class TestSimulatedExamples(unittest.TestCase):
 
     def test_negative_rec_rate(self):
         ts = msprime.simulate(
-            5, recombination_rate=1, random_seed=12, record_full_arg=True
+            5,
+            recombination_rate=1,
+            random_seed=12,
+            record_full_arg=True,
+            discrete_genome=False,
         )
         with self.assertRaises(ValueError):
             msprime.log_arg_likelihood(ts, recombination_rate=-1)
@@ -554,7 +562,11 @@ class TestSimulatedExamples(unittest.TestCase):
     def test_zero_mut_rate(self):
         # No mutations
         ts = msprime.simulate(
-            5, recombination_rate=1, random_seed=12, record_full_arg=True
+            5,
+            recombination_rate=1,
+            random_seed=12,
+            record_full_arg=True,
+            discrete_genome=False,
         )
         lik = msprime.unnormalised_log_mutation_likelihood(ts, 0)
         self.assertEqual(lik, 0)
@@ -566,6 +578,7 @@ class TestSimulatedExamples(unittest.TestCase):
             mutation_rate=1,
             random_seed=12,
             record_full_arg=True,
+            discrete_genome=False,
         )
         lik = msprime.unnormalised_log_mutation_likelihood(ts, 0)
         self.assertEqual(lik, float("-inf"))
