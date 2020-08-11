@@ -30,7 +30,12 @@ class TestPedigree(unittest.TestCase):
         model = msprime.WrightFisherPedigree()
         ped = msprime.Pedigree(individual, parents, time, is_sample, sex=None, ploidy=2)
         replicates = msprime.simulate(
-            2, pedigree=ped, model=model, recombination_rate=1, num_replicates=100
+            2,
+            pedigree=ped,
+            model=model,
+            recombination_rate=1,
+            num_replicates=100,
+            discrete_genome=False,
         )
         for ts in replicates:
             self.assertTrue(ts is not None)

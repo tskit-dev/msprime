@@ -60,7 +60,7 @@ class ValidateSchemas(unittest.TestCase):
 
     def test_mutate(self):
         ts = msprime.simulate(5, random_seed=1)
-        ts = msprime.mutate(ts, rate=1, random_seed=1)
+        ts = msprime.mutate(ts, rate=1, random_seed=1, discrete=False)
         prov = json.loads(ts.provenance(1).record)
         tskit.validate_provenance(prov)
         self.assertEqual(prov["parameters"]["command"], "mutate")
@@ -276,7 +276,13 @@ class TestBuildObjects(unittest.TestCase):
     def test_mutate(self):
         ts = msprime.simulate(5, random_seed=1)
         ts = msprime.mutate(
-            ts, rate=2, random_seed=1, start_time=0, end_time=100, keep=False
+            ts,
+            rate=2,
+            random_seed=1,
+            start_time=0,
+            end_time=100,
+            keep=False,
+            discrete=False,
         )
         decoded = self.decode(ts.provenance(1).record)
         self.assertEqual(decoded.schema_version, "1.0.0")
@@ -286,13 +292,14 @@ class TestBuildObjects(unittest.TestCase):
         self.assertEqual(decoded.parameters.start_time, 0)
         self.assertEqual(decoded.parameters.end_time, 100)
         self.assertEqual(decoded.parameters.keep, False)
+        self.assertEqual(decoded.parameters.discrete, False)
         self.assertEqual(
             decoded.parameters.model["__class__"], "msprime.mutations.BinaryMutations"
         )
 
     def test_mutate_model(self):
         ts = msprime.simulate(5, random_seed=1)
-        ts = msprime.mutate(ts, model=msprime.JukesCantor())
+        ts = msprime.mutate(ts, model=msprime.JukesCantor(), discrete=True)
         decoded = self.decode(ts.provenance(1).record)
         self.assertEqual(decoded.schema_version, "1.0.0")
         self.assertEqual(decoded.parameters.command, "mutate")
@@ -303,7 +310,7 @@ class TestBuildObjects(unittest.TestCase):
     def test_mutate_map(self):
         ts = msprime.simulate(5, random_seed=1)
         rate_map = msprime.MutationMap(position=[0, 0.5, 1], rate=[0, 1, 0])
-        ts = msprime.mutate(ts, rate=rate_map)
+        ts = msprime.mutate(ts, rate=rate_map, discrete=False)
         decoded = self.decode(ts.provenance(1).record)
         self.assertEqual(decoded.schema_version, "1.0.0")
         self.assertEqual(decoded.parameters.command, "mutate")
@@ -322,6 +329,7 @@ class TestBuildObjects(unittest.TestCase):
             start_time=np.array([0])[0],
             end_time=np.array([100][0]),
             keep=np.array([False][0]),
+            discrete=np.array([False][0]),
         )
         decoded = self.decode(ts.provenance(1).record)
         self.assertEqual(decoded.schema_version, "1.0.0")
@@ -331,6 +339,7 @@ class TestBuildObjects(unittest.TestCase):
         self.assertEqual(decoded.parameters.start_time, 0)
         self.assertEqual(decoded.parameters.end_time, 100)
         self.assertEqual(decoded.parameters.keep, False)
+        self.assertEqual(decoded.parameters.discrete, False)
 
 
 class TestParseProvenance(unittest.TestCase):
@@ -348,7 +357,7 @@ class TestParseProvenance(unittest.TestCase):
             )
 
     def test_current_ts(self):
-        ts1 = msprime.simulate(5, random_seed=1)
+        ts1 = msprime.simulate(5, length=1000, random_seed=1)
         ts2 = msprime.mutate(ts1)
         command, prov = msprime.provenance.parse_provenance(ts2.provenance(1), ts1)
         self.assertEquals(command, "mutate")
@@ -445,7 +454,13 @@ class TestMutateRoundTrip(TestRoundTrip):
     def test_mutate_round_trip(self):
         ts = msprime.simulate(5, random_seed=1)
         ts = msprime.mutate(
-            ts, rate=2, random_seed=1, start_time=0, end_time=100, keep=False
+            ts,
+            rate=2,
+            random_seed=1,
+            start_time=0,
+            end_time=100,
+            keep=False,
+            discrete=False,
         )
         self.verify(ts)
 
