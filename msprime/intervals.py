@@ -72,10 +72,7 @@ class RecombinationMap:
     is also required to be zero (although it is not used).
 
     .. warning::
-        The ``num_loci`` parameter is deprecated. To set a discrete number of
-        possible recombination sites along the sequence, scale ``positions``
-        to the desired number of sites and set ``discrete=True`` to ensure
-        recombination occurs only at integer values.
+        The ``num_loci`` parameter is deprecated.
 
     :param list positions: The positions (in bases) denoting the
         distinct intervals where recombination rates change. These can
@@ -89,13 +86,9 @@ class RecombinationMap:
         the largest possible value, allowing the maximum resolution
         in the recombination process. However, for a finite sites
         model this can be set to smaller values.
-    :param bool discrete: Whether recombination can occur only at integer
-        positions. When ``False``, recombination sites can take continuous
-        values. To simulate a fixed number of loci, set this parameter to
-        ``True`` and scale ``positions`` to span the desired number of loci.
     """
 
-    def __init__(self, positions, rates, num_loci=None, discrete=False, map_start=0):
+    def __init__(self, positions, rates, num_loci=None, map_start=0):
         if num_loci is not None:
             if num_loci == positions[-1]:
                 warnings.warn("num_loci is no longer supported and should not be used.")
@@ -106,35 +99,22 @@ class RecombinationMap:
                     "scale positions to span the desired number of loci "
                     "and set discrete=True"
                 )
-        self._ll_recombination_map = _msprime.RecombinationMap(
-            positions, rates, discrete
-        )
+        self._ll_recombination_map = _msprime.RecombinationMap(positions, rates)
         self.map_start = map_start
 
     @classmethod
-    def uniform_map(cls, length, rate, num_loci=None, discrete=False):
+    def uniform_map(cls, length, rate, num_loci=None):
         """
         Returns a :class:`.RecombinationMap` instance in which the recombination
-        rate is constant over a chromosome of the specified length. The optional
-        ``discrete`` controls whether recombination sites can occur only on integer
-        positions or can take continuous values. The legacy ``num_loci`` option is
-        no longer supported and should not be used.
-
-        The following map can be used to simulate a true finite locus model
-        with a fixed number of loci ``m``::
-
-            >>> recomb_map = RecombinationMap.uniform_map(m, rate, discrete=True)
+        rate is constant over a chromosome of the specified length.
+        The legacy ``num_loci`` option is no longer supported and should not be used.
 
         :param float length: The length of the chromosome.
         :param float rate: The rate of recombination per unit of sequence length
             along this chromosome.
         :param int num_loci: This parameter is no longer supported.
-        :param bool discrete: Whether recombination can occur only at integer
-            positions. When ``False``, recombination sites can take continuous
-            values. To simulate a fixed number of loci, set this parameter to
-            ``True`` and set ``length`` to the desired number of loci.
         """
-        return cls([0, length], [rate, 0], num_loci=num_loci, discrete=discrete)
+        return cls([0, length], [rate, 0], num_loci=num_loci)
 
     @classmethod
     def read_hapmap(cls, filename):
@@ -268,7 +248,7 @@ class RecombinationMap:
             if new_positions[-1] != positions[-1]:
                 new_positions.append(positions[-1])
                 new_rates.append(0)
-        return self.__class__(new_positions, new_rates, discrete=self.discrete)
+        return self.__class__(new_positions, new_rates)
 
     def __getitem__(self, key):
         """
@@ -323,14 +303,9 @@ class RecombinationMap:
         # Deprecated: use sequence_length instead
         return self.get_sequence_length()
 
-    @property
-    def discrete(self):
-        return self._ll_recombination_map.get_discrete()
-
     def asdict(self):
         return {
             "positions": self.get_positions(),
             "rates": self.get_rates(),
-            "discrete": self.discrete,
             "map_start": self.map_start,
         }

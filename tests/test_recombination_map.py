@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018 University of Oxford
+# Copyright (C) 2018-2020 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -17,11 +17,9 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Tests for the recombination map functionality, mapping continuous physical
-coordinates to discrete genetic loci and vice versa.
+Tests for the recombination map functionality.
 """
 import gzip
-import math
 import os
 import random
 import tempfile
@@ -38,7 +36,7 @@ class PythonRecombinationMap:
     A Python implementation of the RecombinationMap interface.
     """
 
-    def __init__(self, positions, rates, discrete=False):
+    def __init__(self, positions, rates):
         assert len(positions) == len(rates)
         assert len(positions) >= 2
         assert sorted(positions) == positions
@@ -46,7 +44,6 @@ class PythonRecombinationMap:
         self._positions = positions
         self._sequence_length = positions[-1]
         self._rates = rates
-        self._discrete = discrete
         self._cumulative = np.insert(np.cumsum(np.diff(positions) * rates[:-1]), 0, 0)
 
     def get_total_recombination_rate(self):
@@ -77,7 +74,7 @@ class PythonRecombinationMap:
 
         index = np.searchsorted(self._cumulative, v) - 1
         y = self._positions[index] + (v - self._cumulative[index]) / self._rates[index]
-        return math.floor(y) if self._discrete else y
+        return y
 
 
 class TestCoordinateConversion(unittest.TestCase):
@@ -85,14 +82,14 @@ class TestCoordinateConversion(unittest.TestCase):
     Tests that we convert coordinates correctly.
     """
 
-    def verify_coordinate_conversion(self, positions, rates, discrete=False):
+    def verify_coordinate_conversion(self, positions, rates):
         """
         Verifies coordinate conversions by the specified RecombinationMap
         instance.
         """
         L = positions[-1]
-        rm = msprime.RecombinationMap(positions, rates, discrete=discrete)
-        other_rm = PythonRecombinationMap(positions, rates, discrete=discrete)
+        rm = msprime.RecombinationMap(positions, rates)
+        other_rm = PythonRecombinationMap(positions, rates)
 
         self.assertEqual(
             rm.get_total_recombination_rate(), other_rm.get_total_recombination_rate()
@@ -139,8 +136,8 @@ class TestCoordinateConversion(unittest.TestCase):
         positions = [0, 50, 100]
         rates = [0, 1, 0]
         maps = [
-            msprime.RecombinationMap(positions, rates, discrete=True),
-            PythonRecombinationMap(positions, rates, discrete=True),
+            msprime.RecombinationMap(positions, rates),
+            PythonRecombinationMap(positions, rates),
         ]
         for rm in maps:
             # Anything <= 50 maps to 0
@@ -199,8 +196,8 @@ class TestCoordinateConversion(unittest.TestCase):
     def test_integer_round_trip(self):
         for L in [1, 10, 100]:
             maps = [
-                msprime.RecombinationMap.uniform_map(L, 1, discrete=True),
-                PythonRecombinationMap([0, L], [1, 0], discrete=True),
+                msprime.RecombinationMap.uniform_map(L, 1),
+                PythonRecombinationMap([0, L], [1, 0]),
             ]
             for rm in maps:
                 for x in range(L + 1):

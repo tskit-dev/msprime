@@ -2533,10 +2533,11 @@ class HistoricalSamplingMixin:
                 Ne=N,
                 model=self.model,
                 recombination_map=msprime.RecombinationMap.uniform_map(
-                    length=1, rate=recombination_rate, discrete=True
+                    length=1, rate=recombination_rate,
                 ),
                 samples=[msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
                 random_seed=3,
+                discrete_genome=True,
             )
             for t in ts.trees():
                 self.assertEqual(t.get_time(0), 0)

@@ -756,7 +756,7 @@ class DiscoalSweeps(DiscoalTest):
         logging.debug(f"sample sizes msp: {len(df['pi'])} discoal: {len(df_df['pi'])}")
         self._plot_stats("mutation", df, df_df, "msp", "discoal")
 
-    def test_sweep_ex1(self):
+    def _test_sweep_ex1(self):
         cmd = "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a 500 -x 0.5 -N 10000"
         self._run(cmd)
 

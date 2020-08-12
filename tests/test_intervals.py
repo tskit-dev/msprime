@@ -31,12 +31,6 @@ class TestRecombinationMap(unittest.TestCase):
     Tests for the RecombinationMap class.
     """
 
-    # TODO these are incomplete.
-    def test_discrete(self):
-        for truthy in [True, False, {}, None, "ser"]:
-            rm = msprime.RecombinationMap.uniform_map(1, 0, discrete=truthy)
-            self.assertEqual(rm.discrete, bool(truthy))
-
     def test_zero_recombination_map(self):
         # test that beginning and trailing zero recombination regions in the
         # recomb map are included in the sequence

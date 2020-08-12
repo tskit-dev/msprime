@@ -570,7 +570,7 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
 
     def test_recomb_map(self):
         runner = self.create_runner("15 1000 -t 10.04 -r 100.0 2501")
-        uniform = msprime.RecombinationMap([0, 2501], [0.04, 0], discrete=True)
+        uniform = msprime.RecombinationMap([0, 2501], [0.04, 0])
         actual = runner.get_recomb_map()
         self.assertEqual(actual.get_positions(), uniform.get_positions())
         self.assertEqual(actual.get_rates(), uniform.get_rates())

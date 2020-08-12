@@ -197,7 +197,6 @@ typedef struct {
     interval_map_t map;
     double total_recombination_rate;
     double *cumulative;
-    bool discrete;
 } recomb_map_t;
 
 typedef struct _msp_t {
@@ -208,6 +207,7 @@ typedef struct _msp_t {
     bool store_full_arg;
     uint32_t num_samples;
     double sequence_length;
+    bool discrete_genome;
     recomb_map_t recomb_map;
     double gene_conversion_rate;
     double gene_conversion_track_length;
@@ -407,6 +407,7 @@ int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
 int msp_set_ploidy(msp_t *self, uint32_t ploidy);
+int msp_set_discrete_genome(msp_t *self, bool is_discrete);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels);
 int msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length);
@@ -501,10 +502,8 @@ size_t interval_map_get_index(interval_map_t *self, double x);
 
 typedef double (*msp_convert_func)(void *obj, double rate);
 
-int recomb_map_alloc_uniform(
-    recomb_map_t *self, double sequence_length, double rate, bool discrete);
-int recomb_map_alloc(
-    recomb_map_t *self, size_t size, double *position, double *rate, bool discrete);
+int recomb_map_alloc_uniform(recomb_map_t *self, double sequence_length, double rate);
+int recomb_map_alloc(recomb_map_t *self, size_t size, double *position, double *rate);
 int recomb_map_copy(recomb_map_t *to, recomb_map_t *from);
 int recomb_map_free(recomb_map_t *self);
 double recomb_map_get_sequence_length(recomb_map_t *self);

@@ -43,12 +43,12 @@ NULL_NODE = -1
 IS_WINDOWS = platform.system() == "Windows"
 
 
-def uniform_recombination_map(L=1, rate=0, discrete=True):
+def uniform_recombination_map(L=1, rate=0):
     """
     Returns a uniform recombination map for the specified sequence length
     and rate.
     """
-    return _msprime.RecombinationMap([0, L], [rate, 0], discrete)
+    return _msprime.RecombinationMap([0, L], [rate, 0])
 
 
 def get_mutation_model(model=0):
@@ -995,6 +995,22 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(TypeError, sim.fenwick_drift, "sdf")
         for bad_label in [-1, 1, 100]:
             self.assertRaises(ValueError, sim.fenwick_drift, bad_label)
+
+    def test_discrete_genome(self):
+        def f(discrete_genome):
+            return _msprime.Simulator(
+                get_samples(10),
+                uniform_recombination_map(),
+                _msprime.RandomGenerator(1),
+                _msprime.LightweightTableCollection(),
+                discrete_genome=discrete_genome,
+            )
+
+        for discrete_genome in [True, False]:
+            sim = f(discrete_genome)
+            self.assertEqual(sim.discrete_genome, discrete_genome)
+        self.assertEqual(sim.fenwick_drift(0), 0)
+        self.assertRaises(TypeError, f, "sdf")
 
     @unittest.skipIf(IS_WINDOWS, "windows IO is weird")
     def test_print_state_errors(self):
@@ -2235,29 +2251,17 @@ class TestRecombinationMap(LowLevelTestCase):
         self.assertRaises(TypeError, _msprime.RecombinationMap)
         self.assertRaises(ValueError, _msprime.RecombinationMap, None)
         self.assertRaises(ValueError, _msprime.RecombinationMap, None, None)
-        self.assertRaises(ValueError, _msprime.RecombinationMap, {}, {}, False)
+        self.assertRaises(ValueError, _msprime.RecombinationMap, [0, 0.1], [1, 2, 3])
+        self.assertRaises(ValueError, _msprime.RecombinationMap, [], [0, 0])
+        self.assertRaises(_msprime.LibraryError, _msprime.RecombinationMap, [], [])
         self.assertRaises(
-            ValueError, _msprime.RecombinationMap, [0, 0.1], [1, 2, 3], False
-        )
-        self.assertRaises(ValueError, _msprime.RecombinationMap, [], [0, 0], False)
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [], [], False
+            _msprime.LibraryError, _msprime.RecombinationMap, [0, -2], [0, 0]
         )
         self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [0, -2], [0, 0], False
+            _msprime.LibraryError, _msprime.RecombinationMap, [1, 0], [0, 0]
         )
         self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [1, 0], [0, 0], False
-        )
-        self.assertRaises(
-            _msprime.LibraryError,
-            _msprime.RecombinationMap,
-            [0, 1, 0.5],
-            [0, 0, 0],
-            False,
-        )
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [0, 0.5], [0.1, 0], True
+            _msprime.LibraryError, _msprime.RecombinationMap, [0, 1, 0.5], [0, 0, 0],
         )
 
     def test_arrays(self):
@@ -2267,36 +2271,23 @@ class TestRecombinationMap(LowLevelTestCase):
             (np.linspace(0, 1, 1000), np.linspace(10, 100, 1000)),
         ]
         for positions, rates in test_values:
-            rmap = _msprime.RecombinationMap(
-                positions=positions, rates=rates, discrete=False
-            )
+            rmap = _msprime.RecombinationMap(positions=positions, rates=rates,)
             np.testing.assert_array_equal(rmap.get_positions(), positions)
             np.testing.assert_array_equal(rmap.get_rates(), rates)
 
     def test_bad_arrays(self):
         for bad_array in ["sadf", [[], []], None]:
             with self.assertRaises(ValueError):
-                _msprime.RecombinationMap(
-                    positions=bad_array, rates=[0, 1], discrete=False
-                )
+                _msprime.RecombinationMap(positions=bad_array, rates=[0, 1])
 
     def test_total_rate(self):
-        rm = _msprime.RecombinationMap([0, 10], [0.25, 0], True)
+        rm = _msprime.RecombinationMap([0, 10], [0.25, 0])
         self.assertEqual(rm.get_total_recombination_rate(), 2.5)
-        rm = _msprime.RecombinationMap([0, 10, 20], [0.25, 0.5, 0], True)
+        rm = _msprime.RecombinationMap([0, 10, 20], [0.25, 0.5, 0])
         self.assertEqual(rm.get_total_recombination_rate(), 7.5)
 
-    def test_get_discrete(self):
-        for truthy in [[], "sd", None, ValueError]:
-            rm = _msprime.RecombinationMap([0, 10], [0.25, 0], discrete=truthy)
-            self.assertEqual(bool(truthy), rm.get_discrete())
-
-        for discrete in [True, False]:
-            rm = _msprime.RecombinationMap([0, 10], [0.25, 0], discrete)
-            self.assertEqual(rm.get_discrete(), discrete)
-
     def test_convert_mass_and_position(self):
-        rm = _msprime.RecombinationMap([0, 10, 20], [0, 1, 0], discrete=True)
+        rm = _msprime.RecombinationMap([0, 10, 20], [0, 1, 0])
         self.assertRaises(TypeError, rm.position_to_mass)
         self.assertRaises(TypeError, rm.mass_to_position)
         for bad_value in [[1, 2, 3], "123", dict(), None]:

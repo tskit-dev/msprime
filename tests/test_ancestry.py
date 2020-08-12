@@ -173,10 +173,10 @@ class TestSimulator(unittest.TestCase):
         """
         Verifies a simulation for the specified parameters.
         """
-        recomb_map = msprime.RecombinationMap.uniform_map(m, r, discrete=True)
+        recomb_map = msprime.RecombinationMap.uniform_map(m, r)
         rng = _msprime.RandomGenerator(1)
         sim = msprime.simulator_factory(
-            n, recombination_map=recomb_map, random_generator=rng
+            n, recombination_map=recomb_map, random_generator=rng, discrete_genome=True,
         )
         self.assertEqual(sim.random_generator, rng)
         sim.run()
@@ -725,12 +725,6 @@ class TestSimulateInterface(unittest.TestCase):
         with self.assertRaises(TypeError):
             msprime.simulate(2, 100)
 
-    def test_discrete_genome_recombination_map(self):
-        # Cannot specify discrete_genome and recombination_map at once
-        recomb_map = msprime.RecombinationMap.uniform_map(10, 0.1)
-        with self.assertRaises(ValueError):
-            msprime.simulate(10, discrete_genome=True, recombination_map=recomb_map)
-
     def test_discrete_genome_no_mutations(self):
         def run_sim(discrete_genome=None):
             return msprime.simulate(
@@ -897,22 +891,21 @@ class TestSimulateInterface(unittest.TestCase):
             n,
             gene_conversion_rate=1,
             gene_conversion_track_length=1,
-            recombination_map=msprime.RecombinationMap.uniform_map(
-                10, 1, discrete=True
-            ),
+            length=10,
+            recombination_rate=1,
+            discrete_genome=True,
         )
         self.assertIsInstance(ts, tskit.TreeSequence)
         self.assertEqual(ts.num_samples, n)
         self.assertGreater(ts.num_trees, 1)
 
     def test_gene_conversion_continuous(self):
-        rm = msprime.RecombinationMap.uniform_map(10, 1, discrete=False)
         with self.assertRaises(ValueError):
             msprime.simulate(
                 10,
                 gene_conversion_rate=1,
                 gene_conversion_track_length=1,
-                recombination_map=rm,
+                discrete_genome=False,
             )
 
     @unittest.skip("Cannot use GC with default recomb map")

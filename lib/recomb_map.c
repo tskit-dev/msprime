@@ -59,30 +59,23 @@ out:
 }
 
 int MSP_WARN_UNUSED
-recomb_map_alloc_uniform(
-    recomb_map_t *self, double sequence_length, double rate, bool discrete)
+recomb_map_alloc_uniform(recomb_map_t *self, double sequence_length, double rate)
 {
     double positions[] = { 0.0, sequence_length };
     double rates[] = { rate, 0.0 };
 
-    return recomb_map_alloc(self, 2, positions, rates, discrete);
+    return recomb_map_alloc(self, 2, positions, rates);
 }
 
 int MSP_WARN_UNUSED
-recomb_map_alloc(
-    recomb_map_t *self, size_t size, double *position, double *rate, bool discrete)
+recomb_map_alloc(recomb_map_t *self, size_t size, double *position, double *rate)
 {
     int ret = 0;
 
     memset(self, 0, sizeof(recomb_map_t));
-    self->discrete = discrete;
 
     ret = interval_map_alloc(&self->map, size, position, rate);
     if (ret != 0) {
-        goto out;
-    }
-    if (interval_map_get_sequence_length(&self->map) < 1 && discrete) {
-        ret = MSP_ERR_BAD_RECOMBINATION_MAP;
         goto out;
     }
     self->cumulative = malloc(size * sizeof(double));
@@ -98,8 +91,7 @@ out:
 int
 recomb_map_copy(recomb_map_t *to, recomb_map_t *from)
 {
-    return recomb_map_alloc(
-        to, from->map.size, from->map.position, from->map.value, from->discrete);
+    return recomb_map_alloc(to, from->map.size, from->map.position, from->map.value);
 }
 
 int
@@ -124,27 +116,12 @@ recomb_map_get_sequence_length(recomb_map_t *self)
     return interval_map_get_sequence_length(&self->map);
 }
 
-/* Returns a boolean indicating whether the recombination map is discrete.
- */
-bool
-recomb_map_get_discrete(recomb_map_t *self)
-{
-    return self->discrete;
-}
-
 double
 recomb_map_mass_between(recomb_map_t *self, double left, double right)
 {
     double left_mass = recomb_map_position_to_mass(self, left);
     double right_mass = recomb_map_position_to_mass(self, right);
     return right_mass - left_mass;
-}
-
-double
-recomb_map_mass_between_left_exclusive(recomb_map_t *self, double left, double right)
-{
-    double left_bound = self->discrete ? left + 1 : left;
-    return recomb_map_mass_between(self, left_bound, right);
 }
 
 /* Translates a physical coordinate to the cumulative recombination
@@ -192,8 +169,7 @@ recomb_map_mass_to_position(recomb_map_t *self, double mass)
     index--;
     mass_in_interval = mass - self->cumulative[index];
     pos = position[index] + mass_in_interval / rate[index];
-
-    return self->discrete ? floor(pos) : pos;
+    return pos;
 }
 
 double
@@ -201,23 +177,6 @@ recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass)
 {
     double result_mass = recomb_map_position_to_mass(self, pos) + mass;
     return recomb_map_mass_to_position(self, result_mass);
-}
-
-/* Select a position from (start, sequence_length) by sampling
- * a distance in mass to the next recombination site and finding the
- * corresponding position that much after start.
- */
-double
-recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start)
-{
-    double left_bound, mass_to_next_recomb;
-
-    left_bound = self->discrete ? start + 1 : start;
-    do {
-        mass_to_next_recomb = gsl_ran_exponential(rng, 1.0);
-    } while (mass_to_next_recomb == 0.0);
-
-    return recomb_map_shift_by_mass(self, left_bound, mass_to_next_recomb);
 }
 
 void

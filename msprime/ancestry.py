@@ -24,7 +24,6 @@ import copy
 import inspect
 import logging
 import math
-import warnings
 
 import attr
 import numpy as np
@@ -354,6 +353,9 @@ def simulator_factory(
                 "equal to the number of populations in from_ts"
             )
 
+    if discrete_genome is None:
+        discrete_genome = False
+
     if recombination_map is None:
         # Default to 1 if no from_ts; otherwise default to the sequence length
         # of from_ts
@@ -371,9 +373,7 @@ def simulator_factory(
                 "Cannot specify non-integer sequence length when discrete_genome "
                 "is True"
             )
-        recombination_map = intervals.RecombinationMap.uniform_map(
-            the_length, the_rate, discrete=discrete_genome
-        )
+        recombination_map = intervals.RecombinationMap.uniform_map(the_length, the_rate)
     else:
         if not isinstance(recombination_map, intervals.RecombinationMap):
             raise TypeError("RecombinationMap instance required")
@@ -399,10 +399,10 @@ def simulator_factory(
     if gene_conversion_rate is None:
         gene_conversion_rate = 0
     else:
-        if not recombination_map.discrete:
+        if not discrete_genome:
             raise ValueError(
                 "Cannot specify gene_conversion_rate along with "
-                "a nondiscrete recombination map"
+                "a non discrete genome."
             )
     if gene_conversion_track_length is None:
         gene_conversion_track_length = 1
@@ -420,6 +420,7 @@ def simulator_factory(
     sim = Simulator(
         samples=samples,
         recombination_map=recombination_map,
+        discrete_genome=discrete_genome,
         Ne=Ne,
         random_generator=random_generator,
         pedigree=pedigree,
@@ -623,15 +624,6 @@ def simulate(
 
     if discrete_genome is None:
         discrete_genome = False
-    elif recombination_map is not None:
-        # TODO this is probably overly strict and we'll want to check if
-        # the recombination_map agrees with the value of discrete_genome.
-        # Let's figure out the exact default semantcs first before worrying
-        # about this, though.
-        raise ValueError(
-            "Cannot specify ``discrete_genome`` at the same time as the "
-            "``recombination_map`` argument."
-        )
 
     sim = simulator_factory(
         sample_size=sample_size,
@@ -725,8 +717,10 @@ class Simulator(_msprime.Simulator):
 
     def __init__(
         self,
+        *,
         samples,
         recombination_map,
+        discrete_genome,
         Ne,
         random_generator,
         demography,
@@ -794,6 +788,7 @@ class Simulator(_msprime.Simulator):
             node_mapping_block_size=node_mapping_block_size,
             gene_conversion_rate=gene_conversion_rate,
             gene_conversion_track_length=gene_conversion_track_length,
+            discrete_genome=discrete_genome,
         )
         # attributes that are internal to the highlevel Simulator class
         self._hl_from_ts = from_ts

@@ -2469,19 +2469,17 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"positions", "rates", "discrete", NULL};
+    static char *kwlist[] = {"positions", "rates", NULL};
     Py_ssize_t size;
     PyObject *py_positions = NULL;
     PyObject *py_rates = NULL;
     double *positions;
     double *rates;
-    int discrete = false;
 
     self->recomb_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O&O&p", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O&O&", kwlist,
             double_PyArray_converter, &py_positions,
-            double_PyArray_converter, &py_rates,
-            &discrete)) {
+            double_PyArray_converter, &py_rates)) {
         goto out;
     }
 
@@ -2500,7 +2498,7 @@ RecombinationMap_init(RecombinationMap *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = recomb_map_alloc(self->recomb_map, size, positions, rates, discrete);
+    err = recomb_map_alloc(self->recomb_map, size, positions, rates);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2598,19 +2596,6 @@ out:
 }
 
 static PyObject *
-RecombinationMap_get_discrete(RecombinationMap *self)
-{
-    PyObject *ret = NULL;
-
-    if (RecombinationMap_check_recomb_map(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("i", recomb_map_get_discrete(self->recomb_map));
-out:
-    return ret;
-}
-
-static PyObject *
 RecombinationMap_get_positions(RecombinationMap *self)
 {
     PyObject *ret = NULL;
@@ -2691,9 +2676,6 @@ static PyMethodDef RecombinationMap_methods[] = {
     {"get_rates",
         (PyCFunction) RecombinationMap_get_rates, METH_NOARGS,
         "Returns the rates in this recombination map."},
-    {"get_discrete",
-        (PyCFunction) RecombinationMap_get_discrete, METH_NOARGS,
-        "Returns the value of discrete in this recombination map."},
     {NULL}  /* Sentinel */
 };
 
@@ -3389,7 +3371,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "demographic_events", "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time",
         "store_full_arg", "num_labels", "gene_conversion_rate",
-        "gene_conversion_track_length", NULL};
+        "gene_conversion_track_length", "discrete_genome", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
@@ -3407,8 +3389,9 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t node_mapping_block_size = 10;
     Py_ssize_t num_labels = 1;
     Py_ssize_t num_populations = 1;
-    int store_migrations = 0;
-    int store_full_arg = 0;
+    int store_migrations = false;
+    int store_full_arg = false;
+    int discrete_genome = true;
     double start_time = -1;
     double gene_conversion_rate = 0;
     double gene_conversion_track_length = 1.0;
@@ -3416,7 +3399,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     self->sim = NULL;
     self->random_generator = NULL;
     self->recombination_map = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!OOO!O!nnnidindd", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!OOO!O!nnnidinddi", kwlist,
             &PyList_Type, &py_samples,
             &RecombinationMapType, &recombination_map,
             &RandomGeneratorType, &random_generator,
@@ -3430,7 +3413,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &store_migrations, &start_time,
             &store_full_arg, &num_labels,
-            &gene_conversion_rate, &gene_conversion_track_length)) {
+            &gene_conversion_rate, &gene_conversion_track_length,
+            &discrete_genome)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -3509,6 +3493,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error("set_gene_conversion_rate", sim_ret);
         goto out;
     }
+
+    msp_set_discrete_genome(self->sim, discrete_genome);
 
     sim_ret = msp_set_dimensions(self->sim, (size_t) num_populations, (size_t) num_labels);
     if (sim_ret != 0) {
@@ -3661,6 +3647,18 @@ Simulator_set_model(Simulator *self, PyObject *args, void *closure)
         goto out;
     }
     ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_discrete_genome(Simulator *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", self->sim->discrete_genome);
 out:
     return ret;
 }
@@ -4547,6 +4545,9 @@ static PyGetSetDef Simulator_getsetters[] = {
     {"store_migrations",
             (getter) Simulator_get_store_migrations, NULL,
             "True if the simulator should store migration records." },
+    {"discrete_genome",
+            (getter) Simulator_get_discrete_genome, NULL,
+            "True if the simulator has a discrete genome." },
     {"tables",
             (getter) Simulator_get_tables, NULL,
             "The tables"},
