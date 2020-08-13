@@ -27,6 +27,7 @@ import tskit
 
 import _msprime
 from . import core
+from . import intervals
 from . import provenance
 from _msprime import BaseMutationModel
 
@@ -722,31 +723,14 @@ class InfiniteSites(MatrixMutationModel):
         )
 
 
-class MutationMap:
-    # TODO Get rid of this class and use IntervalMap (or maybe IntervalRateMap) instead.
-    # See
-    # https://github.com/tskit-dev/msprime/issues/902
-    # https://github.com/tskit-dev/msprime/issues/920
-    def __init__(self, position, rate):
-        self.position = position
-        self.rate = rate
-        self._ll_map = _msprime.IntervalMap(position=position, value=rate)
-
-    def asdict(self):
-        return {"position": self.position, "rate": self.rate}
-
-
-def _simple_mutation_generator(rate, sequence_length, rng, discrete=False):
-    """
-    Factory function used to create a low-level mutation generator that
-    produces binary infinite sites mutations suitable for use in
-    msprime.simulate() and the mspms CLI.
-    """
-    if rate is None:
-        return None
-    rate_map = MutationMap(position=[0, sequence_length], rate=[rate, 0])
-    return _msprime.MutationGenerator(
-        rng, rate_map._ll_map, BinaryMutations(), discrete_sites=discrete
+def _simple_mutate(tables, rng, rate, sequence_length, discrete_sites=False):
+    rate_map = intervals.RateMap.uniform(sequence_length, rate)
+    _msprime.sim_mutations(
+        tables,
+        rng,
+        rate_map.asdict(),
+        model=BinaryMutations(),
+        discrete_sites=discrete_sites,
     )
 
 
@@ -796,7 +780,7 @@ def mutate(
         wish to throw mutations.
     :param float rate: The rate of mutation per generation, as either a
         single number (for a uniform rate) or as a
-        :class:`.MutationMap`. (Default: 0).
+        :class:`.RateMap`. (Default: 0).
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
@@ -829,13 +813,13 @@ def mutate(
         rate = 0
     try:
         rate = float(rate)
-        rate_map = MutationMap(
-            position=[0.0, tree_sequence.sequence_length], rate=[rate, 0.0]
+        rate_map = intervals.RateMap(
+            position=[0.0, tree_sequence.sequence_length], rate=[rate]
         )
     except TypeError:
         rate_map = rate
-    if not isinstance(rate_map, MutationMap):
-        raise TypeError("rate must be a float or a MutationMap")
+    if not isinstance(rate_map, intervals.RateMap):
+        raise TypeError("rate must be a float or a RateMap")
 
     if start_time is None:
         start_time = -sys.float_info.max
@@ -866,16 +850,17 @@ def mutate(
     )
 
     rng = _msprime.RandomGenerator(seed)
-    mutation_generator = _msprime.MutationGenerator(
-        random_generator=rng,
-        rate_map=rate_map._ll_map,
-        model=model,
-        discrete_sites=discrete,
-    )
     lwt = _msprime.LightweightTableCollection()
     lwt.fromdict(tables.asdict())
-    mutation_generator.generate(
-        lwt, keep=keep, start_time=start_time, end_time=end_time
+    _msprime.sim_mutations(
+        tables=lwt,
+        random_generator=rng,
+        rate_map=rate_map.asdict(),
+        model=model,
+        discrete_sites=discrete,
+        keep=keep,
+        start_time=start_time,
+        end_time=end_time,
     )
 
     tables = tskit.TableCollection.fromdict(lwt.asdict())

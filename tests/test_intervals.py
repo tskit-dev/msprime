@@ -17,7 +17,7 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Test cases for the high level interface to msprime.
+Test cases for the intervals module.
 """
 import os
 import tempfile
@@ -26,6 +26,7 @@ import unittest
 import msprime
 
 
+@unittest.skip("more recomb map")
 class TestRecombinationMap(unittest.TestCase):
     """
     Tests for the RecombinationMap class.

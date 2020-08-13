@@ -169,9 +169,6 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_TRUNCATION_POINT:
             ret = "Bad truncation_point. Must have 0 < truncation_point <= 1";
             break;
-        case MSP_ERR_BAD_MUTATION_MAP_RATE:
-            ret = "Bad mutation rate; must be >= 0.";
-            break;
         case MSP_ERR_INCOMPATIBLE_MUTATION_MAP:
             ret = "Mutation map is not compatible with specified tables.";
             break;
@@ -183,6 +180,9 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_INTERVAL_POSITIONS_UNSORTED:
             ret = "Interval positions must be listed in increasing order";
+            break;
+        case MSP_ERR_NONFINITE_INTERVAL_POSITION:
+            ret = "Interval positions must be finite.";
             break;
         case MSP_ERR_BAD_C:
             ret = "Bad C. Must have 0 < C ";

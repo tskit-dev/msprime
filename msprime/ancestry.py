@@ -165,36 +165,6 @@ def _check_population_configurations(population_configurations):
             raise ValueError("Sample size must be >= 0")
 
 
-def _replicate_generator(
-    sim, mutation_generator, num_replicates, provenance_dict, end_time
-):
-    """
-    Generator function for the many-replicates case of the simulate
-    function.
-    """
-    encoded_provenance = None
-    # The JSON is modified for each replicate to insert the replicate number.
-    # To avoid repeatedly encoding the same JSON (which can take milliseconds)
-    # we insert a replaceable string.
-    placeholder = "@@_MSPRIME_REPLICATE_INDEX_@@"
-    if provenance_dict is not None:
-        provenance_dict["parameters"]["replicate_index"] = placeholder
-        encoded_provenance = provenance.json_encode_provenance(
-            provenance_dict, num_replicates
-        )
-
-    for j in range(num_replicates):
-        sim.run(end_time)
-        replicate_provenance = None
-        if encoded_provenance is not None:
-            replicate_provenance = encoded_provenance.replace(
-                f'"{placeholder}"', str(j)
-            )
-        tree_sequence = sim.get_tree_sequence(mutation_generator, replicate_provenance)
-        yield tree_sequence
-        sim.reset()
-
-
 def samples_factory(sample_size, samples, pedigree, population_configurations):
     """
     Returns a list of Sample objects, given the specified inputs.
@@ -296,6 +266,7 @@ def simulator_factory(
     gene_conversion_rate=None,
     gene_conversion_track_length=None,
     demography=None,
+    mutation_rate=None,
 ):
     """
     Convenience method to create a simulator instance using the same
@@ -373,17 +344,20 @@ def simulator_factory(
                 "Cannot specify non-integer sequence length when discrete_genome "
                 "is True"
             )
-        recombination_map = intervals.RecombinationMap.uniform_map(the_length, the_rate)
+        recombination_map = intervals.RateMap.uniform(the_length, the_rate)
     else:
-        if not isinstance(recombination_map, intervals.RecombinationMap):
-            raise TypeError("RecombinationMap instance required")
+        if isinstance(recombination_map, intervals.RecombinationMap):
+            # Convert from the legacy RecombinationMap class
+            recombination_map = recombination_map.map
+        elif not isinstance(recombination_map, intervals.RateMap):
+            raise TypeError("RateMap instance required.")
         if length is not None or recombination_rate is not None:
             raise ValueError(
                 "Cannot specify length/recombination_rate along with "
                 "a recombination map"
             )
     if from_ts is not None:
-        if recombination_map.get_length() != from_ts.sequence_length:
+        if recombination_map.sequence_length != from_ts.sequence_length:
             raise ValueError(
                 "Recombination map and from_ts must have identical " "sequence_length"
             )
@@ -622,33 +596,6 @@ def simulate(
         parameters["random_seed"] = seed
         provenance_dict = provenance.get_provenance_dict(parameters)
 
-    if discrete_genome is None:
-        discrete_genome = False
-
-    sim = simulator_factory(
-        sample_size=sample_size,
-        random_generator=rng,
-        Ne=Ne,
-        length=length,
-        discrete_genome=discrete_genome,
-        recombination_rate=recombination_rate,
-        recombination_map=recombination_map,
-        population_configurations=population_configurations,
-        pedigree=pedigree,
-        migration_matrix=migration_matrix,
-        demographic_events=demographic_events,
-        samples=samples,
-        model=model,
-        record_migrations=record_migrations,
-        from_ts=from_ts,
-        start_time=start_time,
-        record_full_arg=record_full_arg,
-        num_labels=num_labels,
-        gene_conversion_rate=gene_conversion_rate,
-        gene_conversion_track_length=gene_conversion_track_length,
-        demography=demography,
-    )
-
     if mutation_generator is not None:
         # This error was added in version 0.6.1.
         raise ValueError(
@@ -678,12 +625,32 @@ def simulate(
                 "start_time. Please use msprime.mutate on the returned "
                 "tree sequence instead"
             )
-    mutation_generator = mutations._simple_mutation_generator(
-        mutation_rate,
-        sim.sequence_length,
-        sim.random_generator,
-        discrete=discrete_genome,
+        mutation_rate = float(mutation_rate)
+
+    sim = simulator_factory(
+        sample_size=sample_size,
+        random_generator=rng,
+        Ne=Ne,
+        length=length,
+        discrete_genome=discrete_genome,
+        recombination_rate=recombination_rate,
+        recombination_map=recombination_map,
+        population_configurations=population_configurations,
+        pedigree=pedigree,
+        migration_matrix=migration_matrix,
+        demographic_events=demographic_events,
+        samples=samples,
+        model=model,
+        record_migrations=record_migrations,
+        from_ts=from_ts,
+        start_time=start_time,
+        record_full_arg=record_full_arg,
+        num_labels=num_labels,
+        gene_conversion_rate=gene_conversion_rate,
+        gene_conversion_track_length=gene_conversion_track_length,
+        demography=demography,
     )
+
     if replicate_index is not None and random_seed is None:
         raise ValueError(
             "Cannot specify replicate_index without random_seed as this "
@@ -696,18 +663,25 @@ def simulate(
             "the replicate_index specified will be returned."
         )
     if num_replicates is None and replicate_index is None:
+        # This is the default case where we just return one replicate.
         replicate_index = 0
+        num_replicates = 1
     if replicate_index is not None:
-        iterator = _replicate_generator(
-            sim, mutation_generator, replicate_index + 1, provenance_dict, end_time
-        )
+        num_replicates = replicate_index + 1
+
+    iterator = sim.run_replicates(
+        num_replicates,
+        end_time=end_time,
+        mutation_rate=mutation_rate,
+        discrete_sites=sim.discrete_genome,
+        provenance_dict=provenance_dict,
+    )
+    if replicate_index is not None:
         # Return the last element of the iterator
         deque = collections.deque(iterator, maxlen=1)
         return deque.pop()
     else:
-        return _replicate_generator(
-            sim, mutation_generator, num_replicates, provenance_dict, end_time
-        )
+        return iterator
 
 
 class Simulator(_msprime.Simulator):
@@ -761,9 +735,9 @@ class Simulator(_msprime.Simulator):
         ll_demographic_events = [
             event.get_ll_representation() for event in demography.events
         ]
-        ll_recomb_map = recombination_map.get_ll_recombination_map()
+        ll_recomb_map = recombination_map.asdict()
         ll_tables = _msprime.LightweightTableCollection(
-            recombination_map.get_sequence_length()
+            recombination_map.sequence_length
         )
         if from_ts is not None:
             from_ts_tables = from_ts.tables.asdict()
@@ -798,11 +772,6 @@ class Simulator(_msprime.Simulator):
         self.recombination_map = recombination_map
 
     @property
-    def tables(self):
-        # convert lowlevel tables to highlevel tables
-        return tskit.TableCollection.fromdict(super().tables.asdict())
-
-    @property
     def sample_configuration(self):
         """
         Returns the number of samples from each popuation.
@@ -818,6 +787,8 @@ class Simulator(_msprime.Simulator):
     ):
         # TODO this functionality is preliminary and undocumented, so this
         # code should be expected to change.
+        # TODO Remove this code from the Simulator class and call it somewhere
+        # in the simulator_factory somewhere instead.
         if demography.num_populations != 1:
             raise ValueError(
                 "Cannot yet specify population structure "
@@ -919,24 +890,58 @@ class Simulator(_msprime.Simulator):
             self.num_edges,
         )
 
-    def get_tree_sequence(self, mutation_generator=None, provenance_record=None):
+    def run_replicates(
+        self,
+        num_replicates,
+        *,
+        mutation_rate=None,
+        discrete_sites=False,
+        end_time=None,
+        provenance_dict=None,
+    ):
         """
-        Returns a TreeSequence representing the state of the simulation.
+        Sequentially yield the specified number of simulation replicates.
         """
-        if mutation_generator is not None:
-            mutation_generator.generate(super().tables)
-        tables = self.tables
-        if provenance_record is not None:
-            tables.provenances.add_row(provenance_record)
-        if self._hl_from_ts is None:
-            # Add the populations with metadata
-            assert len(tables.populations) == self.demography.num_populations
-            tables.populations.clear()
-            for population in self.demography.populations:
-                tables.populations.add_row(
-                    metadata=population.temporary_hack_for_encoding_old_style_metadata()
+        encoded_provenance = None
+        # The JSON is modified for each replicate to insert the replicate number.
+        # To avoid repeatedly encoding the same JSON (which can take milliseconds)
+        # we insert a replaceable string.
+        placeholder = "@@_MSPRIME_REPLICATE_INDEX_@@"
+        if provenance_dict is not None:
+            provenance_dict["parameters"]["replicate_index"] = placeholder
+            encoded_provenance = provenance.json_encode_provenance(
+                provenance_dict, num_replicates
+            )
+
+        for j in range(num_replicates):
+            self.run(end_time)
+            if mutation_rate is not None:
+                mutations._simple_mutate(
+                    self.tables,
+                    self.random_generator,
+                    sequence_length=self.sequence_length,
+                    rate=mutation_rate,
+                    discrete_sites=discrete_sites,
                 )
-        return tables.tree_sequence()
+            tables = tskit.TableCollection().fromdict(self.tables.asdict())
+            replicate_provenance = None
+            if encoded_provenance is not None:
+                replicate_provenance = encoded_provenance.replace(
+                    f'"{placeholder}"', str(j)
+                )
+                tables.provenances.add_row(replicate_provenance)
+            # TODO this is super ugly - we should be preparing the state of the
+            # tables at the start and not updating then at all during the reps.
+            # Make sure we remove this _hl_from_ts property too.
+            if self._hl_from_ts is None:
+                # Add the populations with metadata
+                assert len(tables.populations) == self.demography.num_populations
+                tables.populations.clear()
+                for population in self.demography.populations:
+                    md = population.temporary_hack_for_encoding_old_style_metadata()
+                    tables.populations.add_row(metadata=md)
+            yield tables.tree_sequence()
+            self.reset()
 
 
 # TODO update the documentation here to state that using this class is

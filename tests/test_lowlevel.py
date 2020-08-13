@@ -20,7 +20,9 @@
 Test cases for the low level C interface to msprime.
 """
 import collections
+import functools
 import heapq
+import inspect
 import io
 import itertools
 import math
@@ -43,12 +45,12 @@ NULL_NODE = -1
 IS_WINDOWS = platform.system() == "Windows"
 
 
-def uniform_recombination_map(L=1, rate=0):
+def uniform_rate_map(L=1, rate=0):
     """
     Returns a uniform recombination map for the specified sequence length
     and rate.
     """
-    return _msprime.RecombinationMap([0, L], [rate, 0])
+    return {"position": [0, L], "rate": [rate]}
 
 
 def get_mutation_model(model=0):
@@ -228,7 +230,7 @@ def get_migration_matrix(num_populations, value=1.0):
 def get_example_simulator(
     num_samples=10, Ne=0.25, random_seed=1, num_populations=1, store_migrations=False
 ):
-    tables = _msprime.LightweightTableCollection()
+    tables = _msprime.LightweightTableCollection(10)
     samples = [(j % num_populations, 0) for j in range(num_samples)]
     migration_matrix = get_migration_matrix(num_populations, 1)
     population_configuration = [
@@ -236,7 +238,7 @@ def get_example_simulator(
     ]
     sim = _msprime.Simulator(
         samples,
-        uniform_recombination_map(10, 0.1),
+        uniform_rate_map(10, 0.1),
         _msprime.RandomGenerator(random_seed),
         tables=tables,
         population_configuration=population_configuration,
@@ -631,8 +633,8 @@ class TestSimulationState(LowLevelTestCase):
         avl_node_block_size = rng.randint(1, 100)
         sim = _msprime.Simulator(
             samples=get_population_samples(*num_sampless),
-            recombination_map=uniform_recombination_map(L=m, rate=rho),
-            tables=_msprime.LightweightTableCollection(),
+            recombination_map=uniform_rate_map(L=m, rate=rho),
+            tables=_msprime.LightweightTableCollection(m),
             random_generator=_msprime.RandomGenerator(random_seed),
             store_migrations=store_migrations,
             start_time=start_time,
@@ -745,10 +747,10 @@ class TestSimulationState(LowLevelTestCase):
         # These tests don't work for n == 2
         assert n > 2
         random_seed = random.randint(0, 2 ** 31)
-        tables = _msprime.LightweightTableCollection()
+        tables = _msprime.LightweightTableCollection(m)
         sim = _msprime.Simulator(
             samples=get_samples(n),
-            recombination_map=uniform_recombination_map(L=m, rate=r),
+            recombination_map=uniform_rate_map(L=m, rate=r),
             random_generator=_msprime.RandomGenerator(random_seed),
             tables=tables,
             demographic_events=list(demographic_events),
@@ -794,9 +796,9 @@ class TestSimulationState(LowLevelTestCase):
         m = 100
         sim = _msprime.Simulator(
             samples=get_samples(n),
-            recombination_map=uniform_recombination_map(L=m, rate=1),
+            recombination_map=uniform_rate_map(L=m, rate=1),
             random_generator=_msprime.RandomGenerator(1),
-            tables=_msprime.LightweightTableCollection(),
+            tables=_msprime.LightweightTableCollection(m),
         )
         # We run until time 0 to for initialisation
         sim.run(0)
@@ -841,9 +843,9 @@ class TestSimulationState(LowLevelTestCase):
             event["time"] *= 1e-6
         sim = _msprime.Simulator(
             get_population_samples(n, 0, 0),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             migration_matrix=migration_matrix,
             population_configuration=population_configuration,
             demographic_events=demographic_events,
@@ -851,9 +853,9 @@ class TestSimulationState(LowLevelTestCase):
         # Use a second instance to track the demographic events debugger.
         sim2 = _msprime.Simulator(
             get_samples(n),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             migration_matrix=migration_matrix,
             population_configuration=population_configuration,
             demographic_events=demographic_events,
@@ -937,9 +939,9 @@ class TestSimulator(LowLevelTestCase):
     def test_run(self):
         sim = _msprime.Simulator(
             get_samples(10),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
         )
         status = sim.run()
         self.assertEqual(status, _msprime.EXIT_COALESCENCE)
@@ -962,9 +964,9 @@ class TestSimulator(LowLevelTestCase):
     def test_print_state(self):
         sim = _msprime.Simulator(
             get_samples(10),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
         )
         with tempfile.TemporaryFile("w+") as f:
             sim.print_state(f)
@@ -973,12 +975,37 @@ class TestSimulator(LowLevelTestCase):
         self.assertGreater(len(output), 0)
         self.assertTrue(output.startswith("simulation model"))
 
+    def test_uninitialised(self):
+        # Create a properly initialised instance so we can run inspect on it.
+        sim = _msprime.Simulator(
+            get_samples(10),
+            uniform_rate_map(),
+            _msprime.RandomGenerator(1),
+            _msprime.LightweightTableCollection(1),
+        )
+        attributes = []
+        methods = []
+        for name, value in inspect.getmembers(sim):
+            if not name.startswith("__"):
+                if inspect.isbuiltin(value):
+                    methods.append(name)
+                else:
+                    attributes.append(name)
+        uninitialised_sim = _msprime.Simulator.__new__(_msprime.Simulator)
+        for attr in attributes:
+            with self.assertRaises(SystemError):
+                getattr(uninitialised_sim, attr)
+        for method_name in methods:
+            method = getattr(uninitialised_sim, method_name)
+            with self.assertRaises(SystemError):
+                method()
+
     def test_verify(self):
         sim = _msprime.Simulator(
             get_samples(10),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
         )
         sim.verify()
         with self.assertRaises(TypeError):
@@ -987,9 +1014,9 @@ class TestSimulator(LowLevelTestCase):
     def test_fenwick_drift(self):
         sim = _msprime.Simulator(
             get_samples(10),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
         )
         self.assertEqual(sim.fenwick_drift(0), 0)
         self.assertRaises(TypeError, sim.fenwick_drift, "sdf")
@@ -1000,9 +1027,9 @@ class TestSimulator(LowLevelTestCase):
         def f(discrete_genome):
             return _msprime.Simulator(
                 get_samples(10),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 discrete_genome=discrete_genome,
             )
 
@@ -1016,9 +1043,9 @@ class TestSimulator(LowLevelTestCase):
     def test_print_state_errors(self):
         sim = _msprime.Simulator(
             get_samples(10),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
         )
         with self.assertRaises(TypeError):
             sim.print_state()
@@ -1033,16 +1060,48 @@ class TestSimulator(LowLevelTestCase):
                 with self.assertRaises(OSError):
                     sim.print_state(f)
 
+    def test_bad_recombination_map(self):
+        def f(recomb_map):
+            return _msprime.Simulator(
+                get_samples(2),
+                recomb_map,
+                _msprime.RandomGenerator(1),
+                _msprime.LightweightTableCollection(1),
+            )
+
+        for bad_type in ["", None, []]:
+            with self.assertRaises(TypeError):
+                f(bad_type)
+        for missing_key in [{}, {"position": []}, {"rate": []}]:
+            with self.assertRaises(ValueError):
+                f(missing_key)
+        for bad_array in ["sdrf", b"sxdf", None, [[], []]]:
+            with self.assertRaises(ValueError):
+                f({"position": bad_array, "rate": []})
+            with self.assertRaises(ValueError):
+                f({"position": [], "rate": bad_array})
+
+        with self.assertRaises(ValueError):
+            f({"position": [0, 1], "rate": []})
+        with self.assertRaises(_msprime.InputError):
+            f({"position": [0], "rate": []})
+        with self.assertRaises(_msprime.InputError):
+            f({"position": [1, 0], "rate": [0]})
+        with self.assertRaises(_msprime.InputError):
+            f({"position": [0, -1], "rate": [0]})
+        with self.assertRaises(_msprime.InputError):
+            f({"position": [0, 1], "rate": [-1]})
+
     def test_bad_parameters(self):
         rng = _msprime.RandomGenerator(1)
-        recomb_map = uniform_recombination_map()
+        recomb_map = uniform_rate_map()
 
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
                 recomb_map,
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 **kwargs,
             )
 
@@ -1095,7 +1154,7 @@ class TestSimulator(LowLevelTestCase):
         self.assertRaises(OverflowError, f, avl_node_block_size=2 ** 65)
 
     def test_pedigree_simulation_model(self):
-        recomb_map = uniform_recombination_map()
+        recomb_map = uniform_rate_map()
         base_ped = {
             "individual": np.array([1, 2, 3, 4], dtype=np.int32),
             "parents": np.array([2, 3, 2, 3, -1, -1, -1, -1], dtype=np.int32).reshape(
@@ -1116,7 +1175,7 @@ class TestSimulator(LowLevelTestCase):
                 get_samples(num_samples),
                 recomb_map,
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 model=get_simulation_model(model),
                 **kwargs,
             )
@@ -1139,14 +1198,14 @@ class TestSimulator(LowLevelTestCase):
             self.assertEqual(sim.model, get_simulation_model("wf_ped"))
 
     def test_num_labels(self):
-        recomb_map = uniform_recombination_map()
+        recomb_map = uniform_rate_map()
 
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
                 recomb_map,
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 **kwargs,
             )
 
@@ -1203,9 +1262,9 @@ class TestSimulator(LowLevelTestCase):
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 **kwargs,
             )
 
@@ -1224,9 +1283,9 @@ class TestSimulator(LowLevelTestCase):
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 **kwargs,
             )
 
@@ -1254,9 +1313,9 @@ class TestSimulator(LowLevelTestCase):
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 **kwargs,
             )
 
@@ -1295,9 +1354,9 @@ class TestSimulator(LowLevelTestCase):
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
-                uniform_recombination_map(L=L),
+                uniform_rate_map(L=L),
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(L),
                 **kwargs,
             )
 
@@ -1362,9 +1421,9 @@ class TestSimulator(LowLevelTestCase):
         def f(num_samples=10, random_seed=1, **kwargs):
             return _msprime.Simulator(
                 get_samples(num_samples),
-                uniform_recombination_map(L=L, rate=1),
+                uniform_rate_map(L=L, rate=1),
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(L),
                 **kwargs,
             )
 
@@ -1378,9 +1437,9 @@ class TestSimulator(LowLevelTestCase):
     def test_sweep_after_coalescence(self):
         sim = _msprime.Simulator(
             get_samples(10),
-            uniform_recombination_map(L=10, rate=1),
+            uniform_rate_map(L=10, rate=1),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(10),
             num_labels=2,
         )
         status = sim.run()
@@ -1401,9 +1460,9 @@ class TestSimulator(LowLevelTestCase):
             ]
             return _msprime.Simulator(
                 samples,
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(random_seed),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 population_configuration=population_configuration,
                 migration_matrix=migration_matrix,
                 **kwargs,
@@ -1439,9 +1498,9 @@ class TestSimulator(LowLevelTestCase):
         def f(samples):
             return _msprime.Simulator(
                 samples,
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 rng,
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
             )
 
         err = (TypeError, ValueError)
@@ -1467,9 +1526,9 @@ class TestSimulator(LowLevelTestCase):
         rng = _msprime.RandomGenerator(1)
         sim = _msprime.Simulator(
             samples,
-            uniform_recombination_map(),
+            uniform_rate_map(),
             rng,
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             population_configuration=[get_population_configuration() for _ in range(N)],
             migration_matrix=np.zeros((N, N)),
         )
@@ -1477,10 +1536,8 @@ class TestSimulator(LowLevelTestCase):
 
     def test_deleting_tables(self):
         rng = _msprime.RandomGenerator(1)
-        tables = _msprime.LightweightTableCollection()
-        sim = _msprime.Simulator(
-            get_samples(10), uniform_recombination_map(), rng, tables
-        )
+        tables = _msprime.LightweightTableCollection(1)
+        sim = _msprime.Simulator(get_samples(10), uniform_rate_map(), rng, tables)
         del tables
         sim.run()
 
@@ -1488,18 +1545,18 @@ class TestSimulator(LowLevelTestCase):
         rng = _msprime.RandomGenerator(1)
         sim = _msprime.Simulator(
             get_samples(10),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             rng,
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
         )
         del rng
         sim.run()
 
     def test_deleting_recomb_map(self):
         rng = _msprime.RandomGenerator(1)
-        recomb_map = uniform_recombination_map()
+        recomb_map = uniform_rate_map()
         sim = _msprime.Simulator(
-            get_samples(10), recomb_map, rng, _msprime.LightweightTableCollection()
+            get_samples(10), recomb_map, rng, _msprime.LightweightTableCollection(1)
         )
         del recomb_map
         sim.run()
@@ -1508,9 +1565,9 @@ class TestSimulator(LowLevelTestCase):
         n = 10
         sim = _msprime.Simulator(
             get_samples(n),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
         )
         self.assertEqual(sim.migration_matrix, [0.0])
         self.assertEqual(
@@ -1522,9 +1579,9 @@ class TestSimulator(LowLevelTestCase):
         def f(population_configuration):
             return _msprime.Simulator(
                 get_samples(2),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 population_configuration=population_configuration,
             )
 
@@ -1565,9 +1622,9 @@ class TestSimulator(LowLevelTestCase):
             migration_matrix = [0 for j in range(N) for k in range(N)]
             _msprime.Simulator(
                 get_samples(num_samples),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 rng,
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 population_configuration=population_configuration,
                 migration_matrix=migration_matrix,
             )
@@ -1577,7 +1634,7 @@ class TestSimulator(LowLevelTestCase):
                 TypeError,
                 _msprime.Simulator,
                 get_samples(2),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 rng,
                 population_configuration=bad_type,
             )
@@ -1589,9 +1646,9 @@ class TestSimulator(LowLevelTestCase):
             ValueError,
             _msprime.Simulator,
             get_samples(2),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             rng,
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             migration_matrix=[0, 0, 0, 0],
         )
 
@@ -1605,9 +1662,9 @@ class TestSimulator(LowLevelTestCase):
             migration_matrix = [[0 for j in range(N)] for k in range(N)]
             s = _msprime.Simulator(
                 get_samples(num_samples),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 population_configuration=population_configuration,
                 migration_matrix=migration_matrix,
             )
@@ -1630,9 +1687,9 @@ class TestSimulator(LowLevelTestCase):
             population_configuration[0]["num_samples"] = 2
             return _msprime.Simulator(
                 get_samples(2),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 population_configuration=population_configuration,
                 migration_matrix=migration_matrix,
             )
@@ -1668,9 +1725,9 @@ class TestSimulator(LowLevelTestCase):
                 ValueError,
                 _msprime.Simulator,
                 get_samples(2),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 population_configuration=pop_conf,
             )
 
@@ -1690,9 +1747,9 @@ class TestSimulator(LowLevelTestCase):
             for migration_matrix in matrices:
                 sim = _msprime.Simulator(
                     get_samples(2),
-                    uniform_recombination_map(),
+                    uniform_rate_map(),
                     _msprime.RandomGenerator(1),
-                    _msprime.LightweightTableCollection(),
+                    _msprime.LightweightTableCollection(1),
                     migration_matrix=migration_matrix,
                     population_configuration=population_configuration,
                 )
@@ -1702,9 +1759,9 @@ class TestSimulator(LowLevelTestCase):
         def f(events):
             _msprime.Simulator(
                 get_samples(2),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 demographic_events=events,
             )
 
@@ -1777,9 +1834,9 @@ class TestSimulator(LowLevelTestCase):
             ]
             _msprime.Simulator(
                 get_samples(2),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 demographic_events=events,
                 population_configuration=population_configuration,
                 migration_matrix=get_migration_matrix(num_populations),
@@ -1849,9 +1906,9 @@ class TestSimulator(LowLevelTestCase):
             ]
             _msprime.Simulator(
                 get_samples(2),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 demographic_events=events,
                 population_configuration=population_configuration,
                 migration_matrix=get_migration_matrix(num_populations),
@@ -1883,9 +1940,9 @@ class TestSimulator(LowLevelTestCase):
             _msprime.InputError,
             _msprime.Simulator,
             get_samples(10),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             demographic_events=events,
         )
 
@@ -1898,7 +1955,7 @@ class TestSimulator(LowLevelTestCase):
             },
             {
                 "samples": get_samples(10),
-                "recombination_map": uniform_recombination_map(L=10, rate=1),
+                "recombination_map": uniform_rate_map(L=10, rate=1),
             },
             {
                 "samples": get_population_samples(3, 3, 4),
@@ -1920,12 +1977,12 @@ class TestSimulator(LowLevelTestCase):
         seed = 10
         for params in simulations:
             params["random_generator"] = _msprime.RandomGenerator(seed)
-            params["recombination_map"] = uniform_recombination_map()
-            params["tables"] = _msprime.LightweightTableCollection()
+            params["recombination_map"] = uniform_rate_map()
+            params["tables"] = _msprime.LightweightTableCollection(1)
             sim1 = _msprime.Simulator(**params)
             params["random_generator"] = _msprime.RandomGenerator(seed)
-            params["recombination_map"] = uniform_recombination_map()
-            params["tables"] = _msprime.LightweightTableCollection()
+            params["recombination_map"] = uniform_rate_map()
+            params["tables"] = _msprime.LightweightTableCollection(1)
             sim2 = _msprime.Simulator(**params)
             sim1.run()
             sim2.run()
@@ -1945,9 +2002,9 @@ class TestSimulator(LowLevelTestCase):
         ]
         sim = _msprime.Simulator(
             get_population_samples(5, 5),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             population_configuration=population_configuration,
             migration_matrix=[[0, 0], [0, 0]],
         )
@@ -1957,9 +2014,9 @@ class TestSimulator(LowLevelTestCase):
         for n in [2, 10, 20]:
             sim = _msprime.Simulator(
                 get_samples(n),
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
             )
             sim.run()
             self.assertEqual(n - 1, sim.num_common_ancestor_events)
@@ -1975,9 +2032,9 @@ class TestSimulator(LowLevelTestCase):
         ]
         sim = _msprime.Simulator(
             get_samples(n),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             population_configuration=population_configuration,
             migration_matrix=[[0.0, 0.0], [0.0, 0.0]],
         )
@@ -1994,9 +2051,9 @@ class TestSimulator(LowLevelTestCase):
         ]
         sim = _msprime.Simulator(
             get_samples(n),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             population_configuration=population_configuration,
             migration_matrix=matrix,
         )
@@ -2027,9 +2084,9 @@ class TestSimulator(LowLevelTestCase):
         num_sampless[active_pops[2]] = 6
         sim = _msprime.Simulator(
             get_population_samples(*num_sampless),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             population_configuration=population_configuration,
             migration_matrix=migration_matrix,
         )
@@ -2047,9 +2104,9 @@ class TestSimulator(LowLevelTestCase):
         dt = 0.0000001
         sim = _msprime.Simulator(
             get_samples(n),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             population_configuration=[
                 get_population_configuration(),
                 get_population_configuration(),
@@ -2080,9 +2137,9 @@ class TestSimulator(LowLevelTestCase):
         dt = 1e-9
         sim = _msprime.Simulator(
             get_population_samples(n, n),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             population_configuration=[
                 get_population_configuration(),
                 get_population_configuration(),
@@ -2118,9 +2175,9 @@ class TestSimulator(LowLevelTestCase):
         ]
         sim = _msprime.Simulator(
             get_samples(n),
-            uniform_recombination_map(L=10, rate=10),
+            uniform_rate_map(L=10, rate=10),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(10),
             population_configuration=population_configuration,
             migration_matrix=[[0.0, 0.0], [0.0, 0.0]],
         )
@@ -2140,9 +2197,9 @@ class TestSimulator(LowLevelTestCase):
         ]
         sim = _msprime.Simulator(
             get_population_samples(5, 5, 0),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             population_configuration=population_configuration,
             migration_matrix=matrix,
         )
@@ -2156,9 +2213,9 @@ class TestSimulator(LowLevelTestCase):
     def test_reset(self):
         sim = _msprime.Simulator(
             get_samples(10),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
         )
         times = set()
         for _ in range(10):
@@ -2186,9 +2243,9 @@ class TestSampleParsing(unittest.TestCase):
         for samples in examples:
             sim = _msprime.Simulator(
                 samples,
-                uniform_recombination_map(),
+                uniform_rate_map(),
                 _msprime.RandomGenerator(1),
-                _msprime.LightweightTableCollection(),
+                _msprime.LightweightTableCollection(1),
                 migration_matrix=np.zeros((4, 4)),
                 population_configuration=[
                     get_population_configuration() for j in range(4)
@@ -2216,9 +2273,9 @@ class TestSampleParsing(unittest.TestCase):
             with self.assertRaises(TypeError):
                 _msprime.Simulator(
                     samples,
-                    uniform_recombination_map(),
+                    uniform_rate_map(),
                     _msprime.RandomGenerator(1),
-                    _msprime.LightweightTableCollection(),
+                    _msprime.LightweightTableCollection(1),
                 )
 
     def test_value_errors(self):
@@ -2236,12 +2293,13 @@ class TestSampleParsing(unittest.TestCase):
             with self.assertRaises(ValueError):
                 _msprime.Simulator(
                     samples,
-                    uniform_recombination_map(),
+                    uniform_rate_map(),
                     _msprime.RandomGenerator(1),
-                    _msprime.LightweightTableCollection(),
+                    _msprime.LightweightTableCollection(1),
                 )
 
 
+@unittest.skip("We might keep some of these")
 class TestRecombinationMap(LowLevelTestCase):
     """
     Tests for the low-level Recombination Map.
@@ -2316,6 +2374,17 @@ class TestRandomGenerator(unittest.TestCase):
             rng = _msprime.RandomGenerator(s)
             self.assertEqual(rng.get_seed(), s)
 
+    def test_uninitialised(self):
+        uninitialised_rng = _msprime.RandomGenerator.__new__(_msprime.RandomGenerator)
+        with self.assertRaises(SystemError):
+            uninitialised_rng.get_seed()
+        with self.assertRaises(SystemError):
+            uninitialised_rng.flat()
+        with self.assertRaises(SystemError):
+            uninitialised_rng.poisson()
+        with self.assertRaises(SystemError):
+            uninitialised_rng.uniform_int()
+
     def test_flat_errors(self):
         rng = _msprime.RandomGenerator(1)
         self.assertRaises(TypeError, rng.flat)
@@ -2361,6 +2430,7 @@ class TestRandomGenerator(unittest.TestCase):
                 self.assertEqual(rng1.uniform_int(n), rng2.uniform_int(n))
 
 
+@unittest.skip("We might keep some of these")
 class TestIntervalMap(unittest.TestCase):
     """
     Tests for the IntervalMap class.
@@ -2478,6 +2548,15 @@ class TestMatrixMutationModel(unittest.TestCase):
             with self.assertRaises(_msprime.LibraryError):
                 _msprime.MatrixMutationModel(alleles, distribution, matrix)
 
+    def test_uninitialised(self):
+        model = _msprime.MatrixMutationModel.__new__(_msprime.MatrixMutationModel)
+        with self.assertRaises(SystemError):
+            model.root_distribution
+        with self.assertRaises(SystemError):
+            model.alleles
+        with self.assertRaises(SystemError):
+            model.transition_matrix
+
     def test_good_alleles(self):
         for n in range(2, 10):
             alleles = [f"{j}" for j in range(n)]
@@ -2551,6 +2630,13 @@ class TestSlimMutationModel(unittest.TestCase):
             _msprime.SlimMutationModel(type=-1, next_id=0)
             _msprime.SlimMutationModel(type=1, next_id=-1)
 
+    def test_uninitialised(self):
+        model = _msprime.SlimMutationModel.__new__(_msprime.SlimMutationModel)
+        with self.assertRaises(SystemError):
+            model.type
+        with self.assertRaises(SystemError):
+            model.next_id
+
     def test_type(self):
         for mutation_type in [0, 10, 2 ** 31 - 1]:
             model = _msprime.SlimMutationModel(type=mutation_type)
@@ -2579,6 +2665,15 @@ class TestInfiniteAllelesMutationModel(unittest.TestCase):
         self.assertEqual(iamm.start_allele, 0)
         self.assertEqual(iamm.next_allele, 0)
 
+    def test_uninitialised(self):
+        model = _msprime.InfiniteAllelesMutationModel.__new__(
+            _msprime.InfiniteAllelesMutationModel
+        )
+        with self.assertRaises(SystemError):
+            model.start_allele
+        with self.assertRaises(SystemError):
+            model.next_allele
+
     def test_start_allele(self):
         for start_allele in [0, 10, 2 ** 64 - 1]:
             iamm = _msprime.InfiniteAllelesMutationModel(start_allele)
@@ -2592,110 +2687,191 @@ class TestInfiniteAllelesMutationModel(unittest.TestCase):
             self.assertEqual(iamm.next_allele, 0)
 
 
-class TestMutationGenerator(unittest.TestCase):
+class TestSimMutations(unittest.TestCase):
     """
-    Tests for the mutation generator class.
+    Tests for the sim_mutations function.
     """
 
-    def test_basic_constructor(self):
-        imap = _msprime.IntervalMap([0, 1], [0, 0])
+    def test_mandatory_args(self):
+        tables = _msprime.LightweightTableCollection(1.0)
+        rate_map = uniform_rate_map(1, 1)
         model = get_mutation_model()
-        self.assertRaises(TypeError, _msprime.MutationGenerator)
-        self.assertRaises(TypeError, _msprime.MutationGenerator, imap)
-        _msprime.MutationGenerator(_msprime.RandomGenerator(1), imap, model)
-        self.assertRaises(
-            TypeError, _msprime.MutationGenerator, imap, discrete_sites="sdf"
+        self.assertRaises(TypeError, _msprime.sim_mutations)
+        self.assertRaises(TypeError, _msprime.sim_mutations, tables)
+        rng = _msprime.RandomGenerator(1)
+        _msprime.sim_mutations(tables, rng, rate_map, model)
+        for bad_type in [None, "x"]:
+            with self.assertRaises(TypeError):
+                _msprime.sim_mutations(
+                    tables=bad_type,
+                    random_generator=rng,
+                    rate_map=rate_map,
+                    model=model,
+                )
+            with self.assertRaises(TypeError):
+                _msprime.sim_mutations(
+                    tables=tables,
+                    random_generator=bad_type,
+                    rate_map=rate_map,
+                    model=model,
+                )
+            with self.assertRaises(TypeError):
+                _msprime.sim_mutations(
+                    tables=tables, random_generator=rng, rate_map=bad_type, model=model
+                )
+            with self.assertRaises(TypeError):
+                _msprime.sim_mutations(
+                    tables=tables,
+                    random_generator=rng,
+                    rate_map=rate_map,
+                    model=bad_type,
+                )
+            with self.assertRaises(TypeError):
+                _msprime.sim_mutations(
+                    tables=tables,
+                    random_generator=rng,
+                    rate_map=rate_map,
+                    model=model,
+                    discrete_sites=bad_type,
+                )
+        self.assertIsNone(
+            _msprime.sim_mutations(
+                tables=tables, random_generator=rng, rate_map=rate_map, model=model,
+            )
         )
-        _msprime.MutationGenerator(
-            _msprime.RandomGenerator(1), imap, model, discrete_sites=True
+
+    def test_optional_args(self):
+        tables = _msprime.LightweightTableCollection(1.0)
+        rate_map = uniform_rate_map(1, 1)
+        model = get_mutation_model()
+        rng = _msprime.RandomGenerator(1)
+        generate = functools.partial(
+            _msprime.sim_mutations,
+            tables=tables,
+            random_generator=rng,
+            rate_map=rate_map,
+            model=model,
         )
+        generate()
+        for bad_type in [[], None, "asdf"]:
+            with self.assertRaises(TypeError):
+                generate(discrete_sites=bad_type)
+            with self.assertRaises(TypeError):
+                generate(keep=bad_type)
+            with self.assertRaises(TypeError):
+                generate(start_time=bad_type)
+            with self.assertRaises(TypeError):
+                generate(end_time=bad_type)
+
+    def test_tables(self):
+        imap = uniform_rate_map(1)
+        rng = _msprime.RandomGenerator(1)
+        model = get_mutation_model()
+        for bad_type in ["x", {}, None]:
+            with self.assertRaises(TypeError):
+                _msprime.sim_mutations(
+                    tables=bad_type, random_generator=rng, rate_map=imap, model=model,
+                )
+        tables = _msprime.LightweightTableCollection.__new__(
+            _msprime.LightweightTableCollection
+        )
+        with self.assertRaises(SystemError):
+            _msprime.sim_mutations(
+                tables=tables, random_generator=rng, rate_map=imap, model=model,
+            )
 
     def test_rng(self):
-        imap = _msprime.IntervalMap([0, 1], [0, 0])
+        imap = uniform_rate_map(1)
+        tables = _msprime.LightweightTableCollection(1.0)
         for bad_type in ["x", {}, None]:
-            self.assertRaises(
-                TypeError,
-                _msprime.MutationGenerator,
-                random_generator=bad_type,
+            with self.assertRaises(TypeError):
+                _msprime.sim_mutations(
+                    tables=tables,
+                    random_generator=bad_type,
+                    rate_map=imap,
+                    model=get_mutation_model(),
+                )
+        rng = _msprime.RandomGenerator.__new__(_msprime.RandomGenerator)
+        # This doesn't have __init__ called, so will have NULL as the rng.
+        with self.assertRaises(SystemError):
+            _msprime.sim_mutations(
+                tables=tables,
+                random_generator=rng,
                 rate_map=imap,
                 model=get_mutation_model(),
             )
 
     def test_mutation_map(self):
         rng = _msprime.RandomGenerator(1)
-        for bad_type in ["x", {}, None, [[], []]]:
-            self.assertRaises(
-                TypeError,
-                _msprime.MutationGenerator,
-                rng,
-                rate_map=bad_type,
-                model=get_mutation_model(),
-            )
+        tables = _msprime.LightweightTableCollection(1.0)
+        for bad_type in ["x", None, [[], []]]:
+            with self.assertRaises(TypeError):
+                _msprime.sim_mutations(
+                    tables, rng, rate_map=bad_type, model=get_mutation_model(),
+                )
 
     def test_model(self):
         rng = _msprime.RandomGenerator(1)
-        imap = _msprime.IntervalMap([0, 1], [0, 0])
+        imap = uniform_rate_map(1)
+        tables = _msprime.LightweightTableCollection(1.0)
         for bad_type in ["x", {}, None, [[], []]]:
-            self.assertRaises(
-                TypeError,
-                _msprime.MutationGenerator,
-                rng,
-                rate_map=imap,
-                model=bad_type,
-            )
+            with self.assertRaises(TypeError):
+                _msprime.sim_mutations(
+                    tables, rng, rate_map=imap, model=bad_type,
+                )
+        model_classes = [
+            _msprime.SlimMutationModel,
+            _msprime.InfiniteAllelesMutationModel,
+            _msprime.MatrixMutationModel,
+        ]
+        for cls in model_classes:
+            uninitialised_model = cls.__new__(cls)
+            with self.assertRaises(SystemError):
+                _msprime.sim_mutations(
+                    tables, rng, rate_map=imap, model=uninitialised_model,
+                )
 
     def test_slim_model(self):
         rng = _msprime.RandomGenerator(1)
-        imap = _msprime.IntervalMap([0, 1], [5, 0])
+        imap = uniform_rate_map(1)
+        tables = _msprime.LightweightTableCollection(1.0)
         model = _msprime.SlimMutationModel(1234, 5678)
-        mutgen = _msprime.MutationGenerator(rng, imap, model)
-        tables = _msprime.LightweightTableCollection(1)
-        mutgen.generate(tables)
+        _msprime.sim_mutations(tables, rng, imap, model)
         self.assertEqual(model.next_id, 5678)
 
     def test_infinite_alleles_model(self):
         rng = _msprime.RandomGenerator(1)
-        imap = _msprime.IntervalMap([0, 1], [1, 0])
+        imap = uniform_rate_map(1, 1)
+        tables = _msprime.LightweightTableCollection(1.0)
         model = _msprime.InfiniteAllelesMutationModel(1234)
-        mutgen = _msprime.MutationGenerator(rng, imap, model)
-        tables = _msprime.LightweightTableCollection(1)
-        mutgen.generate(tables)
+        _msprime.sim_mutations(tables, rng, imap, model)
         self.assertEqual(model.start_allele, 1234)
         self.assertEqual(model.next_allele, 0)
 
-    def test_generate_interface(self):
-        rng = _msprime.RandomGenerator(1)
-        imap = _msprime.IntervalMap([0, 1], [1, 0])
-        mutgen = _msprime.MutationGenerator(rng, imap, get_mutation_model())
-        tables = _msprime.LightweightTableCollection(1)
-        for bad_type in [None, [], {}]:
-            self.assertRaises(TypeError, mutgen.generate, bad_type)
-            self.assertRaises(TypeError, mutgen.generate, tables, bad_type)
-        for _ in range(10):
-            tables = _msprime.LightweightTableCollection(1)
-            mutgen.generate(tables)
-
     def test_time_interval(self):
         rng = _msprime.RandomGenerator(1)
-        imap = _msprime.IntervalMap([0, 1], [0, 0])
-        mutgen = _msprime.MutationGenerator(rng, imap, get_mutation_model())
+        rate_map = uniform_rate_map(1, 1)
         tables = _msprime.LightweightTableCollection(1)
+        mutgen = functools.partial(
+            _msprime.sim_mutations, tables, rng, rate_map, get_mutation_model()
+        )
         for bad_type in ["x", {}, None]:
             with self.assertRaises(TypeError):
-                mutgen.generate(tables, start_time=bad_type)
+                mutgen(start_time=bad_type)
             with self.assertRaises(TypeError):
-                mutgen.generate(tables, end_time=bad_type)
+                mutgen(end_time=bad_type)
         for start_time, end_time in [(1, 0), (-1, -2), (200, 100)]:
             with self.assertRaises(_msprime.LibraryError):
-                mutgen.generate(tables, start_time=start_time, end_time=end_time)
+                mutgen(start_time=start_time, end_time=end_time)
 
     def verify_block_size(self, tables):
         rng = _msprime.RandomGenerator(1)
-        rate_map = _msprime.IntervalMap([0, tables.sequence_length], [2, 0])
-        mutgen = _msprime.MutationGenerator(rng, rate_map, get_mutation_model(1))
         ll_tables = _msprime.LightweightTableCollection()
         ll_tables.fromdict(tables.asdict())
-        mutgen.generate(ll_tables, keep=True)
+        rate_map = uniform_rate_map(tables.sequence_length, 2)
+        _msprime.sim_mutations(
+            ll_tables, rng, rate_map, get_mutation_model(1), keep=True
+        )
         after_tables = tskit.TableCollection.fromdict(ll_tables.asdict())
         self.assertEqual(tables, after_tables)
 
@@ -2742,9 +2918,9 @@ class TestDemographyDebugger(unittest.TestCase):
     def get_simulator(self, events):
         return _msprime.Simulator(
             get_samples(2),
-            uniform_recombination_map(),
+            uniform_rate_map(),
             _msprime.RandomGenerator(1),
-            _msprime.LightweightTableCollection(),
+            _msprime.LightweightTableCollection(1),
             demographic_events=events,
         )
 
@@ -2776,17 +2952,12 @@ class TestLikelihood(unittest.TestCase):
         L = 20
         rng = _msprime.RandomGenerator(1)
         tables = _msprime.LightweightTableCollection(L)
+        rate_map = uniform_rate_map(L=L, rate=2)
         sim = _msprime.Simulator(
-            get_samples(5),
-            uniform_recombination_map(L=L, rate=2),
-            rng,
-            tables,
-            store_full_arg=True,
+            get_samples(5), rate_map, rng, tables, store_full_arg=True,
         )
         sim.run()
-        rate_map = _msprime.IntervalMap(position=[0, L], value=[2, 0])
-        mutgen = _msprime.MutationGenerator(rng, rate_map, get_mutation_model())
-        mutgen.generate(tables)
+        _msprime.sim_mutations(tables, rng, rate_map, get_mutation_model())
         t = tskit.TableCollection.fromdict(tables.asdict())
         self.assertGreater(len(t.edges), 10)
         self.assertGreater(len(t.mutations), 10)
@@ -2827,6 +2998,6 @@ class TestLikelihood(unittest.TestCase):
     def test_bad_tables(self):
         # Pass in a table collection that can't be made into a tree
         # sequence.
-        lw_tables = _msprime.LightweightTableCollection()
+        lw_tables = _msprime.LightweightTableCollection(0)
         with self.assertRaises(_msprime.LibraryError):
             _msprime.log_likelihood_arg(lw_tables, 1, 1)

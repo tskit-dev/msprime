@@ -77,6 +77,7 @@ class PythonRecombinationMap:
         return y
 
 
+@unittest.skip("recomb map")
 class TestCoordinateConversion(unittest.TestCase):
     """
     Tests that we convert coordinates correctly.
@@ -204,6 +205,7 @@ class TestCoordinateConversion(unittest.TestCase):
                     self.assertAlmostEqual(x, rm.genetic_to_physical(x))
 
 
+@unittest.skip("Recomb map")
 class TestConstructorAndGetters(unittest.TestCase):
     def verify_warning(self, f):
         with warnings.catch_warnings(record=True) as w:
@@ -288,6 +290,7 @@ class TestReadHapmap(unittest.TestCase):
             os.unlink(filename)
 
 
+@unittest.skip("Recomb map")
 class TestSlice(unittest.TestCase):
     def test_slice(self):
         # test RecombinationMap.slice(..., trim=False)

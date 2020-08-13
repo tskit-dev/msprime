@@ -25,29 +25,25 @@ import warnings
 
 import numpy as np
 
-import _msprime
 
-
-class IntervalMap:
+class RateMap:
     """
     A class mapping a numeric value to a set of adjacent intervals along the
     genome.
     """
 
-    def __init__(self, position, value=None):
-        size = len(self.position) - 1
-        if size < 1:
-            raise ValueError("Must have at least two positions to define an interval")
+    def __init__(self, position, rate):
         # We take copies to make sure there are no unintended consequences
         # later when a user modifies the arrays in this map.
         self.position = np.array(position, copy=True)
-        if value is None:
-            self.value = np.zeros(size)
-        else:
-            self.value = np.array(value, copy=True)
-        if self.value.shape[0] != size:
+        self.rate = np.array(rate, copy=True)
+        size = len(self.rate)
+        # TODO These errors are confusing.
+        if size < 1:
+            raise ValueError("Must have at least two positions to define an interval")
+        if self.position.shape[0] != size + 1:
             raise ValueError(
-                "Value array must have one less entry than the position array."
+                "Rate array must have one less entry than the position array."
             )
         if self.position[0] != 0:
             raise ValueError("First position must be zero")
@@ -55,9 +51,21 @@ class IntervalMap:
             raise ValueError("Position values must be in increasing order")
         # TODO continue.
 
+    @staticmethod
+    def uniform(sequence_length, rate):
+        return RateMap([0, sequence_length], [rate])
 
-# TODO refactor to use the new IntervalMap API but without breaking the old
-# exported API.
+    def asdict(self):
+        return {"position": self.position, "rate": self.rate}
+
+    @property
+    def sequence_length(self):
+        return self.position[-1]
+
+    # TODO more.
+
+
+# TODO refactor to remove any functionality added since last release.
 
 
 class RecombinationMap:
@@ -99,7 +107,7 @@ class RecombinationMap:
                     "scale positions to span the desired number of loci "
                     "and set discrete=True"
                 )
-        self._ll_recombination_map = _msprime.RecombinationMap(positions, rates)
+        self.map = RateMap(positions, rates[:-1])
         self.map_start = map_start
 
     @classmethod
@@ -290,11 +298,11 @@ class RecombinationMap:
 
     def get_positions(self):
         # For compatability with existing code we convert to a list
-        return list(self._ll_recombination_map.get_positions())
+        return list(self.map.position)
 
     def get_rates(self):
         # For compatability with existing code we convert to a list
-        return list(self._ll_recombination_map.get_rates())
+        return list(self.map.rate) + [0]
 
     def get_sequence_length(self):
         return self._ll_recombination_map.get_sequence_length()
@@ -304,8 +312,4 @@ class RecombinationMap:
         return self.get_sequence_length()
 
     def asdict(self):
-        return {
-            "positions": self.get_positions(),
-            "rates": self.get_rates(),
-            "map_start": self.map_start,
-        }
+        return self.map.asdict()

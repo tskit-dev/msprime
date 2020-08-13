@@ -31,7 +31,6 @@ import tskit
 
 import _msprime
 import msprime
-from . import mutations
 
 
 def set_sigpipe_handler():
@@ -255,9 +254,6 @@ class SimulationRunner:
 
         self._precision = precision
         self._print_trees = print_trees
-        self._mutation_generator = mutations._simple_mutation_generator(
-            self._mutation_rate, self._simulator.sequence_length, self._random_generator
-        )
 
     def get_num_replicates(self):
         """
@@ -318,9 +314,13 @@ class SimulationRunner:
         # The first line of ms's output is the command line.
         print(" ".join(sys.argv), file=output)
         print(" ".join(str(s) for s in self._ms_random_seeds), file=output)
-        for _ in range(self._num_replicates):
-            self._simulator.run()
-            tree_sequence = self._simulator.get_tree_sequence(self._mutation_generator)
+        replicates = self._simulator.run_replicates(
+            self._num_replicates, mutation_rate=self._mutation_rate
+        )
+        for tree_sequence in replicates:
+            # for _ in range(self._num_replicates):
+            # self._simulator.run()
+            # tree_sequence = self._simulator.get_tree_sequence(self._mutation_generator)
             print(file=output)
             print("//", file=output)
             if self._print_trees:
