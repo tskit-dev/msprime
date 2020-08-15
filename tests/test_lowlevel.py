@@ -1060,6 +1060,30 @@ class TestSimulator(LowLevelTestCase):
                 with self.assertRaises(OSError):
                     sim.print_state(f)
 
+    def test_recombination_map(self):
+        def f(recomb_map):
+            return _msprime.Simulator(
+                get_samples(2),
+                recomb_map,
+                _msprime.RandomGenerator(1),
+                _msprime.LightweightTableCollection(recomb_map["position"][-1]),
+            )
+
+        maps = [
+            uniform_rate_map(),
+            uniform_rate_map(100, 0.001),
+            {"position": np.arange(100), "rate": np.arange(99)},
+            {"position": np.arange(1000), "rate": np.ones(999)},
+        ]
+        for recomb_map in maps:
+            sim = f(recomb_map)
+            for _ in range(2):
+                other_map = sim.recombination_map
+                self.assertEqual(len(other_map), 2)
+                self.assertEqual(other_map.keys(), recomb_map.keys())
+                for key, array in recomb_map.items():
+                    self.assertTrue(np.array_equal(array, other_map[key]))
+
     def test_bad_recombination_map(self):
         def f(recomb_map):
             return _msprime.Simulator(
@@ -2299,64 +2323,6 @@ class TestSampleParsing(unittest.TestCase):
                 )
 
 
-@unittest.skip("We might keep some of these")
-class TestRecombinationMap(LowLevelTestCase):
-    """
-    Tests for the low-level Recombination Map.
-    """
-
-    def test_constructor(self):
-        self.assertRaises(TypeError, _msprime.RecombinationMap)
-        self.assertRaises(ValueError, _msprime.RecombinationMap, None)
-        self.assertRaises(ValueError, _msprime.RecombinationMap, None, None)
-        self.assertRaises(ValueError, _msprime.RecombinationMap, [0, 0.1], [1, 2, 3])
-        self.assertRaises(ValueError, _msprime.RecombinationMap, [], [0, 0])
-        self.assertRaises(_msprime.LibraryError, _msprime.RecombinationMap, [], [])
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [0, -2], [0, 0]
-        )
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [1, 0], [0, 0]
-        )
-        self.assertRaises(
-            _msprime.LibraryError, _msprime.RecombinationMap, [0, 1, 0.5], [0, 0, 0],
-        )
-
-    def test_arrays(self):
-        test_values = [
-            ([0, 1], [0.1, 0.2]),
-            (np.arange(1000), np.zeros(1000)),
-            (np.linspace(0, 1, 1000), np.linspace(10, 100, 1000)),
-        ]
-        for positions, rates in test_values:
-            rmap = _msprime.RecombinationMap(positions=positions, rates=rates,)
-            np.testing.assert_array_equal(rmap.get_positions(), positions)
-            np.testing.assert_array_equal(rmap.get_rates(), rates)
-
-    def test_bad_arrays(self):
-        for bad_array in ["sadf", [[], []], None]:
-            with self.assertRaises(ValueError):
-                _msprime.RecombinationMap(positions=bad_array, rates=[0, 1])
-
-    def test_total_rate(self):
-        rm = _msprime.RecombinationMap([0, 10], [0.25, 0])
-        self.assertEqual(rm.get_total_recombination_rate(), 2.5)
-        rm = _msprime.RecombinationMap([0, 10, 20], [0.25, 0.5, 0])
-        self.assertEqual(rm.get_total_recombination_rate(), 7.5)
-
-    def test_convert_mass_and_position(self):
-        rm = _msprime.RecombinationMap([0, 10, 20], [0, 1, 0])
-        self.assertRaises(TypeError, rm.position_to_mass)
-        self.assertRaises(TypeError, rm.mass_to_position)
-        for bad_value in [[1, 2, 3], "123", dict(), None]:
-            self.assertRaises(TypeError, rm.position_to_mass, bad_value)
-            self.assertRaises(TypeError, rm.mass_to_position, bad_value)
-        self.assertRaises(ValueError, rm.position_to_mass, -1)
-        self.assertRaises(ValueError, rm.mass_to_position, -1)
-        self.assertEqual(rm.position_to_mass(15), 5)
-        self.assertEqual(rm.mass_to_position(5), 15)
-
-
 class TestRandomGenerator(unittest.TestCase):
     """
     Tests for the random generator class.
@@ -2428,46 +2394,6 @@ class TestRandomGenerator(unittest.TestCase):
             values = [-1, 0, 1, 2, 10, 100, 2 ** 31]
             for n in values:
                 self.assertEqual(rng1.uniform_int(n), rng2.uniform_int(n))
-
-
-@unittest.skip("We might keep some of these")
-class TestIntervalMap(unittest.TestCase):
-    """
-    Tests for the IntervalMap class.
-    """
-
-    def test_basic_constructor(self):
-        self.assertRaises(TypeError, _msprime.IntervalMap)
-        self.assertRaises(TypeError, _msprime.IntervalMap, [])
-        im = _msprime.IntervalMap([0, 1], [0, 0])
-        self.assertTrue(np.array_equal(im.position, [0, 1]))
-        self.assertTrue(np.array_equal(im.value, [0, 0]))
-
-    def test_input_errors(self):
-        for bad_value in [-1, 0]:
-            self.assertRaises(
-                _msprime.LibraryError, _msprime.IntervalMap, [0, bad_value], [0, 0]
-            )
-        with self.assertRaises(_msprime.LibraryError):
-            _msprime.IntervalMap([], [])
-        with self.assertRaises(_msprime.LibraryError):
-            _msprime.IntervalMap([0], [0])
-        with self.assertRaises(ValueError):
-            _msprime.IntervalMap([0], [1, 2])
-        with self.assertRaises(ValueError):
-            _msprime.IntervalMap([0, 1], [1])
-
-    def test_good_inputs(self):
-        good_values = [
-            ([0, 1], [0, 2]),
-            ([0, 0.1, 10], [0, 2, 0]),
-            (np.arange(10), np.arange(10)),
-            (np.arange(100), np.zeros(100)),
-        ]
-        for pos, value in good_values:
-            im = _msprime.IntervalMap(pos, value)
-            self.assertTrue(np.array_equal(pos, im.position))
-            self.assertTrue(np.array_equal(value, im.value))
 
 
 class TestMatrixMutationModel(unittest.TestCase):
@@ -2808,6 +2734,11 @@ class TestSimMutations(unittest.TestCase):
             with self.assertRaises(TypeError):
                 _msprime.sim_mutations(
                     tables, rng, rate_map=bad_type, model=get_mutation_model(),
+                )
+        for bad_mutation_map in [{}, {"position": [], "rate": []}]:
+            with self.assertRaises(ValueError):
+                _msprime.sim_mutations(
+                    tables, rng, rate_map=bad_mutation_map, model=get_mutation_model(),
                 )
 
     def test_model(self):

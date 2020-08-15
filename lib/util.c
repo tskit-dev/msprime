@@ -169,6 +169,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_TRUNCATION_POINT:
             ret = "Bad truncation_point. Must have 0 < truncation_point <= 1";
             break;
+        case MSP_ERR_BAD_RATE_VALUE:
+            ret = "Rates must be non-negative and finite";
+            break;
         case MSP_ERR_INCOMPATIBLE_MUTATION_MAP:
             ret = "Mutation map is not compatible with specified tables.";
             break;

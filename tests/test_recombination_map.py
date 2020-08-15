@@ -17,7 +17,7 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Tests for the recombination map functionality.
+Tests for the legacy recombination map functionality.
 """
 import gzip
 import os
@@ -26,14 +26,14 @@ import tempfile
 import unittest
 import warnings
 
-import numpy as np
-
 import msprime
 
 
 class PythonRecombinationMap:
     """
     A Python implementation of the RecombinationMap interface.
+
+    This uses a simple algorithm used in previous versions of msprime.
     """
 
     def __init__(self, positions, rates):
@@ -44,40 +44,75 @@ class PythonRecombinationMap:
         self._positions = positions
         self._sequence_length = positions[-1]
         self._rates = rates
-        self._cumulative = np.insert(np.cumsum(np.diff(positions) * rates[:-1]), 0, 0)
 
     def get_total_recombination_rate(self):
         """
         Returns the effective recombination rate for this genetic map.
         This is the weighted mean of the rates across all intervals.
         """
-        return self._cumulative[-1]
+        x = self._positions
+        effective_rate = 0
+        for j in range(len(x) - 1):
+            length = x[j + 1] - x[j]
+            effective_rate += self._rates[j] * length
+        return effective_rate
 
     def _genetic_to_physical_zero_rate(self, v):
         """
         If we have a zero recombination rate throughout then everything except
         L maps to 0.
         """
-        if v >= self.get_total_recombination_rate():
+        if v > 0:
             return self._sequence_length
-
         return 0
 
+    def _physical_to_genetic_zero_rate(self, x):
+        """
+        If we have a zero recombination rate throughout, then we only have
+        two possible values. Any value < L maps to 0, as this is the start
+        of the interval. If x = L, then we map to L.
+        """
+        ret = 0
+        if x >= self._sequence_length:
+            ret = self.get_total_recombination_rate()
+        return ret
+
     def physical_to_genetic(self, x):
-        return np.interp(x, self._positions, self._cumulative)
+        if self.get_total_recombination_rate() == 0:
+            return self._physical_to_genetic_zero_rate(x)
+        s = 0
+        last_phys_x = 0
+        j = 1
+        while j < len(self._positions) - 1 and x > self._positions[j]:
+            phys_x = self._positions[j]
+            rate = self._rates[j - 1]
+            s += (phys_x - last_phys_x) * rate
+            j += 1
+            last_phys_x = phys_x
+        rate = self._rates[j - 1]
+        s += (x - last_phys_x) * rate
+        return s
 
     def genetic_to_physical(self, v):
         if self.get_total_recombination_rate() == 0:
             return self._genetic_to_physical_zero_rate(v)
-        if v == 0:
-            return self._positions[0]
-
-        index = np.searchsorted(self._cumulative, v) - 1
-        y = self._positions[index] + (v - self._cumulative[index]) / self._rates[index]
+        u = v
+        s = 0
+        last_phys_x = 0
+        rate = self._rates[0]
+        j = 1
+        while j < len(self._positions) and s < u:
+            phys_x = self._positions[j]
+            rate = self._rates[j - 1]
+            s += (phys_x - last_phys_x) * rate
+            j += 1
+            last_phys_x = phys_x
+        y = last_phys_x
+        if rate != 0:
+            y = last_phys_x - (s - u) / rate
         return y
 
 
-@unittest.skip("recomb map")
 class TestCoordinateConversion(unittest.TestCase):
     """
     Tests that we convert coordinates correctly.
@@ -132,6 +167,19 @@ class TestCoordinateConversion(unittest.TestCase):
                 self.assertTrue(0 <= y <= total_recomb)
                 z = rm.genetic_to_physical(y)
                 self.assertAlmostEqual(x, z)
+
+    def test_all_zero_rate(self):
+        positions = [0, 100]
+        rates = [0, 0]
+        maps = [
+            msprime.RecombinationMap(positions, rates),
+            PythonRecombinationMap(positions, rates),
+        ]
+        for rm in maps:
+            for x in [0, 50, 51, 55, 99, 100]:
+                self.assertEqual(0, rm.physical_to_genetic(x))
+                self.assertEqual(0, rm.genetic_to_physical(0))
+                self.assertEqual(100, rm.genetic_to_physical(1))
 
     def test_zero_rate_start(self):
         positions = [0, 50, 100]
@@ -205,33 +253,6 @@ class TestCoordinateConversion(unittest.TestCase):
                     self.assertAlmostEqual(x, rm.genetic_to_physical(x))
 
 
-@unittest.skip("Recomb map")
-class TestConstructorAndGetters(unittest.TestCase):
-    def verify_warning(self, f):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            f()
-            self.assertEqual(len(w), 1)
-
-    def test_warn_on_num_loci_equal_seq_len(self):
-        self.verify_warning(
-            lambda: msprime.RecombinationMap([0, 100], [0.1, 0], num_loci=100)
-        )
-        self.verify_warning(
-            lambda: msprime.RecombinationMap.uniform_map(100, 0.1, num_loci=100)
-        )
-
-    def test_unsupported_methods(self):
-        recomb_map = msprime.RecombinationMap([0, 10], [0.2, 0])
-        self.assertRaises(ValueError, recomb_map.get_num_loci)
-        self.assertRaises(ValueError, recomb_map.physical_to_discrete_genetic, 8)
-        self.assertRaises(ValueError, recomb_map.get_per_locus_recombination_rate)
-
-    def test_total_recombination_rate(self):
-        recomb_map = msprime.RecombinationMap([0, 10], [0.1, 0])
-        self.assertEqual(recomb_map.get_total_recombination_rate(), 1)
-
-
 class TestReadHapmap(unittest.TestCase):
     """
     Tests file reading code.
@@ -290,224 +311,101 @@ class TestReadHapmap(unittest.TestCase):
             os.unlink(filename)
 
 
-@unittest.skip("Recomb map")
-class TestSlice(unittest.TestCase):
-    def test_slice(self):
-        # test RecombinationMap.slice(..., trim=False)
-        a = msprime.RecombinationMap([0, 100, 200, 300, 400], [0, 1, 2, 3, 0])
-        b = a.slice()
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal(a.get_positions(), b.get_positions()))
-        self.assertTrue(np.array_equal(a.get_rates(), b.get_rates()))
+class TestRecombinationMapInterface(unittest.TestCase):
+    """
+    Tests for the RecombinationMap interface.
+    """
 
-        b = a.slice(start=50)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 100, 200, 300, 400], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 2, 3, 0], b.get_rates()))
+    def verify_warning(self, f):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            f()
+            self.assertEqual(len(w), 1)
 
-        b = a.slice(start=100)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 100, 200, 300, 400], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 2, 3, 0], b.get_rates()))
-
-        b = a.slice(start=150)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 150, 200, 300, 400], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 2, 3, 0], b.get_rates()))
-
-        b = a.slice(end=300)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 100, 200, 300, 400], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 2, 0, 0], b.get_rates()))
-
-        b = a.slice(end=250)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 100, 200, 250, 400], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 2, 0, 0], b.get_rates()))
-
-        b = a.slice(start=50, end=300)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 100, 200, 300, 400], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 2, 0, 0], b.get_rates()))
-
-        b = a.slice(start=150, end=250)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 150, 200, 250, 400], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 2, 0, 0], b.get_rates()))
-
-        b = a.slice(start=150, end=300)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 150, 200, 300, 400], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 2, 0, 0], b.get_rates()))
-
-        b = a.slice(start=150, end=160)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 150, 160, 400], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 0, 0], b.get_rates()))
-
-    def test_slice_with_floats(self):
-        #  test RecombinationMap.slice(..., trim=False) with floats
-        a = msprime.RecombinationMap(
-            [np.pi * x for x in [0, 100, 200, 300, 400]], [0, 1, 2, 3, 0]
+    def test_warn_on_num_loci_equal_seq_len(self):
+        self.verify_warning(
+            lambda: msprime.RecombinationMap([0, 100], [0.1, 0], num_loci=100)
         )
-        b = a.slice(start=50 * np.pi)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal(a.get_positions(), b.get_positions()))
-        self.assertTrue(np.array_equal(a.get_rates(), b.get_rates()))
-
-        b = a.slice(start=150 * np.pi)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(
-            np.array_equal(
-                [np.pi * x for x in [0, 150, 200, 300, 400]], b.get_positions()
-            )
+        self.verify_warning(
+            lambda: msprime.RecombinationMap.uniform_map(100, 0.1, num_loci=100)
         )
-        self.assertTrue(np.array_equal([0, 1, 2, 3, 0], b.get_rates()))
 
-        b = a.slice(end=300 * np.pi)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(
-            np.array_equal(
-                [np.pi * x for x in [0, 100, 200, 300, 400]], b.get_positions()
-            )
-        )
-        self.assertTrue(np.array_equal([0, 1, 2, 0, 0], b.get_rates()))
+    def test_error_on_num_loci_not_equal_seq_len(self):
+        with self.assertRaises(ValueError):
+            msprime.RecombinationMap.uniform_map(100, 0.1, num_loci=10)
 
-        b = a.slice(end=250 * np.pi)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(
-            np.array_equal(
-                [np.pi * x for x in [0, 100, 200, 250, 400]], b.get_positions()
-            )
-        )
-        self.assertTrue(np.array_equal([0, 1, 2, 0, 0], b.get_rates()))
+    def test_unsupported_methods(self):
+        recomb_map = msprime.RecombinationMap([0, 10], [0.2, 0])
+        self.assertRaises(ValueError, recomb_map.get_num_loci)
+        self.assertRaises(ValueError, recomb_map.physical_to_discrete_genetic, 8)
+        self.assertRaises(ValueError, recomb_map.get_per_locus_recombination_rate)
 
-        b = a.slice(start=50 * np.pi, end=300 * np.pi)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(
-            np.array_equal(
-                [np.pi * x for x in [0, 100, 200, 300, 400]], b.get_positions()
-            )
-        )
-        self.assertTrue(np.array_equal([0, 1, 2, 0, 0], b.get_rates()))
+    def test_total_recombination_rate(self):
+        recomb_map = msprime.RecombinationMap([0, 10], [0.1, 0])
+        self.assertEqual(recomb_map.get_total_recombination_rate(), 1)
 
-        b = a.slice(start=150 * np.pi, end=160 * np.pi)
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(
-            np.array_equal([np.pi * x for x in [0, 150, 160, 400]], b.get_positions())
-        )
-        self.assertTrue(np.array_equal([0, 1, 0, 0], b.get_rates()))
+    def test_basic_properties(self):
+        recomb_map = msprime.RecombinationMap.uniform_map(10, 1)
+        self.assertEqual(recomb_map.get_sequence_length(), 10)
+        self.assertEqual(recomb_map.get_length(), 10)
+        self.assertEqual(recomb_map.get_rates(), [1, 0])
+        self.assertEqual(recomb_map.get_positions(), [0, 10])
+        self.assertEqual(recomb_map.get_size(), 2)
 
-    def test_slice_error(self):
-        recomb_map = msprime.RecombinationMap([0, 100], [1, 0])
-        with self.assertRaises(IndexError):
-            recomb_map.slice(start=-1)
-        with self.assertRaises(IndexError):
-            recomb_map.slice(end=-1)
-        with self.assertRaises(IndexError):
-            recomb_map.slice(start=200)
-        with self.assertRaises(IndexError):
-            recomb_map.slice(end=200)
-        with self.assertRaises(IndexError):
-            recomb_map.slice(start=20, end=10)
+    def test_zero_recombination_map(self):
+        # test that beginning and trailing zero recombination regions in the
+        # recomb map are included in the sequence
+        for n in range(3, 10):
+            positions = list(range(n))
+            rates = [0.0, 0.2] + [0.0] * (n - 2)
+            recomb_map = msprime.RecombinationMap(positions, rates)
+            ts = msprime.simulate(10, recombination_map=recomb_map)
+            self.assertEqual(ts.sequence_length, n - 1)
+            self.assertEqual(min(ts.tables.edges.left), 0.0)
+            self.assertEqual(max(ts.tables.edges.right), n - 1.0)
 
-    def test_getitem_slice(self):
-        # test RecombinationMap slice syntax
-        a = msprime.RecombinationMap([0, 100, 200, 300, 400], [0, 1, 2, 3, 0])
-        b = a[:]
-        self.assertEqual(a.get_sequence_length(), b.get_sequence_length())
-        self.assertTrue(np.array_equal(a.get_positions(), b.get_positions()))
-        self.assertTrue(np.array_equal(a.get_rates(), b.get_rates()))
+    def test_mean_recombination_rate(self):
+        # Some quick sanity checks.
+        recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
+        mean_rr = recomb_map.mean_recombination_rate
+        self.assertEqual(mean_rr, 1.0)
 
-        b = a[50:]
-        self.assertEqual(350, b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 50, 150, 250, 350], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 2, 3, 0], b.get_rates()))
+        recomb_map = msprime.RecombinationMap([0, 1, 2], [1, 0, 0])
+        mean_rr = recomb_map.mean_recombination_rate
+        self.assertEqual(mean_rr, 0.5)
 
-        b = a[100:]
-        self.assertEqual(300, b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 100, 200, 300], b.get_positions()))
-        self.assertTrue(np.array_equal([1, 2, 3, 0], b.get_rates()))
+        recomb_map = msprime.RecombinationMap([0, 1, 2], [0, 0, 0])
+        mean_rr = recomb_map.mean_recombination_rate
+        self.assertEqual(mean_rr, 0.0)
 
-        b = a[150:]
-        self.assertEqual(250, b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 50, 150, 250], b.get_positions()))
-        self.assertTrue(np.array_equal([1, 2, 3, 0], b.get_rates()))
+        # Test mean_recombination_rate is correct after reading from
+        # a hapmap file. RecombinationMap.read_hapmap() ignores the cM
+        # field, so here we test against using the cM field directly.
+        def hapmap_rr(hapmap_file):
+            first_pos = 0
+            with open(hapmap_file) as f:
+                next(f)  # skip header
+                for line in f:
+                    pos, rate, cM = map(float, line.split()[1:4])
+                    if cM == 0:
+                        first_pos = pos
+            return cM / 100 / (pos - first_pos)
 
-        b = a[:300]
-        self.assertEqual(300, b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 100, 200, 300], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 2, 0], b.get_rates()))
-
-        b = a[:250]
-        self.assertEqual(250, b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 100, 200, 250], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 2, 0], b.get_rates()))
-
-        b = a[50:300]
-        self.assertEqual(250, b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 50, 150, 250], b.get_positions()))
-        self.assertTrue(np.array_equal([0, 1, 2, 0], b.get_rates()))
-
-        b = a[100:300]
-        self.assertEqual(200, b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 100, 200], b.get_positions()))
-        self.assertTrue(np.array_equal([1, 2, 0], b.get_rates()))
-
-        b = a[150:250]
-        self.assertEqual(100, b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 50, 100], b.get_positions()))
-        self.assertTrue(np.array_equal([1, 2, 0], b.get_rates()))
-
-        b = a[150:160]
-        self.assertEqual(10, b.get_sequence_length())
-        self.assertTrue(np.array_equal([0, 10], b.get_positions()))
-        self.assertTrue(np.array_equal([1, 0], b.get_rates()))
-
-    def test_getitem_slice_with_negative_indexes_and_floats(self):
-        # test RecombinationMap slice syntax with negative indexes and floats
-        a = msprime.RecombinationMap([0, 100, 200, 300, 400], [0, 1, 2, 3, 0])
-
-        b = a[150:250]
-        c = a[150:-150]
-        self.assertTrue(np.array_equal(b.get_positions(), c.get_positions()))
-        self.assertTrue(np.array_equal(b.get_rates(), c.get_rates()))
-
-        b = a[150:250]
-        c = a[-250:250]
-        self.assertTrue(np.array_equal(b.get_positions(), c.get_positions()))
-        self.assertTrue(np.array_equal(b.get_rates(), c.get_rates()))
-
-        b = a[150:250]
-        c = a[-250:-150]
-        self.assertTrue(np.array_equal(b.get_positions(), c.get_positions()))
-        self.assertTrue(np.array_equal(b.get_rates(), c.get_rates()))
-
-        b = a[: -np.pi]
-        c = a[: 400 - np.pi]
-        self.assertTrue(np.array_equal(b.get_positions(), c.get_positions()))
-        self.assertTrue(np.array_equal(b.get_rates(), c.get_rates()))
-
-        b = a[-50 * np.pi : -np.pi]
-        c = a[400 - 50 * np.pi : 400 - np.pi]
-        self.assertTrue(np.array_equal(b.get_positions(), c.get_positions()))
-        self.assertTrue(np.array_equal(b.get_rates(), c.get_rates()))
-
-    def test_getitem_slice_errors(self):
-        recomb_map = msprime.RecombinationMap([0, 100], [1, 0])
-        with self.assertRaises(TypeError):
-            recomb_map["foo"]
-        with self.assertRaises(TypeError):
-            recomb_map[50]
-        with self.assertRaises(IndexError):
-            recomb_map[200:]
-        with self.assertRaises(IndexError):
-            recomb_map[:200]
-        with self.assertRaises(IndexError):
-            recomb_map[20:10]
-        with self.assertRaises(IndexError):
-            recomb_map[-10:-20]
-        with self.assertRaises(IndexError):
-            recomb_map[-101:]
-        with self.assertRaises(IndexError):
-            recomb_map[:-101]
+        hapmap = """chr pos        rate                    cM
+                    1   4283592    3.79115663174456        0
+                    1   4361401    0.0664276817058413      0.294986106359414
+                    1   7979763   10.9082897515584         0.535345505591925
+                    1   8007051    0.0976780648822495      0.833010916332456
+                    1   8762788    0.0899929572085616      0.906829844052373
+                    1   9477943    0.0864382908650907      0.971188757364862
+                    1   9696341    4.76495005895746        0.990066707213216
+                    1   9752154    0.0864316558730679      1.25601286485381
+                    1   9881751    0.0                     1.26721414815999"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            hapfile = os.path.join(temp_dir, "hapmap.txt")
+            with open(hapfile, "w") as f:
+                f.write(hapmap)
+            recomb_map = msprime.RecombinationMap.read_hapmap(f.name)
+            mean_rr = recomb_map.mean_recombination_rate
+            mean_rr2 = hapmap_rr(hapfile)
+        self.assertAlmostEqual(mean_rr, mean_rr2, places=15)

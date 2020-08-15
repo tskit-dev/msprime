@@ -19,73 +19,236 @@
 """
 Test cases for the intervals module.
 """
-import os
-import tempfile
 import unittest
+
+import numpy as np
 
 import msprime
 
 
-@unittest.skip("more recomb map")
-class TestRecombinationMap(unittest.TestCase):
-    """
-    Tests for the RecombinationMap class.
-    """
+class TestRateMap(unittest.TestCase):
+    def test_bad_input(self):
+        bad_inputs = [
+            ([], []),
+            ([0], []),
+            ([0], [0]),
+            ([1, 2], [0]),
+            ([0, -1], [0]),
+            ([0, 1], [-1]),
+        ]
 
-    def test_zero_recombination_map(self):
-        # test that beginning and trailing zero recombination regions in the
-        # recomb map are included in the sequence
-        for n in range(3, 10):
-            positions = list(range(n))
-            rates = [0.0, 0.2] + [0.0] * (n - 2)
-            recomb_map = msprime.RecombinationMap(positions, rates)
-            ts = msprime.simulate(10, recombination_map=recomb_map)
-            self.assertEqual(ts.sequence_length, n - 1)
-            self.assertEqual(min(ts.tables.edges.left), 0.0)
-            self.assertEqual(max(ts.tables.edges.right), n - 1.0)
+        for pos, rate in bad_inputs:
+            with self.assertRaises(ValueError):
+                msprime.RateMap(pos, rate)
 
-    def test_mean_recombination_rate(self):
-        # Some quick sanity checks.
-        recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
-        mean_rr = recomb_map.mean_recombination_rate
-        self.assertEqual(mean_rr, 1.0)
 
-        recomb_map = msprime.RecombinationMap([0, 1, 2], [1, 0, 0])
-        mean_rr = recomb_map.mean_recombination_rate
-        self.assertEqual(mean_rr, 0.5)
+class TestSlice(unittest.TestCase):
+    def test_slice(self):
+        # test RateMap.slice(..., trim=False)
+        a = msprime.RateMap([0, 100, 200, 300, 400], [0, 1, 2, 3])
+        b = a.slice()
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal(a.position, b.position))
+        self.assertTrue(np.array_equal(a.rate, b.rate))
 
-        recomb_map = msprime.RecombinationMap([0, 1, 2], [0, 0, 0])
-        mean_rr = recomb_map.mean_recombination_rate
-        self.assertEqual(mean_rr, 0.0)
+        b = a.slice(start=50)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 100, 200, 300, 400], b.position))
+        self.assertTrue(np.array_equal([0, 1, 2, 3], b.rate))
 
-        # Test mean_recombination_rate is correct after reading from
-        # a hapmap file. RecombinationMap.read_hapmap() ignores the cM
-        # field, so here we test against using the cM field directly.
-        def hapmap_rr(hapmap_file):
-            first_pos = 0
-            with open(hapmap_file) as f:
-                next(f)  # skip header
-                for line in f:
-                    pos, rate, cM = map(float, line.split()[1:4])
-                    if cM == 0:
-                        first_pos = pos
-            return cM / 100 / (pos - first_pos)
+        b = a.slice(start=100)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 100, 200, 300, 400], b.position))
+        self.assertTrue(np.array_equal([0, 1, 2, 3], b.rate))
 
-        hapmap = """chr pos        rate                    cM
-                    1   4283592    3.79115663174456        0
-                    1   4361401    0.0664276817058413      0.294986106359414
-                    1   7979763   10.9082897515584         0.535345505591925
-                    1   8007051    0.0976780648822495      0.833010916332456
-                    1   8762788    0.0899929572085616      0.906829844052373
-                    1   9477943    0.0864382908650907      0.971188757364862
-                    1   9696341    4.76495005895746        0.990066707213216
-                    1   9752154    0.0864316558730679      1.25601286485381
-                    1   9881751    0.0                     1.26721414815999"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            hapfile = os.path.join(temp_dir, "hapmap.txt")
-            with open(hapfile, "w") as f:
-                f.write(hapmap)
-            recomb_map = msprime.RecombinationMap.read_hapmap(f.name)
-            mean_rr = recomb_map.mean_recombination_rate
-            mean_rr2 = hapmap_rr(hapfile)
-        self.assertAlmostEqual(mean_rr, mean_rr2, places=15)
+        b = a.slice(start=150)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 150, 200, 300, 400], b.position))
+        self.assertTrue(np.array_equal([0, 1, 2, 3], b.rate))
+
+        b = a.slice(end=300)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 100, 200, 300, 400], b.position))
+        self.assertTrue(np.array_equal([0, 1, 2, 0], b.rate))
+
+        b = a.slice(end=250)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 100, 200, 250, 400], b.position))
+        self.assertTrue(np.array_equal([0, 1, 2, 0], b.rate))
+
+        b = a.slice(start=50, end=300)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 100, 200, 300, 400], b.position))
+        self.assertTrue(np.array_equal([0, 1, 2, 0], b.rate))
+
+        b = a.slice(start=150, end=250)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 150, 200, 250, 400], b.position))
+        self.assertTrue(np.array_equal([0, 1, 2, 0], b.rate))
+
+        b = a.slice(start=150, end=300)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 150, 200, 300, 400], b.position))
+        self.assertTrue(np.array_equal([0, 1, 2, 0], b.rate))
+
+        b = a.slice(start=150, end=160)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 150, 160, 400], b.position))
+        self.assertTrue(np.array_equal([0, 1, 0], b.rate))
+
+    def test_slice_with_floats(self):
+        #  test RateMap.slice(..., trim=False) with floats
+        a = msprime.RateMap([np.pi * x for x in [0, 100, 200, 300, 400]], [0, 1, 2, 3])
+        b = a.slice(start=50 * np.pi)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal(a.position, b.position))
+        self.assertTrue(np.array_equal(a.rate, b.rate))
+
+        b = a.slice(start=150 * np.pi)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(
+            np.array_equal([np.pi * x for x in [0, 150, 200, 300, 400]], b.position)
+        )
+        self.assertTrue(np.array_equal([0, 1, 2, 3], b.rate))
+
+        b = a.slice(end=300 * np.pi)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(
+            np.array_equal([np.pi * x for x in [0, 100, 200, 300, 400]], b.position)
+        )
+        self.assertTrue(np.array_equal([0, 1, 2, 0], b.rate))
+
+        b = a.slice(end=250 * np.pi)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(
+            np.array_equal([np.pi * x for x in [0, 100, 200, 250, 400]], b.position)
+        )
+        self.assertTrue(np.array_equal([0, 1, 2, 0], b.rate))
+
+        b = a.slice(start=50 * np.pi, end=300 * np.pi)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(
+            np.array_equal([np.pi * x for x in [0, 100, 200, 300, 400]], b.position)
+        )
+        self.assertTrue(np.array_equal([0, 1, 2, 0], b.rate))
+
+        b = a.slice(start=150 * np.pi, end=160 * np.pi)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(
+            np.array_equal([np.pi * x for x in [0, 150, 160, 400]], b.position)
+        )
+        self.assertTrue(np.array_equal([0, 1, 0], b.rate))
+
+    def test_slice_error(self):
+        recomb_map = msprime.RateMap([0, 100], [1])
+        with self.assertRaises(IndexError):
+            recomb_map.slice(start=-1)
+        with self.assertRaises(IndexError):
+            recomb_map.slice(end=-1)
+        with self.assertRaises(IndexError):
+            recomb_map.slice(start=200)
+        with self.assertRaises(IndexError):
+            recomb_map.slice(end=200)
+        with self.assertRaises(IndexError):
+            recomb_map.slice(start=20, end=10)
+
+    def test_getitem_slice(self):
+        # test RateMap slice syntax
+        a = msprime.RateMap([0, 100, 200, 300, 400], [0, 1, 2, 3])
+        b = a[:]
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal(a.position, b.position))
+        self.assertTrue(np.array_equal(a.rate, b.rate))
+
+        b = a[50:]
+        self.assertEqual(350, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 50, 150, 250, 350], b.position))
+        self.assertTrue(np.array_equal([0, 1, 2, 3], b.rate))
+
+        b = a[100:]
+        self.assertEqual(300, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 100, 200, 300], b.position))
+        self.assertTrue(np.array_equal([1, 2, 3], b.rate))
+
+        b = a[150:]
+        self.assertEqual(250, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 50, 150, 250], b.position))
+        self.assertTrue(np.array_equal([1, 2, 3], b.rate))
+
+        b = a[:300]
+        self.assertEqual(300, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 100, 200, 300], b.position))
+        self.assertTrue(np.array_equal([0, 1, 2], b.rate))
+
+        b = a[:250]
+        self.assertEqual(250, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 100, 200, 250], b.position))
+        self.assertTrue(np.array_equal([0, 1, 2], b.rate))
+
+        b = a[50:300]
+        self.assertEqual(250, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 50, 150, 250], b.position))
+        self.assertTrue(np.array_equal([0, 1, 2], b.rate))
+
+        b = a[100:300]
+        self.assertEqual(200, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 100, 200], b.position))
+        self.assertTrue(np.array_equal([1, 2], b.rate))
+
+        b = a[150:250]
+        self.assertEqual(100, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 50, 100], b.position))
+        self.assertTrue(np.array_equal([1, 2], b.rate))
+
+        b = a[150:160]
+        self.assertEqual(10, b.sequence_length)
+        self.assertTrue(np.array_equal([0, 10], b.position))
+        self.assertTrue(np.array_equal([1], b.rate))
+
+    def test_getitem_slice_with_negative_indexes_and_floats(self):
+        # test RateMap slice syntax with negative indexes and floats
+        a = msprime.RateMap([0, 100, 200, 300, 400], [0, 1, 2, 3])
+
+        b = a[150:250]
+        c = a[150:-150]
+        self.assertTrue(np.array_equal(b.position, c.position))
+        self.assertTrue(np.array_equal(b.rate, c.rate))
+
+        b = a[150:250]
+        c = a[-250:250]
+        self.assertTrue(np.array_equal(b.position, c.position))
+        self.assertTrue(np.array_equal(b.rate, c.rate))
+
+        b = a[150:250]
+        c = a[-250:-150]
+        self.assertTrue(np.array_equal(b.position, c.position))
+        self.assertTrue(np.array_equal(b.rate, c.rate))
+
+        b = a[: -np.pi]
+        c = a[: 400 - np.pi]
+        self.assertTrue(np.array_equal(b.position, c.position))
+        self.assertTrue(np.array_equal(b.rate, c.rate))
+
+        b = a[-50 * np.pi : -np.pi]
+        c = a[400 - 50 * np.pi : 400 - np.pi]
+        self.assertTrue(np.array_equal(b.position, c.position))
+        self.assertTrue(np.array_equal(b.rate, c.rate))
+
+    def test_getitem_slice_errors(self):
+        recomb_map = msprime.RateMap([0, 100], [1])
+        with self.assertRaises(TypeError):
+            recomb_map["foo"]
+        with self.assertRaises(TypeError):
+            recomb_map[50]
+        with self.assertRaises(IndexError):
+            recomb_map[200:]
+        with self.assertRaises(IndexError):
+            recomb_map[:200]
+        with self.assertRaises(IndexError):
+            recomb_map[20:10]
+        with self.assertRaises(IndexError):
+            recomb_map[-10:-20]
+        with self.assertRaises(IndexError):
+            recomb_map[-101:]
+        with self.assertRaises(IndexError):
+            recomb_map[:-101]

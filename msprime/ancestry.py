@@ -266,7 +266,6 @@ def simulator_factory(
     gene_conversion_rate=None,
     gene_conversion_track_length=None,
     demography=None,
-    mutation_rate=None,
 ):
     """
     Convenience method to create a simulator instance using the same
@@ -769,7 +768,6 @@ class Simulator(_msprime.Simulator):
         # highlevel attributes used externally that have no lowlevel equivalent
         self.model_change_events = model_change_events
         self.demography = demography
-        self.recombination_map = recombination_map
 
     @property
     def sample_configuration(self):

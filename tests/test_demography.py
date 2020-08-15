@@ -964,8 +964,6 @@ class TestDemographyTrajectories(unittest.TestCase):
         ddb = self.one_pop_example()
         steps = np.array([1000000 * k for k in range(1, 4)])
         rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2])
-        print(rates)
-        print(P)
         for rA, pA in zip(rates, P):
             self.assertTrue(np.isnan(rA))
             self.assertEqual(pA, 0)

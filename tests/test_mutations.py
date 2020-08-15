@@ -313,7 +313,7 @@ class TestMutate(unittest.TestCase, MutateMixin):
         for bad_rate in ["abc", "xxx"]:
             self.assertRaises(ValueError, msprime.mutate, ts, bad_rate)
         for bad_rate in [-1, -1e-6, -1e7]:
-            self.assertRaises(_msprime.InputError, msprime.mutate, ts, bad_rate)
+            self.assertRaises(ValueError, msprime.mutate, ts, bad_rate)
 
     def test_bad_models(self):
         ts = msprime.simulate(2, random_seed=2)

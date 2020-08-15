@@ -794,16 +794,6 @@ mutgen_alloc(mutgen_t *self, gsl_rng *rng, tsk_table_collection_t *tables,
         goto out;
     }
     avl_init_tree(&self->sites, cmp_site, NULL);
-    if (block_size == 0) {
-        block_size = 8192;
-    }
-    /* In practice this is the minimum we can support */
-    block_size = GSL_MAX(block_size, 128);
-    ret = tsk_blkalloc_init(&self->allocator, block_size);
-    if (ret != 0) {
-        ret = msp_set_tsk_error(ret);
-        goto out;
-    }
     ret = mutgen_set_rate(self, 0);
     if (ret != 0) {
         goto out;

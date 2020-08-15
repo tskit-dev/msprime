@@ -318,9 +318,6 @@ class SimulationRunner:
             self._num_replicates, mutation_rate=self._mutation_rate
         )
         for tree_sequence in replicates:
-            # for _ in range(self._num_replicates):
-            # self._simulator.run()
-            # tree_sequence = self._simulator.get_tree_sequence(self._mutation_generator)
             print(file=output)
             print("//", file=output)
             if self._print_trees:

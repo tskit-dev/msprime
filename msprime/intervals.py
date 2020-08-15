@@ -26,6 +26,11 @@ import warnings
 import numpy as np
 
 
+# TODO this is a minimal implementation of the functionality we need to get
+# varying-rates-of-things-along the genome into msprime. It's deliberately
+# lightweight, and unencumbered by any backing classes from the low-level
+# model. The intention would be to add a bunch of useful functionality here
+# using numpy APIs.
 class RateMap:
     """
     A class mapping a numeric value to a set of adjacent intervals along the
@@ -38,9 +43,8 @@ class RateMap:
         self.position = np.array(position, copy=True)
         self.rate = np.array(rate, copy=True)
         size = len(self.rate)
-        # TODO These errors are confusing.
         if size < 1:
-            raise ValueError("Must have at least two positions to define an interval")
+            raise ValueError("Must have at least two positions")
         if self.position.shape[0] != size + 1:
             raise ValueError(
                 "Rate array must have one less entry than the position array."
@@ -49,7 +53,10 @@ class RateMap:
             raise ValueError("First position must be zero")
         if np.any(self.position[:1] >= self.position[1:]):
             raise ValueError("Position values must be in increasing order")
-        # TODO continue.
+        if np.any(self.rate < 0):
+            raise ValueError("Rates must be non-negative")
+
+        # TODO more
 
     @staticmethod
     def uniform(sequence_length, rate):
@@ -62,10 +69,88 @@ class RateMap:
     def sequence_length(self):
         return self.position[-1]
 
-    # TODO more.
+    @property
+    def size(self):
+        return self.rate.shape[0]
+
+    def slice(self, start=None, end=None, trim=False):  # noqa: A003
+        """
+        Returns a subset of this rate map between the specified end
+        points. If start is None, it defaults to 0. If end is None, it defaults
+        to the end of the map. If trim is True, remove the flanking
+        zero rate regions such that the sequence length of the
+        new rate map is end - start.
+        """
+        # TODO change this to use numpy operations. We can keep the existing
+        # implentation using lists in the tests as a useful comparison.
+        positions = list(self.position)
+        rates = list(self.rate) + [0]
+
+        if start is None:
+            i = 0
+            start = 0
+        if end is None:
+            end = positions[-1]
+            j = len(positions)
+
+        if (
+            start < 0
+            or end < 0
+            or start > positions[-1]
+            or end > positions[-1]
+            or start > end
+        ):
+            raise IndexError(f"Invalid subset: start={start}, end={end}")
+
+        if start != 0:
+            i = bisect.bisect_left(positions, start)
+            if start < positions[i]:
+                i -= 1
+        if end != positions[-1]:
+            j = bisect.bisect_right(positions, end, lo=i)
+
+        new_positions = list(positions[i:j])
+        new_rates = list(rates[i:j])
+        new_positions[0] = start
+        if end > new_positions[-1]:
+            new_positions.append(end)
+            new_rates.append(0)
+        else:
+            new_rates[-1] = 0
+        if trim:
+            new_positions = [pos - start for pos in new_positions]
+        else:
+            if new_positions[0] != 0:
+                if new_rates[0] == 0:
+                    new_positions[0] = 0
+                else:
+                    new_positions.insert(0, 0)
+                    new_rates.insert(0, 0.0)
+            if new_positions[-1] != positions[-1]:
+                new_positions.append(positions[-1])
+                new_rates.append(0)
+        return self.__class__(new_positions, new_rates[:-1])
+
+    def __getitem__(self, key):
+        """
+        Use slice syntax for obtaining a rate map subset. E.g.
+            >>> recomb_map_4m_to_5m = recomb_map[4e6:5e6]
+        """
+        if not isinstance(key, slice) or key.step is not None:
+            raise TypeError("Only interval slicing is supported")
+        start, end = key.start, key.stop
+        if start is not None and start < 0:
+            start += self.sequence_length
+        if end is not None and end < 0:
+            end += self.sequence_length
+        return self.slice(start=start, end=end, trim=True)
 
 
-# TODO refactor to remove any functionality added since last release.
+# The RecombinationMap class is deprecated since 1.0. We maintain the
+# functionality where it is possible to do so.
+
+# TODO update the documentation to make it clear that this is a legacy
+# interface and is deprecated.
 
 
 class RecombinationMap:
@@ -109,6 +194,11 @@ class RecombinationMap:
                 )
         self.map = RateMap(positions, rates[:-1])
         self.map_start = map_start
+        # Used for genetic/physical conversions which are part of the
+        # legacy interface.
+        self.cumulative = np.insert(
+            np.cumsum(np.diff(self.map.position) * self.map.rate), 0, 0
+        )
 
     @classmethod
     def uniform_map(cls, length, rate, num_loci=None):
@@ -124,6 +214,9 @@ class RecombinationMap:
         """
         return cls([0, length], [rate, 0], num_loci=num_loci)
 
+    # TODO port this code to be a top-level function, msprime.read_hapmap, which
+    # will return a RateMap. We can keep this function here for compatability,
+    # but use the other definition.
     @classmethod
     def read_hapmap(cls, filename):
         """
@@ -182,133 +275,74 @@ class RecombinationMap:
             f.close()
         return cls(positions, rates, map_start=map_start)
 
+    # TODO add this functionality to the RateMap class and put in a call to
+    # that here.
     @property
     def mean_recombination_rate(self):
         """
         Return the weighted mean recombination rate
         across all windows of the entire recombination map.
         """
-        chrom_length = self._ll_recombination_map.get_sequence_length()
+        chrom_length = self.map.sequence_length
 
-        positions = self._ll_recombination_map.get_positions()
-        positions_diff = self._ll_recombination_map.get_positions()[1:]
+        positions = self.map.position
+        positions_diff = positions[1:]
         positions_diff = np.append(positions_diff, chrom_length)
         window_sizes = positions_diff - positions
 
         weights = window_sizes / chrom_length
         if self.map_start != 0:
             weights[0] = 0
-        rates = self._ll_recombination_map.get_rates()
-
+        rates = self.get_rates()
         return np.average(rates, weights=weights)
 
-    def slice(self, start=None, end=None, trim=False):  # noqa: A003
+    def get_total_recombination_rate(self):
         """
-        Returns a subset of this recombination map between the specified end
-        points. If start is None, it defaults to 0. If end is None, it defaults
-        to the end of the map. If trim is True, remove the flanking
-        zero recombination rate regions such that the sequence length of the
-        new recombination map is end - start.
+        Returns the effective recombination rate for this genetic map.
+        This is the weighted mean of the rates across all intervals.
         """
-        positions = self.get_positions()
-        rates = self.get_rates()
+        return self.cumulative[-1]
 
-        if start is None:
-            i = 0
-            start = 0
-        if end is None:
-            end = positions[-1]
-            j = len(positions)
+    def physical_to_genetic(self, x):
+        return np.interp(x, self.map.position, self.cumulative)
 
-        if (
-            start < 0
-            or end < 0
-            or start > positions[-1]
-            or end > positions[-1]
-            or start > end
-        ):
-            raise IndexError(f"Invalid subset: start={start}, end={end}")
-
-        if start != 0:
-            i = bisect.bisect_left(positions, start)
-            if start < positions[i]:
-                i -= 1
-        if end != positions[-1]:
-            j = bisect.bisect_right(positions, end, lo=i)
-
-        new_positions = list(positions[i:j])
-        new_rates = list(rates[i:j])
-        new_positions[0] = start
-        if end > new_positions[-1]:
-            new_positions.append(end)
-            new_rates.append(0)
-        else:
-            new_rates[-1] = 0
-        if trim:
-            new_positions = [pos - start for pos in new_positions]
-        else:
-            if new_positions[0] != 0:
-                if new_rates[0] == 0:
-                    new_positions[0] = 0
-                else:
-                    new_positions.insert(0, 0)
-                    new_rates.insert(0, 0.0)
-            if new_positions[-1] != positions[-1]:
-                new_positions.append(positions[-1])
-                new_rates.append(0)
-        return self.__class__(new_positions, new_rates)
-
-    def __getitem__(self, key):
-        """
-        Use slice syntax for obtaining a recombination map subset. E.g.
-            >>> recomb_map_4m_to_5m = recomb_map[4e6:5e6]
-        """
-        if not isinstance(key, slice) or key.step is not None:
-            raise TypeError("Only interval slicing is supported")
-        start, end = key.start, key.stop
-        if start is not None and start < 0:
-            start += self.get_sequence_length()
-        if end is not None and end < 0:
-            end += self.get_sequence_length()
-        return self.slice(start=start, end=end, trim=True)
-
-    def get_ll_recombination_map(self):
-        return self._ll_recombination_map
-
-    def physical_to_genetic(self, physical_x):
-        return self._ll_recombination_map.position_to_mass(physical_x)
+    def genetic_to_physical(self, genetic_x):
+        if self.cumulative[-1] == 0:
+            # If we have a zero recombination rate throughout then everything
+            # except L maps to 0.
+            return self.get_sequence_length() if genetic_x > 0 else 0
+        if genetic_x == 0:
+            return self.map.position[0]
+        index = np.searchsorted(self.cumulative, genetic_x) - 1
+        y = (
+            self.map.position[index]
+            + (genetic_x - self.cumulative[index]) / self.map.rate[index]
+        )
+        return y
 
     def physical_to_discrete_genetic(self, physical_x):
         raise ValueError("Discrete genetic space is no longer supported")
 
-    def genetic_to_physical(self, genetic_x):
-        return self._ll_recombination_map.mass_to_position(genetic_x)
-
-    def get_total_recombination_rate(self):
-        return self._ll_recombination_map.get_total_recombination_rate()
-
     def get_per_locus_recombination_rate(self):
         raise ValueError("Genetic loci are no longer supported")
-
-    def get_size(self):
-        return self._ll_recombination_map.get_size()
 
     def get_num_loci(self):
         raise ValueError("num_loci is no longer supported")
 
+    def get_size(self):
+        return self.map.size + 1
+
     def get_positions(self):
-        # For compatability with existing code we convert to a list
         return list(self.map.position)
 
     def get_rates(self):
-        # For compatability with existing code we convert to a list
         return list(self.map.rate) + [0]
 
     def get_sequence_length(self):
-        return self._ll_recombination_map.get_sequence_length()
+        return self.map.sequence_length
 
     def get_length(self):
-        # Deprecated: use sequence_length instead
+        # Deprecated: use get_sequence_length() instead
         return self.get_sequence_length()
 
     def asdict(self):

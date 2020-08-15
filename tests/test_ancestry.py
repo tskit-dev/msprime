@@ -519,7 +519,6 @@ class TestSimulatorFactory(unittest.TestCase):
             )
         # TODO test for bad values.
 
-    @unittest.skip("FIXME")
     def test_recombination_rate(self):
         def f(recomb_rate):
             return msprime.simulator_factory(10, recombination_rate=recomb_rate)
@@ -530,11 +529,11 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertRaises(ValueError, f, bad_value)
         for rate in [0, 1e-3, 10]:
             sim = f(rate)
-            recomb_map = sim.recombination_map
-            self.assertEqual(recomb_map.get_positions(), [0, 1], [rate, 0])
-            self.assertEqual(sim.sequence_length, recomb_map.get_sequence_length())
+            recomb_map = msprime.RateMap(**sim.recombination_map)
+            self.assertEqual(list(recomb_map.position), [0, 1])
+            self.assertEqual(list(recomb_map.rate), [rate])
+            self.assertEqual(sim.sequence_length, recomb_map.sequence_length)
 
-    @unittest.skip("FIXME")
     def test_recombination_map(self):
         def f(recomb_map):
             return msprime.simulator_factory(10, recombination_map=recomb_map)
@@ -542,13 +541,21 @@ class TestSimulatorFactory(unittest.TestCase):
         self.assertRaises(TypeError, f, "wrong type")
         for n in range(2, 10):
             positions = list(range(n))
-            rates = [0.1 * j for j in range(n - 1)] + [0.0]
-            recomb_map = msprime.RecombinationMap(positions, rates)
+            rates = [0.1 * j for j in range(n - 1)]
+            # Use the old-form RecombinationMap
+            recomb_map = msprime.RecombinationMap(positions, rates + [0.0])
             sim = msprime.simulator_factory(10, recombination_map=recomb_map)
-            self.assertEqual(sim.recombination_map, recomb_map)
-            self.assertEqual(recomb_map.get_positions(), positions)
-            self.assertEqual(recomb_map.get_rates(), rates)
-            self.assertEqual(sim.sequence_length, recomb_map.get_sequence_length())
+            other_map = msprime.RateMap(**sim.recombination_map)
+            self.assertEqual(list(other_map.position), positions)
+            self.assertEqual(list(other_map.rate), rates)
+            self.assertEqual(sim.sequence_length, other_map.sequence_length)
+            # Use the new-form RateMap
+            rate_map = msprime.RateMap(positions, rates)
+            sim = msprime.simulator_factory(10, recombination_map=rate_map)
+            other_map = msprime.RateMap(**sim.recombination_map)
+            self.assertEqual(list(other_map.position), positions)
+            self.assertEqual(list(other_map.rate), rates)
+            self.assertEqual(sim.sequence_length, other_map.sequence_length)
 
     def test_combining_recomb_map_and_rate_length(self):
         recomb_map = msprime.RecombinationMap([0, 1], [1, 0])

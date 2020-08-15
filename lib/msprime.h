@@ -186,13 +186,6 @@ typedef struct {
     double *cumulative_mass;
 } rate_map_t;
 
-/* /1* Recombination map *1/ */
-/* typedef struct { */
-/*     rate_map_t map; */
-/*     double total_recombination_rate; */
-/*     double *cumulative; */
-/* } recomb_map_t; */
-
 typedef struct _msp_t {
     gsl_rng *rng;
     /* input parameters */

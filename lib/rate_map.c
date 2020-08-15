@@ -77,7 +77,7 @@ rate_map_alloc(rate_map_t *self, size_t size, double *position, double *rate)
                 goto out;
             }
             if ((!isfinite(rate[j])) || rate[j] < 0) {
-                ret = MSP_ERR_BAD_RECOMBINATION_MAP;
+                ret = MSP_ERR_BAD_RATE_VALUE;
                 goto out;
             }
             self->rate[j] = rate[j];

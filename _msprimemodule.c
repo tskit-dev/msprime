@@ -56,11 +56,6 @@ typedef struct {
     gsl_rng* rng;
 } RandomGenerator;
 
-/* typedef struct { */
-/*     PyObject_HEAD */
-/*     rate_map_t *rate_map; */
-/* } RateMap; */
-
 /* TODO we should refactor some of the code for dealing with the
  * mutation_model in this base class (which currently does nothing).
  */
@@ -1744,223 +1739,8 @@ static PyTypeObject RandomGeneratorType = {
     .tp_new = PyType_GenericNew,
 };
 
-/* / *=================================================================== */
-/*  * RateMap */
-/*  *=================================================================== */
-/*  *1/ */
-
-/* static int */
-/* RateMap_check_state(RateMap *self) */
-/* { */
-/*     int ret = 0; */
-/*     if (self->rate_map == NULL) { */
-/*         PyErr_SetString(PyExc_SystemError, "RateMap not initialised"); */
-/*         ret = -1; */
-/*     } */
-/*     return ret; */
-/* } */
-
-/* static void */
-/* RateMap_dealloc(RateMap* self) */
-/* { */
-/*     if (self->rate_map != NULL) { */
-/*         rate_map_free(self->rate_map); */
-/*         PyMem_Free(self->rate_map); */
-/*         self->rate_map = NULL; */
-/*     } */
-/*     Py_TYPE(self)->tp_free((PyObject*)self); */
-/* } */
-
-/* static int */
-/* RateMap_init(RateMap *self, PyObject *args, PyObject *kwds) */
-/* { */
-/*     int ret = -1; */
-/*     int err; */
-/*     static char *kwlist[] = {"position", "value", NULL}; */
-/*     Py_ssize_t size; */
-/*     PyObject *py_position = NULL; */
-/*     PyObject *py_value = NULL; */
-
-/*     self->rate_map = NULL; */
-/*     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O&O&", kwlist, */
-/*             double_PyArray_converter, &py_position, */
-/*             double_PyArray_converter, &py_value)) { */
-/*         goto out; */
-/*     } */
-
-/*     size = PyObject_Size(py_position); */
-/*     if (size != PyObject_Size(py_value)) { */
-/*         PyErr_SetString(PyExc_ValueError, */
-/*             "position and value must be the same length"); */
-/*         goto out; */
-/*     } */
-/*     self->rate_map = PyMem_Malloc(sizeof(rate_map_t)); */
-/*     if (self->rate_map == NULL) { */
-/*         PyErr_NoMemory(); */
-/*         goto out; */
-/*     } */
-/*     err = rate_map_alloc(self->rate_map, size, */
-/*             PyArray_DATA((PyArrayObject *) py_position), */
-/*             PyArray_DATA((PyArrayObject *) py_value)); */
-/*     if (err != 0) { */
-/*         handle_library_error(err); */
-/*         goto out; */
-/*     } */
-/*     ret = 0; */
-/* out: */
-/*     Py_XDECREF(py_position); */
-/*     Py_XDECREF(py_value); */
-/*     return ret; */
-/* } */
-
-/* static PyObject * */
-/* RateMap_get_position(RateMap *self, void *closure) */
-/* { */
-/*     PyObject *ret = NULL; */
-/*     PyArrayObject *array; */
-/*     size_t size = self->rate_map->size; */
-/*     npy_intp dims = (npy_intp) size; */
-
-/*     array = (PyArrayObject *) PyArray_EMPTY(1, &dims, NPY_FLOAT64, 0); */
-/*     if (array == NULL) { */
-/*         goto out; */
-/*     } */
-/*     memcpy(PyArray_DATA(array), self->rate_map->position, size * sizeof(double)); */
-/*     ret = (PyObject *) array; */
-/* out: */
-/*     return ret; */
-/* } */
-
-/* static PyObject * */
-/* RateMap_get_rate(RateMap *self, void *closure) */
-/* { */
-/*     PyObject *ret = NULL; */
-/*     PyArrayObject *array; */
-/*     size_t size = self->rate_map->size - 1; */
-/*     npy_intp dims = (npy_intp) size; */
-
-/*     array = (PyArrayObject *) PyArray_EMPTY(1, &dims, NPY_FLOAT64, 0); */
-/*     if (array == NULL) { */
-/*         goto out; */
-/*     } */
-/*     memcpy(PyArray_DATA(array), self->rate_map->rate, size * sizeof(double)); */
-/*     ret = (PyObject *) array; */
-/* out: */
-/*     return ret; */
-/* } */
-
-/* static PyObject * */
-/* RateMap_position_to_mass(RateMap *self, PyObject *args) */
-/* { */
-/*     PyObject *ret = NULL; */
-/*     double position; */
-
-/*     if (!PyArg_ParseTuple(args, "d", &position)) { */
-/*         goto out; */
-/*     } */
-/*     if (position < 0) { */
-/*         PyErr_SetString(PyExc_ValueError, "Position must be >= 0"); */
-/*         goto out; */
-/*     } */
-
-/*     ret = Py_BuildValue("d", rate_map_position_to_mass(self->rate_map, position)); */
-/* out: */
-/*     return ret; */
-/* } */
-
-/* static PyObject * */
-/* RateMap_mass_to_position(RateMap *self, PyObject *args) */
-/* { */
-/*     PyObject *ret = NULL; */
-/*     double mass; */
-
-/*     if (!PyArg_ParseTuple(args, "d", &mass)) { */
-/*         goto out; */
-/*     } */
-/*     if (mass < 0) { */
-/*         PyErr_SetString(PyExc_ValueError, "Rate mass must be >= 0"); */
-/*         goto out; */
-/*     } */
-
-/*     ret = Py_BuildValue("d", rate_map_mass_to_position(self->rate_map, mass)); */
-/* out: */
-/*     return ret; */
-/* } */
-
-/* static PyGetSetDef RateMap_getsetters[] = { */
-/*     {"position", (getter) RateMap_get_position, NULL, */
-/*         "A copy of the position array"}, */
-/*     {"rate", (getter) RateMap_get_rate, NULL, */
-/*         "A copy of the rate array"}, */
-/*     {NULL}  /1* Sentinel *1/ */
-/* }; */
-
-/* static PyMemberDef RateMap_members[] = { */
-/*     {NULL}  /1* Sentinel *1/ */
-/* }; */
-
-/* static PyMethodDef RateMap_methods[] = { */
-/*     {"position_to_mass", */
-/*         (PyCFunction) RateMap_position_to_mass, METH_VARARGS, */
-/*         "Returns the cumulative mass corresponding to the given position"}, */
-/*     {"mass_to_position", */
-/*         (PyCFunction) RateMap_mass_to_position, METH_VARARGS, */
-/*         "Returns the position corresponding to the given cumulative mass"}, */
-/*     {NULL}  /1* Sentinel *1/ */
-/* }; */
-
-/* /1* static PyMethodDef RecombinationMap_methods[] = { *1/ */
-/* /1*     {"get_total_recombination_rate", *1/ */
-/* /1*         (PyCFunction) RecombinationMap_get_total_recombination_rate, METH_NOARGS, *1/ */
-/* /1*         "Returns the total product of physical distance times recombination rate"}, *1/ */
-/* /1*     {"position_to_mass", *1/ */
-/* /1*         (PyCFunction) RecombinationMap_position_to_mass, METH_VARARGS, *1/ */
-/* /1*         "Returns the cumulative recombination mass corresponding to the given position"}, *1/ */
-/* /1*     {"mass_to_position", *1/ */
-/* /1*         (PyCFunction) RecombinationMap_mass_to_position, METH_VARARGS, *1/ */
-/* /1*         "Returns the position corresponding to the given cumulative recombination mass"}, *1/ */
-/* /1*     {"get_size", (PyCFunction) RecombinationMap_get_size, METH_NOARGS, *1/ */
-/* /1*         "Returns the number of physical  positions in this map."}, *1/ */
-/* /1*     {"get_sequence_length", (PyCFunction) RecombinationMap_get_sequence_length, METH_NOARGS, *1/ */
-/* /1*         "Returns the physical sequence length defined by this map."}, *1/ */
-/* /1*     {"get_positions", *1/ */
-/* /1*         (PyCFunction) RecombinationMap_get_positions, METH_NOARGS, *1/ */
-/* /1*         "Returns the positions in this recombination map."}, *1/ */
-/* /1*     {"get_rates", *1/ */
-/* /1*         (PyCFunction) RecombinationMap_get_rates, METH_NOARGS, *1/ */
-/* /1*         "Returns the rates in this recombination map."}, *1/ */
-/* /1*     {NULL}  /2* Sentinel *2/ *1/ */
-/* /1* }; *1/ */
-
-/* /1* static PyTypeObject RecombinationMapType = { *1/ */
-/* /1*     PyVarObject_HEAD_INIT(NULL, 0) *1/ */
-/* /1*     .tp_name = "_msprime.RecombinationMap", *1/ */
-/* /1*     .tp_basicsize = sizeof(RecombinationMap), *1/ */
-/* /1*     .tp_dealloc = (destructor)RecombinationMap_dealloc, *1/ */
-/* /1*     .tp_flags = Py_TPFLAGS_DEFAULT, *1/ */
-/* /1*     .tp_doc = "RecombinationMap objects", *1/ */
-/* /1*     .tp_methods = RecombinationMap_methods, *1/ */
-/* /1*     .tp_members = RecombinationMap_members, *1/ */
-/* /1*     .tp_init = (initproc)RecombinationMap_init, *1/ */
-/* /1*     .tp_new = PyType_GenericNew, *1/ */
-/* /1* }; *1/ */
-
-/* static PyTypeObject RateMapType = { */
-/*     PyVarObject_HEAD_INIT(NULL, 0) */
-/*     .tp_name = "_msprime.RateMap", */
-/*     .tp_basicsize = sizeof(RateMap), */
-/*     .tp_dealloc = (destructor)RateMap_dealloc, */
-/*     .tp_flags = Py_TPFLAGS_DEFAULT, */
-/*     .tp_doc = "RateMap objects", */
-/*     .tp_methods = RateMap_methods, */
-/*     .tp_members = RateMap_members, */
-/*     .tp_getset = RateMap_getsetters, */
-/*     .tp_init = (initproc)RateMap_init, */
-/*     .tp_new = PyType_GenericNew, */
-/* }; */
-
 /*===================================================================
- * Matrix mutation model
+ * Base mutation model
  *===================================================================
  */
 
@@ -3822,6 +3602,39 @@ out:
 }
 
 static PyObject *
+Simulator_get_recombination_map(Simulator *self, void *closure)
+{
+    PyObject *ret = NULL;
+    rate_map_t rate_map;
+    PyArrayObject *position = NULL;
+    PyArrayObject *rate = NULL;
+    npy_intp dims;
+
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    rate_map = self->sim->recomb_map;
+    dims = rate_map.size + 1;
+    position = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_FLOAT64);
+    dims = rate_map.size;
+    rate = (PyArrayObject *) PyArray_SimpleNew(1, &dims, NPY_FLOAT64);
+    if (position == NULL || rate == NULL) {
+        goto out;
+    }
+    memcpy(PyArray_DATA(position), rate_map.position,
+            (rate_map.size + 1) * (sizeof(*rate_map.position)));
+    memcpy(PyArray_DATA(rate), rate_map.rate,
+            (rate_map.size) * (sizeof(*rate_map.rate)));
+    ret = Py_BuildValue("{s:O,s:O}",
+        "position", position,
+        "rate", rate);
+out:
+    Py_XDECREF(position);
+    Py_XDECREF(rate);
+    return ret;
+}
+
+static PyObject *
 Simulator_get_migration_matrix(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -4205,6 +4018,9 @@ static PyGetSetDef Simulator_getsetters[] = {
     {"breakpoints",
             (getter) Simulator_get_breakpoints, NULL,
             "The recombination breakpoints in physical coordinates" },
+    {"recombination_map",
+            (getter) Simulator_get_recombination_map, NULL,
+            "The recombination map" },
     {"model",
             (getter) Simulator_get_model, (setter) Simulator_set_model, NULL,
             "The simulation model." },
@@ -4554,13 +4370,6 @@ PyInit__msprime(void)
     }
     Py_INCREF(&SimulatorType);
     PyModule_AddObject(module, "Simulator", (PyObject *) &SimulatorType);
-
-    /* /1* RateMap type *1/ */
-    /* if (PyType_Ready(&RateMapType) < 0) { */
-    /*     return NULL; */
-    /* } */
-    /* Py_INCREF(&RateMapType); */
-    /* PyModule_AddObject(module, "RateMap", (PyObject *) &RateMapType); */
 
     /* BaseMutationModel type */
     if (PyType_Ready(&BaseMutationModelType) < 0) {

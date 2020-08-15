@@ -813,9 +813,7 @@ def mutate(
         rate = 0
     try:
         rate = float(rate)
-        rate_map = intervals.RateMap(
-            position=[0.0, tree_sequence.sequence_length], rate=[rate]
-        )
+        rate_map = intervals.RateMap.uniform(tree_sequence.sequence_length, rate)
     except TypeError:
         rate_map = rate
     if not isinstance(rate_map, intervals.RateMap):
