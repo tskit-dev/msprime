@@ -3522,8 +3522,6 @@ verify_rate_map(double length, double *positions, double *rates, size_t size)
         CU_ASSERT_EQUAL(rate_map.position[j], positions[j]);
         if (j < size) {
             CU_ASSERT_EQUAL(rate_map.rate[j], rates[j]);
-        } else {
-            CU_ASSERT_EQUAL(rate_map.rate[j], -1);
         }
     }
     ret = rate_map_free(&rate_map);
@@ -4187,7 +4185,6 @@ test_mutgen_simple_map(void)
     CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.rate[2], 0.02);
     CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.rate[3], 0.03);
     CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.rate[4], 0.04);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.rate[5], -1);
 
     ret = mutgen_generate(&mutgen, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);

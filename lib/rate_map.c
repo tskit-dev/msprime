@@ -27,12 +27,14 @@ void
 rate_map_print_state(rate_map_t *self, FILE *out)
 {
     size_t j;
+    double rate;
 
     fprintf(out, "rate_map (%p):: size = %d\n", (void *) self, (int) self->size);
     fprintf(out, "\tsequence_length = %.14g\n", rate_map_get_sequence_length(self));
     fprintf(out, "\tindex\tposition\tvalue\n");
     for (j = 0; j <= self->size; j++) {
-        fprintf(out, "\t%d\t%.14g\t%.14g\n", (int) j, self->position[j], self->rate[j]);
+        rate = j < self->size ? self->rate[j] : -1;
+        fprintf(out, "\t%d\t%.14g\t%.14g\n", (int) j, self->position[j], rate);
     }
 }
 
@@ -53,7 +55,7 @@ rate_map_alloc(rate_map_t *self, size_t size, double *position, double *rate)
         ret = MSP_ERR_INTERVAL_MAP_START_NON_ZERO;
         goto out;
     }
-    self->rate = malloc((size + 1) * sizeof(*self->rate));
+    self->rate = malloc(size * sizeof(*self->rate));
     self->position = malloc((size + 1) * sizeof(*self->position));
     self->cumulative_mass = malloc((size + 1) * sizeof(*self->cumulative_mass));
     if (self->position == NULL || self->rate == NULL || self->cumulative_mass == NULL) {
@@ -84,8 +86,6 @@ rate_map_alloc(rate_map_t *self, size_t size, double *position, double *rate)
             sum += (position[j + 1] - position[j]) * rate[j];
         }
     }
-    /* We should never touch this, but we initialise it for neatness. */
-    self->rate[size] = -1;
 out:
     return ret;
 }
