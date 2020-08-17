@@ -623,7 +623,8 @@ To fix this, let's add some migration events to the specific demographic history
 Migrations
 **********
 
-With msprime, you can specify continual rates of migrations between populations, as well as one-off mass migrations.
+With msprime, you can specify continual rates of migrations between
+populations, as well as one-off mass migrations.
 
 Constant migration
 ------------------
@@ -632,9 +633,18 @@ Constant migration
    :width: 500px
    :alt: 2 populations with constant migration rate.
 
-Migration rates between the populations can be specified as the elements of an *N* by *N* numpy array, and given to :meth:`msprime.simulate` via the ``migration_matrix`` argument. The diagonal elements of this array must each be 0, and the *(i, j)* th element specifies the fraction of population *i* that consists of new migrants from population *j* in each generation.
+Migration rates between the populations can be specified as the elements of an
+*N* by *N* numpy array, and given to :meth:`msprime.simulate` via the
+``migration_matrix`` argument. The diagonal elements of this array must each be
+0, and the *(i, j)* th element specifies the expected number of migrants moving
+from population *j* to population *i* per generation, divided by the size of
+population *i*.  When this rate is small (close to 0), it is approximately
+equal to the fraction of population *i* that consists of new migrants from
+population *j* in each generation.
 
-For instance, the following migration matrix specifies that in each generation, 5% of population 0 consists of migrants from population 1, and 2% of population 1 consists of migrants from population 0.
+For instance, the following migration matrix specifies that in each generation,
+approximately 5% of population 0 consists of migrants from population 1, and
+approximately 2% of population 1 consists of migrants from population 0.
 
 
 .. code-block:: python
@@ -650,7 +660,9 @@ For instance, the following migration matrix specifies that in each generation, 
             random_seed = 17,
             recombination_rate = 1e-7)
 
-One consequence of specifying :meth:`msprime.PopulationConfiguration` objects is that each of the simulated nodes will now belong to one of our specified populations:
+One consequence of specifying :meth:`msprime.PopulationConfiguration` objects
+is that each of the simulated nodes will now belong to one of our specified
+populations:
 
 .. code-block:: python
 

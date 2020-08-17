@@ -824,7 +824,7 @@ test_demographic_events(void)
     uint32_t m = 10;
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    double migration_matrix[] = { 0, 1, 1, 0 };
+    double migration_matrix[] = { 0, 0.1, 0.1, 0 };
     double last_time, time, pop_size;
     tsk_table_collection_t tables;
     msp_t msp;
@@ -882,21 +882,21 @@ test_demographic_events(void)
         CU_ASSERT_EQUAL(
             msp_add_mass_migration(&msp, 10, 0, 1, -5), MSP_ERR_BAD_PROPORTION);
 
-        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -1, 0, 2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -1, 0, 0.2),
             MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
-        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 0, -1, 2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 0, -1, 0.2),
             MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
-        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 0, 2, 2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 0, 2, 0.2),
             MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
-        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 2, 0, 2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 2, 0, 0.2),
             MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
-        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -1, 0, 2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -1, 0, 0.2),
             MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
-        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 0, -1, 2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 0, -1, 0.2),
             MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
-        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -1, -1, -2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -1, -1, -0.2),
             MSP_ERR_BAD_PARAM_VALUE);
-        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 0, 0, 2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, 0, 0, 0.2),
             MSP_ERR_DIAGONAL_MIGRATION_MATRIX_INDEX);
 
         CU_ASSERT_EQUAL(msp_add_population_parameters_change(&msp, 10, -2, 0, 0),
@@ -927,9 +927,9 @@ test_demographic_events(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_add_migration_rate_change(&msp, 0.2, 0, 1, 2.0);
+        ret = msp_add_migration_rate_change(&msp, 0.2, 0, 1, 0.2);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_add_migration_rate_change(&msp, 0.3, -1, -1, 3.0);
+        ret = msp_add_migration_rate_change(&msp, 0.3, -1, -1, 0.3);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_add_population_parameters_change(&msp, 0.4, 1, 1, GSL_NAN);
         CU_ASSERT_EQUAL(ret, 0);
@@ -963,7 +963,7 @@ test_demographic_events(void)
 
         CU_ASSERT_EQUAL(msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5),
             MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
-        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 0.2, 0, 1, 2.0),
+        CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 0.2, 0, 1, 0.2),
             MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
         CU_ASSERT_EQUAL(msp_add_population_parameters_change(&msp, 0.4, 0, 0.5, 1.0),
             MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
@@ -1197,6 +1197,65 @@ test_dtwf_zero_pop_size(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_ZERO_POPULATION_SIZE);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    gsl_rng_free(rng);
+    free(samples);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_dtwf_migration_matrix_not_stochastic(void)
+{
+    int ret;
+    uint32_t n = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+    double migration_matrix[] = { 0, .1, .1, .1, 0, .1, .1, .1, 0 };
+
+    memset(samples, 0, n * sizeof(sample_t));
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
+
+    /* Rows of migration matrix must sum to <=1 in DTWF */
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_num_populations(&msp, 3);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 10, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 1, 10, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 2, 10, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_migration_matrix(&msp, 9, migration_matrix);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_migration_rate_change(&msp, 0, 0, 1, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_MIGRATION_MATRIX_NOT_STOCHASTIC);
+
+    /* With a second migration rate change in same generation to satisfy constraint */
+    ret = msp_add_migration_rate_change(&msp, 0, 0, 2, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_reset(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -5683,6 +5742,8 @@ main(int argc, char **argv)
         { "test_mixed_model_simulation", test_mixed_model_simulation },
         { "test_dtwf_deterministic", test_dtwf_deterministic },
         { "test_dtwf_zero_pop_size", test_dtwf_zero_pop_size },
+        { "test_dtwf_migration_matrix_not_stochastic",
+            test_dtwf_migration_matrix_not_stochastic },
         { "test_dtwf_events_between_generations", test_dtwf_events_between_generations },
         { "test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation },
         { "test_dtwf_low_recombination", test_dtwf_low_recombination },

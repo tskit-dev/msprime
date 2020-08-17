@@ -99,6 +99,7 @@
 #define MSP_ERR_BREAKPOINT_MASS_NON_FINITE                          -59
 #define MSP_ERR_BREAKPOINT_RESAMPLE_OVERFLOW                        -60
 #define MSP_ERR_BAD_PLOIDY                                          -61
+#define MSP_ERR_DTWF_MIGRATION_MATRIX_NOT_STOCHASTIC                -62
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */
