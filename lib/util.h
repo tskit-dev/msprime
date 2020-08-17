@@ -54,7 +54,7 @@
 #define MSP_ERR_INFINITE_WAITING_TIME                               -13
 #define MSP_ERR_ASSERTION_FAILED                                    -14
 #define MSP_ERR_SOURCE_DEST_EQUAL                                   -15
-#define MSP_ERR_BAD_RECOMBINATION_MAP                               -16
+#define MSP_ERR_BAD_RATE_MAP                                        -16
 #define MSP_ERR_BAD_POPULATION_SIZE                                 -17
 #define MSP_ERR_BAD_SAMPLES                                         -18
 #define MSP_ERR_BAD_MODEL                                           -19
@@ -98,8 +98,9 @@
 #define MSP_ERR_MUTATION_ID_OVERFLOW                                -58
 #define MSP_ERR_BREAKPOINT_MASS_NON_FINITE                          -59
 #define MSP_ERR_BREAKPOINT_RESAMPLE_OVERFLOW                        -60
-#define MSP_ERR_BAD_PLOIDY                                          -61
-#define MSP_ERR_DTWF_MIGRATION_MATRIX_NOT_STOCHASTIC                -62
+#define MSP_ERR_TRACKLEN_RESAMPLE_OVERFLOW                          -61
+#define MSP_ERR_BAD_PLOIDY                                          -62
+#define MSP_ERR_DTWF_MIGRATION_MATRIX_NOT_STOCHASTIC                -63
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */

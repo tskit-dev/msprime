@@ -9,3 +9,4 @@ setuptools_scm == 1.11.1
 python_jsonschema_objects
 newick
 daiquiri
+bintrees

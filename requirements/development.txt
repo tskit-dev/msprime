@@ -1,5 +1,6 @@
 asv
 attrs
+bintrees
 codecov
 coverage
 daiquiri

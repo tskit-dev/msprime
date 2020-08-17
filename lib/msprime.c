@@ -278,7 +278,7 @@ msp_set_recombination_map(msp_t *self, size_t size, double *position, double *ra
         goto out;
     }
     if (rate_map_get_sequence_length(&self->recomb_map) != self->sequence_length) {
-        ret = MSP_ERR_BAD_RECOMBINATION_MAP;
+        ret = MSP_ERR_BAD_RATE_MAP;
         goto out;
     }
 out:
@@ -291,6 +291,47 @@ msp_set_recombination_rate(msp_t *self, double rate)
 {
     double position[] = { 0, self->sequence_length };
     return msp_set_recombination_map(self, 1, position, &rate);
+}
+
+int
+msp_set_gene_conversion_track_length(msp_t *self, double track_length)
+{
+    int ret = 0;
+
+    if (track_length < 0 || track_length > self->sequence_length) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->gc_track_length = track_length;
+out:
+    return ret;
+}
+
+int
+msp_set_gene_conversion_map(msp_t *self, size_t size, double *position, double *rate)
+{
+    int ret = 0;
+
+    rate_map_free(&self->gc_map);
+
+    ret = rate_map_alloc(&self->gc_map, size, position, rate);
+    if (ret != 0) {
+        goto out;
+    }
+    if (rate_map_get_sequence_length(&self->gc_map) != self->sequence_length) {
+        ret = MSP_ERR_BAD_RATE_MAP;
+        goto out;
+    }
+out:
+    return ret;
+}
+
+/* Short-cut for msp_set_gene_conversion_map can be used in testing. */
+int
+msp_set_gene_conversion_rate(msp_t *self, double rate)
+{
+    double position[] = { 0, self->sequence_length };
+    return msp_set_gene_conversion_map(self, 1, position, &rate);
 }
 
 int
@@ -318,7 +359,8 @@ msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
     msp_safe_free(self->initial_migration_matrix);
     msp_safe_free(self->migration_matrix);
     msp_safe_free(self->num_migration_events);
-    msp_safe_free(self->links);
+    msp_safe_free(self->recomb_mass_index);
+    msp_safe_free(self->gc_mass_index);
     msp_safe_free(self->segment_heap);
 
     self->num_populations = (uint32_t) num_populations;
@@ -332,12 +374,13 @@ msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
     self->initial_populations
         = calloc(num_populations, sizeof(*self->initial_populations));
     self->populations = calloc(num_populations, sizeof(*self->populations));
-    self->links = calloc(self->num_labels, sizeof(*self->links));
+    self->recomb_mass_index = calloc(self->num_labels, sizeof(*self->recomb_mass_index));
+    self->gc_mass_index = calloc(self->num_labels, sizeof(*self->gc_mass_index));
     self->segment_heap = calloc(self->num_labels, sizeof(*self->segment_heap));
     if (self->migration_matrix == NULL || self->initial_migration_matrix == NULL
         || self->num_migration_events == NULL || self->initial_populations == NULL
-        || self->populations == NULL || self->links == NULL
-        || self->segment_heap == NULL) {
+        || self->populations == NULL || self->recomb_mass_index == NULL
+        || self->gc_mass_index == NULL || self->segment_heap == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -359,31 +402,6 @@ msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
         self->initial_populations[j].initial_size = 1.0;
         self->initial_populations[j].start_time = 0.0;
     }
-out:
-    return ret;
-}
-
-int
-msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length)
-{
-    int ret = 0;
-    double sequence_length = rate_map_get_sequence_length(&self->recomb_map);
-
-    /* if the rate is zero, we ignore the track length */
-    if (rate > 0) {
-        if (track_length < 0 || track_length > sequence_length) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-    }
-    if (rate < 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    /* NB: the gene_conversion_rate gets rescaled when we call msp_initialise,
-     * so that it's in model units. */
-    self->gene_conversion_rate = rate;
-    self->gene_conversion_track_length = track_length;
 out:
     return ret;
 }
@@ -490,9 +508,8 @@ out:
 }
 
 static segment_t *MSP_WARN_UNUSED
-msp_alloc_segment(msp_t *self, double left, double right, double left_mass,
-    double right_mass, tsk_id_t value, population_id_t population, label_id_t label,
-    segment_t *prev, segment_t *next)
+msp_alloc_segment(msp_t *self, double left, double right, tsk_id_t value,
+    population_id_t population, label_id_t label, segment_t *prev, segment_t *next)
 {
     segment_t *seg = NULL;
 
@@ -500,7 +517,11 @@ msp_alloc_segment(msp_t *self, double left, double right, double left_mass,
         if (object_heap_expand(&self->segment_heap[label]) != 0) {
             goto out;
         }
-        if (fenwick_expand(&self->links[label], self->segment_block_size) != 0) {
+        if (fenwick_expand(&self->recomb_mass_index[label], self->segment_block_size)
+            != 0) {
+            goto out;
+        }
+        if (fenwick_expand(&self->gc_mass_index[label], self->segment_block_size) != 0) {
             goto out;
         }
     }
@@ -509,18 +530,24 @@ msp_alloc_segment(msp_t *self, double left, double right, double left_mass,
         goto out;
     }
     assert(left < right);
-    assert(fenwick_get_value(&self->links[label], seg->id) == 0);
+    assert(fenwick_get_value(&self->recomb_mass_index[label], seg->id) == 0);
+    assert(fenwick_get_value(&self->gc_mass_index[label], seg->id) == 0);
     seg->prev = prev;
     seg->next = next;
     seg->left = left;
     seg->right = right;
-    seg->left_mass = left_mass;
-    seg->right_mass = right_mass;
     seg->value = value;
     seg->population = population;
     seg->label = label;
 out:
     return seg;
+}
+
+static segment_t *MSP_WARN_UNUSED
+msp_copy_segment(msp_t *self, segment_t *seg)
+{
+    return msp_alloc_segment(self, seg->left, seg->right, seg->value, seg->population,
+        seg->label, seg->prev, seg->next);
 }
 
 /* Top level allocators and initialisation */
@@ -552,6 +579,10 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
         goto out;
     }
     ret = msp_set_recombination_rate(self, 0.0);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_set_gene_conversion_rate(self, 0.0);
     if (ret != 0) {
         goto out;
     }
@@ -656,7 +687,11 @@ msp_alloc_memory_blocks(msp_t *self)
         if (ret != 0) {
             goto out;
         }
-        ret = fenwick_alloc(&self->links[j], self->segment_block_size);
+        ret = fenwick_alloc(&self->recomb_mass_index[j], self->segment_block_size);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = fenwick_alloc(&self->gc_mass_index[j], self->segment_block_size);
         if (ret != 0) {
             goto out;
         }
@@ -700,8 +735,11 @@ msp_free(msp_t *self)
         de = tmp;
     }
     for (j = 0; j < self->num_labels; j++) {
-        if (self->links != NULL) {
-            fenwick_free(&self->links[j]);
+        if (self->recomb_mass_index != NULL) {
+            fenwick_free(&self->recomb_mass_index[j]);
+        }
+        if (self->gc_mass_index != NULL) {
+            fenwick_free(&self->gc_mass_index[j]);
         }
         if (self->segment_heap != NULL) {
             object_heap_free(&self->segment_heap[j]);
@@ -711,7 +749,8 @@ msp_free(msp_t *self)
         msp_safe_free(self->populations[j].ancestors);
         msp_safe_free(self->populations[j].potential_destinations);
     }
-    msp_safe_free(self->links);
+    msp_safe_free(self->recomb_mass_index);
+    msp_safe_free(self->gc_mass_index);
     msp_safe_free(self->segment_heap);
     msp_safe_free(self->initial_migration_matrix);
     msp_safe_free(self->migration_matrix);
@@ -725,6 +764,7 @@ msp_free(msp_t *self)
     object_heap_free(&self->avl_node_heap);
     object_heap_free(&self->node_mapping_heap);
     rate_map_free(&self->recomb_map);
+    rate_map_free(&self->gc_map);
     if (self->from_ts != NULL) {
         tsk_treeseq_free(self->from_ts);
         free(self->from_ts);
@@ -798,7 +838,8 @@ static void
 msp_free_segment(msp_t *self, segment_t *seg)
 {
     object_heap_free_object(&self->segment_heap[seg->label], seg);
-    fenwick_set_value(&self->links[seg->label], seg->id, 0);
+    fenwick_set_value(&self->recomb_mass_index[seg->label], seg->id, 0);
+    fenwick_set_value(&self->gc_mass_index[seg->label], seg->id, 0);
 }
 
 static inline avl_tree_t *
@@ -895,70 +936,99 @@ msp_print_segment_chain(msp_t *MSP_UNUSED(self), segment_t *head, FILE *out)
 }
 
 static void
-msp_verify_segments(msp_t *self, bool verify_breakpoints)
+msp_verify_segment_index(
+    msp_t *self, fenwick_t *mass_index_array, rate_map_t *rate_map, bool left_at_zero)
 {
-    double left, right, l_mass, r_mass, left_bound;
+
+    double left, right, left_bound;
     double s, ss, total_mass, alt_total_mass;
     size_t j, k;
-    size_t label_segments = 0;
-    size_t total_avl_nodes = 0;
-    const double epsilon = 1e-12;
+    const double epsilon = 1e-10;
     avl_node_t *node;
     segment_t *u;
 
     for (k = 0; k < self->num_labels; k++) {
         total_mass = 0;
         alt_total_mass = 0;
+        for (j = 0; j < self->num_populations; j++) {
+            node = (&self->populations[j].ancestors[k])->head;
+            while (node != NULL) {
+                u = (segment_t *) node->item;
+                left = u->left;
+                while (u != NULL) {
+                    if (u->prev != NULL) {
+                        s = rate_map_mass_between(rate_map, u->prev->right, u->right);
+                    } else {
+                        if (left_at_zero) {
+                            left_bound = self->discrete_genome ? 1 : 0;
+                        } else {
+                            left_bound = self->discrete_genome ? u->left + 1 : u->left;
+                        }
+                        assert(left_bound <= u->right);
+                        s = rate_map_mass_between(rate_map, left_bound, u->right);
+                    }
+                    assert(s >= 0);
+                    ss = fenwick_get_value(&mass_index_array[k], u->id);
+                    assert(doubles_almost_equal(s, ss, epsilon));
+                    total_mass += ss;
+                    if (s == ss) {
+                        /* do nothing; just to keep compiler happy - see below also */
+                    }
+                    right = u->right;
+                    u = u->next;
+                }
+                if (left_at_zero) {
+                    left_bound = self->discrete_genome ? 1 : 0;
+                } else {
+                    left_bound = self->discrete_genome ? left + 1 : left;
+                }
+                s = rate_map_mass_between(rate_map, left_bound, right);
+                alt_total_mass += s;
+                node = node->next;
+            }
+        }
+        assert(doubles_almost_equal(
+            total_mass, fenwick_get_total(&mass_index_array[k]), epsilon));
+        assert(doubles_almost_equal(total_mass, alt_total_mass, epsilon));
+    }
+}
+
+static void
+msp_verify_segments(msp_t *self, bool verify_breakpoints)
+{
+    size_t j, k;
+    size_t label_segments = 0;
+    size_t total_avl_nodes = 0;
+    avl_node_t *node;
+    segment_t *u;
+
+    for (k = 0; k < self->num_labels; k++) {
         label_segments = 0;
         for (j = 0; j < self->num_populations; j++) {
             node = (&self->populations[j].ancestors[k])->head;
             while (node != NULL) {
                 u = (segment_t *) node->item;
                 assert(u->prev == NULL);
-                left = u->left;
                 while (u != NULL) {
                     label_segments++;
                     assert(u->population == (population_id_t) j);
                     assert(u->label == (label_id_t) k);
                     assert(u->left < u->right);
                     assert(u->right <= self->sequence_length);
-
-                    l_mass = rate_map_position_to_mass(&self->recomb_map, u->left);
-                    r_mass = rate_map_position_to_mass(&self->recomb_map, u->right);
-                    assert(u->left_mass == l_mass);
-                    assert(u->right_mass == r_mass);
-                    assert(l_mass >= 0);
-                    assert(r_mass >= 0);
                     if (u->prev != NULL) {
-                        s = rate_map_mass_between(
-                            &self->recomb_map, u->prev->right, u->right);
-                    } else {
-                        left_bound = self->discrete_genome ? u->left + 1 : u->left;
-                        s = rate_map_mass_between(
-                            &self->recomb_map, left_bound, u->right);
-                    }
-                    assert(s >= 0);
-                    ss = fenwick_get_value(&self->links[k], u->id);
-                    assert(doubles_almost_equal(s, ss, epsilon));
-                    total_mass += ss;
-                    if (s == ss) {
-                        /* do nothing; just to keep compiler happy - see below also */
+                        assert(u->prev->next == u);
                     }
                     if (verify_breakpoints && u->left != 0) {
                         assert(msp_has_breakpoint(self, u->left));
                     }
-                    right = u->right;
+                    if (self->discrete_genome) {
+                        assert(floor(u->left) == u->left);
+                    }
                     u = u->next;
                 }
-                left_bound = self->discrete_genome ? left + 1 : left;
-                s = rate_map_mass_between(&self->recomb_map, left_bound, right);
-                alt_total_mass += s;
                 node = node->next;
             }
         }
-        assert(doubles_almost_equal(
-            total_mass, fenwick_get_total(&self->links[k]), epsilon));
-        assert(doubles_almost_equal(total_mass, alt_total_mass, epsilon));
         assert(label_segments == object_heap_get_num_allocated(&self->segment_heap[k]));
     }
     total_avl_nodes = msp_get_num_ancestors(self) + avl_count(&self->breakpoints)
@@ -973,6 +1043,8 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
          * asserts are turned off.
          */
     }
+    msp_verify_segment_index(self, self->recomb_mass_index, &self->recomb_map, false);
+    msp_verify_segment_index(self, self->gc_mass_index, &self->gc_map, true);
 }
 
 typedef struct {
@@ -1229,9 +1301,6 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "n = %d\n", self->num_samples);
     fprintf(out, "L = %.14g\n", self->sequence_length);
     fprintf(out, "discrete_genome = %d\n", self->discrete_genome);
-    fprintf(out, "gene_conversion_rate         = %f\n", self->gene_conversion_rate);
-    fprintf(
-        out, "gene_conversion_track_length = %f\n", self->gene_conversion_track_length);
     fprintf(out, "from_ts    = %p\n", (void *) self->from_ts);
     fprintf(out, "start_time = %f\n", self->start_time);
     fprintf(out, "Samples    = \n");
@@ -1241,6 +1310,9 @@ msp_print_state(msp_t *self, FILE *out)
     }
     fprintf(out, "recombination map:\n");
     rate_map_print_state(&self->recomb_map, out);
+    fprintf(out, "gene_conversion_track_length = %f\n", self->gc_track_length);
+    fprintf(out, "gene conversion map:\n");
+    rate_map_print_state(&self->gc_map, out);
 
     fprintf(out, "Sampling events:\n");
     for (j = 0; j < self->num_sampling_events; j++) {
@@ -1273,7 +1345,9 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "Population sizes\n");
     for (j = 0; j < self->num_labels; j++) {
         fprintf(out, "label %d\n", j);
-        fprintf(out, "\trecomb_mass = %.14g\n", fenwick_get_total(&self->links[j]));
+        fprintf(out, "\trecomb_mass = %.14g\n",
+            fenwick_get_total(&self->recomb_mass_index[j]));
+        fprintf(out, "\tgc_mass = %.14g\n", fenwick_get_total(&self->gc_mass_index[j]));
         for (k = 0; k < self->num_populations; k++) {
             fprintf(out, "\tpop_size[%d] = %d\n", k,
                 avl_count(&self->populations[k].ancestors[j]));
@@ -1306,11 +1380,24 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "Fenwick trees\n");
     for (k = 0; k < self->num_labels; k++) {
         fprintf(out, "=====\nLabel %d\n=====\n", k);
+        fprintf(out, "**Recomb mass**\n");
         fprintf(out, "numerical drift = %.17g\n",
-            fenwick_get_numerical_drift(&self->links[k]));
-        for (j = 1; j <= (uint32_t) fenwick_get_size(&self->links[k]); j++) {
+            fenwick_get_numerical_drift(&self->recomb_mass_index[k]));
+        for (j = 1; j <= (uint32_t) fenwick_get_size(&self->recomb_mass_index[k]); j++) {
             u = msp_get_segment(self, j, (label_id_t) k);
-            v = fenwick_get_value(&self->links[k], j);
+            v = fenwick_get_value(&self->recomb_mass_index[k], j);
+            if (v != 0) {
+                fprintf(out, "\t%.14f\ti=%d l=%.14g r=%.14g v=%d prev=%p next=%p\n", v,
+                    (int) u->id, u->left, u->right, (int) u->value, (void *) u->prev,
+                    (void *) u->next);
+            }
+        }
+        fprintf(out, "**GC mass**\n");
+        fprintf(out, "numerical drift = %.17g\n",
+            fenwick_get_numerical_drift(&self->gc_mass_index[k]));
+        for (j = 1; j <= (uint32_t) fenwick_get_size(&self->gc_mass_index[k]); j++) {
+            u = msp_get_segment(self, j, (label_id_t) k);
+            v = fenwick_get_value(&self->gc_mass_index[k], j);
             if (v != 0) {
                 fprintf(out, "\t%.14f\ti=%d l=%.14g r=%.14g v=%d prev=%p next=%p\n", v,
                     (int) u->id, u->left, u->right, (int) u->value, (void *) u->prev,
@@ -1500,7 +1587,7 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
 {
     int ret = 0;
     segment_t *ind, *x, *y, *new_ind;
-    double recomb_mass;
+    double recomb_mass, gc_mass;
 
     ind = (segment_t *) node->item;
     avl_unlink_node(source, node);
@@ -1536,15 +1623,17 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         new_ind = NULL;
         y = NULL;
         for (x = ind; x != NULL; x = x->next) {
-            y = msp_alloc_segment(self, x->left, x->right, x->left_mass, x->right_mass,
-                x->value, x->population, dest_label, y, NULL);
+            y = msp_alloc_segment(
+                self, x->left, x->right, x->value, x->population, dest_label, y, NULL);
             if (new_ind == NULL) {
                 new_ind = y;
             } else {
                 y->prev->next = y;
             }
-            recomb_mass = fenwick_get_value(&self->links[x->label], x->id);
-            fenwick_set_value(&self->links[y->label], y->id, recomb_mass);
+            recomb_mass = fenwick_get_value(&self->recomb_mass_index[x->label], x->id);
+            fenwick_set_value(&self->recomb_mass_index[y->label], y->id, recomb_mass);
+            gc_mass = fenwick_get_value(&self->gc_mass_index[x->label], x->id);
+            fenwick_set_value(&self->gc_mass_index[y->label], y->id, gc_mass);
             msp_free_segment(self, x);
         }
     }
@@ -1690,59 +1779,44 @@ out:
     return ret;
 }
 
-/* Updates the mass on the specified segment to account for the additional
- * mass incurred between the left and right masses.
- */
-static void
-msp_add_segment_mass_between(msp_t *self, segment_t *seg, double l_mass, double r_mass)
+static inline double
+msp_get_recomb_left_bound(msp_t *self, segment_t *seg)
 {
-    fenwick_increment(&self->links[seg->label], seg->id, r_mass - l_mass);
+    double left_bound;
+    if (seg->prev == NULL) {
+        left_bound = self->discrete_genome ? seg->left + 1 : seg->left;
+    } else {
+        left_bound = seg->prev->right;
+    }
+    return left_bound;
 }
 
-/* Add the mass subtended by the endpoints of seg2 to that of seg1
- */
-static void
-msp_add_segment_mass(msp_t *self, segment_t *seg1, segment_t *seg2)
+static inline double
+msp_get_gc_left_bound(msp_t *self, segment_t *seg)
 {
-    double mass = seg2->right_mass - seg2->left_mass;
-    fenwick_increment(&self->links[seg1->label], seg1->id, mass);
-}
-
-/* Subtract the mass subtended by the endpoints of seg2 to that of seg1
- */
-static void
-msp_subtract_segment_mass(msp_t *self, segment_t *seg1, segment_t *seg2)
-{
-    double mass = seg2->left_mass - seg2->right_mass;
-    fenwick_increment(&self->links[seg1->label], seg1->id, mass);
+    double left_bound;
+    if (seg->prev == NULL) {
+        left_bound = self->discrete_genome ? 1 : 0;
+    } else {
+        left_bound = seg->prev->right;
+    }
+    return left_bound;
 }
 
 /* Set the mass of the specified segment to that between the segment's right endpoint
  * and the right endpoint of the left tail segment.
  */
 static void
-msp_set_segment_mass(msp_t *self, segment_t *seg, segment_t *tail_seg)
+msp_set_segment_mass(msp_t *self, segment_t *seg)
 {
-    double mass = seg->right_mass - tail_seg->right_mass;
-    fenwick_set_value(&self->links[seg->label], seg->id, mass);
-}
+    double recomb_left_bound = msp_get_recomb_left_bound(self, seg);
+    double recomb_mass
+        = rate_map_mass_between(&self->recomb_map, recomb_left_bound, seg->right);
+    double gc_left_bound = msp_get_gc_left_bound(self, seg);
+    double gc_mass = rate_map_mass_between(&self->gc_map, gc_left_bound, seg->right);
 
-/* Set the mass of a specified segment that is not part of a
- * chain to the mass spanned by the segment, exclusive of its
- * endpoints.
- */
-static void
-msp_set_single_segment_mass(msp_t *self, segment_t *seg)
-{
-    double mass;
-
-    if (self->discrete_genome) {
-        /* Exclude the left endpoint because breakpoints can't happen there */
-        mass = rate_map_mass_between(&self->recomb_map, seg->left + 1, seg->right);
-    } else {
-        mass = seg->right_mass - seg->left_mass;
-    }
-    fenwick_set_value(&self->links[seg->label], seg->id, mass);
+    fenwick_set_value(&self->recomb_mass_index[seg->label], seg->id, recomb_mass);
+    fenwick_set_value(&self->gc_mass_index[seg->label], seg->id, gc_mass);
 }
 
 /* Defragment the segment chain ending in z by squashing any redundant
@@ -1757,12 +1831,12 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
         x = y->prev;
         if (x->right == y->left && x->value == y->value) {
             x->right = y->right;
-            x->right_mass = y->right_mass;
             x->next = y->next;
             if (y->next != NULL) {
                 y->next->prev = x;
             }
-            msp_add_segment_mass(self, x, y);
+            /* msp_add_segment_mass(self, x, y); */
+            msp_set_segment_mass(self, x);
             msp_free_segment(self, y);
         }
         y = x;
@@ -2178,7 +2252,6 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     int ret = 0;
     int ix;
     double k;
-    double k_mass;
     segment_t *y, *z, *tail;
     segment_t s1, s2;
     segment_t *seg_tails[] = { &s1, &s2 };
@@ -2196,7 +2269,6 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
 
         if (x->right > k) {
             // Make new segment
-            k_mass = rate_map_position_to_mass(&self->recomb_map, k);
             assert(x->left < k);
             self->num_re_events++;
             ix = (ix + 1) % 2;
@@ -2206,17 +2278,13 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             } else {
                 tail = seg_tails[ix];
             }
-            z = msp_alloc_segment(self, k, x->right, k_mass, x->right_mass, x->value,
-                x->population, x->label, tail, x->next);
+            z = msp_alloc_segment(
+                self, k, x->right, x->value, x->population, x->label, tail, x->next);
             if (z == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
             }
-            if (z->prev == NULL) {
-                msp_set_single_segment_mass(self, z);
-            } else {
-                msp_set_segment_mass(self, z, z->prev);
-            }
+            msp_set_segment_mass(self, z);
             assert(z->left < z->right);
             if (x->next != NULL) {
                 x->next->prev = z;
@@ -2225,8 +2293,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             seg_tails[ix] = z;
             x->next = NULL;
             x->right = k;
-            x->right_mass = k_mass;
-            msp_subtract_segment_mass(self, x, z);
+            msp_set_segment_mass(self, x);
             assert(x->left < x->right);
             x = z;
             k = msp_dtwf_generate_breakpoint(self, k);
@@ -2246,11 +2313,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
                 tail = seg_tails[ix];
             }
             y->prev = tail;
-            if (y->prev == NULL) {
-                msp_set_single_segment_mass(self, y);
-            } else {
-                msp_set_segment_mass(self, y, y->prev);
-            }
+            msp_set_segment_mass(self, y);
             seg_tails[ix] = y;
             x = y;
         } else {
@@ -2295,16 +2358,17 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-msp_choose_uniform_breakpoint(msp_t *self, int label, double *ret_breakpoint,
-    double *ret_breakpoint_mass, segment_t **ret_seg)
+msp_choose_uniform_breakpoint(msp_t *self, int label, rate_map_t *rate_map,
+    fenwick_t *mass_index_array, bool left_at_zero, double *ret_breakpoint,
+    segment_t **ret_seg)
 {
 
     int ret = 0;
-    double breakpoint, breakpoint_mass, random_mass, y_cumulative_mass;
+    double breakpoint, breakpoint_mass, random_mass, y_cumulative_mass, y_right_mass,
+        left_bound;
     segment_t *x, *y;
-    fenwick_t *tree = &self->links[label];
+    fenwick_t *tree = &mass_index_array[label];
     int num_breakpoint_resamplings = 0;
-
     do {
         /* Choose a recombination mass uniformly from the total and find the
          * segment y that is associated with this *cumulative* value. */
@@ -2313,21 +2377,23 @@ msp_choose_uniform_breakpoint(msp_t *self, int label, double *ret_breakpoint,
         assert(fenwick_get_value(tree, y->id) > 0);
         x = y->prev;
         y_cumulative_mass = fenwick_get_cumulative_sum(tree, y->id);
-        breakpoint_mass = y->right_mass - (y_cumulative_mass - random_mass);
-        breakpoint = rate_map_mass_to_position(&self->recomb_map, breakpoint_mass);
+        y_right_mass = rate_map_position_to_mass(rate_map, y->right);
+        breakpoint_mass = y_right_mass - (y_cumulative_mass - random_mass);
+        breakpoint = rate_map_mass_to_position(rate_map, breakpoint_mass);
         if (self->discrete_genome) {
             breakpoint = floor(breakpoint);
         }
 
         /* Deal with various quirks that can happen with numerical
-         * imprecision from going back and forth between recombination mass
+         * imprecision from going back and forth between rate mass
          * and physical positions. We try to make this robust by making
          * resampling the default case and only break out of the loop
          * when the conditions we need are explicitly met. */
         if (x == NULL) {
+            left_bound = left_at_zero ? 0 : y->left;
             /* if there is no previous segment we cannot have breakpoint
-             * <= y->left */
-            if (y->left < breakpoint && breakpoint < y->right) {
+             * <= y->left (or zero, if the left limit is zero) */
+            if (left_bound < breakpoint && breakpoint < y->right) {
                 break;
             }
         } else {
@@ -2345,13 +2411,7 @@ msp_choose_uniform_breakpoint(msp_t *self, int label, double *ret_breakpoint,
         }
     } while (true);
 
-    /* Convert the breakpoint position back into a recombination mass
-     * value. When the recombination map is discrete, this is *not*
-     * the same as the value computed above */
-    breakpoint_mass = rate_map_position_to_mass(&self->recomb_map, breakpoint);
-
     *ret_breakpoint = breakpoint;
-    *ret_breakpoint_mass = breakpoint_mass;
     *ret_seg = y;
 out:
     return ret;
@@ -2361,12 +2421,13 @@ static int MSP_WARN_UNUSED
 msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_t **rhs)
 {
     int ret = 0;
-    double breakpoint, breakpoint_mass;
-    segment_t *x, *y, *z, *lhs_tail;
+    double breakpoint;
+    segment_t *x, *y, *alpha, *lhs_tail;
 
     self->num_re_events++;
 
-    ret = msp_choose_uniform_breakpoint(self, label, &breakpoint, &breakpoint_mass, &y);
+    ret = msp_choose_uniform_breakpoint(
+        self, label, &self->recomb_map, self->recomb_mass_index, false, &breakpoint, &y);
     if (ret != 0) {
         goto out;
     }
@@ -2374,19 +2435,18 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
 
     if (y->left < breakpoint) {
         assert(breakpoint < y->right);
-        z = msp_alloc_segment(self, breakpoint, y->right, breakpoint_mass, y->right_mass,
-            y->value, y->population, y->label, NULL, y->next);
-        if (z == NULL) {
+        alpha = msp_alloc_segment(self, breakpoint, y->right, y->value, y->population,
+            y->label, NULL, y->next);
+        if (alpha == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
         if (y->next != NULL) {
-            y->next->prev = z;
+            y->next->prev = alpha;
         }
         y->next = NULL;
         y->right = breakpoint;
-        y->right_mass = breakpoint_mass;
-        msp_subtract_segment_mass(self, y, z);
+        msp_set_segment_mass(self, y);
         if (msp_has_breakpoint(self, breakpoint)) {
             self->num_multiple_re_events++;
         } else {
@@ -2401,18 +2461,18 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
         assert(x != NULL);
         x->next = NULL;
         y->prev = NULL;
-        z = y;
+        alpha = y;
         self->num_trapped_re_events++;
         lhs_tail = x;
     }
-    assert(z->left < z->right);
-    msp_set_single_segment_mass(self, z);
-    ret = msp_insert_individual(self, z);
+    assert(alpha->left < alpha->right);
+    msp_set_segment_mass(self, alpha);
+    ret = msp_insert_individual(self, alpha);
     if (ret != 0) {
         goto out;
     }
     if (self->store_full_arg) {
-        ret = msp_store_arg_recombination(self, lhs_tail, z);
+        ret = msp_store_arg_recombination(self, lhs_tail, alpha);
         if (ret != 0) {
             goto out;
         }
@@ -2424,117 +2484,140 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
             x = x->prev;
         }
         *lhs = x;
-        *rhs = z;
+        *rhs = alpha;
     }
 out:
     return ret;
 }
 
-/* Helper function for doing GC */
 static int MSP_WARN_UNUSED
-msp_cut_right_break(msp_t *self, segment_t *lhs_tail, segment_t *y,
-    segment_t *new_segment, double track_end)
+msp_gene_conversion_event(msp_t *self, label_id_t label)
 {
     int ret = 0;
-    double track_end_mass = rate_map_position_to_mass(&self->recomb_map, track_end);
-    assert(lhs_tail != NULL);
-    lhs_tail->next = new_segment;
-    msp_set_segment_mass(self, new_segment, lhs_tail);
-    if (y->next != NULL) {
-        y->next->prev = new_segment;
-    }
-    y->next = NULL;
-    y->right = track_end;
-    y->right_mass = track_end_mass;
-    msp_add_segment_mass_between(self, y, new_segment->right_mass, track_end_mass);
-    if (!msp_has_breakpoint(self, track_end)) {
-        ret = msp_insert_breakpoint(self, track_end);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-out:
-    return ret;
-}
+    segment_t *x, *y, *alpha, *head, *tail, *z, *new_individual_head;
+    double left_breakpoint, right_breakpoint, tl;
+    bool insert_alpha;
+    int num_resamplings = 0;
 
-/* Processes a gene conversion event that starts within or between segments.
- */
-static int MSP_WARN_UNUSED
-msp_gene_conversion_within_event(msp_t *self, label_id_t label)
-{
-    int ret = 0;
-    double left_breakpoint, tl, right_breakpoint, left_breakpoint_mass,
-        right_breakpoint_mass;
-    segment_t *x, *y, *y2, *z, *z2, *lhs_tail;
-
+    self->num_gc_events++;
     ret = msp_choose_uniform_breakpoint(
-        self, label, &left_breakpoint, &left_breakpoint_mass, &y);
+        self, label, &self->gc_map, self->gc_mass_index, true, &left_breakpoint, &y);
     if (ret != 0) {
         goto out;
     }
+
     x = y->prev;
 
     /* generate track length */
     do {
-        tl = gsl_ran_geometric(self->rng, 1.0 / self->gene_conversion_track_length);
+        tl = gsl_ran_exponential(self->rng, self->gc_track_length);
+        if (self->discrete_genome) {
+            /* We want the track length to be at least 1 */
+            tl = ceil(tl);
+        }
+        if (num_resamplings == 10) {
+            ret = MSP_ERR_TRACKLEN_RESAMPLE_OVERFLOW;
+            goto out;
+        }
+        num_resamplings++;
     } while (tl <= 0);
     right_breakpoint = left_breakpoint + tl;
-    right_breakpoint_mass
-        = rate_map_position_to_mass(&self->recomb_map, right_breakpoint);
 
-    /* Check if the gene conversion falls between segments and hence has no effect */
     if (y->left >= right_breakpoint) {
-        self->num_gc_events++;
+        //                  y
+        // ...  |   |   ========== ...
+        //     lbp rbp
         self->num_noneffective_gc_events++;
         return 0;
     }
 
-    self->num_gc_events++;
-    x = y->prev;
+    /* Process left break */
+    insert_alpha = true;
+    if (left_breakpoint <= y->left) {
+        //  x             y
+        // =====  |  ==========
+        //       lbp
+        //
+        // becomes
+        //  x
+        // =====         α
+        //           ==========
+        if (x == NULL) {
+            // In this case we *don't* insert alpha because it is already
+            // the head of a segment chain
+            insert_alpha = false;
+        } else {
+            x->next = NULL;
+        }
+        y->prev = NULL;
+        alpha = y;
+        tail = x;
+    } else {
+        //  x             y
+        // =====     ====|=====
+        //              lbp
+        //
+        // becomes
+        //  x         y
+        // =====     ====   α
+        //               ======
+        /* alpha = self->copy_segment(y) */
+        alpha = msp_copy_segment(self, y);
+        if (alpha == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        alpha->left = left_breakpoint;
+        alpha->prev = NULL;
+        if (y->next != NULL) {
+            y->next->prev = alpha;
+        }
+        y->next = NULL;
+        y->right = left_breakpoint;
+        msp_set_segment_mass(self, y);
+        tail = y;
 
-    if (right_breakpoint < y->right) {
-        /* Both breaks are within the same segment */
-        if (left_breakpoint <= y->left) {
-            y->prev = NULL;
-            z2 = msp_alloc_segment(self, right_breakpoint, y->right,
-                right_breakpoint_mass, y->right_mass, y->value, y->population, y->label,
-                x, y->next);
-            if (z2 == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            lhs_tail = x;
-            ret = msp_cut_right_break(self, lhs_tail, y, z2, right_breakpoint);
+        if (!msp_has_breakpoint(self, left_breakpoint)) {
+            ret = msp_insert_breakpoint(self, left_breakpoint);
             if (ret != 0) {
                 goto out;
             }
-            z = y;
-        } else {
-            z = msp_alloc_segment(self, left_breakpoint, right_breakpoint,
-                left_breakpoint_mass, right_breakpoint_mass, y->value, y->population,
-                y->label, NULL, NULL);
-            z2 = msp_alloc_segment(self, right_breakpoint, y->right,
-                right_breakpoint_mass, y->right_mass, y->value, y->population, y->label,
-                y, y->next);
-            if (z == NULL || z2 == NULL) {
+        }
+    }
+    msp_set_segment_mass(self, alpha);
+
+    // Find the segment z that the right breakpoint falls in
+    z = alpha;
+    while (z != NULL && right_breakpoint >= z->right) {
+        z = z->next;
+    }
+
+    head = NULL;
+    // Process the right break
+    if (z != NULL) {
+        if (z->left < right_breakpoint) {
+            //   tail             z
+            // ======
+            //       ...  ===|==========
+            //              rbp
+            //
+            // becomes
+            //  tail              head
+            // =====         ===========
+            //      ...   ===
+            //             z
+            head = msp_copy_segment(self, z);
+            if (head == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
             }
-            if (y->next != NULL) {
-                y->next->prev = z2;
+            head->left = right_breakpoint;
+            if (z->next != NULL) {
+                z->next->prev = head;
             }
-            y->next = z2;
-            y->right = left_breakpoint;
-            y->right_mass = left_breakpoint_mass;
-            msp_set_segment_mass(self, z2, y);
-            msp_subtract_segment_mass(self, y, z);
-            msp_subtract_segment_mass(self, y, z2);
-            if (!msp_has_breakpoint(self, left_breakpoint)) {
-                ret = msp_insert_breakpoint(self, left_breakpoint);
-                if (ret != 0) {
-                    goto out;
-                }
-            }
+            z->right = right_breakpoint;
+            z->next = NULL;
+            msp_set_segment_mass(self, z);
 
             if (!msp_has_breakpoint(self, right_breakpoint)) {
                 ret = msp_insert_breakpoint(self, right_breakpoint);
@@ -2542,220 +2625,44 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
                     goto out;
                 }
             }
-            lhs_tail = y;
-        }
-    } else {
-        /* Breaks are in separate segments */
-
-        /* Get the segment y2 containing the end of the conversion tract*/
-        y2 = y;
-        while (y2 != NULL && right_breakpoint >= y2->right) {
-            y2 = y2->next;
-        }
-        /* Process left break */
-        if (left_breakpoint <= y->left) {
-            if (x != NULL) {
-                x->next = NULL;
-            }
-            y->prev = NULL;
-            z = y;
-            lhs_tail = x;
         } else {
-            z = msp_alloc_segment(self, left_breakpoint, y->right, left_breakpoint_mass,
-                y->right_mass, y->value, y->population, y->label, NULL, y->next);
-            if (z == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
+            //   tail             z
+            // ======
+            //   ...   |   =============
+            //        rbp
+            //
+            // becomes
+            //  tail             z
+            // ======      =============
+            //  ...
+            if (z->prev != NULL) {
+                z->prev->next = NULL;
             }
-            msp_set_single_segment_mass(self, z);
-            if (y->next != NULL) {
-                y->next->prev = z;
-            }
-            y->next = NULL;
-            y->right = left_breakpoint;
-            y->right_mass = left_breakpoint_mass;
-            msp_subtract_segment_mass(self, y, z);
-            if (!msp_has_breakpoint(self, left_breakpoint)) {
-                ret = msp_insert_breakpoint(self, left_breakpoint);
-                if (ret != 0) {
-                    goto out;
-                }
-            }
-            lhs_tail = y;
+            head = z;
         }
-
-        /* Process right break */
-        if (y2 != NULL) {
-            if (y2->left < right_breakpoint) {
-                z2 = msp_alloc_segment(self, right_breakpoint, y2->right,
-                    rate_map_position_to_mass(&self->recomb_map, right_breakpoint),
-                    y2->right_mass, y2->value, y2->population, y2->label, lhs_tail,
-                    y2->next);
-                if (z2 == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
-                    goto out;
-                }
-                ret = msp_cut_right_break(self, lhs_tail, y2, z2, right_breakpoint);
-                if (ret != 0) {
-                    goto out;
-                }
-                if (z2->prev == NULL) {
-                    z = z2;
-                }
-            } else {
-                lhs_tail->next = y2;
-                y2->prev->next = NULL;
-                y2->prev = lhs_tail;
-                msp_set_segment_mass(self, y2, lhs_tail);
-            }
+        if (tail != NULL) {
+            tail->next = head;
         }
+        head->prev = tail;
+        msp_set_segment_mass(self, head);
     }
 
-    /* Update population */
-    z->label = label;
-    msp_set_single_segment_mass(self, z);
-    ret = msp_insert_individual(self, z);
-out:
-    return ret;
-}
-
-/* This is an inefficient function used until we figure out how to use a
- * Fenwick tree to implement it without iterating over the full population */
-/* TODO: what does 'cleft' mean? I'm not finding it very enlightening. We should
- * change this to something more meaningful here and in algorithms.py */
-static double
-msp_get_cleft_total(msp_t *self)
-{
-    double ret = 0;
-    avl_node_t *node;
-    avl_tree_t *population_ancestors;
-    label_id_t label;
-    size_t j;
-    segment_t *u;
-    double dist, left, right;
-    const double track_length = self->gene_conversion_track_length;
-    const double x = (track_length - 1) / track_length;
-
-    for (j = 0; j < self->num_populations; j++) {
-        for (label = 0; label < (label_id_t) self->num_labels; label++) {
-            population_ancestors = &self->populations[j].ancestors[label];
-            for (node = population_ancestors->head; node != NULL; node = node->next) {
-                u = (segment_t *) node->item;
-                left = u->left;
-                while (u->next != NULL) {
-                    u = u->next;
-                }
-                right = u->right;
-                dist = right - left;
-                ret += 1 - pow(x, dist - 1);
-            }
-        }
+    //        y            z
+    //  |  ========== ... ===== |
+    // lbp                     rbp
+    // When y and z are the head and tail of the segment chains, then
+    // this GC event does nothing. This logic takes care of this situation.
+    new_individual_head = NULL;
+    if (insert_alpha) {
+        new_individual_head = alpha;
+    } else if (head != NULL) {
+        new_individual_head = head;
     }
-    /* printf("CLEFT_TOTAL = %f\n", ret); */
-    return ret;
-}
-
-static void
-msp_find_cleft_individual(msp_t *self, double rvalue, size_t *segment_id, double *dist)
-{
-    avl_node_t *node;
-    avl_tree_t *population_ancestors;
-    label_id_t label;
-    size_t j;
-    size_t head_id = 0;
-    segment_t *u;
-    double left, right, distance;
-    const double track_length = self->gene_conversion_track_length;
-    const double x = (track_length - 1) / track_length;
-
-    distance = 0;
-    for (j = 0; j < self->num_populations; j++) {
-        for (label = 0; label < (label_id_t) self->num_labels; label++) {
-            population_ancestors = &self->populations[j].ancestors[label];
-            for (node = population_ancestors->head; node != NULL; node = node->next) {
-                if (rvalue > 0) {
-                    u = (segment_t *) node->item;
-                    left = u->left;
-                    head_id = u->id;
-                    while (u->next != NULL) {
-                        u = u->next;
-                    }
-                    right = u->right;
-                    distance = right - left;
-                    rvalue -= 1 - pow(x, distance - 1);
-                }
-            }
-        }
-    }
-    *segment_id = head_id;
-    *dist = distance;
-}
-
-/* Processes a gene conversion event that started left of a first
- * segment and does not span the whole segment chain*/
-static int MSP_WARN_UNUSED
-msp_gene_conversion_left_event(msp_t *self, label_id_t label)
-{
-    int ret = 0;
-    double h, length, p, logp, u;
-    segment_t *x, *y, *z;
-    double k, tl, k_mass;
-    size_t segment_id;
-    const double track_length = self->gene_conversion_track_length;
-
-    self->num_gc_events++;
-    h = gsl_rng_uniform(self->rng) * msp_get_cleft_total(self);
-    /* Get the segment where gc starts from left and the length of the segment chain */
-    msp_find_cleft_individual(self, h, &segment_id, &length);
-    y = msp_get_segment(self, segment_id, label);
-    /* Generate conditional track length */
-    assert(length > 0);
-
-    tl = 1.0;
-    if (track_length > 1.0) {
-        /* p is the proba of continuing the track */
-        p = (track_length - 1.0) / track_length;
-        logp = log(1.0 - 1.0 / track_length);
-        u = gsl_rng_uniform(self->rng);
-        tl = floor(1.0 + log(1.0 - u * (1.0 - pow(p, length - 1.0))) / logp);
-    }
-    k = y->left + tl;
-    k_mass = rate_map_position_to_mass(&self->recomb_map, k);
-
-    while (y->right <= k) {
-        y = y->next;
-    }
-    x = y->prev;
-    if (y->left < k) {
-        /*make new segment*/
-        z = msp_alloc_segment(self, k, y->right, k_mass, y->right_mass, y->value,
-            y->population, y->label, NULL, y->next);
-        if (z == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        if (y->next != NULL) {
-            y->next->prev = z;
-        }
-        y->next = NULL;
-        y->right = k;
-        y->right_mass = k_mass;
-        msp_subtract_segment_mass(self, y, z);
-        if (!msp_has_breakpoint(self, k)) {
-            ret = msp_insert_breakpoint(self, k);
-            if (ret != 0) {
-                goto out;
-            }
-        }
+    if (new_individual_head != NULL) {
+        ret = msp_insert_individual(self, new_individual_head);
     } else {
-        /*split the link between x and y*/
-        x->next = NULL;
-        y->prev = NULL;
-        z = y;
+        self->num_noneffective_gc_events++;
     }
-    z->label = label;
-    msp_set_single_segment_mass(self, z);
-    ret = msp_insert_individual(self, z);
 out:
     return ret;
 }
@@ -2794,13 +2701,6 @@ msp_reject_ca_event(msp_t *self, segment_t *a, segment_t *b)
         }
     }
     return ret;
-}
-
-static void
-msp_set_segment_left_endpoint(msp_t *self, segment_t *seg, double left)
-{
-    seg->left = left;
-    seg->left_mass = rate_map_position_to_mass(&self->recomb_map, left);
 }
 
 static int MSP_WARN_UNUSED
@@ -2846,14 +2746,13 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 x = x->next;
                 alpha->next = NULL;
             } else if (x->left != y->left) {
-                alpha = msp_alloc_segment(self, x->left, y->left, x->left_mass,
-                    y->left_mass, x->value, x->population, x->label, NULL, NULL);
+                alpha = msp_alloc_segment(self, x->left, y->left, x->value,
+                    x->population, x->label, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
                 }
                 x->left = y->left;
-                x->left_mass = y->left_mass;
             } else {
                 l = x->left;
                 r_max = GSL_MIN(x->right, y->right);
@@ -2903,10 +2802,8 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                         nm = (node_mapping_t *) node->item;
                         r = nm->position;
                     }
-                    alpha = msp_alloc_segment(self, l, r,
-                        rate_map_position_to_mass(&self->recomb_map, l),
-                        rate_map_position_to_mass(&self->recomb_map, r), v,
-                        population_id, label, NULL, NULL);
+                    alpha = msp_alloc_segment(
+                        self, l, r, v, population_id, label, NULL, NULL);
                     if (alpha == NULL) {
                         ret = MSP_ERR_NO_MEMORY;
                         goto out;
@@ -2927,14 +2824,14 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                     x = x->next;
                     msp_free_segment(self, beta);
                 } else {
-                    msp_set_segment_left_endpoint(self, x, r);
+                    x->left = r;
                 }
                 if (y->right == r) {
                     beta = y;
                     y = y->next;
                     msp_free_segment(self, beta);
                 } else {
-                    msp_set_segment_left_endpoint(self, y, r);
+                    y->left = r;
                 }
             }
         }
@@ -2944,7 +2841,6 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 if (ret != 0) {
                     goto out;
                 }
-                msp_set_single_segment_mass(self, alpha);
             } else {
                 if (self->store_full_arg) {
                     // we pre-empt the fact that values will be set equal later
@@ -2955,9 +2851,9 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 }
                 assert(z->right <= alpha->left);
                 z->next = alpha;
-                msp_set_segment_mass(self, alpha, z);
             }
             alpha->prev = z;
+            msp_set_segment_mass(self, alpha);
             z = alpha;
         }
     }
@@ -3035,7 +2931,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     bool set_merged = false;
     tsk_id_t v;
     uint32_t j, h;
-    double l, r, r_max, next_l, next_l_mass, l_min;
+    double l, r, r_max, next_l, l_min;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *z, *alpha;
@@ -3065,21 +2961,19 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         next_l = 0;
         if (node != NULL) {
             next_l = ((segment_t *) node->item)->left;
-            next_l_mass = ((segment_t *) node->item)->left_mass;
             r_max = GSL_MIN(r_max, next_l);
         }
         alpha = NULL;
         if (h == 1) {
             x = H[0];
             if (node != NULL && next_l < x->right) {
-                alpha = msp_alloc_segment(self, x->left, next_l, x->left_mass,
-                    next_l_mass, x->value, x->population, x->label, NULL, NULL);
+                alpha = msp_alloc_segment(self, x->left, next_l, x->value, x->population,
+                    x->label, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
                 }
                 x->left = next_l;
-                x->left_mass = next_l_mass;
             } else {
                 alpha = x;
                 x = x->next;
@@ -3139,10 +3033,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     nm = (node_mapping_t *) node->item;
                     r = nm->position;
                 }
-                alpha = msp_alloc_segment(self, l, r,
-                    rate_map_position_to_mass(&self->recomb_map, l),
-                    rate_map_position_to_mass(&self->recomb_map, r), v, population_id,
-                    label, NULL, NULL);
+                alpha
+                    = msp_alloc_segment(self, l, r, v, population_id, label, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -3160,7 +3052,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     msp_free_segment(self, x);
                     x = x->next;
                 } else if (x->right > r) {
-                    msp_set_segment_left_endpoint(self, x, r);
+                    x->left = r;
                 }
                 if (x != NULL) {
                     ret = msp_priority_queue_insert(self, Q, x);
@@ -3182,7 +3074,6 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         /* Loop tail; integrate alpha into the global state */
         if (alpha != NULL) {
             if (z == NULL) {
-                msp_set_single_segment_mass(self, alpha);
                 /* Pedigree doesn't currently track lineages in Populations, so
                    keep reference to merged segments instead */
                 if (self->pedigree != NULL
@@ -3205,9 +3096,9 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                         |= z->right == alpha->left && z->value == alpha->value;
                 }
                 z->next = alpha;
-                msp_set_segment_mass(self, alpha, z);
             }
             alpha->prev = z;
+            msp_set_segment_mass(self, alpha);
             z = alpha;
         }
     }
@@ -3314,10 +3205,7 @@ msp_insert_sample(msp_t *self, tsk_id_t sample, population_id_t population)
         ret = MSP_ERR_BAD_SAMPLES;
         goto out;
     }
-
-    u = msp_alloc_segment(self, 0, seq_len, 0,
-        rate_map_position_to_mass(&self->recomb_map, seq_len), sample, population, 0,
-        NULL, NULL);
+    u = msp_alloc_segment(self, 0, seq_len, sample, population, 0, NULL, NULL);
     if (u == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -3326,7 +3214,7 @@ msp_insert_sample(msp_t *self, tsk_id_t sample, population_id_t population)
     if (ret != 0) {
         goto out;
     }
-    msp_set_single_segment_mass(self, u);
+    msp_set_segment_mass(self, u);
 out:
     return ret;
 }
@@ -3352,10 +3240,8 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree, double left, double ri
             goto out;
         }
         if (root_segments_head[root] == NULL) {
-            seg = msp_alloc_segment(self, left, right,
-                rate_map_position_to_mass(&self->recomb_map, left),
-                rate_map_position_to_mass(&self->recomb_map, right), root, population,
-                label, NULL, NULL);
+            seg = msp_alloc_segment(
+                self, left, right, root, population, label, NULL, NULL);
             if (seg == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -3366,12 +3252,9 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree, double left, double ri
             tail = root_segments_tail[root];
             if (tail->right == left) {
                 tail->right = right;
-                tail->right_mass = rate_map_position_to_mass(&self->recomb_map, right);
             } else {
-                seg = msp_alloc_segment(self, left, right,
-                    rate_map_position_to_mass(&self->recomb_map, left),
-                    rate_map_position_to_mass(&self->recomb_map, right), root,
-                    population, label, tail, NULL);
+                seg = msp_alloc_segment(
+                    self, left, right, root, population, label, tail, NULL);
                 if (seg == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -3451,9 +3334,9 @@ msp_reset_from_ts(msp_t *self)
             if (ret != 0) {
                 goto out;
             }
-            msp_set_single_segment_mass(self, seg);
-            for (seg = seg->next; seg != NULL; seg = seg->next) {
-                msp_set_segment_mass(self, seg, seg->prev);
+            while (seg != NULL) {
+                msp_set_segment_mass(self, seg);
+                seg = seg->next;
             }
         }
     }
@@ -3844,6 +3727,41 @@ out:
     return ret;
 }
 
+static int MSP_WARN_UNUSED
+msp_sample_waiting_time(msp_t *self, fenwick_t *mass_index, double *ret_t_wait)
+{
+    int ret = 0;
+    double total_mass, t_wait, lambda;
+
+    /* In very large simulations, the fenwick tree used as an indexing
+     * structure for genomic segments will experience some numerical
+     * drift, where the indexed values diverge from the true values
+     * associated with segments. We ensure that this drift does not
+     * become too large by rebuilding the indexing structure every
+     * now and again. The 1e-12 threshold is the result of some
+     * experimentation, and seems to give a good bound on error
+     * without being triggered too often. */
+    if (fenwick_get_numerical_drift(mass_index) > 1e-12) {
+        fenwick_rebuild(mass_index);
+        self->num_fenwick_rebuilds++;
+    }
+
+    total_mass = fenwick_get_total(mass_index);
+    if (!isfinite(total_mass)) {
+        ret = MSP_ERR_BREAKPOINT_MASS_NON_FINITE;
+        goto out;
+    }
+    lambda = total_mass;
+    t_wait = DBL_MAX;
+    if (lambda > 0.0) {
+        t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
+    }
+
+    *ret_t_wait = t_wait;
+out:
+    return ret;
+}
+
 /* The main event loop for continuous time coalescent models. Runs until either
  * coalescence; or the time of a simulated event would have exceeded the
  * specified max_time; or for a specified number of events. The num_events
@@ -3863,9 +3781,8 @@ static int MSP_WARN_UNUSED
 msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
-    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, gc_in_t_wait, gc_left_t_wait,
-        mig_t_wait, sampling_event_time, demographic_event_time;
-    double recomb_mass, total_recomb_rate;
+    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, gc_t_wait, mig_t_wait,
+        sampling_event_time, demographic_event_time;
     uint32_t n;
     tsk_id_t i, pop_id, pop_id_j, pop_id_k, ca_pop_id, mig_source_pop, mig_dest_pop;
     const tsk_id_t N = (tsk_id_t) self->num_populations;
@@ -3887,64 +3804,16 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             break;
         }
         events++;
-        /* In very large simulations, the fenwick tree used as an indexing
-         * structure for genomic segments will experience some numerical
-         * drift, where the indexed values diverge from the true values
-         * associated with segments. We ensure that this drift does not
-         * become too large by rebuilding the indexing structure every
-         * now and again. The 1e-12 threshold is the result of some
-         * experimentation, and seems to give a good bound on error
-         * without being triggered too often. */
-        if (fenwick_get_numerical_drift(&self->links[label]) > 1e-12) {
-            fenwick_rebuild(&self->links[label]);
-            self->num_fenwick_rebuilds++;
-        }
 
-        recomb_mass = fenwick_get_total(&self->links[label]);
-        if (!isfinite(recomb_mass)) {
-            ret = MSP_ERR_BREAKPOINT_MASS_NON_FINITE;
+        /* Recombination */
+        ret = msp_sample_waiting_time(self, &self->recomb_mass_index[label], &re_t_wait);
+        if (ret != 0) {
             goto out;
         }
-        /* Recombination */
-        lambda = recomb_mass;
-        re_t_wait = DBL_MAX;
-        if (lambda > 0.0) { /* fenwick_get_total sometimes returns -0.0 */
-            re_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
-        }
-
-        gc_in_t_wait = DBL_MAX;
-        gc_left_t_wait = DBL_MAX;
-        /* For now, don't compute the GC rates if 0 to avoid slowing down other
-         * simulations */
-        if (self->gene_conversion_rate > 0) {
-            /* Gene conversion within segments */
-            if (recomb_mass > 0.0) {
-                lambda = rate_map_mass_to_position(&self->recomb_map, recomb_mass)
-                         * self->gene_conversion_rate;
-            } else {
-                total_recomb_rate = rate_map_get_total_mass(&self->recomb_map);
-                if (total_recomb_rate == 0.0) {
-                    /* FIXME */
-                    printf("recombination rate zero and gene conversion rate > 0 "
-                           "currently not supported\n");
-                    ret = MSP_ERR_GENERIC;
-                    goto out;
-                } else {
-                    lambda = 0.0;
-                }
-            }
-            gc_in_t_wait = DBL_MAX;
-            if (lambda != 0.0) {
-                gc_in_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
-            }
-
-            /* Gene conversion to the left of initial segments */
-            gc_left_t_wait = DBL_MAX;
-            lambda = msp_get_cleft_total(self) * self->gene_conversion_rate
-                     * self->gene_conversion_track_length;
-            if (lambda != 0.0) {
-                gc_left_t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
-            }
+        /* Gene conversion */
+        ret = msp_sample_waiting_time(self, &self->gc_mass_index[label], &gc_t_wait);
+        if (ret != 0) {
+            goto out;
         }
 
         /* Common ancestors */
@@ -3988,9 +3857,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             }
         }
 
-        t_wait = GSL_MIN(
-            mig_t_wait, GSL_MIN(gc_in_t_wait,
-                            GSL_MIN(gc_left_t_wait, GSL_MIN(re_t_wait, ca_t_wait))));
+        t_wait = GSL_MIN(mig_t_wait, GSL_MIN(gc_t_wait, GSL_MIN(re_t_wait, ca_t_wait)));
         if (self->next_demographic_event == NULL
             && self->next_sampling_event == self->num_sampling_events
             && t_wait == DBL_MAX) {
@@ -4060,10 +3927,8 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             self->time = t_temp;
             if (re_t_wait == t_wait) {
                 ret = msp_recombination_event(self, label, NULL, NULL);
-            } else if (gc_in_t_wait == t_wait) {
-                ret = msp_gene_conversion_within_event(self, label);
-            } else if (gc_left_t_wait == t_wait) {
-                ret = msp_gene_conversion_left_event(self, label);
+            } else if (gc_t_wait == t_wait) {
+                ret = msp_gene_conversion_event(self, label);
             } else if (ca_t_wait == t_wait) {
                 ret = self->common_ancestor_event(self, ca_pop_id, label);
                 if (ret == 1) {
@@ -4743,7 +4608,7 @@ msp_run_sweep(msp_t *self)
         /* Set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
             label = (label_id_t) j;
-            recomb_mass = fenwick_get_total(&self->links[label]);
+            recomb_mass = fenwick_get_total(&self->recomb_mass_index[label]);
             sweep_pop_sizes[j] = avl_count(&self->populations[0].ancestors[label]);
             rec_rates[j] = recomb_mass;
         }
@@ -5288,12 +5153,6 @@ double
 msp_get_time(msp_t *self)
 {
     return self->time;
-}
-
-double
-msp_get_gene_conversion_rate(msp_t *self)
-{
-    return self->gene_conversion_rate;
 }
 
 /* Demographic events. All times and input parameters are specified in units
@@ -6592,7 +6451,7 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     simulation_model_t *model = &self->model;
     genic_selection_trajectory_t *trajectory
         = &model->params.sweep.trajectory_params.genic_selection_trajectory;
-    double L = rate_map_get_sequence_length(&self->recomb_map);
+    double L = self->sequence_length;
 
     /* Check the inputs to make sure they make sense */
     if (position < 0 || position >= L) {

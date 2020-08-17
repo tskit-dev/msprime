@@ -348,7 +348,8 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
 
     // To mimic the verfication.py call
     msp_set_discrete_genome(&msp, 0);
-    msp_set_gene_conversion_rate(&msp, 0, 1);
+    msp_set_gene_conversion_rate(&msp, 0);
+    msp_set_gene_conversion_track_length(&msp, 1);
     msp_set_avl_node_block_size(&msp, 65536);
     msp_set_node_mapping_block_size(&msp, 65536);
     msp_set_segment_block_size(&msp, 65536);
