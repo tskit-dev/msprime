@@ -300,7 +300,6 @@ class TestBuildObjects(unittest.TestCase):
             decoded.parameters.model["__class__"], "msprime.mutations.JukesCantor"
         )
 
-    @unittest.skip("FIXME RateMap not roundrtipping")
     def test_mutate_map(self):
         ts = msprime.simulate(5, random_seed=1)
         rate_map = msprime.RateMap(position=[0, 0.5, 1], rate=[0, 1])
@@ -311,8 +310,12 @@ class TestBuildObjects(unittest.TestCase):
         self.assertEqual(
             decoded.parameters.rate["__class__"], "msprime.intervals.RateMap"
         )
-        self.assertEqual(decoded.parameters.rate["position"], rate_map.position)
-        self.assertEqual(decoded.parameters.rate["rate"], rate_map.rate)
+        self.assertEqual(
+            decoded.parameters.rate["position"]["__ndarray__"], list(rate_map.position)
+        )
+        self.assertEqual(
+            decoded.parameters.rate["rate"]["__ndarray__"], list(rate_map.rate)
+        )
 
     def test_mutate_numpy(self):
         ts = msprime.simulate(5, random_seed=1)
@@ -448,6 +451,12 @@ class TestMutateRoundTrip(TestRoundTrip):
         ts = msprime.mutate(
             ts, rate=2, random_seed=1, start_time=0, end_time=100, keep=False
         )
+        self.verify(ts)
+
+    def test_mutate_rate_map(self):
+        ts = msprime.simulate(5, random_seed=1)
+        rate_map = msprime.RateMap(position=[0, 0.5, 1], rate=[0, 1])
+        ts = msprime.mutate(ts, rate=rate_map)
         self.verify(ts)
 
 
