@@ -964,8 +964,6 @@ class TestDemographyTrajectories(unittest.TestCase):
         ddb = self.one_pop_example()
         steps = np.array([1000000 * k for k in range(1, 4)])
         rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2])
-        print(rates)
-        print(P)
         for rA, pA in zip(rates, P):
             self.assertTrue(np.isnan(rA))
             self.assertEqual(pA, 0)
@@ -2533,10 +2531,11 @@ class HistoricalSamplingMixin:
                 Ne=N,
                 model=self.model,
                 recombination_map=msprime.RecombinationMap.uniform_map(
-                    length=1, rate=recombination_rate, discrete=True
+                    length=1, rate=recombination_rate,
                 ),
                 samples=[msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
                 random_seed=3,
+                discrete_genome=True,
             )
             for t in ts.trees():
                 self.assertEqual(t.get_time(0), 0)

@@ -31,7 +31,6 @@ import tskit
 
 import _msprime
 import msprime
-from . import mutations
 
 
 def set_sigpipe_handler():
@@ -184,7 +183,7 @@ def hotspots_to_recomb_map(hotspots, background_rate, seq_length):
         positions.append(seq_length)
         rates.append(0)
 
-    return msprime.RecombinationMap(positions, rates, discrete=True)
+    return msprime.RecombinationMap(positions, rates)
 
 
 class SimulationRunner:
@@ -217,7 +216,7 @@ class SimulationRunner:
         # For strict ms-compability we want to have m non-recombining loci
         if hotspots is None:
             self._recomb_map = msprime.RecombinationMap.uniform_map(
-                num_loci, self._recombination_rate, discrete=True
+                num_loci, self._recombination_rate
             )
         else:
             self._recomb_map = hotspots_to_recomb_map(
@@ -250,13 +249,11 @@ class SimulationRunner:
             gene_conversion_rate=scaled_gene_conversion_rate,
             gene_conversion_track_length=gene_conversion_track_length,
             random_generator=self._random_generator,
+            discrete_genome=True,
         )
 
         self._precision = precision
         self._print_trees = print_trees
-        self._mutation_generator = mutations._simple_mutation_generator(
-            self._mutation_rate, self._simulator.sequence_length, self._random_generator
-        )
 
     def get_num_replicates(self):
         """
@@ -317,9 +314,10 @@ class SimulationRunner:
         # The first line of ms's output is the command line.
         print(" ".join(sys.argv), file=output)
         print(" ".join(str(s) for s in self._ms_random_seeds), file=output)
-        for _ in range(self._num_replicates):
-            self._simulator.run()
-            tree_sequence = self._simulator.get_tree_sequence(self._mutation_generator)
+        replicates = self._simulator.run_replicates(
+            self._num_replicates, mutation_rate=self._mutation_rate
+        )
+        for tree_sequence in replicates:
             print(file=output)
             print("//", file=output)
             if self._print_trees:

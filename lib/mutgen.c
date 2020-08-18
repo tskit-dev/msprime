@@ -748,7 +748,7 @@ mutgen_print_state(mutgen_t *self, FILE *out)
 
     fprintf(out, "Mutgen state\n");
     fprintf(out, "\trate_map:\n");
-    interval_map_print_state(self->rate_map, out);
+    rate_map_print_state(&self->rate_map, out);
     fprintf(out, "\tstart_time = %f\n", self->start_time);
     fprintf(out, "\tend_time = %f\n", self->end_time);
     fprintf(out, "\tmodel:\n");
@@ -772,37 +772,31 @@ mutgen_print_state(mutgen_t *self, FILE *out)
 }
 
 int MSP_WARN_UNUSED
-mutgen_alloc(mutgen_t *self, gsl_rng *rng, interval_map_t *rate_map,
+mutgen_alloc(mutgen_t *self, gsl_rng *rng, tsk_table_collection_t *tables,
     mutation_model_t *model, size_t block_size)
 {
     int ret = 0;
-    size_t j;
 
-    assert(rng != NULL);
     memset(self, 0, sizeof(mutgen_t));
+    if (rng == NULL || tables == NULL || model == NULL) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
     self->rng = rng;
-    self->rate_map = rate_map;
+    self->tables = tables;
     self->model = model;
     self->start_time = -DBL_MAX;
     self->end_time = DBL_MAX;
     self->block_size = block_size;
 
-    avl_init_tree(&self->sites, cmp_site, NULL);
-    if (block_size == 0) {
-        block_size = 8192;
-    }
-    /* In practice this is the minimum we can support */
-    block_size = GSL_MAX(block_size, 128);
-    ret = tsk_blkalloc_init(&self->allocator, block_size);
-    if (ret != 0) {
-        ret = msp_set_tsk_error(ret);
+    if (tables->sequence_length <= 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    for (j = 0; j < rate_map->size - 1; j++) {
-        if (rate_map->value[j] < 0) {
-            ret = MSP_ERR_BAD_MUTATION_MAP_RATE;
-            goto out;
-        }
+    avl_init_tree(&self->sites, cmp_site, NULL);
+    ret = mutgen_set_rate(self, 0);
+    if (ret != 0) {
+        goto out;
     }
 out:
     return ret;
@@ -812,6 +806,7 @@ int
 mutgen_free(mutgen_t *self)
 {
     tsk_blkalloc_free(&self->allocator);
+    rate_map_free(&self->rate_map);
     return 0;
 }
 
@@ -830,8 +825,35 @@ out:
     return ret;
 }
 
+int
+mutgen_set_rate_map(mutgen_t *self, size_t size, double *position, double *rate)
+{
+    int ret = 0;
+
+    rate_map_free(&self->rate_map);
+
+    ret = rate_map_alloc(&self->rate_map, size, position, rate);
+    if (ret != 0) {
+        goto out;
+    }
+    if (rate_map_get_sequence_length(&self->rate_map) != self->tables->sequence_length) {
+        ret = MSP_ERR_INCOMPATIBLE_MUTATION_MAP;
+        goto out;
+    }
+out:
+    return ret;
+}
+
+/* Short-cut for mutgen_set_recombination_map can be used in testing. */
+int
+mutgen_set_rate(mutgen_t *self, double rate)
+{
+    double position[] = { 0, self->tables->sequence_length };
+    return mutgen_set_rate_map(self, 1, position, &rate);
+}
+
 static int MSP_WARN_UNUSED
-mutgen_init_allocator(mutgen_t *self, tsk_table_collection_t *tables)
+mutgen_init_allocator(mutgen_t *self)
 {
     int ret = -1;
 
@@ -849,13 +871,15 @@ mutgen_init_allocator(mutgen_t *self, tsk_table_collection_t *tables)
      * to chunk size (probably wrongly).
      */
     self->block_size
-        = GSL_MAX(self->block_size, 1 + tables->sites.ancestral_state_length);
-    self->block_size = GSL_MAX(self->block_size, 1 + tables->sites.metadata_length);
+        = GSL_MAX(self->block_size, 1 + self->tables->sites.ancestral_state_length);
     self->block_size
-        = GSL_MAX(self->block_size, 1 + tables->mutations.derived_state_length);
-    self->block_size = GSL_MAX(self->block_size, 1 + tables->mutations.metadata_length);
+        = GSL_MAX(self->block_size, 1 + self->tables->sites.metadata_length);
+    self->block_size
+        = GSL_MAX(self->block_size, 1 + self->tables->mutations.derived_state_length);
+    self->block_size
+        = GSL_MAX(self->block_size, 1 + self->tables->mutations.metadata_length);
     self->block_size = GSL_MAX(
-        self->block_size, (1 + tables->mutations.num_rows) * sizeof(mutation_t));
+        self->block_size, (1 + self->tables->mutations.num_rows) * sizeof(mutation_t));
     ret = tsk_blkalloc_init(&self->allocator, self->block_size);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
@@ -983,12 +1007,12 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_initialise_sites(mutgen_t *self, tsk_table_collection_t *tables)
+mutgen_initialise_sites(mutgen_t *self)
 {
     int ret = 0;
-    tsk_site_table_t *sites = &tables->sites;
-    tsk_mutation_table_t *mutations = &tables->mutations;
-    tsk_node_table_t *nodes = &tables->nodes;
+    tsk_site_table_t *sites = &self->tables->sites;
+    tsk_mutation_table_t *mutations = &self->tables->mutations;
+    tsk_node_table_t *nodes = &self->tables->nodes;
     tsk_id_t site_id;
     site_t *site;
     char *state, *metadata;
@@ -1032,10 +1056,11 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_populate_tables(
-    mutgen_t *self, tsk_site_table_t *sites, tsk_mutation_table_t *mutations)
+mutgen_populate_tables(mutgen_t *self)
 {
     int ret = 0;
+    tsk_site_table_t *sites = &self->tables->sites;
+    tsk_mutation_table_t *mutations = &self->tables->mutations;
     tsk_id_t site_id, mutation_id, parent_id;
     avl_node_t *a;
     site_t *site;
@@ -1082,8 +1107,7 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_place_mutations(
-    mutgen_t *self, tsk_table_collection_t *tables, bool discrete_sites)
+mutgen_place_mutations(mutgen_t *self, bool discrete_sites)
 {
     /* The mutation model for discrete sites is that there is
      * a unit of "mutation mass" on each integer, so that
@@ -1091,33 +1115,33 @@ mutgen_place_mutations(
      * integers {ceil(left), ceil(left) + 1, ..., ceil(right) - 1},
      * and the total mutation "length" is ceil(right) - ceil(left). */
     int ret = 0;
-    const double *map_position = self->rate_map->position;
-    const double *map_rate = self->rate_map->value;
+    const double *map_position = self->rate_map.position;
+    const double *map_rate = self->rate_map.rate;
     size_t branch_mutations, map_index;
     size_t j, k;
-    tsk_node_table_t *nodes = &tables->nodes;
-    tsk_edge_table_t *edges = &tables->edges;
+    const tsk_node_table_t nodes = self->tables->nodes;
+    const tsk_edge_table_t edges = self->tables->edges;
+    const double start_time = self->start_time;
+    const double end_time = self->end_time;
     double left, right, site_left, site_right, edge_right;
     double time, mu, position;
     double branch_start, branch_end, branch_length;
     node_id_t parent, child;
     avl_node_t *avl_node;
     site_t *site;
-    double start_time = self->start_time;
-    double end_time = self->end_time;
     site_t search;
 
-    for (j = 0; j < edges->num_rows; j++) {
-        left = edges->left[j];
-        edge_right = edges->right[j];
-        parent = edges->parent[j];
-        child = edges->child[j];
-        assert(child >= 0 && child < (node_id_t) nodes->num_rows);
-        branch_start = GSL_MAX(start_time, nodes->time[child]);
-        branch_end = GSL_MIN(end_time, nodes->time[parent]);
+    for (j = 0; j < edges.num_rows; j++) {
+        left = edges.left[j];
+        edge_right = edges.right[j];
+        parent = edges.parent[j];
+        child = edges.child[j];
+        assert(child >= 0 && child < (node_id_t) nodes.num_rows);
+        branch_start = GSL_MAX(start_time, nodes.time[child]);
+        branch_end = GSL_MIN(end_time, nodes.time[parent]);
         branch_length = branch_end - branch_start;
 
-        map_index = interval_map_get_index(self->rate_map, left);
+        map_index = rate_map_get_index(&self->rate_map, left);
         right = 0;
         while (right != edge_right) {
             right = GSL_MIN(edge_right, map_position[map_index + 1]);
@@ -1242,17 +1266,18 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_apply_mutations(mutgen_t *self, tsk_table_collection_t *tables)
+mutgen_apply_mutations(mutgen_t *self)
 {
     int ret = 0;
     const tsk_id_t *I, *O;
-    const tsk_edge_table_t edges = tables->edges;
-    const tsk_node_table_t nodes = tables->nodes;
+    const tsk_edge_table_t edges = self->tables->edges;
+    const tsk_node_table_t nodes = self->tables->nodes;
     const tsk_id_t M = (tsk_id_t) edges.num_rows;
     tsk_id_t tj, tk;
     tsk_id_t *parent = NULL;
     mutation_t **bottom_mutation = NULL;
     double left, right;
+    const double sequence_length = self->tables->sequence_length;
     avl_node_t *avl_node;
     site_t *site;
 
@@ -1265,20 +1290,20 @@ mutgen_apply_mutations(mutgen_t *self, tsk_table_collection_t *tables)
     memset(parent, 0xff, nodes.num_rows * sizeof(*parent));
     memset(bottom_mutation, 0, nodes.num_rows * sizeof(*bottom_mutation));
 
-    if (!tsk_table_collection_has_index(tables, 0)) {
-        ret = tsk_table_collection_build_index(tables, 0);
+    if (!tsk_table_collection_has_index(self->tables, 0)) {
+        ret = tsk_table_collection_build_index(self->tables, 0);
         if (ret != 0) {
             goto out;
         }
     }
 
-    I = tables->indexes.edge_insertion_order;
-    O = tables->indexes.edge_removal_order;
+    I = self->tables->indexes.edge_insertion_order;
+    O = self->tables->indexes.edge_removal_order;
     tj = 0;
     tk = 0;
     left = 0;
     avl_node = self->sites.head;
-    while (tj < M || left < tables->sequence_length) {
+    while (tj < M || left < sequence_length) {
         while (tk < M && edges.right[O[tk]] == left) {
             parent[edges.child[O[tk]]] = TSK_NULL;
             tk++;
@@ -1287,7 +1312,7 @@ mutgen_apply_mutations(mutgen_t *self, tsk_table_collection_t *tables)
             parent[edges.child[I[tj]]] = edges.parent[I[tj]];
             tj++;
         }
-        right = tables->sequence_length;
+        right = sequence_length;
         if (tj < M) {
             right = TSK_MIN(right, edges.left[I[tj]]);
         }
@@ -1319,50 +1344,46 @@ out:
 }
 
 int MSP_WARN_UNUSED
-mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags)
+mutgen_generate(mutgen_t *self, int flags)
 {
     int ret = 0;
     bool discrete_sites = flags & MSP_DISCRETE_SITES;
 
     avl_clear_tree(&self->sites);
 
-    ret = mutgen_init_allocator(self, tables);
+    ret = mutgen_init_allocator(self);
     if (ret != 0) {
         goto out;
     }
-    ret = tsk_table_collection_check_integrity(tables, TSK_CHECK_OFFSETS);
+    ret = tsk_table_collection_check_integrity(self->tables, TSK_CHECK_OFFSETS);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
     }
-    if (interval_map_get_sequence_length(self->rate_map) != tables->sequence_length) {
-        ret = MSP_ERR_INCOMPATIBLE_MUTATION_MAP;
-        goto out;
-    }
     if (flags & MSP_KEEP_SITES) {
-        ret = mutgen_initialise_sites(self, tables);
+        ret = mutgen_initialise_sites(self);
         if (ret != 0) {
             goto out;
         }
     }
 
-    ret = tsk_site_table_clear(&tables->sites);
+    ret = tsk_site_table_clear(&self->tables->sites);
     if (ret != 0) {
         goto out;
     }
-    ret = tsk_mutation_table_clear(&tables->mutations);
+    ret = tsk_mutation_table_clear(&self->tables->mutations);
     if (ret != 0) {
         goto out;
     }
-    ret = mutgen_place_mutations(self, tables, discrete_sites);
+    ret = mutgen_place_mutations(self, discrete_sites);
     if (ret != 0) {
         goto out;
     }
-    ret = mutgen_apply_mutations(self, tables);
+    ret = mutgen_apply_mutations(self);
     if (ret != 0) {
         goto out;
     }
-    ret = mutgen_populate_tables(self, &tables->sites, &tables->mutations);
+    ret = mutgen_populate_tables(self);
     if (ret != 0) {
         goto out;
     }

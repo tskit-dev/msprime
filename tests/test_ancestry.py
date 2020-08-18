@@ -22,9 +22,7 @@ Test cases for basic ancestry simulation operations.
 import datetime
 import json
 import logging
-import os
 import random
-import tempfile
 import unittest
 import warnings
 
@@ -78,7 +76,7 @@ class TestFullArg(unittest.TestCase):
 
     def verify(self, sim, multiple_mergers=False):
         sim.run()
-        tree_sequence = sim.get_tree_sequence()
+        tree_sequence = next(sim.run_replicates(1))
         # Check if we have multiple merger somewhere.
         found = False
         for edgeset in tree_sequence.edgesets():
@@ -175,10 +173,10 @@ class TestSimulator(unittest.TestCase):
         """
         Verifies a simulation for the specified parameters.
         """
-        recomb_map = msprime.RecombinationMap.uniform_map(m, r, discrete=True)
+        recomb_map = msprime.RecombinationMap.uniform_map(m, r)
         rng = _msprime.RandomGenerator(1)
         sim = msprime.simulator_factory(
-            n, recombination_map=recomb_map, random_generator=rng
+            n, recombination_map=recomb_map, random_generator=rng, discrete_genome=True,
         )
         self.assertEqual(sim.random_generator, rng)
         sim.run()
@@ -187,7 +185,7 @@ class TestSimulator(unittest.TestCase):
         self.assertGreater(sim.num_avl_node_blocks, 0)
         self.assertGreater(sim.num_segment_blocks, 0)
         self.assertGreater(sim.num_node_mapping_blocks, 0)
-        tree_sequence = sim.get_tree_sequence()
+        tree_sequence = next(sim.run_replicates(1))
         t = 0.0
         for record in tree_sequence.nodes():
             if record.time > t:
@@ -531,9 +529,10 @@ class TestSimulatorFactory(unittest.TestCase):
             self.assertRaises(ValueError, f, bad_value)
         for rate in [0, 1e-3, 10]:
             sim = f(rate)
-            recomb_map = sim.recombination_map
-            self.assertEqual(recomb_map.get_positions(), [0, 1], [rate, 0])
-            self.assertEqual(sim.sequence_length, recomb_map.get_sequence_length())
+            recomb_map = msprime.RateMap(**sim.recombination_map)
+            self.assertEqual(list(recomb_map.position), [0, 1])
+            self.assertEqual(list(recomb_map.rate), [rate])
+            self.assertEqual(sim.sequence_length, recomb_map.sequence_length)
 
     def test_recombination_map(self):
         def f(recomb_map):
@@ -542,13 +541,21 @@ class TestSimulatorFactory(unittest.TestCase):
         self.assertRaises(TypeError, f, "wrong type")
         for n in range(2, 10):
             positions = list(range(n))
-            rates = [0.1 * j for j in range(n - 1)] + [0.0]
-            recomb_map = msprime.RecombinationMap(positions, rates)
+            rates = [0.1 * j for j in range(n - 1)]
+            # Use the old-form RecombinationMap
+            recomb_map = msprime.RecombinationMap(positions, rates + [0.0])
             sim = msprime.simulator_factory(10, recombination_map=recomb_map)
-            self.assertEqual(sim.recombination_map, recomb_map)
-            self.assertEqual(recomb_map.get_positions(), positions)
-            self.assertEqual(recomb_map.get_rates(), rates)
-            self.assertEqual(sim.sequence_length, recomb_map.get_sequence_length())
+            other_map = msprime.RateMap(**sim.recombination_map)
+            self.assertEqual(list(other_map.position), positions)
+            self.assertEqual(list(other_map.rate), rates)
+            self.assertEqual(sim.sequence_length, other_map.sequence_length)
+            # Use the new-form RateMap
+            rate_map = msprime.RateMap(positions, rates)
+            sim = msprime.simulator_factory(10, recombination_map=rate_map)
+            other_map = msprime.RateMap(**sim.recombination_map)
+            self.assertEqual(list(other_map.position), positions)
+            self.assertEqual(list(other_map.rate), rates)
+            self.assertEqual(sim.sequence_length, other_map.sequence_length)
 
     def test_combining_recomb_map_and_rate_length(self):
         recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
@@ -727,12 +734,6 @@ class TestSimulateInterface(unittest.TestCase):
         with self.assertRaises(TypeError):
             msprime.simulate(2, 100)
 
-    def test_discrete_genome_recombination_map(self):
-        # Cannot specify discrete_genome and recombination_map at once
-        recomb_map = msprime.RecombinationMap.uniform_map(10, 0.1)
-        with self.assertRaises(ValueError):
-            msprime.simulate(10, discrete_genome=True, recombination_map=recomb_map)
-
     def test_discrete_genome_no_mutations(self):
         def run_sim(discrete_genome=None):
             return msprime.simulate(
@@ -872,17 +873,13 @@ class TestSimulateInterface(unittest.TestCase):
         self.assertGreater(ts.num_sites, 0)
 
     def test_mutation_generator_unsupported(self):
-        n = 10
-        mutgen = msprime.mutations._simple_mutation_generator(
-            1, 1, _msprime.RandomGenerator(1)
-        )
         with self.assertRaises(ValueError):
-            msprime.simulate(n, mutation_generator=mutgen)
+            msprime.simulate(10, mutation_generator="some non-None value")
 
     def test_mutation_interface(self):
-        for bad_type in [{}, self]:
+        for bad_type in [{}, [], self]:
             self.assertRaises(TypeError, msprime.simulate, 10, mutation_rate=bad_type)
-        for bad_value in ["x", [], [[], []]]:
+        for bad_value in ["x", "234x"]:
             self.assertRaises(ValueError, msprime.simulate, 10, mutation_rate=bad_value)
 
     def test_recombination(self):
@@ -899,22 +896,21 @@ class TestSimulateInterface(unittest.TestCase):
             n,
             gene_conversion_rate=1,
             gene_conversion_track_length=1,
-            recombination_map=msprime.RecombinationMap.uniform_map(
-                10, 1, discrete=True
-            ),
+            length=10,
+            recombination_rate=1,
+            discrete_genome=True,
         )
         self.assertIsInstance(ts, tskit.TreeSequence)
         self.assertEqual(ts.num_samples, n)
         self.assertGreater(ts.num_trees, 1)
 
     def test_gene_conversion_continuous(self):
-        rm = msprime.RecombinationMap.uniform_map(10, 1, discrete=False)
         with self.assertRaises(ValueError):
             msprime.simulate(
                 10,
                 gene_conversion_rate=1,
                 gene_conversion_track_length=1,
-                recombination_map=rm,
+                discrete_genome=False,
             )
 
     @unittest.skip("Cannot use GC with default recomb map")
@@ -962,76 +958,6 @@ class TestSimulateInterface(unittest.TestCase):
             "the replicate_index specified will be returned.",
             str(cm.exception),
         )
-
-
-class TestRecombinationMap(unittest.TestCase):
-    """
-    Tests for the RecombinationMap class.
-    """
-
-    # TODO these are incomplete.
-    def test_discrete(self):
-        for truthy in [True, False, {}, None, "ser"]:
-            rm = msprime.RecombinationMap.uniform_map(1, 0, discrete=truthy)
-            self.assertEqual(rm.discrete, bool(truthy))
-
-    def test_zero_recombination_map(self):
-        # test that beginning and trailing zero recombination regions in the
-        # recomb map are included in the sequence
-        for n in range(3, 10):
-            positions = list(range(n))
-            rates = [0.0, 0.2] + [0.0] * (n - 2)
-            recomb_map = msprime.RecombinationMap(positions, rates)
-            ts = msprime.simulate(10, recombination_map=recomb_map)
-            self.assertEqual(ts.sequence_length, n - 1)
-            self.assertEqual(min(ts.tables.edges.left), 0.0)
-            self.assertEqual(max(ts.tables.edges.right), n - 1.0)
-
-    def test_mean_recombination_rate(self):
-        # Some quick sanity checks.
-        recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
-        mean_rr = recomb_map.mean_recombination_rate
-        self.assertEqual(mean_rr, 1.0)
-
-        recomb_map = msprime.RecombinationMap([0, 1, 2], [1, 0, 0])
-        mean_rr = recomb_map.mean_recombination_rate
-        self.assertEqual(mean_rr, 0.5)
-
-        recomb_map = msprime.RecombinationMap([0, 1, 2], [0, 0, 0])
-        mean_rr = recomb_map.mean_recombination_rate
-        self.assertEqual(mean_rr, 0.0)
-
-        # Test mean_recombination_rate is correct after reading from
-        # a hapmap file. RecombinationMap.read_hapmap() ignores the cM
-        # field, so here we test against using the cM field directly.
-        def hapmap_rr(hapmap_file):
-            first_pos = 0
-            with open(hapmap_file) as f:
-                next(f)  # skip header
-                for line in f:
-                    pos, rate, cM = map(float, line.split()[1:4])
-                    if cM == 0:
-                        first_pos = pos
-            return cM / 100 / (pos - first_pos)
-
-        hapmap = """chr pos        rate                    cM
-                    1   4283592    3.79115663174456        0
-                    1   4361401    0.0664276817058413      0.294986106359414
-                    1   7979763   10.9082897515584         0.535345505591925
-                    1   8007051    0.0976780648822495      0.833010916332456
-                    1   8762788    0.0899929572085616      0.906829844052373
-                    1   9477943    0.0864382908650907      0.971188757364862
-                    1   9696341    4.76495005895746        0.990066707213216
-                    1   9752154    0.0864316558730679      1.25601286485381
-                    1   9881751    0.0                     1.26721414815999"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            hapfile = os.path.join(temp_dir, "hapmap.txt")
-            with open(hapfile, "w") as f:
-                f.write(hapmap)
-            recomb_map = msprime.RecombinationMap.read_hapmap(f.name)
-            mean_rr = recomb_map.mean_recombination_rate
-            mean_rr2 = hapmap_rr(hapfile)
-        self.assertAlmostEqual(mean_rr, mean_rr2, places=15)
 
 
 class TestReprRoundTrip(unittest.TestCase):

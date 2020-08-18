@@ -81,11 +81,11 @@
 #define MSP_ERR_BAD_PEDIGREE_ID                                     -40
 #define MSP_ERR_BAD_BETA_MODEL_ALPHA                                -41
 #define MSP_ERR_BAD_TRUNCATION_POINT                                -42
-#define MSP_ERR_BAD_MUTATION_MAP_RATE                               -43
+#define MSP_ERR_BAD_RATE_VALUE                                      -43
 #define MSP_ERR_INCOMPATIBLE_MUTATION_MAP                           -44
 #define MSP_ERR_INSUFFICIENT_INTERVALS                              -45
 #define MSP_ERR_INTERVAL_MAP_START_NON_ZERO                         -46
-#define MSP_ERR_NEGATIVE_INTERVAL_POSITION                          -47
+#define MSP_ERR_NONFINITE_INTERVAL_POSITION                         -47
 #define MSP_ERR_INTERVAL_POSITIONS_UNSORTED                         -48
 #define MSP_ERR_BAD_C                                               -49
 #define MSP_ERR_BAD_PSI                                             -50

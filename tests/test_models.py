@@ -505,11 +505,14 @@ class TestDtwf(unittest.TestCase):
         self.assertEqual(ts.num_trees, 1)
 
     def test_single_recombination(self):
-        recombination_map = msprime.RecombinationMap(
-            [0, 100, 101, 200], [0, 1, 0, 0], discrete=True
-        )
+        recombination_map = msprime.RecombinationMap([0, 100, 101, 200], [0, 1, 0, 0],)
         ts = msprime.simulate(
-            10, Ne=10, model="dtwf", random_seed=2, recombination_map=recombination_map
+            10,
+            Ne=10,
+            model="dtwf",
+            random_seed=2,
+            recombination_map=recombination_map,
+            discrete_genome=True,
         )
         self.assertEqual(ts.num_trees, 2)
         trees = ts.trees()

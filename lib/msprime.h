@@ -69,13 +69,6 @@ typedef tsk_id_t population_id_t;
 typedef tsk_id_t node_id_t;
 typedef tsk_id_t mutation_id_t;
 typedef tsk_id_t site_id_t;
-
-/* TODO int16 is surely fine, but it won't make the segment struct any smaller
- * because of alignment requirements. After tskit has been separarated,
- * we will probably want to make both population_id_t and label_id_t
- * int16_t, and then we'll reduce the size of the segment struct a
- * fair bit. It's not worth doing until then though.
- */
 typedef tsk_id_t label_id_t;
 
 typedef struct segment_t_t {
@@ -187,18 +180,11 @@ typedef struct _simulation_model_t {
 } simulation_model_t;
 
 typedef struct {
-    double *position;
-    double *value;
     size_t size;
-} interval_map_t;
-
-/* Recombination map */
-typedef struct {
-    interval_map_t map;
-    double total_recombination_rate;
-    double *cumulative;
-    bool discrete;
-} recomb_map_t;
+    double *position;
+    double *rate;
+    double *cumulative_mass;
+} rate_map_t;
 
 typedef struct _msp_t {
     gsl_rng *rng;
@@ -208,7 +194,8 @@ typedef struct _msp_t {
     bool store_full_arg;
     uint32_t num_samples;
     double sequence_length;
-    recomb_map_t recomb_map;
+    bool discrete_genome;
+    rate_map_t recomb_map;
     double gene_conversion_rate;
     double gene_conversion_track_length;
     uint32_t num_populations;
@@ -382,18 +369,18 @@ typedef struct _mutation_model_t {
 
 typedef struct {
     gsl_rng *rng;
-    interval_map_t *rate_map;
+    tsk_table_collection_t *tables;
     double start_time;
     double end_time;
     size_t block_size;
+    rate_map_t rate_map;
     avl_tree_t sites;
     tsk_blkalloc_t allocator;
     mutation_model_t *model;
 } mutgen_t;
 
 int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
-    recomb_map_t *recomb_map, tsk_table_collection_t *from_ts_tables, gsl_rng *rng);
-int msp_set_start_time(msp_t *self, double start_time);
+    tsk_table_collection_t *tables, gsl_rng *rng);
 int msp_set_simulation_model_hudson(msp_t *self);
 int msp_set_simulation_model_smc(msp_t *self);
 int msp_set_simulation_model_smc_prime(msp_t *self);
@@ -404,9 +391,13 @@ int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_p
 int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     double start_frequency, double end_frequency, double alpha, double dt);
 
+int msp_set_start_time(msp_t *self, double start_time);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
 int msp_set_ploidy(msp_t *self, uint32_t ploidy);
+int msp_set_recombination_map(msp_t *self, size_t size, double *position, double *rate);
+int msp_set_recombination_rate(msp_t *self, double rate);
+int msp_set_discrete_genome(msp_t *self, bool is_discrete);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels);
 int msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length);
@@ -429,7 +420,6 @@ int msp_add_instantaneous_bottleneck(
     msp_t *self, double time, int population_id, double strength);
 int msp_add_census_event(msp_t *self, double time);
 
-int alloc_individual(individual_t *ind, size_t ploidy);
 int msp_alloc_pedigree(msp_t *self, size_t num_inds, size_t ploidy);
 int msp_free_pedigree(msp_t *self);
 int msp_set_pedigree(msp_t *self, size_t num_rows, int *inds, int *parents,
@@ -488,42 +478,20 @@ size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
 size_t msp_get_num_gene_conversion_events(msp_t *self);
 
-int interval_map_alloc(
-    interval_map_t *self, size_t size, double *position, double *value);
-int interval_map_alloc_single(
-    interval_map_t *self, double sequence_length, double value);
-int interval_map_free(interval_map_t *self);
-void interval_map_print_state(interval_map_t *self, FILE *out);
-double interval_map_get_sequence_length(interval_map_t *self);
-size_t interval_map_get_size(interval_map_t *self);
-size_t interval_map_get_num_intervals(interval_map_t *self);
-size_t interval_map_get_index(interval_map_t *self, double x);
-
-typedef double (*msp_convert_func)(void *obj, double rate);
-
-int recomb_map_alloc_uniform(
-    recomb_map_t *self, double sequence_length, double rate, bool discrete);
-int recomb_map_alloc(
-    recomb_map_t *self, size_t size, double *position, double *rate, bool discrete);
-int recomb_map_copy(recomb_map_t *to, recomb_map_t *from);
-int recomb_map_free(recomb_map_t *self);
-double recomb_map_get_sequence_length(recomb_map_t *self);
-bool recomb_map_get_discrete(recomb_map_t *self);
-double recomb_map_get_total_recombination_rate(recomb_map_t *self);
-void recomb_map_convert_rates(recomb_map_t *self, msp_convert_func convert, void *obj);
-size_t recomb_map_get_size(recomb_map_t *self);
-int recomb_map_get_positions(recomb_map_t *self, double *positions);
-int recomb_map_get_rates(recomb_map_t *self, double *rates);
-
-void recomb_map_print_state(recomb_map_t *self, FILE *out);
-
-double recomb_map_mass_between_left_exclusive(
-    recomb_map_t *self, double left, double right);
-double recomb_map_mass_between(recomb_map_t *self, double left, double right);
-double recomb_map_mass_to_position(recomb_map_t *self, double mass);
-double recomb_map_position_to_mass(recomb_map_t *self, double position);
-double recomb_map_shift_by_mass(recomb_map_t *self, double pos, double mass);
-double recomb_map_sample_poisson(recomb_map_t *self, gsl_rng *rng, double start);
+int rate_map_alloc(rate_map_t *self, size_t size, double *position, double *value);
+int rate_map_alloc_single(rate_map_t *self, double sequence_length, double value);
+int rate_map_copy(rate_map_t *to, rate_map_t *from);
+int rate_map_free(rate_map_t *self);
+void rate_map_print_state(rate_map_t *self, FILE *out);
+double rate_map_get_sequence_length(rate_map_t *self);
+size_t rate_map_get_size(rate_map_t *self);
+size_t rate_map_get_num_intervals(rate_map_t *self);
+size_t rate_map_get_index(rate_map_t *self, double x);
+double rate_map_get_total_mass(rate_map_t *self);
+double rate_map_mass_between(rate_map_t *self, double left, double right);
+double rate_map_mass_to_position(rate_map_t *self, double mass);
+double rate_map_position_to_mass(rate_map_t *self, double position);
+double rate_map_shift_by_mass(rate_map_t *self, double pos, double mass);
 
 int matrix_mutation_model_factory(mutation_model_t *self, int model);
 int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
@@ -536,11 +504,13 @@ int infinite_alleles_mutation_model_alloc(
 int mutation_model_free(mutation_model_t *self);
 void mutation_model_print_state(mutation_model_t *self, FILE *out);
 
-int mutgen_alloc(mutgen_t *self, gsl_rng *rng, interval_map_t *rate_map,
+int mutgen_alloc(mutgen_t *self, gsl_rng *rng, tsk_table_collection_t *tables,
     mutation_model_t *model, size_t mutation_block_size);
 int mutgen_set_time_interval(mutgen_t *self, double start_time, double end_time);
+int mutgen_set_rate(mutgen_t *self, double rate);
+int mutgen_set_rate_map(mutgen_t *self, size_t size, double *position, double *rate);
 int mutgen_free(mutgen_t *self);
-int mutgen_generate(mutgen_t *self, tsk_table_collection_t *tables, int flags);
+int mutgen_generate(mutgen_t *self, int flags);
 void mutgen_print_state(mutgen_t *self, FILE *out);
 
 /* Functions exposed here for unit testing. Not part of public API. */

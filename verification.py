@@ -106,13 +106,6 @@ def flatten(l):
     return [x for sublist in l for x in sublist]
 
 
-def scale_breakpoints(df, factor):
-    def scale(points):
-        return [factor * x for x in points]
-
-    df["breakpoints"] = df["breakpoints"].map(scale)
-
-
 def harmonic_number(n):
     return np.sum(1 / np.arange(1, n + 1))
 
@@ -756,7 +749,7 @@ class DiscoalSweeps(DiscoalTest):
         logging.debug(f"sample sizes msp: {len(df['pi'])} discoal: {len(df_df['pi'])}")
         self._plot_stats("mutation", df, df_df, "msp", "discoal")
 
-    def test_sweep_ex1(self):
+    def _test_sweep_ex1(self):
         cmd = "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a 500 -x 0.5 -N 10000"
         self._run(cmd)
 
@@ -1248,13 +1241,13 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
         recombination_map = msprime.RecombinationMap(
             positions=[0, 100, 500, 900, 1200, 1500, 2000],
             rates=[0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
-            discrete=True,
         )
         self._run(
             sample_size=10,
             Ne=1000,
             recombination_map=recombination_map,
             num_replicates=300,
+            discrete_genome=True,
         )
 
     def test_dtwf_vs_coalescent_recomb_continuous_hotspots(self):
@@ -1265,23 +1258,24 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
         recombination_map = msprime.RecombinationMap(
             positions=[0, 0.1, 0.5, 0.9, 1.2, 1.5, 2.0],
             rates=[0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
-            discrete=False,
         )
         self._run(
             sample_size=10,
             Ne=1000,
             recombination_map=recombination_map,
             num_replicates=300,
+            discrete_genome=False,
         )
 
     def test_dtwf_vs_coalescent_single_forced_recombination(self):
         recombination_map = msprime.RecombinationMap(
-            positions=[0, 100, 101, 201], rates=[0, 1, 0, 0], discrete=True,
+            positions=[0, 100, 101, 201], rates=[0, 1, 0, 0],
         )
         self._run(
             sample_size=10,
             Ne=10,
             num_replicates=1,
+            discrete_genome=True,
             recombination_map=recombination_map,
         )
 
@@ -1313,12 +1307,13 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
             )
         ]
         recombination_map = msprime.RecombinationMap(
-            positions=[0, int(5e7)], rates=[1e-8, 0], discrete=True,
+            positions=[0, int(5e7)], rates=[1e-8, 0],
         )
         self._run(
             population_configurations=population_configurations,
             recombination_map=recombination_map,
             num_replicates=300,
+            discrete_genome=True,
         )
 
     def test_dtwf_vs_coalescent_2_pop_shrink(self):
@@ -1329,7 +1324,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
             )
         ]
         recombination_map = msprime.RecombinationMap(
-            positions=[0, int(1e7)], rates=[1e-8, 0], discrete=True,
+            positions=[0, int(1e7)], rates=[1e-8, 0],
         )
         demographic_events = [
             msprime.PopulationParametersChange(
@@ -1341,6 +1336,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
             recombination_map=recombination_map,
             demographic_events=demographic_events,
             num_replicates=300,
+            discrete_genome=True,
         )
 
     def test_dtwf_vs_coalescent_multiple_bottleneck(self):
@@ -1442,7 +1438,7 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
             )
 
         recombination_map = msprime.RecombinationMap(
-            positions=[0, num_loci], rates=[recombination_rate, 0], discrete=True,
+            positions=[0, num_loci], rates=[recombination_rate, 0],
         )
 
         if migration_matrix is None:
@@ -1459,6 +1455,7 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
             num_replicates=num_replicates,
             demographic_events=demographic_events,
             recombination_map=recombination_map,
+            discrete_genome=True,
         )
 
     def test_dtwf_vs_coalescent_long_region(self):
@@ -1637,7 +1634,7 @@ class DtwfVsSlim(Test):
 
         num_loci = int(num_loci)
         recombination_map = msprime.RecombinationMap(
-            positions=[0, num_loci], rates=[recombination_rate, 0], discrete=True,
+            positions=[0, num_loci], rates=[recombination_rate, 0],
         )
         slim_args["RHO"] = recombination_rate
         slim_args["NUM_LOCI"] = num_loci
@@ -1648,6 +1645,7 @@ class DtwfVsSlim(Test):
             migration_matrix=migration_matrix,
             num_replicates=num_replicates,
             recombination_map=recombination_map,
+            discrete_genome=True,
         )
 
     def test_dtwf_vs_slim_single_locus(self):
@@ -1671,14 +1669,14 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
         num_loci = np.random.randint(1e5, 1e7)
         rho = 1e-8
         recombination_map = msprime.RecombinationMap(
-            positions=[0, num_loci], rates=[rho, 0], discrete=True,
+            positions=[0, num_loci], rates=[rho, 0],
         )
 
         population_configurations = []
         for _ in range(N):
             population_configurations.append(
                 msprime.PopulationConfiguration(
-                    sample_size=np.random.randint(1, 10), initial_size=int(1000 / N)
+                    sample_size=np.random.randint(2, 10), initial_size=int(1000 / N)
                 )
             )
 
@@ -1735,6 +1733,7 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
             demographic_events=demographic_events,
             num_replicates=num_replicates,
             recombination_map=recombination_map,
+            discrete_genome=True,
         )
 
     def test_dtwf_vs_coalescent_random_1(self):
@@ -1891,9 +1890,8 @@ class RecombinationMutationTest(Test):
                 ],
                 model=model,
             )
-            sim.run()
+            ts = next(sim.run_replicates(1))
             empirical_rho.append(sim.num_breakpoints)
-            ts = sim.get_tree_sequence()
             ts = msprime.mutate(ts, rate=m)
             empirical_theta.append(ts.get_num_sites())
         empirical_rho.sort()
@@ -2462,25 +2460,23 @@ class ContinuousVsDiscreteRecombination(Test):
         df = pd.DataFrame(d)
         return df
 
-    def run_cont_discrete_comparison(self, model, discrete_recomb_map, cont_recomb_map):
+    def run_cont_discrete_comparison(self, model, recomb_map):
         sample_size = 10
         num_replicates = 400
         df_discrete = self._run_msprime_coalescent_stats(
             num_replicates=num_replicates,
             sample_size=sample_size,
             model=model,
-            recombination_map=discrete_recomb_map,
+            recombination_map=recomb_map,
+            discrete_genome=True,
         )
         df_cont = self._run_msprime_coalescent_stats(
             num_replicates=num_replicates,
             sample_size=sample_size,
             model=model,
-            recombination_map=cont_recomb_map,
+            recombination_map=recomb_map,
+            discrete_genome=False,
         )
-
-        discrete_length = discrete_recomb_map.get_sequence_length()
-        cont_length = cont_recomb_map.get_sequence_length()
-        scale_breakpoints(df_cont, discrete_length / cont_length)
         self._plot_stats(
             "compare continuous and discrete coordinates",
             df_discrete,
@@ -2492,13 +2488,8 @@ class ContinuousVsDiscreteRecombination(Test):
 
 class UniformRecombination(ContinuousVsDiscreteRecombination):
     def _run(self, model):
-        discrete_recomb_map = msprime.RecombinationMap.uniform_map(
-            2000000, 1e-5, discrete=True
-        )
-        cont_recomb_map = msprime.RecombinationMap.uniform_map(
-            2000000, 1e-5, discrete=False
-        )
-        self.run_cont_discrete_comparison(model, discrete_recomb_map, cont_recomb_map)
+        recomb_map = msprime.RecombinationMap.uniform_map(2000000, 1e-5,)
+        self.run_cont_discrete_comparison(model, recomb_map)
 
     def test_hudson_cont_discrete_uniform(self):
         self._run("hudson")
@@ -2510,20 +2501,12 @@ class UniformRecombination(ContinuousVsDiscreteRecombination):
 class VariableRecombination(ContinuousVsDiscreteRecombination):
     def _run(self, model):
         r = 1e-5
-        discrete_positions = [0, 10000, 50000, 150000, 200000]
-        discrete_rates = [0.0, r, 5 * r, r / 2, 0.0]
-        cont_positions = [x / 200000 for x in discrete_positions]
-        cont_rates = [x * 200000 for x in discrete_rates]
+        positions = [0, 10000, 50000, 150000, 200000]
+        rates = [0.0, r, 5 * r, r / 2, 0.0]
 
-        discrete_recomb_map = msprime.RecombinationMap(
-            discrete_positions, discrete_rates, discrete=True
-        )
+        recomb_map = msprime.RecombinationMap(positions, rates)
 
-        cont_recomb_map = msprime.RecombinationMap(
-            cont_positions, cont_rates, discrete=False
-        )
-
-        self.run_cont_discrete_comparison(model, discrete_recomb_map, cont_recomb_map)
+        self.run_cont_discrete_comparison(model, recomb_map)
 
     def test_hudson_cont_discrete_variable(self):
         self._run("hudson")
@@ -2728,13 +2711,14 @@ class HudsonAnalytical(Test):
             same_root_count_last = np.zeros(seq_length)
             low_recombination_rate = 0.000001
             recomb_map = msprime.RecombinationMap.uniform_map(
-                seq_length, low_recombination_rate, discrete=True
+                seq_length, low_recombination_rate
             )
             replicates = msprime.simulate(
                 sample_size=sample_size,
                 recombination_map=recomb_map,
                 gene_conversion_rate=gc_rate[k],
                 gene_conversion_track_length=gc_length[k],
+                discrete_genome=True,
                 num_replicates=R,
             )
             for ts in replicates:
@@ -3396,9 +3380,12 @@ class SimulateFrom(Test):
             logging.debug(f"running for m = {m}")
             T1 = np.zeros(num_replicates)
             num_trees1 = np.zeros(num_replicates)
-            recomb_map = msprime.RecombinationMap.uniform_map(m, 1 / m, discrete=True)
+            recomb_map = msprime.RecombinationMap.uniform_map(m, 1 / m)
             reps = msprime.simulate(
-                n, recombination_map=recomb_map, num_replicates=num_replicates
+                n,
+                recombination_map=recomb_map,
+                num_replicates=num_replicates,
+                discrete_genome=True,
             )
             for j, ts in enumerate(reps):
                 T1[j] = np.max(ts.tables.nodes.time)
@@ -3552,9 +3539,7 @@ class SimulateFrom(Test):
             recombination_rate=recombination_rate,
         )
         logging.debug("t\ttrees\tnodes\tedges\tca\tre\tmig")
-        for j in range(num_replicates):
-            sim.run()
-            ts = sim.get_tree_sequence()
+        for j, ts in enumerate(sim.run_replicates(num_replicates)):
             num_ca_events1[j] = sim.num_common_ancestor_events
             num_re_events1[j] = sim.num_recombination_events
             num_mig_events1[j] = sum(
@@ -3593,15 +3578,12 @@ class SimulateFrom(Test):
                 demographic_events=demographic_events,
                 recombination_rate=recombination_rate,
             )
-            for j in range(num_replicates):
-                sim.run(end_time=t)
-                ts = sim.get_tree_sequence()
+            for j, ts in enumerate(sim.run_replicates(num_replicates, end_time=t)):
                 num_ca_events2[j] = sim.num_common_ancestor_events
                 num_re_events2[j] = sim.num_recombination_events
                 num_mig_events2[j] = sum(
                     [r for row in sim.num_migration_events for r in row]
                 )
-                sim.reset()
 
                 max_time = max(node.time for node in ts.nodes())
                 sim2 = msprime.simulator_factory(
@@ -3613,7 +3595,7 @@ class SimulateFrom(Test):
                     ],
                     recombination_rate=recombination_rate,
                 )
-                sim2.run()
+                final_ts = next(sim2.run_replicates(1)).simplify()
 
                 num_ca_events2[j] += sim2.num_common_ancestor_events
                 num_re_events2[j] += sim2.num_recombination_events
@@ -3621,7 +3603,6 @@ class SimulateFrom(Test):
                     [r for row in sim2.num_migration_events for r in row]
                 )
 
-                final_ts = sim2.get_tree_sequence().simplify()
                 T2[j] = np.max(final_ts.tables.nodes.time)
                 num_trees2[j] = final_ts.num_trees
                 num_nodes2[j] = final_ts.num_nodes
@@ -4344,11 +4325,21 @@ class TestRunner:
             max_workers=num_threads
         ) as executor:
             futures = [executor.submit(test.run, basedir) for test in tests]
+            exception = None
             for future in concurrent.futures.as_completed(futures):
                 exception = future.exception()
                 if exception is not None:
-                    raise exception
+                    # At least tell the user that we've had an exception.
+                    # Other stuff will still keep going, though.
+                    logging.error("EXCEPTION:%s", exception)
+                    break
                 progress.update()
+            if exception is not None:
+                # Try to clear out as much work as we can, but it'll still run a
+                # lot of stuff before we finish
+                for future in futures:
+                    future.cancel()
+                raise exception
 
     def run(self, tests, basedir, num_threads, show_progress):
         progress = tqdm.tqdm(total=len(tests), disable=not show_progress)

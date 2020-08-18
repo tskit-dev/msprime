@@ -90,11 +90,10 @@ class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
     def test_discrete_loci(self):
         ts = msprime.simulate(
             10,
-            recombination_map=msprime.RecombinationMap.uniform_map(
-                10, 1, discrete=True
-            ),
+            recombination_map=msprime.RecombinationMap.uniform_map(10, 1),
             random_seed=1,
             end_time=0.5,
+            discrete_genome=True,
         )
         self.verify(ts)
 
@@ -197,7 +196,8 @@ class TestBasicFunctionality(unittest.TestCase):
         final_ts = msprime.simulate(
             from_ts=from_ts,
             random_seed=2,
-            recombination_map=msprime.RecombinationMap.uniform_map(m, 1, discrete=True),
+            recombination_map=msprime.RecombinationMap.uniform_map(m, 1),
+            discrete_genome=True,
         )
         self.verify_from_tables(from_ts, final_ts)
         self.verify_simulation_completed(final_ts)
@@ -208,7 +208,8 @@ class TestBasicFunctionality(unittest.TestCase):
         final_ts = msprime.simulate(
             from_ts=from_ts,
             random_seed=2,
-            recombination_map=msprime.RecombinationMap.uniform_map(m, 1, discrete=True),
+            recombination_map=msprime.RecombinationMap.uniform_map(m, 1),
+            discrete_genome=True,
         )
         self.verify_from_tables(from_ts, final_ts)
         self.verify_simulation_completed(final_ts)
@@ -927,8 +928,9 @@ class TestSlimOutput(unittest.TestCase):
             start_time=1,
             population_configurations=population_configurations,
             recombination_map=msprime.RecombinationMap.uniform_map(
-                from_ts.sequence_length, recombination_rate, discrete=True
+                from_ts.sequence_length, recombination_rate,
             ),
+            discrete_genome=True,
             random_seed=seed,
         )
 

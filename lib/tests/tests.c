@@ -242,16 +242,15 @@ test_single_locus_two_populations(void)
     double t0 = 30.0;
     double t1 = 30.5;
     double t2 = 40.5;
-    recomb_map_t recomb_map;
 
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 0, false);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(rng != NULL);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
 
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_discrete_genome(&msp, false), 0);
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_store_migrations(&msp, true);
@@ -309,7 +308,6 @@ test_single_locus_two_populations(void)
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -322,16 +320,14 @@ test_single_locus_many_populations(void)
     uint32_t num_populations = 500;
     sample_t samples[] = { { 0, 0.0 }, { num_populations - 1, 0.0 } };
     uint32_t n = 2;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1, 0, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
 
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(&msp, num_populations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -360,7 +356,6 @@ test_single_locus_many_populations(void)
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -373,19 +368,17 @@ test_dtwf_simultaneous_historical_samples(void)
     sample_t samples[] = { { 0, 0 }, { 0, 1.1 }, { 0, 1.2 } };
     tsk_node_table_t *nodes;
     uint32_t n = 3;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     gsl_rng_set(rng, 5);
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 0, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
 
     tsk_table_collection_clear(&tables);
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_set_simulation_model_dtwf(&msp);
@@ -413,7 +406,6 @@ test_dtwf_simultaneous_historical_samples(void)
 
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
-    recomb_map_free(&recomb_map);
 }
 
 static void
@@ -426,20 +418,18 @@ test_single_locus_historical_sample(void)
     tsk_edge_table_t *edges;
     tsk_node_table_t *nodes;
     uint32_t n = 2;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     gsl_rng_set(rng, 5);
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 0, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1;
 
     for (j = 0; j < 2; j++) {
         tsk_table_collection_clear(&tables);
-        ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+        ret = msp_alloc(&msp, n, samples, &tables, rng);
         CU_ASSERT_EQUAL(ret, 0);
 
         if (j == 0) {
@@ -481,7 +471,6 @@ test_single_locus_historical_sample(void)
     }
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
-    recomb_map_free(&recomb_map);
 }
 
 static void
@@ -491,23 +480,19 @@ test_single_locus_multiple_historical_samples(void)
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = { { 0, 0.0 }, { 0, 10.0 }, { 0, 10.0 }, { 0, 10.0 } };
-    /* tsk_edge_table_t *edges; */
-    /* tsk_node_table_t *nodes; */
     uint32_t n = 4;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     gsl_rng_set(rng, 5);
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 0, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
 
     for (j = 0; j < 2; j++) {
         tsk_table_collection_clear(&tables);
-        ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+        ret = msp_alloc(&msp, n, samples, &tables, rng);
         CU_ASSERT_EQUAL(ret, 0);
 
         if (j == 0) {
@@ -540,7 +525,6 @@ test_single_locus_multiple_historical_samples(void)
     }
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
-    recomb_map_free(&recomb_map);
 }
 
 static void
@@ -554,22 +538,18 @@ test_single_locus_historical_sample_start_time(void)
     tsk_node_table_t *nodes;
     uint32_t n = 2;
     size_t j, model;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
     double start_times[] = { 0, 2, 10, 10.0001, 1000 };
-    /* double start_times[] = {0, 2, 9.99}; //10, 1000}; */
-    /* double start_times[] = {10.00}; //10, 1000}; */
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 0, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
 
     for (model = 0; model < 2; model++) {
         for (j = 0; j < sizeof(start_times) / sizeof(double); j++) {
 
-            ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+            ret = msp_alloc(&msp, n, samples, &tables, rng);
             CU_ASSERT_EQUAL(ret, 0);
             if (model == 0) {
                 ret = msp_set_simulation_model_hudson(&msp);
@@ -617,7 +597,6 @@ test_single_locus_historical_sample_start_time(void)
         }
     }
     gsl_rng_free(rng);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -631,17 +610,15 @@ test_single_locus_historical_sample_end_time(void)
     tsk_node_table_t *nodes;
     uint32_t n = 2;
     size_t model;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 0, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1;
 
     for (model = 0; model < 2; model++) {
-        ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+        ret = msp_alloc(&msp, n, samples, &tables, rng);
         CU_ASSERT_EQUAL(ret, 0);
         if (model == 0) {
             ret = msp_set_simulation_model_hudson(&msp);
@@ -691,7 +668,6 @@ test_single_locus_historical_sample_end_time(void)
         CU_ASSERT_EQUAL(ret, 0);
     }
     gsl_rng_free(rng);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -709,41 +685,44 @@ test_simulator_getters_setters(void)
     double Ne = 4;
     size_t migration_events[4];
     size_t breakpoints[m];
-    recomb_map_t recomb_map;
+    double position[] = { 0, 1.0 };
+    double rate = 0;
     tsk_table_collection_t tables;
     msp_t msp;
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
 
-    ret = recomb_map_alloc_uniform(&recomb_map, m, 1, true);
-    CU_ASSERT_EQUAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = m;
     for (j = 0; j < n; j++) {
         samples[j].time = j;
         samples[j].population_id = j % 2;
     }
-    CU_ASSERT_EQUAL(msp_alloc(&msp, 0, NULL, NULL, NULL, rng), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_alloc(&msp, 0, NULL, NULL, rng), MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
-    CU_ASSERT_EQUAL(
-        msp_alloc(&msp, n, samples, NULL, NULL, rng), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, NULL, rng), MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
-    ret = msp_alloc(&msp, 0, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, 0, samples, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
+    tables.sequence_length = 0;
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    tables.sequence_length = m;
     samples[0].time = 1.0;
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SAMPLES);
     msp_free(&msp);
     samples[0].time = -1.0;
-    CU_ASSERT_EQUAL(
-        msp_alloc(&msp, n, samples, &recomb_map, &tables, rng), MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(msp_alloc(&msp, n, samples, &tables, rng), MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
     samples[0].time = 0.0;
 
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(msp_set_dimensions(&msp, 0, 1), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_dimensions(&msp, 1, 0), MSP_ERR_BAD_PARAM_VALUE);
@@ -755,6 +734,9 @@ test_simulator_getters_setters(void)
         MSP_ERR_POPULATION_OUT_OF_BOUNDS);
     CU_ASSERT_EQUAL(msp_set_population_configuration(&msp, 3, 0, 0),
         MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL(msp_set_recombination_rate(&msp, -1), MSP_ERR_BAD_RATE_VALUE);
+    CU_ASSERT_EQUAL(msp_set_recombination_map(&msp, 1, position, &rate),
+        MSP_ERR_BAD_RECOMBINATION_MAP);
 
     ret = msp_set_simulation_model_hudson(&msp);
     CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
@@ -787,6 +769,7 @@ test_simulator_getters_setters(void)
     ret = msp_set_store_migrations(&msp, true);
     CU_ASSERT_EQUAL(ret, 0);
 
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1), 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 
@@ -794,7 +777,6 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(initial_size, 2 * Ne);
     CU_ASSERT_EQUAL(growth_rate, 0.5);
-    // TODO CU_ASSERT_EQUAL(msp_get_recombination_rate(&msp), 1.0);
 
     CU_ASSERT_TRUE(msp_get_store_migrations(&msp));
     CU_ASSERT_EQUAL(msp_get_num_avl_node_blocks(&msp), 1);
@@ -806,7 +788,7 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL(msp_get_num_breakpoints(&msp), m - 1);
     ret = msp_get_breakpoints(&msp, breakpoints);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     for (j = 0; j < m - 1; j++) {
         CU_ASSERT_EQUAL(breakpoints[j], j + 1);
     }
@@ -828,7 +810,6 @@ test_simulator_getters_setters(void)
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -843,17 +824,15 @@ test_demographic_events(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     double migration_matrix[] = { 0, 1, 1, 0 };
     double last_time, time, pop_size;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
     msp_t msp;
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
 
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, m, true);
-    CU_ASSERT_EQUAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = m;
 
     for (model = 0; model < 2; model++) {
         for (j = 0; j < n; j++) {
@@ -862,8 +841,9 @@ test_demographic_events(void)
         }
 
         tsk_table_collection_clear(&tables);
-        ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+        ret = msp_alloc(&msp, n, samples, &tables, rng);
         CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1), 0);
 
         /* Zero or negative population sizes are not allowed */
         ret = msp_set_population_configuration(&msp, 0, -1, 0);
@@ -1033,7 +1013,6 @@ test_demographic_events(void)
 
     free(samples);
     gsl_rng_free(rng);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1045,7 +1024,6 @@ test_census_event(void)
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
     int num_census_nodes = 0;
     int i;
@@ -1053,14 +1031,14 @@ test_census_event(void)
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 2.0;
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(msp, 1);
 
     /* Add a census event in at 0.5 generations. */
     ret = msp_add_census_event(msp, 0.5);
@@ -1087,7 +1065,6 @@ test_census_event(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1101,7 +1078,6 @@ test_dtwf_events_between_generations(void)
     population_t pop;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     double migration_matrix[] = { 0, 0, 0, 0 };
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     for (j = 0; j < n; j++) {
@@ -1111,16 +1087,16 @@ test_dtwf_events_between_generations(void)
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 5;
 
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-
+    ret = msp_set_recombination_rate(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_population_configuration(&msp, 0, 10, 0);
@@ -1169,7 +1145,6 @@ test_dtwf_events_between_generations(void)
 
     gsl_rng_free(rng);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1181,20 +1156,20 @@ test_dtwf_zero_pop_size(void)
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t msp;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     memset(samples, 0, n * sizeof(sample_t));
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
 
     /* DTWF population size must round to >= 1 */
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(&msp, 1);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1208,8 +1183,10 @@ test_dtwf_zero_pop_size(void)
 
     /* With no high growth rate, population sizes crash to zero. */
     tsk_table_collection_clear(&tables);
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_recombination_rate(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_population_configuration(&msp, 0, 10, 100);
@@ -1224,7 +1201,6 @@ test_dtwf_zero_pop_size(void)
 
     gsl_rng_free(rng);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1237,20 +1213,20 @@ test_demographic_events_start_time(void)
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 2;
 
     for (model = 0; model < 1; model++) {
         memset(samples, 0, n * sizeof(sample_t));
-        ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+        ret = msp_alloc(msp, n, samples, &tables, rng);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_recombination_rate(msp, 1);
         CU_ASSERT_EQUAL(ret, 0);
 
         if (model == 0) {
@@ -1279,7 +1255,6 @@ test_demographic_events_start_time(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1291,14 +1266,11 @@ test_dtwf_unsupported_bottleneck(void)
     uint32_t j;
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
     msp_t msp;
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -1306,8 +1278,8 @@ test_dtwf_unsupported_bottleneck(void)
         samples[j].time = 0;
         samples[j].population_id = 0;
     }
-
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    tables.sequence_length = 1.0;
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_add_simple_bottleneck(&msp, 0.8, 0, 0.5);
@@ -1335,7 +1307,6 @@ test_dtwf_unsupported_bottleneck(void)
 
     gsl_rng_free(rng);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1346,19 +1317,17 @@ test_time_travel_error(void)
     uint32_t n = 100;
     sample_t *samples = calloc(n, sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
     msp_t msp;
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
 
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
-    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_add_simple_bottleneck(&msp, 0.1, 0, 0.75);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_simple_bottleneck(&msp, 0.1, 0, 1.0);
@@ -1373,7 +1342,6 @@ test_time_travel_error(void)
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1396,10 +1364,6 @@ test_pedigree_multi_locus_simulation(void)
 {
     int ret;
     const char *model_name;
-    /* int i; */
-    /* int num_coalescent_events = 0; */
-    /* int num_children; */
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
     int num_inds = 4;
     int ploidy = 2;
@@ -1416,15 +1380,15 @@ test_pedigree_multi_locus_simulation(void)
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 100.0, 10.0, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 100;
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
-
+    ret = msp_set_recombination_rate(msp, 10);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_alloc_pedigree(msp, num_inds, ploidy);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_pedigree(msp, num_inds, inds, parents, times, is_sample);
@@ -1461,7 +1425,6 @@ test_pedigree_multi_locus_simulation(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1470,7 +1433,6 @@ test_pedigree_specification(void)
 {
     int ret;
     const char *model_name;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
     int num_inds = 4;
     int ploidy = 2;
@@ -1486,13 +1448,12 @@ test_pedigree_specification(void)
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_alloc_pedigree(msp, num_inds, ploidy);
@@ -1521,7 +1482,6 @@ test_pedigree_specification(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1533,7 +1493,6 @@ test_pedigree_single_locus_simulation(void)
     int i;
     int num_coalescent_events = 0;
     int num_children;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
     int num_inds = 4;
     int ploidy = 2;
@@ -1551,13 +1510,12 @@ test_pedigree_single_locus_simulation(void)
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_alloc_pedigree(msp, num_inds, ploidy);
@@ -1612,7 +1570,6 @@ test_pedigree_single_locus_simulation(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1621,29 +1578,28 @@ test_dtwf_deterministic(void)
 {
     int j, ret;
     uint32_t n = 10;
-    uint32_t m = 2;
     unsigned long seed = 133;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables[2];
-    recomb_map_t recomb_map;
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, m, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     memset(samples, 0, n * sizeof(sample_t));
     for (j = 0; j < 2; j++) {
         ret = tsk_table_collection_init(&tables[j], 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
+        tables[j].sequence_length = 2;
 
         gsl_rng_set(rng, seed);
-        ret = msp_alloc(msp, n, samples, &recomb_map, &tables[j], rng);
+        ret = msp_alloc(msp, n, samples, &tables[j], rng);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_simulation_model_dtwf(msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_recombination_rate(msp, 1);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_population_configuration(msp, 0, n, 0);
         CU_ASSERT_EQUAL(ret, 0);
@@ -1669,7 +1625,6 @@ test_dtwf_deterministic(void)
     for (j = 0; j < 2; j++) {
         tsk_table_collection_free(&tables[j]);
     }
-    recomb_map_free(&recomb_map);
 }
 
 static void
@@ -1684,7 +1639,6 @@ test_mixed_model_simulation(void)
     const char *model_name;
     tsk_table_collection_t tables;
     tsk_treeseq_t ts;
-    recomb_map_t recomb_map;
     double g = -1.0 / 8192;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
@@ -1695,11 +1649,12 @@ test_mixed_model_simulation(void)
     CU_ASSERT_FATAL(rng != NULL);
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 10, true);
-    CU_ASSERT_EQUAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    tables.sequence_length = 10;
+    ret = msp_alloc(msp, n, samples, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(msp, 1);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(msp, 3);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1767,7 +1722,6 @@ test_mixed_model_simulation(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1783,19 +1737,17 @@ test_dtwf_single_locus_simulation(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     int num_coalescent_events = 0;
     int num_children;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1;
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1823,7 +1775,6 @@ test_dtwf_single_locus_simulation(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1832,24 +1783,23 @@ test_dtwf_low_recombination(void)
 {
     int ret;
     uint32_t n = 2;
-
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1e-9, false);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1;
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_discrete_genome(msp, false), 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, 1e-9), 0);
     ret = msp_set_simulation_model_dtwf(msp);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_population_configuration(msp, 0, n, 0);
@@ -1859,14 +1809,13 @@ test_dtwf_low_recombination(void)
 
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
-    /* msp_verify(msp); */
+    msp_verify(msp, 0);
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1881,19 +1830,17 @@ test_single_locus_simulation(void)
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1;
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1918,7 +1865,6 @@ test_single_locus_simulation(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1931,21 +1877,21 @@ test_single_locus_gene_conversion(void)
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1;
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_gene_conversion_rate(msp, 10, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(msp, 1);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1967,7 +1913,6 @@ test_single_locus_gene_conversion(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -1979,20 +1924,19 @@ test_multi_locus_bottleneck_arg(void)
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 100.0, 10.0, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 100;
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, 10), 0);
     ret = msp_add_instantaneous_bottleneck(msp, 1.0, 0, 10);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_store_full_arg(msp, true);
@@ -2009,7 +1953,6 @@ test_multi_locus_bottleneck_arg(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -2021,7 +1964,6 @@ test_floating_point_extremes(void)
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
     double denormal_min = pow(2, -52) * pow(2, -1022);
 
@@ -2032,10 +1974,11 @@ test_floating_point_extremes(void)
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = recomb_map_alloc_uniform(&recomb_map, denormal_min, DBL_MAX, false);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    tables.sequence_length = denormal_min;
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, DBL_MAX), 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_discrete_genome(msp, false), 0);
     ret = msp_set_population_configuration(msp, 0, DBL_MAX, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
@@ -2044,23 +1987,21 @@ test_floating_point_extremes(void)
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BREAKPOINT_RESAMPLE_OVERFLOW);
     msp_print_state(msp, _devnull);
-    recomb_map_free(&recomb_map);
     msp_free(msp);
 
     tsk_table_collection_clear(&tables);
     /* A long sequence length and high recombination should overflow */
-    ret = recomb_map_alloc_uniform(&recomb_map, DBL_MAX, DBL_MAX, false);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    tables.sequence_length = DBL_MAX;
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_discrete_genome(msp, false), 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, DBL_MAX), 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
     msp_print_state(msp, _devnull);
     ret = msp_run(msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BREAKPOINT_MASS_NON_FINITE);
-
     msp_free(msp);
-    recomb_map_free(&recomb_map);
 
     gsl_rng_free(rng);
     free(msp);
@@ -2073,13 +2014,11 @@ test_dtwf_multi_locus_simulation(void)
 {
     int ret;
     uint32_t n = 100;
-    uint32_t m = 10;
     long seed = 10;
     double migration_matrix[] = { 0, 0.1, 0.1, 0 };
     const char *model_name;
     size_t num_ca_events, num_re_events;
     double t;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     sample_t *samples = malloc(n * sizeof(sample_t));
@@ -2089,16 +2028,16 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, m, .01, true);
-    CU_ASSERT_EQUAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL(ret, 0);
+    tables.sequence_length = 10;
     gsl_rng_set(rng, seed);
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(msp);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, 0.1), 0);
     ret = msp_set_population_configuration(msp, 0, n, 0);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_num_populations(msp, 2);
@@ -2125,8 +2064,9 @@ test_dtwf_multi_locus_simulation(void)
      * we get the same result. */
     gsl_rng_set(rng, seed);
     tsk_table_collection_clear(&tables);
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, 0.1), 0);
     ret = msp_set_simulation_model_dtwf(msp);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_population_configuration(msp, 0, n, 0);
@@ -2155,7 +2095,6 @@ test_dtwf_multi_locus_simulation(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -2164,11 +2103,9 @@ test_gene_conversion_simulation(void)
 {
     int ret;
     uint32_t n = 10;
-    uint32_t m = 10;
     double track_lengths[] = { 1.0, 1.3333, 5, 10 };
     long seed = 10;
     size_t j, num_events, num_ca_events, num_re_events, num_gc_events;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
     tsk_treeseq_t ts;
     sample_t *samples = malloc(n * sizeof(sample_t));
@@ -2178,16 +2115,17 @@ test_gene_conversion_simulation(void)
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, m, 0.1, true);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_discrete_genome(msp, true), 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL(ret, 0);
+    tables.sequence_length = 10;
     gsl_rng_set(rng, seed);
 
     for (j = 0; j < sizeof(track_lengths) / sizeof(double); j++) {
         memset(samples, 0, n * sizeof(sample_t));
-        ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+        ret = msp_alloc(msp, n, samples, &tables, rng);
         CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, 0.1), 0);
         ret = msp_set_gene_conversion_rate(msp, 1.0, track_lengths[j]);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = msp_initialise(msp);
@@ -2218,7 +2156,6 @@ test_gene_conversion_simulation(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -2922,13 +2859,11 @@ test_multi_locus_simulation(void)
     const char *model_name;
     bool store_full_arg[] = { true, false };
     size_t j, k;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
-    ret = recomb_map_alloc_uniform(&recomb_map, m, 1 / m, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = m;
 
     for (j = 0; j < sizeof(models) / sizeof(int); j++) {
         for (k = 0; k < sizeof(store_full_arg) / sizeof(bool); k++) {
@@ -2942,8 +2877,9 @@ test_multi_locus_simulation(void)
             gsl_rng_set(rng, seed);
             tsk_table_collection_clear(&tables);
             memset(samples, 0, n * sizeof(sample_t));
-            ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+            ret = msp_alloc(msp, n, samples, &tables, rng);
             CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, 1.0 / m), 0);
             ret = msp_set_num_populations(msp, 2);
             CU_ASSERT_EQUAL(ret, 0);
             ret = msp_set_migration_matrix(msp, 4, migration_matrix);
@@ -3024,7 +2960,6 @@ test_multi_locus_simulation(void)
             free(samples);
         }
     }
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -3033,7 +2968,7 @@ test_simulation_replicates(void)
 {
     int ret;
     uint32_t n = 100;
-    uint32_t m = 100;
+    uint32_t m = 10;
     double mutation_rate = 2;
     size_t num_replicates = 10;
     long seed = 10;
@@ -3046,26 +2981,22 @@ test_simulation_replicates(void)
     mutgen_t mutgen;
     mutation_model_t mut_model;
     tsk_table_collection_t tables;
-    recomb_map_t recomb_map;
-    interval_map_t mut_map;
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
 
-    ret = recomb_map_alloc_uniform(&recomb_map, m / 2, 1.0, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = interval_map_alloc_single(&mut_map, m / 2, mutation_rate);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = matrix_mutation_model_factory(&mut_model, ALPHABET_BINARY);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = m;
 
     gsl_rng_set(rng, seed);
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1), 0);
     ret = msp_set_num_populations(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
@@ -3082,7 +3013,9 @@ test_simulation_replicates(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, rng, &mut_map, &mut_model, 3);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 3);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = mutgen_set_rate(&mutgen, mutation_rate);
     CU_ASSERT_EQUAL(ret, 0);
 
     mutgen_print_state(&mutgen, _devnull);
@@ -3095,9 +3028,8 @@ test_simulation_replicates(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = msp_finalise_tables(&msp);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = mutgen_generate(&mutgen, &tables, 0);
+        ret = mutgen_generate(&mutgen, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        tables.sequence_length = m;
         ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         verify_simulator_tsk_treeseq_equality(&msp, &ts, 1.0);
@@ -3116,8 +3048,6 @@ test_simulation_replicates(void)
     gsl_rng_free(rng);
     free(samples);
     tsk_table_collection_free(&tables);
-    recomb_map_free(&recomb_map);
-    interval_map_free(&mut_map);
 }
 
 static void
@@ -3125,7 +3055,7 @@ test_bottleneck_simulation(void)
 {
     int ret;
     uint32_t n = 100;
-    uint32_t m = 100;
+    uint32_t m = 10;
     long seed = 10;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
@@ -3133,22 +3063,21 @@ test_bottleneck_simulation(void)
     double t1 = 0.1;
     double t2 = 0.5;
     int t1_found = 0;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
 
-    ret = recomb_map_alloc_uniform(&recomb_map, m, 1 / m, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = m;
 
     gsl_rng_set(rng, seed);
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, 1.0 / m), 0);
     /* set all the block sizes to something small to provoke the memory
      * expansions. */
     ret = msp_set_avl_node_block_size(msp, 2);
@@ -3194,7 +3123,6 @@ test_bottleneck_simulation(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -3214,7 +3142,6 @@ test_large_bottleneck_simulation(void)
     int ret;
     uint32_t j;
     uint32_t n = 1000;
-    uint32_t m = 10;
     long seed = 10;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
@@ -3222,17 +3149,15 @@ test_large_bottleneck_simulation(void)
     uint32_t num_bottlenecks = 10;
     bottleneck_desc_t bottlenecks[num_bottlenecks];
     double t;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
 
-    ret = recomb_map_alloc_uniform(&recomb_map, m, m, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 10;
 
     t = 0.1;
     for (j = 0; j < num_bottlenecks; j++) {
@@ -3246,8 +3171,9 @@ test_large_bottleneck_simulation(void)
 
     gsl_rng_set(rng, seed);
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, 1), 0);
     for (j = 0; j < num_bottlenecks; j++) {
         ret = msp_add_simple_bottleneck(
             msp, bottlenecks[j].time, 0, bottlenecks[j].parameter);
@@ -3286,7 +3212,6 @@ test_large_bottleneck_simulation(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -3301,17 +3226,15 @@ test_dirac_coalescent_bad_parameters(void)
     double psis[] = { -1e6, 1e6 };
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    tables.sequence_length = 1;
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < sizeof(cs) / sizeof(*cs); j++) {
@@ -3324,7 +3247,6 @@ test_dirac_coalescent_bad_parameters(void)
     }
 
     msp_free(&msp);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
     free(samples);
     gsl_rng_free(rng);
@@ -3341,17 +3263,15 @@ test_beta_coalescent_bad_parameters(void)
     double truncation_points[] = { -1e6, 0, 1.001, 1e6 };
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
+    tables.sequence_length = 1;
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < sizeof(alphas) / sizeof(*alphas); j++) {
@@ -3364,7 +3284,6 @@ test_beta_coalescent_bad_parameters(void)
     }
 
     msp_free(&msp);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
     free(samples);
     gsl_rng_free(rng);
@@ -3376,7 +3295,6 @@ test_multiple_mergers_simulation(void)
     int ret;
     size_t j, k, o, p;
     uint32_t n = 10;
-    uint32_t m = 10;
     long seed = 10;
     bool store_full_arg[] = { true, false };
     /* These simulations can be slow, so just choose a few param combinations */
@@ -3386,16 +3304,14 @@ test_multiple_mergers_simulation(void)
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, m, m, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 10;
 
     for (j = 0; j < 2; j++) {
         if (j == 0) {
@@ -3409,8 +3325,9 @@ test_multiple_mergers_simulation(void)
                 /* TODO check non-zero sample times here to make sure they fail. */
                 memset(samples, 0, n * sizeof(sample_t));
                 tsk_table_collection_clear(&tables);
-                ret = msp_alloc(msp, n, samples, &recomb_map, &tables, rng);
+                ret = msp_alloc(msp, n, samples, &tables, rng);
                 CU_ASSERT_EQUAL(ret, 0);
+                CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, 1), 0);
                 if (j == 0) {
                     ret = msp_set_simulation_model_dirac(
                         msp, psi_params[p][0], psi_params[p][1]);
@@ -3449,7 +3366,6 @@ test_multiple_mergers_simulation(void)
     gsl_rng_free(rng);
     free(msp);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
@@ -3458,24 +3374,21 @@ test_multiple_mergers_growth_rate(void)
 {
     int ret;
     size_t n = 10;
-    size_t m = 1;
     int j;
     sample_t *samples = calloc(n, sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     msp_t msp;
-    recomb_map_t recomb_map;
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, m, m, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1;
 
     for (j = 0; j < 2; j++) {
 
-        ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+        ret = msp_alloc(&msp, n, samples, &tables, rng);
         CU_ASSERT_EQUAL(ret, 0);
         if (j == 0) {
             ret = msp_set_simulation_model_dirac(&msp, 0.9, 100);
@@ -3501,15 +3414,14 @@ test_multiple_mergers_growth_rate(void)
     }
     gsl_rng_free(rng);
     free(samples);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
 }
 
 static void
-test_simple_recomb_map(void)
+test_simple_rate_map(void)
 {
     int ret;
-    recomb_map_t recomb_map;
+    rate_map_t recomb_map;
     double seq_length;
     double positions[][2] = { { 0.0, 1.0 }, { 0.0, 100.0 }, { 0.0, 10000.0 } };
     double rates[] = { 0.0, 1.0 };
@@ -3517,135 +3429,80 @@ test_simple_recomb_map(void)
 
     for (j = 0; j < 3; j++) {
         seq_length = positions[j][1];
-        ret = recomb_map_alloc(&recomb_map, 2, positions[j], rates, true);
+        ret = rate_map_alloc(&recomb_map, 1, positions[j], rates);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        recomb_map_print_state(&recomb_map, _devnull);
-        CU_ASSERT_EQUAL(recomb_map_get_size(&recomb_map), 2);
-        CU_ASSERT_EQUAL(recomb_map_get_sequence_length(&recomb_map), seq_length);
-        ret = recomb_map_free(&recomb_map);
+        rate_map_print_state(&recomb_map, _devnull);
+        CU_ASSERT_EQUAL(rate_map_get_size(&recomb_map), 1);
+        CU_ASSERT_EQUAL(rate_map_get_sequence_length(&recomb_map), seq_length);
+        ret = rate_map_free(&recomb_map);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }
 }
 
 static void
-verify_recomb_maps_equal(recomb_map_t *actual, recomb_map_t *expected)
-{
-    size_t i;
-
-    CU_ASSERT_EQUAL(actual->map.size, expected->map.size);
-    CU_ASSERT_EQUAL(actual->discrete, expected->discrete);
-    for (i = 0; i < actual->map.size; i++) {
-        CU_ASSERT_DOUBLE_EQUAL(actual->map.position[i], expected->map.position[i], 0.0);
-        CU_ASSERT_DOUBLE_EQUAL(actual->map.value[i], expected->map.value[i], 0.0);
-        CU_ASSERT_DOUBLE_EQUAL(actual->cumulative[i], expected->cumulative[i], 1e-6);
-    }
-}
-
-static double
-double_rate(void *_, double rate)
-{
-    return 2 * rate;
-}
-
-static void
-test_recomb_map_copy(void)
-{
-    int ret = 0;
-    recomb_map_t map, other, copy;
-    double positions[] = { 0.0, 1.0, 2.0 };
-    double rates[] = { 1.0, 2.0, 0.0 };
-    double other_rates[] = { 2.0, 4.0, 0.0 };
-
-    ret = recomb_map_alloc(&map, 3, positions, rates, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = recomb_map_copy(&copy, &map);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    verify_recomb_maps_equal(&copy, &map);
-    recomb_map_free(&map);
-    recomb_map_free(&copy);
-
-    ret = recomb_map_alloc(&map, 3, positions, rates, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = recomb_map_alloc(&other, 3, positions, other_rates, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    recomb_map_convert_rates(&map, double_rate, NULL);
-    verify_recomb_maps_equal(&map, &other);
-    recomb_map_free(&map);
-    recomb_map_free(&other);
-}
-
-static void
-test_recomb_map_errors(void)
+test_rate_map_errors(void)
 {
     int ret;
-    recomb_map_t recomb_map;
+    rate_map_t rate_map;
     double positions[] = { 0.0, 1.0, 2.0 };
     double rates[] = { 1.0, 2.0, 0.0 };
     double short_positions[] = { 0.0, 0.25, 0.5 };
 
-    ret = recomb_map_alloc(&recomb_map, 0, positions, rates, true);
+    ret = rate_map_alloc(&rate_map, 0, positions, rates);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_INTERVALS);
-    recomb_map_free(&recomb_map);
-
-    ret = recomb_map_alloc(&recomb_map, 3, short_positions, rates, true);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
-    recomb_map_free(&recomb_map);
-
-    ret = recomb_map_alloc(&recomb_map, 1, positions, rates, true);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_INTERVALS);
-    recomb_map_free(&recomb_map);
+    rate_map_free(&rate_map);
 
     positions[0] = 1;
-    ret = recomb_map_alloc(&recomb_map, 2, positions, rates, true);
+    ret = rate_map_alloc(&rate_map, 2, positions, rates);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INTERVAL_MAP_START_NON_ZERO);
-    recomb_map_free(&recomb_map);
+    rate_map_free(&rate_map);
     positions[0] = 0;
 
     positions[1] = 3.0;
-    ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
+    ret = rate_map_alloc(&rate_map, 2, positions, rates);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INTERVAL_POSITIONS_UNSORTED);
-    recomb_map_free(&recomb_map);
+    rate_map_free(&rate_map);
     positions[1] = 1.0;
 
     positions[0] = -1;
-    ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
+    ret = rate_map_alloc(&rate_map, 2, positions, rates);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INTERVAL_MAP_START_NON_ZERO);
-    recomb_map_free(&recomb_map);
+    rate_map_free(&rate_map);
     positions[0] = 0.0;
 
     rates[0] = -1;
-    ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
-    recomb_map_free(&recomb_map);
+    ret = rate_map_alloc(&rate_map, 2, positions, rates);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RATE_VALUE);
+    rate_map_free(&rate_map);
     rates[0] = 1.0;
 
     rates[0] = INFINITY;
-    ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
-    recomb_map_free(&recomb_map);
+    ret = rate_map_alloc(&rate_map, 2, positions, rates);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RATE_VALUE);
+    rate_map_free(&rate_map);
     rates[0] = 1.0;
 
     rates[0] = NAN;
-    ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RECOMBINATION_MAP);
-    recomb_map_free(&recomb_map);
+    ret = rate_map_alloc(&rate_map, 2, positions, rates);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RATE_VALUE);
+    rate_map_free(&rate_map);
     rates[0] = 1.0;
 
-    ret = recomb_map_alloc(&recomb_map, 3, positions, rates, true);
+    ret = rate_map_alloc(&rate_map, 2, positions, rates);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    recomb_map_free(&recomb_map);
+    rate_map_free(&rate_map);
 
-    ret = recomb_map_alloc(&recomb_map, 3, short_positions, rates, false);
+    ret = rate_map_alloc(&rate_map, 2, short_positions, rates);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    recomb_map_free(&recomb_map);
+    rate_map_free(&rate_map);
 }
 
 static void
-verify_recomb_map(double length, double *positions, double *rates, size_t size)
+verify_rate_map(double length, double *positions, double *rates, size_t size)
 {
 
     int ret;
-    recomb_map_t recomb_map;
+    rate_map_t rate_map;
     size_t j;
     double *ret_rates, *ret_positions;
 
@@ -3655,94 +3512,85 @@ verify_recomb_map(double length, double *positions, double *rates, size_t size)
     CU_ASSERT_FATAL(ret_rates != NULL);
     CU_ASSERT_FATAL(ret_positions != NULL);
 
-    ret = recomb_map_alloc(&recomb_map, size, positions, rates, true);
+    ret = rate_map_alloc(&rate_map, size, positions, rates);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    recomb_map_print_state(&recomb_map, _devnull);
-    CU_ASSERT_EQUAL(recomb_map_get_size(&recomb_map), size);
+    rate_map_print_state(&rate_map, _devnull);
+    CU_ASSERT_EQUAL(rate_map_get_size(&rate_map), size);
 
-    ret = recomb_map_get_positions(&recomb_map, ret_positions);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = recomb_map_get_rates(&recomb_map, ret_rates);
-    CU_ASSERT_EQUAL(ret, 0);
-    for (j = 0; j < size; j++) {
-        CU_ASSERT_EQUAL(ret_rates[j], rates[j]);
-        CU_ASSERT_EQUAL(ret_positions[j], positions[j]);
+    for (j = 0; j <= size; j++) {
+        CU_ASSERT_EQUAL(rate_map.position[j], positions[j]);
+        if (j < size) {
+            CU_ASSERT_EQUAL(rate_map.rate[j], rates[j]);
+        }
     }
-    ret = recomb_map_free(&recomb_map);
+    ret = rate_map_free(&rate_map);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     free(ret_rates);
     free(ret_positions);
 }
 
 static void
-test_recomb_map_examples(void)
+test_rate_map_examples(void)
 {
     double p1[] = { 0, 0.05019838393314813, 0.36933662489552865, 1 };
-    double r1[] = { 3.5510784169955434, 4.184964179610539, 3.800808140657212, 0 };
+    double r1[] = { 3.5510784169955434, 4.184964179610539, 3.800808140657212 };
     double p2[] = { 0, 0.125, 0.875, 1, 4, 8, 16 };
-    double r2[] = { 0.1, 6.0, 3.333, 2.1, 0.0, 2.2, 0 };
+    double r2[] = { 0.1, 6.0, 3.333, 2.1, 0.0, 2.2 };
 
-    verify_recomb_map(1.0, p1, r1, 4);
-    verify_recomb_map(1.0, p1, r1, 4);
-    verify_recomb_map(1.0, p1, r1, 4);
+    verify_rate_map(1.0, p1, r1, 3);
+    verify_rate_map(1.0, p1, r1, 3);
+    verify_rate_map(1.0, p1, r1, 3);
 
-    verify_recomb_map(16.0, p2, r2, 7);
-    verify_recomb_map(16.0, p2, r2, 7);
-    verify_recomb_map(16.0, p2, r2, 7);
+    verify_rate_map(16.0, p2, r2, 6);
+    verify_rate_map(16.0, p2, r2, 6);
+    verify_rate_map(16.0, p2, r2, 6);
 }
 
 static void
 test_translate_position_and_recomb_mass(void)
 {
-    recomb_map_t map;
+    rate_map_t map;
     double p1[] = { 0, 6, 13, 20 };
-    double r1[] = { 3, 0, 1, 0 };
-    recomb_map_alloc(&map, 4, p1, r1, true);
+    double r1[] = { 3, 0, 1 };
+    rate_map_alloc(&map, 3, p1, r1);
 
     /* interval edges */
-    CU_ASSERT_EQUAL(recomb_map_position_to_mass(&map, 0), 0);
-    CU_ASSERT_EQUAL(recomb_map_position_to_mass(&map, 6), 18);
-    CU_ASSERT_EQUAL(recomb_map_position_to_mass(&map, 13), 18);
-    CU_ASSERT_EQUAL(recomb_map_position_to_mass(&map, 19), 24);
-    CU_ASSERT_EQUAL(recomb_map_mass_to_position(&map, 0), 0);
-    CU_ASSERT_EQUAL(recomb_map_mass_to_position(&map, 18), 6);
-    CU_ASSERT_EQUAL(recomb_map_mass_to_position(&map, 24), 19);
+    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, 0), 0);
+    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, 6), 18);
+    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, 13), 18);
+    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, 19), 24);
+    CU_ASSERT_EQUAL(rate_map_mass_to_position(&map, 0), 0);
+    CU_ASSERT_EQUAL(rate_map_mass_to_position(&map, 18), 6);
+    CU_ASSERT_EQUAL(rate_map_mass_to_position(&map, 24), 19);
 
     /* intervals with recombination */
-    CU_ASSERT_EQUAL(recomb_map_position_to_mass(&map, 4), 12);
-    CU_ASSERT_EQUAL(recomb_map_position_to_mass(&map, 14), 19);
-    CU_ASSERT_EQUAL(recomb_map_position_to_mass(&map, 16), 21);
-    CU_ASSERT_EQUAL(recomb_map_mass_to_position(&map, 12), 4);
-    CU_ASSERT_EQUAL(recomb_map_mass_to_position(&map, 19), 14);
-    CU_ASSERT_EQUAL(recomb_map_mass_to_position(&map, 21), 16);
+    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, 4), 12);
+    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, 14), 19);
+    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, 16), 21);
+    CU_ASSERT_EQUAL(rate_map_mass_to_position(&map, 12), 4);
+    CU_ASSERT_EQUAL(rate_map_mass_to_position(&map, 19), 14);
+    CU_ASSERT_EQUAL(rate_map_mass_to_position(&map, 21), 16);
 
     /* inside recombination interval */
-    CU_ASSERT_EQUAL(recomb_map_position_to_mass(&map, 8), 18);
+    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, 8), 18);
 
-    recomb_map_free(&map);
+    rate_map_free(&map);
 }
 
 static void
-test_recomb_map_mass_between(void)
+test_rate_map_mass_between(void)
 {
-    recomb_map_t discrete_map;
-    recomb_map_t cont_map;
+    rate_map_t discrete_map;
     double p1[] = { 0, 6, 13, 20 };
-    double r1[] = { 3, 0, 1, 0 };
+    double r1[] = { 3, 0, 1 };
     double tol = 1e-9;
 
-    recomb_map_alloc(&discrete_map, 4, p1, r1, true);
-    recomb_map_alloc(&cont_map, 4, p1, r1, false);
+    rate_map_alloc(&discrete_map, 3, p1, r1);
 
-    CU_ASSERT_DOUBLE_EQUAL_FATAL(recomb_map_mass_between(&discrete_map, 0, 2), 6, tol);
-    CU_ASSERT_DOUBLE_EQUAL_FATAL(recomb_map_mass_between(&cont_map, 0, 2), 6, tol);
-    CU_ASSERT_DOUBLE_EQUAL_FATAL(
-        recomb_map_mass_between_left_exclusive(&discrete_map, 0, 2), 3, tol);
-    CU_ASSERT_DOUBLE_EQUAL_FATAL(
-        recomb_map_mass_between_left_exclusive(&cont_map, 0, 2), 6, tol);
+    CU_ASSERT_DOUBLE_EQUAL_FATAL(rate_map_mass_between(&discrete_map, 0, 2), 6, tol);
 
-    recomb_map_free(&discrete_map);
-    recomb_map_free(&cont_map);
+    rate_map_free(&discrete_map);
 }
 
 static void
@@ -3851,7 +3699,7 @@ test_msp_binary_interval_search_edge_cases(void)
 }
 
 static void
-verify_simulate_from(int model, recomb_map_t *recomb_map,
+verify_simulate_from(int model, rate_map_t *recomb_map,
     tsk_table_collection_t *from_tables, size_t num_replicates)
 {
     int ret;
@@ -3865,7 +3713,10 @@ verify_simulate_from(int model, recomb_map_t *recomb_map,
 
     ret = tsk_table_collection_copy(from_tables, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(&msp, 0, NULL, recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, 0, NULL, &tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_recombination_map(
+        &msp, recomb_map->size, recomb_map->position, recomb_map->rate);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     if (model == MSP_MODEL_DTWF) {
@@ -3917,14 +3768,17 @@ verify_simulate_from(int model, recomb_map_t *recomb_map,
  * with from_ts is equivalent to the state in the original simulator */
 static void
 verify_initial_simulate_from_state(
-    msp_t *msp_source, recomb_map_t *recomb_map, tsk_table_collection_t *from_tables)
+    msp_t *msp_source, rate_map_t *recomb_map, tsk_table_collection_t *from_tables)
 {
     int ret;
     msp_t msp_dest;
     size_t num_ancestors;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
 
-    ret = msp_alloc(&msp_dest, 0, NULL, recomb_map, from_tables, rng);
+    ret = msp_alloc(&msp_dest, 0, NULL, from_tables, rng);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_recombination_map(
+        &msp_dest, recomb_map->size, recomb_map->position, recomb_map->rate);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp_dest);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3943,28 +3797,30 @@ verify_initial_simulate_from_state(
 }
 
 static void
-verify_simple_simulate_from(int model, uint32_t n, size_t num_loci,
-    double sequence_length, double recombination_rate, size_t num_events,
-    size_t num_replicates)
+verify_simple_simulate_from(int model, uint32_t n, double sequence_length,
+    double recombination_rate, size_t num_events, size_t num_replicates)
 {
     int ret;
     tsk_table_collection_t tables;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t msp;
-    recomb_map_t recomb_map;
+    rate_map_t recomb_map;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(
-        &recomb_map, sequence_length, recombination_rate, true);
+    ret = rate_map_alloc_single(&recomb_map, sequence_length, recombination_rate);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = sequence_length;
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_map(
+        &msp, recomb_map.size, recomb_map.position, recomb_map.rate);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 
@@ -3983,32 +3839,32 @@ verify_simple_simulate_from(int model, uint32_t n, size_t num_loci,
     msp_free(&msp);
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
-    recomb_map_free(&recomb_map);
+    rate_map_free(&recomb_map);
     free(samples);
 }
 
 static void
 test_simulate_from_single_locus(void)
 {
-    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1, 1.0, 0, 5, 1);
-    verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1, 1.0, 0, 5, 1);
+    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1.0, 0, 5, 1);
+    verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1.0, 0, 5, 1);
 
-    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1, 1.0, 1, 5, 1);
-    verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1, 1.0, 1, 5, 1);
+    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1.0, 1, 5, 1);
+    verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1.0, 1, 5, 1);
 }
 
 static void
 test_simulate_from_single_locus_replicates(void)
 {
-    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1, 1.0, 0, 5, 10);
-    verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1, 1.0, 0, 5, 10);
+    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1.0, 0, 5, 10);
+    verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1.0, 0, 5, 10);
 }
 
 static void
 test_simulate_from_empty(void)
 {
-    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1, 1.0, 0, 0, 1);
-    verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1, 1.0, 0, 0, 1);
+    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1.0, 0, 0, 1);
+    verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1.0, 0, 0, 1);
 }
 
 static void
@@ -4018,21 +3874,25 @@ test_simulate_from_completed(void)
     uint32_t n = 25;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t msp;
-    recomb_map_t recomb_map;
+    rate_map_t recomb_map;
     tsk_table_collection_t tables;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     double recombination_rate = 2;
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, recombination_rate, true);
+    ret = rate_map_alloc_single(&recomb_map, 1.0, recombination_rate);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_map(
+        &msp, recomb_map.size, recomb_map.position, recomb_map.rate);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 
@@ -4047,7 +3907,7 @@ test_simulate_from_completed(void)
     msp_free(&msp);
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
-    recomb_map_free(&recomb_map);
+    rate_map_free(&recomb_map);
     free(samples);
 }
 
@@ -4056,13 +3916,10 @@ test_simulate_from_incompatible(void)
 {
     int ret;
     msp_t msp;
-    recomb_map_t recomb_map;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t from_tables;
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 10.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&from_tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     from_tables.sequence_length = 1.0;
@@ -4074,7 +3931,7 @@ test_simulate_from_incompatible(void)
 
     /* Malformed tree sequence */
     from_tables.nodes.individual[0] = 100;
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
+    ret = msp_alloc(&msp, 0, NULL, &from_tables, rng);
     CU_ASSERT_FATAL(msp_is_tsk_error(ret));
     CU_ASSERT_EQUAL_FATAL(
         ret ^ (1 << MSP_TSK_ERR_BIT), TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS);
@@ -4083,14 +3940,9 @@ test_simulate_from_incompatible(void)
     from_tables.nodes.individual[0] = -1;
     msp_free(&msp);
 
-    /* Sequence length mismatch */
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCOMPATIBLE_FROM_TS);
-    msp_free(&msp);
-
     /* zero samples */
     from_tables.sequence_length = 10.0;
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
+    ret = msp_alloc(&msp, 0, NULL, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, MSP_ERR_INSUFFICIENT_SAMPLES);
@@ -4104,7 +3956,7 @@ test_simulate_from_incompatible(void)
     ret = tsk_node_table_add_row(
         &from_tables.nodes, TSK_NODE_IS_SAMPLE, 2.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
+    ret = msp_alloc(&msp, 0, NULL, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_start_time(&msp, 1.999);
     CU_ASSERT_EQUAL(ret, 0);
@@ -4117,7 +3969,7 @@ test_simulate_from_incompatible(void)
     ret = msp_set_start_time(&msp, 0);
     CU_ASSERT_EQUAL(ret, 0);
     from_tables.sequence_length = 10.0;
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
+    ret = msp_alloc(&msp, 0, NULL, &from_tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, MSP_ERR_INCOMPATIBLE_FROM_TS);
@@ -4125,7 +3977,7 @@ test_simulate_from_incompatible(void)
 
     tsk_population_table_clear(&from_tables.populations);
     tsk_population_table_add_row(&from_tables.populations, NULL, 0);
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
+    ret = msp_alloc(&msp, 0, NULL, &from_tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_start_time(&msp, 1.999);
     CU_ASSERT_EQUAL(ret, 0);
@@ -4135,7 +3987,7 @@ test_simulate_from_incompatible(void)
 
     /* Must have legitimate population references */
     from_tables.nodes.population[0] = -1;
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
+    ret = msp_alloc(&msp, 0, NULL, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_start_time(&msp, 2.0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -4145,7 +3997,7 @@ test_simulate_from_incompatible(void)
 
     /* Check to make sure we can run this correctly */
     from_tables.nodes.population[0] = 0;
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
+    ret = msp_alloc(&msp, 0, NULL, &from_tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_start_time(&msp, 2.0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -4159,7 +4011,7 @@ test_simulate_from_incompatible(void)
     CU_ASSERT_FATAL(ret >= 0);
     tsk_edge_table_add_row(&from_tables.edges, 0, 1, 2, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = msp_alloc(&msp, 0, NULL, &recomb_map, &from_tables, rng);
+    ret = msp_alloc(&msp, 0, NULL, &from_tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_FATAL(msp_is_tsk_error(ret));
@@ -4170,7 +4022,6 @@ test_simulate_from_incompatible(void)
     msp_free(&msp);
 
     gsl_rng_free(rng);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&from_tables);
 }
 
@@ -4181,34 +4032,31 @@ test_simulate_init_errors(void)
     uint32_t n = 25;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t msp;
-    recomb_map_t recomb_map;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables.sequence_length = 1.0;
 
     memset(samples, 0, n * sizeof(sample_t));
-    ret = msp_alloc(&msp, 0, samples, &recomb_map, NULL, rng);
+    ret = msp_alloc(&msp, 0, samples, NULL, rng);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
-    ret = msp_alloc(&msp, n, samples, &recomb_map, NULL, rng);
+    ret = msp_alloc(&msp, n, samples, NULL, rng);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
-    ret = msp_alloc(&msp, n, NULL, &recomb_map, NULL, rng);
+    ret = msp_alloc(&msp, n, NULL, NULL, rng);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
-    ret = msp_alloc(&msp, n, NULL, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, NULL, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
 
     tsk_table_collection_clear(&tables);
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_set_start_time(&msp, -1);
@@ -4226,7 +4074,6 @@ test_simulate_init_errors(void)
 
     msp_free(&msp);
     gsl_rng_free(rng);
-    recomb_map_free(&recomb_map);
     free(samples);
     tsk_table_collection_free(&tables);
 }
@@ -4311,45 +4158,38 @@ test_mutgen_simple_map(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     mutation_model_t mut_model;
     tsk_table_collection_t tables;
-    interval_map_t rate_map;
     double pos[] = { 0, 0.1, 0.2, 0.3, 0.4, 1.0 };
-    double rate[] = { 0, 0.01, 0.02, 0.03, 0.04, 0.0 };
+    double rate[] = { 0, 0.01, 0.02, 0.03, 0.04 };
 
     CU_ASSERT_FATAL(rng != NULL);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     insert_single_tree(&tables, ALPHABET_NUCLEOTIDE);
 
-    ret = interval_map_alloc(&rate_map, 6, pos, rate);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = matrix_mutation_model_factory(&mut_model, ALPHABET_NUCLEOTIDE);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->size, 6);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->position[0], 0);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->position[1], 0.1);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->position[2], 0.2);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->position[3], 0.3);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->position[4], 0.4);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->position[5], 1.0);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->value[0], 0);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->value[1], 0.01);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->value[2], 0.02);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->value[3], 0.03);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->value[4], 0.04);
-    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map->value[5], 0);
-
-    ret = mutgen_generate(&mutgen, &tables, 0);
+    ret = mutgen_set_rate_map(&mutgen, 5, pos, rate);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.size, 5);
+    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.position[0], 0);
+    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.position[1], 0.1);
+    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.position[2], 0.2);
+    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.position[3], 0.3);
+    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.position[4], 0.4);
+    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.position[5], 1.0);
+    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.rate[0], 0);
+    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.rate[1], 0.01);
+    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.rate[2], 0.02);
+    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.rate[3], 0.03);
+    CU_ASSERT_EQUAL_FATAL(mutgen.rate_map.rate[4], 0.04);
 
-    tables.sequence_length = 2.0;
-    ret = mutgen_generate(&mutgen, &tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCOMPATIBLE_MUTATION_MAP);
+    ret = mutgen_generate(&mutgen, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     mutgen_free(&mutgen);
-    interval_map_free(&rate_map);
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
@@ -4360,9 +4200,10 @@ test_mutgen_errors(void)
 {
     int ret = 0;
     mutgen_t mutgen;
+    double pos[] = { 0, 10 };
+    double rate = 0;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
-    interval_map_t rate_map;
     mutation_model_t mut_model, mut_model_binary;
 
     CU_ASSERT_FATAL(rng != NULL);
@@ -4375,48 +4216,62 @@ test_mutgen_errors(void)
     ret = matrix_mutation_model_factory(&mut_model_binary, ALPHABET_BINARY);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = interval_map_alloc_single(&rate_map, 1, -1);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_MUTATION_MAP_RATE);
-    interval_map_free(&rate_map);
+    ret = mutgen_set_rate_map(&mutgen, 1, pos, &rate);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCOMPATIBLE_MUTATION_MAP);
     mutgen_free(&mutgen);
 
-    ret = interval_map_alloc_single(&rate_map, 5, 1);
+    tables.sequence_length = 10;
+    rate = -1;
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCOMPATIBLE_MUTATION_MAP);
+    ret = mutgen_set_rate_map(&mutgen, 1, pos, &rate);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RATE_VALUE);
+    mutgen_free(&mutgen);
 
     tables.sequence_length = 0.1;
-    ret = mutgen_generate(&mutgen, &tables, 0);
+    ret = mutgen_generate(&mutgen, 0);
     CU_ASSERT_FATAL(msp_is_tsk_error(ret));
     tables.sequence_length = 1.0;
-    interval_map_free(&rate_map);
     mutgen_free(&mutgen);
 
     /* mix of binary and nucleotide alleles */
-    ret = interval_map_alloc_single(&rate_map, 1, 20);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model_binary, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model_binary, 1);
+    ret = mutgen_set_rate(&mutgen, 20);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_time_interval(&mutgen, 0.5, 10.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     /* we shouldn't error the first time since existing site is nucleotide
      * but not at an integer loction */
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutgen_free(&mutgen);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 1);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_time_interval(&mutgen, 0.0, 0.5);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
+    ret = mutgen_set_rate(&mutgen, 20);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNKNOWN_ALLELE);
 
     mutgen_free(&mutgen);
-    interval_map_free(&rate_map);
+
+    ret = mutgen_alloc(&mutgen, NULL, &tables, &mut_model, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    mutgen_free(&mutgen);
+
+    ret = mutgen_alloc(&mutgen, rng, NULL, &mut_model, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    mutgen_free(&mutgen);
+
+    tables.sequence_length = -1;
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    mutgen_free(&mutgen);
+
     mutation_model_free(&mut_model);
     mutation_model_free(&mut_model_binary);
     tsk_table_collection_free(&tables);
@@ -4430,32 +4285,30 @@ test_mutgen_bad_mutation_order(void)
     mutgen_t mutgen;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
-    interval_map_t rate_map;
     mutation_model_t mut_model;
 
     CU_ASSERT_FATAL(rng != NULL);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     insert_single_tree(&tables, ALPHABET_NUCLEOTIDE);
-    ret = interval_map_alloc_single(&rate_map, 1, 20);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = matrix_mutation_model_factory(&mut_model, ALPHABET_NUCLEOTIDE);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* bad mutation generation order */
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 1);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_time_interval(&mutgen, 0.0, 0.5);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
+    ret = mutgen_set_rate(&mutgen, 20);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_time_interval(&mutgen, 0.5, 1.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER);
 
     mutgen_free(&mutgen);
-    interval_map_free(&rate_map);
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
@@ -4470,7 +4323,6 @@ test_single_tree_mutgen(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables1, tables2;
     mutation_model_t mut_model;
-    interval_map_t rate_map;
 
     CU_ASSERT_FATAL(rng != NULL);
     ret = tsk_table_collection_init(&tables1, 0);
@@ -4482,11 +4334,9 @@ test_single_tree_mutgen(void)
     ret = matrix_mutation_model_factory(&mut_model, ALPHABET_BINARY);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = interval_map_alloc_single(&rate_map, 1, 0);
+    ret = mutgen_alloc(&mutgen, rng, &tables1, &mut_model, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 100);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables1, 0);
+    ret = mutgen_generate(&mutgen, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables1.mutations.num_rows == 0);
     mutgen_print_state(&mutgen, _devnull);
@@ -4494,11 +4344,11 @@ test_single_tree_mutgen(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     gsl_rng_set(rng, 1);
-    /* Cheat a bit to avoid reallocating a new rate_map */
-    rate_map.value[0] = 10;
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 100);
+    ret = mutgen_alloc(&mutgen, rng, &tables1, &mut_model, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables1, 0);
+    ret = mutgen_set_rate(&mutgen, 10);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutgen_print_state(&mutgen, _devnull);
     CU_ASSERT_TRUE(tables1.mutations.num_rows > 0);
@@ -4517,9 +4367,11 @@ test_single_tree_mutgen(void)
      * block size.
      */
     gsl_rng_set(rng, 1);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 1);
+    ret = mutgen_alloc(&mutgen, rng, &tables2, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables2, 0);
+    ret = mutgen_set_rate(&mutgen, 10);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tsk_table_collection_equals(&tables1, &tables2));
     ret = mutgen_free(&mutgen);
@@ -4528,7 +4380,6 @@ test_single_tree_mutgen(void)
     tsk_table_collection_free(&tables1);
     tsk_table_collection_free(&tables2);
     mutation_model_free(&mut_model);
-    interval_map_free(&rate_map);
     gsl_rng_free(rng);
 }
 
@@ -4539,7 +4390,6 @@ test_single_tree_mutgen_keep_sites(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
     tsk_table_collection_t copy, copy2;
-    interval_map_t rate_map;
     mutation_model_t mut_model;
     mutgen_t mutgen;
 
@@ -4559,41 +4409,49 @@ test_single_tree_mutgen_keep_sites(void)
 
     /* With a mutation rate of 0, we should keep exactly the same set
      * of mutations */
-    ret = interval_map_alloc_single(&rate_map, 1, 0);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy));
     mutgen_free(&mutgen);
 
     /* and, with discrete sites */
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 1);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy));
     mutgen_free(&mutgen);
 
     /* Turn up the mutation rate */
-    rate_map.value[0] = 10;
     gsl_rng_set(rng, 2);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+    ret = mutgen_set_rate(&mutgen, 10);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables.sites.num_rows > copy.sites.num_rows);
     CU_ASSERT_TRUE(tables.mutations.num_rows > copy.mutations.num_rows);
     mutgen_free(&mutgen);
+
     /* and, discrete sites */
     gsl_rng_set(rng, 2);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    ret = mutgen_alloc(&mutgen, rng, &copy2, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &copy2, MSP_KEEP_SITES);
+    ret = mutgen_set_rate(&mutgen, 10);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy2));
-    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
+    mutgen_free(&mutgen);
+
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_set_rate(&mutgen, 10);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables.sites.num_rows > copy2.sites.num_rows);
     CU_ASSERT_TRUE(tables.mutations.num_rows > copy2.mutations.num_rows);
@@ -4602,9 +4460,11 @@ test_single_tree_mutgen_keep_sites(void)
     /* If we run precisely the same mutations again we should rejection
      * sample away all of the original positions */
     gsl_rng_set(rng, 2);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+    ret = mutgen_set_rate(&mutgen, 10);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables.sites.num_rows > copy.sites.num_rows);
     CU_ASSERT_TRUE(tables.mutations.num_rows > copy.mutations.num_rows);
@@ -4612,10 +4472,10 @@ test_single_tree_mutgen_keep_sites(void)
     /* add a duplicate site to the original */
     ret = tsk_site_table_add_row(&tables.sites, 0.1, "A", 1, NULL, 0);
     CU_ASSERT_TRUE(ret > 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_DUPLICATE_SITE_POSITION);
     /* and, discrete sites */
-    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_DUPLICATE_SITE_POSITION);
 
     mutgen_free(&mutgen);
@@ -4624,7 +4484,6 @@ test_single_tree_mutgen_keep_sites(void)
     tsk_table_collection_free(&copy);
     tsk_table_collection_free(&copy2);
     gsl_rng_free(rng);
-    interval_map_free(&rate_map);
 }
 
 static void
@@ -4635,7 +4494,6 @@ test_single_tree_mutgen_discrete_sites(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
     mutgen_t mutgen;
-    interval_map_t rate_map;
     mutation_model_t mut_model;
 
     ret = tsk_table_collection_init(&tables, 0);
@@ -4654,15 +4512,15 @@ test_single_tree_mutgen_discrete_sites(void)
     ret = tsk_mutation_table_add_row(&tables.mutations, 0, 4, 1, "G", 1, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 2);
 
-    ret = interval_map_alloc_single(&rate_map, 1, 10);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     gsl_rng_set(rng, 2);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 1);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_time_interval(&mutgen, 0.0, 1.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_set_rate(&mutgen, 10);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(tables.sites.num_rows, 1);
     CU_ASSERT_FATAL(tables.mutations.num_rows > 1);
@@ -4683,7 +4541,7 @@ test_single_tree_mutgen_discrete_sites(void)
     ret = tsk_mutation_table_add_row(&tables.mutations, 0, 4, 1, "G", 1, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 2);
 
-    ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(tables.sites.num_rows, 2);
     CU_ASSERT_FATAL(tables.mutations.num_rows > 3);
@@ -4692,7 +4550,6 @@ test_single_tree_mutgen_discrete_sites(void)
 
     mutgen_free(&mutgen);
     mutation_model_free(&mut_model);
-    interval_map_free(&rate_map);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
 }
@@ -4705,7 +4562,6 @@ test_single_tree_mutgen_keep_sites_many_mutations(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
     mutgen_t mutgen;
-    interval_map_t rate_map;
     mutation_model_t mut_model;
 
     ret = tsk_table_collection_init(&tables, 0);
@@ -4719,21 +4575,19 @@ test_single_tree_mutgen_keep_sites_many_mutations(void)
         CU_ASSERT_EQUAL_FATAL(ret, j + 1);
     }
 
-    ret = interval_map_alloc_single(&rate_map, 1, 10);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     gsl_rng_set(rng, 2);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 1);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_set_rate(&mutgen, 10);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < 10; j++) {
-        ret = mutgen_generate(&mutgen, &tables, MSP_KEEP_SITES);
+        ret = mutgen_generate(&mutgen, MSP_KEEP_SITES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }
-
     CU_ASSERT_TRUE(tables.sites.num_rows > 2);
-    mutgen_free(&mutgen);
 
-    interval_map_free(&rate_map);
+    mutgen_free(&mutgen);
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
@@ -4746,7 +4600,6 @@ test_single_tree_mutgen_interval(void)
     mutgen_t mutgen;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
-    interval_map_t rate_map;
     mutation_model_t mut_model;
     size_t j;
     tsk_id_t node;
@@ -4759,11 +4612,11 @@ test_single_tree_mutgen_interval(void)
     ret = matrix_mutation_model_factory(&mut_model, ALPHABET_NUCLEOTIDE);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = interval_map_alloc_single(&rate_map, 1, 10);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 100);
+    ret = mutgen_set_rate(&mutgen, 10);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, 0);
+    ret = mutgen_generate(&mutgen, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables.mutations.num_rows > 0);
     mutgen_print_state(&mutgen, _devnull);
@@ -4775,7 +4628,7 @@ test_single_tree_mutgen_interval(void)
     /* Setting start and end == 0 should give 0 mutations */
     ret = mutgen_set_time_interval(&mutgen, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, 0);
+    ret = mutgen_generate(&mutgen, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables.sites.num_rows == 0);
     CU_ASSERT_TRUE(tables.mutations.num_rows == 0);
@@ -4783,7 +4636,7 @@ test_single_tree_mutgen_interval(void)
     /* Setting start = 3 should give 0 mutations */
     ret = mutgen_set_time_interval(&mutgen, 3, DBL_MAX);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, 0);
+    ret = mutgen_generate(&mutgen, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables.sites.num_rows == 0);
     CU_ASSERT_TRUE(tables.mutations.num_rows == 0);
@@ -4791,7 +4644,7 @@ test_single_tree_mutgen_interval(void)
     /* Setting start = 2 should give mutations only above 4 and 5 */
     ret = mutgen_set_time_interval(&mutgen, 2, DBL_MAX);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, 0);
+    ret = mutgen_generate(&mutgen, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables.sites.num_rows > 0);
     CU_ASSERT_TRUE(tables.mutations.num_rows > 0);
@@ -4804,7 +4657,6 @@ test_single_tree_mutgen_interval(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     mutation_model_free(&mut_model);
-    interval_map_free(&rate_map);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
 }
@@ -4816,13 +4668,10 @@ test_single_tree_mutgen_empty_site(void)
     mutgen_t mutgen;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
-    interval_map_t rate_map;
     mutation_model_t mut_model;
 
     CU_ASSERT_FATAL(rng != NULL);
     ret = matrix_mutation_model_factory(&mut_model, ALPHABET_NUCLEOTIDE);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = interval_map_alloc_single(&rate_map, 1, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tsk_table_collection_init(&tables, 0);
@@ -4831,13 +4680,14 @@ test_single_tree_mutgen_empty_site(void)
     ret = tsk_site_table_add_row(&tables.sites, 0.5, NULL, 0, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 1);
 
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 100);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
+    ret = mutgen_set_rate(&mutgen, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     mutgen_free(&mutgen);
-    interval_map_free(&rate_map);
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
@@ -4850,7 +4700,6 @@ test_single_tree_mutgen_do_nothing_mutations(void)
     mutgen_t mutgen;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables, copy;
-    interval_map_t rate_map;
     mutation_model_t mut_model;
     size_t lengths[] = { 1, 1 };
     const char *binary_alleles[] = { "0", "1" };
@@ -4862,8 +4711,6 @@ test_single_tree_mutgen_do_nothing_mutations(void)
         (char **) (uintptr_t *) binary_alleles, lengths, root_distribution,
         transition_matrix);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = interval_map_alloc_single(&rate_map, 1, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -4873,22 +4720,25 @@ test_single_tree_mutgen_do_nothing_mutations(void)
     insert_single_tree(&copy, ALPHABET_NUCLEOTIDE);
     CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy));
 
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 100);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
+    ret = mutgen_set_rate(&mutgen, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy));
     mutgen_free(&mutgen);
 
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 100);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES);
+    ret = mutgen_set_rate(&mutgen, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(tables.mutations.num_rows, 0);
     CU_ASSERT_EQUAL_FATAL(tables.sites.num_rows, 0);
     mutgen_free(&mutgen);
 
-    interval_map_free(&rate_map);
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     tsk_table_collection_free(&copy);
@@ -4902,28 +4752,25 @@ test_single_tree_mutgen_many_mutations(void)
     mutgen_t mutgen;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
-    interval_map_t rate_map;
     mutation_model_t mut_model;
 
     CU_ASSERT_FATAL(rng != NULL);
     ret = matrix_mutation_model_factory(&mut_model, ALPHABET_BINARY);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = interval_map_alloc_single(&rate_map, 1, 100);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     insert_single_tree(&tables, ALPHABET_BINARY);
 
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES);
+    ret = mutgen_set_rate(&mutgen, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER);
     mutgen_free(&mutgen);
 
-    interval_map_free(&rate_map);
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
@@ -5004,7 +4851,6 @@ test_mutgen_slim_mutations(void)
     mutgen_t mutgen;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
-    interval_map_t rate_map;
     mutation_model_t mut_model;
     size_t len, parent_len;
     char *ds;
@@ -5015,16 +4861,16 @@ test_mutgen_slim_mutations(void)
     CU_ASSERT_FATAL(rng != NULL);
     ret = slim_mutation_model_alloc(&mut_model, mutation_type_id, next_mutation_id, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = interval_map_alloc_single(&rate_map, 1, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     insert_single_tree(&tables, -1);
 
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES);
+    ret = mutgen_set_rate(&mutgen, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables.mutations.num_rows > 0);
 
@@ -5086,7 +4932,6 @@ test_mutgen_slim_mutations(void)
 
     mutgen_free(&mutgen);
     free(all_mut_ids);
-    interval_map_free(&rate_map);
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
@@ -5100,7 +4945,6 @@ test_mutgen_slim_mutation_large_values(void)
     tsk_mutation_t mut;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
-    interval_map_t rate_map;
     mutation_model_t mut_model;
     char value[21]; /* longest 64 bit int has 20 digits */
     int64_t next_mutation_id;
@@ -5109,15 +4953,15 @@ test_mutgen_slim_mutation_large_values(void)
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     insert_single_tree(&tables, -1);
-    ret = interval_map_alloc_single(&rate_map, 1, 2);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Trying to generate mutations that overflow raises an error */
     ret = slim_mutation_model_alloc(&mut_model, 0, INT64_MAX, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES);
+    ret = mutgen_set_rate(&mutgen, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_ID_OVERFLOW);
     mutgen_free(&mutgen);
     mutation_model_free(&mut_model);
@@ -5128,9 +4972,11 @@ test_mutgen_slim_mutation_large_values(void)
     next_mutation_id = INT64_MAX - 100;
     ret = slim_mutation_model_alloc(&mut_model, 0, next_mutation_id, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES);
+    ret = mutgen_set_rate(&mutgen, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables.mutations.num_rows > 10);
     mutgen_free(&mutgen);
@@ -5142,7 +4988,6 @@ test_mutgen_slim_mutation_large_values(void)
     sprintf(value, "%" PRId64, next_mutation_id);
     CU_ASSERT_NSTRING_EQUAL(value, mut.derived_state, mut.derived_state_length);
 
-    interval_map_free(&rate_map);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
 }
@@ -5154,7 +4999,6 @@ test_mutgen_infinite_alleles(void)
     mutgen_t mutgen;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
-    interval_map_t rate_map;
     mutation_model_t mut_model;
     tsk_site_t site;
     tsk_mutation_t mutation;
@@ -5162,17 +5006,17 @@ test_mutgen_infinite_alleles(void)
     char buff[100];
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = interval_map_alloc_single(&rate_map, 1, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     insert_single_tree(&tables, -1);
 
     ret = infinite_alleles_mutation_model_alloc(&mut_model, 0, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES);
+    ret = mutgen_set_rate(&mutgen, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables.mutations.num_rows > 5);
     CU_ASSERT_TRUE(tables.sites.num_rows == 1);
@@ -5191,7 +5035,6 @@ test_mutgen_infinite_alleles(void)
     mutgen_print_state(&mutgen, _devnull);
 
     mutgen_free(&mutgen);
-    interval_map_free(&rate_map);
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
@@ -5206,7 +5049,6 @@ test_mutgen_infinite_alleles_large_values(void)
     tsk_site_t site;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
-    interval_map_t rate_map;
     mutation_model_t mut_model;
     char value[21]; /* longest 64 bit uint has 20 digits */
 
@@ -5214,14 +5056,14 @@ test_mutgen_infinite_alleles_large_values(void)
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     insert_single_tree(&tables, -1);
-    ret = interval_map_alloc_single(&rate_map, 1, 2);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = infinite_alleles_mutation_model_alloc(&mut_model, UINT64_MAX, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_alloc(&mutgen, rng, &rate_map, &mut_model, 0);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, &tables, MSP_DISCRETE_SITES);
+    ret = mutgen_set_rate(&mutgen, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tables.sites.num_rows == 1);
     CU_ASSERT_TRUE(tables.mutations.num_rows > 10);
@@ -5239,7 +5081,6 @@ test_mutgen_infinite_alleles_large_values(void)
 
     mutgen_free(&mutgen);
     mutation_model_free(&mut_model);
-    interval_map_free(&rate_map);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
 }
@@ -5253,17 +5094,15 @@ verify_simple_genic_selection_trajectory(
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 } };
     tsk_table_collection_t tables;
-    recomb_map_t recomb_map;
     size_t j, num_steps;
     double *allele_frequency, *time;
 
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 0, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(rng != NULL);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
 
-    ret = msp_alloc(&msp, 2, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, 2, samples, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_sweep_genic_selection(
         &msp, 0.5, start_frequency, end_frequency, alpha, dt);
@@ -5291,7 +5130,6 @@ verify_simple_genic_selection_trajectory(
     free(time);
     free(allele_frequency);
     msp_free(&msp);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
 }
@@ -5314,14 +5152,12 @@ test_sweep_genic_selection_bad_parameters(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 } };
     tsk_table_collection_t tables;
-    recomb_map_t recomb_map;
 
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 0, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(rng != NULL);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_alloc(&msp, 2, samples, &recomb_map, &tables, rng);
+    tables.sequence_length = 1.0;
+    ret = msp_alloc(&msp, 2, samples, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_set_simulation_model_sweep_genic_selection(
@@ -5367,7 +5203,6 @@ test_sweep_genic_selection_bad_parameters(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_UNSUPPORTED_OPERATION);
 
     msp_free(&msp);
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
 }
@@ -5380,15 +5215,13 @@ test_sweep_genic_selection_events(void)
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 }, { 0, 0.0 } };
     tsk_table_collection_t tables;
-    recomb_map_t recomb_map;
 
-    ret = recomb_map_alloc_uniform(&recomb_map, 1.0, 0, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_FATAL(rng != NULL);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
 
-    ret = msp_alloc(&msp, 2, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, 2, samples, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5404,7 +5237,7 @@ test_sweep_genic_selection_events(void)
 
     tsk_table_collection_clear(&tables);
     samples[1].time = 0.1;
-    ret = msp_alloc(&msp, 3, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, 3, samples, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -5416,13 +5249,12 @@ test_sweep_genic_selection_events(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_EVENTS_DURING_SWEEP);
     msp_free(&msp);
 
-    recomb_map_free(&recomb_map);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
 }
 
 static void
-verify_sweep_genic_selection(uint32_t num_loci, double growth_rate)
+verify_sweep_genic_selection(double sequence_length, double growth_rate)
 {
     int j, ret;
     uint32_t n = 10;
@@ -5431,24 +5263,22 @@ verify_sweep_genic_selection(uint32_t num_loci, double growth_rate)
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables[2];
-    recomb_map_t recomb_map;
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, num_loci, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     memset(samples, 0, n * sizeof(sample_t));
-
     for (j = 0; j < 2; j++) {
         ret = tsk_table_collection_init(&tables[j], 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
+        tables[j].sequence_length = sequence_length;
         gsl_rng_set(rng, seed);
-        ret = msp_alloc(&msp, n, samples, &recomb_map, &tables[j], rng);
+        ret = msp_alloc(&msp, n, samples, &tables[j], rng);
         CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1), 0);
         ret = msp_set_dimensions(&msp, 1, 2);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_simulation_model_sweep_genic_selection(
-            &msp, num_loci / 2, 0.1, 0.9, 0.1, 0.01);
+            &msp, sequence_length / 2, 0.1, 0.9, 0.1, 0.01);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_population_configuration(&msp, 0, 1.0, growth_rate);
         CU_ASSERT_EQUAL(ret, 0);
@@ -5472,7 +5302,6 @@ verify_sweep_genic_selection(uint32_t num_loci, double growth_rate)
     for (j = 0; j < 2; j++) {
         tsk_table_collection_free(&tables[j]);
     }
-    recomb_map_free(&recomb_map);
 }
 
 static void
@@ -5496,26 +5325,25 @@ test_sweep_genic_selection_time_change(void)
 {
     int j, ret;
     uint32_t n = 10;
-    uint32_t num_loci = 10;
+    double num_loci = 10;
     unsigned long seed = 133234;
     double t;
     msp_t msp;
     sample_t *samples = malloc(n * sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
-    recomb_map_t recomb_map;
 
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = recomb_map_alloc_uniform(&recomb_map, num_loci, 1, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     memset(samples, 0, n * sizeof(sample_t));
 
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = num_loci;
     gsl_rng_set(rng, seed);
-    ret = msp_alloc(&msp, n, samples, &recomb_map, &tables, rng);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1), 0);
     ret = msp_set_dimensions(&msp, 1, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
@@ -5543,7 +5371,6 @@ test_sweep_genic_selection_time_change(void)
     gsl_rng_free(rng);
     free(samples);
     tsk_table_collection_free(&tables);
-    recomb_map_free(&recomb_map);
 }
 
 static void
@@ -5551,38 +5378,40 @@ test_interval_map(void)
 {
     int ret;
     size_t j;
-    interval_map_t imap;
-    double position[] = { 0, 1, 2, 3, 4, 5 };
+    rate_map_t imap;
+    double position[] = { 0, 1, 2, 3, 4, 5, 6 };
     double value[] = { 0.1, 1.1, 2.1, 3.1, 4.1, 5.1 };
 
-    ret = interval_map_alloc(&imap, 0, NULL, NULL);
+    ret = rate_map_alloc(&imap, 0, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_INTERVALS);
-    interval_map_free(&imap);
+    rate_map_free(&imap);
 
-    ret = interval_map_alloc(&imap, 1, NULL, NULL);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_INTERVALS);
-    interval_map_free(&imap);
-
-    for (j = 2; j < 6; j++) {
-        ret = interval_map_alloc(&imap, j, position, value);
+    for (j = 1; j < 7; j++) {
+        ret = rate_map_alloc(&imap, j, position, value);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_EQUAL(interval_map_get_size(&imap), j);
-        CU_ASSERT_EQUAL(interval_map_get_num_intervals(&imap), j - 1);
-        CU_ASSERT_EQUAL(interval_map_get_sequence_length(&imap), j - 1);
-        interval_map_print_state(&imap, _devnull);
-        interval_map_free(&imap);
+        CU_ASSERT_EQUAL(rate_map_get_size(&imap), j);
+        CU_ASSERT_EQUAL(rate_map_get_sequence_length(&imap), j);
+        rate_map_print_state(&imap, _devnull);
+        rate_map_free(&imap);
     }
 
+    position[0] = 1;
+    ret = rate_map_alloc(&imap, 6, position, value);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INTERVAL_MAP_START_NON_ZERO);
+    rate_map_free(&imap);
+
+    position[0] = 0;
     position[1] = -1;
-    ret = interval_map_alloc(&imap, 6, position, value);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NEGATIVE_INTERVAL_POSITION);
-    interval_map_free(&imap);
+    ret = rate_map_alloc(&imap, 6, position, value);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INTERVAL_POSITIONS_UNSORTED);
+    rate_map_free(&imap);
     position[1] = 0;
 
-    position[0] = 1;
-    ret = interval_map_alloc(&imap, 6, position, value);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INTERVAL_MAP_START_NON_ZERO);
-    interval_map_free(&imap);
+    position[1] = NAN;
+    ret = rate_map_alloc(&imap, 6, position, value);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_NONFINITE_INTERVAL_POSITION);
+    rate_map_free(&imap);
+    position[1] = 0;
 }
 
 static void
@@ -5822,6 +5651,7 @@ main(int argc, char **argv)
         { "test_fenwick_expand", test_fenwick_expand },
         { "test_fenwick_zero_values", test_fenwick_zero_values },
         { "test_fenwick_drift", test_fenwick_drift },
+
         { "test_single_locus_two_populations", test_single_locus_two_populations },
         { "test_single_locus_many_populations", test_single_locus_many_populations },
         { "test_single_locus_historical_sample", test_single_locus_historical_sample },
@@ -5874,14 +5704,13 @@ main(int argc, char **argv)
         { "test_multiple_mergers_simulation", test_multiple_mergers_simulation },
         { "test_multiple_mergers_growth_rate", test_multiple_mergers_growth_rate },
         { "test_large_bottleneck_simulation", test_large_bottleneck_simulation },
-        { "test_simple_recombination_map", test_simple_recomb_map },
-        { "test_recombination_map_copy", test_recomb_map_copy },
-        { "test_recombination_map_errors", test_recomb_map_errors },
-        { "test_recombination_map_examples", test_recomb_map_examples },
 
+        { "test_simple_rate_map", test_simple_rate_map },
+        { "test_rate_map_errors", test_rate_map_errors },
+        { "test_rate_map_examples", test_rate_map_examples },
         { "test_translate_position_and_recomb_mass",
             test_translate_position_and_recomb_mass },
-        { "test_recomb_map_mass_between", test_recomb_map_mass_between },
+        { "test_rate_map_mass_between", test_rate_map_mass_between },
 
         { "test_binary_search", test_msp_binary_interval_search },
         { "test_binary_search_repeating", test_msp_binary_interval_search_repeating },

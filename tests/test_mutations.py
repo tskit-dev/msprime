@@ -313,7 +313,7 @@ class TestMutate(unittest.TestCase, MutateMixin):
         for bad_rate in ["abc", "xxx"]:
             self.assertRaises(ValueError, msprime.mutate, ts, bad_rate)
         for bad_rate in [-1, -1e-6, -1e7]:
-            self.assertRaises(_msprime.LibraryError, msprime.mutate, ts, bad_rate)
+            self.assertRaises(ValueError, msprime.mutate, ts, bad_rate)
 
     def test_bad_models(self):
         ts = msprime.simulate(2, random_seed=2)
@@ -1428,7 +1428,7 @@ def py_mutate(
             transition_matrix=model.transition_matrix,
         )
     tables = ts.dump_tables()
-    mutmap = msprime.MutationMap([0, ts.sequence_length], [rate, 0])
+    mutmap = msprime.RateMap([0, ts.sequence_length], [rate])
     mutgen = PythonMutationGenerator(mutmap, py_model)
     return mutgen.generate(
         tables,
