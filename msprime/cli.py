@@ -1032,33 +1032,6 @@ def mspms_main(arg_list=None):
 #######################################################
 
 
-def run_dump_newick(args):
-    tree_sequence = tskit.load(args.tree_sequence)
-    for tree in tree_sequence.trees():
-        newick = tree.newick(precision=args.precision)
-        print(newick)
-
-
-def run_dump_macs(args):
-    """
-    Write a macs formatted file so we can import into pbwt.
-    """
-    tree_sequence = tskit.load(args.tree_sequence)
-    n = tree_sequence.get_sample_size()
-    m = tree_sequence.get_sequence_length()
-    print(f"COMMAND:\tnot_macs {n} {m}")
-    print("SEED:\tASEED")
-    for variant in tree_sequence.variants(as_bytes=True):
-        print(
-            "SITE:",
-            variant.index,
-            variant.position / m,
-            0.0,
-            f"{variant.genotypes.decode()}",
-            sep="\t",
-        )
-
-
 def run_simulate(args):
     tree_sequence = msprime.simulate(
         sample_size=int(args.sample_size),
@@ -1096,30 +1069,9 @@ def get_msp_parser():
     subparsers.required = True
 
     add_simulate_subcommand(subparsers)
-    add_macs_subcommand(subparsers)
-    add_newick_subcommand(subparsers)
     add_mutate_subcommand(subparsers)
 
     return top_parser
-
-
-def add_newick_subcommand(subparsers):
-    parser = subparsers.add_parser("newick", help="Dump results in newick format.")
-    add_tree_sequence_argument(parser)
-    parser.add_argument(
-        "--precision",
-        "-p",
-        type=int,
-        default=3,
-        help="The number of decimal places in branch lengths",
-    )
-    parser.set_defaults(runner=run_dump_newick)
-
-
-def add_macs_subcommand(subparsers):
-    parser = subparsers.add_parser("macs", help="Dump results in MaCS format.")
-    add_tree_sequence_argument(parser)
-    parser.set_defaults(runner=run_dump_macs)
 
 
 def add_mutate_subcommand(subparsers):

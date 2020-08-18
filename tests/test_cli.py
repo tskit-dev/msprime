@@ -1248,37 +1248,6 @@ class TestMspArgumentParser(unittest.TestCase):
         self.assertEqual(args.random_seed, 123)
         self.assertEqual(args.compress, True)
 
-    def test_macs_default_values(self):
-        parser = cli.get_msp_parser()
-        cmd = "macs"
-        tree_sequence = "test2.trees"
-        args = parser.parse_args([cmd, tree_sequence])
-        self.assertEqual(args.tree_sequence, tree_sequence)
-
-    def test_newick_default_values(self):
-        parser = cli.get_msp_parser()
-        cmd = "newick"
-        tree_sequence = "test3.trees"
-        args = parser.parse_args([cmd, tree_sequence])
-        self.assertEqual(args.tree_sequence, tree_sequence)
-        self.assertEqual(args.precision, 3)
-
-    def test_newick_short_args(self):
-        parser = cli.get_msp_parser()
-        cmd = "newick"
-        tree_sequence = "test.trees"
-        args = parser.parse_args([cmd, tree_sequence, "-p", "10"])
-        self.assertEqual(args.tree_sequence, tree_sequence)
-        self.assertEqual(args.precision, 10)
-
-    def test_newick_long_args(self):
-        parser = cli.get_msp_parser()
-        cmd = "newick"
-        tree_sequence = "test.trees"
-        args = parser.parse_args([cmd, tree_sequence, "--precision=5"])
-        self.assertEqual(args.tree_sequence, tree_sequence)
-        self.assertEqual(args.precision, 5)
-
 
 class TestMspSimulateOutput(unittest.TestCase):
     """
@@ -1404,39 +1373,3 @@ class TestMspConversionOutput(unittest.TestCase):
         self.assertGreaterEqual(min(tables.nodes.time[tables.mutations.node]), 0)
         self.assertLessEqual(set(tables.sites.position), set(range(10)))
         self.assertGreater(tree_sequence.get_num_mutations(), 0)
-
-    def verify_newick(self, output_newick):
-        newick = list(tree.newick(precision=3) for tree in self._tree_sequence.trees())
-        self.assertEqual(len(newick), len(output_newick))
-        for tree, line in zip(newick, output_newick):
-            self.assertEqual(tree, line)
-
-    def test_newick(self):
-        cmd = "newick"
-        stdout, stderr = capture_output(cli.msp_main, [cmd, self._tree_sequence_file])
-        self.assertEqual(len(stderr), 0)
-        output_newick = stdout.splitlines()
-        self.verify_newick(output_newick)
-
-    def test_macs(self):
-        cmd = "macs"
-        stdout, stderr = capture_output(cli.msp_main, [cmd, self._tree_sequence_file])
-        self.assertEqual(len(stderr), 0)
-        output = stdout.splitlines()
-        self.assertTrue(output[0].startswith("COMMAND:"))
-        self.assertTrue(output[1].startswith("SEED:"))
-        self.assertEqual(len(output), 2 + self._tree_sequence.get_num_mutations())
-        n = self._tree_sequence.get_sample_size()
-        m = self._tree_sequence.get_sequence_length()
-        sites = list(self._tree_sequence.sites())
-        haplotypes = list(self._tree_sequence.haplotypes())
-        for site_id, line in enumerate(output[2:]):
-            splits = line.split()
-            self.assertEqual(splits[0], "SITE:")
-            self.assertEqual(int(splits[1]), site_id)
-            position = sites[site_id].position / m
-            self.assertAlmostEqual(float(splits[2]), position)
-            col = splits[4]
-            self.assertEqual(len(col), n)
-            for j in range(n):
-                self.assertEqual(col[j], haplotypes[j][site_id])
