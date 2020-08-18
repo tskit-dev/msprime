@@ -1648,7 +1648,7 @@ class TestSimulator(LowLevelTestCase):
                 TypeError, f, [get_population_configuration(growth_rate=bad_number)]
             )
         # Cannot have negative for initial_size
-        for bad_size in [-1, 0]:
+        for bad_size in [-1, -1e300]:
             self.assertRaises(
                 _msprime.InputError,
                 f,

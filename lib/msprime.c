@@ -404,7 +404,7 @@ msp_set_population_configuration(
         ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
-    if (initial_size <= 0) {
+    if (initial_size < 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -3308,6 +3308,11 @@ msp_insert_sample(msp_t *self, node_id_t sample, population_id_t population)
     double seq_len = self->sequence_length;
     segment_t *u;
 
+    if (self->populations[population].initial_size == 0) {
+        ret = MSP_ERR_BAD_SAMPLES;
+        goto out;
+    }
+
     u = msp_alloc_segment(self, 0, seq_len, 0,
         rate_map_position_to_mass(&self->recomb_map, seq_len), sample, population, 0,
         NULL, NULL);
@@ -5405,7 +5410,7 @@ msp_add_population_parameters_change(
         ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
-    if (initial_size <= 0) {
+    if (initial_size < 0) {
         assert(!gsl_isnan(initial_size));
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;

@@ -159,10 +159,6 @@ def _check_population_configurations(population_configurations):
     for config in population_configurations:
         if not isinstance(config, demog.PopulationConfiguration):
             raise TypeError(err)
-        if config.initial_size is not None and config.initial_size <= 0:
-            raise ValueError("Population size must be > 0")
-        if config.sample_size is not None and config.sample_size < 0:
-            raise ValueError("Sample size must be >= 0")
 
 
 def samples_factory(sample_size, samples, pedigree, population_configurations):
