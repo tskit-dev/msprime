@@ -3293,7 +3293,7 @@ static void
 test_multiple_mergers_simulation(void)
 {
     int ret;
-    size_t j, k, o, p;
+    size_t j, k, o, p, q;
     uint32_t n = 10;
     long seed = 10;
     bool store_full_arg[] = { true, false };
@@ -3321,45 +3321,48 @@ test_multiple_mergers_simulation(void)
         }
         for (k = 0; k < sizeof(store_full_arg) / sizeof(bool); k++) {
             for (p = 0; p < o; p++) {
-                gsl_rng_set(rng, seed);
-                /* TODO check non-zero sample times here to make sure they fail. */
-                memset(samples, 0, n * sizeof(sample_t));
-                tsk_table_collection_clear(&tables);
-                ret = msp_alloc(msp, n, samples, &tables, rng);
-                CU_ASSERT_EQUAL(ret, 0);
-                CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, 1), 0);
-                if (j == 0) {
-                    ret = msp_set_simulation_model_dirac(
-                        msp, psi_params[p][0], psi_params[p][1]);
-                } else {
-                    ret = msp_set_simulation_model_beta(
-                        msp, beta_params[p][0], beta_params[p][1]);
-                }
-                CU_ASSERT_EQUAL(ret, 0);
-                /* TODO check for adding various complications like multiple
-                 * populations etc to ensure they fail.
-                 */
-                ret = msp_set_store_full_arg(msp, store_full_arg[k]);
-                CU_ASSERT_EQUAL(ret, 0);
-                ret = msp_initialise(msp);
-                CU_ASSERT_EQUAL(ret, 0);
-                msp_print_state(msp, _devnull);
+                for (q = 1; q < 3; q++) {
+                    gsl_rng_set(rng, seed);
+                    /* TODO check non-zero sample times here to make sure they fail. */
+                    memset(samples, 0, n * sizeof(sample_t));
+                    tsk_table_collection_clear(&tables);
+                    ret = msp_alloc(msp, n, samples, &tables, rng);
+                    CU_ASSERT_EQUAL(ret, 0);
+                    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, 1), 0);
+                    if (j == 0) {
+                        ret = msp_set_simulation_model_dirac(
+                            msp, psi_params[p][0], psi_params[p][1]);
+                    } else {
+                        ret = msp_set_simulation_model_beta(
+                            msp, beta_params[p][0], beta_params[p][1]);
+                    }
+                    msp_set_ploidy(msp, q);
+                    CU_ASSERT_EQUAL(ret, 0);
+                    /* TODO check for adding various complications like multiple
+                     * populations etc to ensure they fail.
+                     */
+                    ret = msp_set_store_full_arg(msp, store_full_arg[k]);
+                    CU_ASSERT_EQUAL(ret, 0);
+                    ret = msp_initialise(msp);
+                    CU_ASSERT_EQUAL(ret, 0);
+                    msp_print_state(msp, _devnull);
 
-                ret = msp_run(msp, DBL_MAX, ULONG_MAX);
-                CU_ASSERT_EQUAL_FATAL(ret, 0);
-                CU_ASSERT_TRUE(msp_is_completed(msp));
-                CU_ASSERT_TRUE(msp->time > 0);
-                msp_verify(msp, 0);
-
-                msp_reset(msp);
-                while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+                    ret = msp_run(msp, DBL_MAX, ULONG_MAX);
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    CU_ASSERT_TRUE(msp_is_completed(msp));
+                    CU_ASSERT_TRUE(msp->time > 0);
                     msp_verify(msp, 0);
-                }
-                CU_ASSERT_EQUAL_FATAL(ret, 0);
-                CU_ASSERT_TRUE(msp_is_completed(msp));
 
-                ret = msp_free(msp);
-                CU_ASSERT_EQUAL(ret, 0);
+                    msp_reset(msp);
+                    while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
+                        msp_verify(msp, 0);
+                    }
+                    CU_ASSERT_EQUAL_FATAL(ret, 0);
+                    CU_ASSERT_TRUE(msp_is_completed(msp));
+
+                    ret = msp_free(msp);
+                    CU_ASSERT_EQUAL(ret, 0);
+                }
             }
         }
     }
@@ -3374,7 +3377,7 @@ test_multiple_mergers_growth_rate(void)
 {
     int ret;
     size_t n = 10;
-    int j;
+    int j, k;
     sample_t *samples = calloc(n, sizeof(sample_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     msp_t msp;
@@ -3387,30 +3390,32 @@ test_multiple_mergers_growth_rate(void)
     tables.sequence_length = 1;
 
     for (j = 0; j < 2; j++) {
+        for (k = 1; k < 3; k++) {
+            ret = msp_alloc(&msp, n, samples, &tables, rng);
+            CU_ASSERT_EQUAL(ret, 0);
+            if (j == 0) {
+                ret = msp_set_simulation_model_dirac(&msp, 0.9, 100);
+                CU_ASSERT_EQUAL(ret, 0);
+            } else {
+                ret = msp_set_simulation_model_beta(&msp, 1.9, 1);
+                CU_ASSERT_EQUAL(ret, 0);
+            }
+            msp_set_ploidy(&msp, k);
 
-        ret = msp_alloc(&msp, n, samples, &tables, rng);
-        CU_ASSERT_EQUAL(ret, 0);
-        if (j == 0) {
-            ret = msp_set_simulation_model_dirac(&msp, 0.9, 100);
+            /* Set to a nonzero growth_rate */
+            ret = msp_set_population_configuration(&msp, 0, 1, -0.01);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            ret = msp_initialise(&msp);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
             CU_ASSERT_EQUAL(ret, 0);
-        } else {
-            ret = msp_set_simulation_model_beta(&msp, 1.9, 1);
-            CU_ASSERT_EQUAL(ret, 0);
+
+            msp_print_state(&msp, _devnull);
+
+            msp_free(&msp);
+
+            tsk_table_collection_clear(&tables);
         }
-
-        /* Set to a nonzero growth_rate */
-        ret = msp_set_population_configuration(&msp, 0, 1, -0.01);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = msp_initialise(&msp);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
-        CU_ASSERT_EQUAL(ret, 0);
-
-        msp_print_state(&msp, _devnull);
-
-        msp_free(&msp);
-
-        tsk_table_collection_clear(&tables);
     }
     gsl_rng_free(rng);
     free(samples);
