@@ -24,8 +24,8 @@ import unittest
 
 import numpy as np
 
-import _msprime
 import msprime
+from msprime import _msprime
 
 
 class TestIntrospectionInterface(unittest.TestCase):

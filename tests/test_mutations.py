@@ -30,9 +30,9 @@ import numpy as np
 import scipy.stats as stats
 import tskit
 
-import _msprime
 import msprime
 import tests.wright_fisher as wf
+from msprime import _msprime
 from tests import tsutil
 
 

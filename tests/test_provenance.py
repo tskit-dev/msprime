@@ -28,8 +28,8 @@ import numpy as np
 import python_jsonschema_objects as pjs
 import tskit
 
-import _msprime
 import msprime
+from msprime import _msprime
 
 
 class TestProvenance(unittest.TestCase):

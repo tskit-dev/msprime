@@ -69,11 +69,11 @@ from tskit import validate_provenance
 from tskit import NODE_IS_SAMPLE, FORWARD, REVERSE
 
 # TODO document these flags
-import _msprime
-from _msprime import NODE_IS_CA_EVENT
-from _msprime import NODE_IS_CEN_EVENT
-from _msprime import NODE_IS_MIG_EVENT
-from _msprime import NODE_IS_RE_EVENT
+from msprime import _msprime
+from msprime._msprime import NODE_IS_CA_EVENT
+from msprime._msprime import NODE_IS_CEN_EVENT
+from msprime._msprime import NODE_IS_MIG_EVENT
+from msprime._msprime import NODE_IS_RE_EVENT
 
 from msprime.core import __version__
 from msprime.exceptions import *

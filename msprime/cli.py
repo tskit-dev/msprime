@@ -28,8 +28,8 @@ import sys
 
 import tskit
 
-import _msprime
 import msprime
+from msprime import _msprime
 
 
 def set_sigpipe_handler():

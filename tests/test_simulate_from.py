@@ -25,10 +25,10 @@ import unittest
 import numpy as np
 import tskit
 
-import _msprime
 import msprime
 import tests.tsutil as tsutil
 import tests.wright_fisher as wf
+from msprime import _msprime
 
 
 def get_wf_base(N, ngens, survival=0.0, num_loci=10, seed=1):

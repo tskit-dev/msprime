@@ -32,8 +32,8 @@ import numpy as np
 import scipy.linalg
 import tskit
 
-import _msprime
 import msprime
+from msprime import _msprime
 
 
 class TestNePopulationSizeEquivalence(unittest.TestCase):

@@ -22,7 +22,7 @@ Core functions and classes used throughout msprime.
 import os
 import random
 
-import _msprime
+from msprime import _msprime
 
 __version__ = "undefined"
 try:
