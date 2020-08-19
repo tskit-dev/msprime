@@ -29,12 +29,12 @@ import attr
 import numpy as np
 import tskit
 
-import _msprime
 from . import core
 from . import demography as demog
 from . import intervals
 from . import mutations
 from . import provenance
+from msprime import _msprime
 
 logger = logging.getLogger(__name__)
 

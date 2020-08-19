@@ -29,8 +29,8 @@ import warnings
 import numpy as np
 import tskit
 
-import _msprime
 import msprime
+from msprime import _msprime
 
 
 def has_discrete_genome(ts):

@@ -36,8 +36,8 @@ import _tskit
 import numpy as np
 import tskit
 
-import _msprime
 import tests
+from msprime import _msprime
 
 # Root node marker
 NULL_NODE = -1

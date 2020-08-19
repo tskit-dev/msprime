@@ -101,7 +101,7 @@ tsk_source_files = ["core.c", "tables.c", "trees.c"]
 kas_source_files = ["kastore.c"]
 
 sources = (
-    ["_msprimemodule.c"]
+    ["msprime/_msprimemodule.c"]
     + [os.path.join(libdir, f) for f in msp_source_files]
     + [os.path.join(tskdir, f) for f in tsk_source_files]
     + [os.path.join(kasdir, f) for f in kas_source_files]
@@ -120,7 +120,7 @@ if IS_WINDOWS:
     ]
 
 _msprime_module = Extension(
-    "_msprime",
+    "msprime._msprime",
     sources=sources,
     # Enable asserts by default.
     undef_macros=["NDEBUG"],

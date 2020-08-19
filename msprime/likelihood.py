@@ -21,7 +21,7 @@ Module responsible for computing likelihoods.
 """
 import math
 
-import _msprime
+from msprime import _msprime
 
 
 def unnormalised_log_mutation_likelihood(ts, mu):

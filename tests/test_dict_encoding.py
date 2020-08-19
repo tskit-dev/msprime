@@ -11,8 +11,8 @@ import unittest
 import numpy as np
 import tskit
 
-import _msprime as c_module
 import msprime
+import msprime._msprime as c_module
 
 
 def get_example_tables():

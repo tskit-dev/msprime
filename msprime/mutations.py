@@ -25,11 +25,11 @@ import sys
 import numpy as np
 import tskit
 
-import _msprime
 from . import core
 from . import intervals
 from . import provenance
-from _msprime import BaseMutationModel
+from msprime import _msprime
+from msprime._msprime import BaseMutationModel
 
 _ACGT_ALLELES = ["A", "C", "G", "T"]
 _AMINO_ACIDS = [

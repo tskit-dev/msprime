@@ -30,8 +30,8 @@ import types
 import numpy
 import tskit
 
-import _msprime
 from . import ancestry
+from msprime import _msprime
 
 __version__ = "undefined"
 try:
