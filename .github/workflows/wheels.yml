@@ -1,0 +1,156 @@
+name: Build and test wheels
+
+on:
+  push:
+    branches:
+      - master
+      - test
+    tags:
+      - '*'
+  release:
+    types: [published]
+  
+jobs:
+  OSX:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        python: [3.6, 3.7, 3.8]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+            submodules: true
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install deps
+        run: |
+          brew install gsl
+          # Upgrade pip to get bdist_wheel
+          pip install --upgrade pip
+          pip install setuptools wheel
+          # Instead of letting setup.py install a newer numpy we install it here
+          # using the oldest supported version for ABI compatibility
+          pip install oldest-supported-numpy
+      - name: Build C extension
+        run: |
+          python -VV
+          python setup.py build_ext --inplace
+      - name: Build Wheel
+        run: |
+          python setup.py bdist_wheel
+      - name: Delocate to bundle dynamic libs
+        run: |
+          pip install delocate
+          delocate-wheel -v dist/*.whl
+      - name: Upload Wheels
+        uses: actions/upload-artifact@v2
+        with:
+          name: osx-wheel-${{ matrix.python }}
+          path: dist
+
+  manylinux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+            submodules: true
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Build sdist
+        shell: bash
+        run: |
+          python setup.py sdist
+      - name: Upload sdist
+        uses: actions/upload-artifact@v2
+        with:
+          name: sdist
+          path: dist
+      - name: Build wheels in docker
+        shell: bash
+        run: |
+          docker run --rm -v `pwd`:/project -w /project quay.io/pypa/manylinux2010_x86_64 bash .github/workflows/docker/buildwheel.sh
+
+      - name: Upload Wheels
+        uses: actions/upload-artifact@v2
+        with:
+          name: linux-wheels
+          path: dist/wheelhouse
+
+  OSX-test:
+    needs: ['OSX']
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        python: [3.6, 3.7, 3.8]
+    steps:
+      - name: Download wheels
+        uses: actions/download-artifact@v2
+        with:
+          name: osx-wheel-${{ matrix.python }}
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install wheel and test
+        run: |
+          python -VV
+          # Install the local wheel
+          pip install msprime --only-binary msprime -f .
+          python -c "import msprime"
+          msp simulate 10 tmp.trees
+          tskit info tmp.trees
+          tskit provenances tmp.trees
+
+  manylinux-test:
+    runs-on: ubuntu-latest
+    needs: ['manylinux']
+    strategy:
+      matrix:
+        python: [3.6, 3.7, 3.8]
+    steps:
+      - name: Download wheels
+        uses: actions/download-artifact@v2
+        with:
+          name: linux-wheels
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install wheel and test
+        run: |
+          python -VV
+          # Install the local wheel
+          pip install msprime --only-binary msprime -f .
+          python -c "import msprime"
+          msp simulate 10 tmp.trees
+          tskit info tmp.trees
+          tskit provenances tmp.trees
+
+
+  PyPI_Upload:
+    runs-on: ubuntu-latest
+    needs: ['OSX-test', 'manylinux-test']
+    steps:
+      - name: Download all
+        uses: actions/download-artifact@v2
+      - name: Move to dist
+        run: |
+          mkdir dist
+          cp */*.{whl,gz} dist/.
+      - name: Publish distribution to Test PyPI
+        if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          password: ${{ secrets.test_pypi_password }}
+          repository_url: https://test.pypi.org/legacy/
+      - name: Publish distribution to PRODUCTION PyPI
+        if: github.event_name == 'release'
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          password: ${{ secrets.pypi_password }}
