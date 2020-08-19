@@ -683,6 +683,87 @@ def simulate(
         return iterator
 
 
+def sim_ancestry(
+    sample_size=None,
+    *,
+    ploidy=None,
+    sequence_length=None,
+    samples=None,
+    discrete_genome=None,
+    recombination_rate=None,
+    population_size=None,
+    demography=None,
+    model=None,
+    random_seed=None,
+    num_replicates=None,
+):
+    if discrete_genome is None:
+        discrete_genome = True
+    if ploidy is None:
+        ploidy = 1
+    if population_size is None:
+        population_size = 1
+    # Samples are interpreted as k-ploid individuals here. For the
+    # initial hack we just multiply by this value.
+    if sample_size is not None:
+        sample_size *= ploidy
+    elif samples is not None:
+        old_samples = samples
+        samples = [None] * (len(samples) * ploidy)
+        j = 0
+        for sample in old_samples:
+            for _ in range(ploidy):
+                samples[j] = sample
+                j += 1
+
+    recomb_map = None
+    if recombination_rate is None:
+        if sequence_length is None:
+            # We've no recombination, so this is a single locus simulation.
+            # Defaulting to length of 1 is fine.
+            sequence_length = 1
+    else:
+        # The recombination_rate argument is more flexible.
+        if isinstance(recombination_rate, intervals.RateMap):
+            recomb_map = recombination_rate
+            recombination_rate = None
+        else:
+            if sequence_length is None:
+                raise ValueError(
+                    "Must specify a sequence_length for simulations of a "
+                    "genome with recombination or gene conversion without "
+                    "rate map"
+                )
+
+    sim = simulator_factory(
+        sample_size=sample_size,
+        samples=samples,
+        # ploidy=ploidy,
+        length=sequence_length,
+        discrete_genome=discrete_genome,
+        recombination_rate=recombination_rate,
+        recombination_map=recomb_map,
+        Ne=population_size,
+        demography=demography,
+        random_seed=random_seed,
+        model=model,
+    )
+
+    # TODO abstract out the running of replicates stuff a bit more
+    # so that it's a method of the tree sequence.
+    return_single = False
+    if num_replicates is None:
+        num_replicates = 1
+        return_single = True
+    iterator = sim.run_replicates(
+        num_replicates,
+        # provenance_dict=provenance_dict,
+    )
+    if return_single:
+        return next(iterator)
+    return iterator
+
+
 class Simulator(_msprime.Simulator):
     """
     Class to simulate trees under a variety of population models.

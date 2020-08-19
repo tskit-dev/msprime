@@ -33,6 +33,18 @@ import msprime
 from msprime import _msprime
 
 
+def tree_sequences_equal(ts1, ts2):
+    """
+    Returns True if the specified tree sequences are equal, ignoring
+    their provenances.
+    """
+    t1 = ts1.dump_tables()
+    t2 = ts2.dump_tables()
+    t1.provenances.clear()
+    t2.provenances.clear()
+    return t1 == t2
+
+
 def has_discrete_genome(ts):
     """
     Returns True if the specified tree sequence has discrete genome coordinates.
@@ -713,6 +725,114 @@ class TestSimulatorFactory(unittest.TestCase):
         self.assertEqual(
             str(ve.exception), "Negative population ID in sample at index 2"
         )
+
+
+class TestSimAncestryInterface(unittest.TestCase):
+    """
+    Some simple tests cases for the sim_ancestry interface.
+    """
+
+    def test_defaults(self):
+        n = 10
+        ts = msprime.sim_ancestry(n)
+        self.assertEqual(ts.num_samples, n)
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(ts.num_sites, 0)
+        self.assertEqual(ts.sequence_length, 1)
+
+    def test_ploidy(self):
+        n = 10
+        for k in [1, 2, 3, 4]:
+            ts = msprime.sim_ancestry(n, ploidy=k)
+            self.assertEqual(ts.num_samples, k * n)
+            self.assertEqual(ts.num_trees, 1)
+            self.assertEqual(ts.num_sites, 0)
+            self.assertEqual(ts.sequence_length, 1)
+            # TODO check for individuals
+
+    def test_ploidy_demography(self):
+        n = 2
+        demography = msprime.Demography.island_model(2, 0.1)
+        for k in [1, 2, 3, 4]:
+            samples = demography.sample(n, n)
+            ts = msprime.sim_ancestry(samples=samples, ploidy=k, demography=demography)
+            self.assertEqual(ts.num_samples, len(samples) * k)
+            self.assertEqual(ts.num_trees, 1)
+            self.assertEqual(ts.num_sites, 0)
+            self.assertEqual(ts.sequence_length, 1)
+            self.assertEqual(ts.num_populations, 2)
+            # TODO check for individuals
+
+    def test_random_seed(self):
+        ts1 = msprime.sim_ancestry(10, random_seed=1)
+        ts2 = msprime.sim_ancestry(10, random_seed=1)
+        self.assertTrue(tree_sequences_equal(ts1, ts2))
+
+        ts2 = msprime.sim_ancestry(10, random_seed=2)
+        self.assertFalse(tree_sequences_equal(ts1, ts2))
+
+    def test_population_size(self):
+        ts1 = msprime.sim_ancestry(10, population_size=1, random_seed=2)
+        # Defaults to 1
+        ts2 = msprime.sim_ancestry(10, random_seed=2)
+        self.assertTrue(tree_sequences_equal(ts1, ts2))
+        ts2 = msprime.sim_ancestry(10, population_size=100, random_seed=2)
+        # Acts as a simple scaling factor on times.
+        self.assertEqual(ts1.tables.edges, ts2.tables.edges)
+        self.assertTrue(np.allclose(100 * ts1.tables.nodes.time, ts2.tables.nodes.time))
+
+    def test_replicates(self):
+        ts = msprime.simulate(10)
+        self.assertIsInstance(ts, tskit.TreeSequence)
+        for n in [0, 1, 2, 5]:
+            ts_list = list(msprime.sim_ancestry(10, num_replicates=n))
+            self.assertEqual(len(ts_list), n)
+            for ts in ts_list:
+                self.assertIsInstance(ts, tskit.TreeSequence)
+                self.assertEqual(ts.num_samples, 10)
+                self.assertEqual(ts.num_trees, 1)
+
+    def test_recombination_rate(self):
+        ts = msprime.sim_ancestry(10, recombination_rate=1, sequence_length=10)
+        self.assertEqual(ts.num_samples, 10)
+        self.assertEqual(ts.sequence_length, 10)
+        self.assertGreater(ts.num_trees, 1)
+        self.assertTrue(has_discrete_genome(ts))
+        # A non-zero recombination_rate and no sequence length is an error
+        with self.assertRaises(ValueError):
+            msprime.sim_ancestry(10, recombination_rate=1)
+        # But if we specify a rate map, that's OK.
+        rate_map = msprime.RateMap.uniform(sequence_length=10, rate=1)
+        ts = msprime.sim_ancestry(10, recombination_rate=rate_map)
+        self.assertEqual(ts.num_samples, 10)
+        self.assertEqual(ts.sequence_length, 10)
+        self.assertGreater(ts.num_trees, 1)
+        self.assertTrue(has_discrete_genome(ts))
+
+        # We should get precisely the same ts if we have the same seed
+        ts1 = msprime.sim_ancestry(
+            10, recombination_rate=1, sequence_length=10, random_seed=1
+        )
+        ts2 = msprime.sim_ancestry(10, recombination_rate=rate_map, random_seed=1)
+        self.assertTrue(tree_sequences_equal(ts1, ts2))
+
+    def test_model(self):
+        ts1 = msprime.sim_ancestry(10, population_size=100, random_seed=2)
+        ts2 = msprime.sim_ancestry(
+            10, population_size=100, model="hudson", random_seed=2
+        )
+        self.assertTrue(tree_sequences_equal(ts1, ts2))
+        ts2 = msprime.sim_ancestry(10, population_size=100, model="dtwf", random_seed=2)
+        self.assertFalse(tree_sequences_equal(ts1, ts2))
+
+    def test_continuous_genome(self):
+        ts = msprime.sim_ancestry(
+            10, recombination_rate=10, sequence_length=1, discrete_genome=False
+        )
+        self.assertEqual(ts.num_samples, 10)
+        self.assertEqual(ts.sequence_length, 1)
+        self.assertGreater(ts.num_trees, 1)
+        self.assertFalse(has_discrete_genome(ts))
 
 
 class TestSimulateInterface(unittest.TestCase):
