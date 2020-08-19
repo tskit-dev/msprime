@@ -1958,9 +1958,9 @@ class XiVsHudsonTest(Test):
             if model != "hudson":
                 model_str = "Xi"
                 # The Xi Dirac coalescent scales differently than the Hudson model.
-                # (Ne² for Dirac and 4Ne for Hudson).
-                # We need NeDirac= square_root(4NeHudson).
-                simulate_args["Ne"] = 2 * (math.sqrt(int(simulate_args["Ne"])))
+                # (Ne² for Dirac and 2Ne for Hudson).
+                # We need NeDirac= square_root(2NeHudson).
+                simulate_args["Ne"] = math.sqrt(2 * int(simulate_args["Ne"]))
             logging.debug(f"Running: {simulate_args}")
             replicates = msprime.simulate(**simulate_args)
             data = collections.defaultdict(list)
@@ -2393,7 +2393,7 @@ class XiGrowth(Test):
 class BetaGrowth(XiGrowth):
     def _run(self, pop_size, alpha, growth_rate, num_replicates=10000):
         logging.debug(f"running Beta growth for {pop_size} {alpha} {growth_rate}")
-        a = 2 / self.compute_beta_timescale(pop_size, alpha)
+        a = 1 / (4 * self.compute_beta_timescale(pop_size, alpha))
         b = growth_rate * (alpha - 1)
         model = (msprime.BetaCoalescent(alpha=alpha, truncation_point=1),)
         name = f"N={pop_size}_alpha={alpha}_growth_rate={growth_rate}"
@@ -2403,7 +2403,7 @@ class BetaGrowth(XiGrowth):
         m = 2 + np.exp(alpha * np.log(2) + (1 - alpha) * np.log(3) - np.log(alpha - 1))
         ret = np.exp(
             alpha * np.log(m)
-            + (alpha - 1) * np.log(pop_size)
+            + (alpha - 1) * np.log(pop_size / 2)
             - np.log(alpha)
             - scipy.special.betaln(2 - alpha, alpha)
         )
@@ -2422,7 +2422,7 @@ class BetaGrowth(XiGrowth):
 class DiracGrowth(XiGrowth):
     def _run(self, pop_size, c, psi, growth_rate, num_replicates=10000):
         logging.debug(f"running Dirac growth for {pop_size} {c} {psi} {growth_rate}")
-        a = 2 * (1 + c * psi * psi / 4) / (pop_size * pop_size)
+        a = (1 + c * psi * psi / 4) / (pop_size * pop_size)
         b = growth_rate
         model = (msprime.DiracCoalescent(psi=psi, c=c),)
         name = f"N={pop_size}_c={c}_psi={psi}_growth_rate={growth_rate}"

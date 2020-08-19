@@ -515,6 +515,6 @@ void mutgen_print_state(mutgen_t *self, FILE *out);
 
 /* Functions exposed here for unit testing. Not part of public API. */
 int msp_multi_merger_common_ancestor_event(
-    msp_t *self, avl_tree_t *ancestors, avl_tree_t *Q, uint32_t k);
+    msp_t *self, avl_tree_t *ancestors, avl_tree_t *Q, uint32_t k, uint32_t num_pots);
 
 #endif /*__MSPRIME_H__*/
