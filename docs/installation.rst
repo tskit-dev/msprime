@@ -4,38 +4,25 @@
 Installation
 ############
 
-There are two basic options for installing ``msprime``: either through
-pre-built binary packages using :ref:`sec_installation_conda` or
-by compiling locally using :ref:`sec_installation_pip`. We recommend using ``conda``
-for most users, although ``pip`` can be more convenient in certain cases.
+There are three options for installing ``msprime``: 
 
-.. _sec_installation_requirements:
+1. :ref:`sec_installation_conda`: the recommended options for most users
 
-============
-Requirements
-============
+2. :ref:`sec_installation_pip`: more flexibility and control for advanced users
 
-Msprime requires Python 3.4+
-and the `GNU Scientific Library <http://www.gnu.org/software/gsl/>`_.
-GSL can either be installed automatically as part of a
-:ref:`sec_installation_conda` installation **or** via system packages
-(see :ref:`sec_pip_platform_specific_installation`)
-
-.. warning::
-    If you installed Python using anaconda/miniconda, please install
-    msprime using ``conda``. Link/load time errors will occur if you mix
-    a conda installed Python with system libraries.
+3. :ref:`sec_linux_container`: to use
+   ``msprime`` inside an extremely isolated environment
 
 
 .. _sec_installation_conda:
 
-=====
-conda
-=====
+=========
+Via Conda
+=========
 
 Pre-built binary packages for ``msprime`` are available through
 `conda <https://conda.io/docs/>`_, and built using `conda-forge <https://conda-forge.org/>`_.
-Packages for Python 3.6 and 3.7 are available for Linux, OSX and Windows.
+Packages for Python 3.6, 3.7 and 3.8 are available for Linux, OSX and Windows.
 
 ***********
 Quick Start
@@ -156,48 +143,86 @@ more details on managing packages and environments.
 
 .. _sec_installation_pip:
 
-===
-pip
-===
+=======
+Via Pip
+=======
 
 Installing using ``pip`` is more flexible than ``conda`` as it
 can support more versions of Python, and the locations of the
 various dependencies can be specified.
 
-Installing via ``pip`` is the recommended method when using the
-system provided Python installations.
+.. warning::
+    If you installed Python using anaconda/miniconda, please install
+    msprime using ``conda``. Link/load time errors will occur if you mix
+    a conda installed Python with system libraries.
+
+To install msprime via pip, first
+:ref:`sec_installation_system_requirements`, then :ref:`sec_run_pip`.
 
 .. _sec_installation_system_requirements:
 
-******************************
-Installing system requirements
-******************************
+*************************
+check system requirements
+*************************
 
-When installing via ``pip``, GSL must be installed using system packages
-(we do not recommend installing GSL from source). GSL packages are available
-on all major platforms.
+Msprime has a number of requirements which may or may not already be
+installed on your system:
 
-For example, to install on Debian/Ubuntu use (as root)::
+* Python 3.6+ and pip
+* `GNU Scientific Library <http://www.gnu.org/software/gsl/>`_ (GSL)
+* other requirements depending on the specific platform
 
-    $ apt-get install python-dev libgsl0-dev
+To make sure you have Python 3.6+ and pip installed, run
 
-For Redhat/Fedora use::
+.. code-block:: bash
 
-    $ yum install gsl-devel
+    $ python3 -m pip --version
 
-On FreeBSD we can use ``pkg`` to install the requirements::
+to make sure you see Python 3.6 or greater.
+If you do not, do installation :ref:`via conda <sec_installation_conda>`.
 
-    $ pkg install gsl
+To install GSL, follow instructions per your platform.
 
-To install the dependencies on OS X, we can use `Homebrew <http://brew.sh/>`_::
+.. glossary::
 
-    $ brew update
-    $ brew install gsl
+    Debian/Ubuntu
+        ::
+
+            $ apt-get install python-dev libgsl0-dev
+
+    Redhat/Fedora
+        ::
+
+            $ yum install gsl-devel
+
+    FreeBSD
+        ::
+
+            $ pkg install gsl
+
+    OS X
+        We recommend using :ref:`sec_installation_conda` to install ``msprime`` on OS X.
+        However, it is also possible to install using `Homebrew <http://brew.sh/>`_:
+        ::
+
+            $ brew update
+            $ brew install gsl
+
+    Windows
+        Use :ref:`sec_installation_conda`, do not install via ``pip`` on Windows.
 
 
-************
-Installation
-************
+There may be additional requirements depending on the specific platform. The
+next instructions running pip might not succeed. Depending your platform, you
+might be able to determine missing requirements. If not, install :ref:`via
+conda <sec_installation_conda>`.
+
+
+.. _sec_run_pip:
+
+***************
+run pip install
+***************
 
 We can install ``msprime`` easily using pip::
 
@@ -205,8 +230,7 @@ We can install ``msprime`` easily using pip::
 
 (It is generally better to use ``python3 -m pip`` rather than call ``pip``
 directly since this allows you to control which installation of Python the
-package is installed to.) This will work in most cases, once the GSL has been
-installed. See below for platform specific build instructions when this fails.
+package is installed to.)
 
 If you do not have root access to your machine, you can install
 ``msprime`` into your local Python installation as follows::
@@ -224,94 +248,106 @@ To uninstall ``msprime``, simply run::
     $ python3 -m pip uninstall msprime
 
 
-.. _sec_pip_platform_specific_installation:
+.. _sec_linux_container:
 
-******************************
-Platform specific installation
-******************************
+=============
+Via Container 
+=============
 
-This section contains instructions to build on platforms
-that require build time flags for GSL.
+An `open container <https://opencontainers.org/>`_ image (aka docker image) is built on
+`Dockerhub <https://hub.docker.com/r/tskit/msprime>`_ for each release of
+msprime. Each image is `tagged <https://hub.docker.com/r/tskit/msprime/tags>`_
+with the corresponding release. For example, for msprime release 0.7.5, the
+corresponding image tag is ``tskit/msprime:0.7.5``.
 
-+++++++++++++
-Debian/Ubuntu
-+++++++++++++
+To run a container, you can use `docker <https://www.docker.com/>`_,
+`Singularity <https://sylabs.io/singularity/>`_,
+`podman <https://podman.io/>`_ or similar tools supporting docker images.
 
-To install and run ``msprime`` on a fresh Ubuntu 15.10 installation, do the
-following:
+******
+docker
+******
+
+`docker` requires root privilege to run a container:
 
 .. code-block:: bash
 
-    $ sudo apt-get install pkg-config python-dev python-pip libgsl0-dev
-    $ pip install msprime --user
-    $ ~/.local/bin/mspms 2 1 -t 1
-    /usr/local/bin/mspms 2 1 -t 1
-    5338 8035 23205
+    $ sudo docker run -it tskit/msprime:<release> mspms 10 1 -T
 
-    //
-    segsites: 3
-    positions: 0.014 0.045 0.573
-    100
-    011
+******
+podman
+******
+
+podman can run an msprime container without root privilege:
+
+.. code-block:: bash
+
+    $ podman run -it docker.io/tskit/msprime:<release> mspms 10 1 -T
+
+***********
+Singularity
+***********
+
+A docker image can also be converted to a Singularity container and
+then run without root privilege:
+
+.. code-block:: bash
+
+    $ singularity pull docker://tskit/msprime:<release> msprime-<release>.simg
+    $ singularity exec msprime-<release>.simg mspms 10 1 -T
+
+.. note::
+
+  It is possible that your current environment may conflict with the environment in the singularity container.
+  There are two workarounds:
+
+  1.  Ignore your home with the conflicting environment with ``--contain`` or ``-H </new/path/to/home> -e``
+
+  .. code-block:: bash
+
+      $ singularity shell --contain msprime-release-0.7.3.simg
+      Singularity: Invoking an interactive shell within container...
+
+      Singularity msprime-release-0.7.3.simg:~> python3
+      Python 3.6.8 (default, Jan 14 2019, 11:02:34)
+      [GCC 8.0.1 20180414 (experimental) [trunk revision 259383]] on linux
+      Type "help", "copyright", "credits" or "license" for more information.
+      >>> import msprime
+      >>>
+
+  or use a different path as your home that does not have a conflicting environment
+
+  .. code-block:: bash
+
+      $ singularity shell -H </new/path/to/home> -e msprime-release-0.7.3.simg
+      Singularity: Invoking an interactive shell within container...
+
+      Singularity msprime-release-0.7.3.simg:~/cnn_classify_demography> python3
+      Python 3.6.8 (default, Jan 14 2019, 11:02:34)
+      [GCC 8.0.1 20180414 (experimental) [trunk revision 259383]] on linux
+      Type "help", "copyright", "credits" or "license" for more information.
+      >>> import msprime
+      >>>
+
+  2. In python get rid of your local path
+
+  .. code-block:: bash
+
+      $ singularity shell msprime-release-0.7.3.simg
+      Singularity: Invoking an interactive shell within container...
+
+      Singularity msprime-release-0.7.3.simg:~> python3
+      Python 3.6.8 (default, Jan 14 2019, 11:02:34)
+      [GCC 8.0.1 20180414 (experimental) [trunk revision 259383]] on linux
+      Type "help", "copyright", "credits" or "license" for more information.
+      >>> import sys
+      >>> for _path in sys.path:
+      ...     if ".local" in _path:
+      ...             sys.path.remove(_path)
+      ...
+      >>> import msprime
+      >>>
 
 
-++++++++++++
-FreeBSD 10.0
-++++++++++++
-
-Install the prerequisitites, and build ``msprime`` as follows::
-
-    $ pkg install gsl
-    $ CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib pip install msprime
-
-This assumes that root is logged in using a bash shell. For other shells,
-different methods are need to set the ``CFLAGS`` and ``LDFLAGS`` environment
-variables.
-
-+++++++++++++
-OS X Homebrew
-+++++++++++++
-
-We recommend using :ref:`sec_installation_conda` to install ``msprime`` on OS X.
-However, it is also possible to install using Homebrew to satisfy the
-GSL dependency.
-
-First, ensure that Homebrew is installed and up-to-date::
-
-    $ brew update
-
-We need to ensure that the version of Python we used is installed via Homebrew
-(there can be linking issues if we use the built-in version of
-Python or a version from Anaconda). Therefore, we install Python 3 using
-homebrew::
-
-    $ brew install python3
-    $ pip3 install --upgrade pip setuptools
-
-The previous step can be skipped if you wish to use your own Python installation,
-and already have a working pip.
-
-Now install the dependencies and msprime::
-
-    $ brew install gsl
-    $ pip3 install msprime
-
-Check if it works::
-
-    $ mspms 10 1 -T
-
-
-==============
-Python 2 users
-==============
-
-Msprime no longer supports Python 2, and therefore those wishing to continue
-using Python 2.7 will not be able to take advantage of newer features. We
-recommend using msprime version 0.6.2 if you need to work with Python 2.7::
-
-$ python -m pip install msprime==0.6.2
-
-or ::
-
-$ conda install msprime==0.6.2
+For more information on Singularity, see https://www.sylabs.io/guides/3.6/user-guide/
 
