@@ -35,6 +35,10 @@
 - The ``simulate`` function only takes one positional argument, and all other
   arguments are keyword-only.
 
+- The ``msp`` CLI has been stripped of all sub-commands except for
+  ``simulate`` and ``mutate``. These sub-commands are provided by the ``tskit``
+  CLI or the ``TreeSequence`` API in ``tskit``.
+
 
 ********************
 [0.7.4] - 2019-12-05
