@@ -247,10 +247,16 @@ msp_set_store_full_arg(msp_t *self, bool store_full_arg)
 }
 
 int
-msp_set_ploidy(msp_t *self, uint32_t ploidy)
+msp_set_ploidy(msp_t *self, int ploidy)
 {
-    self->ploidy = ploidy;
-    return 0;
+    int ret = 0;
+    if (ploidy < 1) {
+        ret = MSP_ERR_BAD_PLOIDY;
+        goto out;
+    }
+    self->ploidy = (uint32_t) ploidy;
+out:
+    return ret;
 }
 
 int

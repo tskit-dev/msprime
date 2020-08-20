@@ -229,6 +229,9 @@ msp_strerror_internal(int err)
                   "parameters, and if they make sense help us fix the problem "
                   "by opening an issue on GitHub.";
             break;
+        case MSP_ERR_BAD_PLOIDY:
+            ret = "Ploidy must be at least 1";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                   "report!";

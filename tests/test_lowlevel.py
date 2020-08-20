@@ -1039,6 +1039,26 @@ class TestSimulator(LowLevelTestCase):
         self.assertEqual(sim.fenwick_drift(0), 0)
         self.assertRaises(TypeError, f, "sdf")
 
+    def test_ploidy(self):
+        def f(ploidy):
+            return _msprime.Simulator(
+                get_samples(10),
+                uniform_rate_map(),
+                _msprime.RandomGenerator(1),
+                _msprime.LightweightTableCollection(1),
+                ploidy=ploidy,
+            )
+
+        for ploidy in [1, 2, 3]:
+            sim = f(ploidy)
+            self.assertEqual(sim.ploidy, ploidy)
+        for bad_type in ["sdf", [], 0.0]:
+            with self.assertRaises(TypeError):
+                f(bad_type)
+        for bad_ploidy in [-1, -100, 0]:
+            with self.assertRaises(_msprime.InputError):
+                f(bad_ploidy)
+
     @unittest.skipIf(IS_WINDOWS, "windows IO is weird")
     def test_print_state_errors(self):
         sim = _msprime.Simulator(

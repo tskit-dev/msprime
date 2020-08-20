@@ -724,6 +724,8 @@ test_simulator_getters_setters(void)
 
     ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(msp_set_ploidy(&msp, -1), MSP_ERR_BAD_PLOIDY);
+    CU_ASSERT_EQUAL(msp_set_ploidy(&msp, 0), MSP_ERR_BAD_PLOIDY);
     CU_ASSERT_EQUAL(msp_set_dimensions(&msp, 0, 1), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_dimensions(&msp, 1, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_node_mapping_block_size(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
