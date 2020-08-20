@@ -2896,7 +2896,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "demographic_events", "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time",
         "store_full_arg", "num_labels", "gene_conversion_rate",
-        "gene_conversion_track_length", "discrete_genome", NULL};
+        "gene_conversion_track_length", "discrete_genome",
+        "ploidy", NULL};
     PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
@@ -2920,10 +2921,11 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     double start_time = -1;
     double gene_conversion_rate = 0;
     double gene_conversion_track_length = 1.0;
+    int ploidy = 2;
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!OOO!O!nnnidinddi", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!OOO!O!nnnidinddii", kwlist,
             &PyList_Type, &py_samples,
             &PyDict_Type, &recombination_map,
             &RandomGeneratorType, &random_generator,
@@ -2938,7 +2940,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &node_mapping_block_size, &store_migrations, &start_time,
             &store_full_arg, &num_labels,
             &gene_conversion_rate, &gene_conversion_track_length,
-            &discrete_genome)) {
+            &discrete_genome, &ploidy)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -3016,6 +3018,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     msp_set_discrete_genome(self->sim, discrete_genome);
+
+    sim_ret = msp_set_ploidy(self->sim, ploidy);
+    if (sim_ret != 0) {
+        handle_input_error("set_ploidy", sim_ret);
+        goto out;
+    }
 
     sim_ret = msp_set_dimensions(self->sim, (size_t) num_populations, (size_t) num_labels);
     if (sim_ret != 0) {
@@ -3178,6 +3186,18 @@ Simulator_get_discrete_genome(Simulator *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("i", self->sim->discrete_genome);
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_ploidy(Simulator *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i", self->sim->ploidy);
 out:
     return ret;
 }
@@ -4106,6 +4126,9 @@ static PyGetSetDef Simulator_getsetters[] = {
     {"discrete_genome",
             (getter) Simulator_get_discrete_genome, NULL,
             "True if the simulator has a discrete genome." },
+    {"ploidy",
+            (getter) Simulator_get_ploidy, NULL,
+            "Returns the simulation ploidy." },
     {"tables",
             (getter) Simulator_get_tables, NULL,
             "The tables"},

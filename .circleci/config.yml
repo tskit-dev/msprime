@@ -62,7 +62,7 @@ jobs:
       - run:
           name: Run gcov manually, as the one used in codecov doesn't work here.
           command: |
-            gcov -pb -o ./build/temp.linux*/ _msprimemodule.c
+            gcov -pb -o ./build/temp.linux*/msprime msprime/_msprimemodule.c
             cd build-gcc
             # TODO should be able to do this with 'find', but it's tricky and opaque.
             gcov -pb ./libmsprime.a.p/fenwick.c.gcno ../lib/fenwick.c
