@@ -4468,6 +4468,13 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
             }
             assert(mig_tmp[j] == 0);
 
+            // Must check that row sums of migration matrix are <=1 in the main
+            // loop, as multiple indices can change in the same generation
+            if (sum > 1) {
+                ret = MSP_ERR_DTWF_MIGRATION_MATRIX_NOT_STOCHASTIC;
+                goto out;
+            }
+
             mig_tmp[j] = 1 - sum;
             N = avl_count(&self->populations[j].ancestors[label]);
             gsl_ran_multinomial(self->rng, self->num_populations, N, mig_tmp, n);

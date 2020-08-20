@@ -499,15 +499,18 @@ def simulate(
         a single population with a sample of size ``sample_size``
         is assumed.
     :type population_configurations: list or None.
-    :param list migration_matrix: The matrix describing the rates
-        of migration between all pairs of populations. If :math:`N`
-        populations are defined in the ``population_configurations``
-        parameter, then the migration matrix must be an
-        :math:`N \\times N` matrix with 0 on the diagonal, consisting of
-        :math:`N` lists of length :math:`N` or an :math:`N \\times N` numpy
-        array, with the [j, k]th element giving the fraction of
-        population j that consists of migrants from population k in each
-        generation.
+    :param list migration_matrix: The matrix describing the rates of migration
+        between all pairs of populations. If :math:`N` populations are defined
+        in the ``population_configurations`` parameter, then the migration
+        matrix must be an :math:`N \\times N` matrix with 0 on the diagonal,
+        consisting of :math:`N` lists of length :math:`N` or an :math:`N
+        \\times N` numpy array. The :math:`[j, k]^{th}` element of the
+        migration matrix gives the expected number of migrants moving from
+        population :math:`k` to population :math:`j` per generation, divided by
+        the size of population :math:`j`.  When simulating from the
+        discrete-time Wright-Fisher model (``model = "dtwf"``), the row sums of
+        the migration matrix must not exceed 1. There are no sum constraints for
+        migration rates in continuous-time models.
     :param list demographic_events: The list of demographic events to
         simulate. Demographic events describe changes to the populations
         in the past. Events should be supplied in non-decreasing

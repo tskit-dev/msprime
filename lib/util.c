@@ -232,6 +232,10 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_PLOIDY:
             ret = "Ploidy must be at least 1";
             break;
+        case MSP_ERR_DTWF_MIGRATION_MATRIX_NOT_STOCHASTIC:
+            ret = "The row sums of the migration matrix must not exceed one for "
+                  "the discrete time Wright-Fisher model.";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                   "report!";
