@@ -428,6 +428,11 @@ class TestSimulatorFactory(unittest.TestCase):
         sim = msprime.simulator_factory(10)
         self.assertEqual(sim.demography.populations[0].initial_size, 1)
 
+    def test_ploidy(self):
+        for ploidy in [1, 2, 7]:
+            sim = msprime.simulator_factory(10, ploidy=ploidy)
+            self.assertEqual(sim.ploidy, ploidy)
+
     def test_discrete_genome_continuous_length(self):
         for bad_length in [0.1, 1.1, 1000.1]:
             with self.assertRaises(ValueError):
@@ -749,6 +754,18 @@ class TestSimAncestryInterface(unittest.TestCase):
             self.assertEqual(ts.num_sites, 0)
             self.assertEqual(ts.sequence_length, 1)
             # TODO check for individuals
+
+    def test_hudson_time_scale(self):
+        n = 10
+        seed = 1234
+        for ploidy in [1, 2, 3, 7]:
+            # Default ploidy is 1
+            ts1 = msprime.sim_ancestry(n * ploidy, random_seed=seed)
+            ts2 = msprime.sim_ancestry(n, ploidy=ploidy, random_seed=seed)
+            t1 = ts1.tables
+            t2 = ts2.tables
+            self.assertTrue(np.allclose(t1.nodes.time * ploidy, t2.nodes.time))
+            self.assertEqual(t1.edges, t2.edges)
 
     def test_ploidy_demography(self):
         n = 2

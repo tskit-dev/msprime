@@ -266,6 +266,7 @@ def simulator_factory(
     gene_conversion_rate=None,
     gene_conversion_track_length=None,
     demography=None,
+    ploidy=None,
 ):
     """
     Convenience method to create a simulator instance using the same
@@ -390,10 +391,14 @@ def simulator_factory(
     if random_generator is None:
         random_generator = _msprime.RandomGenerator(core.get_random_seed())
 
+    if ploidy is None:
+        ploidy = 2
+
     sim = Simulator(
         samples=samples,
         recombination_map=recombination_map,
         discrete_genome=discrete_genome,
+        ploidy=ploidy,
         Ne=Ne,
         random_generator=random_generator,
         pedigree=pedigree,
@@ -683,6 +688,9 @@ def simulate(
         return iterator
 
 
+# This is the initial prototype interface for sim_ancestry. A bunch of
+# parameters have been left out in the interest of simplicity so that
+# we can get an initial version in as soon as possible.
 def sim_ancestry(
     sample_size=None,
     *,
@@ -738,7 +746,7 @@ def sim_ancestry(
     sim = simulator_factory(
         sample_size=sample_size,
         samples=samples,
-        # ploidy=ploidy,
+        ploidy=ploidy,
         length=sequence_length,
         discrete_genome=discrete_genome,
         recombination_rate=recombination_rate,
@@ -775,6 +783,7 @@ class Simulator(_msprime.Simulator):
         samples,
         recombination_map,
         discrete_genome,
+        ploidy,
         Ne,
         random_generator,
         demography,
@@ -843,6 +852,7 @@ class Simulator(_msprime.Simulator):
             gene_conversion_rate=gene_conversion_rate,
             gene_conversion_track_length=gene_conversion_track_length,
             discrete_genome=discrete_genome,
+            ploidy=ploidy,
         )
         # attributes that are internal to the highlevel Simulator class
         self._hl_from_ts = from_ts
