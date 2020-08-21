@@ -31,7 +31,7 @@ class Mock(MagicMock):
         return MagicMock()
 
 
-MOCK_MODULES = ["_msprime"]
+MOCK_MODULES = ["msprime._msprime"]
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -125,8 +125,8 @@ master_doc = "index"
 
 # General information about the project.
 project = "msprime"
-copyright = "2015-2019, Jerome Kelleher"  # noqa: A001
-author = "Jerome Kelleher"
+copyright = "2015-2020, Tskit Developers"  # noqa: A001
+author = "Tskit Developers"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
