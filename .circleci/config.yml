@@ -63,8 +63,7 @@ jobs:
       - run:
           name: Run the low-level tests.
           command: |
-            cd build-gcc
-            ./tests
+            ninja -C build-gcc test
 
       - run:
           name: Run gcov manually, as the one used in codecov doesn't work here.
