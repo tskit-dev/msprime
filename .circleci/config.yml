@@ -34,6 +34,13 @@ jobs:
           command: |
             pre-commit run --all-files --show-diff-on-failure
 
+      # Note: it's important that we build the docs *before* compiling the low-level
+      # module so that we're simulating the build on readthedocs as accurately as
+      # possible.
+      - run:
+          name: Make sure the docs build.
+          command: make -C docs
+
       - run:
           name: Compile Python
           command: |
@@ -76,9 +83,6 @@ jobs:
             cd ..
             codecov -X gcov -F C
 
-      - run:
-          name: Make sure the docs build.
-          command: make -C docs
       - run:
           name: Make sure we can build a distribution tarball.
           command: |
