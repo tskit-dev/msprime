@@ -19,6 +19,10 @@
 
 #include "testlib.h"
 
+/* Global variables used for test in state in the test suite */
+char *_tmp_file_name;
+FILE *_devnull;
+
 static int
 msprime_suite_init(void)
 {
