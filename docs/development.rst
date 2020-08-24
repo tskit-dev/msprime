@@ -561,104 +561,21 @@ on how to write and run these tests.
 Containerization
 ****************
 
-This repo is integrated with `Dockerhub <https://hub.docker.com/r/tskit/msprime>`__ and the Docker image will be automatically
-built upon each release on GitHub. Each Docker image is `tagged <https://hub.docker.com/r/tskit/msprime/tags>`__ with the corresponding release.
+To run msprime in a container, see the
+:ref:`installation instructions as Linux container <sec_linux_container>`.
 
-Enter a Docker container from Dockerhub:
-
-.. code-block:: bash
-
-    $ sudo docker run -it tskit/msprime:<release>
-
-For example, if we want to use msprime release 0.7.3, we would use the corresponding Docker image tag (``tskit/msprime:0.7.3``)
-
-msprime can also be executed via the Docker container:
-
-.. code-block:: bash
-
-    $ sudo docker run -it tskit/msprime:<release> mspms 10 1 -T
-
-A Docker image can also be locally built:
+You can use ``docker`` to locally build an image, but it requires root access:
 
 .. code-block:: bash
 
     $ sudo docker build -t tskit/msprime .
 
-
-Building Docker images and running Docker containers requires root access.
-If you are on a system and do not have root access, you can pull the Docker image
-and run it as a Singularity container.
-
-To run as a Singularity container, pull the docker image:
+`podman <https://podman.io/>`_ can build and run images without root privilege.
 
 .. code-block:: bash
 
-    $ singularity pull docker://tskit/msprime:<release> msprime-<release>.simg
+    $ podman build -t tskit/msprime .
 
-Enter Singularity container container:
-
-.. code-block:: bash
-
-    $ singularity shell msprime-<release>.simg
-
-Or, msprime can be executed via the Singularity container:
-
-.. code-block:: bash
-
-    $ singularity exec msprime-<release>.simg mspms 10 1 -T
-
-It is possible that your current environment may conflict with the environment in the singularity container.
-There are two workarounds:
-
-1.  Ignore your home with the conflicting environment with ``--contain`` or ``-H </new/path/to/home> -e``
-
-.. code-block:: bash
-
-    $ singularity shell --contain msprime-release-0.7.3.simg
-    Singularity: Invoking an interactive shell within container...
-
-    Singularity msprime-release-0.7.3.simg:~> python3
-    Python 3.6.8 (default, Jan 14 2019, 11:02:34)
-    [GCC 8.0.1 20180414 (experimental) [trunk revision 259383]] on linux
-    Type "help", "copyright", "credits" or "license" for more information.
-    >>> import msprime
-    >>>
-
-or use a different path as your home that does not have a conflicting environment
-
-.. code-block:: bash
-
-    $ singularity shell -H </new/path/to/home> -e msprime-release-0.7.3.simg
-    Singularity: Invoking an interactive shell within container...
-
-    Singularity msprime-release-0.7.3.simg:~/cnn_classify_demography> python3
-    Python 3.6.8 (default, Jan 14 2019, 11:02:34)
-    [GCC 8.0.1 20180414 (experimental) [trunk revision 259383]] on linux
-    Type "help", "copyright", "credits" or "license" for more information.
-    >>> import msprime
-    >>>
-
-2. In python get rid of your local path
-
-.. code-block:: bash
-
-    $ singularity shell msprime-release-0.7.3.simg
-    Singularity: Invoking an interactive shell within container...
-
-    Singularity msprime-release-0.7.3.simg:~> python3
-    Python 3.6.8 (default, Jan 14 2019, 11:02:34)
-    [GCC 8.0.1 20180414 (experimental) [trunk revision 259383]] on linux
-    Type "help", "copyright", "credits" or "license" for more information.
-    >>> import sys
-    >>> for _path in sys.path:
-    ...     if ".local" in _path:
-    ...             sys.path.remove(_path)
-    ...
-    >>> import msprime
-    >>>
-
-
-For more information on Singularity, see https://www.sylabs.io/guides/3.0/user-guide/
 
 *************
 Documentation
