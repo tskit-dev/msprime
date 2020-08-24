@@ -556,6 +556,25 @@ directory.
 Please the comments at the top of the ``verification.py`` script for details
 on how to write and run these tests.
 
+************
+Benchmarking
+************
+
+Benchmarks to measure performance are in the ``benchmarks`` folder and are run using
+`airspeed velocity <https://asv.readthedocs.io/en/stable/index.html>`_. These
+benchmarks can be run locally to compare your branch with the master branch. Your
+changes must be in a commit to be measured. To run the benchmarks::
+
+    asv run HEAD...master~1
+
+This will run the benchmarks for the latest master commit and all commits on
+your current branch (the syntax for choosing commits is the same as ``git log``).
+The following commands then make a browsable report (link given by output of
+the command)::
+
+    asv publish
+    asv preview
+
 
 ****************
 Containerization
