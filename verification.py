@@ -1764,9 +1764,9 @@ class RecombinationBreakpointTest(Test):
     """
 
     def verify_breakpoint_distribution(
-        self, name, sample_size, Ne, r, L, model, growth_rate=0
+        self, name, sample_size, Ne, r, L, ploidy, model, growth_rate=0
     ):
-        ts = msprime.simulate(
+        sim = msprime.simulator_factory(
             Ne=Ne,
             recombination_rate=r,
             length=L,
@@ -1775,15 +1775,17 @@ class RecombinationBreakpointTest(Test):
                     sample_size=sample_size, initial_size=Ne, growth_rate=growth_rate
                 )
             ],
+            ploidy=ploidy,
             model=model,
         )
+        ts = next(sim.run_replicates(1))
         empirical = []
         for tree in ts.trees():
             area = tree.total_branch_length * tree.span
             empirical.append(area)
 
         scipy.stats.probplot(empirical, dist=scipy.stats.expon(Ne * r), plot=pyplot)
-        path = self.output_dir / f"{name}_growth={growth_rate}.png"
+        path = self.output_dir / f"{name}_growth={growth_rate}_ploidy={ploidy}.png"
         logging.debug(f"Writing {path}")
         pyplot.savefig(path)
         pyplot.close("all")
@@ -1791,76 +1793,86 @@ class RecombinationBreakpointTest(Test):
     def test_xi_beta_breakpoints(self):
         Ne = 10 ** 4
         for alpha in [1.1, 1.3, 1.6, 1.9]:
-            self.verify_breakpoint_distribution(
-                f"n=100_alpha={alpha}",
-                sample_size=100,
-                Ne=Ne,
-                r=1e-7,
-                L=10 ** 6,
-                model=msprime.BetaCoalescent(alpha=alpha),
-            )
-            # Add a growth rate with a higher recombination rate so
-            # we still get decent numbers of trees
-            self.verify_breakpoint_distribution(
-                f"growth_n=100_alpha={alpha}",
-                sample_size=100,
-                Ne=Ne,
-                r=1e-7,
-                L=10 ** 6,
-                model=msprime.BetaCoalescent(alpha=alpha),
-                growth_rate=0.05,
-            )
+            for p in [1, 2]:
+                self.verify_breakpoint_distribution(
+                    f"n=100_alpha={alpha}",
+                    sample_size=100,
+                    Ne=Ne,
+                    r=1e-7,
+                    L=10 ** 6,
+                    ploidy=p,
+                    model=msprime.BetaCoalescent(alpha=alpha),
+                )
+                # Add a growth rate with a higher recombination rate so
+                # we still get decent numbers of trees
+                self.verify_breakpoint_distribution(
+                    f"growth_n=100_alpha={alpha}",
+                    sample_size=100,
+                    Ne=Ne,
+                    r=1e-7,
+                    L=10 ** 6,
+                    ploidy=p,
+                    model=msprime.BetaCoalescent(alpha=alpha),
+                    growth_rate=0.05,
+                )
 
     def test_xi_dirac_breakpoints(self):
         Ne = 10 ** 2
         for psi in [0.1, 0.3, 0.6, 0.9]:
             for c in [1, 10]:
-                self.verify_breakpoint_distribution(
-                    f"n=100_psi={psi}_c={c}",
-                    sample_size=100,
-                    Ne=Ne,
-                    r=1e-8,
-                    L=10 ** 6,
-                    model=msprime.DiracCoalescent(psi=psi, c=c),
-                )
-                # Add a growth rate with a higher recombination rate so
-                # we still get decent numbers of trees
-                self.verify_breakpoint_distribution(
-                    f"growth_n=100_psi={psi}_c={c}",
-                    sample_size=100,
-                    Ne=Ne,
-                    r=1e-7,
-                    L=10 ** 6,
-                    model=msprime.DiracCoalescent(psi=psi, c=c),
-                    growth_rate=0.05,
-                )
+                for p in [1, 2]:
+                    self.verify_breakpoint_distribution(
+                        f"n=100_psi={psi}_c={c}",
+                        sample_size=100,
+                        Ne=Ne,
+                        r=1e-8,
+                        L=10 ** 6,
+                        ploidy=p,
+                        model=msprime.DiracCoalescent(psi=psi, c=c),
+                    )
+                    # Add a growth rate with a higher recombination rate so
+                    # we still get decent numbers of trees
+                    self.verify_breakpoint_distribution(
+                        f"growth_n=100_psi={psi}_c={c}",
+                        sample_size=100,
+                        Ne=Ne,
+                        r=1e-7,
+                        L=10 ** 6,
+                        ploidy=p,
+                        model=msprime.DiracCoalescent(psi=psi, c=c),
+                        growth_rate=0.05,
+                    )
 
     def test_hudson_breakpoints(self):
-        self.verify_breakpoint_distribution(
-            "single_pop_n_50",
-            sample_size=50,
-            Ne=10 ** 4,
-            r=1e-8,
-            L=10 ** 6,
-            model="hudson",
-        )
-        self.verify_breakpoint_distribution(
-            "single_pop_n_100",
-            sample_size=100,
-            Ne=10 ** 4,
-            r=1e-8,
-            L=10 ** 6,
-            model="hudson",
-        )
-        self.verify_breakpoint_distribution(
-            "single_pop_n_100_growth",
-            sample_size=100,
-            Ne=10 ** 4,
-            r=1e-7,
-            L=10 ** 6,
-            model="hudson",
-            growth_rate=0.05,
-        )
+        for p in [1, 2]:
+            self.verify_breakpoint_distribution(
+                "single_pop_n_50",
+                sample_size=50,
+                Ne=10 ** 4,
+                r=1e-8,
+                L=10 ** 6,
+                ploidy=p,
+                model="hudson",
+            )
+            self.verify_breakpoint_distribution(
+                "single_pop_n_100",
+                sample_size=100,
+                Ne=10 ** 4,
+                r=1e-8,
+                L=10 ** 6,
+                ploidy=p,
+                model="hudson",
+            )
+            self.verify_breakpoint_distribution(
+                "single_pop_n_100_growth",
+                sample_size=100,
+                Ne=10 ** 4,
+                r=1e-7,
+                L=10 ** 6,
+                ploidy=p,
+                model="hudson",
+                growth_rate=0.05,
+            )
 
 
 class RecombinationMutationTest(Test):
@@ -1871,7 +1883,7 @@ class RecombinationMutationTest(Test):
     """
 
     def verify_recombination(
-        self, name, sample_size, Ne, r, m, L, model, growth_rate=0
+        self, name, sample_size, Ne, r, m, L, ploidy, model, growth_rate=0
     ):
         num_replicates = 500
         empirical_theta = []
@@ -1881,6 +1893,7 @@ class RecombinationMutationTest(Test):
                 Ne=Ne,
                 recombination_rate=r,
                 length=L,
+                ploidy=ploidy,
                 population_configurations=[
                     msprime.PopulationConfiguration(
                         sample_size=sample_size,
@@ -1899,7 +1912,10 @@ class RecombinationMutationTest(Test):
         empirical_rho = np.array(empirical_rho)
         empirical_theta = np.array(empirical_theta)
         plot_qq(empirical_theta, empirical_rho)
-        path = self.output_dir / f"{name}_growth={growth_rate}_rec_check.png"
+        path = (
+            self.output_dir
+            / f"{name}_growth={growth_rate}_ploidy={ploidy}_rec_check.png"
+        )
         logging.debug(f"Writing {path}")
         pyplot.savefig(path)
         pyplot.close("all")
@@ -1907,40 +1923,46 @@ class RecombinationMutationTest(Test):
     def test_xi_beta_recombinations(self):
         Ne = 10000
         for alpha in [1.1, 1.3, 1.5, 1.9]:
-            self.verify_recombination(
-                f"n=100_alpha={alpha}",
-                sample_size=100,
-                Ne=Ne,
-                r=1e-8,
-                m=1e-8,
-                L=10 ** 6,
-                model=msprime.BetaCoalescent(alpha=alpha),
-            )
-
-    def test_xi_dirac_recombinations(self):
-        Ne = 100
-        for psi in [0.1, 0.3, 0.5, 0.9]:
-            for c in [1, 10, 100]:
+            for p in [1, 2]:
                 self.verify_recombination(
-                    f"n=100_psi={psi}_c={c}",
+                    f"n=100_alpha={alpha}",
                     sample_size=100,
                     Ne=Ne,
                     r=1e-8,
                     m=1e-8,
                     L=10 ** 6,
-                    model=msprime.DiracCoalescent(psi=psi, c=c),
+                    p=p,
+                    model=msprime.BetaCoalescent(alpha=alpha),
                 )
 
+    def test_xi_dirac_recombinations(self):
+        Ne = 100
+        for psi in [0.1, 0.5, 0.9]:
+            for c in [1, 10]:
+                for p in [1, 2]:
+                    self.verify_recombination(
+                        f"n=100_psi={psi}_c={c}",
+                        sample_size=100,
+                        Ne=Ne,
+                        r=1e-8,
+                        m=1e-8,
+                        L=10 ** 6,
+                        p=p,
+                        model=msprime.DiracCoalescent(psi=psi, c=c),
+                    )
+
     def test_hudson_recombinations(self):
-        self.verify_recombination(
-            "n=100_hudson",
-            sample_size=100,
-            Ne=10000,
-            r=1e-8,
-            m=1e-8,
-            L=10 ** 6,
-            model="hudson",
-        )
+        for p in [1, 2]:
+            self.verify_recombination(
+                "n=100_hudson",
+                sample_size=100,
+                Ne=10000,
+                r=1e-8,
+                m=1e-8,
+                L=10 ** 6,
+                p=p,
+                model="hudson",
+            )
 
 
 class XiVsHudsonTest(Test):
@@ -1949,7 +1971,7 @@ class XiVsHudsonTest(Test):
     appropriate regime.
     """
 
-    def _run(self, xi_model, **kwargs):
+    def _run(self, xi_model, num_replicates, **kwargs):
         df = pd.DataFrame()
         for model in ["hudson", xi_model]:
             simulate_args = dict(kwargs)
@@ -1960,9 +1982,13 @@ class XiVsHudsonTest(Test):
                 # The Xi Dirac coalescent scales differently than the Hudson model.
                 # (Ne² for Dirac and 2Ne for Hudson).
                 # We need NeDirac= square_root(2NeHudson).
-                simulate_args["Ne"] = math.sqrt(2 * int(simulate_args["Ne"]))
+                simulate_args["Ne"] = math.sqrt(
+                    int(simulate_args["ploidy"]) * int(simulate_args["Ne"])
+                )
             logging.debug(f"Running: {simulate_args}")
-            replicates = msprime.simulate(**simulate_args)
+            # replicates = msprime.simulate(**simulate_args)
+            sim = msprime.simulator_factory(**simulate_args)
+            replicates = sim.run_replicates(num_replicates)
             data = collections.defaultdict(list)
             for ts in replicates:
                 t_mrca = np.zeros(ts.num_trees)
@@ -1977,30 +2003,48 @@ class XiVsHudsonTest(Test):
 
         df_hudson = df[df.model == "hudson"]
         df_xi = df[df.model == "Xi"]
+        p = int(simulate_args["ploidy"])
         for stat in ["tmrca_mean", "num_trees", "num_nodes", "num_edges"]:
             v1 = df_hudson[stat]
             v2 = df_xi[stat]
             sm.graphics.qqplot(v1)
             sm.qqplot_2samples(v1, v2, line="45")
-            f = self.output_dir / f"{stat}.png"
+            f = self.output_dir / f"{stat}_ploidy={p}.png"
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
     def test_xi_dirac_vs_hudson_recombination(self):
         self._run(
             msprime.DiracCoalescent(psi=0.99, c=0),
+            num_replicates=1000,
             sample_size=50,
             Ne=10000,
-            num_replicates=1000,
             recombination_rate=0.001,
+            ploidy=1,
+        )
+        self._run(
+            msprime.DiracCoalescent(psi=0.99, c=0),
+            num_replicates=1000,
+            sample_size=50,
+            Ne=10000,
+            recombination_rate=0.001,
+            ploidy=2,
         )
 
     def test_xi_dirac_vs_hudson_single_locus(self):
         self._run(
             msprime.DiracCoalescent(psi=0.99, c=0),
+            num_replicates=5000,
             sample_size=10,
             Ne=10000,
+            ploidy=1,
+        )
+        self._run(
+            msprime.DiracCoalescent(psi=0.99, c=0),
             num_replicates=5000,
+            sample_size=10,
+            Ne=10000,
+            ploidy=2,
         )
 
 
@@ -2371,16 +2415,19 @@ class BetaSFS(KnownSFS):
 
 
 class XiGrowth(Test):
-    def compare_tmrca(self, pop_size, growth_rate, model, num_replicates, a, b, name):
-        replicates = msprime.simulate(
+    def compare_tmrca(
+        self, pop_size, growth_rate, model, num_replicates, a, b, ploidy, name
+    ):
+        sim = msprime.simulator_factory(
             population_configurations=[
                 msprime.PopulationConfiguration(
                     sample_size=2, initial_size=pop_size, growth_rate=growth_rate,
                 )
             ],
             model=model,
-            num_replicates=num_replicates,
+            ploidy=ploidy,
         )
+        replicates = sim.run_replicates(num_replicates)
         T1 = np.array([ts.first().tmrca(0, 1) for ts in replicates])
         sm.graphics.qqplot(
             T1, dist=scipy.stats.gompertz, distargs=(a / b,), scale=1 / b, line="45"
@@ -2393,17 +2440,29 @@ class XiGrowth(Test):
 class BetaGrowth(XiGrowth):
     def _run(self, pop_size, alpha, growth_rate, num_replicates=10000):
         logging.debug(f"running Beta growth for {pop_size} {alpha} {growth_rate}")
-        a = 1 / (4 * self.compute_beta_timescale(pop_size, alpha))
         b = growth_rate * (alpha - 1)
         model = (msprime.BetaCoalescent(alpha=alpha, truncation_point=1),)
-        name = f"N={pop_size}_alpha={alpha}_growth_rate={growth_rate}"
-        self.compare_tmrca(pop_size, growth_rate, model, num_replicates, a, b, name)
+        ploidy = 2
+        a = 1 / (2 * ploidy * self.compute_beta_timescale(pop_size, alpha, ploidy))
+        name = f"N={pop_size}_alpha={alpha}_growth_rate={growth_rate}_ploidy={ploidy}"
+        self.compare_tmrca(
+            pop_size, growth_rate, model, num_replicates, a, b, ploidy, name
+        )
+        ploidy = 1
+        a = 1 / self.compute_beta_timescale(pop_size, alpha, ploidy)
+        name = f"N={pop_size}_alpha={alpha}_growth_rate={growth_rate}_ploidy={ploidy}"
+        self.compare_tmrca(
+            pop_size, growth_rate, model, num_replicates, a, b, ploidy, name
+        )
 
-    def compute_beta_timescale(self, pop_size, alpha):
+    def compute_beta_timescale(self, pop_size, alpha, ploidy):
         m = 2 + np.exp(alpha * np.log(2) + (1 - alpha) * np.log(3) - np.log(alpha - 1))
+        N = pop_size
+        if ploidy > 1:
+            N = pop_size / 2
         ret = np.exp(
             alpha * np.log(m)
-            + (alpha - 1) * np.log(pop_size / 2)
+            + (alpha - 1) * np.log(N)
             - np.log(alpha)
             - scipy.special.betaln(2 - alpha, alpha)
         )
@@ -2422,11 +2481,16 @@ class BetaGrowth(XiGrowth):
 class DiracGrowth(XiGrowth):
     def _run(self, pop_size, c, psi, growth_rate, num_replicates=10000):
         logging.debug(f"running Dirac growth for {pop_size} {c} {psi} {growth_rate}")
-        a = (1 + c * psi * psi / 4) / (pop_size * pop_size)
         b = growth_rate
         model = (msprime.DiracCoalescent(psi=psi, c=c),)
-        name = f"N={pop_size}_c={c}_psi={psi}_growth_rate={growth_rate}"
-        self.compare_tmrca(pop_size, growth_rate, model, num_replicates, a, b, name)
+        p = 2
+        a = (1 + c * psi * psi / (2 * p)) / (pop_size * pop_size)
+        name = f"N={pop_size}_c={c}_psi={psi}_growth_rate={growth_rate}_ploidy={p}"
+        self.compare_tmrca(pop_size, growth_rate, model, num_replicates, a, b, p, name)
+        p = 1
+        a = (1 + c * psi * psi) / (pop_size * pop_size)
+        name = f"N={pop_size}_c={c}_psi={psi}_growth_rate={growth_rate}_ploidy={p}"
+        self.compare_tmrca(pop_size, growth_rate, model, num_replicates, a, b, p, name)
 
     def test_1_01_05_01(self):
         self._run(pop_size=1, c=0.1, psi=0.5, growth_rate=0.1)
