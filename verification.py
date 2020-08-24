@@ -1778,7 +1778,7 @@ class RecombinationBreakpointTest(Test):
             ploidy=ploidy,
             model=model,
         )
-        replicates = next(sim.run_replicates(1))
+        ts = next(sim.run_replicates(1))
         empirical = []
         for tree in ts.trees():
             area = tree.total_branch_length * tree.span
@@ -1912,7 +1912,10 @@ class RecombinationMutationTest(Test):
         empirical_rho = np.array(empirical_rho)
         empirical_theta = np.array(empirical_theta)
         plot_qq(empirical_theta, empirical_rho)
-        path = self.output_dir / f"{name}_growth={growth_rate}_ploidy={ploidy}_rec_check.png"
+        path = (
+            self.output_dir
+            / f"{name}_growth={growth_rate}_ploidy={ploidy}_rec_check.png"
+        )
         logging.debug(f"Writing {path}")
         pyplot.savefig(path)
         pyplot.close("all")
@@ -2442,11 +2445,15 @@ class BetaGrowth(XiGrowth):
         ploidy = 2
         a = 1 / (2 * ploidy * self.compute_beta_timescale(pop_size, alpha, ploidy))
         name = f"N={pop_size}_alpha={alpha}_growth_rate={growth_rate}_ploidy={ploidy}"
-        self.compare_tmrca(pop_size, growth_rate, model, num_replicates, a, b, ploidy, name)
+        self.compare_tmrca(
+            pop_size, growth_rate, model, num_replicates, a, b, ploidy, name
+        )
         ploidy = 1
         a = 1 / self.compute_beta_timescale(pop_size, alpha, ploidy)
         name = f"N={pop_size}_alpha={alpha}_growth_rate={growth_rate}_ploidy={ploidy}"
-        self.compare_tmrca(pop_size, growth_rate, model, num_replicates, a, b, ploidy, name)
+        self.compare_tmrca(
+            pop_size, growth_rate, model, num_replicates, a, b, ploidy, name
+        )
 
     def compute_beta_timescale(self, pop_size, alpha, ploidy):
         m = 2 + np.exp(alpha * np.log(2) + (1 - alpha) * np.log(3) - np.log(alpha - 1))
