@@ -2354,7 +2354,7 @@ class DiracSFS(KnownSFS):
             ],
         )
 
-    def test_xi_dirac_expected_sfs_psi_0_1_c_10000(self):
+    def test_dirac_expected_sfs_psi_0_1_c_10000(self):
         self._run(
             psi=0.1,
             c=10000,
@@ -2372,7 +2372,7 @@ class DiracSFS(KnownSFS):
             ],
         )
 
-    def test_xi_dirac_expected_sfs_psi_0_3_c_10000(self):
+    def test_dirac_expected_sfs_psi_0_3_c_10000(self):
         self._run(
             psi=0.3,
             c=10000,
@@ -2390,7 +2390,7 @@ class DiracSFS(KnownSFS):
             ],
         )
 
-    def test_xi_dirac_expected_sfs_psi_0_5_c_10000(self):
+    def test_dirac_expected_sfs_psi_0_5_c_10000(self):
         self._run(
             psi=0.5,
             c=10000,
@@ -2408,7 +2408,7 @@ class DiracSFS(KnownSFS):
             ],
         )
 
-    def test_xi_dirac_expected_sfs_psi_0_9_c_10000(self):
+    def test_dirac_expected_sfs_psi_0_9_c_10000(self):
         self._run(
             psi=0.9,
             c=10000,
