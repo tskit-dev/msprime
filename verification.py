@@ -2057,7 +2057,7 @@ class KnownSFS(Test):
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
         tot_bl_sum = [0]
-        sim=msprime.simulator_factory(sample_size, ploidy=ploidy, model=model)
+        sim = msprime.simulator_factory(sample_size, ploidy=ploidy, model=model)
         replicates = sim.run_replicates(num_replicates)
         for ts in replicates:
             for tree in ts.trees():
@@ -2096,7 +2096,9 @@ class KnownSFS(Test):
 
 
 class DiracSFS(KnownSFS):
-    def _run(self, sample_size=10, ploidy=2 ,psi=None, c=None, sfs=None, num_replicates=10000):
+    def _run(
+        self, sample_size=10, ploidy=2, psi=None, c=None, sfs=None, num_replicates=10000
+    ):
         """
         Runs simulations of the xi dirac model and calculates
         E[Bi]/E[B] (Bi branch length having i leaves and B total branch length)
@@ -2182,7 +2184,7 @@ class DiracSFS(KnownSFS):
 
     def test_xi_dirac_expected_sfs_n3(self):
         self._run(
-            sample_size=3, ploidy=2 ,psi=0.1, c=10, sfs=[0.6667343, 0.3332657],
+            sample_size=3, ploidy=2, psi=0.1, c=10, sfs=[0.6667343, 0.3332657],
         )
         self._run(
             sample_size=3, ploidy=2, psi=0.3, c=10, sfs=[0.6682113, 0.3317887],
@@ -2194,7 +2196,7 @@ class DiracSFS(KnownSFS):
             sample_size=3, ploidy=2, psi=0.9, c=10, sfs=[0.6852703, 0.3147297],
         )
         self._run(
-            sample_size=3, ploidy=1 ,psi=0.1, c=10000, sfs=[0.678571, 0.321429],
+            sample_size=3, ploidy=1, psi=0.1, c=10000, sfs=[0.678571, 0.321429],
         )
         self._run(
             sample_size=3, ploidy=1, psi=0.3, c=10000, sfs=[0.708333, 0.291667],
@@ -2205,7 +2207,6 @@ class DiracSFS(KnownSFS):
         self._run(
             sample_size=3, ploidy=1, psi=0.9, c=10000, sfs=[0.916667, 0.083333],
         )
-
 
     def test_xi_dirac_expected_sfs_psi_0_1_c_10(self):
         self._run(
@@ -2353,7 +2354,6 @@ class DiracSFS(KnownSFS):
             ],
         )
 
-
     def test_xi_dirac_expected_sfs_psi_0_1_c_10000(self):
         self._run(
             psi=0.1,
@@ -2435,7 +2435,7 @@ class BetaSFS(KnownSFS):
         logging.debug(f"running Beta SFS for {sample_size} {alpha}")
         model = (msprime.BetaCoalescent(alpha=alpha, truncation_point=1),)
         name = f"n={sample_size}_alpha={alpha}_ploidy={ploidy}"
-        self.compare_sfs(sample_size, ploidy , model, num_replicates, sfs, name)
+        self.compare_sfs(sample_size, ploidy, model, num_replicates, sfs, name)
 
     def test_xi_beta_expected_sfs_alpha1_1(self):
 
@@ -2513,6 +2513,7 @@ class BetaSFS(KnownSFS):
                 0.03951149,
             ],
         )
+
     def test_beta_expected_sfs_alpha1_1(self):
         self._run(
             num_replicates=100000,
@@ -2588,6 +2589,7 @@ class BetaSFS(KnownSFS):
                 0.040681,
             ],
         )
+
 
 class XiGrowth(Test):
     def compare_tmrca(
