@@ -145,7 +145,7 @@ cmp_node_mapping(const void *a, const void *b)
 {
     const node_mapping_t *ia = (const node_mapping_t *) a;
     const node_mapping_t *ib = (const node_mapping_t *) b;
-    return (ia->left > ib->left) - (ia->left < ib->left);
+    return (ia->position > ib->position) - (ia->position < ib->position);
 }
 
 static int
@@ -491,7 +491,7 @@ out:
 
 static segment_t *MSP_WARN_UNUSED
 msp_alloc_segment(msp_t *self, double left, double right, double left_mass,
-    double right_mass, node_id_t value, population_id_t population, label_id_t label,
+    double right_mass, tsk_id_t value, population_id_t population, label_id_t label,
     segment_t *prev, segment_t *next)
 {
     segment_t *seg = NULL;
@@ -517,7 +517,7 @@ msp_alloc_segment(msp_t *self, double left, double right, double left_mass,
     seg->left_mass = left_mass;
     seg->right_mass = right_mass;
     seg->value = value;
-    seg->population_id = population;
+    seg->population = population;
     seg->label = label;
 out:
     return seg;
@@ -568,7 +568,7 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
             goto out;
         }
         for (j = 0; j < num_samples; j++) {
-            self->samples[j].population_id = samples[j].population_id;
+            self->samples[j].population = samples[j].population;
             self->samples[j].time = samples[j].time;
             if (self->samples[j].time < 0) {
                 ret = MSP_ERR_BAD_PARAM_VALUE;
@@ -804,7 +804,7 @@ msp_free_segment(msp_t *self, segment_t *seg)
 static inline avl_tree_t *
 msp_get_segment_population(msp_t *self, segment_t *u)
 {
-    return &self->populations[u->population_id].ancestors[u->label];
+    return &self->populations[u->population].ancestors[u->label];
 }
 
 static inline int MSP_WARN_UNUSED
@@ -853,7 +853,7 @@ static bool
 msp_has_breakpoint(msp_t *self, double x)
 {
     node_mapping_t search;
-    search.left = x;
+    search.position = x;
 
     return avl_search(&self->breakpoints, &search) != NULL;
 }
@@ -872,7 +872,7 @@ msp_insert_breakpoint(msp_t *self, double left)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    m->left = left;
+    m->position = left;
     m->value = 0;
     avl_init_node(node, m);
     node = avl_insert_node(&self->breakpoints, node);
@@ -886,7 +886,7 @@ msp_print_segment_chain(msp_t *MSP_UNUSED(self), segment_t *head, FILE *out)
 {
     segment_t *s = head;
 
-    fprintf(out, "[pop=%d,label=%d]", s->population_id, s->label);
+    fprintf(out, "[pop=%d,label=%d]", s->population, s->label);
     while (s != NULL) {
         fprintf(out, "[(%.14g,%.14g) %d] ", s->left, s->right, (int) s->value);
         s = s->next;
@@ -918,7 +918,7 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
                 left = u->left;
                 while (u != NULL) {
                     label_segments++;
-                    assert(u->population_id == (population_id_t) j);
+                    assert(u->population == (population_id_t) j);
                     assert(u->label == (label_id_t) k);
                     assert(u->left < u->right);
                     assert(u->right <= self->sequence_length);
@@ -997,7 +997,7 @@ overlap_counter_alloc(overlap_counter_t *self, double seq_length, int initial_co
     overlaps->left = 0;
     overlaps->right = seq_length;
     overlaps->value = initial_count;
-    overlaps->population_id = 0;
+    overlaps->population = 0;
     overlaps->label = 0;
 
     self->seq_length = seq_length;
@@ -1050,7 +1050,7 @@ overlap_counter_split_segment(segment_t *seg, double breakpoint)
     right_seg->left = breakpoint;
     right_seg->right = seg->right;
     right_seg->value = seg->value;
-    right_seg->population_id = 0;
+    right_seg->population = 0;
     right_seg->label = 0;
 
     if (seg->next != NULL) {
@@ -1119,7 +1119,7 @@ msp_verify_overlaps(msp_t *self)
     }
     for (node = self->overlap_counts.head; node->next != NULL; node = node->next) {
         nm = (node_mapping_t *) node->item;
-        count = overlap_counter_overlaps_at(&counter, nm->left);
+        count = overlap_counter_overlaps_at(&counter, nm->position);
         assert(nm->value == count);
     }
 
@@ -1223,7 +1223,7 @@ msp_print_state(msp_t *self, FILE *out)
             self->model.params.dirac_coalescent.psi,
             self->model.params.dirac_coalescent.c);
     } else if (self->model.type == MSP_MODEL_SWEEP) {
-        fprintf(out, "\tsweep @ locus = %f\n", self->model.params.sweep.locus);
+        fprintf(out, "\tsweep @ locus = %f\n", self->model.params.sweep.position);
         self->model.params.sweep.print_state(&self->model.params.sweep, out);
     }
     fprintf(out, "n = %d\n", self->num_samples);
@@ -1237,7 +1237,7 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "Samples    = \n");
     for (j = 0; j < self->num_samples; j++) {
         fprintf(out, "\t%d\tpopulation=%d\ttime=%f\n", j,
-            (int) self->samples[j].population_id, self->samples[j].time);
+            (int) self->samples[j].population, self->samples[j].time);
     }
     fprintf(out, "recombination map:\n");
     rate_map_print_state(&self->recomb_map, out);
@@ -1250,7 +1250,7 @@ msp_print_state(msp_t *self, FILE *out)
         se = &self->sampling_events[j];
         fprintf(out, "\t");
         fprintf(out, "%d @ %f in deme %d\n", (int) se->sample, se->time,
-            (int) se->population_id);
+            (int) se->population);
     }
     fprintf(out, "Demographic events:\n");
     for (de = self->demographic_events_head; de != NULL; de = de->next) {
@@ -1321,12 +1321,12 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "Breakpoints = %d\n", avl_count(&self->breakpoints));
     for (a = self->breakpoints.head; a != NULL; a = a->next) {
         nm = (node_mapping_t *) a->item;
-        fprintf(out, "\t%.14g -> %d\n", nm->left, nm->value);
+        fprintf(out, "\t%.14g -> %d\n", nm->position, nm->value);
     }
     fprintf(out, "Overlap count = %d\n", avl_count(&self->overlap_counts));
     for (a = self->overlap_counts.head; a != NULL; a = a->next) {
         nm = (node_mapping_t *) a->item;
-        fprintf(out, "\t%.14g -> %d\n", nm->left, nm->value);
+        fprintf(out, "\t%.14g -> %d\n", nm->position, nm->value);
     }
     fprintf(out, "Tables = \n");
     tsk_table_collection_print_state(self->tables, out);
@@ -1356,7 +1356,7 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-msp_record_migration(msp_t *self, double left, double right, node_id_t node,
+msp_record_migration(msp_t *self, double left, double right, tsk_id_t node,
     population_id_t source_pop, population_id_t dest_pop)
 {
     int ret = 0;
@@ -1423,14 +1423,14 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id_t child)
+msp_store_edge(msp_t *self, double left, double right, tsk_id_t parent, tsk_id_t child)
 {
     int ret = 0;
     tsk_edge_t *edge;
     const double *node_time = self->tables->nodes.time;
 
     assert(parent > child);
-    assert(parent < (node_id_t) self->tables->nodes.num_rows);
+    assert(parent < (tsk_id_t) self->tables->nodes.num_rows);
     if (self->num_buffered_edges == self->max_buffered_edges - 1) {
         /* Grow the array */
         self->max_buffered_edges *= 2;
@@ -1462,7 +1462,7 @@ static int MSP_WARN_UNUSED
 msp_store_arg_edges(msp_t *self, segment_t *z)
 {
     int ret = 0;
-    node_id_t u = (node_id_t) msp_get_num_nodes(self) - 1;
+    tsk_id_t u = (tsk_id_t) msp_get_num_nodes(self) - 1;
     segment_t *x;
 
     /* Store edges to the left */
@@ -1523,12 +1523,12 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         for (x = ind; x != NULL; x = x->next) {
             if (self->store_migrations) {
                 ret = msp_record_migration(
-                    self, x->left, x->right, x->value, x->population_id, dest_pop);
+                    self, x->left, x->right, x->value, x->population, dest_pop);
                 if (ret != 0) {
                     goto out;
                 }
             }
-            x->population_id = dest_pop;
+            x->population = dest_pop;
         }
     } else {
         /* Because we are changing to a different Fenwick tree we must allocate
@@ -1537,7 +1537,7 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         y = NULL;
         for (x = ind; x != NULL; x = x->next) {
             y = msp_alloc_segment(self, x->left, x->right, x->left_mass, x->right_mass,
-                x->value, x->population_id, dest_label, y, NULL);
+                x->value, x->population, dest_label, y, NULL);
             if (new_ind == NULL) {
                 new_ind = y;
             } else {
@@ -1607,7 +1607,7 @@ msp_insert_overlap_count(msp_t *self, double left, uint32_t v)
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    m->left = left;
+    m->position = left;
     m->value = v;
     avl_init_node(node, m);
     node = avl_insert_node(&self->overlap_counts, node);
@@ -1627,11 +1627,11 @@ msp_copy_overlap_count(msp_t *self, double k)
     node_mapping_t search, *nm;
     avl_node_t *node;
 
-    search.left = k;
+    search.position = k;
     avl_search_closest(&self->overlap_counts, &search, &node);
     assert(node != NULL);
     nm = (node_mapping_t *) node->item;
-    if (nm->left > k) {
+    if (nm->position > k) {
         node = node->prev;
         assert(node != NULL);
         nm = (node_mapping_t *) node->item;
@@ -1646,7 +1646,7 @@ msp_compress_overlap_counts(msp_t *self, double l, double r)
     avl_node_t *node1, *node2;
     node_mapping_t search, *nm1, *nm2;
 
-    search.left = l;
+    search.position = l;
     node1 = avl_search(&self->overlap_counts, &search);
     assert(node1 != NULL);
     if (node1->prev != NULL) {
@@ -1665,7 +1665,7 @@ msp_compress_overlap_counts(msp_t *self, double l, double r)
             node1 = node2;
             node2 = node2->next;
         }
-    } while (node2 != NULL && nm2->left <= r);
+    } while (node2 != NULL && nm2->position <= r);
     return ret;
 }
 
@@ -2207,7 +2207,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
                 tail = seg_tails[ix];
             }
             z = msp_alloc_segment(self, k, x->right, k_mass, x->right_mass, x->value,
-                x->population_id, x->label, tail, x->next);
+                x->population, x->label, tail, x->next);
             if (z == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -2272,7 +2272,7 @@ msp_store_arg_recombination(msp_t *self, segment_t *lhs_tail, segment_t *rhs)
 
     /* Store the edges for the LHS */
     ret = msp_store_node(
-        self, MSP_NODE_IS_RE_EVENT, self->time, lhs_tail->population_id, TSK_NULL);
+        self, MSP_NODE_IS_RE_EVENT, self->time, lhs_tail->population, TSK_NULL);
     if (ret != 0) {
         goto out;
     }
@@ -2282,7 +2282,7 @@ msp_store_arg_recombination(msp_t *self, segment_t *lhs_tail, segment_t *rhs)
     }
     /* Store the edges for the RHS */
     ret = msp_store_node(
-        self, MSP_NODE_IS_RE_EVENT, self->time, rhs->population_id, TSK_NULL);
+        self, MSP_NODE_IS_RE_EVENT, self->time, rhs->population, TSK_NULL);
     if (ret != 0) {
         goto out;
     }
@@ -2375,7 +2375,7 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
     if (y->left < breakpoint) {
         assert(breakpoint < y->right);
         z = msp_alloc_segment(self, breakpoint, y->right, breakpoint_mass, y->right_mass,
-            y->value, y->population_id, y->label, NULL, y->next);
+            y->value, y->population, y->label, NULL, y->next);
         if (z == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -2497,8 +2497,8 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
         if (left_breakpoint <= y->left) {
             y->prev = NULL;
             z2 = msp_alloc_segment(self, right_breakpoint, y->right,
-                right_breakpoint_mass, y->right_mass, y->value, y->population_id,
-                y->label, x, y->next);
+                right_breakpoint_mass, y->right_mass, y->value, y->population, y->label,
+                x, y->next);
             if (z2 == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -2511,11 +2511,11 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             z = y;
         } else {
             z = msp_alloc_segment(self, left_breakpoint, right_breakpoint,
-                left_breakpoint_mass, right_breakpoint_mass, y->value, y->population_id,
+                left_breakpoint_mass, right_breakpoint_mass, y->value, y->population,
                 y->label, NULL, NULL);
             z2 = msp_alloc_segment(self, right_breakpoint, y->right,
-                right_breakpoint_mass, y->right_mass, y->value, y->population_id,
-                y->label, y, y->next);
+                right_breakpoint_mass, y->right_mass, y->value, y->population, y->label,
+                y, y->next);
             if (z == NULL || z2 == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -2562,7 +2562,7 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             lhs_tail = x;
         } else {
             z = msp_alloc_segment(self, left_breakpoint, y->right, left_breakpoint_mass,
-                y->right_mass, y->value, y->population_id, y->label, NULL, y->next);
+                y->right_mass, y->value, y->population, y->label, NULL, y->next);
             if (z == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -2589,7 +2589,7 @@ msp_gene_conversion_within_event(msp_t *self, label_id_t label)
             if (y2->left < right_breakpoint) {
                 z2 = msp_alloc_segment(self, right_breakpoint, y2->right,
                     rate_map_position_to_mass(&self->recomb_map, right_breakpoint),
-                    y2->right_mass, y2->value, y2->population_id, y2->label, lhs_tail,
+                    y2->right_mass, y2->value, y2->population, y2->label, lhs_tail,
                     y2->next);
                 if (z2 == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
@@ -2729,7 +2729,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     if (y->left < k) {
         /*make new segment*/
         z = msp_alloc_segment(self, k, y->right, k_mass, y->right_mass, y->value,
-            y->population_id, y->label, NULL, y->next);
+            y->population, y->label, NULL, y->next);
         if (z == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -2810,7 +2810,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     int ret = 0;
     bool coalescence = false;
     bool defrag_required = false;
-    node_id_t v;
+    tsk_id_t v;
     double l, r, l_min, r_max;
     avl_node_t *node;
     node_mapping_t *nm, search;
@@ -2847,7 +2847,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 alpha->next = NULL;
             } else if (x->left != y->left) {
                 alpha = msp_alloc_segment(self, x->left, y->left, x->left_mass,
-                    y->left_mass, x->value, x->population_id, x->label, NULL, NULL);
+                    y->left_mass, x->value, x->population, x->label, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -2865,9 +2865,9 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                         goto out;
                     }
                 }
-                v = (node_id_t) msp_get_num_nodes(self) - 1;
+                v = (tsk_id_t) msp_get_num_nodes(self) - 1;
                 /* Insert overlap counts for bounds, if necessary */
-                search.left = l;
+                search.position = l;
                 node = avl_search(&self->overlap_counts, &search);
                 if (node == NULL) {
                     ret = msp_copy_overlap_count(self, l);
@@ -2875,7 +2875,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                         goto out;
                     }
                 }
-                search.left = r_max;
+                search.position = r_max;
                 node = avl_search(&self->overlap_counts, &search);
                 if (node == NULL) {
                     ret = msp_copy_overlap_count(self, r_max);
@@ -2884,7 +2884,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                     }
                 }
                 /* Now get overlap count at the left */
-                search.left = l;
+                search.position = l;
                 node = avl_search(&self->overlap_counts, &search);
                 assert(node != NULL);
                 nm = (node_mapping_t *) node->item;
@@ -2893,7 +2893,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                     node = node->next;
                     assert(node != NULL);
                     nm = (node_mapping_t *) node->item;
-                    r = nm->left;
+                    r = nm->position;
                 } else {
                     r = l;
                     while (nm->value != 2 && r < r_max) {
@@ -2901,7 +2901,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                         node = node->next;
                         assert(node != NULL);
                         nm = (node_mapping_t *) node->item;
-                        r = nm->left;
+                        r = nm->position;
                     }
                     alpha = msp_alloc_segment(self, l, r,
                         rate_map_position_to_mass(&self->recomb_map, l),
@@ -3033,7 +3033,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     bool coalescence = false;
     bool defrag_required = false;
     bool set_merged = false;
-    node_id_t v;
+    tsk_id_t v;
     uint32_t j, h;
     double l, r, r_max, next_l, next_l_mass, l_min;
     avl_node_t *node;
@@ -3073,7 +3073,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             x = H[0];
             if (node != NULL && next_l < x->right) {
                 alpha = msp_alloc_segment(self, x->left, next_l, x->left_mass,
-                    next_l_mass, x->value, x->population_id, x->label, NULL, NULL);
+                    next_l_mass, x->value, x->population, x->label, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -3100,9 +3100,9 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     goto out;
                 }
             }
-            v = (node_id_t) msp_get_num_nodes(self) - 1;
+            v = (tsk_id_t) msp_get_num_nodes(self) - 1;
             /* Insert overlap counts for bounds, if necessary */
-            search.left = l;
+            search.position = l;
             node = avl_search(&self->overlap_counts, &search);
             if (node == NULL) {
                 ret = msp_copy_overlap_count(self, l);
@@ -3110,7 +3110,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     goto out;
                 }
             }
-            search.left = r_max;
+            search.position = r_max;
             node = avl_search(&self->overlap_counts, &search);
             if (node == NULL) {
                 ret = msp_copy_overlap_count(self, r_max);
@@ -3120,7 +3120,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             }
             /* Update the extant segments and allocate alpha if the interval
              * has not coalesced. */
-            search.left = l;
+            search.position = l;
             node = avl_search(&self->overlap_counts, &search);
             assert(node != NULL);
             nm = (node_mapping_t *) node->item;
@@ -3129,7 +3129,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                 node = node->next;
                 assert(node != NULL);
                 nm = (node_mapping_t *) node->item;
-                r = nm->left;
+                r = nm->position;
             } else {
                 r = l;
                 while (nm->value != h && r < r_max) {
@@ -3137,7 +3137,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     node = node->next;
                     assert(node != NULL);
                     nm = (node_mapping_t *) node->item;
-                    r = nm->left;
+                    r = nm->position;
                 }
                 alpha = msp_alloc_segment(self, l, r,
                     rate_map_position_to_mass(&self->recomb_map, l),
@@ -3304,7 +3304,7 @@ msp_reset_memory_state(msp_t *self)
 }
 
 static int MSP_WARN_UNUSED
-msp_insert_sample(msp_t *self, node_id_t sample, population_id_t population)
+msp_insert_sample(msp_t *self, tsk_id_t sample, population_id_t population)
 {
     int ret = MSP_ERR_GENERIC;
     double seq_len = self->sequence_length;
@@ -3339,7 +3339,7 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree, double left, double ri
     tsk_table_collection_t *tables = self->from_ts->tables;
     const population_id_t *node_population = tables->nodes.population;
     population_id_t population;
-    node_id_t root;
+    tsk_id_t root;
     segment_t *seg, *tail;
     label_id_t label = 0; /* For now only support label 0 */
 
@@ -3391,7 +3391,7 @@ msp_reset_from_ts(msp_t *self)
     int ret = 0;
     int t_iter;
     tsk_tree_t t;
-    node_id_t root;
+    tsk_id_t root;
     segment_t *seg;
     uint32_t num_roots, overlap, last_overlap;
     size_t num_nodes = self->tables->nodes.num_rows;
@@ -3444,7 +3444,7 @@ msp_reset_from_ts(msp_t *self)
     }
 
     /* Insert the segment chains into the algorithm state */
-    for (root = 0; root < (node_id_t) num_nodes; root++) {
+    for (root = 0; root < (tsk_id_t) num_nodes; root++) {
         seg = root_segments_head[root];
         if (seg != NULL) {
             ret = msp_insert_individual(self, seg);
@@ -3473,7 +3473,7 @@ msp_reset_from_samples(msp_t *self)
     tsk_size_t id_str_len;
     size_t sample_idx, j;
     individual_t *ind = NULL;
-    node_id_t u;
+    tsk_id_t u;
     tsk_id_t tsk_ind;
 
     tsk_table_collection_clear(self->tables);
@@ -3486,9 +3486,9 @@ msp_reset_from_samples(msp_t *self)
         }
     }
     /* Set up the sample */
-    for (u = 0; u < (node_id_t) self->num_samples; u++) {
+    for (u = 0; u < (tsk_id_t) self->num_samples; u++) {
         if (self->samples[u].time <= self->start_time) {
-            ret = msp_insert_sample(self, u, self->samples[u].population_id);
+            ret = msp_insert_sample(self, u, self->samples[u].population);
             if (ret != 0) {
                 goto out;
             }
@@ -3517,7 +3517,7 @@ msp_reset_from_samples(msp_t *self)
             tsk_ind = ind->tsk_id;
         }
         ret = msp_store_node(self, TSK_NODE_IS_SAMPLE, self->samples[u].time,
-            self->samples[u].population_id, tsk_ind);
+            self->samples[u].population, tsk_ind);
         if (ret != 0) {
             goto out;
         }
@@ -3629,7 +3629,7 @@ msp_initialise_from_samples(msp_t *self)
     initial_samples = 0;
     for (j = 0; j < self->num_samples; j++) {
         /* Check that the sample configuration makes sense */
-        pop = self->samples[j].population_id;
+        pop = self->samples[j].population;
         if (pop < 0 || pop >= (population_id_t) self->num_populations) {
             ret = MSP_ERR_BAD_SAMPLES;
             goto out;
@@ -3651,9 +3651,9 @@ msp_initialise_from_samples(msp_t *self)
         k = 0;
         for (j = 0; j < self->num_samples; j++) {
             if (self->samples[j].time > self->start_time) {
-                self->sampling_events[k].sample = (node_id_t) j;
+                self->sampling_events[k].sample = (tsk_id_t) j;
                 self->sampling_events[k].time = self->samples[j].time;
-                self->sampling_events[k].population_id = self->samples[j].population_id;
+                self->sampling_events[k].population = self->samples[j].population;
                 k++;
             }
         }
@@ -4023,14 +4023,14 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                    && self->sampling_events[self->next_sampling_event].time
                           == sampling_event_time) {
                 se = self->sampling_events + self->next_sampling_event;
-                ret = msp_insert_sample(self, se->sample, se->population_id);
+                ret = msp_insert_sample(self, se->sample, se->population);
                 if (ret != 0) {
                     goto out;
                 }
                 self->next_sampling_event++;
                 /* To keep things simple, just insert the population
                  * unconditionally for each sample. */
-                ret = msp_insert_non_empty_population(self, se->population_id);
+                ret = msp_insert_non_empty_population(self, se->population);
                 if (ret != 0) {
                     goto out;
                 }
@@ -4556,7 +4556,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
             se = self->sampling_events + self->next_sampling_event;
             /* The sampling event doesn't modify the tables, so we don't need to
              * catch it here */
-            ret = msp_insert_sample(self, se->sample, se->population_id);
+            ret = msp_insert_sample(self, se->sample, se->population);
             if (ret != 0) {
                 goto out;
             }
@@ -4640,13 +4640,13 @@ static int
 msp_change_label(msp_t *self, segment_t *ind, label_id_t label)
 {
     int ret = 0;
-    avl_tree_t *pop = &self->populations[ind->population_id].ancestors[ind->label];
+    avl_tree_t *pop = &self->populations[ind->population].ancestors[ind->label];
     avl_node_t *node;
 
     /* Find the this individual in the AVL tree. */
     node = avl_search(pop, ind);
     assert(node != NULL);
-    ret = msp_move_individual(self, node, pop, ind->population_id, label);
+    ret = msp_move_individual(self, node, pop, ind->population, label);
     return ret;
 }
 
@@ -4697,7 +4697,7 @@ msp_run_sweep(msp_t *self)
     size_t num_steps;
     double *allele_frequency = NULL;
     double *time = NULL;
-    double sweep_locus = model->params.sweep.locus;
+    double sweep_locus = model->params.sweep.position;
     double sweep_dt;
     size_t j = 0;
     double recomb_mass;
@@ -4911,7 +4911,7 @@ msp_insert_uncoalesced_edges(msp_t *self)
     label_id_t label;
     avl_node_t *a;
     segment_t *seg;
-    node_id_t node;
+    tsk_id_t node;
     int64_t edge_start;
     tsk_node_table_t *nodes = &self->tables->nodes;
     const double current_time = self->time;
@@ -5027,7 +5027,7 @@ msp_debug_demography(msp_t *self, double *end_time)
         while (self->next_sampling_event < self->num_sampling_events
                && self->sampling_events[self->next_sampling_event].time <= de->time) {
             se = self->sampling_events + self->next_sampling_event;
-            ret = msp_insert_sample(self, se->sample, se->population_id);
+            ret = msp_insert_sample(self, se->sample, se->population);
             if (ret != 0) {
                 goto out;
             }
@@ -5220,7 +5220,7 @@ msp_get_breakpoints(msp_t *self, size_t *breakpoints)
 
     for (node = (&self->breakpoints)->head; node != NULL; node = node->next) {
         nm = (node_mapping_t *) node->item;
-        breakpoints[j] = (size_t) nm->left;
+        breakpoints[j] = (size_t) nm->position;
         j++;
     }
     ret = 0;
@@ -5364,7 +5364,7 @@ static int
 msp_change_population_parameters(msp_t *self, demographic_event_t *event)
 {
     int ret = 0;
-    population_id_t pid = event->params.population_parameters_change.population_id;
+    population_id_t pid = event->params.population_parameters_change.population;
     double initial_size = event->params.population_parameters_change.initial_size;
     double growth_rate = event->params.population_parameters_change.growth_rate;
 
@@ -5393,7 +5393,7 @@ msp_print_population_parameters_change(
 {
     fprintf(out,
         "%f\tpopulation_parameters_change: %d -> initial_size=%f, growth_rate=%f\n",
-        event->time, (int) event->params.population_parameters_change.population_id,
+        event->time, (int) event->params.population_parameters_change.population,
         event->params.population_parameters_change.initial_size,
         event->params.population_parameters_change.growth_rate);
 }
@@ -5425,7 +5425,7 @@ msp_add_population_parameters_change(
     if (ret != 0) {
         goto out;
     }
-    de->params.population_parameters_change.population_id = population_id;
+    de->params.population_parameters_change.population = population_id;
     /* Note we don't rescale the size and rates until we apply the event,
      * because we don't know which model will apply until then */
     de->params.population_parameters_change.initial_size = initial_size;
@@ -5625,7 +5625,7 @@ static int
 msp_simple_bottleneck(msp_t *self, demographic_event_t *event)
 {
     int ret = 0;
-    population_id_t population_id = event->params.simple_bottleneck.population_id;
+    population_id_t population_id = event->params.simple_bottleneck.population;
     double p = event->params.simple_bottleneck.proportion;
     population_id_t N = (population_id_t) self->num_populations;
     avl_node_t *node, *next, *q_node;
@@ -5676,7 +5676,7 @@ msp_print_simple_bottleneck(
     msp_t *MSP_UNUSED(self), demographic_event_t *event, FILE *out)
 {
     fprintf(out, "%f\tsimple_bottleneck: %d I = %f\n", event->time,
-        (int) event->params.simple_bottleneck.population_id,
+        (int) event->params.simple_bottleneck.population,
         event->params.simple_bottleneck.proportion);
 }
 
@@ -5700,7 +5700,7 @@ msp_add_simple_bottleneck(msp_t *self, double time, int population_id, double pr
     if (ret != 0) {
         goto out;
     }
-    de->params.simple_bottleneck.population_id = population_id;
+    de->params.simple_bottleneck.population = population_id;
     de->params.simple_bottleneck.proportion = proportion;
     de->change_state = msp_simple_bottleneck;
     de->print_state = msp_print_simple_bottleneck;
@@ -5717,14 +5717,14 @@ static int
 msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
 {
     int ret = 0;
-    population_id_t population_id = event->params.instantaneous_bottleneck.population_id;
+    population_id_t population_id = event->params.instantaneous_bottleneck.population;
     double T2 = event->params.instantaneous_bottleneck.strength;
     population_id_t N = (population_id_t) self->num_populations;
-    node_id_t *lineages = NULL;
-    node_id_t *pi = NULL;
+    tsk_id_t *lineages = NULL;
+    tsk_id_t *pi = NULL;
     avl_node_t **avl_nodes = NULL;
     avl_tree_t *sets = NULL;
-    node_id_t u, parent;
+    tsk_id_t u, parent;
     uint32_t j, k, n, num_roots;
     double rate, t;
     avl_tree_t *pop;
@@ -5743,18 +5743,18 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     }
     pop = &self->populations[population_id].ancestors[label];
     n = avl_count(pop);
-    lineages = malloc(n * sizeof(node_id_t));
+    lineages = malloc(n * sizeof(tsk_id_t));
     avl_nodes = malloc(n * sizeof(avl_node_t *));
-    pi = malloc(2 * n * sizeof(node_id_t));
+    pi = malloc(2 * n * sizeof(tsk_id_t));
     sets = malloc(2 * n * sizeof(avl_tree_t));
     if (lineages == NULL || avl_nodes == NULL || pi == NULL || sets == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    for (u = 0; u < (node_id_t) n; u++) {
+    for (u = 0; u < (tsk_id_t) n; u++) {
         lineages[u] = u;
     }
-    for (u = 0; u < (node_id_t)(2 * n); u++) {
+    for (u = 0; u < (tsk_id_t)(2 * n); u++) {
         pi[u] = TSK_NULL;
     }
     j = 0;
@@ -5768,7 +5768,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
      */
     j = n - 1;
     t = 0.0;
-    parent = (node_id_t) n;
+    parent = (tsk_id_t) n;
     while (j > 0) {
         rate = j + 1;
         rate = rate * j;
@@ -5791,7 +5791,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     }
     num_roots = j + 1;
     for (j = 0; j < num_roots; j++) {
-        if (lineages[j] >= (node_id_t) n) {
+        if (lineages[j] >= (tsk_id_t) n) {
             avl_init_tree(&sets[lineages[j]], cmp_segment_queue, NULL);
         }
     }
@@ -5801,11 +5801,11 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
      * leave it alone.
      */
     for (j = 0; j < n; j++) {
-        u = (node_id_t) j;
+        u = (tsk_id_t) j;
         while (pi[u] != TSK_NULL) {
             u = pi[u];
         }
-        if (u >= (node_id_t) n) {
+        if (u >= (tsk_id_t) n) {
             /* Remove this node from the population, and add it into the
              * set for the root at u */
             individual = (segment_t *) avl_nodes[j]->item;
@@ -5822,7 +5822,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
         }
     }
     for (j = 0; j < num_roots; j++) {
-        if (lineages[j] >= (node_id_t) n) {
+        if (lineages[j] >= (tsk_id_t) n) {
             ret = msp_merge_ancestors(
                 self, &sets[lineages[j]], population_id, label, NULL, TSK_NULL);
             if (ret != 0) {
@@ -5851,7 +5851,7 @@ msp_print_instantaneous_bottleneck(
     msp_t *MSP_UNUSED(self), demographic_event_t *event, FILE *out)
 {
     fprintf(out, "%f\tinstantaneous_bottleneck: %d T2 = %f\n", event->time,
-        (int) event->params.instantaneous_bottleneck.population_id,
+        (int) event->params.instantaneous_bottleneck.population,
         event->params.instantaneous_bottleneck.strength);
 }
 
@@ -5877,7 +5877,7 @@ msp_add_instantaneous_bottleneck(
     if (ret != 0) {
         goto out;
     }
-    de->params.instantaneous_bottleneck.population_id = population_id;
+    de->params.instantaneous_bottleneck.population = population_id;
     de->params.instantaneous_bottleneck.strength = strength;
     de->change_state = msp_instantaneous_bottleneck;
     de->print_state = msp_print_instantaneous_bottleneck;
@@ -5895,7 +5895,7 @@ msp_census_event(msp_t *self, demographic_event_t *event)
     avl_node_t *node;
     segment_t *seg;
     tsk_id_t i, j;
-    node_id_t u;
+    tsk_id_t u;
 
     for (i = 0; i < (int) self->num_populations; i++) {
         for (j = 0; j < (int) self->num_labels; j++) {
@@ -6609,7 +6609,7 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     if (ret != 0) {
         goto out;
     }
-    model->params.sweep.locus = position;
+    model->params.sweep.position = position;
     model->params.sweep.generate_trajectory = genic_selection_generate_trajectory;
     model->params.sweep.print_state = genic_selection_print_state;
     trajectory->start_frequency = start_frequency;

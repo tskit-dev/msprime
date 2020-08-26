@@ -203,7 +203,7 @@ parse_samples(PyObject *py_samples, Py_ssize_t num_populations,
                 (int) tmp_long, (int) j);
             goto out;
         }
-        ret_samples[j].population_id = (population_id_t) tmp_long;
+        ret_samples[j].population = (population_id_t) tmp_long;
         value = PyTuple_GetItem(sample, 1);
         if (!PyNumber_Check(value)) {
             PyErr_Format(PyExc_TypeError, "'time' is not number");
@@ -3569,7 +3569,7 @@ Simulator_get_model(Simulator *self, void *closure)
         Py_DECREF(value);
         value = NULL;
     } else if (model->type == MSP_MODEL_SWEEP) {
-        value = Py_BuildValue("d", model->params.sweep.locus);
+        value = Py_BuildValue("d", model->params.sweep.position);
         if (value == NULL) {
             goto out;
         }
@@ -3967,7 +3967,7 @@ Simulator_individual_to_python(Simulator *self, segment_t *ind)
     j = 0;
     while (u != NULL) {
         t = Py_BuildValue("(d,d,I,I)", u->left, u->right, u->value,
-                u->population_id);
+                u->population);
         if (t == NULL) {
             Py_DECREF(l);
             goto out;
@@ -4182,8 +4182,8 @@ Simulator_get_samples(Simulator *self, void *closure)
         goto out;
     }
     for (j = 0; j < num_samples; j++) {
-        population = samples[j].population_id == TSK_NULL? -1:
-            samples[j].population_id;
+        population = samples[j].population == TSK_NULL? -1:
+            samples[j].population;
         t = Py_BuildValue("id", population, samples[j].time);
         if (t == NULL) {
             goto out;

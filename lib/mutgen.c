@@ -949,7 +949,7 @@ out:
 
 static int
 mutgen_add_mutation(
-    mutgen_t *self, site_t *site, node_id_t node, double time, mutation_t **new_mutation)
+    mutgen_t *self, site_t *site, tsk_id_t node, double time, mutation_t **new_mutation)
 {
     int ret = 0;
 
@@ -970,14 +970,14 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_add_new_mutation(mutgen_t *self, site_t *site, node_id_t node, double time)
+mutgen_add_new_mutation(mutgen_t *self, site_t *site, tsk_id_t node, double time)
 {
     mutation_t *not_used;
     return mutgen_add_mutation(self, site, node, time, &not_used);
 }
 
 static int MSP_WARN_UNUSED
-mutgen_add_existing_mutation(mutgen_t *self, site_t *site, tsk_id_t id, node_id_t node,
+mutgen_add_existing_mutation(mutgen_t *self, site_t *site, tsk_id_t id, tsk_id_t node,
     double time, char *derived_state, tsk_size_t derived_state_length, char *metadata,
     tsk_size_t metadata_length)
 {
@@ -1019,7 +1019,7 @@ mutgen_initialise_sites(mutgen_t *self)
     tsk_size_t j, length, metadata_length;
 
     j = 0;
-    for (site_id = 0; site_id < (site_id_t) sites->num_rows; site_id++) {
+    for (site_id = 0; site_id < (tsk_id_t) sites->num_rows; site_id++) {
         state = sites->ancestral_state + sites->ancestral_state_offset[site_id];
         length = sites->ancestral_state_offset[site_id + 1]
                  - sites->ancestral_state_offset[site_id];
@@ -1127,7 +1127,7 @@ mutgen_place_mutations(mutgen_t *self, bool discrete_sites)
     double left, right, site_left, site_right, edge_right;
     double time, mu, position;
     double branch_start, branch_end, branch_length;
-    node_id_t parent, child;
+    tsk_id_t parent, child;
     avl_node_t *avl_node;
     site_t *site;
     site_t search;
@@ -1137,7 +1137,7 @@ mutgen_place_mutations(mutgen_t *self, bool discrete_sites)
         edge_right = edges.right[j];
         parent = edges.parent[j];
         child = edges.child[j];
-        assert(child >= 0 && child < (node_id_t) nodes.num_rows);
+        assert(child >= 0 && child < (tsk_id_t) nodes.num_rows);
         branch_start = GSL_MAX(start_time, nodes.time[child]);
         branch_end = GSL_MIN(end_time, nodes.time[parent]);
         branch_length = branch_end - branch_start;
