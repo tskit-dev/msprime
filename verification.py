@@ -2053,13 +2053,12 @@ class KnownSFS(Test):
     Compare the simulated SFS to precomputed known values.
     """
 
-    def compare_sfs(self, sample_size, model, num_replicates, sfs, name):
-        replicates = msprime.simulate(
-            sample_size, num_replicates=num_replicates, model=model,
-        )
+    def compare_sfs(self, sample_size, ploidy, model, num_replicates, sfs, name):
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
         tot_bl_sum = [0]
+        sim = msprime.simulator_factory(sample_size, ploidy=ploidy, model=model)
+        replicates = sim.run_replicates(num_replicates)
         for ts in replicates:
             for tree in ts.trees():
                 tot_bl = 0.0
@@ -2097,7 +2096,9 @@ class KnownSFS(Test):
 
 
 class DiracSFS(KnownSFS):
-    def _run(self, sample_size=10, psi=None, c=None, sfs=None, num_replicates=10000):
+    def _run(
+        self, sample_size=10, ploidy=2, psi=None, c=None, sfs=None, num_replicates=10000
+    ):
         """
         Runs simulations of the xi dirac model and calculates
         E[Bi]/E[B] (Bi branch length having i leaves and B total branch length)
@@ -2105,14 +2106,15 @@ class DiracSFS(KnownSFS):
         """
         logging.debug(f"running SFS for {sample_size} {psi} {c}")
         model = (msprime.DiracCoalescent(psi=psi, c=c),)
-        name = f"n={sample_size}_psi={psi}_c={c}"
-        self.compare_sfs(sample_size, model, num_replicates, sfs, name)
+        name = f"n={sample_size}_psi={psi}_c={c}_ploidy={ploidy}"
+        self.compare_sfs(sample_size, ploidy, model, num_replicates, sfs, name)
 
     def test_xi_dirac_expected_sfs_psi_0_1_c_1(self):
 
         self._run(
             psi=0.1,
             c=1,
+            ploidy=2,
             sfs=[
                 0.35352303,
                 0.17672997,
@@ -2130,6 +2132,7 @@ class DiracSFS(KnownSFS):
         self._run(
             psi=0.3,
             c=1,
+            ploidy=2,
             sfs=[
                 0.35430737,
                 0.17650201,
@@ -2147,6 +2150,7 @@ class DiracSFS(KnownSFS):
         self._run(
             psi=0.5,
             c=1,
+            ploidy=2,
             sfs=[
                 0.35655911,
                 0.17596878,
@@ -2164,6 +2168,7 @@ class DiracSFS(KnownSFS):
         self._run(
             psi=0.9,
             c=1,
+            ploidy=2,
             sfs=[
                 0.36443828,
                 0.17490683,
@@ -2179,22 +2184,35 @@ class DiracSFS(KnownSFS):
 
     def test_xi_dirac_expected_sfs_n3(self):
         self._run(
-            sample_size=3, psi=0.1, c=10, sfs=[0.6667343, 0.3332657],
+            sample_size=3, ploidy=2, psi=0.1, c=10, sfs=[0.6667343, 0.3332657],
         )
         self._run(
-            sample_size=3, psi=0.3, c=10, sfs=[0.6682113, 0.3317887],
+            sample_size=3, ploidy=2, psi=0.3, c=10, sfs=[0.6682113, 0.3317887],
         )
         self._run(
-            sample_size=3, psi=0.5, c=10, sfs=[0.6721853, 0.3278147],
+            sample_size=3, ploidy=2, psi=0.5, c=10, sfs=[0.6721853, 0.3278147],
         )
         self._run(
-            sample_size=3, psi=0.9, c=10, sfs=[0.6852703, 0.3147297],
+            sample_size=3, ploidy=2, psi=0.9, c=10, sfs=[0.6852703, 0.3147297],
+        )
+        self._run(
+            sample_size=3, ploidy=1, psi=0.1, c=10000, sfs=[0.678571, 0.321429],
+        )
+        self._run(
+            sample_size=3, ploidy=1, psi=0.3, c=10000, sfs=[0.708333, 0.291667],
+        )
+        self._run(
+            sample_size=3, ploidy=1, psi=0.5, c=10000, sfs=[0.750000, 0.250000],
+        )
+        self._run(
+            sample_size=3, ploidy=1, psi=0.9, c=10000, sfs=[0.916667, 0.083333],
         )
 
     def test_xi_dirac_expected_sfs_psi_0_1_c_10(self):
         self._run(
             psi=0.1,
             c=10,
+            ploidy=2,
             sfs=[
                 0.35385062,
                 0.17661522,
@@ -2212,6 +2230,7 @@ class DiracSFS(KnownSFS):
         self._run(
             psi=0.3,
             c=10,
+            ploidy=2,
             sfs=[
                 0.36053858,
                 0.17456975,
@@ -2229,6 +2248,7 @@ class DiracSFS(KnownSFS):
             sample_size=10,
             psi=0.5,
             c=10,
+            ploidy=2,
             sfs=[
                 0.37556917,
                 0.17015781,
@@ -2246,6 +2266,7 @@ class DiracSFS(KnownSFS):
             sample_size=10,
             psi=0.9,
             c=10,
+            ploidy=2,
             sfs=[
                 0.41154361,
                 0.15908770,
@@ -2265,6 +2286,7 @@ class DiracSFS(KnownSFS):
         self._run(
             psi=0.1,
             c=10000,
+            ploidy=2,
             sfs=[
                 0.36939374,
                 0.17057448,
@@ -2282,6 +2304,7 @@ class DiracSFS(KnownSFS):
         self._run(
             psi=0.3,
             c=10000,
+            ploidy=2,
             sfs=[
                 0.39876239,
                 0.15840021,
@@ -2299,6 +2322,7 @@ class DiracSFS(KnownSFS):
         self._run(
             psi=0.5,
             c=10000,
+            ploidy=2,
             sfs=[
                 0.42603419,
                 0.14512841,
@@ -2316,6 +2340,7 @@ class DiracSFS(KnownSFS):
         self._run(
             psi=0.9,
             c=10000,
+            ploidy=2,
             sfs=[
                 0.47543921,
                 0.11338801,
@@ -2329,16 +2354,88 @@ class DiracSFS(KnownSFS):
             ],
         )
 
+    def test_dirac_expected_sfs_psi_0_1_c_10000(self):
+        self._run(
+            psi=0.1,
+            c=10000,
+            ploidy=1,
+            sfs=[
+                0.422312,
+                0.148277,
+                0.101947,
+                0.077241,
+                0.062498,
+                0.052964,
+                0.046659,
+                0.043069,
+                0.045033,
+            ],
+        )
+
+    def test_dirac_expected_sfs_psi_0_3_c_10000(self):
+        self._run(
+            psi=0.3,
+            c=10000,
+            ploidy=1,
+            sfs=[
+                0.570300,
+                0.083920,
+                0.067942,
+                0.056251,
+                0.047302,
+                0.041406,
+                0.038521,
+                0.039844,
+                0.054512,
+            ],
+        )
+
+    def test_dirac_expected_sfs_psi_0_5_c_10000(self):
+        self._run(
+            psi=0.5,
+            c=10000,
+            ploidy=1,
+            sfs=[
+                0.710037,
+                0.036594,
+                0.031667,
+                0.031557,
+                0.032135,
+                0.031557,
+                0.031667,
+                0.036594,
+                0.058192,
+            ],
+        )
+
+    def test_dirac_expected_sfs_psi_0_9_c_10000(self):
+        self._run(
+            psi=0.9,
+            c=10000,
+            ploidy=1,
+            sfs=[
+                0.927920,
+                0.001810,
+                0.000476,
+                0.000096,
+                0.000148,
+                0.001040,
+                0.005356,
+                0.018413,
+                0.044742,
+            ],
+        )
+
 
 class BetaSFS(KnownSFS):
-    def _run(self, sample_size, alpha, sfs, num_replicates=1000):
+    def _run(self, sample_size, ploidy, alpha, sfs, num_replicates=1000):
         """
         Runs simulations of the xi beta model and compares to the expected SFS.
         """
         logging.debug(f"running Beta SFS for {sample_size} {alpha}")
         model = (msprime.BetaCoalescent(alpha=alpha, truncation_point=1),)
-        name = f"n={sample_size}_alpha={alpha}"
-        self.compare_sfs(sample_size, model, num_replicates, sfs, name)
+        name = f"n={sample_size}_alpha={alpha}_ploidy={ploidy}"
+        self.compare_sfs(sample_size, ploidy, model, num_replicates, sfs, name)
 
     def test_xi_beta_expected_sfs_alpha1_1(self):
 
@@ -2346,6 +2443,7 @@ class BetaSFS(KnownSFS):
             num_replicates=100000,
             sample_size=10,
             alpha=1.1,
+            ploidy=2,
             sfs=[
                 0.40838865,
                 0.15645421,
@@ -2364,6 +2462,7 @@ class BetaSFS(KnownSFS):
             num_replicates=100000,
             sample_size=10,
             alpha=1.3,
+            ploidy=2,
             sfs=[
                 0.39612917,
                 0.16173072,
@@ -2382,6 +2481,7 @@ class BetaSFS(KnownSFS):
             num_replicates=100000,
             sample_size=10,
             alpha=1.5,
+            ploidy=2,
             sfs=[
                 0.38395732,
                 0.16650213,
@@ -2400,6 +2500,7 @@ class BetaSFS(KnownSFS):
             num_replicates=100000,
             sample_size=10,
             alpha=1.9,
+            ploidy=2,
             sfs=[
                 0.35961114,
                 0.17486018,
@@ -2410,6 +2511,82 @@ class BetaSFS(KnownSFS):
                 0.05007349,
                 0.04396363,
                 0.03951149,
+            ],
+        )
+
+    def test_beta_expected_sfs_alpha1_1(self):
+        self._run(
+            num_replicates=100000,
+            sample_size=10,
+            alpha=1.1,
+            ploidy=1,
+            sfs=[
+                0.580175,
+                0.119103,
+                0.066440,
+                0.047197,
+                0.038166,
+                0.033879,
+                0.032796,
+                0.035382,
+                0.046863,
+            ],
+        )
+
+    def test_beta_expected_sfs_alpha1_3(self):
+        self._run(
+            num_replicates=100000,
+            sample_size=10,
+            alpha=1.3,
+            ploidy=1,
+            sfs=[
+                0.521296,
+                0.137166,
+                0.078487,
+                0.056070,
+                0.045115,
+                0.039481,
+                0.037258,
+                0.038479,
+                0.046649,
+            ],
+        )
+
+    def test_beta_expected_sfs_alpha1_5(self):
+        self._run(
+            num_replicates=100000,
+            sample_size=10,
+            alpha=1.5,
+            ploidy=1,
+            sfs=[
+                0.467491,
+                0.152216,
+                0.090245,
+                0.065103,
+                0.052216,
+                0.045067,
+                0.041436,
+                0.040898,
+                0.045330,
+            ],
+        )
+
+    def test_beta_expected_sfs_alpha1_9(self):
+        self._run(
+            num_replicates=100000,
+            sample_size=10,
+            alpha=1.9,
+            ploidy=1,
+            sfs=[
+                0.374086,
+                0.173264,
+                0.112565,
+                0.083644,
+                0.066914,
+                0.056165,
+                0.048856,
+                0.043826,
+                0.040681,
             ],
         )
 
