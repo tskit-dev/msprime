@@ -373,7 +373,7 @@ class TestBadDemographicParameters(unittest.TestCase):
     """
 
     def test_bad_population_size(self):
-        for bad_size in [-1, 0, -1e300]:
+        for bad_size in [-1, -1e300]:
             self.assertRaises(
                 ValueError, msprime.PopulationParametersChange, 0, initial_size=bad_size
             )
@@ -416,6 +416,63 @@ class TestBadDemographicEvents(unittest.TestCase):
             des = [msprime.SimulationModelChange(time=0, model=model)]
             with self.assertRaises(TypeError):
                 msprime.simulate(10, demographic_events=des)
+
+
+class TestZeroPopulationSize(unittest.TestCase):
+    """
+    Tests to check that a population with zero size is correctly handled.
+    """
+
+    def setUp(self):
+        # Build a three-population demography, where pop 0 is a strict ancestor
+        # of pop 1 and pop 2, such that pop 0 goes extinct when pop 1 and pop 2
+        # come into existence.
+        # Each population's size is set to zero outside its existence time.
+        self.N = 1000
+        self.T = 500
+        self.population_configurations = [
+            msprime.PopulationConfiguration(initial_size=0),
+            msprime.PopulationConfiguration(initial_size=self.N),
+            msprime.PopulationConfiguration(initial_size=self.N),
+        ]
+        self.demographic_events = [
+            msprime.MassMigration(self.T, source=1, dest=0),
+            msprime.MassMigration(self.T, source=2, dest=0),
+            msprime.PopulationParametersChange(
+                self.T, initial_size=self.N, population_id=0
+            ),
+            msprime.PopulationParametersChange(self.T, initial_size=0, population_id=1),
+            msprime.PopulationParametersChange(self.T, initial_size=0, population_id=2),
+        ]
+
+    def test_demography_with_zero_sizes(self):
+        for samples in [
+            [msprime.Sample(1, 0)],
+            [msprime.Sample(1, 0), msprime.Sample(2, 0)],
+            # Check ancient sampling.
+            [msprime.Sample(0, self.T), msprime.Sample(1, 0)],
+        ]:
+            ts = msprime.simulate(
+                population_configurations=self.population_configurations,
+                demographic_events=self.demographic_events,
+                samples=samples * 10,
+            )
+            self.assertTrue(
+                all(tree.num_roots == 1 for tree in ts.trees()), msg=f"{samples}"
+            )
+
+    def test_cant_sample_a_zero_sized_population(self):
+        for bad_samples, err in [
+            ([msprime.Sample(0, 0)], _msprime.InputError),
+            # Check ancient sampling.
+            ([msprime.Sample(1, self.T), msprime.Sample(1, 0)], _msprime.LibraryError),
+        ]:
+            with self.assertRaises(err, msg=f"{bad_samples}"):
+                msprime.simulate(
+                    population_configurations=self.population_configurations,
+                    demographic_events=self.demographic_events,
+                    samples=bad_samples * 10,
+                )
 
 
 class TestDeprecatedParameters(unittest.TestCase):

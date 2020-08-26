@@ -2011,10 +2011,8 @@ test_demographic_events(void)
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1), 0);
 
-        /* Zero or negative population sizes are not allowed */
+        /* Negative population sizes are not allowed */
         ret = msp_set_population_configuration(&msp, 0, -1, 0);
-        CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-        ret = msp_set_population_configuration(&msp, 0, 0, 0);
         CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
         ret = msp_set_num_populations(&msp, 2);
@@ -2034,6 +2032,8 @@ test_demographic_events(void)
             CU_ASSERT_EQUAL(ret, 0);
         }
 
+        ret = msp_set_population_configuration(&msp, 0, 0, 0);
+        CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_population_configuration(&msp, 0, 100, 0);
         CU_ASSERT_EQUAL(ret, 0);
 
@@ -3008,6 +3008,90 @@ test_simulate_init_errors(void)
     tsk_table_collection_free(&tables);
 }
 
+static void
+check_zero_population_size(
+    sample_t *samples, size_t n, double N, double T, int init_ret, int run_ret)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+    int model;
+
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
+
+    for (model = 0; model < 2; model++) {
+        tsk_table_collection_clear(&tables);
+        ret = msp_alloc(&msp, n, samples, &tables, rng);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        if (model == 0) {
+            ret = msp_set_simulation_model_hudson(&msp);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else {
+            ret = msp_set_simulation_model_dtwf(&msp);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
+
+        ret = msp_set_num_populations(&msp, 3);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_population_configuration(&msp, 0, 0, 0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_population_configuration(&msp, 1, N, 0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_population_configuration(&msp, 2, N, 0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_mass_migration(&msp, T, 1, 0, 1.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_mass_migration(&msp, T, 2, 0, 1.0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_parameters_change(&msp, T, 0, N, 0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_parameters_change(&msp, T, 1, 0, 0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_parameters_change(&msp, T, 2, 0, 0);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_initialise(&msp);
+        CU_ASSERT_EQUAL_FATAL(ret, init_ret);
+
+        if (init_ret == 0) {
+            msp_print_state(&msp, _devnull);
+            ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+            CU_ASSERT_EQUAL(ret, run_ret);
+            msp_verify(&msp, 0);
+            msp_print_state(&msp, _devnull);
+        }
+
+        ret = msp_free(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+    }
+
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
+test_zero_population_size(void)
+{
+    const size_t n = 2;
+    const double N = 1000;
+    const double T = 500;
+    sample_t samples_good_1[] = { { 1, 0.0 }, { 1, 0.0 } };
+    sample_t samples_good_2[] = { { 1, 0.0 }, { 2, 0.0 } };
+    sample_t samples_good_3[] = { { 1, 0.0 }, { 0, T } };
+    sample_t samples_bad_1[] = { { 0, 0.0 }, { 1, 0.0 } };
+    sample_t samples_bad_2[] = { { 1, T }, { 1, 0.0 } };
+
+    check_zero_population_size(samples_good_1, n, N, T, 0, 0);
+    check_zero_population_size(samples_good_2, n, N, T, 0, 0);
+    check_zero_population_size(samples_good_3, n, N, T, 0, 0);
+    check_zero_population_size(samples_bad_1, n, N, T, MSP_ERR_BAD_SAMPLES, 0);
+    check_zero_population_size(samples_bad_2, n, N, T, 0, MSP_ERR_BAD_SAMPLES);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -3070,6 +3154,7 @@ main(int argc, char **argv)
         { "test_simulate_from_completed", test_simulate_from_completed },
         { "test_simulate_from_incompatible", test_simulate_from_incompatible },
         { "test_simulate_init_errors", test_simulate_init_errors },
+        { "test_zero_population_size", test_zero_population_size },
 
         CU_TEST_INFO_NULL,
     };

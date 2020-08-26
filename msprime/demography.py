@@ -480,8 +480,8 @@ class PopulationConfiguration:
     def __init__(
         self, sample_size=None, initial_size=None, growth_rate=0.0, metadata=None
     ):
-        if initial_size is not None and initial_size <= 0:
-            raise ValueError("Population size must be > 0")
+        if initial_size is not None and initial_size < 0:
+            raise ValueError("Population size must be >= 0")
         if sample_size is not None and sample_size < 0:
             raise ValueError("Sample size must be >= 0")
         self.sample_size = sample_size
@@ -555,8 +555,8 @@ class PopulationParametersChange(DemographicEvent):
             self.population = self.population_id
         if self.growth_rate is None and self.initial_size is None:
             raise ValueError("Must specify one or more of growth_rate and initial_size")
-        if self.initial_size is not None and self.initial_size <= 0:
-            raise ValueError("Cannot have a population size <= 0")
+        if self.initial_size is not None and self.initial_size < 0:
+            raise ValueError("Cannot have a population size < 0")
         self.population = -1 if self.population is None else self.population
 
     def get_ll_representation(self, num_populations=None):
