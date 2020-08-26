@@ -307,6 +307,78 @@ test_sweep_genic_selection_time_change(void)
     tsk_table_collection_free(&tables);
 }
 
+static void
+sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
+{
+
+    /* Try to mimic the msms parameters used in verification.py
+           "100 300 -t 200 -r 200 500000"
+           " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
+     */
+    int ret;
+    uint32_t n = 100;
+    double num_loci = 500001;
+    double position = 0.5;
+    double alpha = 10000;
+    double recom_rate = 0.0004;
+    double start_frequency = 0.5 / 10000;
+    double end_frequency = 0.9;
+    double dt = 1.0 / 400000;
+
+    msp_t msp;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+
+    // Test over differnt seeds
+    gsl_rng_set(rng, seed);
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    memset(samples, 0, n * sizeof(sample_t));
+
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = num_loci;
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, recom_rate), 0);
+    ret = msp_set_dimensions(&msp, 1, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    // To mimic the verfication.py call
+    msp_set_discrete_genome(&msp, 0);
+    msp_set_gene_conversion_rate(&msp, 0, 1);
+    msp_set_avl_node_block_size(&msp, 65536);
+    msp_set_node_mapping_block_size(&msp, 65536);
+    msp_set_segment_block_size(&msp, 65536);
+
+    ret = msp_set_simulation_model_sweep_genic_selection(
+        &msp, position, start_frequency, end_frequency, alpha, dt);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    msp_verify(&msp, 0);
+
+    msp_free(&msp);
+    gsl_rng_free(rng);
+    free(samples);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_sweep_genic_selection_mimic_msms(void)
+{
+    /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
+    for (int i = 0; i < 300; i++)
+        sweep_genic_selection_mimic_msms_single_run(i + 1);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -320,6 +392,8 @@ main(int argc, char **argv)
         { "test_sweep_genic_selection_recomb", test_sweep_genic_selection_recomb },
         { "test_sweep_genic_selection_time_change",
             test_sweep_genic_selection_time_change },
+        { "test_sweep_genic_selection_mimic_msms",
+            test_sweep_genic_selection_mimic_msms },
         CU_TEST_INFO_NULL,
     };
 

@@ -999,7 +999,7 @@ class MsmsSweeps(Test):
     def test_neutral_msms_vs_msp(self):
         self._run_msms_vs_msp("100 300 -t 200 -r 200 500000 -N 10000")
 
-    def _test_selective_msms_vs_msp(self):
+    def test_selective_msms_vs_msp(self):
         """
         NOTE:
             This and the following test methods invoke the seletive sweep
@@ -1031,12 +1031,12 @@ class MsmsSweeps(Test):
             " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
         )
 
-    def _test_selective_msms_vs_msp_small_s(self):
+    def test_selective_msms_vs_msp_small_s(self):
         self._run_msms_vs_msp(
             "100 300 -t 200 -r 200 500000 -SF 0 0.9 -Sp 0.5 -SaA 1 -SAA 2 -N 10000"
         )
 
-    def _test_selective_msms_vs_msp_multiple_sweeps(self):
+    def test_selective_msms_vs_msp_multiple_sweeps(self):
         self._run_msms_vs_msp(
             "100 300 -t 200 -r 200 500000"
             " -SF 0 0.9 -Sp 0.5"
