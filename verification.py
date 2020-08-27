@@ -2633,10 +2633,11 @@ class BetaGrowth(XiGrowth):
         )
 
     def compute_beta_timescale(self, pop_size, alpha, ploidy):
-        m = 2 + np.exp(alpha * np.log(2) + (1 - alpha) * np.log(3) - np.log(alpha - 1))
+        m = 1 + np.exp(alpha * np.log(2) + (1 - alpha) * np.log(3) - np.log(alpha - 1))
         N = pop_size
         if ploidy > 1:
             N = pop_size / 2
+            m = m + 1
         ret = np.exp(
             alpha * np.log(m)
             + (alpha - 1) * np.log(N)
