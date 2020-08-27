@@ -1080,7 +1080,8 @@ mutgen_populate_tables(mutgen_t *self)
                     assert(parent_id != TSK_NULL);
                 }
                 mutation_id = tsk_mutation_table_add_row(mutations, site_id, m->node,
-                    parent_id, m->derived_state, m->derived_state_length, m->metadata,
+                    parent_id, TSK_UNKNOWN_TIME, /* FIXME */
+                    m->derived_state, m->derived_state_length, m->metadata,
                     m->metadata_length);
                 if (mutation_id < 0) {
                     ret = msp_set_tsk_error(mutation_id);
@@ -1355,7 +1356,7 @@ mutgen_generate(mutgen_t *self, int flags)
     if (ret != 0) {
         goto out;
     }
-    ret = tsk_table_collection_check_integrity(self->tables, TSK_CHECK_OFFSETS);
+    ret = tsk_table_collection_check_integrity(self->tables, 0);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
         goto out;

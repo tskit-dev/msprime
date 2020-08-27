@@ -442,15 +442,15 @@ class TestSimulationState(LowLevelTestCase):
         tables = tskit.TableCollection.fromdict(sim.tables.asdict())
         nodes = tables.nodes
         self.assertEqual(len(nodes), sim.num_nodes)
-        for j, (flags, t, pop, _ind, metadata) in enumerate(nodes):
+        for j, node in enumerate(nodes):
             if j < sim.num_samples:
-                self.assertEqual(t, 0.0)
-                self.assertEqual(flags, 1)
+                self.assertEqual(node.time, 0.0)
+                self.assertEqual(node.flags, 1)
             else:
-                self.assertGreater(t, 0.0)
-                self.assertEqual(flags, 0)
-            self.assertTrue(0 <= pop < sim.num_populations)
-            self.assertEqual(len(metadata), 0)
+                self.assertGreater(node.time, 0.0)
+                self.assertEqual(node.flags, 0)
+            self.assertTrue(0 <= node.population < sim.num_populations)
+            self.assertEqual(len(node.metadata), 0)
 
         edges = tables.edges
         self.assertEqual(len(edges), sim.num_edges)
@@ -466,9 +466,9 @@ class TestSimulationState(LowLevelTestCase):
                     segments_am[j] += 1
                     j += 1
         records_am = [0 for b in breakpoints[:-1]]
-        for left, right, _, _ in edges:
-            j = breakpoints.index(left)
-            while breakpoints[j] < right:
+        for edge in edges:
+            j = breakpoints.index(edge.left)
+            while breakpoints[j] < edge.right:
                 # We are assuming a binary coalescent here. We would need to
                 # do something more complicated for more general models.
                 records_am[j] += 0.5
@@ -513,9 +513,9 @@ class TestSimulationState(LowLevelTestCase):
         last_l = 0
         num_trees = 0
         live_segments = []
-        for left, right, parent, child in sorted_edges:
-            if last_l != left:
-                last_l = left
+        for edge in sorted_edges:
+            if last_l != edge.left:
+                last_l = edge.left
                 for j in range(n):
                     assert j in pi
                 # insert the root
@@ -530,11 +530,11 @@ class TestSimulationState(LowLevelTestCase):
                 self.verify_trees_equal(n, pi, st)
                 del pi[v]
                 num_trees += 1
-            heapq.heappush(live_segments, (right, (child, parent)))
-            while live_segments[0][0] <= left:
+            heapq.heappush(live_segments, (edge.right, (edge.child, edge.parent)))
+            while live_segments[0][0] <= edge.left:
                 x, (other_child, p) = heapq.heappop(live_segments)
                 del pi[other_child]
-            pi[child] = parent
+            pi[edge.child] = edge.parent
         for j in range(n):
             assert j in pi
         # Insert the root branch.
@@ -555,11 +555,11 @@ class TestSimulationState(LowLevelTestCase):
         Checks to see if there were any unsquashed edges in the specified
         set of time sorted edges.
         """
-        _, last_r, last_p, last_c = sorted_edges[0]
-        for left, right, p, c in sorted_edges[1:]:
-            if p == last_p and c == last_c:
-                self.assertNotEqual(last_r, left)
-            last_r, last_p, last_c = right, p, c
+        last_edge = sorted_edges[0]
+        for edge in sorted_edges[1:]:
+            if edge.parent == last_edge.parent and edge.child == last_edge.child:
+                self.assertNotEqual(last_edge.right, edge.left)
+            last_edge = edge
 
     def verify_completed_simulation(self, sim):
         """
@@ -589,24 +589,25 @@ class TestSimulationState(LowLevelTestCase):
         self.assertGreater(len(edges), 0)
         self.assertEqual(len(edges), sim.num_edges)
         # Edges should be returned in canonical order
-        self.assertEqual(edges, sorted(edges, key=lambda e: (e[2], e[3], e[0])))
+        self.assertEqual(
+            edges, sorted(edges, key=lambda e: (e.parent, e.child, e.left))
+        )
         # Nodes should be in nondecreasing time order
-        times = [node[1] for node in tables.nodes]
+        times = [node.time for node in tables.nodes]
         self.assertEqual(times, sorted(times))
         self.assertEqual(times[-1], sim.time)
         self.verify_squashed_edges(edges)
 
         ts = tables.tree_sequence()
-        left_sorted_edges = sorted(edges, key=lambda r: (r[0], r[2]))
+        left_sorted_edges = sorted(edges, key=lambda e: (e.left, e.parent))
         self.verify_trees(sim, left_sorted_edges, ts)
         ts_edges = list(ts.edges())
         j = 0
         for edge in edges:
-            left, right, parent, child = edge
-            self.assertEqual(left, ts_edges[j].left)
-            self.assertEqual(right, ts_edges[j].right)
-            self.assertEqual(parent, ts_edges[j].parent)
-            self.assertEqual(child, ts_edges[j].child)
+            self.assertEqual(edge.left, ts_edges[j].left)
+            self.assertEqual(edge.right, ts_edges[j].right)
+            self.assertEqual(edge.parent, ts_edges[j].parent)
+            self.assertEqual(edge.child, ts_edges[j].child)
             j += 1
         assert j == len(ts_edges)
 
@@ -1227,7 +1228,7 @@ class TestSimulator(LowLevelTestCase):
         for bad_type in ["1", [], int, set()]:
             self.assertRaises(TypeError, f, pedigree=bad_type)
         for bad_value in [{}]:
-            self.assertRaises(ValueError, f, pedigree=bad_value)
+            self.assertRaises(TypeError, f, pedigree=bad_value)
         for bad_model in ["dtwf", "hudson"]:
             self.assertRaises(ValueError, f, pedigree=base_ped, model=bad_model)
         for bad_ped in [
@@ -1259,24 +1260,6 @@ class TestSimulator(LowLevelTestCase):
             sim.run()
             self.assertEqual(sim.num_labels, num_labels)
 
-    def test_record_scaling(self):
-        for Ne in [0.25, 1, 10, 1e6]:
-            sim = get_example_simulator(
-                10, Ne=Ne, num_populations=2, store_migrations=True
-            )
-            sim.run()
-            tables = tskit.TableCollection.fromdict(sim.tables.asdict())
-            sim_times = [node[1] for node in tables.nodes]
-            for j in range(len(tables.nodes)):
-                node = tables.nodes[j]
-                self.assertAlmostEqual(node.time, sim_times[j])
-            self.assertGreater(sim.num_migrations, 0)
-            self.assertEqual(sim.num_migrations, len(tables.migrations))
-            sim_times = [r[-1] for r in tables.migrations]
-            for j in range(len(tables.migrations)):
-                generation = tables.migrations[j].time
-                self.assertAlmostEqual(generation, sim_times[j])
-
     def test_bad_run_args(self):
         sim = get_example_simulator(10)
         for bad_type in ["x", []]:
@@ -1290,17 +1273,6 @@ class TestSimulator(LowLevelTestCase):
         tables = tskit.TableCollection.fromdict(sim.tables.asdict())
         self.assertGreater(sim.num_migrations, 0)
         self.assertEqual(sim.num_migrations, len(tables.migrations))
-        sim_records = tables.migrations
-        self.assertEqual(len(sim_records), len(tables.migrations))
-        for sim_r, ts_r in zip(sim_records, tables.migrations):
-            self.assertEqual(len(sim_r), 6)
-            # Left and right have been remapped, so might be slightly different.
-            self.assertAlmostEqual(sim_r[0], ts_r.left)
-            self.assertAlmostEqual(sim_r[1], ts_r.right)
-            self.assertAlmostEqual(sim_r[2], ts_r.node)
-            self.assertAlmostEqual(sim_r[3], ts_r.source)
-            self.assertAlmostEqual(sim_r[4], ts_r.dest)
-            self.assertAlmostEqual(sim_r[5], ts_r.time)
 
     def test_non_parametric_simulation_models(self):
         def f(num_samples=10, random_seed=1, **kwargs):
@@ -1523,15 +1495,14 @@ class TestSimulator(LowLevelTestCase):
             else:
                 self.assertEqual(sim.num_migrations, 0)
             tables = tskit.TableCollection.fromdict(sim.tables.asdict())
-            records = tables.migrations
-            self.assertEqual(len(records), sim.num_migrations)
-            for left, right, node, source, dest, time in records:
-                self.assertTrue(0 <= left < sim.sequence_length)
-                self.assertTrue(0 < right <= sim.sequence_length)
-                self.assertTrue(0 <= source < 2)
-                self.assertTrue(0 <= dest < 2)
-                self.assertGreaterEqual(node, 0)
-                self.assertGreater(time, 0)
+            self.assertEqual(len(tables.migrations), sim.num_migrations)
+            for migration in tables.migrations:
+                self.assertTrue(0 <= migration.left < sim.sequence_length)
+                self.assertTrue(0 < migration.right <= sim.sequence_length)
+                self.assertTrue(0 <= migration.source < 2)
+                self.assertTrue(0 <= migration.dest < 2)
+                self.assertGreaterEqual(migration.node, 0)
+                self.assertGreater(migration.time, 0)
         # By default, this should be off.
         sim = f()
         self.assertFalse(sim.store_migrations)

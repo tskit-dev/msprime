@@ -39,17 +39,19 @@ test_likelihood_errors(void)
     ret = tsk_node_table_add_row(&tables.nodes, 0, 1.0, TSK_NULL, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 1.0, 2, 0);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 1.0, 2, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 1.0, 2, 1);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 1.0, 2, 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_site_table_add_row(&tables.sites, 0.1, "A", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     /* Site has two mutations */
-    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 0, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 1, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 0, 1, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -110,7 +112,8 @@ test_likelihood_zero_edges(void)
     /* Add in a site and a mutation */
     ret = tsk_site_table_add_row(&tables.sites, 0.1, "A", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 0, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -161,9 +164,9 @@ test_likelihood_three_leaves(void)
         &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 3, 2);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 3, 2, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 4, 2);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 4, 2, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
@@ -172,36 +175,41 @@ test_likelihood_three_leaves(void)
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 5, 1);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 5, 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 5, 3);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 5, 3, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 0.25, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 6, 0);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 6, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 6, 4);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 6, 4, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 0.5, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 7, 5);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 7, 5, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 7, 6);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 7, 6, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 0, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 1, 1, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 1, 1, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 2, 3, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 2, 3, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 3, 0, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 3, 0, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 4, 5, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 4, 5, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_site_table_add_row(&tables.sites, 0.1, "A", 1, NULL, 0);
@@ -267,9 +275,9 @@ test_likelihood_two_mrcas(void)
         &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 2, 1);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 2, 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 3, 1);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 3, 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
@@ -278,9 +286,9 @@ test_likelihood_two_mrcas(void)
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 4, 0);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 4, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 5, 0);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 5, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.15, 0, TSK_NULL, NULL, 0);
@@ -289,25 +297,28 @@ test_likelihood_two_mrcas(void)
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.15, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 6, 2);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 6, 2, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 6, 4);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 6, 4, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 0.5, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 7, 3);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 7, 3, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 7, 5);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 7, 5, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 1, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 0, 1, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 1, 4, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 1, 4, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 2, 3, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 2, 3, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_site_table_add_row(&tables.sites, 0.1, "A", 1, NULL, 0);
@@ -368,9 +379,9 @@ test_likelihood_material_overhang(void)
         &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 2, 1);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 2, 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 3, 1);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 3, 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
@@ -379,9 +390,9 @@ test_likelihood_material_overhang(void)
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.7, 4, 0);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.7, 4, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.7, 1, 5, 0);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.7, 1, 5, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.15, 0, TSK_NULL, NULL, 0);
@@ -390,32 +401,35 @@ test_likelihood_material_overhang(void)
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.15, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 6, 2);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.5, 6, 2, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.7, 6, 4);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.7, 6, 4, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 0.5, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 7, 3);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 7, 3, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.7, 1, 7, 5);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.7, 1, 7, 5, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 0.7, 8, 6);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 0.7, 8, 6, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 0.7, 8, 7);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 0.7, 8, 7, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 1.3, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 1, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 0, 1, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 1, 4, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 1, 4, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 2, 3, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 2, 3, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_site_table_add_row(&tables.sites, 0.1, "A", 1, NULL, 0);
@@ -477,9 +491,9 @@ test_likelihood_material_gap(void)
         &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 2, 0);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 2, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 1, 3, 0);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 1, 3, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
@@ -488,9 +502,9 @@ test_likelihood_material_gap(void)
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 4, 3);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 4, 3, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 5, 3);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 5, 3, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.2, 0, TSK_NULL, NULL, 0);
@@ -499,38 +513,43 @@ test_likelihood_material_gap(void)
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.2, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 6, 2);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 6, 2, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 6, 5);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 6, 5, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 0.3, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 7, 1);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 7, 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 7, 6);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 7, 6, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 7, 6);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 7, 6, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 0.4, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 8, 4);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 8, 4, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 8, 7);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 8, 7, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 0.5, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 2, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 0, 2, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 1, 3, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 1, 3, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 2, 7, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 2, 7, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 3, 6, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 3, 6, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 4, 5, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 4, 5, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_site_table_add_row(&tables.sites, 0.1, "A", 1, NULL, 0);
@@ -595,9 +614,9 @@ test_likelihood_recombination_in_material_gap(void)
         &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 2, 0);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 2, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 1, 3, 0);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 1, 3, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
@@ -606,9 +625,9 @@ test_likelihood_recombination_in_material_gap(void)
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.1, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 4, 3);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 4, 3, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 5, 3);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 5, 3, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.2, 0, TSK_NULL, NULL, 0);
@@ -617,16 +636,16 @@ test_likelihood_recombination_in_material_gap(void)
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.2, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 6, 2);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 6, 2, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 6, 5);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 6, 5, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 0.3, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 7, 6);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 7, 6, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 8, 6);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 8, 6, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.4, 0, TSK_NULL, NULL, 0);
@@ -635,34 +654,38 @@ test_likelihood_recombination_in_material_gap(void)
         &tables.nodes, MSP_NODE_IS_RE_EVENT, 0.4, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 9, 4);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 0.5, 9, 4, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 9, 8);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.5, 1, 9, 8, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 0.5, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 10, 1);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 1, 10, 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 10, 7);
+    ret = tsk_edge_table_add_row(&tables.edges, 0, 0.3, 10, 7, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 0.6, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 1, 11, 9);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 1, 11, 9, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 1, 11, 10);
+    ret = tsk_edge_table_add_row(&tables.edges, 0.3, 1, 11, 10, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = tsk_node_table_add_row(&tables.nodes, 0, 0.7, 0, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_mutation_table_add_row(&tables.mutations, 0, 2, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 0, 2, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 1, 3, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 1, 3, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 2, 6, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 2, 6, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_mutation_table_add_row(&tables.mutations, 3, 5, -1, "C", 1, NULL, 0);
+    ret = tsk_mutation_table_add_row(
+        &tables.mutations, 3, 5, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
     ret = tsk_site_table_add_row(&tables.sites, 0.1, "A", 1, NULL, 0);

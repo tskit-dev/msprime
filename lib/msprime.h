@@ -250,8 +250,8 @@ typedef struct _msp_t {
     tsk_bookmark_t from_position;
     /* edges are buffered in a flat array until they are squashed and flushed */
     tsk_edge_t *buffered_edges;
-    size_t num_buffered_edges;
-    size_t max_buffered_edges;
+    tsk_size_t num_buffered_edges;
+    tsk_size_t max_buffered_edges;
     /* Methods for getting the waiting time until the next common ancestor
      * event and the event are defined by the simulation model */
     double (*get_common_ancestor_waiting_time)(

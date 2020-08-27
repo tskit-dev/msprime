@@ -47,7 +47,7 @@ verify_simulator_tsk_treeseq_equality(msp_t *msp, tsk_treeseq_t *tree_seq, doubl
         CU_ASSERT_EQUAL(node.time, samples[j].time);
     }
     /* Samples should always be 0..n - 1 here for simulations */
-    ret = tsk_treeseq_get_samples(tree_seq, &sample_ids);
+    sample_ids = tsk_treeseq_get_samples(tree_seq);
     CU_ASSERT_FATAL(sample_ids != NULL);
     for (j = 0; j < num_samples; j++) {
         CU_ASSERT_EQUAL(j, sample_ids[j]);
@@ -2935,15 +2935,12 @@ test_simulate_from_incompatible(void)
     CU_ASSERT_EQUAL(ret, 0);
     msp_free(&msp);
 
-    /* Make a tree sequence that we cannot recover trees from. This only happens
-     * at initialisation time. */
-    ret = tsk_edge_table_add_row(&from_tables.edges, 0, 1, 1, 0);
+    /* Make a tree sequence that we cannot recover trees from */
+    ret = tsk_edge_table_add_row(&from_tables.edges, 0, 1, 1, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    tsk_edge_table_add_row(&from_tables.edges, 0, 1, 2, 0);
+    tsk_edge_table_add_row(&from_tables.edges, 0, 1, 2, 0, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
     ret = msp_alloc(&msp, 0, NULL, &from_tables, rng);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_initialise(&msp);
     CU_ASSERT_FATAL(msp_is_tsk_error(ret));
     CU_ASSERT_EQUAL_FATAL(
         ret ^ (1 << MSP_TSK_ERR_BIT), TSK_ERR_BAD_EDGES_CONTRADICTORY_CHILDREN);

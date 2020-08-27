@@ -895,24 +895,6 @@ class TestErrors(unittest.TestCase):
             with self.assertRaises(ValueError):
                 msprime.simulate(from_ts=base_ts, start_time=start_time)
 
-    def test_malformed_tree_sequence(self):
-        tables = tskit.TableCollection(1)
-        tables.populations.add_row()
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
-        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
-        tables.nodes.add_row(flags=0, time=1, population=0)
-        tables.nodes.add_row(flags=0, time=2, population=0)
-        tables.edges.add_row(0, 1, 2, 0)
-        tables.edges.add_row(0, 1, 3, 0)
-        # The exception here is raised by tskit.
-        ts = tables.tree_sequence()
-        with self.assertRaises(tskit.LibraryError) as e:
-            ts.first()
-        message = str(e.exception)
-        with self.assertRaises(_msprime.InputError) as e:
-            msprime.simulate(from_ts=ts)
-        self.assertTrue(str(e.exception).endswith(message))
-
 
 class TestSlimOutput(unittest.TestCase):
     """

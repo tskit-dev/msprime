@@ -1361,8 +1361,8 @@ msp_record_migration(msp_t *self, double left, double right, node_id_t node,
 {
     int ret = 0;
 
-    ret = tsk_migration_table_add_row(
-        &self->tables->migrations, left, right, node, source_pop, dest_pop, self->time);
+    ret = tsk_migration_table_add_row(&self->tables->migrations, left, right, node,
+        source_pop, dest_pop, self->time, NULL, 0);
     if (ret < 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
@@ -1376,7 +1376,7 @@ static int MSP_WARN_UNUSED
 msp_flush_edges(msp_t *self)
 {
     int ret = 0;
-    size_t j, num_edges;
+    tsk_size_t j, num_edges;
     tsk_edge_t edge;
 
     if (self->num_buffered_edges > 0) {
@@ -1388,8 +1388,8 @@ msp_flush_edges(msp_t *self)
         }
         for (j = 0; j < num_edges; j++) {
             edge = self->buffered_edges[j];
-            ret = tsk_edge_table_add_row(
-                &self->tables->edges, edge.left, edge.right, edge.parent, edge.child);
+            ret = tsk_edge_table_add_row(&self->tables->edges, edge.left, edge.right,
+                edge.parent, edge.child, NULL, 0);
             if (ret < 0) {
                 ret = msp_set_tsk_error(ret);
                 goto out;
@@ -1451,6 +1451,8 @@ msp_store_edge(msp_t *self, double left, double right, node_id_t parent, node_id
     edge->right = right;
     edge->parent = parent;
     edge->child = child;
+    edge->metadata = NULL;
+    edge->metadata_length = 0;
     self->num_buffered_edges++;
 out:
     return ret;
@@ -4947,7 +4949,7 @@ msp_insert_uncoalesced_edges(msp_t *self)
                     if (seg->value != node) {
                         assert(nodes->time[node] > nodes->time[seg->value]);
                         ret = tsk_edge_table_add_row(&self->tables->edges, seg->left,
-                            seg->right, node, seg->value);
+                            seg->right, node, seg->value, NULL, 0);
                         if (ret < 0) {
                             ret = msp_set_tsk_error(ret);
                             goto out;

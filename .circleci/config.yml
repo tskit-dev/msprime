@@ -8,7 +8,11 @@ jobs:
       - checkout
       - run: sudo chown -R circleci:circleci *
       - restore_cache:
-          key: msprime-{{ .Branch }}
+          # Note: we put a v{x} suffix at the end of the cache key so that
+          # we can invalidate the cache when we need to. Note that we need
+          # to update the key in the ``save_cache`` block below also when
+          # doing that.
+          key: msprime-{{ .Branch }}-v1
       - run:
           name: Checkout submodules
           command: |
@@ -25,7 +29,7 @@ jobs:
             # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
             echo 'export PATH=/home/circleci/.local/bin:$PATH' >> $BASH_ENV
       - save_cache:
-          key: msprime-{{ .Branch }}
+          key: msprime-{{ .Branch }}-v1
           paths:
             - "/home/circleci/.local"
 
