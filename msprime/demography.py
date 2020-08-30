@@ -839,8 +839,14 @@ class DemographyDebugger:
     def _make_epochs(self):
         self.epochs = []
         # Create some samples to keep the simulator factory happy
+        for j, pop in enumerate(self.demography.populations):
+            if pop.initial_size is None or pop.initial_size > 0:
+                samples = 2 * [Sample(population=j, time=0)]
+                break
+        else:
+            raise ValueError("No population with non-zero initial size.")
         simulator = ancestry.simulator_factory(
-            sample_size=2, demography=self.demography
+            samples=samples, demography=self.demography
         )
         start_time = 0
         end_time = 0

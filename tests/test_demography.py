@@ -474,6 +474,19 @@ class TestZeroPopulationSize(unittest.TestCase):
                     samples=bad_samples * 10,
                 )
 
+    def test_demography_debugger(self):
+        msprime.DemographyDebugger(
+            population_configurations=self.population_configurations,
+            demographic_events=self.demographic_events,
+        )
+
+        with self.assertRaises(ValueError):
+            msprime.DemographyDebugger(
+                population_configurations=[
+                    msprime.PopulationConfiguration(initial_size=0)
+                ]
+            )
+
 
 class TestDeprecatedParameters(unittest.TestCase):
     """
