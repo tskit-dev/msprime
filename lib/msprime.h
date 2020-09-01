@@ -63,36 +63,30 @@
 #define MSP_PED_STATE_CLIMBING 1
 #define MSP_PED_STATE_CLIMB_COMPLETE 2
 
-/* FIXME: Using these typedefs to keep the diff size small on the initial
- * tskit transition. Can remove later. */
 typedef tsk_id_t population_id_t;
-typedef tsk_id_t node_id_t;
-typedef tsk_id_t mutation_id_t;
-typedef tsk_id_t site_id_t;
 typedef tsk_id_t label_id_t;
 
 typedef struct segment_t_t {
-    /* TODO change to population */
-    population_id_t population_id;
+    population_id_t population;
     label_id_t label;
     /* During simulation we use genetic coordinates */
     double left;
     double right;
     double left_mass;
     double right_mass;
-    node_id_t value;
+    tsk_id_t value;
     size_t id;
     struct segment_t_t *prev;
     struct segment_t_t *next;
 } segment_t;
 
 typedef struct {
-    double left; /* TODO CHANGE THIS - not a good name! */
+    double position;
     uint32_t value;
 } node_mapping_t;
 
 typedef struct {
-    population_id_t population_id;
+    population_id_t population;
     double time;
 } sample_t;
 
@@ -129,8 +123,8 @@ typedef struct {
 
 typedef struct {
     double time;
-    node_id_t sample;
-    population_id_t population_id;
+    tsk_id_t sample;
+    population_id_t population;
 } sampling_event_t;
 
 /* Simulation models */
@@ -157,8 +151,7 @@ typedef struct {
 } genic_selection_trajectory_t;
 
 typedef struct _sweep_t {
-    /* TODO change the name of this to position */
-    double locus;
+    double position;
     union {
         /* Future trajectory simulation models would go here */
         genic_selection_trajectory_t genic_selection_trajectory;
@@ -262,7 +255,7 @@ typedef struct _msp_t {
 
 /* Demographic events */
 typedef struct {
-    population_id_t population_id;
+    population_id_t population;
     double initial_size;
     double growth_rate;
 } population_parameters_change_t;
@@ -279,12 +272,12 @@ typedef struct {
 } mass_migration_t;
 
 typedef struct {
-    population_id_t population_id;
+    population_id_t population;
     double proportion;
 } simple_bottleneck_t;
 
 typedef struct {
-    population_id_t population_id;
+    population_id_t population;
     double strength;
 } instantaneous_bottleneck_t;
 

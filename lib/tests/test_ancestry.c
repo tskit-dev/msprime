@@ -27,7 +27,7 @@ verify_simulator_tsk_treeseq_equality(msp_t *msp, tsk_treeseq_t *tree_seq, doubl
     uint32_t j;
     tsk_node_t node;
     sample_t *samples;
-    node_id_t *sample_ids;
+    tsk_id_t *sample_ids;
 
     CU_ASSERT_EQUAL_FATAL(
         tsk_treeseq_get_num_samples(tree_seq), msp_get_num_samples(msp));
@@ -43,7 +43,7 @@ verify_simulator_tsk_treeseq_equality(msp_t *msp, tsk_treeseq_t *tree_seq, doubl
     for (j = 0; j < num_samples; j++) {
         ret = tsk_treeseq_get_node(tree_seq, j, &node);
         CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL(node.population, samples[j].population_id);
+        CU_ASSERT_EQUAL(node.population, samples[j].population);
         CU_ASSERT_EQUAL(node.time, samples[j].time);
     }
     /* Samples should always be 0..n - 1 here for simulations */
@@ -974,7 +974,7 @@ test_dtwf_events_between_generations(void)
 
     for (j = 0; j < n; j++) {
         samples[j].time = 0;
-        samples[j].population_id = j % 2;
+        samples[j].population = j % 2;
     }
 
     CU_ASSERT_FATAL(samples != NULL);
@@ -1058,7 +1058,7 @@ test_dtwf_unsupported_bottleneck(void)
 
     for (j = 0; j < n; j++) {
         samples[j].time = 0;
-        samples[j].population_id = 0;
+        samples[j].population = 0;
     }
     tables.sequence_length = 1.0;
     ret = msp_alloc(&msp, n, samples, &tables, rng);
@@ -1862,7 +1862,7 @@ test_simulator_getters_setters(void)
     tables.sequence_length = m;
     for (j = 0; j < n; j++) {
         samples[j].time = j;
-        samples[j].population_id = j % 2;
+        samples[j].population = j % 2;
     }
     CU_ASSERT_EQUAL(msp_alloc(&msp, 0, NULL, NULL, rng), MSP_ERR_BAD_PARAM_VALUE);
     msp_free(&msp);
@@ -2003,7 +2003,7 @@ test_demographic_events(void)
     for (model = 0; model < 2; model++) {
         for (j = 0; j < n; j++) {
             samples[j].time = j;
-            samples[j].population_id = j % 2;
+            samples[j].population = j % 2;
         }
 
         tsk_table_collection_clear(&tables);
