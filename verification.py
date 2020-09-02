@@ -259,6 +259,8 @@ class Test:
             else:
                 plot_qq(v1, v2)
             f = self._build_filename(stats_type, stat)
+            pyplot.xlabel(df1_name)
+            pyplot.ylabel(df2_name)
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
@@ -665,8 +667,84 @@ class DiscoalTest(Test):
         )
         self._plot_stats("mutation", df_d, df_msp, "discoal", "msp")
 
+    def _discoal_str_to_simulation(self, args):
+        # takes discoal command line as input
+        # and returns msprime run treeseqs
 
-class DisccoalCompatibility(DiscoalTest):
+        tokens = args.split(" ")
+        # positional args
+        sample_size = int(tokens[0])
+        nreps = int(tokens[1])
+        seq_length = int(tokens[2])
+        # parse discoal command line for params
+        # init ones we definitely need for comparison
+        theta = rho = alpha = sweep_site = sweep_mod_time = None
+        refsize = 1e6
+        for i in range(3, len(tokens)):
+            # pop size change case
+            if tokens[i] == "-en":
+                raise ValueError(
+                    "sweeps with population size changes remain unimplemented"
+                )
+            # migration rate case
+            if (tokens[i] == "-m") or (tokens[i] == "-p"):
+                raise ValueError(
+                    "sweeps with multiple populations remain unimplemented"
+                )
+            # split or admixture case
+            if (tokens[i] == "-ea") or (tokens[i] == "-ed"):
+                raise ValueError("sweeps with splits or admixture not supported")
+            # sweep params
+            if tokens[i] == "-x":
+                sweep_site = float(tokens[i + 1])
+            if (tokens[i] == "-ws") or (tokens[i] == "-wd") or (tokens[i] == "-wn"):
+                sweep_mod_time = float(tokens[i + 1])
+            if tokens[i] == "-a":
+                alpha = float(tokens[i + 1])
+            if tokens[i] == "-N":
+                refsize = float(tokens[i + 1])
+            # coalescent params
+            if tokens[i] == "-t":
+                theta = float(tokens[i + 1])
+            if tokens[i] == "-r":
+                rho = float(tokens[i + 1])
+        mod_list = [None]
+        # check we have what we need
+        if None in [alpha, sweep_site, sweep_mod_time]:
+            logging.warning(
+                "full parameterization of sweep model not given \
+                          running neutral simulation"
+            )
+        else:
+            # sweep model
+            mod = msprime.SweepGenicSelection(
+                position=sweep_site,
+                start_frequency=1.0 / (2 * refsize),
+                end_frequency=1.0 - (1.0 / (2 * refsize)),
+                alpha=alpha,
+                dt=1.0 / (40 * refsize),
+            )
+            mod_list.append((sweep_mod_time, mod))
+        # append final model
+        mod_list.append((None, None))
+        # scale theta and rho and create recomb_map
+        recomb_map = msprime.RecombinationMap.uniform_map(
+            seq_length, rho / (seq_length - 1),
+        )
+        mu = theta / seq_length
+        replicates = msprime.simulate(
+            sample_size,
+            Ne=0.25,
+            model=mod_list,
+            discrete_genome=True,
+            recombination_map=recomb_map,
+            mutation_rate=mu,
+            num_replicates=nreps,
+        )
+        return replicates
+
+
+class DiscoalCompatibility(DiscoalTest):
     """
     Basic tests to make sure that we have correctly set up the
     discoal interface.
@@ -700,35 +778,9 @@ class DiscoalSweeps(DiscoalTest):
     """
 
     def _run(self, args):
-        # This is broken currently: https://github.com/tskit-dev/msprime/issues/942
-        # Skip noisily
-        # logging.error("Skipping sweep comparison due to known bug.")
-        # return
-
-        # TODO We should be parsing the args string here to derive these values
-        # from the input. There's no point in having it as a parameter otherwise.
         df = pd.DataFrame()
-        refsize = 1e4
-        seqlen = 1e4
-        nreps = 1000
-        mod = msprime.SweepGenicSelection(
-            position=np.floor(seqlen / 2),
-            start_frequency=1.0 / (2 * refsize),
-            end_frequency=1.0 - (1.0 / (2 * refsize)),
-            alpha=1000.0,
-            dt=1.0 / (40 * refsize),
-        )
-        mu = 2.5e-4
-        rho = 2.5e-4
         data = collections.defaultdict(list)
-        replicates = msprime.simulate(
-            10,
-            model=[mod, (None, None)],
-            length=seqlen,
-            recombination_rate=rho,
-            mutation_rate=mu,
-            num_replicates=nreps,
-        )
+        replicates = self._discoal_str_to_simulation(args)
         for ts in replicates:
             data["pi"].append(ts.diversity(span_normalise=False))
             data["D"].append(ts.Tajimas_D())
@@ -749,8 +801,16 @@ class DiscoalSweeps(DiscoalTest):
         logging.debug(f"sample sizes msp: {len(df['pi'])} discoal: {len(df_df['pi'])}")
         self._plot_stats("mutation", df, df_df, "msp", "discoal")
 
-    def _test_sweep_ex1(self):
+    def test_sweep_ex0(self):
+        cmd = "10 1000 10000 -t 10.0 -r 10.0"
+        self._run(cmd)
+
+    def test_sweep_ex1(self):
         cmd = "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a 500 -x 0.5 -N 10000"
+        self._run(cmd)
+
+    def test_sweep_ex2(self):
+        cmd = "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a 5000 -x 0.5 -N 10000"
         self._run(cmd)
 
 
@@ -1060,6 +1120,76 @@ class MsmsSweeps(Test):
             "100 300 -t 20 -r 20 50000"
             " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
         )
+
+
+class SweepAnalytical(Test):
+    """
+    Analytical comparisons wrt to sweeps
+    """
+
+    def hermissonPennings_exp_sojourn(self, alpha):
+        """
+        analytic expectation of sojourn time
+        equation A.17 from Hermisson and Pennings
+        """
+        inner = np.log(alpha) + np.euler_gamma - (1.0 / alpha)
+        return 4.0 / alpha * inner
+
+    def charlesworth_exp_sojourn(self, alpha, s):
+        """
+        same as above but scaled in number of gens
+        """
+        inner = np.log(alpha) + np.euler_gamma - (1.0 / alpha)
+        return 4.0 / s * inner
+
+    def test_sojourn_time(self):
+        alphas = np.arange(100, 5000, 100)
+        refsize = 1e4
+        nreps = 500
+        seqlen = 1e4
+        mu = 2.5e-8
+        rho = 0
+        p0 = 1.0 / (2 * refsize)
+        p1 = 1 - p0
+        dt = 1.0 / (40 * refsize)
+        pos = np.floor(seqlen / 2)
+        df = pd.DataFrame()
+        data = collections.defaultdict(list)
+        for a in alphas:
+            mod = msprime.SweepGenicSelection(
+                start_frequency=p0, end_frequency=p1, alpha=a, dt=dt, position=pos
+            )
+            replicates = msprime.simulate(
+                nreps,
+                Ne=0.25,
+                model=[mod],
+                length=seqlen,
+                num_labels=2,
+                recombination_rate=rho,
+                mutation_rate=mu,
+                num_replicates=nreps,
+            )
+
+            reptimes = np.zeros(nreps)
+            i = 0
+            for x in replicates:
+                tree_times = np.zeros(x.num_trees)
+                j = 0
+                for tree in x.trees():
+                    tree_times[j] = np.max([tree.time(root) for root in tree.roots])
+                    j += 1
+                reptimes[i] = np.max(tree_times)
+                i += 1
+            data["alpha_means"].append(np.mean(reptimes))
+            data["exp_means"].append(self.hermissonPennings_exp_sojourn(a) / 2)
+        df = pd.DataFrame.from_dict(data)
+        df = df.fillna(0)
+        sm.qqplot_2samples(df["exp_means"], df["alpha_means"], line="45")
+        pyplot.xlabel("expected sojourn time")
+        pyplot.ylabel("simulated sojourn time")
+        f = self.output_dir / f"sojourn.png"
+        pyplot.savefig(f, dpi=72)
+        pyplot.close("all")
 
 
 # FIXME disabling these for now because the pedigree file that
