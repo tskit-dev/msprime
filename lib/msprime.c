@@ -4736,6 +4736,8 @@ msp_run_sweep(msp_t *self)
         goto out;
     }
 
+    curr_step = 1;
+
     while (msp_get_num_ancestors(self) > 0 && curr_step < num_steps) {
         events++;
         /* Set pop sizes & rec_rates */
@@ -4746,7 +4748,6 @@ msp_run_sweep(msp_t *self)
             rec_rates[j] = recomb_mass;
         }
 
-        curr_step++;
         event_prob = 1.0;
         event_rand = gsl_rng_uniform(self->rng);
         sweep_over = false;
@@ -4754,24 +4755,34 @@ msp_run_sweep(msp_t *self)
             sweep_dt = time[curr_step] - time[curr_step - 1];
             /* using pop sizes grabbed from get_population_size */
             pop_size = get_population_size(&self->populations[0], time[curr_step]);
-            p_coal_B = ((sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1)))
-                       / allele_frequency[curr_step] * sweep_dt / pop_size;
-            p_coal_b = ((sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1)))
-                       / (1.0 - allele_frequency[curr_step]) * sweep_dt / pop_size;
+
+            p_coal_B = 0;
+            if (avl_count(&self->populations[0].ancestors[1]) > 1) {
+                p_coal_B = ((sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1)))
+                           / allele_frequency[curr_step] * sweep_dt / pop_size;
+            }
+            p_coal_b = 0;
+            if (avl_count(&self->populations[0].ancestors[0]) > 1) {
+                p_coal_b = ((sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1)))
+                           / (1.0 - allele_frequency[curr_step]) * sweep_dt / pop_size;
+            }
             p_rec_b = rec_rates[0] * sweep_dt;
             p_rec_B = rec_rates[1] * sweep_dt;
             sweep_pop_tot_rate = p_coal_b + p_coal_B + p_rec_b + p_rec_B;
             /* doing this to build in generality if we want >1 pop */
+
             total_rate = sweep_pop_tot_rate;
             event_prob *= 1.0 - total_rate;
             curr_step++;
+
             sweep_over = total_rate == 0;
         }
         if (sweep_over) {
             break;
         }
-        /* passed check, choose event */
+
         tmp_rand = gsl_rng_uniform(self->rng);
+
         e_sum = p_coal_b;
         self->time = time[curr_step - 1];
         if (tmp_rand < e_sum / sweep_pop_tot_rate) {
