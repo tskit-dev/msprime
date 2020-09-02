@@ -1177,10 +1177,10 @@ class ParametricSimulationModel(SimulationModel):
 @attr.s
 class BetaCoalescent(ParametricSimulationModel):
     """
-    A diploid Xi-coalescent with up to four simultaneous multiple mergers and
-    crossover recombination.
+    A Lambda-coalescent with multiple mergers in the haploid cases, or a
+    Xi-coalescent with simultaneous multiple mergers in the polyploid case.
 
-    There are two main differences between the Beta-Xi-coalescent and the
+    There are two main differences between the Beta-coalescent and the
     standard coalescent. Firstly, the number of lineages that take part in each
     common ancestor event is random, with distribution determined by moments of
     the :math:`Beta(2 - \\alpha, \\alpha)`-distribution. In particular, when there
@@ -1188,44 +1188,52 @@ class BetaCoalescent(ParametricSimulationModel):
     common ancestor event at rate
 
     .. math::
-        \\frac{8}{B(2 - \\alpha, \\alpha)}
+        \\frac{1}{B(2 - \\alpha, \\alpha)}
         \\int_0^1 x^{k - \\alpha - 1} (1 - x)^{n - k + \\alpha - 1} dx,
 
     where :math:`B(2 - \\alpha, \\alpha)` is the Beta-function.
 
-    In a common ancestor event, all participating lineages are randomly split
-    into four groups, corresponding to the four parental chromosomes in a diploid,
-    bi-parental reproduction event. All lineages within each group merge simultaneously.
+    If ploidy = 1, then all participating lineages merge into one common ancestor,
+    corresponding to haploid, single-parent reproduction.
+    If ploidy = :math:`p > 1`, all participating lineages split randomly into
+    :math:`2 p` groups, corresponding to two-parent reproduction with :math:`p` copies
+    of each chromosome per parent. All lineages within each group merge simultaneously.
 
-    .. warning::
-        The prefactor of 8 in the common ancestor event rate arises as the product
-        of two terms. A factor of 4 compensates for the fact that only one quarter
-        of binary common ancestor events result in a merger due to diploidy.
-        A further factor of 2 is included for consistency with the implementation
-        of the Hudson model, in which :math:`n` lineages undergo binary mergers at
-        rate :math:`n (n - 1)`.
-
-    Secondly, the time scale predicted by the Beta-Xi-coalescent is proportional
-    to :math:`N_e^{\\alpha - 1}` generations, where :math:`N_e` is the effective
-    population size. Specifically, one unit of coalescent time corresponds to
-    a number of generations given by
+    Secondly, the number of generations between common ancestor events predicted by the
+    Beta-coalescent is proportional to :math:`N_e^{\\alpha - 1}`, where :math:`N_e` is
+    the effective population size. Specifically, the mean number of generations until
+    two lineages undergo a common ancestor event is
 
     .. math::
-        \\frac{m^{\\alpha} N_e^{\\alpha - 1}}{\\alpha B(2 - \\alpha, \\alpha)},
+        G = \\frac{m^{\\alpha} N_e^{\\alpha - 1}}{\\alpha B(2 - \\alpha, \\alpha)},
 
-    where
+    if ploidy = 1, and
 
     .. math::
-        m = 2 + \\frac{2^{\\alpha}}{3^{\\alpha - 1} (\\alpha - 1)}.
+        G = \\frac{m^{\\alpha} (N_e / 2)^{\\alpha - 1}}
+            {2 p \\alpha B(2 - \\alpha, \\alpha)},
+
+    if ploidy = :math:`p > 1`, where :math:`m` is the mean number of juveniles per
+    family, and is given by
+
+    .. math::
+        m = q + \\frac{2^{\\alpha}}{3^{\\alpha - 1} (\\alpha - 1)},
+
+    where :math:`q = 1` ploidy = 1, and :math:`q = 2` if ploidy > 1.
+
+    In the polyploid case we divide the effective population size :math:`N_e` by two
+    because we assume the :math:`N_e` polyploid individuals form :math:`N_e / 2`
+    two-parent families in which reproduction takes place.
 
     .. warning::
-        The time scale depends both on the effective population size :math:`N_e`
-        and :math:`\\alpha`, and can be dramatically shorter than that of the
+        The number of generations between common ancestor events :math:`G` depends
+        both on the effective population size :math:`N_e` and :math:`\\alpha`,
+        and can be dramatically shorter than in the case of the
         standard coalescent. For :math:`\\alpha \\approx 1` that is due to
-        insensitivity of the time scale to :math:`N_e` --- see
+        insensitivity of :math:`G` to :math:`N_e` --- see
         :ref:`sec_api_simulation_models_multiple_mergers` for an illustration.
-        For :math:`\\alpha \\approx 2` the time scale is short despite depending on
-        :math:`N_e` almost linearly, matching the standard coalescent, because
+        For :math:`\\alpha \\approx 2`, :math:`G` is almost linear in
+        :math:`N_e`, but can nevertheless be small because
         :math:`B(2 - \\alpha, \\alpha) \\rightarrow \\infty` as
         :math:`\\alpha \\rightarrow 2`. As a result, effective population sizes
         must often be many orders of magnitude larger than census population sizes
@@ -1233,10 +1241,14 @@ class BetaCoalescent(ParametricSimulationModel):
 
     See `Schweinsberg (2003)
     <https://www.sciencedirect.com/science/article/pii/S0304414903000280>`_
-    for the derivation of the common ancestor event rate, as well as the time scaling.
-    Note however that the model of Schweinsberg (2003) is haploid, so that
-    all participating lineages merge in a common ancestor event without
-    splitting into four groups.
+    for the derivation of the common ancestor event rate,
+    as well as the number of generations between common ancestor events.
+    Note however that Schweinsberg (2003) only covers the haploid case.
+    For details of the diploid extension, see
+    `Blath et al. (2013) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3527250/>`_.
+    The general polyploid model is analogous to the diploid case, with
+    :math:`2 p` available copies of parental chromsomes per common ancestor event,
+    and hence up to :math:`2 p` simultaneous mergers.
 
     :param float alpha: Determines the degree of skewness in the family size
         distribution, and must satisfy :math:`1 < \\alpha < 2`. Smaller values of
@@ -1246,12 +1258,12 @@ class BetaCoalescent(ParametricSimulationModel):
         population replaced by offspring in one reproduction event, and must
         satisfy :math:`0 < \\tau \\leq 1`, where :math:`\\tau` is the truncation point.
         The default is :math:`\\tau = 1`, which corresponds to the standard
-        Beta-Xi-coalescent. When :math:`\\tau < 1`, the number of lineages
+        Beta-coalescent. When :math:`\\tau < 1`, the number of lineages
         participating in a common ancestor event is determined by moments
-        of the :math:`Beta(2 - \\alpha, \\alpha)` distribution conditioned on not
+        of the Beta:math:`(2 - \\alpha, \\alpha)` distribution conditioned on not
         exceeding :math:`\\tau`, and the Beta-function in the expression
-        for the time scale is also replaced by the incomplete Beta function
-        :math:`Beta(\\tau; 2 - \\alpha, \\alpha)`.
+        for :math:`G` is also replaced by the incomplete Beta-function
+        :math:`B(\\tau; 2 - \\alpha, \\alpha)`.
     """
 
     name = "beta"
@@ -1263,29 +1275,30 @@ class BetaCoalescent(ParametricSimulationModel):
 @attr.s
 class DiracCoalescent(ParametricSimulationModel):
     """
-    A diploid Xi-coalescent with up to four simultaneous multiple mergers and
-    crossover recombination.
+    A Lambda-coalescent with multiple mergers in the haploid cases, or a
+    Xi-coalescent with simultaneous multiple mergers in the polyploid case.
 
-    The Dirac-Xi-coalescent is an implementation of the model of
+    The Dirac-coalescent is an implementation of the model of
     `Blath et al. (2013) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3527250/>`_
     The simulation proceeds similarly to the standard coalescent.
-    In addition to binary common ancestor events at rate :math:`n (n - 1)` when
+    In addition to binary common ancestor events at rate :math:`n (n - 1) / 2` when
     there are :math:`n` lineages, potential multiple merger events take place
-    at rate :math:`2 c > 0`. Each lineage participates in each multiple merger
-    event independently with probability :math:`0 < \\psi \\leq 1`. All participating
-    lineages are randomly split into four groups, corresponding to the four
-    parental chromosomes present in a diploid, bi-parental reproduction event,
-    and the lineages within each group merge simultaneously.
+    at rate :math:`c > 0`. Each lineage participates in each multiple merger
+    event independently with probability :math:`0 < \\psi \\leq 1`.
+
+    If ploidy = 1, then all participating lineages merge into one common ancestor,
+    corresponding to haploid, single-parent reproduction.
+    If ploidy = :math:`p > 1`, all participating lineages split randomly into
+    :math:`2 p` groups, corresponding to two-parent reproduction with :math:`p` copies
+    of each chromosome per parent. All lineages within each group merge simultaneously.
 
     .. warning::
-        The Dirac-Xi-coalescent is obtained as a scaling limit of Moran models,
-        rather than Wright-Fisher models. As a consequence, one unit of coalescent
-        time is proportional to :math:`N_e^2` generations,
+        The Dirac-coalescent is obtained as a scaling limit of Moran models,
+        rather than Wright-Fisher models. As a consequence, the number of generations
+        between coalescence events is proportional to :math:`N_e^2`,
         rather than :math:`N_e` generations as in the standard coalescent.
-        However, the coalescent recombination rate is obtained from the
-        per-generation recombination probability by rescaling with
-        :math:`N_e`. See :ref:`sec_tutorial_multiple_mergers`
-        for an illustration of how this affects simulation output in practice.
+        See :ref:`sec_tutorial_multiple_mergers` for an illustration of how this
+        affects simulation output in practice.
 
     :param float c: Determines the rate of potential multiple merger events.
         We require :math:`c > 0`.

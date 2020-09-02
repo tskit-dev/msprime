@@ -6179,13 +6179,14 @@ beta_compute_timescale(msp_t *self, population_t *pop)
 {
     double alpha = self->model.params.beta_coalescent.alpha;
     double truncation_point = self->model.params.beta_coalescent.truncation_point;
-    double m = 2 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
+    double m = 1 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
     double pop_size = pop->initial_size;
     /* For ploidy > 1 we assume N/2 two-parent families, so that the rate
      * with which 2 lineages belong to a common family is based on "population size"
      * N/2 */
     if (self->ploidy > 1) {
         pop_size /= 2.0;
+        m += 1.0;
     }
     double timescale = exp(alpha * log(m) + (alpha - 1) * log(pop_size) - log(alpha)
                            - gsl_sf_lnbeta(2 - alpha, alpha)

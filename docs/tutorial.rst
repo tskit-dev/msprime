@@ -1960,23 +1960,23 @@ Multiple merger coalescents
 ***************************
 
 ``msprime`` can simulate several multiple merger coalescent models,
-in which any number of lineages can coalesce in up to four simultaneous
-mergers. These can often be appropriate models when the distribution of
+in which any number of lineages can coalesce in a number of simultaneous
+mergers. These models are often appropriate when the distribution of
 offspring numbers among individuals in the population is highly skewed.
-Provided are the classes of Beta-Xi-coalescents and Dirac-Xi-coalescents.
+The two provided models are the Beta-coalescent and the Dirac-coalescent.
 
-The Beta-Xi-coalescent can be simulated as follows:
+The diploid Beta-Xi-coalescent can be simulated as follows:
 
 .. code-block:: python
 
     def beta_multiple_merger_example():
-        ts = msprime.simulate(
-            sample_size=10, random_seed=1,
+        ts = msprime.sim_ancestry(
+            sample_size=5, ploidy=2, random_seed=1,
             model=msprime.BetaCoalescent(alpha=1.001, truncation_point=1))
         tree = ts.first()
         print(tree.draw(format="unicode"))
 
-Running this code we get::
+Running this code, we get::
 
          16
      ┏━━━━┻━━━┓
@@ -2000,13 +2000,13 @@ no multiple mergers for small sample sizes:
 .. code-block:: python
 
     def beta_few_multiple_mergers_example():
-        ts = msprime.simulate(
-            sample_size=10, random_seed=1,
+        ts = msprime.sim_ancestry(
+            sample_size=5, ploidy=2, random_seed=1,
             model=msprime.BetaCoalescent(alpha=1.8, truncation_point=1))
         tree = ts.first()
         print(tree.draw(format="unicode"))
 
-Running this code we get::
+Running this code, we get::
 
          18
       ┏━━━┻━━━┓
@@ -2028,15 +2028,44 @@ Running this code we get::
     ┃ ┃ ┃ ┃ ┃ ┃ ┃ ┃ ┏┻┓
     5 2 3 7 8 0 6 9 1 4
 
-The timescale of the Beta-Xi-coalescent depends nonlinearly on both :math:`\alpha`
-and the effective population size :math:`N_e` as detailed in
-:ref:`sec_api_simulation_models_multiple_mergers`. For a fixed :math:`\alpha`,
-a unit of coalescent time is proportional to :math:`N_e^{\alpha - 1}` generations,
-albeit with a complicated constant of proportionality that depends on :math:`\alpha`.
-The dependence on :math:`\alpha` for fixed :math:`N_e` is not monotone.
-Since two lineages merge in 0.5 units of coalescent time on average regadless of
-:math:`N_e` and :math:`\alpha`, the time to their most recent common ancestor depends
-on both of these parameters when measured in generations.
+Multiple mergers still take place in a haploid simulaton, but only one merger
+can take place at a given time:
+
+.. code-block:: python
+
+    def beta_haploid_multiple_merger_example():
+        ts = msprime.sim_ancestry(
+            sample_size=10, ploidy=1, random_seed=1,
+            model=msprime.BetaCoalescent(alpha=1.001, truncation_point=1))
+        tree = ts.first()
+        print(tree.draw(format="unicode"))
+
+Running this code, we get::
+
+       14
+    ┏━┳━┻━━━┓
+    ┃ ┃    13
+    ┃ ┃ ┏━━━┻━━━┓
+    ┃ ┃ ┃      12
+    ┃ ┃ ┃ ┏━┳━━━╋━━━━┓
+    ┃ ┃ ┃ ┃ ┃   ┃   11
+    ┃ ┃ ┃ ┃ ┃   ┃   ┏┻┓
+    ┃ ┃ ┃ ┃ ┃  10   ┃ ┃
+    ┃ ┃ ┃ ┃ ┃ ┏━╋━┓ ┃ ┃
+    1 2 0 5 7 3 4 9 6 8
+
+A haploid simulation results in larger individual mergers than a polyploid simulation
+because large mergers typically get broken up into multiple simultaneous mergers
+in the polyploid model.
+
+The number of generations between merger events in the Beta-coalescent depends
+nonlinearly on both :math:`\alpha` and the effective population size :math:`N_e`
+as detailed in :ref:`sec_api_simulation_models_multiple_mergers`.
+For a fixed :math:`\alpha`, the number of generations between common ancestor events
+is proportional to :math:`N_e^{\alpha - 1}`, albeit with a complicated constant of
+proportionality that depends on :math:`\alpha`. The dependence on :math:`\alpha`
+for fixed :math:`N_e` is not monotone. Thus, branch lengths and the number of
+generations until a most recent common ancestor depend on both of these parameters.
 
 To illustrate, for :math:`\alpha` close to 2 the relationship between effective
 population size and number of generations is almost linear:
@@ -2044,74 +2073,98 @@ population size and number of generations is almost linear:
 .. code-block:: python
 
     def beta_high_scaling_example():
-        ts = msprime.simulate(
-            sample_size=2, random_seed=1, Ne=10,
+        ts = msprime.sim_ancestry(
+            sample_size=1, ploidy=2, random_seed=1, population_size=10,
             model=msprime.BetaCoalescent(alpha=1.99, truncation_point=1))
         tree = ts.first()
         print(tree.tmrca(0,1))
-        ts = msprime.simulate(
-            sample_size=2, random_seed=1, Ne=1000,
+        ts = msprime.sim_ancestry(
+            sample_size=1, ploidy=2, random_seed=1, population_size=1000,
             model=msprime.BetaCoalescent(alpha=1.99, truncation_point=1))
         tree = ts.first()
         print(tree.tmrca(0,1))
 
 which results in::
 
-    0.03714089444719166
-    3.546927883527276
+    0.14959691919068155
+    14.286394871874865
 
 For :math:`\alpha` close to 1 the effective population size has little effect:
 
 .. code-block:: python
 
     def beta_low_scaling_example():
-        ts = msprime.simulate(
-            sample_size=2, random_seed=1, Ne=10,
+        ts = msprime.sim_ancestry(
+            sample_size=1, ploidy=2, random_seed=1, population_size=10,
             model=msprime.BetaCoalescent(alpha=1.1, truncation_point=1))
         tree = ts.first()
         print(tree.tmrca(0,1))
-        ts = msprime.simulate(
-            sample_size=2, random_seed=1, Ne=1000,
+        ts = msprime.sim_ancestry(
+            sample_size=1, ploidy=2, random_seed=1, population_size=1000,
             model=msprime.BetaCoalescent(alpha=1.1, truncation_point=1))
         tree = ts.first()
         print(tree.tmrca(0,1))
 
 which gives::
 
-    2.185320238451494
-    3.4634991692692694
+    16.311807036386615
+    25.85247192870844
 
-The Dirac-Xi-coalescent is simulated similarly:
+The Dirac-coalescent is simulated similarly in both the diploid case:
 
 .. code-block:: python
 
     def dirac_multiple_merger_example():
-        ts = msprime.simulate(
-            sample_size=10, random_seed=1,
+        ts = msprime.sim_ancestry(
+            sample_size=5, ploidy=2, random_seed=1,
             model=msprime.DiracCoalescent(psi=0.9, c=10))
         tree = ts.first()
         print(tree.draw(format="unicode"))
 
 which gives::
 
-           14
-       ┏━━━━┻━━━┓
-       ┃       13
-       ┃      ┏━┻━━┓
-      12      ┃    ┃
-    ┏━┳┻━━┓   ┃    ┃
-    ┃ ┃  11   ┃   10
-    ┃ ┃ ┏━╋━┓ ┃ ┏━┳┻┳━┓
-    2 6 3 4 8 1 0 5 7 9
+       15
+     ┏━━┻━━━┓
+     ┃     14
+     ┃  ┏━━━┻━━━┓
+     ┃  ┃      13
+     ┃  ┃    ┏━━┻━━━┓
+    12  ┃    ┃      ┃
+    ┏┻┓ ┃    ┃      ┃
+    ┃ ┃ ┃   10     11
+    ┃ ┃ ┃ ┏━┳┻┳━┓ ┏━╋━┓
+    1 2 6 0 5 7 9 3 4 8
 
-Larger values of the parameter :math:`c > 0` result in more frequent multiple
-mergers, while larger values of :math:`0 < \psi \leq 1` result in multiple mergers
+and in the haploid case:
+
+.. code-block:: python
+
+    def dirac_haploid_multiple_merger_example():
+        ts = msprime.sim_ancestry(
+            sample_size=10, ploidy=1, random_seed=1,
+            model=msprime.DiracCoalescent(psi=0.9, c=10))
+        tree = ts.first()
+        print(tree.draw(format="unicode"))
+
+which gives::
+
+        11
+    ┏━━━━┻━━━━┓
+    ┃        10
+    ┃ ┏━┳━┳━┳━╋━┳━┳━┳━┓
+    1 0 2 3 4 5 6 7 8 9
+
+As with the Beta-coalescent, a haploid simulation results in larger individual
+mergers than a polyploid simulation because large mergers typically get broken
+up into multiple simultaneous mergers in the polyploid model. Larger values
+of the parameter :math:`c > 0` result in more frequent multiple mergers,
+while larger values of :math:`0 < \psi \leq 1` result in multiple mergers
 with more participating lineages. Setting either parameter to 0 would correspond
 to the standard coalescent.
 
-The Dirac-Xi-coalescent is obtained as the infinite population scaling limit of
-Moran models, and therefore the coalescence rate is proportional to
-:math:`1/N_e^2` generations.
+The Dirac-coalescent is obtained as the infinite population scaling limit of
+Moran models, and therefore branch lengths are proportional to :math:`N_e^2`
+generations, as opposed to :math:`N_e` generations under the standard coalescent.
 
 *********
 Old stuff
