@@ -683,22 +683,17 @@ class DiscoalTest(Test):
         for i in range(3, len(tokens)):
             # pop size change case
             if tokens[i] == "-en":
-                logging.error(
-                    "sweeps with population size changes remain\
-                              unimplemented"
+                raise ValueError(
+                    "sweeps with population size changes remain unimplemented"
                 )
-                return
             # migration rate case
             if (tokens[i] == "-m") or (tokens[i] == "-p"):
-                logging.error(
-                    "sweeps with multiple populations remain \
-                              unimplemented"
+                raise ValueError(
+                    "sweeps with multiple populations remain unimplemented"
                 )
-                return
             # split or admixture case
             if (tokens[i] == "-ea") or (tokens[i] == "-ed"):
-                logging.error("sweeps with splits or admixture not supported")
-                return
+                raise ValueError("sweeps with splits or admixture not supported")
             # sweep params
             if tokens[i] == "-x":
                 sweep_site = float(tokens[i + 1])
@@ -734,13 +729,14 @@ class DiscoalTest(Test):
         mod_list.append((None, None))
         # scale theta and rho and create recomb_map
         recomb_map = msprime.RecombinationMap.uniform_map(
-            seq_length, rho / (seq_length - 1), discrete=True
+            seq_length, rho / (seq_length - 1),
         )
         mu = theta / seq_length
         replicates = msprime.simulate(
             sample_size,
             Ne=0.25,
             model=mod_list,
+            discrete_genome=True,
             recombination_map=recomb_map,
             mutation_rate=mu,
             num_replicates=nreps,
