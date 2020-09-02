@@ -2058,14 +2058,14 @@ A haploid simulation results in larger individual mergers than a polyploid simul
 because large mergers typically get broken up into multiple simultaneous mergers
 in the polyploid model.
 
-The timescale of the Beta-coalescent depends nonlinearly on both :math:`\alpha`
-and the effective population size :math:`N_e` as detailed in
-:ref:`sec_api_simulation_models_multiple_mergers`. For a fixed :math:`\alpha`,
-the number of generations between common ancestor events is proportional to
-:math:`N_e^{\alpha - 1}`, albeit with a complicated constant of proportionality
-that depends on :math:`\alpha`. The dependence on :math:`\alpha` for fixed :math:`N_e`
-is not monotone. Thus, both branch lengths and the number of generations until a
-most recent common ancestor depend on both of these parameters.
+The number of generations between merger events in the Beta-coalescent depends
+nonlinearly on both :math:`\alpha` and the effective population size :math:`N_e`
+as detailed in :ref:`sec_api_simulation_models_multiple_mergers`.
+For a fixed :math:`\alpha`, the number of generations between common ancestor events
+is proportional to :math:`N_e^{\alpha - 1}`, albeit with a complicated constant of
+proportionality that depends on :math:`\alpha`. The dependence on :math:`\alpha`
+for fixed :math:`N_e` is not monotone. Thus, branch lengths and the number of
+generations until a most recent common ancestor depend on both of these parameters.
 
 To illustrate, for :math:`\alpha` close to 2 the relationship between effective
 population size and number of generations is almost linear:

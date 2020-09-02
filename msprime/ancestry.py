@@ -1205,12 +1205,13 @@ class BetaCoalescent(ParametricSimulationModel):
     two lineages undergo a common ancestor event is
 
     .. math::
-        \\frac{m^{\\alpha} N_e^{\\alpha - 1}}{\\alpha B(2 - \\alpha, \\alpha)},
+        G = \\frac{m^{\\alpha} N_e^{\\alpha - 1}}{\\alpha B(2 - \\alpha, \\alpha)},
 
     if ploidy = 1, and
 
     .. math::
-        \\frac{m^{\\alpha} (N_e / 2)^{\\alpha - 1}}{2 p \\alpha B(2 - \\alpha, \\alpha)},
+        G = \\frac{m^{\\alpha} (N_e / 2)^{\\alpha - 1}}
+            {2 p \\alpha B(2 - \\alpha, \\alpha)},
 
     if ploidy = :math:`p > 1`, where :math:`m` is the mean number of juveniles per
     family, and is given by
@@ -1225,13 +1226,14 @@ class BetaCoalescent(ParametricSimulationModel):
     two-parent families in which reproduction takes place.
 
     .. warning::
-        The time scale depends both on the effective population size :math:`N_e`
-        and :math:`\\alpha`, and can be dramatically shorter than that of the
+        The number of generations between common ancestor events :math:`G` depends
+        both on the effective population size :math:`N_e` and :math:`\\alpha`,
+        and can be dramatically shorter than in the case of the
         standard coalescent. For :math:`\\alpha \\approx 1` that is due to
-        insensitivity of the time scale to :math:`N_e` --- see
+        insensitivity of :math:`G` to :math:`N_e` --- see
         :ref:`sec_api_simulation_models_multiple_mergers` for an illustration.
-        For :math:`\\alpha \\approx 2` the time scale is almost linear in
-        :math:`N_e`, but can nevertheless be short because
+        For :math:`\\alpha \\approx 2`, :math:`G` is almost linear in
+        :math:`N_e`, but can nevertheless be small because
         :math:`B(2 - \\alpha, \\alpha) \\rightarrow \\infty` as
         :math:`\\alpha \\rightarrow 2`. As a result, effective population sizes
         must often be many orders of magnitude larger than census population sizes
@@ -1239,7 +1241,8 @@ class BetaCoalescent(ParametricSimulationModel):
 
     See `Schweinsberg (2003)
     <https://www.sciencedirect.com/science/article/pii/S0304414903000280>`_
-    for the derivation of the common ancestor event rate, as well as the time scaling.
+    for the derivation of the common ancestor event rate,
+    as well as the number of generations between common ancestor events.
     Note however that Schweinsberg (2003) only covers the haploid case.
     For details of the diploid extension, see
     `Blath et al. (2013) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3527250/>`_.
@@ -1259,7 +1262,7 @@ class BetaCoalescent(ParametricSimulationModel):
         participating in a common ancestor event is determined by moments
         of the Beta:math:`(2 - \\alpha, \\alpha)` distribution conditioned on not
         exceeding :math:`\\tau`, and the Beta-function in the expression
-        for the time scale is also replaced by the incomplete Beta-function
+        for :math:`G` is also replaced by the incomplete Beta-function
         :math:`B(\\tau; 2 - \\alpha, \\alpha)`.
     """
 
