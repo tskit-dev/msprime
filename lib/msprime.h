@@ -24,6 +24,7 @@
 #include <stdbool.h>
 
 #include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
 #include <tskit.h>
 
 #include "util.h"
@@ -327,7 +328,7 @@ typedef struct {
     size_t num_alleles;
     char **alleles;
     tsk_size_t *allele_length;
-    double *root_distribution;
+    gsl_ran_discrete_t *root_distribution;
     double *transition_matrix;
 } mutation_matrix_t;
 
