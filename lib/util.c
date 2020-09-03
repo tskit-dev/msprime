@@ -327,3 +327,47 @@ doubles_almost_equal(double a, double b, double eps)
 {
     return (fabs(a) < eps && fabs(b) < eps) || gsl_fcmp(a, b, eps) == 0;
 }
+
+/* Inputs:
+ *   - `lengths` is an array of the real number lengths of `num_intervals`
+ *      consecutive half-open intervals on the real number line start at zero,
+ *      i.e. given lengths L_i, the intervals are:
+ *          [0.0, L_0), [L_0, L_0 + L_1), [L_0 + L_1, L_0 + L_1 + L_2), ...
+ *   - `x` is a real number to find in one of the intervals or after all of them
+ * Returns:
+ *   - the index (starting at zero) of the interval in which `x` was found
+ *   - `num_intervals` if `x` is at or past the end of the last interval
+ *     (the sum of all the lengths)
+ *   - zero if `x` is negative
+ *   - `num_interval` if `x` is NaN
+ * Pre-conditions:
+ *   - `lengths` must point to `num_interval` non-negative non-NaN doubles
+ * Post-condition:
+ *   - returned value is less than or equal to `num_intervals` (and non-negative)
+ *
+ */
+static inline size_t
+positive_interval_select(double x, size_t num_intervals, double const *restrict lengths)
+{
+    size_t i = 0;
+    double sum = 0.0;
+    while (i < num_intervals) {
+        assert(lengths[i] >= 0.0);
+        sum += lengths[i];
+        if (x < sum) {
+            break;
+        }
+        i++;
+    }
+    return i;
+}
+
+/* Convenient helper function to use with random variant `u` and array of probabilities
+ * that approximately sum to one. Note the function does not actually use the last
+ * probability because its correct value is implied by all the previous probabilities.
+ */
+size_t
+probability_list_select(double u, size_t num_probs, double const *probs)
+{
+    return (num_probs > 0 ? positive_interval_select(u, num_probs - 1, probs) : 0);
+}
