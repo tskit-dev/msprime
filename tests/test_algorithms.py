@@ -35,6 +35,7 @@ def has_discrete_genome(ts):
 @unittest.skipIf(IS_WINDOWS, "Bintrees isn't availble on windows")
 class TestAlgorithms(unittest.TestCase):
     def run_script(self, cmd):
+        # print("RUN", cmd)
         with tempfile.TemporaryDirectory() as tmpdir:
             outfile = pathlib.Path(tmpdir) / "out.trees"
             algorithms.main(cmd.split() + [str(outfile)])
@@ -58,6 +59,12 @@ class TestAlgorithms(unittest.TestCase):
         self.assertFalse(has_discrete_genome(ts))
         self.assertEqual(ts.sequence_length, 100)
 
+    def test_dtwf_migration(self):
+        ts = self.run_script("10 -r 0 --model=dtwf -p 2 -g 0.1")
+        self.assertEqual(ts.num_trees, 1)
+        self.assertEqual(ts.sequence_length, 100)
+        self.assertEqual(ts.num_populations, 2)
+
     def test_dtwf_discrete(self):
         ts = self.run_script("10 -d --model=dtwf")
         self.assertGreater(ts.num_trees, 1)
@@ -70,13 +77,104 @@ class TestAlgorithms(unittest.TestCase):
         self.assertGreater(np.sum(node_flags == msprime.NODE_IS_RE_EVENT), 0)
         self.assertGreater(np.sum(node_flags == msprime.NODE_IS_CA_EVENT), 0)
 
+    def test_migration_full_arg(self):
+        ts = self.run_script("10 -p 3 -g 0.1 --full-arg")
+        self.assertGreater(ts.num_trees, 1)
+        node_flags = ts.tables.nodes.flags
+        self.assertGreater(np.sum(node_flags == msprime.NODE_IS_MIG_EVENT), 0)
+
     def test_gc(self):
-        ts = self.run_script("10 -c 0.1 2 -d")
+        ts = self.run_script("10 -c 0.4 2 -d")
         self.assertGreater(ts.num_trees, 1)
         self.assertTrue(has_discrete_genome(ts))
         self.assertEqual(ts.sequence_length, 100)
 
+    def test_recomb_map(self):
+        # Need the final -- to break the end of the recomb_rates option
+        ts = self.run_script(
+            "10 -d --recomb-positions 0 10 100 --recomb-rates 0 0.1 0 --"
+        )
+        self.assertGreater(ts.num_trees, 1)
+        self.assertTrue(has_discrete_genome(ts))
+        self.assertEqual(ts.sequence_length, 100)
+
+    def test_census_event(self):
+        ts = self.run_script("10 --census-time 0.01")
+        self.assertGreater(ts.num_trees, 1)
+        node_time = ts.tables.nodes.time
+        self.assertGreater(np.sum(node_time == 0.01), 0)
+
+    def test_single_sweep(self):
+        ts = self.run_script(
+            "10 --model=single_sweep --trajectory 0.1 0.9 0.01 --time-slice=0.1"
+        )
+        self.assertGreater(ts.num_trees, 1)
+
+    def test_single_sweep_shorter(self):
+        # Try to catch some situtations not covered in other test.
+        ts = self.run_script(
+            "10 --model=single_sweep --trajectory 0.1 0.5 0.1 --time-slice=0.01"
+        )
+        self.assertGreater(ts.num_trees, 1)
+
+    def test_bottleneck(self):
+        ts = self.run_script("10 -r 0 --bottleneck 0.1 0 2")
+        self.assertEqual(ts.num_trees, 1)
+        tree = ts.first()
+        found = False
+        for node in tree.nodes():
+            if len(tree.children(node)) > 2:
+                found = True
+        self.assertTrue(found)
+
+    def test_pop_size_change_event(self):
+        ts = self.run_script("10 -r 0 --population-size-change 1 0 1")
+        self.assertEqual(ts.num_trees, 1)
+
+    def test_pop_growth_rate_change_event(self):
+        ts = self.run_script("10 -r 0 --population-growth-rate-change 1 0 0.1")
+        self.assertEqual(ts.num_trees, 1)
+
+    def test_migration_rate_change_event(self):
+        ts = self.run_script("10 -r 0 -p 2 --migration-matrix-element-change 1 0 1 0.1")
+        self.assertEqual(ts.num_trees, 1)
+
     def test_verbose(self):
-        stdout, stderr = test_cli.capture_output(self.run_script, "10 -v")
+        stdout, stderr = test_cli.capture_output(
+            self.run_script, "10 -c 0.4 2 -v --end-time=0.1"
+        )
         self.assertGreater(len(stdout), 0)
         self.assertEqual(len(stderr), 0)
+
+    def test_from_ts(self):
+        from_ts = msprime.simulate(
+            10,
+            length=100,
+            discrete_genome=True,
+            recombination_rate=2,
+            random_seed=2,
+            end_time=0.1,
+        )
+        tree = from_ts.first()
+        self.assertGreater(tree.num_roots, 1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            from_ts_path = pathlib.Path(tmpdir) / "from.trees"
+            from_ts.dump(from_ts_path)
+            ts = self.run_script(f"0 --from-ts {from_ts_path}")
+            self.assertGreater(ts.num_trees, 1)
+            self.assertEqual(ts.sequence_length, 100)
+
+    def test_pedigree(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ped_path = pathlib.Path(tmpdir) / "tmp.ped"
+            individual = np.array([1, 2, 3, 4])
+            parents = np.array([2, 3, 2, 3, -1, -1, -1, -1]).reshape(-1, 2)
+            time = np.array([0, 0, 1, 1])
+            is_sample = np.array([1, 1, 0, 0])
+            ped = msprime.Pedigree(
+                individual, parents, time, is_sample, sex=None, ploidy=2
+            )
+            ped.save_txt(ped_path)
+            ts = self.run_script(f"2 --pedigree-file {ped_path} --model=wf_ped")
+            for tree in ts.trees():
+                self.assertGreater(tree.num_roots, 1)

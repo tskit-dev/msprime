@@ -129,17 +129,6 @@ class Segment:
             seg = seg.next
         return s[:-2]
 
-    def __str__(self):
-        s = "({}:{}-{}->{}: prev={} next={})".format(
-            self.index,
-            self.left,
-            self.right,
-            self.node,
-            repr(self.prev),
-            repr(self.next),
-        )
-        return s
-
     def __lt__(self, other):
         return (self.left, self.right, self.population, self.node) < (
             other.left,
@@ -822,17 +811,12 @@ class Simulator:
         return sum(pop.get_num_ancestors() for pop in self.P) != 0
 
     def change_population_size(self, pop_id, size):
-        print("Changing pop size to ", size)
-        for i in range(self.num_labels):
-            self.P[i][pop_id].set_start_size(size)
+        self.P[pop_id].set_start_size(size)
 
     def change_population_growth_rate(self, pop_id, rate, time):
-        print("Changing growth rate to ", rate)
-        for i in range(self.num_labels):
-            self.P[i][pop_id].set_growth_rate(rate, time)
+        self.P[pop_id].set_growth_rate(rate, time)
 
     def change_migration_matrix_element(self, pop_i, pop_j, rate):
-        print("Changing migration rate", pop_i, pop_j, rate)
         self.migration_matrix[pop_i][pop_j] = rate
 
     def alloc_segment(
@@ -919,16 +903,15 @@ class Simulator:
         ts = self.tables.tree_sequence()
         return ts
 
-    def simulate(self, model="hudson"):
+    def simulate(self, end_time):
         self.verify()
         if self.model == "hudson":
-            self.hudson_simulate()
+            self.hudson_simulate(end_time)
         elif self.model == "dtwf":
             self.dtwf_simulate()
         elif self.model == "wf_ped":
             self.pedigree_simulate()
         elif self.model == "single_sweep":
-            # self.print_state()
             self.single_sweep_simulate()
         else:
             print("Error: bad model specification -", self.model)
@@ -948,7 +931,7 @@ class Simulator:
                     potential_destinations[j].add(k)
         return potential_destinations
 
-    def hudson_simulate(self):
+    def hudson_simulate(self, end_time):
         """
         Simulates the algorithm until all loci have coalesced.
         """
@@ -959,6 +942,8 @@ class Simulator:
         # only worried about label 0 below
         while len(non_empty_pops) > 0:
             self.verify()
+            if self.t >= end_time:
+                break
             # self.print_state()
             re_rate = self.recomb_mass_index[0].get_total()
             t_re = infinity
@@ -1083,13 +1068,13 @@ class Simulator:
                     (sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1))
                     / (1.0 - x)
                     * t_inc_orig
-                    / self.P[0]._start_size
+                    / self.P[0].start_size
                 )
                 p_coal_B = (
                     (sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1))
                     / x
                     * t_inc_orig
-                    / self.P[0]._start_size
+                    / self.P[0].start_size
                 )
                 sweep_pop_tot_rate = p_rec_b + p_rec_B + p_coal_b + p_coal_B
 
@@ -1352,6 +1337,21 @@ class Simulator:
         gc_mass = self.gc_map.mass_between(gc_left_bound, seg.right)
         self.gc_mass_index[seg.label].set_value(seg.index, gc_mass)
 
+    def set_labels(self, segment, new_label):
+        """
+        Move the specified segment to the specified label.
+        """
+        mass_indexes = [self.recomb_mass_index, self.gc_mass_index]
+        while segment is not None:
+            masses = []
+            for mass_index in mass_indexes:
+                masses.append(mass_index[segment.label].get_value(segment.index))
+                mass_index[segment.label].set_value(segment.index, 0)
+            segment.label = new_label
+            for mass, mass_index in zip(masses, mass_indexes):
+                mass_index[segment.label].set_value(segment.index, mass)
+            segment = segment.next
+
     def choose_breakpoint(self, mass_index, rate_map):
         assert mass_index.get_total() > 0
         random_mass = random.uniform(0, mass_index.get_total())
@@ -1534,13 +1534,6 @@ class Simulator:
                 new_individual_head, new_individual_head.label
             )
 
-    def set_labels(self, segment, new_label):
-        while segment is not None:
-            recomb_mass = self.recomb_mass_index[segment.label].get_value(segment.index)
-            self.recomb_mass_index[new_label].set_value(segment.index, recomb_mass)
-            segment.label = new_label
-            segment = segment.next
-
     def hudson_recombination_event_sweep_phase(self, label, sweep_site, pop_freq):
         """
         Implements a recombination event in during a selective sweep.
@@ -1655,7 +1648,7 @@ class Simulator:
                 seg = ancestor
                 self.flush_edges()
                 u = self.tables.nodes.add_row(
-                    time=time, flags=msprime.NODE_IS_CEN_EVENT, population=pop._id
+                    time=time, flags=msprime.NODE_IS_CEN_EVENT, population=pop.id
                 )
                 while seg is not None:
                     # Add an edge joining the segment to the new node.
@@ -1666,7 +1659,7 @@ class Simulator:
     def bottleneck_event(self, pop_id, label, intensity):
         # self.print_state()
         # Merge some of the ancestors.
-        pop = self.P[label][pop_id]
+        pop = self.P[pop_id]
         H = []
         for _ in range(pop.get_num_ancestors()):
             if random.random() < intensity:
@@ -1933,10 +1926,7 @@ class Simulator:
                     seg = self.segments[j]
                     left_bound = self.get_recomb_left_bound(seg)
                     sp = self.recomb_map.mass_between(left_bound, seg.right)
-                    trailer = ""
-                    if not math.isclose(s, sp):
-                        trailer = "***ERROR***"
-                    print("\t", j, "->", s, sp, trailer)
+                    print("\t", j, "->", s, sp)
             print(
                 "gc_mass_index [%d]: %d"
                 % (label, self.gc_mass_index[label].get_total())
@@ -1947,10 +1937,7 @@ class Simulator:
                     seg = self.segments[j]
                     left_bound = self.get_gc_left_bound(seg)
                     sp = self.gc_map.mass_between(left_bound, seg.right)
-                    trailer = ""
-                    if not math.isclose(s, sp):
-                        trailer = "***ERROR***"
-                    print("\t", j, "->", s, sp, trailer)
+                    print("\t", j, "->", s, sp)
         print("nodes")
         print(self.tables.nodes)
         print("edges")
@@ -2015,11 +2002,6 @@ class Simulator:
                 del A[k]
             else:
                 j = k
-        if list(A.items()) != list(self.S.items()):
-            print("MISMATCH")
-            print("keys = ", len(list(A.keys())), len(list(self.S.keys())))
-            print(list(A.items()))
-            print(list(self.S.items()))
         assert list(A.items()) == list(self.S.items())
 
     def verify_mass_index(self, label, mass_index, rate_map, compute_left_bound):
@@ -2035,10 +2017,9 @@ class Simulator:
                     left_bound = compute_left_bound(u)
                     s = rate_map.mass_between(left_bound, u.right)
                     right = u.right
-                    if self.model != "wf_ped":
-                        index_value = mass_index.get_value(u.index)
-                        total_mass += index_value
-                        assert math.isclose(s, index_value, abs_tol=1e-6)
+                    index_value = mass_index.get_value(u.index)
+                    total_mass += index_value
+                    assert math.isclose(s, index_value, abs_tol=1e-6)
                     v = u.next
                     if v is not None:
                         assert v.prev == u
@@ -2055,17 +2036,23 @@ class Simulator:
         Checks that the state of the simulator is consistent.
         """
         self.verify_segments()
-        self.verify_overlaps()
-        for label in range(self.num_labels):
-            self.verify_mass_index(
-                label,
-                self.recomb_mass_index[label],
-                self.recomb_map,
-                self.get_recomb_left_bound,
-            )
-            self.verify_mass_index(
-                label, self.gc_mass_index[label], self.gc_map, self.get_gc_left_bound,
-            )
+        if self.model != "wf_ped":
+            # The wf_ped model doesn't maintain a bunch of stuff. It would probably
+            # be simpler if it did.
+            self.verify_overlaps()
+            for label in range(self.num_labels):
+                self.verify_mass_index(
+                    label,
+                    self.recomb_mass_index[label],
+                    self.recomb_map,
+                    self.get_recomb_left_bound,
+                )
+                self.verify_mass_index(
+                    label,
+                    self.gc_mass_index[label],
+                    self.gc_map,
+                    self.get_gc_left_bound,
+                )
 
 
 def run_simulate(args):
@@ -2159,7 +2146,7 @@ def run_simulate(args):
         pedigree=pedigree,
         discrete_genome=args.discrete,
     )
-    ts = s.simulate()
+    ts = s.simulate(args.end_time)
     ts.dump(args.output_file)
     if args.verbose:
         s.print_state()
@@ -2240,6 +2227,9 @@ def add_simulator_arguments(parser):
             "Specify the tree sequence to complete. The sample_size argument "
             "is ignored if this is provided"
         ),
+    )
+    parser.add_argument(
+        "--end-time", type=float, default=np.inf, help="The end for simulations.",
     )
 
 

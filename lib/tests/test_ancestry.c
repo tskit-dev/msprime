@@ -2798,6 +2798,16 @@ test_simulate_from_single_locus_replicates(void)
 }
 
 static void
+test_simulate_from_multilocus(void)
+{
+    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 10.0, 1, 5, 1);
+    /* verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1.0, 0, 5, 1); */
+
+    /* verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1.0, 1, 5, 1); */
+    /* verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1.0, 1, 5, 1); */
+}
+
+static void
 test_simulate_from_empty(void)
 {
     verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1.0, 0, 0, 1);
@@ -3143,6 +3153,7 @@ main(int argc, char **argv)
         { "test_simulate_from_single_locus", test_simulate_from_single_locus },
         { "test_simulate_from_single_locus_replicates",
             test_simulate_from_single_locus_replicates },
+        { "test_simulate_from_multilocus", test_simulate_from_multilocus },
         { "test_simulate_from_empty", test_simulate_from_empty },
         { "test_simulate_from_completed", test_simulate_from_completed },
         { "test_simulate_from_incompatible", test_simulate_from_incompatible },
