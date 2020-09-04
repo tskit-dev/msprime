@@ -1796,6 +1796,7 @@ msp_get_gc_left_bound(msp_t *self, segment_t *seg)
 {
     double left_bound;
     if (seg->prev == NULL) {
+        /* left_bound = self->discrete_genome ? seg->left + 1 : seg->left; */
         left_bound = self->discrete_genome ? 1 : 0;
     } else {
         left_bound = seg->prev->right;

@@ -453,7 +453,7 @@ def create_simulation_runner(parser, arg_list):
     # is zero we define the gc rate directly.
     gc_param, gc_track_length = args.gene_conversion
     if r == 0.0:
-        gc_rate = gc_param
+        gc_rate = gc_param / (num_loci - 1)
     else:
         gc_rate = r * gc_param
 
