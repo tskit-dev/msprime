@@ -124,30 +124,34 @@ static void
 mutation_matrix_print_state(mutation_model_t *self, FILE *out)
 {
     size_t j, k;
-    double *mutation_row;
     mutation_matrix_t params = self->params.mutation_matrix;
 
     fprintf(out, "mutation_matrix :: num_alleles = %d\n", (int) params.num_alleles);
     fprintf(out, "\nroot_distribution =");
     for (j = 0; j < params.num_alleles; j++) {
-        #ifdef USE_GSL_DISCRETE_DISTRIBUTION
+#ifdef USE_GSL_DISCRETE_DISTRIBUTION
         double prob = gsl_ran_discrete_pdf(j, params.gsl_root_distribution);
-            #ifdef KEEP_NON_GSL_DISTRIBUTIONS
-            assert(doubles_almost_equal(prob, params.root_distribution[j], DBL_EPSILON));
-            #endif
-        #else
+#else
         double prob = params.root_distribution[j];
-        #endif
+#endif
         fprintf(out, " '%.*s'(len=%d p=%0.4f),", (int) params.allele_length[j],
             params.alleles[j], (int) params.allele_length[j], prob);
     }
     fprintf(out, "\n\t------------------------------\n");
     for (j = 0; j < params.num_alleles; j++) {
-        mutation_row = params.transition_matrix + j * params.num_alleles;
+#ifdef USE_GSL_DISCRETE_DISTRIBUTION
+        gsl_ran_discrete_t *gsl_dist = params.gsl_transition_distributions[j];
+        fprintf(out, "\t");
+        for (k = 0; k < params.num_alleles; k++) {
+            fprintf(out, " %0.4f", gsl_ran_discrete_pdf(j, gsl_dist));
+        }
+#else
+        double *mutation_row = params.transition_matrix + j * params.num_alleles;
         fprintf(out, "\t");
         for (k = 0; k < params.num_alleles; k++) {
             fprintf(out, " %0.4f", mutation_row[k]);
         }
+#endif
         fprintf(out, "\n");
     }
     fprintf(out, "\n");
@@ -158,7 +162,6 @@ ok_probability_masses(size_t num_alleles, double *distribution)
 {
     double prob = 0;
     double min_prob = 0;
-
     /* Check probabilities sum to one */
     for (size_t j = 0; j < num_alleles; j++) {
         prob += distribution[j];
@@ -167,34 +170,20 @@ ok_probability_masses(size_t num_alleles, double *distribution)
     return doubles_almost_equal(prob, 1.0, 1e-12) && min_prob >= 0.0;
 }
 
+#if !defined(NDEBUG) && defined(USE_GSL_DISCRETE_DISTRIBUTION)
 static int MSP_WARN_UNUSED
-mutation_matrix_check_validity(mutation_matrix_t *self)
+check_equal_probabilities(
+    size_t num_probs, double const *probs, gsl_ran_discrete_t const *gsl_dist)
 {
-    int ret = 0;
-    size_t j, k;
-    double prob, min_prob;
-    double *mutation_row;
-
-    /* Check probabilities sum to one */
-    prob = 0;
-    min_prob = 0;
-    for (j = 0; j < self->num_alleles; j++) {
-        prob = 0;
-        min_prob = 0;
-        mutation_row = self->transition_matrix + j * self->num_alleles;
-        for (k = 0; k < self->num_alleles; k++) {
-            prob += mutation_row[k];
-            min_prob = GSL_MIN(min_prob, mutation_row[k]);
-        }
-        if (!doubles_almost_equal(prob, 1.0, 1e-12) || min_prob < 0.0) {
-            ret = MSP_ERR_BAD_TRANSITION_MATRIX;
-            goto out;
+    for (size_t i = 0; i < num_probs; ++i) {
+        double prob = gsl_ran_discrete_pdf(i, gsl_dist);
+        if (!doubles_almost_equal(probs[i], prob, 2 * DBL_EPSILON)) {
+            return MSP_ERR_ASSERTION_FAILED;
         }
     }
-
-out:
-    return ret;
+    return 0;
 }
+#endif
 
 static int MSP_WARN_UNUSED
 mutation_matrix_copy_alleles(
@@ -234,6 +223,25 @@ mutation_matrix_allele_index(mutation_matrix_t *self, const char *allele, size_t
     return ret;
 }
 
+#ifndef USE_GSL_DISCRETE_DISTRIBUTION
+static size_t
+simple_ran_discrete(gsl_rng *rng, size_t num_probs, double const probs[])
+{
+    /* last probability of probs will never actually be read
+     * algo behaves as though all probabilities sum perfectly to one */
+    double u = gsl_ran_flat(rng, 0.0, 1.0);
+    size_t ret = 0;
+    while (ret < num_probs - 1) {
+        assert(probs[ret] >= 0.0);
+        if (u <= probs[ret])
+            break;
+        u -= probs[ret];
+        ++ret;
+    }
+    return ret;
+}
+#endif
+
 static int
 mutation_matrix_choose_root_state(mutation_model_t *self, gsl_rng *rng, site_t *site)
 {
@@ -241,17 +249,10 @@ mutation_matrix_choose_root_state(mutation_model_t *self, gsl_rng *rng, site_t *
     mutation_matrix_t params = self->params.mutation_matrix;
 #ifdef USE_GSL_DISCRETE_DISTRIBUTION
     size_t j = gsl_ran_discrete(rng, params.gsl_root_distribution);
-    assert(j < params.num_alleles);
 #else
-    double u = gsl_ran_flat(rng, 0.0, 1.0);
-    tsk_size_t j = 0;
-
-    while (u > params.root_distribution[j]) {
-        u -= params.root_distribution[j];
-        j++;
-        assert(j < params.num_alleles);
-    }
+    size_t j = simple_ran_discrete(rng, params.num_alleles, params.root_distribution);
 #endif
+    assert(j < params.num_alleles);
     site->ancestral_state = params.alleles[j];
     site->ancestral_state_length = params.allele_length[j];
     return ret;
@@ -268,9 +269,8 @@ mutation_matrix_transition(mutation_model_t *self, gsl_rng *rng,
 {
     int ret = 0;
     mutation_matrix_t params = self->params.mutation_matrix;
-    double u = gsl_ran_flat(rng, 0.0, 1.0);
-    double *probs;
-    tsk_id_t j, pi;
+    tsk_id_t pi;
+    size_t j;
 
     pi = mutation_matrix_allele_index(&params, parent_allele, parent_allele_length);
     if (pi < 0) {
@@ -278,15 +278,16 @@ mutation_matrix_transition(mutation_model_t *self, gsl_rng *rng,
         ret = MSP_ERR_UNKNOWN_ALLELE;
         goto out;
     }
-    probs = params.transition_matrix + (tsk_size_t) pi * params.num_alleles;
-    j = 0;
-    while (u > probs[j]) {
-        u -= probs[j];
-        j++;
-        assert(j < (tsk_id_t) params.num_alleles);
+#ifdef USE_GSL_DISCRETE_DISTRIBUTION
+    j = gsl_ran_discrete(rng, params.gsl_transition_distributions[pi]);
+#else
+    {
+        double *probs = params.transition_matrix + (tsk_size_t) pi * params.num_alleles;
+        j = simple_ran_discrete(rng, params.num_alleles, probs);
     }
+#endif
     ret = 1;
-    if (j != pi) {
+    if (j != (size_t) pi) {
         /* Only return 0 in the case where we perform an actual transition */
         ret = 0;
         mutation->derived_state = params.alleles[j];
@@ -311,23 +312,43 @@ mutation_matrix_free(mutation_model_t *self)
     msp_safe_free(params.allele_length);
 #ifdef USE_GSL_DISCRETE_DISTRIBUTION
     gsl_ran_discrete_free(params.gsl_root_distribution);
-#endif
-#ifdef KEEP_NON_GSL_DISTRIBUTIONS
+    for (j = 0; j < params.num_alleles; ++j) {
+        gsl_ran_discrete_free(params.gsl_transition_distributions[j]);
+    }
+    msp_safe_free(params.gsl_transition_distributions);
+#else
     msp_safe_free(params.root_distribution);
-#endif
     msp_safe_free(params.transition_matrix);
+#endif
     return 0;
 }
 
-int MSP_WARN_UNUSED
-mutation_matrix_get_root_distribution(mutation_matrix_t const* self, double *dest)
+int
+mutation_matrix_get_root_distribution(mutation_matrix_t const *self, double *dest)
 {
-#ifdef KEEP_NON_GSL_DISTRIBUTIONS
-    memcpy(dest, self->root_distribution, self->num_alleles * sizeof(double));
-#else
+#ifdef USE_GSL_DISCRETE_DISTRIBUTION
     for (size_t i = 0; i < self->num_alleles; ++i) {
         dest[i] = gsl_ran_discrete_pdf(i, self->gsl_root_distribution);
     }
+#else
+    memcpy(dest, self->root_distribution, self->num_alleles * sizeof(double));
+#endif
+    return 0;
+}
+
+int
+mutation_matrix_get_transition_matrix(mutation_matrix_t const *self, double *dest)
+{
+#ifdef USE_GSL_DISCRETE_DISTRIBUTION
+    for (size_t pi = 0; pi < self->num_alleles; ++pi) {
+        for (size_t j = 0; j < self->num_alleles; ++j) {
+            dest[pi * self->num_alleles + j]
+                = gsl_ran_discrete_pdf(j, self->gsl_transition_distributions[pi]);
+        }
+    }
+#else
+    size_t tot_size = self->num_alleles * self->num_alleles * sizeof(double);
+    memcpy(dest, self->transition_matrix, tot_size);
 #endif
     return 0;
 }
@@ -589,36 +610,68 @@ matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles, char **a
         ret = MSP_ERR_BAD_ROOT_PROBABILITIES;
         goto out;
     }
+    for (size_t i = 0; i < num_alleles; ++i) {
+        double *probs = transition_matrix + i * num_alleles;
+        if (!ok_probability_masses(num_alleles, probs)) {
+            ret = MSP_ERR_BAD_TRANSITION_MATRIX;
+            goto out;
+        }
+    }
     params->num_alleles = num_alleles;
     params->alleles = calloc(num_alleles, sizeof(*params->alleles));
     params->allele_length = calloc(num_alleles, sizeof(*params->allele_length));
+    if (params->alleles == NULL || params->allele_length == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
 #ifdef USE_GSL_DISCRETE_DISTRIBUTION
-    params->gsl_root_distribution = gsl_ran_discrete_preproc(num_alleles, root_distribution);
+    params->gsl_root_distribution
+        = gsl_ran_discrete_preproc(num_alleles, root_distribution);
     if (params->gsl_root_distribution == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-#endif
-#ifdef KEEP_NON_GSL_DISTRIBUTIONS
-    params->root_distribution = malloc(num_alleles * sizeof(*root_distribution));
-    if (params->root_distribution == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
+#ifndef NDEBUG
+    ret = check_equal_probabilities(
+        num_alleles, root_distribution, params->gsl_root_distribution);
+    if (ret != 0) {
         goto out;
     }
 #endif
+    params->gsl_transition_distributions
+        = calloc(num_alleles, sizeof(*params->gsl_transition_distributions));
+    if (params->gsl_transition_distributions == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    for (size_t i = 0; i < num_alleles; ++i) {
+        double *probs = transition_matrix + i * num_alleles;
+        gsl_ran_discrete_t *gsl_dist = gsl_ran_discrete_preproc(num_alleles, probs);
+        if (gsl_dist == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        params->gsl_transition_distributions[i] = gsl_dist;
+#ifndef NDEBUG
+        ret = check_equal_probabilities(num_alleles, probs, gsl_dist);
+        if (ret != 0) {
+            goto out;
+        }
+#endif
+    }
+#else
+    params->root_distribution = malloc(num_alleles * sizeof(*root_distribution));
     params->transition_matrix
         = malloc(num_alleles * num_alleles * sizeof(*params->transition_matrix));
-    if (params->alleles == NULL || params->allele_length == NULL
-        || params->transition_matrix == NULL) {
+    if (params->root_distribution == NULL || params->transition_matrix == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-#ifdef KEEP_NON_GSL_DISTRIBUTIONS
     memcpy(params->root_distribution, root_distribution,
         num_alleles * sizeof(*root_distribution));
-#endif
     memcpy(params->transition_matrix, transition_matrix,
         num_alleles * num_alleles * sizeof(*transition_matrix));
+#endif
     ret = mutation_matrix_copy_alleles(params, alleles, allele_lengths);
     if (ret != 0) {
         goto out;
@@ -627,11 +680,6 @@ matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles, char **a
     self->transition = &mutation_matrix_transition;
     self->print_state = &mutation_matrix_print_state;
     self->free = &mutation_matrix_free;
-
-    ret = mutation_matrix_check_validity(params);
-    if (ret != 0) {
-        goto out;
-    }
 out:
     return ret;
 }

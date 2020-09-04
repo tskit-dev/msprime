@@ -480,9 +480,6 @@ class TestFiniteSites(TestMutate):
         model = msprime.MatrixMutationModel(
             alleles, root_distribution, transition_matrix
         )
-        model = msprime.MatrixMutationModel(
-            alleles, root_distribution, transition_matrix
-        )
         return self.mutate(ts, model, rate=rate, keep=keep, discrete=discrete)
 
     def test_alleles_binary(self):

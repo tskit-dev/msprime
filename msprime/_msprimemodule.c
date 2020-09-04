@@ -2380,8 +2380,7 @@ MatrixMutationModel_get_transition_matrix(MatrixMutationModel *self, void *closu
     if (array == NULL) {
         goto out;
     }
-    memcpy(PyArray_DATA(array), params->transition_matrix,
-            size * size * sizeof(double));
+    mutation_matrix_get_transition_matrix(params, PyArray_DATA(array));
     ret = (PyObject *) array;
 out:
     return ret;

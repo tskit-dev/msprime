@@ -32,7 +32,6 @@
 #include "object_heap.h"
 
 #define USE_GSL_DISCRETE_DISTRIBUTION
-#define KEEP_NON_GSL_DISTRIBUTIONS
 
 #ifdef USE_GSL_DISCRETE_DISTRIBUTION
 #include <gsl/gsl_randist.h>
@@ -336,11 +335,11 @@ typedef struct {
     tsk_size_t *allele_length;
 #ifdef USE_GSL_DISCRETE_DISTRIBUTION
     gsl_ran_discrete_t *gsl_root_distribution;
-#endif
-#ifdef KEEP_NON_GSL_DISTRIBUTIONS
+    gsl_ran_discrete_t **gsl_transition_distributions;
+#else
     double *root_distribution;
-#endif
     double *transition_matrix;
+#endif
 } mutation_matrix_t;
 
 typedef struct {
@@ -498,7 +497,8 @@ double rate_map_mass_to_position(rate_map_t *self, double mass);
 double rate_map_position_to_mass(rate_map_t *self, double position);
 double rate_map_shift_by_mass(rate_map_t *self, double pos, double mass);
 
-int mutation_matrix_get_root_distribution(mutation_matrix_t const* self, double *dest);
+int mutation_matrix_get_root_distribution(mutation_matrix_t const *self, double *dest);
+int mutation_matrix_get_transition_matrix(mutation_matrix_t const *self, double *dest);
 
 int matrix_mutation_model_factory(mutation_model_t *self, int model);
 int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
