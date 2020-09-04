@@ -2354,8 +2354,7 @@ MatrixMutationModel_get_root_distribution(MatrixMutationModel *self, void *closu
     if (array == NULL) {
         goto out;
     }
-    memcpy(PyArray_DATA(array), params->root_distribution,
-            size * sizeof(double));
+    mutation_matrix_get_root_distribution(params, PyArray_DATA(array));
     ret = (PyObject *) array;
 out:
     return ret;

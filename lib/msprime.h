@@ -24,13 +24,19 @@
 #include <stdbool.h>
 
 #include <gsl/gsl_rng.h>
-#include <gsl/gsl_randist.h>
 #include <tskit.h>
 
 #include "util.h"
 #include "avl.h"
 #include "fenwick.h"
 #include "object_heap.h"
+
+#define USE_GSL_DISCRETE_DISTRIBUTION
+#define KEEP_NON_GSL_DISTRIBUTIONS
+
+#ifdef USE_GSL_DISCRETE_DISTRIBUTION
+#include <gsl/gsl_randist.h>
+#endif
 
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1
@@ -328,7 +334,12 @@ typedef struct {
     size_t num_alleles;
     char **alleles;
     tsk_size_t *allele_length;
-    gsl_ran_discrete_t *root_distribution;
+#ifdef USE_GSL_DISCRETE_DISTRIBUTION
+    gsl_ran_discrete_t *gsl_root_distribution;
+#endif
+#ifdef KEEP_NON_GSL_DISTRIBUTIONS
+    double *root_distribution;
+#endif
     double *transition_matrix;
 } mutation_matrix_t;
 
@@ -486,6 +497,8 @@ double rate_map_mass_between(rate_map_t *self, double left, double right);
 double rate_map_mass_to_position(rate_map_t *self, double mass);
 double rate_map_position_to_mass(rate_map_t *self, double position);
 double rate_map_shift_by_mass(rate_map_t *self, double pos, double mass);
+
+int mutation_matrix_get_root_distribution(mutation_matrix_t const* self, double *dest);
 
 int matrix_mutation_model_factory(mutation_model_t *self, int model);
 int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
