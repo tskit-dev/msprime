@@ -183,6 +183,23 @@ There are simple scripts in the root of the project (currently: ``msp_dev.py``,
 ``mspms_dev.py``) which are used for development. For example, to run the
 development version of ``mspms`` use ``python3 mspms_dev.py``.
 
+++++++++++
+Benchmarks
+++++++++++
+
+TODO intro about asv. These are JK's notes about how to use ASV, stolen
+from various sources.
+
+- Specifying the range of commits to run uses the same syntax as git log.
+  For example, to run for a single commit, use ``asv run 88fbbc33^!``
+
+- GOTCHA! Be careful when running ``asv dev`` or using ``python=same`` as
+  this can use the *installed* version of msprime rather than the local
+  development version. This can lead to confusing results! When tuning
+  benchmarks it's better to commit often and use (e.g.)
+  ``asv run HEAD^! --show-stderr -b Hudson.time_large_sample_size``.
+
+
 *********
 C Library
 *********
