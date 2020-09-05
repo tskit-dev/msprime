@@ -13,6 +13,11 @@
     // project being benchmarked
     "repo": ".",
 
+    // (JK) Note: must have an 'upstream' remote set for this to work. Without
+    // setting this, asv will fixate on the local master branch, which can
+    // be years out of date.
+    "branches": ["upstream/master"], 
+
     // The Python project's subdirectory in your repo.  If missing or
     // the empty string, the project is assumed to be located at the root
     // of the repository.
@@ -27,17 +32,6 @@
     //     "python setup.py build",
     //     "PIP_NO_BUILD_ISOLATION=false python -mpip wheel --no-deps --no-index -w {build_cache_dir} {build_dir}"
     // ],
-
-    // List of branches to benchmark. If not provided, defaults to "master"
-    // (for git) or "default" (for mercurial).
-    // "branches": ["master"], // for git
-    // "branches": ["default"],    // for mercurial
-
-    // The DVCS being used.  If not set, it will be automatically
-    // determined from "repo" by looking at the protocol in the URL
-    // (if remote), or by looking for special directories, such as
-    // ".git" (if local).
-    // "dvcs": "git",
 
     // The tool to use to create environments.  May be "conda",
     // "virtualenv" or other value depending on the plugins in use.
@@ -71,7 +65,10 @@
     // pip (with all the conda available packages installed first,
     // followed by the pip installed packages).
     //
-    // "matrix": {
+    "matrix": {
+        "stdpopsim": [],
+    },
+
     //     "numpy": ["1.6", "1.7"],
     //     "six": ["", null],        // test with and without six installed
     //     "pip+emcee": [""],   // emcee is only available for install with pip.
