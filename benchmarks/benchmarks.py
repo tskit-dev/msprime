@@ -24,7 +24,12 @@ Benchmarks for msprime using airspeed velocity. Please see the developer
 documentation for details on how to run these and how to develop your
 own benchmarks.
 """
-import stdpopsim
+try:
+    import stdpopsim
+
+    stdpopsim_available = True
+except TypeError:
+    stdpopsim_available = False
 
 import msprime
 
@@ -41,12 +46,14 @@ class LargeSimulationBenchmark:
     number = 1
     rounds = 1
     min_run_count = 1
-    timeout = 60
+    timeout = 120
 
     def setup(self):
-        species = stdpopsim.get_species("HomSap")
-        genetic_map = species.get_genetic_map("HapMapII_GRCh37")
-        self.recomb_map_chr22 = genetic_map.get_chromosome_map("chr22")
+        # Stuff that depends on the recomb_map_chr22 will fail
+        if stdpopsim_available:
+            species = stdpopsim.get_species("HomSap")
+            genetic_map = species.get_genetic_map("HapMapII_GRCh37")
+            self.recomb_map_chr22 = genetic_map.get_chromosome_map("chr22")
 
 
 class Hudson(LargeSimulationBenchmark):
