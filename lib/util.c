@@ -235,6 +235,12 @@ msp_strerror_internal(int err)
                   "parameters, and if they make sense help us fix the problem "
                   "by opening an issue on GitHub.";
             break;
+        case MSP_ERR_FENWICK_REBUILD_FAILED:
+            ret = "An unlikely numerical error occured (Fenwick tree rebuild "
+                  "did not reduce drift sufficiently). Please check your "
+                  "parameters, and if they make sense help us fix the problem "
+                  "by opening an issue on GitHub.";
+            break;
         case MSP_ERR_BAD_PLOIDY:
             ret = "Ploidy must be at least 1";
             break;

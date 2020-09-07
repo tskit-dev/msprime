@@ -29,7 +29,7 @@ import stdpopsim
 import msprime
 
 
-class SimulationBenchmark:
+class LargeSimulationBenchmark:
 
     # ASV is designed to accurately time functions that execute in a fraction
     # of a second. But, we're interested in profiling large simulations that
@@ -41,7 +41,7 @@ class SimulationBenchmark:
     number = 1
     rounds = 1
     min_run_count = 1
-    timeout = 180
+    timeout = 60
 
     def setup(self):
         species = stdpopsim.get_species("HomSap")
@@ -49,11 +49,11 @@ class SimulationBenchmark:
         self.recomb_map_chr22 = genetic_map.get_chromosome_map("chr22")
 
 
-class Hudson(SimulationBenchmark):
+class Hudson(LargeSimulationBenchmark):
     def _run_large_sample_size(self):
         msprime.simulate(
-            sample_size=5 * 10 ** 5,
-            length=1e6,
+            sample_size=10 ** 6,
+            length=1e7,
             Ne=10 ** 4,
             recombination_rate=1e-8,
             random_seed=42,
@@ -109,7 +109,7 @@ class Hudson(SimulationBenchmark):
     # Lots of populations, 1D stepping stone.
 
 
-class DTWF(SimulationBenchmark):
+class DTWF(LargeSimulationBenchmark):
     def _run_large_population_size(self):
         msprime.simulate(
             sample_size=1000,

@@ -3484,6 +3484,7 @@ msp_reset(msp_t *self)
     if (ret != 0) {
         goto out;
     }
+
     self->next_demographic_event = self->demographic_events_head;
     memcpy(
         self->migration_matrix, self->initial_migration_matrix, N * N * sizeof(double));
@@ -3739,10 +3740,9 @@ msp_sample_waiting_time(msp_t *self, fenwick_t *mass_index, double *ret_t_wait)
      * drift, where the indexed values diverge from the true values
      * associated with segments. We ensure that this drift does not
      * become too large by rebuilding the indexing structure every
-     * now and again. The 1e-12 threshold is the result of some
-     * experimentation, and seems to give a good bound on error
-     * without being triggered too often. */
-    if (fenwick_get_numerical_drift(mass_index) > 1e-12) {
+     * now and again. */
+
+    if (fenwick_rebuild_required(mass_index)) {
         fenwick_rebuild(mass_index);
         self->num_fenwick_rebuilds++;
     }
