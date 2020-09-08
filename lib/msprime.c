@@ -334,6 +334,148 @@ msp_set_gene_conversion_rate(msp_t *self, double rate)
     return msp_set_gene_conversion_map(self, 1, position, &rate);
 }
 
+static inline double
+msp_get_recomb_left_bound(msp_t *self, segment_t *seg)
+{
+    double left_bound;
+    if (seg->prev == NULL) {
+        left_bound = self->discrete_genome ? seg->left + 1 : seg->left;
+    } else {
+        left_bound = seg->prev->right;
+    }
+    return left_bound;
+}
+
+static inline double
+msp_get_gc_left_bound(msp_t *self, segment_t *seg)
+{
+    double left_bound;
+    if (seg->prev == NULL) {
+        /* left_bound = self->discrete_genome ? seg->left + 1 : seg->left; */
+        left_bound = self->discrete_genome ? 1 : 0;
+    } else {
+        left_bound = seg->prev->right;
+    }
+    return left_bound;
+}
+
+/* Set the mass of the specified segment to that between the segment's right endpoint
+ * and the right endpoint of the left tail segment.
+ */
+static void
+msp_set_segment_mass(msp_t *self, segment_t *seg)
+{
+    double left_bound, mass;
+
+    if (self->recomb_mass_index != NULL) {
+        left_bound = msp_get_recomb_left_bound(self, seg);
+        mass = rate_map_mass_between(&self->recomb_map, left_bound, seg->right);
+        fenwick_set_value(&self->recomb_mass_index[seg->label], seg->id, mass);
+    }
+    if (self->gc_mass_index != NULL) {
+        /* NOTE: it looks like the gc_left_bound doesn't actually give us the
+         * right distribution of gc events, so we'll probably get rid of this
+         * and use the same left bound for both. */
+        left_bound = msp_get_gc_left_bound(self, seg);
+        mass = rate_map_mass_between(&self->gc_map, left_bound, seg->right);
+        fenwick_set_value(&self->gc_mass_index[seg->label], seg->id, mass);
+    }
+}
+
+/* Add all extant segments into the indexes. */
+static void
+msp_reindex_segments(msp_t *self)
+{
+    avl_node_t *node;
+    avl_tree_t *population_ancestors;
+    segment_t *seg;
+    size_t j;
+    label_id_t label;
+
+    for (j = 0; j < self->num_populations; j++) {
+        for (label = 0; label < (label_id_t) self->num_labels; label++) {
+            population_ancestors = &self->populations[j].ancestors[label];
+            for (node = population_ancestors->head; node != NULL; node = node->next) {
+                for (seg = (segment_t *) node->item; seg != NULL; seg = seg->next) {
+                    msp_set_segment_mass(self, seg);
+                }
+            }
+        }
+    }
+}
+
+/* Setup the mass indexes either after a simulation model change
+ * or during msp_initialise */
+static int
+msp_setup_mass_indexes(msp_t *self)
+{
+    int ret = 0;
+    label_id_t label;
+    size_t num_segments;
+    bool build_recomb_mass_index, build_gc_mass_index;
+
+    /* For simplicity, we always drop the mass indexes even though
+     * sometimes we'll be dropping it just to rebuild */
+    if (self->recomb_mass_index != NULL) {
+        for (label = 0; label < (label_id_t) self->num_labels; label++) {
+            fenwick_free(&self->recomb_mass_index[label]);
+        }
+        msp_safe_free(self->recomb_mass_index);
+        self->recomb_mass_index = NULL;
+    }
+    if (self->gc_mass_index != NULL) {
+        for (label = 0; label < (label_id_t) self->num_labels; label++) {
+            fenwick_free(&self->gc_mass_index[label]);
+        }
+        msp_safe_free(self->gc_mass_index);
+        self->gc_mass_index = NULL;
+    }
+
+    /* We never build indexes for the DTWF and Pedigree models */
+    if (self->model.type == MSP_MODEL_DTWF || self->model.type == MSP_MODEL_WF_PED) {
+        build_recomb_mass_index = false;
+        build_gc_mass_index = false;
+    } else {
+        /* For all the other models, we maintain an index only if the total rate
+         * > 0. */
+        build_recomb_mass_index = rate_map_get_total_mass(&self->recomb_map) > 0;
+        build_gc_mass_index = rate_map_get_total_mass(&self->gc_map) > 0;
+    }
+
+    num_segments = self->segment_heap->size;
+    if (build_recomb_mass_index) {
+        self->recomb_mass_index
+            = calloc(self->num_labels, sizeof(*self->recomb_mass_index));
+        if (self->recomb_mass_index == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        for (label = 0; label < (label_id_t) self->num_labels; label++) {
+            ret = fenwick_alloc(&self->recomb_mass_index[label], num_segments);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+    if (build_gc_mass_index) {
+        self->gc_mass_index = calloc(self->num_labels, sizeof(*self->gc_mass_index));
+        if (self->gc_mass_index == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        for (label = 0; label < (label_id_t) self->num_labels; label++) {
+            ret = fenwick_alloc(&self->gc_mass_index[label], num_segments);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+
+    msp_reindex_segments(self);
+out:
+    return ret;
+}
+
 int
 msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
 {
@@ -359,8 +501,6 @@ msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
     msp_safe_free(self->initial_migration_matrix);
     msp_safe_free(self->migration_matrix);
     msp_safe_free(self->num_migration_events);
-    msp_safe_free(self->recomb_mass_index);
-    msp_safe_free(self->gc_mass_index);
     msp_safe_free(self->segment_heap);
 
     self->num_populations = (uint32_t) num_populations;
@@ -374,16 +514,14 @@ msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
     self->initial_populations
         = calloc(num_populations, sizeof(*self->initial_populations));
     self->populations = calloc(num_populations, sizeof(*self->populations));
-    self->recomb_mass_index = calloc(self->num_labels, sizeof(*self->recomb_mass_index));
-    self->gc_mass_index = calloc(self->num_labels, sizeof(*self->gc_mass_index));
     self->segment_heap = calloc(self->num_labels, sizeof(*self->segment_heap));
     if (self->migration_matrix == NULL || self->initial_migration_matrix == NULL
         || self->num_migration_events == NULL || self->initial_populations == NULL
-        || self->populations == NULL || self->recomb_mass_index == NULL
-        || self->gc_mass_index == NULL || self->segment_heap == NULL) {
+        || self->populations == NULL || self->segment_heap == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
+
     for (j = 0; j < num_populations; j++) {
         self->populations[j].ancestors
             = malloc(self->num_labels * sizeof(*self->populations[j].ancestors));
@@ -517,12 +655,17 @@ msp_alloc_segment(msp_t *self, double left, double right, tsk_id_t value,
         if (object_heap_expand(&self->segment_heap[label]) != 0) {
             goto out;
         }
-        if (fenwick_expand(&self->recomb_mass_index[label], self->segment_block_size)
-            != 0) {
-            goto out;
+        if (self->recomb_mass_index != NULL) {
+            if (fenwick_expand(&self->recomb_mass_index[label], self->segment_block_size)
+                != 0) {
+                goto out;
+            }
         }
-        if (fenwick_expand(&self->gc_mass_index[label], self->segment_block_size) != 0) {
-            goto out;
+        if (self->gc_mass_index != NULL) {
+            if (fenwick_expand(&self->gc_mass_index[label], self->segment_block_size)
+                != 0) {
+                goto out;
+            }
         }
     }
     seg = (segment_t *) object_heap_alloc_object(&self->segment_heap[label]);
@@ -530,8 +673,12 @@ msp_alloc_segment(msp_t *self, double left, double right, tsk_id_t value,
         goto out;
     }
     assert(left < right);
-    assert(fenwick_get_value(&self->recomb_mass_index[label], seg->id) == 0);
-    assert(fenwick_get_value(&self->gc_mass_index[label], seg->id) == 0);
+    if (self->recomb_mass_index != NULL) {
+        assert(fenwick_get_value(&self->recomb_mass_index[label], seg->id) == 0);
+    }
+    if (self->gc_mass_index != NULL) {
+        assert(fenwick_get_value(&self->gc_mass_index[label], seg->id) == 0);
+    }
     seg->prev = prev;
     seg->next = next;
     seg->left = left;
@@ -680,18 +827,10 @@ msp_alloc_memory_blocks(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    /* allocate the segments and Fenwick trees */
+    /* allocate the segments */
     for (j = 0; j < self->num_labels; j++) {
         ret = object_heap_init(&self->segment_heap[j], sizeof(segment_t),
             self->segment_block_size, segment_init);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = fenwick_alloc(&self->recomb_mass_index[j], self->segment_block_size);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = fenwick_alloc(&self->gc_mass_index[j], self->segment_block_size);
         if (ret != 0) {
             goto out;
         }
@@ -838,8 +977,12 @@ static void
 msp_free_segment(msp_t *self, segment_t *seg)
 {
     object_heap_free_object(&self->segment_heap[seg->label], seg);
-    fenwick_set_value(&self->recomb_mass_index[seg->label], seg->id, 0);
-    fenwick_set_value(&self->gc_mass_index[seg->label], seg->id, 0);
+    if (self->recomb_mass_index != NULL) {
+        fenwick_set_value(&self->recomb_mass_index[seg->label], seg->id, 0);
+    }
+    if (self->gc_mass_index != NULL) {
+        fenwick_set_value(&self->gc_mass_index[seg->label], seg->id, 0);
+    }
 }
 
 static inline avl_tree_t *
@@ -1043,8 +1186,23 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
          * asserts are turned off.
          */
     }
-    msp_verify_segment_index(self, self->recomb_mass_index, &self->recomb_map, false);
-    msp_verify_segment_index(self, self->gc_mass_index, &self->gc_map, true);
+    if (self->recomb_mass_index != NULL) {
+        msp_verify_segment_index(
+            self, self->recomb_mass_index, &self->recomb_map, false);
+    }
+    if (self->gc_mass_index != NULL) {
+        msp_verify_segment_index(self, self->gc_mass_index, &self->gc_map, true);
+    }
+    /* Check that the mass indexes are set appropriately */
+    if (self->model.type == MSP_MODEL_DTWF || self->model.type == MSP_MODEL_WF_PED) {
+        assert(self->recomb_mass_index == NULL);
+        assert(self->gc_mass_index == NULL);
+    } else {
+        assert((self->recomb_mass_index != NULL) ==
+                (rate_map_get_total_mass(&self->recomb_map) > 0));
+        assert((self->gc_mass_index != NULL) ==
+                (rate_map_get_total_mass(&self->gc_map) > 0));
+    }
 }
 
 typedef struct {
@@ -1346,8 +1504,12 @@ msp_print_state(msp_t *self, FILE *out)
     for (j = 0; j < self->num_labels; j++) {
         fprintf(out, "label %d\n", j);
         fprintf(out, "\trecomb_mass = %.14g\n",
-            fenwick_get_total(&self->recomb_mass_index[j]));
-        fprintf(out, "\tgc_mass = %.14g\n", fenwick_get_total(&self->gc_mass_index[j]));
+            self->recomb_mass_index == NULL
+                ? 0
+                : fenwick_get_total(&self->recomb_mass_index[j]));
+        fprintf(out, "\tgc_mass = %.14g\n",
+            self->gc_mass_index == NULL ? 0
+                                        : fenwick_get_total(&self->gc_mass_index[j]));
         for (k = 0; k < self->num_populations; k++) {
             fprintf(out, "\tpop_size[%d] = %d\n", k,
                 avl_count(&self->populations[k].ancestors[j]));
@@ -1380,28 +1542,33 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "Fenwick trees\n");
     for (k = 0; k < self->num_labels; k++) {
         fprintf(out, "=====\nLabel %d\n=====\n", k);
-        fprintf(out, "**Recomb mass**\n");
-        fprintf(out, "numerical drift = %.17g\n",
-            fenwick_get_numerical_drift(&self->recomb_mass_index[k]));
-        for (j = 1; j <= (uint32_t) fenwick_get_size(&self->recomb_mass_index[k]); j++) {
-            u = msp_get_segment(self, j, (label_id_t) k);
-            v = fenwick_get_value(&self->recomb_mass_index[k], j);
-            if (v != 0) {
-                fprintf(out, "\t%.14f\ti=%d l=%.14g r=%.14g v=%d prev=%p next=%p\n", v,
-                    (int) u->id, u->left, u->right, (int) u->value, (void *) u->prev,
-                    (void *) u->next);
+        if (self->recomb_mass_index != NULL) {
+            fprintf(out, "**Recomb mass**\n");
+            fprintf(out, "numerical drift = %.17g\n",
+                fenwick_get_numerical_drift(&self->recomb_mass_index[k]));
+            for (j = 1; j <= (uint32_t) fenwick_get_size(&self->recomb_mass_index[k]);
+                 j++) {
+                u = msp_get_segment(self, j, (label_id_t) k);
+                v = fenwick_get_value(&self->recomb_mass_index[k], j);
+                if (v != 0) {
+                    fprintf(out, "\t%.14f\ti=%d l=%.14g r=%.14g v=%d prev=%p next=%p\n",
+                        v, (int) u->id, u->left, u->right, (int) u->value,
+                        (void *) u->prev, (void *) u->next);
+                }
             }
         }
-        fprintf(out, "**GC mass**\n");
-        fprintf(out, "numerical drift = %.17g\n",
-            fenwick_get_numerical_drift(&self->gc_mass_index[k]));
-        for (j = 1; j <= (uint32_t) fenwick_get_size(&self->gc_mass_index[k]); j++) {
-            u = msp_get_segment(self, j, (label_id_t) k);
-            v = fenwick_get_value(&self->gc_mass_index[k], j);
-            if (v != 0) {
-                fprintf(out, "\t%.14f\ti=%d l=%.14g r=%.14g v=%d prev=%p next=%p\n", v,
-                    (int) u->id, u->left, u->right, (int) u->value, (void *) u->prev,
-                    (void *) u->next);
+        if (self->gc_mass_index != NULL) {
+            fprintf(out, "**GC mass**\n");
+            fprintf(out, "numerical drift = %.17g\n",
+                fenwick_get_numerical_drift(&self->gc_mass_index[k]));
+            for (j = 1; j <= (uint32_t) fenwick_get_size(&self->gc_mass_index[k]); j++) {
+                u = msp_get_segment(self, j, (label_id_t) k);
+                v = fenwick_get_value(&self->gc_mass_index[k], j);
+                if (v != 0) {
+                    fprintf(out, "\t%.14f\ti=%d l=%.14g r=%.14g v=%d prev=%p next=%p\n",
+                        v, (int) u->id, u->left, u->right, (int) u->value,
+                        (void *) u->prev, (void *) u->next);
+                }
             }
         }
     }
@@ -1630,10 +1797,16 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
             } else {
                 y->prev->next = y;
             }
-            recomb_mass = fenwick_get_value(&self->recomb_mass_index[x->label], x->id);
-            fenwick_set_value(&self->recomb_mass_index[y->label], y->id, recomb_mass);
-            gc_mass = fenwick_get_value(&self->gc_mass_index[x->label], x->id);
-            fenwick_set_value(&self->gc_mass_index[y->label], y->id, gc_mass);
+            if (self->recomb_mass_index != NULL) {
+                recomb_mass
+                    = fenwick_get_value(&self->recomb_mass_index[x->label], x->id);
+                fenwick_set_value(
+                    &self->recomb_mass_index[y->label], y->id, recomb_mass);
+            }
+            if (self->gc_mass_index != NULL) {
+                gc_mass = fenwick_get_value(&self->gc_mass_index[x->label], x->id);
+                fenwick_set_value(&self->gc_mass_index[y->label], y->id, gc_mass);
+            }
             msp_free_segment(self, x);
         }
     }
@@ -1777,47 +1950,6 @@ msp_conditional_compress_overlap_counts(msp_t *self, double l, double r)
     }
 out:
     return ret;
-}
-
-static inline double
-msp_get_recomb_left_bound(msp_t *self, segment_t *seg)
-{
-    double left_bound;
-    if (seg->prev == NULL) {
-        left_bound = self->discrete_genome ? seg->left + 1 : seg->left;
-    } else {
-        left_bound = seg->prev->right;
-    }
-    return left_bound;
-}
-
-static inline double
-msp_get_gc_left_bound(msp_t *self, segment_t *seg)
-{
-    double left_bound;
-    if (seg->prev == NULL) {
-        /* left_bound = self->discrete_genome ? seg->left + 1 : seg->left; */
-        left_bound = self->discrete_genome ? 1 : 0;
-    } else {
-        left_bound = seg->prev->right;
-    }
-    return left_bound;
-}
-
-/* Set the mass of the specified segment to that between the segment's right endpoint
- * and the right endpoint of the left tail segment.
- */
-static void
-msp_set_segment_mass(msp_t *self, segment_t *seg)
-{
-    double recomb_left_bound = msp_get_recomb_left_bound(self, seg);
-    double recomb_mass
-        = rate_map_mass_between(&self->recomb_map, recomb_left_bound, seg->right);
-    double gc_left_bound = msp_get_gc_left_bound(self, seg);
-    double gc_mass = rate_map_mass_between(&self->gc_map, gc_left_bound, seg->right);
-
-    fenwick_set_value(&self->recomb_mass_index[seg->label], seg->id, recomb_mass);
-    fenwick_set_value(&self->gc_mass_index[seg->label], seg->id, gc_mass);
 }
 
 /* Defragment the segment chain ending in z by squashing any redundant
@@ -2426,6 +2558,7 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
     segment_t *x, *y, *alpha, *lhs_tail;
 
     self->num_re_events++;
+    assert(self->recomb_mass_index != NULL);
 
     ret = msp_choose_uniform_breakpoint(
         self, label, &self->recomb_map, self->recomb_mass_index, false, &breakpoint, &y);
@@ -2500,6 +2633,7 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
     bool insert_alpha;
     int num_resamplings = 0;
 
+    assert(self->gc_mass_index != NULL);
     self->num_gc_events++;
     ret = msp_choose_uniform_breakpoint(
         self, label, &self->gc_map, self->gc_mass_index, true, &left_breakpoint, &y);
@@ -3598,7 +3732,7 @@ out:
 }
 
 /*
- * Sets up the memory heaps and rescales times and rates into simulation units.
+ * Sets up the memory heaps.
  */
 int MSP_WARN_UNUSED
 msp_initialise(msp_t *self)
@@ -3609,6 +3743,10 @@ msp_initialise(msp_t *self)
     assert(self->num_populations >= 1);
 
     ret = msp_alloc_memory_blocks(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_setup_mass_indexes(self);
     if (ret != 0) {
         goto out;
     }
@@ -3730,35 +3868,44 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-msp_sample_waiting_time(msp_t *self, fenwick_t *mass_index, double *ret_t_wait)
+msp_sample_waiting_time(
+    msp_t *self, fenwick_t *mass_indexes, label_id_t label, double *ret_t_wait)
 {
     int ret = 0;
     double total_mass, t_wait, lambda;
+    fenwick_t *mass_index;
 
-    /* In very large simulations, the fenwick tree used as an indexing
-     * structure for genomic segments will experience some numerical
-     * drift, where the indexed values diverge from the true values
-     * associated with segments. We ensure that this drift does not
-     * become too large by rebuilding the indexing structure every
-     * now and again. */
+    if (mass_indexes == NULL) {
+        /* When the mass index is NULL this sigifies a total rate of zero
+         * and so we have an infinite waiting time. */
+        *ret_t_wait = DBL_MAX;
+    } else {
+        mass_index = &mass_indexes[label];
+        /* In very large simulations, the fenwick tree used as an indexing
+         * structure for genomic segments will experience some numerical
+         * drift, where the indexed values diverge from the true values
+         * associated with segments. We ensure that this drift does not
+         * become too large by rebuilding the indexing structure every
+         * now and again. */
 
-    if (fenwick_rebuild_required(mass_index)) {
-        fenwick_rebuild(mass_index);
-        self->num_fenwick_rebuilds++;
+        if (fenwick_rebuild_required(mass_index)) {
+            fenwick_rebuild(mass_index);
+            self->num_fenwick_rebuilds++;
+        }
+
+        total_mass = fenwick_get_total(mass_index);
+        if (!isfinite(total_mass)) {
+            ret = MSP_ERR_BREAKPOINT_MASS_NON_FINITE;
+            goto out;
+        }
+        lambda = total_mass;
+        t_wait = DBL_MAX;
+        if (lambda > 0.0) {
+            t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
+        }
+
+        *ret_t_wait = t_wait;
     }
-
-    total_mass = fenwick_get_total(mass_index);
-    if (!isfinite(total_mass)) {
-        ret = MSP_ERR_BREAKPOINT_MASS_NON_FINITE;
-        goto out;
-    }
-    lambda = total_mass;
-    t_wait = DBL_MAX;
-    if (lambda > 0.0) {
-        t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
-    }
-
-    *ret_t_wait = t_wait;
 out:
     return ret;
 }
@@ -3807,12 +3954,13 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         events++;
 
         /* Recombination */
-        ret = msp_sample_waiting_time(self, &self->recomb_mass_index[label], &re_t_wait);
+        ret = msp_sample_waiting_time(self, self->recomb_mass_index, label, &re_t_wait);
         if (ret != 0) {
             goto out;
         }
         /* Gene conversion */
-        ret = msp_sample_waiting_time(self, &self->gc_mass_index[label], &gc_t_wait);
+        gc_t_wait = DBL_MAX;
+        ret = msp_sample_waiting_time(self, self->gc_mass_index, label, &gc_t_wait);
         if (ret != 0) {
             goto out;
         }
@@ -4609,7 +4757,9 @@ msp_run_sweep(msp_t *self)
         /* Set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
             label = (label_id_t) j;
-            recomb_mass = fenwick_get_total(&self->recomb_mass_index[label]);
+            recomb_mass = self->recomb_mass_index == NULL
+                              ? 0
+                              : fenwick_get_total(&self->recomb_mass_index[label]);
             sweep_pop_sizes[j] = avl_count(&self->populations[0].ancestors[label]);
             rec_rates[j] = recomb_mass;
         }
@@ -6339,6 +6489,7 @@ static int
 msp_set_simulation_model(msp_t *self, int model)
 {
     int ret = 0;
+    bool update_mass_indexes = false;
 
     if (model != MSP_MODEL_HUDSON && model != MSP_MODEL_SMC
         && model != MSP_MODEL_SMC_PRIME && model != MSP_MODEL_DIRAC
@@ -6351,11 +6502,20 @@ msp_set_simulation_model(msp_t *self, int model)
         if (self->model.free != NULL) {
             self->model.free(&self->model);
         }
+        /* If this isn't the first time we've set the model then we
+         * need to update the mass indexes */
+        update_mass_indexes = true;
     }
     self->model.type = model;
 
     self->get_common_ancestor_waiting_time = msp_std_get_common_ancestor_waiting_time;
     self->common_ancestor_event = msp_std_common_ancestor_event;
+    if (update_mass_indexes) {
+        ret = msp_setup_mass_indexes(self);
+        if (ret != 0) {
+            goto out;
+        }
+    }
 out:
     return ret;
 }

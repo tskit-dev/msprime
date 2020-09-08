@@ -4341,7 +4341,7 @@ Simulator_fenwick_drift(Simulator *self, PyObject *args)
 
     PyObject *ret = NULL;
     int label;
-    double drift;
+    double drift = 0;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -4353,7 +4353,11 @@ Simulator_fenwick_drift(Simulator *self, PyObject *args)
         PyErr_SetString(PyExc_ValueError, "bad label ID");
         goto out;
     }
-    drift = fenwick_get_numerical_drift(&self->sim->recomb_mass_index[label]);
+    /* TODO need a better API for this, as we should also think about the
+     * drift in the GC map. */
+    if (self->sim->recomb_mass_index != NULL) {
+        drift = fenwick_get_numerical_drift(&self->sim->recomb_mass_index[label]);
+    }
     ret = Py_BuildValue("d", drift);
 out:
     return ret;

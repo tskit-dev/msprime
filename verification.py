@@ -2065,7 +2065,7 @@ class RecombinationMutationTest(Test):
                     r=1e-8,
                     m=1e-8,
                     L=10 ** 6,
-                    p=p,
+                    ploidy=p,
                     model=msprime.BetaCoalescent(alpha=alpha),
                 )
 
@@ -2081,7 +2081,7 @@ class RecombinationMutationTest(Test):
                         r=1e-8,
                         m=1e-8,
                         L=10 ** 6,
-                        p=p,
+                        ploidy=p,
                         model=msprime.DiracCoalescent(psi=psi, c=c),
                     )
 
@@ -2094,7 +2094,7 @@ class RecombinationMutationTest(Test):
                 r=1e-8,
                 m=1e-8,
                 L=10 ** 6,
-                p=p,
+                ploidy=p,
                 model="hudson",
             )
 

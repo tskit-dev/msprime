@@ -680,13 +680,13 @@ class Simulator:
             self.segment_stack.append(s)
         self.P = [Population(id_, num_labels) for id_ in range(N)]
         if self.recomb_map.total_rate == 0:
-            self.recomb_mass_index = [None for j in range(num_labels)]
+            self.recomb_mass_index = None
         else:
             self.recomb_mass_index = [
                 FenwickTree(self.max_segments) for j in range(num_labels)
             ]
         if self.gc_map.total_rate == 0:
-            self.gc_mass_index = [None for j in range(num_labels)]
+            self.gc_mass_index = None
         else:
             self.gc_mass_index = [
                 FenwickTree(self.max_segments) for j in range(num_labels)
@@ -866,9 +866,9 @@ class Simulator:
         Frees the specified segment making it ready for reuse and
         setting its weight to zero.
         """
-        if self.recomb_mass_index[u.label] is not None:
+        if self.recomb_mass_index is not None:
             self.recomb_mass_index[u.label].set_value(u.index, 0)
-        if self.gc_mass_index[u.label] is not None:
+        if self.gc_mass_index is not None:
             self.gc_mass_index[u.label].set_value(u.index, 0)
         self.segment_stack.append(u)
 
@@ -943,13 +943,13 @@ class Simulator:
 
     def get_total_recombination_rate(self, label):
         total_rate = 0
-        if self.recomb_mass_index[label] is not None:
+        if self.recomb_mass_index is not None:
             total_rate = self.recomb_mass_index[label].get_total()
         return total_rate
 
     def get_total_gc_rate(self, label):
         total_rate = 0
-        if self.gc_mass_index[label] is not None:
+        if self.gc_mass_index is not None:
             total_rate = self.gc_mass_index[label].get_total()
         return total_rate
 
@@ -1350,13 +1350,13 @@ class Simulator:
         Sets the mass for the specified segment. All links *must* be
         appropriately set before calling this function.
         """
-        mass_index = self.recomb_mass_index[seg.label]
-        if mass_index is not None:
+        if self.recomb_mass_index is not None:
+            mass_index = self.recomb_mass_index[seg.label]
             recomb_left_bound = self.get_recomb_left_bound(seg)
             recomb_mass = self.recomb_map.mass_between(recomb_left_bound, seg.right)
             mass_index.set_value(seg.index, recomb_mass)
-        mass_index = self.gc_mass_index[seg.label]
-        if mass_index is not None:
+        if self.gc_mass_index is not None:
+            mass_index = self.gc_mass_index[seg.label]
             gc_left_bound = self.get_gc_left_bound(seg)
             gc_mass = self.gc_map.mass_between(gc_left_bound, seg.right)
             mass_index.set_value(seg.index, gc_mass)
@@ -1369,12 +1369,12 @@ class Simulator:
         while segment is not None:
             masses = []
             for mass_index in mass_indexes:
-                if mass_index[segment.label] is not None:
+                if mass_index is not None:
                     masses.append(mass_index[segment.label].get_value(segment.index))
                     mass_index[segment.label].set_value(segment.index, 0)
             segment.label = new_label
             for mass, mass_index in zip(masses, mass_indexes):
-                if mass_index[segment.label] is not None:
+                if mass_index is not None:
                     mass_index[segment.label].set_value(segment.index, mass)
             segment = segment.next
 
@@ -1927,8 +1927,18 @@ class Simulator:
     def print_state(self, verify=False):
         print("State @ time ", self.t)
         for label in range(self.num_labels):
-            print("Recomb mass = ", self.recomb_mass_index[label].get_total())
-            print("GC mass = ", self.gc_mass_index[label].get_total())
+            print(
+                "Recomb mass = ",
+                0
+                if self.recomb_mass_index is None
+                else self.recomb_mass_index[label].get_total(),
+            )
+            print(
+                "GC mass = ",
+                0
+                if self.gc_mass_index is None
+                else self.gc_mass_index[label].get_total(),
+            )
         print("Modifier events = ")
         for t, f, args in self.modifier_events:
             print("\t", t, f, args)
@@ -1942,28 +1952,30 @@ class Simulator:
         for k, x in self.S.items():
             print("\t", k, "\t:\t", x)
         for label in range(self.num_labels):
-            print(
-                "recomb_mass_index [%d]: %d"
-                % (label, self.recomb_mass_index[label].get_total())
-            )
-            for j in range(1, self.max_segments + 1):
-                s = self.recomb_mass_index[label].get_value(j)
-                if s != 0:
-                    seg = self.segments[j]
-                    left_bound = self.get_recomb_left_bound(seg)
-                    sp = self.recomb_map.mass_between(left_bound, seg.right)
-                    print("\t", j, "->", s, sp)
-            print(
-                "gc_mass_index [%d]: %d"
-                % (label, self.gc_mass_index[label].get_total())
-            )
-            for j in range(1, self.max_segments + 1):
-                s = self.gc_mass_index[label].get_value(j)
-                if s != 0:
-                    seg = self.segments[j]
-                    left_bound = self.get_gc_left_bound(seg)
-                    sp = self.gc_map.mass_between(left_bound, seg.right)
-                    print("\t", j, "->", s, sp)
+            if self.recomb_mass_index is not None:
+                print(
+                    "recomb_mass_index [%d]: %d"
+                    % (label, self.recomb_mass_index[label].get_total())
+                )
+                for j in range(1, self.max_segments + 1):
+                    s = self.recomb_mass_index[label].get_value(j)
+                    if s != 0:
+                        seg = self.segments[j]
+                        left_bound = self.get_recomb_left_bound(seg)
+                        sp = self.recomb_map.mass_between(left_bound, seg.right)
+                        print("\t", j, "->", s, sp)
+            if self.gc_mass_index is not None:
+                print(
+                    "gc_mass_index [%d]: %d"
+                    % (label, self.gc_mass_index[label].get_total())
+                )
+                for j in range(1, self.max_segments + 1):
+                    s = self.gc_mass_index[label].get_value(j)
+                    if s != 0:
+                        seg = self.segments[j]
+                        left_bound = self.get_gc_left_bound(seg)
+                        sp = self.gc_map.mass_between(left_bound, seg.right)
+                        print("\t", j, "->", s, sp)
         print("nodes")
         print(self.tables.nodes)
         print("edges")
@@ -2068,7 +2080,7 @@ class Simulator:
             # be simpler if it did.
             self.verify_overlaps()
             for label in range(self.num_labels):
-                if self.recomb_mass_index[label] is None:
+                if self.recomb_mass_index is None:
                     assert self.recomb_map.total_rate == 0
                 else:
                     self.verify_mass_index(
@@ -2078,7 +2090,7 @@ class Simulator:
                         self.get_recomb_left_bound,
                     )
 
-                if self.gc_mass_index[label] is None:
+                if self.gc_mass_index is None:
                     assert self.gc_map.total_rate == 0
                 else:
                     self.verify_mass_index(
