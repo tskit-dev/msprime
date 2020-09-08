@@ -3059,7 +3059,7 @@ class HudsonAnalytical(Test):
         pyplot.savefig(filename)
         pyplot.close("all")
 
-    def test_analytical_correlation_between_trees(self):
+    def test_gc_correlation_between_trees(self):
         """
         Runs the check for the probability of same tree at two sites against
         analytical predictions.
@@ -3085,13 +3085,9 @@ class HudsonAnalytical(Test):
             same_root_count_first = np.zeros(seq_length)
             same_root_count_mid = np.zeros(seq_length)
             same_root_count_last = np.zeros(seq_length)
-            low_recombination_rate = 0.000001
-            recomb_map = msprime.RecombinationMap.uniform_map(
-                seq_length, low_recombination_rate
-            )
             replicates = msprime.simulate(
                 sample_size=sample_size,
-                recombination_map=recomb_map,
+                length=seq_length,
                 gene_conversion_rate=gc_rate[k],
                 gene_conversion_track_length=gc_length[k],
                 discrete_genome=True,
@@ -3756,10 +3752,11 @@ class SimulateFrom(Test):
             logging.debug(f"running for m = {m}")
             T1 = np.zeros(num_replicates)
             num_trees1 = np.zeros(num_replicates)
-            recomb_map = msprime.RecombinationMap.uniform_map(m, 1 / m)
+            recomb_rate = 1 / m
             reps = msprime.simulate(
                 n,
-                recombination_map=recomb_map,
+                recombination_rate=recomb_rate,
+                length=m,
                 num_replicates=num_replicates,
                 discrete_genome=True,
             )
@@ -3773,13 +3770,17 @@ class SimulateFrom(Test):
                 reps = msprime.simulate(
                     n,
                     num_replicates=num_replicates,
-                    recombination_map=recomb_map,
+                    recombination_rate=recomb_rate,
+                    length=m,
                     end_time=t,
+                    discrete_genome=True,
                 )
                 for j, ts in enumerate(reps):
                     final_ts = msprime.simulate(
                         from_ts=ts,
-                        recombination_map=recomb_map,
+                        recombination_rate=recomb_rate,
+                        length=m,
+                        discrete_genome=True,
                         start_time=np.max(ts.tables.nodes.time),
                     )
                     final_ts = final_ts.simplify()
