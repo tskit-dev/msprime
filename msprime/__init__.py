@@ -29,45 +29,6 @@ NULL_POPULATION = tskit.NULL
 NULL_INDIVIDUAL = tskit.NULL
 NULL_MUTATION = tskit.NULL
 
-from tskit import (
-    Individual,
-    Node,
-    Edge,
-    Site,
-    Mutation,
-    Migration,
-    Population,
-    Variant,
-    Edgeset,
-    Provenance,
-)
-from tskit import Tree as SparseTree  # Rename SparseTree to Tree in tskit
-from tskit import TreeSequence
-from tskit import (
-    IndividualTable,
-    NodeTable,
-    EdgeTable,
-    SiteTable,
-    MutationTable,
-    MigrationTable,
-    PopulationTable,
-    ProvenanceTable,
-    TableCollection,
-)
-from tskit import LdCalculator
-from tskit import load, load_text
-from tskit import (
-    parse_nodes,
-    parse_edges,
-    parse_individuals,
-    parse_sites,
-    parse_mutations,
-)
-from tskit import pack_strings, pack_bytes, unpack_bytes, unpack_strings
-from tskit import validate_provenance
-
-from tskit import NODE_IS_SAMPLE, FORWARD, REVERSE
-
 # TODO document these flags
 from msprime import _msprime
 from msprime._msprime import NODE_IS_CA_EVENT
@@ -84,3 +45,29 @@ from msprime.mutations import *
 from msprime.likelihood import *
 from msprime.species_trees import parse_species_tree, parse_starbeast
 from msprime.intervals import *
+
+from types import ModuleType
+
+old_module = sys.modules["msprime"]
+
+# Many attributes were moved to tskit, we use a facade here so we don't break old
+# code, but do emit a warning
+class DeprecationFacade(ModuleType):
+    def __getattr__(self, name):
+        try:
+            # Tree used to be SparseTree
+            if name == "SparseTree":
+                name = "Tree"
+            result = getattr(tskit, name)
+            warnings.warn(
+                f"'{__name__}.{name}' is deprecated and will be removed"
+                f" in future versions. Use 'tskit.{name}'."
+            )
+        except AttributeError:
+            raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+        return result
+
+
+# Patch the facade into the dict of loaded modules
+facade = sys.modules["msprime"] = DeprecationFacade("msprime")
+facade.__dict__.update(old_module.__dict__)

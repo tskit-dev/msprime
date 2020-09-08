@@ -40,6 +40,11 @@
   CLI or the ``TreeSequence`` API in ``tskit``.
 
 
+**Deprecations**:
+
+- Deprecate module attributes that were moved to tskit.
+  (:user:`benjeffery`, :issue:`991`, :pr:`1158`)
+
 ********************
 [0.7.4] - 2019-12-05
 ********************
