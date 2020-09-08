@@ -511,7 +511,7 @@ class RateMap:
         return cumulative
 
     @property
-    def total_recombination_rate(self):
+    def total_rate(self):
         return self.cumulative[-1]
 
     def mass_between(self, left, right):
@@ -679,10 +679,18 @@ class Simulator:
             self.segments[j + 1] = s
             self.segment_stack.append(s)
         self.P = [Population(id_, num_labels) for id_ in range(N)]
-        self.recomb_mass_index = [
-            FenwickTree(self.max_segments) for j in range(num_labels)
-        ]
-        self.gc_mass_index = [FenwickTree(self.max_segments) for j in range(num_labels)]
+        if self.recomb_map.total_rate == 0:
+            self.recomb_mass_index = [None for j in range(num_labels)]
+        else:
+            self.recomb_mass_index = [
+                FenwickTree(self.max_segments) for j in range(num_labels)
+            ]
+        if self.gc_map.total_rate == 0:
+            self.gc_mass_index = [None for j in range(num_labels)]
+        else:
+            self.gc_mass_index = [
+                FenwickTree(self.max_segments) for j in range(num_labels)
+            ]
         self.S = bintrees.AVLTree()
         for pop in self.P:
             pop.set_start_size(population_sizes[pop.id])
@@ -858,8 +866,10 @@ class Simulator:
         Frees the specified segment making it ready for reuse and
         setting its weight to zero.
         """
-        self.recomb_mass_index[u.label].set_value(u.index, 0)
-        self.gc_mass_index[u.label].set_value(u.index, 0)
+        if self.recomb_mass_index[u.label] is not None:
+            self.recomb_mass_index[u.label].set_value(u.index, 0)
+        if self.gc_mass_index[u.label] is not None:
+            self.gc_mass_index[u.label].set_value(u.index, 0)
         self.segment_stack.append(u)
 
     def store_node(self, population, flags=0):
@@ -931,6 +941,18 @@ class Simulator:
                     potential_destinations[j].add(k)
         return potential_destinations
 
+    def get_total_recombination_rate(self, label):
+        total_rate = 0
+        if self.recomb_mass_index[label] is not None:
+            total_rate = self.recomb_mass_index[label].get_total()
+        return total_rate
+
+    def get_total_gc_rate(self, label):
+        total_rate = 0
+        if self.gc_mass_index[label] is not None:
+            total_rate = self.gc_mass_index[label].get_total()
+        return total_rate
+
     def hudson_simulate(self, end_time):
         """
         Simulates the algorithm until all loci have coalesced.
@@ -945,12 +967,12 @@ class Simulator:
             if self.t >= end_time:
                 break
             # self.print_state()
-            re_rate = self.recomb_mass_index[0].get_total()
+            re_rate = self.get_total_recombination_rate(label=0)
             t_re = infinity
             if re_rate > 0:
                 t_re = random.expovariate(re_rate)
             # Gene conversion can occur within segments ..
-            gc_rate = self.gc_mass_index[0].get_total()
+            gc_rate = self.get_total_gc_rate(label=0)
             t_gcin = infinity
             if gc_rate > 0:
                 t_gcin = random.expovariate(gc_rate)
@@ -1058,8 +1080,8 @@ class Simulator:
                     self.P[0].get_num_ancestors(label=1),
                 ]
                 # print(sweep_pop_sizes)
-                p_rec_b = self.recomb_mass_index[0].get_total() * t_inc_orig
-                p_rec_B = self.recomb_mass_index[1].get_total() * t_inc_orig
+                p_rec_b = self.get_total_recombination_rate(0) * t_inc_orig
+                p_rec_B = self.get_total_recombination_rate(1) * t_inc_orig
 
                 # JK NOTE: We should probably factor these pop size calculations
                 # into a method in Population like get_common_ancestor_waiting_time().
@@ -1328,14 +1350,16 @@ class Simulator:
         Sets the mass for the specified segment. All links *must* be
         appropriately set before calling this function.
         """
-        recomb_left_bound = self.get_recomb_left_bound(seg)
-        recomb_mass = self.recomb_map.mass_between(recomb_left_bound, seg.right)
-        self.recomb_mass_index[seg.label].set_value(seg.index, recomb_mass)
-        # We can check to see if the gc_map is defined here for performance
-        # in the C code.
-        gc_left_bound = self.get_gc_left_bound(seg)
-        gc_mass = self.gc_map.mass_between(gc_left_bound, seg.right)
-        self.gc_mass_index[seg.label].set_value(seg.index, gc_mass)
+        mass_index = self.recomb_mass_index[seg.label]
+        if mass_index is not None:
+            recomb_left_bound = self.get_recomb_left_bound(seg)
+            recomb_mass = self.recomb_map.mass_between(recomb_left_bound, seg.right)
+            mass_index.set_value(seg.index, recomb_mass)
+        mass_index = self.gc_mass_index[seg.label]
+        if mass_index is not None:
+            gc_left_bound = self.get_gc_left_bound(seg)
+            gc_mass = self.gc_map.mass_between(gc_left_bound, seg.right)
+            mass_index.set_value(seg.index, gc_mass)
 
     def set_labels(self, segment, new_label):
         """
@@ -1345,11 +1369,13 @@ class Simulator:
         while segment is not None:
             masses = []
             for mass_index in mass_indexes:
-                masses.append(mass_index[segment.label].get_value(segment.index))
-                mass_index[segment.label].set_value(segment.index, 0)
+                if mass_index[segment.label] is not None:
+                    masses.append(mass_index[segment.label].get_value(segment.index))
+                    mass_index[segment.label].set_value(segment.index, 0)
             segment.label = new_label
             for mass, mass_index in zip(masses, mass_indexes):
-                mass_index[segment.label].set_value(segment.index, mass)
+                if mass_index[segment.label] is not None:
+                    mass_index[segment.label].set_value(segment.index, mass)
             segment = segment.next
 
     def choose_breakpoint(self, mass_index, rate_map):
@@ -1574,7 +1600,7 @@ class Simulator:
         seg_tails = [u, v]
 
         # TODO Should this be the recombination rate going foward from x.left?
-        if self.recomb_map.total_recombination_rate > 0:
+        if self.recomb_map.total_rate > 0:
             k = self.dtwf_generate_breakpoint(x.left)
         else:
             k = np.inf
@@ -2005,6 +2031,7 @@ class Simulator:
         assert list(A.items()) == list(self.S.items())
 
     def verify_mass_index(self, label, mass_index, rate_map, compute_left_bound):
+        assert mass_index is not None
         total_mass = 0
         alt_total_mass = 0
         for pop_index, pop in enumerate(self.P):
@@ -2041,18 +2068,25 @@ class Simulator:
             # be simpler if it did.
             self.verify_overlaps()
             for label in range(self.num_labels):
-                self.verify_mass_index(
-                    label,
-                    self.recomb_mass_index[label],
-                    self.recomb_map,
-                    self.get_recomb_left_bound,
-                )
-                self.verify_mass_index(
-                    label,
-                    self.gc_mass_index[label],
-                    self.gc_map,
-                    self.get_gc_left_bound,
-                )
+                if self.recomb_mass_index[label] is None:
+                    assert self.recomb_map.total_rate == 0
+                else:
+                    self.verify_mass_index(
+                        label,
+                        self.recomb_mass_index[label],
+                        self.recomb_map,
+                        self.get_recomb_left_bound,
+                    )
+
+                if self.gc_mass_index[label] is None:
+                    assert self.gc_map.total_rate == 0
+                else:
+                    self.verify_mass_index(
+                        label,
+                        self.gc_mass_index[label],
+                        self.gc_map,
+                        self.get_gc_left_bound,
+                    )
 
 
 def run_simulate(args):
