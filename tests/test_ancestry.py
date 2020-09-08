@@ -1050,13 +1050,15 @@ class TestSimulateInterface(unittest.TestCase):
                 discrete_genome=False,
             )
 
-    @unittest.skip("Cannot use GC with default recomb map")
     def test_gene_conversion_default_map(self):
         n = 10
-        # FIXME we have to be quite delicate with the GC code at the moment.
-        # If we take the default where we have a very large number of loci,
-        # we might be getting overflows. It's not clear what happening in any case.
-        ts = msprime.simulate(n, gene_conversion_rate=1, gene_conversion_track_length=1)
+        ts = msprime.simulate(
+            n,
+            length=10,
+            gene_conversion_rate=1,
+            gene_conversion_track_length=1,
+            discrete_genome=True,
+        )
         self.assertIsInstance(ts, tskit.TreeSequence)
         self.assertEqual(ts.num_samples, n)
         self.assertGreater(ts.num_trees, 1)

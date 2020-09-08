@@ -255,6 +255,49 @@ test_sweep_genic_selection_recomb(void)
 }
 
 static void
+test_sweep_genic_selection_gc(void)
+{
+    int ret;
+    uint32_t n = 100;
+    unsigned long seed = 133;
+    msp_t msp;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+
+    memset(samples, 0, n * sizeof(sample_t));
+
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 10;
+    gsl_rng_set(rng, seed);
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1), 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_gene_conversion_rate(&msp, 1), 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_gene_conversion_track_length(&msp, 1), 0);
+    ret = msp_set_dimensions(&msp, 1, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, 100);
+    CU_ASSERT_TRUE(msp_get_num_gene_conversion_events(&msp) > 0);
+    CU_ASSERT_TRUE(ret >= 0);
+    ret = msp_set_simulation_model_sweep_genic_selection(&msp, 5, 0.1, 0.9, 0.1, 0.01);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_TRUE(ret >= 0);
+    msp_print_state(&msp, _devnull);
+    ret = msp_finalise_tables(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_free(&msp);
+
+    gsl_rng_free(rng);
+    free(samples);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_sweep_genic_selection_time_change(void)
 {
     int j, ret;
@@ -348,7 +391,8 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
 
     // To mimic the verfication.py call
     msp_set_discrete_genome(&msp, 0);
-    msp_set_gene_conversion_rate(&msp, 0, 1);
+    msp_set_gene_conversion_rate(&msp, 0);
+    msp_set_gene_conversion_track_length(&msp, 1);
     msp_set_avl_node_block_size(&msp, 65536);
     msp_set_node_mapping_block_size(&msp, 65536);
     msp_set_segment_block_size(&msp, 65536);
@@ -390,6 +434,7 @@ main(int argc, char **argv)
         { "test_sweep_genic_selection_single_locus",
             test_sweep_genic_selection_single_locus },
         { "test_sweep_genic_selection_recomb", test_sweep_genic_selection_recomb },
+        { "test_sweep_genic_selection_gc", test_sweep_genic_selection_gc },
         { "test_sweep_genic_selection_time_change",
             test_sweep_genic_selection_time_change },
         { "test_sweep_genic_selection_mimic_msms",

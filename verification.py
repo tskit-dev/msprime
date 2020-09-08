@@ -480,22 +480,26 @@ class MsDemography(MsTest):
 
 
 class MsGeneConversion(MsTest):
+    def test_gene_conversion_c10_r0(self):
+        self._run("100 10000 -t 5.0 -r 0 2501 -c 10 1")
 
-    # FIXME disabling this test until GC with recombination rate=0
-    # def test_gene_conversion_1_r0(self):
-    #     self._run("100 10000 -t 5.0 -r 0 2501 -c 10 1")
-
-    def test_gene_conversion_1(self):
+    def test_gene_conversion_c1000(self):
         self._run("100 10000 -t 5.0 -r 0.01 2501 -c 1000 1")
 
-    def test_gene_conversion_2(self):
+    def test_gene_conversion_c2(self):
         self._run("100 10000 -t 5.0 -r 10 2501 -c 2 1")
 
-    def test_gene_conversion_2_tl_10(self):
+    def test_gene_conversion_c2_tl_10(self):
         self._run("100 10000 -t 5.0 -r 10 2501 -c 2 10")
 
-    def test_gene_conversion_2_tl_100(self):
+    def test_gene_conversion_c2_tl_100(self):
         self._run("100 10000 -t 5.0 -r 10 2501 -c 2 100")
+
+    def test_gene_conversion_c2_tl_100_r0(self):
+        self._run("100 10000 -t 5.0 -r 0 2501 -c 2 100")
+
+    def test_gene_conversion_c20_tl_1000_r0(self):
+        self._run("100 10000 -t 5.0 -r 0 2501 -c 20 1000")
 
 
 class MsDocExamples(MsTest):
@@ -2061,7 +2065,7 @@ class RecombinationMutationTest(Test):
                     r=1e-8,
                     m=1e-8,
                     L=10 ** 6,
-                    p=p,
+                    ploidy=p,
                     model=msprime.BetaCoalescent(alpha=alpha),
                 )
 
@@ -2077,7 +2081,7 @@ class RecombinationMutationTest(Test):
                         r=1e-8,
                         m=1e-8,
                         L=10 ** 6,
-                        p=p,
+                        ploidy=p,
                         model=msprime.DiracCoalescent(psi=psi, c=c),
                     )
 
@@ -2090,7 +2094,7 @@ class RecombinationMutationTest(Test):
                 r=1e-8,
                 m=1e-8,
                 L=10 ** 6,
-                p=p,
+                ploidy=p,
                 model="hudson",
             )
 

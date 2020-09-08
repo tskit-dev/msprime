@@ -3439,13 +3439,19 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error("node_mapping_block_size", sim_ret);
         goto out;
     }
-    sim_ret = msp_set_gene_conversion_rate(self->sim, gene_conversion_rate,
-            gene_conversion_track_length);
-    if (sim_ret != 0) {
-        handle_input_error("set_gene_conversion_rate", sim_ret);
-        goto out;
+    if (gene_conversion_rate != 0) {
+        sim_ret = msp_set_gene_conversion_rate(self->sim, gene_conversion_rate);
+        if (sim_ret != 0) {
+            handle_input_error("set_gene_conversion_rate", sim_ret);
+            goto out;
+        }
+        sim_ret = msp_set_gene_conversion_track_length(self->sim,
+                gene_conversion_track_length);
+        if (sim_ret != 0) {
+            handle_input_error("set_gene_conversion_track_length", sim_ret);
+            goto out;
+        }
     }
-
     if (Simulator_parse_recombination_map(self, recombination_map) != 0) {
         goto out;
     }
@@ -4335,7 +4341,7 @@ Simulator_fenwick_drift(Simulator *self, PyObject *args)
 
     PyObject *ret = NULL;
     int label;
-    double drift;
+    double drift = 0;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -4347,7 +4353,11 @@ Simulator_fenwick_drift(Simulator *self, PyObject *args)
         PyErr_SetString(PyExc_ValueError, "bad label ID");
         goto out;
     }
-    drift = fenwick_get_numerical_drift(&self->sim->links[label]);
+    /* TODO need a better API for this, as we should also think about the
+     * drift in the GC map. */
+    if (self->sim->recomb_mass_index != NULL) {
+        drift = fenwick_get_numerical_drift(&self->sim->recomb_mass_index[label]);
+    }
     ret = Py_BuildValue("d", drift);
 out:
     return ret;

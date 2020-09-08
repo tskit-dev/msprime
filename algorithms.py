@@ -35,6 +35,7 @@ class FenwickTree:
         assert max_index > 0
         self.__max_index = max_index
         self.__tree = [0 for j in range(max_index + 1)]
+        self.__value = [0 for j in range(max_index + 1)]
         # Compute the binary logarithm of max_index
         u = self.__max_index
         while u != 0:
@@ -45,7 +46,7 @@ class FenwickTree:
         """
         Returns the total cumulative frequency over all indexes.
         """
-        return self.get_cumulative_frequency(self.__max_index)
+        return self.get_cumulative_sum(self.__max_index)
 
     def increment(self, index, v):
         """
@@ -53,6 +54,7 @@ class FenwickTree:
         value.
         """
         assert 0 < index <= self.__max_index
+        self.__value[index] += v
         j = index
         while j <= self.__max_index:
             self.__tree[j] += v
@@ -62,10 +64,10 @@ class FenwickTree:
         """
         Sets the frequency at the specified index to the specified value.
         """
-        f = self.get_frequency(index)
+        f = self.get_value(index)
         self.increment(index, v - f)
 
-    def get_cumulative_frequency(self, index):
+    def get_cumulative_sum(self, index):
         """
         Returns the cumulative frequency of the specified index.
         """
@@ -77,19 +79,11 @@ class FenwickTree:
             j -= j & -j
         return s
 
-    def get_frequency(self, index):
+    def get_value(self, index):
         """
         Returns the frequency of the specified index.
         """
-        assert 0 < index <= self.__max_index
-        j = index
-        v = self.__tree[j]
-        p = j & (j - 1)
-        j -= 1
-        while p != j:
-            v -= self.__tree[j]
-            j = j & (j - 1)
-        return v
+        return self.__value[index]
 
     def find(self, v):
         """
@@ -120,8 +114,6 @@ class Segment:
     def __init__(self, index):
         self.left = None
         self.right = None
-        self.left_mass = None
-        self.right_mass = None
         self.node = None
         self.prev = None
         self.next = None
@@ -129,16 +121,13 @@ class Segment:
         self.label = 0
         self.index = index
 
-    def __str__(self):
-        s = "({}:{}-{}->{}: prev={} next={})".format(
-            self.index,
-            self.left,
-            self.right,
-            self.node,
-            repr(self.prev),
-            repr(self.next),
-        )
-        return s
+    @staticmethod
+    def show_chain(seg):
+        s = ""
+        while seg is not None:
+            s += f"[{seg.left}, {seg.right}: {seg.node}], "
+            seg = seg.next
+        return s[:-2]
 
     def __lt__(self, other):
         return (self.left, self.right, self.population, self.node) < (
@@ -173,39 +162,7 @@ class Population:
         for label, ancestors in enumerate(self._ancestors):
             print("\tLabel = ", label)
             for u in ancestors:
-                s = ""
-                while u is not None:
-                    s += "({}-{}->{}({});lab:{})".format(
-                        u.left, u.right, u.node, u.index, u.label
-                    )
-                    u = u.next
-                print("\t\t" + s)
-
-    def get_cleft(self, tracklength):
-        cleft = 0
-        for ancestors in self._ancestors:
-            for u in ancestors:
-                left = u.left
-                while u.next is not None:
-                    u = u.next
-                right = u.right
-                dist = right - left
-                cleft += 1 - ((tracklength - 1) / tracklength) ** (dist - 1)
-        return cleft
-
-    def find_cleft(self, rvalue, tracklength):
-        for ancestors in self._ancestors:
-            for u in ancestors:
-                left = u.left
-                index = u.index
-                while u.next is not None:
-                    u = u.next
-                right = u.right
-                dist = right - left
-                rvalue -= 1 - ((tracklength - 1) / tracklength) ** (dist - 1)
-                if rvalue <= 0:
-                    break
-            return rvalue, index, dist
+                print("\t\t" + Segment.show_chain(u))
 
     def set_growth_rate(self, growth_rate, time):
         # TODO This doesn't work because we need to know what the time
@@ -280,6 +237,7 @@ class Population:
         """
         Inserts the specified individual into this population.
         """
+        assert individual.label == label
         self._ancestors[label].append(individual)
 
     def __iter__(self):
@@ -537,12 +495,11 @@ class TrajectorySimulator:
         return self._allele_freqs, self._times
 
 
-class RecombinationMap:
-    def __init__(self, positions, rates, discrete):
+class RateMap:
+    def __init__(self, positions, rates):
         self.positions = positions
         self.rates = rates
-        self.discrete = discrete
-        self.cumulative = RecombinationMap.recomb_mass(positions, rates)
+        self.cumulative = RateMap.recomb_mass(positions, rates)
 
     @staticmethod
     def recomb_mass(positions, rates):
@@ -554,17 +511,13 @@ class RecombinationMap:
         return cumulative
 
     @property
-    def total_recombination_rate(self):
+    def total_rate(self):
         return self.cumulative[-1]
 
     def mass_between(self, left, right):
         left_mass = self.position_to_mass(left)
         right_mass = self.position_to_mass(right)
         return right_mass - left_mass
-
-    def mass_between_left_exclusive(self, left, right):
-        left_bound = left + 1 if self.discrete else left
-        return self.mass_between(left_bound, right)
 
     def position_to_mass(self, pos):
         if pos == self.positions[0]:
@@ -586,16 +539,11 @@ class RecombinationMap:
         index -= 1
         mass_in_interval = recomb_mass - self.cumulative[index]
         pos = self.positions[index] + (mass_in_interval / self.rates[index])
-        return math.floor(pos) if self.discrete else pos
+        return pos
 
     def shift_by_mass(self, pos, mass):
         result_mass = self.position_to_mass(pos) + mass
         return self.mass_to_position(result_mass)
-
-    def sample_poisson(self, start):
-        left_bound = start + 1 if self.discrete else start
-        mass_to_next_recomb = np.random.exponential(1.0)
-        return self.shift_by_mass(left_bound, mass_to_next_recomb)
 
     def _search(self, values, query):
         left = 0
@@ -647,19 +595,19 @@ class OverlapCounter:
                     self._split(curr_interval, left)
                     curr_interval = curr_interval.next
 
-    def _split(self, seg, breakpoint):  # noqa: A002
+    def _split(self, seg, bp):  # noqa: A002
         """
         Split the segment at breakpoint and add in another segment
         from breakpoint to seg.right. Set the original segment's
         right endpoint to breakpoint
         """
-        right = self._make_segment(breakpoint, seg.right, seg.node)
+        right = self._make_segment(bp, seg.right, seg.node)
         if seg.next is not None:
             seg.next.prev = right
             right.next = seg.next
         right.prev = seg
         seg.next = right
-        seg.right = breakpoint
+        seg.right = bp
 
     def _make_segment(self, left, right, count):
         seg = Segment(0)
@@ -699,6 +647,7 @@ class Simulator:
         gene_conversion_rate=0.0,
         gene_conversion_length=1,
         pedigree=None,
+        discrete_genome=True,
     ):
         # Must be a square matrix.
         N = len(migration_matrix)
@@ -709,18 +658,15 @@ class Simulator:
             assert N == len(migration_matrix[j])
             assert migration_matrix[j][j] == 0
         assert sum(sample_configuration) == sample_size
+        assert gene_conversion_length > 1
 
         self.model = model
         self.n = sample_size
         self.m = num_loci
         self.recomb_map = recombination_map
-        self.g = gene_conversion_rate
-        self.tracklength = gene_conversion_length
-        self.pc = (self.tracklength - 1) / self.tracklength
-        if self.tracklength == 1:
-            self.lnpc = -math.inf
-        else:
-            self.lnpc = math.log(1.0 - 1.0 / self.tracklength)
+        self.gc_map = RateMap([0, self.m], [gene_conversion_rate, 0])
+        self.track_length = gene_conversion_length
+        self.discrete_genome = discrete_genome
         self.migration_matrix = migration_matrix
         self.num_labels = num_labels
         self.num_populations = N
@@ -733,7 +679,18 @@ class Simulator:
             self.segments[j + 1] = s
             self.segment_stack.append(s)
         self.P = [Population(id_, num_labels) for id_ in range(N)]
-        self.L = [FenwickTree(self.max_segments) for j in range(num_labels)]
+        if self.recomb_map.total_rate == 0:
+            self.recomb_mass_index = None
+        else:
+            self.recomb_mass_index = [
+                FenwickTree(self.max_segments) for j in range(num_labels)
+            ]
+        if self.gc_map.total_rate == 0:
+            self.gc_mass_index = None
+        else:
+            self.gc_mass_index = [
+                FenwickTree(self.max_segments) for j in range(num_labels)
+            ]
         self.S = bintrees.AVLTree()
         for pop in self.P:
             pop.set_start_size(population_sizes[pop.id])
@@ -749,15 +706,8 @@ class Simulator:
                 sample_size = sample_configuration[pop_index]
                 for _ in range(sample_size):
                     j = len(self.tables.nodes)
-                    x = self.alloc_segment(
-                        0,
-                        self.m,
-                        0,
-                        self.recomb_map.position_to_mass(self.m),
-                        j,
-                        pop_index,
-                    )
-                    self.set_single_segment_mass(x)
+                    x = self.alloc_segment(0, self.m, j, pop_index,)
+                    self.set_segment_mass(x)
                     self.P[pop_index].add(x)
                     self.tables.nodes.add_row(
                         flags=msprime.NODE_IS_SAMPLE, time=0, population=pop_index
@@ -837,14 +787,7 @@ class Simulator:
                 for root in tree.roots:
                     population = ts.node(root).population
                     if root_segments_head[root] is None:
-                        seg = self.alloc_segment(
-                            left,
-                            right,
-                            self.recomb_map.position_to_mass(left),
-                            self.recomb_map.position_to_mass(right),
-                            root,
-                            population,
-                        )
+                        seg = self.alloc_segment(left, right, root, population,)
                         root_segments_head[root] = seg
                         root_segments_tail[root] = seg
                     else:
@@ -853,13 +796,7 @@ class Simulator:
                             tail.right = right
                         else:
                             seg = self.alloc_segment(
-                                left,
-                                right,
-                                self.recomb_map.position_to_mass(left),
-                                self.recomb_map.position_to_mass(right),
-                                root,
-                                population,
-                                tail,
+                                left, right, root, population, tail,
                             )
                             tail.next = seg
                             root_segments_tail[root] = seg
@@ -869,13 +806,9 @@ class Simulator:
         for node in range(ts.num_nodes):
             seg = root_segments_head[node]
             if seg is not None:
-                self.L.set_value(seg.index, seg.right - seg.left - 1)
                 self.P[seg.population].add(seg)
-                prev = seg
-                seg = seg.next
                 while seg is not None:
-                    self.L.set_value(seg.index, seg.right - prev.right)
-                    prev = seg
+                    self.set_segment_mass(seg)
                     seg = seg.next
 
     def ancestors_remain(self):
@@ -886,41 +819,23 @@ class Simulator:
         return sum(pop.get_num_ancestors() for pop in self.P) != 0
 
     def change_population_size(self, pop_id, size):
-        print("Changing pop size to ", size)
-        for i in range(self.num_labels):
-            self.P[i][pop_id].set_start_size(size)
+        self.P[pop_id].set_start_size(size)
 
     def change_population_growth_rate(self, pop_id, rate, time):
-        print("Changing growth rate to ", rate)
-        for i in range(self.num_labels):
-            self.P[i][pop_id].set_growth_rate(rate, time)
+        self.P[pop_id].set_growth_rate(rate, time)
 
     def change_migration_matrix_element(self, pop_i, pop_j, rate):
-        print("Changing migration rate", pop_i, pop_j, rate)
         self.migration_matrix[pop_i][pop_j] = rate
-
-    def get_cleft_total(self, tracklength):
-        cleft = 0
-        for pop in self.P:
-            cleft += pop.get_cleft(tracklength)
-        return cleft
-
-    def find_cleft_individual(self, rvalue, tracklength):
-        for pop in self.P:
-            if rvalue > 0:
-                rvalue, index, distance = pop.find_cleft(rvalue, tracklength)
-        return index, distance
 
     def alloc_segment(
         self,
         left,
         right,
-        left_mass,
-        right_mass,
         node,
-        pop_index,
+        population,
         prev=None,
         next=None,  # noqa: A002
+        label=0,
     ):
         """
         Pops a new segment off the stack and sets its properties.
@@ -928,21 +843,33 @@ class Simulator:
         s = self.segment_stack.pop()
         s.left = left
         s.right = right
-        s.left_mass = left_mass
-        s.right_mass = right_mass
         s.node = node
-        s.population = pop_index
+        s.population = population
         s.next = next
         s.prev = prev
-        s.label = 0
+        s.label = label
         return s
+
+    def copy_segment(self, segment):
+        return self.alloc_segment(
+            left=segment.left,
+            right=segment.right,
+            node=segment.node,
+            population=segment.population,
+            next=segment.next,
+            prev=segment.prev,
+            label=segment.label,
+        )
 
     def free_segment(self, u):
         """
         Frees the specified segment making it ready for reuse and
         setting its weight to zero.
         """
-        self.L[u.label].set_value(u.index, 0)
+        if self.recomb_mass_index is not None:
+            self.recomb_mass_index[u.label].set_value(u.index, 0)
+        if self.gc_mass_index is not None:
+            self.gc_mass_index[u.label].set_value(u.index, 0)
         self.segment_stack.append(u)
 
     def store_node(self, population, flags=0):
@@ -986,15 +913,15 @@ class Simulator:
         ts = self.tables.tree_sequence()
         return ts
 
-    def simulate(self, model="hudson"):
+    def simulate(self, end_time):
+        self.verify()
         if self.model == "hudson":
-            self.hudson_simulate()
+            self.hudson_simulate(end_time)
         elif self.model == "dtwf":
             self.dtwf_simulate()
         elif self.model == "wf_ped":
             self.pedigree_simulate()
         elif self.model == "single_sweep":
-            # self.print_state()
             self.single_sweep_simulate()
         else:
             print("Error: bad model specification -", self.model)
@@ -1014,7 +941,19 @@ class Simulator:
                     potential_destinations[j].add(k)
         return potential_destinations
 
-    def hudson_simulate(self):
+    def get_total_recombination_rate(self, label):
+        total_rate = 0
+        if self.recomb_mass_index is not None:
+            total_rate = self.recomb_mass_index[label].get_total()
+        return total_rate
+
+    def get_total_gc_rate(self, label):
+        total_rate = 0
+        if self.gc_mass_index is not None:
+            total_rate = self.gc_mass_index[label].get_total()
+        return total_rate
+
+    def hudson_simulate(self, end_time):
         """
         Simulates the algorithm until all loci have coalesced.
         """
@@ -1025,23 +964,18 @@ class Simulator:
         # only worried about label 0 below
         while len(non_empty_pops) > 0:
             self.verify()
-            recomb_mass = self.L[0].get_total()
-            rate = recomb_mass
+            if self.t >= end_time:
+                break
+            # self.print_state()
+            re_rate = self.get_total_recombination_rate(label=0)
             t_re = infinity
-            if rate != 0:
-                t_re = random.expovariate(rate)
+            if re_rate > 0:
+                t_re = random.expovariate(re_rate)
             # Gene conversion can occur within segments ..
-            rate = self.g * self.recomb_map.mass_to_position(recomb_mass)
+            gc_rate = self.get_total_gc_rate(label=0)
             t_gcin = infinity
-            if rate != 0:
-                t_gcin = random.expovariate(rate)
-            # .. or left of the first segment
-            cleft = self.get_cleft_total(self.tracklength)
-            assert cleft <= sum(pop.get_num_ancestors() for pop in self.P)
-            rate = self.g * self.tracklength * cleft
-            t_gcleft = infinity
-            if rate != 0:
-                t_gcleft = random.expovariate(rate)
+            if gc_rate > 0:
+                t_gcin = random.expovariate(gc_rate)
             # Common ancestor events occur within demes.
             t_ca = infinity
             for index in non_empty_pops:
@@ -1065,7 +999,7 @@ class Simulator:
                         t_mig = t
                         mig_source = j
                         mig_dest = k
-            min_time = min(t_re, t_ca, t_gcin, t_gcleft, t_mig)
+            min_time = min(t_re, t_ca, t_gcin, t_mig)
             assert min_time != infinity
             if self.t + min_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
@@ -1084,10 +1018,7 @@ class Simulator:
                     self.hudson_recombination_event(0)
                 elif min_time == t_gcin:
                     # print("GCI EVENT")
-                    self.wiuf_geneconversion_within_event(0)
-                elif min_time == t_gcleft:
-                    # print("GCL EVENT")
-                    self.wiuf_geneconversion_left_event(0)
+                    self.wiuf_gene_conversion_within_event(0)
                 elif min_time == t_ca:
                     # print("CA EVENT")
                     self.common_ancestor_event(ca_population, 0)
@@ -1149,8 +1080,8 @@ class Simulator:
                     self.P[0].get_num_ancestors(label=1),
                 ]
                 # print(sweep_pop_sizes)
-                p_rec_b = self.L[0].get_total() * t_inc_orig
-                p_rec_B = self.L[1].get_total() * t_inc_orig
+                p_rec_b = self.get_total_recombination_rate(0) * t_inc_orig
+                p_rec_B = self.get_total_recombination_rate(1) * t_inc_orig
 
                 # JK NOTE: We should probably factor these pop size calculations
                 # into a method in Population like get_common_ancestor_waiting_time().
@@ -1159,13 +1090,13 @@ class Simulator:
                     (sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1))
                     / (1.0 - x)
                     * t_inc_orig
-                    / self.P[0]._start_size
+                    / self.P[0].start_size
                 )
                 p_coal_B = (
                     (sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1))
                     / x
                     * t_inc_orig
-                    / self.P[0]._start_size
+                    / self.P[0].start_size
                 )
                 sweep_pop_tot_rate = p_rec_b + p_rec_B + p_coal_b + p_coal_B
 
@@ -1389,270 +1320,245 @@ class Simulator:
             u.population = k
             u = u.next
 
-    def set_segment_left_endpoint(self, seg, pos):
-        seg.left = pos
-        seg.left_mass = self.recomb_map.position_to_mass(pos)
+    def get_recomb_left_bound(self, seg):
+        """
+        Returns the left bound for genomic region over which the specified
+        segment represents recombination events.
+        """
+        if seg.prev is None:
+            left_bound = seg.left + 1 if self.discrete_genome else seg.left
+        else:
+            left_bound = seg.prev.right
+        return left_bound
 
-    def add_segment_mass_between(self, seg1, l_mass, r_mass):
-        self.L[seg1.label].increment(seg1.index, r_mass - l_mass)
+    def get_gc_left_bound(self, seg):
+        """
+        Returns the left bound for genomic region over which the specified
+        segment represents gene conversion events. Note that because
+        GC events that affect the initial segment in a chain can begin
+        before the start of this segment, this goes back to 0.
+        """
+        if seg.prev is None:
+            left_bound = 1 if self.discrete_genome else 0
+            # left_bound = seg.left + 1 if self.discrete_genome else seg.left
+        else:
+            left_bound = seg.prev.right
+        return left_bound
 
-    # Add the mass subtended by the endpoints of seg2 to that of seg1
-    def add_segment_mass(self, seg1, seg2):
-        mass = seg2.right_mass - seg2.left_mass
-        self.L[seg1.label].increment(seg1.index, mass)
+    def set_segment_mass(self, seg):
+        """
+        Sets the mass for the specified segment. All links *must* be
+        appropriately set before calling this function.
+        """
+        if self.recomb_mass_index is not None:
+            mass_index = self.recomb_mass_index[seg.label]
+            recomb_left_bound = self.get_recomb_left_bound(seg)
+            recomb_mass = self.recomb_map.mass_between(recomb_left_bound, seg.right)
+            mass_index.set_value(seg.index, recomb_mass)
+        if self.gc_mass_index is not None:
+            mass_index = self.gc_mass_index[seg.label]
+            gc_left_bound = self.get_gc_left_bound(seg)
+            gc_mass = self.gc_map.mass_between(gc_left_bound, seg.right)
+            mass_index.set_value(seg.index, gc_mass)
 
-    # Subtract the mass subtended by the endpoints of seg2 to that of seg1
-    def subtract_segment_mass(self, seg1, seg2):
-        mass = seg2.left_mass - seg2.right_mass
-        self.L[seg1.label].increment(seg1.index, mass)
+    def set_labels(self, segment, new_label):
+        """
+        Move the specified segment to the specified label.
+        """
+        mass_indexes = [self.recomb_mass_index, self.gc_mass_index]
+        while segment is not None:
+            masses = []
+            for mass_index in mass_indexes:
+                if mass_index is not None:
+                    masses.append(mass_index[segment.label].get_value(segment.index))
+                    mass_index[segment.label].set_value(segment.index, 0)
+            segment.label = new_label
+            for mass, mass_index in zip(masses, mass_indexes):
+                if mass_index is not None:
+                    mass_index[segment.label].set_value(segment.index, mass)
+            segment = segment.next
 
-    def set_segment_mass(self, seg, tail_seg):
-        mass = seg.right_mass - tail_seg.right_mass
-        self.L[seg.label].set_value(seg.index, mass)
-
-    def set_single_segment_mass(self, seg):
-        mass = self.recomb_map.mass_between_left_exclusive(seg.left, seg.right)
-        self.L[seg.label].set_value(seg.index, mass)
-
-    def pick_segments_and_breakpoint(self, label):
-        h = random.uniform(0, self.L[label].get_total())
-        y = self.segments[self.L[label].find(h)]
-
-        t = self.L[label].get_cumulative_frequency(y.index)
-        k = self.recomb_map.mass_to_position(y.right_mass - (t - h))
-        if k == y.left and y.prev is None:
-            return self.pick_segments_and_breakpoint(label)
-
-        return y.prev, y, k
+    def choose_breakpoint(self, mass_index, rate_map):
+        assert mass_index.get_total() > 0
+        random_mass = random.uniform(0, mass_index.get_total())
+        y = self.segments[mass_index.find(random_mass)]
+        y_cumulative_mass = mass_index.get_cumulative_sum(y.index)
+        y_right_mass = rate_map.position_to_mass(y.right)
+        bp_mass = y_right_mass - (y_cumulative_mass - random_mass)
+        bp = rate_map.mass_to_position(bp_mass)
+        if self.discrete_genome:
+            bp = math.floor(bp)
+        return y, bp
 
     def hudson_recombination_event(self, label, return_heads=False):
         """
         Implements a recombination event.
         """
         self.num_re_events += 1
-        x, y, k = self.pick_segments_and_breakpoint(label)
-        k_mass = self.recomb_map.position_to_mass(k)
-        if y.left < k:
-            # Make new segment
-            z = self.alloc_segment(
-                k, y.right, k_mass, y.right_mass, y.node, y.population, None, y.next
-            )
+        y, bp = self.choose_breakpoint(self.recomb_mass_index[label], self.recomb_map)
+        x = y.prev
+        if y.left < bp:
+            #   x         y
+            # =====  ===|====  ...
+            #          bp
+            # becomes
+            #   x     y
+            # =====  ===  α        (LHS)
+            #           =====  ... (RHS)
+            alpha = self.copy_segment(y)
+            alpha.left = bp
+            alpha.prev = None
             if y.next is not None:
-                y.next.prev = z
+                y.next.prev = alpha
             y.next = None
-            y.right = k
-            y.right_mass = k_mass
-            self.subtract_segment_mass(y, z)
+            y.right = bp
+            self.set_segment_mass(y)
             lhs_tail = y
         else:
-            # split the link between x and y.
+            #   x            y
+            # =====  |   =========  ...
+            #
+            # becomes
+            #   x
+            # =====          α          (LHS)
+            #            =========  ... (RHS)
             x.next = None
             y.prev = None
-            z = y
+            alpha = y
             lhs_tail = x
-        z.label = label
-        self.set_single_segment_mass(z)
-        self.P[z.population].add(z, label)
+        self.set_segment_mass(alpha)
+        self.P[alpha.population].add(alpha, label)
         if self.full_arg:
             self.store_node(lhs_tail.population, flags=msprime.NODE_IS_RE_EVENT)
             self.store_arg_edges(lhs_tail)
-            self.store_node(z.population, flags=msprime.NODE_IS_RE_EVENT)
-            self.store_arg_edges(z)
+            self.store_node(alpha.population, flags=msprime.NODE_IS_RE_EVENT)
+            self.store_arg_edges(alpha)
         ret = None
         if return_heads:
             x = lhs_tail
             # Seek back to the head of the x chain
             while x.prev is not None:
                 x = x.prev
-            ret = x, z
+            ret = x, alpha
         return ret
 
-    def cut_right_break(self, lhs_tail, y, new_segment, track_end, label):
-        assert lhs_tail is not None
-        lhs_tail.next = new_segment
-        self.set_segment_mass(new_segment, lhs_tail)
-        if y.next is not None:
-            y.next.prev = new_segment
-        y.next = None
-        y.right = track_end
-        y.right_mass = self.recomb_map.position_to_mass(track_end)
-        self.add_segment_mass_between(y, new_segment.right_mass, y.right_mass)
-
-    def wiuf_geneconversion_within_event(self, label, return_heads=False):
+    def wiuf_gene_conversion_within_event(self, label):
         """
         Implements a gene conversion event that starts within a segment
         """
-        h = random.uniform(0, self.L[label].get_total())
-        # generate tracklength
-        tl = np.random.geometric(1 / self.tracklength)
-        # Get the segment containing the h'th link
-        y = self.segments[self.L[label].find(h)]
-        t = self.L[label].get_cumulative_frequency(y.index)
-        k = self.recomb_map.shift_by_mass(y.right, h - t)
-        k_plus_tl_mass = self.recomb_map.position_to_mass(k + tl)
-        k_mass = self.recomb_map.position_to_mass(k)
-        # check if the gene conversion falls between segments --> no effect
-        if y.left >= k + tl:
-            # print("noneffective GCI EVENT")
+        y, left_breakpoint = self.choose_breakpoint(
+            self.gc_mass_index[label], self.gc_map
+        )
+        x = y.prev
+        # generate track_length
+        tl = np.random.geometric(1 / self.track_length)
+        assert tl > 0
+        right_breakpoint = left_breakpoint + tl
+        if y.left >= right_breakpoint:
+            #                  y
+            # ...  |   |   ========== ...
+            #     lbp rbp
             return None
         self.num_gc_events += 1
-        x = y.prev
-        # both breaks are within the same segment
-        if k + tl < y.right:
-            if k <= y.left:
-                y.prev = None
-                z2 = self.alloc_segment(
-                    k + tl,
-                    y.right,
-                    k_plus_tl_mass,
-                    y.right_mass,
-                    y.node,
-                    y.population,
-                    x,
-                    y.next,
-                )
-                lhs_tail = x
-                self.cut_right_break(lhs_tail, y, z2, k + tl, label)
-                z = y
-            elif k > y.left:
-                z = self.alloc_segment(
-                    k, k + tl, k_mass, k_plus_tl_mass, y.node, y.population, None, None
-                )
-                z2 = self.alloc_segment(
-                    k + tl,
-                    y.right,
-                    k_plus_tl_mass,
-                    y.right_mass,
-                    y.node,
-                    y.population,
-                    y,
-                    y.next,
-                )
-                if y.next is not None:
-                    y.next.prev = z2
-                y.next = z2
-                y.right = k
-                y.right_mass = k_mass
-                self.set_segment_mass(z2, y)
-                self.subtract_segment_mass(y, z)
-                self.subtract_segment_mass(y, z2)
-                lhs_tail = y
-        # breaks are in separate segments
-        else:
-            # Get the segment y2 containing the end of the conversion tract
-            y2 = y
-            while y2 is not None and k + tl >= y2.right:
-                y2 = y2.next
-            # process left break
-            if k <= y.left:
-                if x is not None:
-                    x.next = None
-                y.prev = None
-                z = y
-                lhs_tail = x
-            elif k > y.left:
-                z = self.alloc_segment(
-                    k, y.right, k_mass, y.right_mass, y.node, y.population, None, y.next
-                )
-                self.set_single_segment_mass(z)
-                if y.next is not None:
-                    y.next.prev = z
-                y.next = None
-                y.right = k
-                y.right_mass = k_mass
-                self.subtract_segment_mass(y, z)
-                lhs_tail = y
-            # process right break
-            if y2 is not None:
-                if y2.left < k + tl:
-                    z2 = self.alloc_segment(
-                        k + tl,
-                        y2.right,
-                        k_plus_tl_mass,
-                        y2.right_mass,
-                        y2.node,
-                        y2.population,
-                        lhs_tail,
-                        y2.next,
-                    )
-                    self.cut_right_break(lhs_tail, y2, z2, k + tl, label)
-                    if z2.prev is None:
-                        z = z2
-                elif y2.left >= k + tl:
-                    lhs_tail.next = y2
-                    y2.prev.next = None
-                    y2.prev = lhs_tail
-                    self.set_segment_mass(y2, lhs_tail)
-        # update population
-        z.label = label
-        self.set_single_segment_mass(z)
-        self.P[z.population].add(z, label)
-        # TODO check what needs to be added for full arg
-        ret = None
-        if return_heads:
-            x = lhs_tail
-            # Seek back to the head of the x chain
-            while x.prev is not None:
-                x = x.prev
-            ret = x, z
-        return ret
 
-    def wiuf_geneconversion_left_event(self, label, return_heads=False):
-        """
-        Implements a gene conversion event that started left of a first segment.
-        """
-        self.num_gc_events += 1
-        h = random.uniform(0, self.get_cleft_total(self.tracklength))
-        # Get segment where gene conversion starts from left and length of the individual
-        index, distance = self.find_cleft_individual(h, self.tracklength)
-        y = self.segments[index]
-        # generate tracklength
-        k = y.left + math.floor(
-            1.0
-            + math.log(1.0 - random.random() * (1.0 - (self.pc) ** (distance - 1)))
-            / self.lnpc
-        )
-        k_mass = self.recomb_map.position_to_mass(k)
-        while y.right <= k:
-            y = y.next
-        x = y.prev
-        if y.left < k:
-            # Make new segment
-            z = self.alloc_segment(
-                k, y.right, k_mass, y.right_mass, y.node, y.population, None, y.next
-            )
-            if y.next is not None:
-                y.next.prev = z
-            y.next = None
-            y.right = k
-            y.right_mass = k_mass
-            self.subtract_segment_mass(y, z)
-            lhs_tail = y
-        else:
-            # split the link between x and y.
-            x.next = None
+        # Process left break
+        insert_alpha = True
+        if left_breakpoint <= y.left:
+            #  x             y
+            # =====  |  ==========
+            #       lbp
+            #
+            # becomes
+            #  x
+            # =====         α
+            #           ==========
+            if x is None:
+                # In this case we *don't* insert alpha because it is already
+                # the head of a segment chain
+                insert_alpha = False
+            else:
+                x.next = None
             y.prev = None
-            z = y
-            lhs_tail = x
-        z.label = label
-        self.set_single_segment_mass(z)
-        self.P[z.population].add(z, label)
-        # TODO check what needs to be added for full arg
-        ret = None
-        if return_heads:
-            x = lhs_tail
-            # Seek back to the head of the x chain
-            while x.prev is not None:
-                x = x.prev
-            ret = x, z
-        return ret
+            alpha = y
+            tail = x
+        else:
+            #  x             y
+            # =====     ====|=====
+            #              lbp
+            #
+            # becomes
+            #  x         y
+            # =====     ====   α
+            #               ======
+            alpha = self.copy_segment(y)
+            alpha.left = left_breakpoint
+            alpha.prev = None
+            if y.next is not None:
+                y.next.prev = alpha
+            y.next = None
+            y.right = left_breakpoint
+            self.set_segment_mass(y)
+            tail = y
+        self.set_segment_mass(alpha)
 
-    def set_labels(self, segment, new_label):
-        while segment is not None:
-            recomb_mass = self.L[segment.label].get_frequency(segment.index)
-            self.L[new_label].set_value(segment.index, recomb_mass)
-            segment.label = new_label
-            segment = segment.next
+        # Find the segment z that the right breakpoint falls in
+        z = alpha
+        while z is not None and right_breakpoint >= z.right:
+            z = z.next
+
+        head = None
+        # Process the right break
+        if z is not None:
+            if z.left < right_breakpoint:
+                #   tail             z
+                # ======
+                #       ...  ===|==========
+                #              rbp
+                #
+                # becomes
+                #  tail              head
+                # =====         ===========
+                #      ...   ===
+                #             z
+                head = self.copy_segment(z)
+                head.left = right_breakpoint
+                if z.next is not None:
+                    z.next.prev = head
+                z.right = right_breakpoint
+                z.next = None
+                self.set_segment_mass(z)
+            else:
+                #   tail             z
+                # ======
+                #   ...   |   =============
+                #        rbp
+                #
+                # becomes
+                #  tail             z
+                # ======      =============
+                #  ...
+                if z.prev is not None:
+                    z.prev.next = None
+                head = z
+            if tail is not None:
+                tail.next = head
+            head.prev = tail
+            self.set_segment_mass(head)
+
+        #        y            z
+        #  |  ========== ... ===== |
+        # lbp                     rbp
+        # When y and z are the head and tail of the segment chains, then
+        # this GC event does nothing. This logic takes are of this situation.
+        new_individual_head = None
+        if insert_alpha:
+            new_individual_head = alpha
+        elif head is not None:
+            new_individual_head = head
+        if new_individual_head is not None:
+            self.P[new_individual_head.population].add(
+                new_individual_head, new_individual_head.label
+            )
 
     def hudson_recombination_event_sweep_phase(self, label, sweep_site, pop_freq):
         """
@@ -1677,21 +1583,24 @@ class Simulator:
                 self.P[lhs.population].add(lhs, lhs.label)
 
     def dtwf_generate_breakpoint(self, start):
-        k = self.recomb_map.sample_poisson(start)
-        assert k > start
-        return k
+        left_bound = start + 1 if self.discrete_genome else start
+        mass_to_next_recomb = np.random.exponential(1.0)
+        bp = self.recomb_map.shift_by_mass(left_bound, mass_to_next_recomb)
+        if self.discrete_genome:
+            bp = math.floor(bp)
+        return bp
 
     def dtwf_recombine(self, x):
         """
         Chooses breakpoints and returns segments sorted by inheritance
         direction, by iterating through segment chain starting with x
         """
-        u = self.alloc_segment(-1, -1, -1, -1, -1, -1, None, None)
-        v = self.alloc_segment(-1, -1, -1, -1, -1, -1, None, None)
+        u = self.alloc_segment(-1, -1, -1, -1, None, None)
+        v = self.alloc_segment(-1, -1, -1, -1, None, None)
         seg_tails = [u, v]
 
         # TODO Should this be the recombination rate going foward from x.left?
-        if self.recomb_map.total_recombination_rate > 0:
+        if self.recomb_map.total_rate > 0:
             k = self.dtwf_generate_breakpoint(x.left)
         else:
             k = np.inf
@@ -1705,7 +1614,6 @@ class Simulator:
 
             if x.right > k:
                 assert x.left < k
-                k_mass = self.recomb_map.position_to_mass(k)
                 self.num_re_events += 1
                 ix = (ix + 1) % 2
                 # Make new segment
@@ -1713,21 +1621,17 @@ class Simulator:
                     tail = None
                 else:
                     tail = seg_tails[ix]
-                z = self.alloc_segment(
-                    k, x.right, k_mass, x.right_mass, x.node, x.population, tail, x.next
-                )
-                if z.prev is None:
-                    self.set_single_segment_mass(z)
-                else:
-                    self.set_segment_mass(z, z.prev)
+                z = self.copy_segment(x)
+                z.left = k
+                z.prev = tail
+                self.set_segment_mass(z)
                 if x.next is not None:
                     x.next.prev = z
                 seg_tails[ix].next = z
                 seg_tails[ix] = z
                 x.next = None
                 x.right = k
-                x.right_mass = k_mass
-                self.subtract_segment_mass(x, z)
+                self.set_segment_mass(x)
                 x = z
                 k = self.dtwf_generate_breakpoint(k)
             elif x.right <= k and y is not None and y.left >= k:
@@ -1745,17 +1649,14 @@ class Simulator:
                 else:
                     tail = seg_tails[ix]
                 y.prev = tail
-                if y.prev is None:
-                    self.set_single_segment_mass(y)
-                else:
-                    self.set_segment_mass(y, y.prev)
+                self.set_segment_mass(y)
                 seg_tails[ix] = y
                 x = y
             else:
                 # No recombination between x.right and y.left
                 x = y
 
-        # Remove sentinal segments - this can be handled more simply
+        # Remove sentinel segments - this can be handled more simply
         # with pointers in C implemetation
         s = u
         u = s.next
@@ -1767,26 +1668,13 @@ class Simulator:
 
         return u, v
 
-    def print_heaps(self, L):
-        copy = list(L)
-        ordered = [heapq.heappop(copy) for _ in L]
-        print("L = ")
-        for l, x in ordered:
-            print("\t", l, ":", end="")
-            u = x
-            s = ""
-            while u is not None:
-                s += f"({u.left}-{u.right}->{u.node}({u.index}))"
-                u = u.next
-            print(s)
-
     def census_event(self, time):
         for pop in self.P:
             for ancestor in pop.iter_ancestors():
                 seg = ancestor
                 self.flush_edges()
                 u = self.tables.nodes.add_row(
-                    time=time, flags=msprime.NODE_IS_CEN_EVENT, population=pop._id
+                    time=time, flags=msprime.NODE_IS_CEN_EVENT, population=pop.id
                 )
                 while seg is not None:
                     # Add an edge joining the segment to the new node.
@@ -1797,7 +1685,7 @@ class Simulator:
     def bottleneck_event(self, pop_id, label, intensity):
         # self.print_state()
         # Merge some of the ancestors.
-        pop = self.P[label][pop_id]
+        pop = self.P[pop_id]
         H = []
         for _ in range(pop.get_num_ancestors()):
             if random.random() < intensity:
@@ -1825,13 +1713,9 @@ class Simulator:
             if len(X) == 1:
                 x = X[0]
                 if len(H) > 0 and H[0][0] < x.right:
-                    next_l_mass = H[0][1].left_mass
-                    alpha = self.alloc_segment(
-                        x.left, H[0][0], x.left_mass, next_l_mass, x.node, x.population
-                    )
+                    alpha = self.alloc_segment(x.left, H[0][0], x.node, x.population,)
                     alpha.label = label
                     x.left = H[0][0]
-                    x.left_mass = next_l_mass
                     heapq.heappush(H, (x.left, x))
                 else:
                     if x.next is not None:
@@ -1861,14 +1745,7 @@ class Simulator:
                     while right < r_max and self.S[right] != len(X):
                         self.S[right] -= len(X) - 1
                         right = self.S.succ_key(right)
-                    alpha = self.alloc_segment(
-                        left,
-                        right,
-                        self.recomb_map.position_to_mass(left),
-                        self.recomb_map.position_to_mass(right),
-                        u,
-                        pop_id,
-                    )
+                    alpha = self.alloc_segment(left, right, u, pop_id,)
                 # Update the heaps and make the record.
                 for x in X:
                     self.store_edge(left, right, u, x.node)
@@ -1878,13 +1755,12 @@ class Simulator:
                             y = x.next
                             heapq.heappush(H, (y.left, y))
                     elif x.right > right:
-                        self.set_segment_left_endpoint(x, right)
+                        x.left = right
                         heapq.heappush(H, (x.left, x))
 
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
                 if z is None:
-                    self.set_single_segment_mass(alpha)
                     # Pedigrees don't currently track lineages in Populations,
                     # so keep reference to merged segments instead.
                     if self.pedigree is not None and self.pedigree.is_climbing:
@@ -1900,8 +1776,8 @@ class Simulator:
                             z.right == alpha.left and z.node == alpha.node
                         )
                     z.next = alpha
-                    self.set_segment_mass(alpha, z)
                 alpha.prev = z
+                self.set_segment_mass(alpha)
                 z = alpha
         if self.full_arg:
             if not coalescence:
@@ -1918,11 +1794,10 @@ class Simulator:
             x = y.prev
             if x.right == y.left and x.node == y.node:
                 x.right = y.right
-                x.right_mass = y.right_mass
                 x.next = y.next
                 if y.next is not None:
                     y.next.prev = x
-                self.add_segment_mass(x, y)
+                self.set_segment_mass(x)
                 self.free_segment(y)
             y = x
 
@@ -1974,12 +1849,11 @@ class Simulator:
                     x = x.next
                     alpha.next = None
                 elif x.left != y.left:
-                    alpha = self.alloc_segment(
-                        x.left, y.left, x.left_mass, y.left_mass, x.node, x.population
-                    )
+                    alpha = self.copy_segment(x)
+                    alpha.prev = None
+                    alpha.next = None
+                    alpha.right = y.left
                     x.left = y.left
-                    x.left_mass = y.left_mass
-                    alpha.label = x.label
                 else:
                     if not coalescence:
                         coalescence = True
@@ -2005,14 +1879,12 @@ class Simulator:
                             self.S[right] -= 1
                             right = self.S.succ_key(right)
                         alpha = self.alloc_segment(
-                            left,
-                            right,
-                            self.recomb_map.position_to_mass(left),
-                            self.recomb_map.position_to_mass(right),
-                            u,
-                            population_index,
+                            left=left,
+                            right=right,
+                            node=u,
+                            population=population_index,
+                            label=label,
                         )
-                        alpha.label = label
                     self.store_edge(left, right, u, x.node)
                     self.store_edge(left, right, u, y.node)
                     # Now trim the ends of x and y to the right sizes.
@@ -2020,18 +1892,17 @@ class Simulator:
                         self.free_segment(x)
                         x = x.next
                     else:
-                        self.set_segment_left_endpoint(x, right)
+                        x.left = right
                     if y.right == right:
                         self.free_segment(y)
                         y = y.next
                     else:
-                        self.set_segment_left_endpoint(y, right)
+                        y.left = right
 
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
                 if z is None:
                     pop.add(alpha, label)
-                    self.set_single_segment_mass(alpha)
                 else:
                     if self.full_arg:
                         defrag_required |= z.right == alpha.left
@@ -2040,24 +1911,34 @@ class Simulator:
                             z.right == alpha.left and z.node == alpha.node
                         )
                     z.next = alpha
-                    self.set_segment_mass(alpha, z)
                 alpha.prev = z
+                self.set_segment_mass(alpha)
                 z = alpha
 
         if self.full_arg:
             if not coalescence:
                 self.store_node(population_index, flags=msprime.NODE_IS_CA_EVENT)
             self.store_arg_edges(z)
-
         if defrag_required:
             self.defrag_segment_chain(z)
         if coalescence:
             self.defrag_breakpoints()
 
-    def print_state(self):
+    def print_state(self, verify=False):
         print("State @ time ", self.t)
-        for l in range(self.num_labels):
-            print("Links = ", self.L[l].get_total())
+        for label in range(self.num_labels):
+            print(
+                "Recomb mass = ",
+                0
+                if self.recomb_mass_index is None
+                else self.recomb_mass_index[label].get_total(),
+            )
+            print(
+                "GC mass = ",
+                0
+                if self.gc_mass_index is None
+                else self.gc_mass_index[label].get_total(),
+            )
         print("Modifier events = ")
         for t, f, args in self.modifier_events:
             print("\t", t, f, args)
@@ -2070,23 +1951,58 @@ class Simulator:
         print("Overlap counts", len(self.S))
         for k, x in self.S.items():
             print("\t", k, "\t:\t", x)
-        for l in range(self.num_labels):
-            print("Fenwick tree[%d]: %d" % (l, self.L[l].get_total()))
-            for j in range(1, self.max_segments + 1):
-                s = self.L[l].get_frequency(j)
-                if s != 0:
-                    print("\t", j, "->", s, self.L[l].get_cumulative_frequency(j))
+        for label in range(self.num_labels):
+            if self.recomb_mass_index is not None:
+                print(
+                    "recomb_mass_index [%d]: %d"
+                    % (label, self.recomb_mass_index[label].get_total())
+                )
+                for j in range(1, self.max_segments + 1):
+                    s = self.recomb_mass_index[label].get_value(j)
+                    if s != 0:
+                        seg = self.segments[j]
+                        left_bound = self.get_recomb_left_bound(seg)
+                        sp = self.recomb_map.mass_between(left_bound, seg.right)
+                        print("\t", j, "->", s, sp)
+            if self.gc_mass_index is not None:
+                print(
+                    "gc_mass_index [%d]: %d"
+                    % (label, self.gc_mass_index[label].get_total())
+                )
+                for j in range(1, self.max_segments + 1):
+                    s = self.gc_mass_index[label].get_value(j)
+                    if s != 0:
+                        seg = self.segments[j]
+                        left_bound = self.get_gc_left_bound(seg)
+                        sp = self.gc_map.mass_between(left_bound, seg.right)
+                        print("\t", j, "->", s, sp)
         print("nodes")
         print(self.tables.nodes)
         print("edges")
         print(self.tables.edges)
-        self.verify()
+        if verify:
+            self.verify()
+
+    def verify_segments(self):
+        for pop in self.P:
+            for label in range(self.num_labels):
+                for head in pop.iter_label(label):
+                    prev = head
+                    u = head.next
+                    while u is not None:
+                        assert prev.next is u
+                        assert u.prev is prev
+                        assert u.left >= prev.right
+                        assert u.label == head.label
+                        assert u.population == head.population
+                        prev = u
+                        u = u.next
 
     def verify_overlaps(self):
         overlap_counter = OverlapCounter(self.m)
         for pop in self.P:
-            for l in range(self.num_labels):
-                for u in pop.iter_label(l):
+            for label in range(self.num_labels):
+                for u in pop.iter_label(label):
                     while u is not None:
                         overlap_counter.increment_interval(u.left, u.right)
                         u = u.next
@@ -2095,65 +2011,14 @@ class Simulator:
             if pos != self.m:
                 assert count == overlap_counter.overlaps_at(pos)
 
-    def verify(self):
-        """
-        Checks that the state of the simulator is consistent.
-        """
-        self.verify_overlaps()
-        q = 0
-        for l in range(self.num_labels):
-            total_mass = 0
-            alt_total_mass = 0
-            for pop_index, pop in enumerate(self.P):
-                for u in pop.iter_label(l):
-                    assert u.prev is None
-                    left = u.left
-                    while u is not None:
-                        assert u.population == pop_index
-                        assert u.left < u.right
-                        l_mass = self.recomb_map.position_to_mass(u.left)
-                        r_mass = self.recomb_map.position_to_mass(u.right)
-                        assert math.isclose(u.left_mass, l_mass, abs_tol=1e-6)
-                        assert math.isclose(u.right_mass, r_mass, abs_tol=1e-6)
-                        if u.prev is not None:
-                            s = self.recomb_map.mass_between(u.prev.right, u.right)
-                            assert u.prev.label == u.label
-                        else:
-                            s = self.recomb_map.mass_between_left_exclusive(
-                                u.left, u.right
-                            )
-                        right = u.right
-                        if self.model != "wf_ped":
-                            freq = self.L[l].get_frequency(u.index)
-                            total_mass += freq
-                            assert math.isclose(s, freq, abs_tol=1e-6)
-                        v = u.next
-                        if v is not None:
-                            assert v.prev == u
-                            if u.right > v.left:
-                                print("ERROR", u, v)
-                            assert u.right <= v.left
-                        u = v
-                    s = self.recomb_map.mass_between_left_exclusive(left, right)
-                    q += s
-                    alt_total_mass += s
-            assert math.isclose(total_mass, self.L[l].get_total(), abs_tol=1e-6)
-            assert math.isclose(total_mass, alt_total_mass, abs_tol=1e-6)
-        # add check for dealing with labels
-        lab_tot = 0
-        for l in range(self.num_labels):
-            lab_tot += self.L[l].get_total()
-        if self.model != "wf_ped":
-            assert math.isclose(q, lab_tot, abs_tol=1e-6)
-
         assert self.S[self.m] == -1
         # Check the ancestry tracking.
         A = bintrees.AVLTree()
         A[0] = 0
         A[self.m] = -1
         for pop in self.P:
-            for l in range(self.num_labels):
-                for u in pop.iter_label(l):
+            for label in range(self.num_labels):
+                for u in pop.iter_label(label):
                     while u is not None:
                         if u.left not in A:
                             k = A.floor_key(u.left)
@@ -2177,19 +2042,74 @@ class Simulator:
                 j = k
         assert list(A.items()) == list(self.S.items())
 
+    def verify_mass_index(self, label, mass_index, rate_map, compute_left_bound):
+        assert mass_index is not None
+        total_mass = 0
+        alt_total_mass = 0
+        for pop_index, pop in enumerate(self.P):
+            for u in pop.iter_label(label):
+                assert u.prev is None
+                left = compute_left_bound(u)
+                while u is not None:
+                    assert u.population == pop_index
+                    assert u.left < u.right
+                    left_bound = compute_left_bound(u)
+                    s = rate_map.mass_between(left_bound, u.right)
+                    right = u.right
+                    index_value = mass_index.get_value(u.index)
+                    total_mass += index_value
+                    assert math.isclose(s, index_value, abs_tol=1e-6)
+                    v = u.next
+                    if v is not None:
+                        assert v.prev == u
+                        assert u.right <= v.left
+                    u = v
+
+                s = rate_map.mass_between(left, right)
+                alt_total_mass += s
+        assert math.isclose(total_mass, mass_index.get_total(), abs_tol=1e-6)
+        assert math.isclose(total_mass, alt_total_mass, abs_tol=1e-6)
+
+    def verify(self):
+        """
+        Checks that the state of the simulator is consistent.
+        """
+        self.verify_segments()
+        if self.model != "wf_ped":
+            # The wf_ped model doesn't maintain a bunch of stuff. It would probably
+            # be simpler if it did.
+            self.verify_overlaps()
+            for label in range(self.num_labels):
+                if self.recomb_mass_index is None:
+                    assert self.recomb_map.total_rate == 0
+                else:
+                    self.verify_mass_index(
+                        label,
+                        self.recomb_mass_index[label],
+                        self.recomb_map,
+                        self.get_recomb_left_bound,
+                    )
+
+                if self.gc_mass_index is None:
+                    assert self.gc_map.total_rate == 0
+                else:
+                    self.verify_mass_index(
+                        label,
+                        self.gc_mass_index[label],
+                        self.gc_map,
+                        self.get_gc_left_bound,
+                    )
+
 
 def run_simulate(args):
     """
     Runs the simulation and outputs the results in text.
     """
     n = args.sample_size
-    m = args.num_loci
+    m = args.sequence_length
     rho = args.recombination_rate
-    if rho == 0:
-        gamma = args.gene_conversion_rate[0]
-    else:
-        gamma = args.gene_conversion_rate[0] * rho
-    mean_tracklength = args.gene_conversion_rate[1]
+    gc_rate = args.gene_conversion_rate[0]
+    mean_track_length = args.gene_conversion_rate[1]
     num_populations = args.num_populations
     migration_matrix = [
         [args.migration_rate * int(j != k) for j in range(num_populations)]
@@ -2208,11 +2128,11 @@ def run_simulate(args):
     if args.population_sizes is not None:
         population_sizes = args.population_sizes
     if args.recomb_positions is None or args.recomb_rates is None:
-        recombination_map = RecombinationMap([0, m], [rho, 0], True)
+        recombination_map = RateMap([0, m], [rho, 0])
     else:
         positions = args.recomb_positions
         rates = args.recomb_rates
-        recombination_map = RecombinationMap(positions, rates, True)
+        recombination_map = RateMap(positions, rates)
     num_labels = 1
     sweep_trajectory = None
     if args.model == "single_sweep":
@@ -2267,11 +2187,12 @@ def run_simulate(args):
         full_arg=args.full_arg,
         sweep_trajectory=sweep_trajectory,
         time_slice=args.time_slice,
-        gene_conversion_rate=gamma,
-        gene_conversion_length=mean_tracklength,
+        gene_conversion_rate=gc_rate,
+        gene_conversion_length=mean_track_length,
         pedigree=pedigree,
+        discrete_genome=args.discrete,
     )
-    ts = s.simulate()
+    ts = s.simulate(args.end_time)
     ts.dump(args.output_file)
     if args.verbose:
         s.print_state()
@@ -2284,7 +2205,8 @@ def add_simulator_arguments(parser):
         "-v", "--verbose", help="increase output verbosity", action="store_true"
     )
     parser.add_argument("--random-seed", "-s", type=int, default=1)
-    parser.add_argument("--num-loci", "-m", type=int, default=100)
+    parser.add_argument("--sequence-length", "-L", type=int, default=100)
+    parser.add_argument("--discrete", "-d", action="store_true")
     parser.add_argument("--num-replicates", "-R", type=int, default=1000)
     parser.add_argument("--recombination-rate", "-r", type=float, default=0.01)
     parser.add_argument("--recomb-positions", type=float, nargs="+", default=None)
@@ -2352,12 +2274,15 @@ def add_simulator_arguments(parser):
             "is ignored if this is provided"
         ),
     )
+    parser.add_argument(
+        "--end-time", type=float, default=np.inf, help="The end for simulations.",
+    )
 
 
-def main():
+def main(args=None):
     parser = argparse.ArgumentParser()
     add_simulator_arguments(parser)
-    args = parser.parse_args()
+    args = parser.parse_args(args)
     run_simulate(args)
 
 

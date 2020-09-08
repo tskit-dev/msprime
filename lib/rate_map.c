@@ -153,6 +153,9 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
     double offset;
     size_t index;
 
+    /* TODO we should add an LRU cache with ~3 items here to cache recent
+     * hits and avoid looking up the map for them. This will make a difference
+     * in the large recombination map case.*/
     if (pos == position[0]) {
         return 0;
     }
@@ -160,7 +163,6 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
         return self->cumulative_mass[self->size];
     }
     /* TODO replace this with tsk_search_sorted */
-    /* index = rate_map_get_index(self, pos); */
     index = msp_binary_interval_search(pos, position, self->size + 1);
     assert(index > 0);
     index--;

@@ -87,8 +87,8 @@ msp_strerror_internal(int err)
         case MSP_ERR_SOURCE_DEST_EQUAL:
             ret = "Source and destination populations equal.";
             break;
-        case MSP_ERR_BAD_RECOMBINATION_MAP:
-            ret = "Bad recombination map provided.";
+        case MSP_ERR_BAD_RATE_MAP:
+            ret = "Bad rate map provided.";
             break;
         case MSP_ERR_INSUFFICIENT_SAMPLES:
             ret = "At least two samples needed.";
@@ -229,12 +229,27 @@ msp_strerror_internal(int err)
                   "parameters, and if they make sense help us fix the problem "
                   "by opening an issue on GitHub.";
             break;
+        case MSP_ERR_TRACKLEN_RESAMPLE_OVERFLOW:
+            ret = "An unlikely numerical error occured computing gene conversion"
+                  "track lengths (resample overflow). Please check your "
+                  "parameters, and if they make sense help us fix the problem "
+                  "by opening an issue on GitHub.";
+            break;
+        case MSP_ERR_FENWICK_REBUILD_FAILED:
+            ret = "An unlikely numerical error occured (Fenwick tree rebuild "
+                  "did not reduce drift sufficiently). Please check your "
+                  "parameters, and if they make sense help us fix the problem "
+                  "by opening an issue on GitHub.";
+            break;
         case MSP_ERR_BAD_PLOIDY:
             ret = "Ploidy must be at least 1";
             break;
         case MSP_ERR_DTWF_MIGRATION_MATRIX_NOT_STOCHASTIC:
             ret = "The row sums of the migration matrix must not exceed one for "
                   "the discrete time Wright-Fisher model.";
+            break;
+        case MSP_ERR_DTWF_GC_NOT_SUPPORTED:
+            ret = "Gene conversion is not supported in the DTWF model";
             break;
         default:
             ret = "Error occurred generating error string. Please file a bug "

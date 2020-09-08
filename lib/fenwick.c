@@ -101,6 +101,9 @@ fenwick_alloc(fenwick_t *self, size_t initial_size)
     /* Initialise the Kahan sum variables for the total */
     self->total_sum = 0;
     self->total_c = 0;
+    /* Set the rebuild threshold to 0 so that we can set an appropriate
+     * threshold for the values being stored */
+    self->rebuild_threshold = 0;
 out:
     return ret;
 }
@@ -179,6 +182,7 @@ fenwick_rebuild(fenwick_t *self)
 {
     double value;
     size_t j;
+    double current_drift;
 
     self->total_sum = 0;
     self->total_c = 0;
@@ -188,6 +192,23 @@ fenwick_rebuild(fenwick_t *self)
         self->values[j] = 0;
         fenwick_increment(self, j, value);
     }
+    current_drift = fenwick_get_numerical_drift(self);
+    /* Since we have just rebuilt the tree, this is as good as we can
+     * do for this particular set of values. We therefore set the limit
+     * for the next rebuild to three orders of magnitude more than this.
+     */
+    self->rebuild_threshold = 1e-12;
+    if (current_drift != 0) {
+        /* Once the drift grows to 3 orders of magnitude more than we
+         * have now, trigger a rebuild. */
+        self->rebuild_threshold = current_drift * 1e3;
+    }
+}
+
+bool
+fenwick_rebuild_required(fenwick_t *self)
+{
+    return fenwick_get_numerical_drift(self) > self->rebuild_threshold;
 }
 
 double
@@ -218,12 +239,17 @@ fenwick_increment(fenwick_t *self, size_t index, double value)
     const size_t size = self->size;
     double *restrict tree = self->tree;
 
-    assert(0 < index && index <= size);
-    fenwick_increment_total(self, value);
+    /* Short-circuiting this saves us a bit of time in higher level
+     * code where we don't have to reason about setting the segment
+     * mass to the same value. */
+    if (value != 0) {
+        assert(0 < index && index <= size);
+        fenwick_increment_total(self, value);
 
-    self->values[index] += value;
-    for (j = index; j <= size; j += (j & -j)) {
-        tree[j] += value;
+        self->values[index] += value;
+        for (j = index; j <= size; j += (j & -j)) {
+            tree[j] += value;
+        }
     }
 }
 

@@ -1208,6 +1208,43 @@ test_dtwf_migration_matrix_not_stochastic(void)
 }
 
 static void
+test_dtwf_gene_conversion(void)
+{
+    int ret;
+    uint32_t n = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+
+    memset(samples, 0, n * sizeof(sample_t));
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
+
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_rate(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_track_length(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_GC_NOT_SUPPORTED);
+
+    msp_free(&msp);
+    gsl_rng_free(rng);
+    free(samples);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_pedigree_single_locus_simulation(void)
 {
     int ret;
@@ -1422,7 +1459,7 @@ test_pedigree_specification(void)
 }
 
 static void
-test_mixed_model_simulation(void)
+test_mixed_hudson_dtwf(void)
 {
     int ret;
     uint32_t j, k;
@@ -1497,14 +1534,11 @@ test_mixed_model_simulation(void)
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(msp_is_completed(msp));
-    CU_ASSERT_TRUE(j > 5);
+    CU_ASSERT_TRUE(j > 10);
 
     ret = msp_finalise_tables(msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    /* TODO remove this when populate tables takes table_collection as arg */
-    tables.sequence_length = msp->sequence_length;
-    CU_ASSERT_EQUAL_FATAL(tables.sequence_length, msp->sequence_length);
     ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tsk_treeseq_print_state(&ts, _devnull);
@@ -1520,44 +1554,73 @@ test_mixed_model_simulation(void)
 }
 
 static void
-test_gene_conversion_single_locus(void)
+test_mixed_hudson_smc(void)
 {
     int ret;
     uint32_t j;
     uint32_t n = 10;
+    int model;
+    tsk_table_collection_t tables;
+    tsk_treeseq_t ts;
     sample_t *samples = malloc(n * sizeof(sample_t));
     msp_t *msp = malloc(sizeof(msp_t));
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
-    tsk_table_collection_t tables;
 
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    ret = tsk_table_collection_init(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    tables.sequence_length = 1;
 
     memset(samples, 0, n * sizeof(sample_t));
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 10;
     ret = msp_alloc(msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_gene_conversion_rate(msp, 10, 1);
+    ret = msp_set_segment_block_size(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_rate(msp, 3);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_track_length(msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(msp);
     CU_ASSERT_EQUAL(ret, 0);
 
-    CU_ASSERT_EQUAL(msp_get_gene_conversion_rate(msp), 10);
-
-    /* For the single locus sim we should have exactly n - 1 events */
-    for (j = 0; j < n - 2; j++) {
-        ret = msp_run(msp, DBL_MAX, 1);
-        CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_EVENTS);
+    /* Run for 1 event each for the models, interleaving */
+    j = 0;
+    while ((ret = msp_run(msp, DBL_MAX, 1)) == MSP_EXIT_MAX_EVENTS) {
         msp_verify(msp, 0);
+        CU_ASSERT_FALSE(msp_is_completed(msp));
+        model = msp_get_model(msp)->type;
+        if (j % 2 == 1) {
+            CU_ASSERT_EQUAL(model, MSP_MODEL_SMC);
+            ret = msp_set_simulation_model_hudson(msp);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else {
+            CU_ASSERT_EQUAL(model, MSP_MODEL_HUDSON);
+            ret = msp_set_simulation_model_smc(msp);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
+        if (j == 10) {
+            msp_print_state(msp, _devnull);
+        }
+        j++;
     }
-    ret = msp_run(msp, DBL_MAX, 1);
-    CU_ASSERT_EQUAL(ret, 0);
-    msp_verify(msp, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(msp_is_completed(msp));
+    CU_ASSERT_TRUE(j > 10);
+    CU_ASSERT_TRUE(msp_get_num_recombination_events(msp) > 1);
+    CU_ASSERT_TRUE(msp_get_num_gene_conversion_events(msp) > 1);
+
+    ret = msp_finalise_tables(msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_treeseq_print_state(&ts, _devnull);
+    tsk_treeseq_free(&ts);
+    tsk_table_collection_free(&tables);
 
     ret = msp_free(msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1568,13 +1631,14 @@ test_gene_conversion_single_locus(void)
 }
 
 static void
-test_gene_conversion_simulation(void)
+run_gc_simulation(double sequence_length, double gc_rate, double track_length,
+    double recombination_rate, bool discrete_genome)
 {
     int ret;
     uint32_t n = 10;
-    double track_lengths[] = { 1.0, 1.3333, 5, 10 };
     long seed = 10;
-    size_t j, num_events, num_ca_events, num_re_events, num_gc_events;
+    size_t num_events, num_ca_events, num_re_events, num_gc_events;
+    bool single_locus = sequence_length == 1 && discrete_genome;
     tsk_table_collection_t tables;
     tsk_treeseq_t ts;
     sample_t *samples = malloc(n * sizeof(sample_t));
@@ -1584,48 +1648,90 @@ test_gene_conversion_simulation(void)
     CU_ASSERT_FATAL(msp != NULL);
     CU_ASSERT_FATAL(samples != NULL);
     CU_ASSERT_FATAL(rng != NULL);
-    CU_ASSERT_EQUAL_FATAL(msp_set_discrete_genome(msp, true), 0);
     ret = tsk_table_collection_init(&tables, 0);
     CU_ASSERT_EQUAL(ret, 0);
-    tables.sequence_length = 10;
+    tables.sequence_length = sequence_length;
     gsl_rng_set(rng, seed);
 
-    for (j = 0; j < sizeof(track_lengths) / sizeof(double); j++) {
-        memset(samples, 0, n * sizeof(sample_t));
-        ret = msp_alloc(msp, n, samples, &tables, rng);
-        CU_ASSERT_EQUAL(ret, 0);
-        CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, 0.1), 0);
-        ret = msp_set_gene_conversion_rate(msp, 1.0, track_lengths[j]);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = msp_initialise(msp);
-        CU_ASSERT_EQUAL(ret, 0);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = msp_alloc(msp, n, samples, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_discrete_genome(msp, discrete_genome), 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(msp, recombination_rate), 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_gene_conversion_rate(msp, gc_rate), 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_gene_conversion_track_length(msp, track_length), 0);
+    /* Set a very small block size to force lots of fenwick tree rebuilds */
+    CU_ASSERT_EQUAL_FATAL(msp_set_segment_block_size(msp, 16), 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
 
-        num_events = 0;
-        while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
-            msp_verify(msp, MSP_VERIFY_BREAKPOINTS);
-            num_events++;
-        }
-        CU_ASSERT_EQUAL(ret, 0);
+    num_events = 0;
+    while ((ret = msp_run(msp, DBL_MAX, 1)) == 1) {
         msp_verify(msp, MSP_VERIFY_BREAKPOINTS);
-        num_ca_events = msp_get_num_common_ancestor_events(msp);
-        num_re_events = msp_get_num_recombination_events(msp);
-        num_gc_events = msp_get_num_gene_conversion_events(msp);
-        CU_ASSERT_TRUE(num_ca_events > 0);
-        CU_ASSERT_TRUE(num_re_events > 0);
-        CU_ASSERT_TRUE(num_gc_events > 0);
-        msp_free(msp);
-
-        /* Make sure we can build a tree sequence out of the result */
-        ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        tsk_treeseq_free(&ts);
-
-        tsk_table_collection_clear(&tables);
+        num_events++;
     }
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    msp_verify(msp, MSP_VERIFY_BREAKPOINTS);
+    num_ca_events = msp_get_num_common_ancestor_events(msp);
+    CU_ASSERT_TRUE(num_ca_events > 0);
+    num_re_events = msp_get_num_recombination_events(msp);
+    if (recombination_rate == 0 || single_locus) {
+        CU_ASSERT_EQUAL(num_re_events, 0);
+    } else {
+        CU_ASSERT_TRUE(num_re_events > 0);
+    }
+    num_gc_events = msp_get_num_gene_conversion_events(msp);
+    if (gc_rate == 0 || single_locus) {
+        CU_ASSERT_EQUAL(num_gc_events, 0);
+    } else {
+        CU_ASSERT_TRUE(num_gc_events > 0);
+    }
+    msp_free(msp);
+
+    /* Make sure we can build a tree sequence out of the result */
+    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_treeseq_free(&ts);
+
     gsl_rng_free(rng);
     free(msp);
     free(samples);
     tsk_table_collection_free(&tables);
+}
+
+static void
+test_gc_single_locus(void)
+{
+    run_gc_simulation(10, 0.0, 1.0, 0.0, false);
+    run_gc_simulation(1, 1.0, 1.0, 0.0, true);
+}
+
+static void
+test_gc_track_lengths(void)
+{
+    double track_lengths[] = { 1.0, 1.3333, 5, 10 };
+    size_t j;
+
+    for (j = 0; j < sizeof(track_lengths) / sizeof(double); j++) {
+        run_gc_simulation(10, 1.0, track_lengths[j], 0.1, true);
+        run_gc_simulation(10, 1.0, track_lengths[j], 0.1, false);
+    }
+}
+
+static void
+test_gc_zero_recombination(void)
+{
+    run_gc_simulation(10, 1.0, 5, 0.0, true);
+    run_gc_simulation(10, 1.0, 1, 0.0, false);
+}
+
+static void
+test_gc_rates(void)
+{
+    run_gc_simulation(1, 0.1, 0.5, 10.0, false);
+    run_gc_simulation(1, 10.0, 0.5, 0.1, false);
+    run_gc_simulation(10, 1, 1, 1.0, false);
+    run_gc_simulation(30, 1.0, 6, 1.0, true);
 }
 
 static void
@@ -1901,8 +2007,20 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_set_population_configuration(&msp, 3, 0, 0),
         MSP_ERR_POPULATION_OUT_OF_BOUNDS);
     CU_ASSERT_EQUAL(msp_set_recombination_rate(&msp, -1), MSP_ERR_BAD_RATE_VALUE);
-    CU_ASSERT_EQUAL(msp_set_recombination_map(&msp, 1, position, &rate),
-        MSP_ERR_BAD_RECOMBINATION_MAP);
+    CU_ASSERT_EQUAL(
+        msp_set_recombination_map(&msp, 1, position, &rate), MSP_ERR_BAD_RATE_MAP);
+
+    ret = msp_set_gene_conversion_rate(&msp, -1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_RATE_VALUE);
+    ret = msp_set_gene_conversion_track_length(&msp, -1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    ret = msp_set_gene_conversion_track_length(&msp, tables.sequence_length + 1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
+    CU_ASSERT_EQUAL(
+        msp_set_gene_conversion_map(&msp, 1, position, &rate), MSP_ERR_BAD_RATE_MAP);
+
+    ret = msp_set_start_time(&msp, -1);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_START_TIME);
 
     ret = msp_set_simulation_model_hudson(&msp);
     CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
@@ -2791,6 +2909,16 @@ test_simulate_from_single_locus_replicates(void)
 }
 
 static void
+test_simulate_from_multilocus(void)
+{
+    verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 10.0, 1, 5, 1);
+    /* verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1.0, 0, 5, 1); */
+
+    /* verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1.0, 1, 5, 1); */
+    /* verify_simple_simulate_from(MSP_MODEL_DTWF, 10, 1.0, 1, 5, 1); */
+}
+
+static void
 test_simulate_from_empty(void)
 {
     verify_simple_simulate_from(MSP_MODEL_HUDSON, 10, 1.0, 0, 0, 1);
@@ -2986,19 +3114,6 @@ test_simulate_init_errors(void)
     ret = msp_alloc(&msp, n, samples, &tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = msp_set_start_time(&msp, -1);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_START_TIME);
-
-    ret = msp_set_gene_conversion_rate(&msp, -1, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = msp_set_gene_conversion_rate(&msp, 1, -1);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-    ret = msp_set_gene_conversion_rate(&msp, 1, 2);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_PARAM_VALUE);
-
-    ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
-
     msp_free(&msp);
     gsl_rng_free(rng);
     free(samples);
@@ -3118,16 +3233,20 @@ main(int argc, char **argv)
         { "test_dtwf_zero_pop_size", test_dtwf_zero_pop_size },
         { "test_dtwf_migration_matrix_not_stochastic",
             test_dtwf_migration_matrix_not_stochastic },
+        { "test_dtwf_gene_conversion", test_dtwf_gene_conversion },
 
         { "test_pedigree_single_locus_simulation",
             test_pedigree_single_locus_simulation },
         { "test_pedigree_multi_locus_simulation", test_pedigree_multi_locus_simulation },
         { "test_pedigree_specification", test_pedigree_specification },
 
-        { "test_mixed_model_simulation", test_mixed_model_simulation },
+        { "test_mixed_hudson_dtwf", test_mixed_hudson_dtwf },
+        { "test_mixed_hudson_smc", test_mixed_hudson_smc },
 
-        { "test_gene_conversion_single_locus", test_gene_conversion_single_locus },
-        { "test_gene_conversion_simulation", test_gene_conversion_simulation },
+        { "test_gc_single_locus", test_gc_single_locus },
+        { "test_gc_track_lengths", test_gc_track_lengths },
+        { "test_gc_zero_recombination", test_gc_zero_recombination },
+        { "test_gc_rates", test_gc_rates },
 
         { "test_multiple_mergers_simulation", test_multiple_mergers_simulation },
         { "test_multiple_mergers_growth_rate", test_multiple_mergers_growth_rate },
@@ -3147,6 +3266,7 @@ main(int argc, char **argv)
         { "test_simulate_from_single_locus", test_simulate_from_single_locus },
         { "test_simulate_from_single_locus_replicates",
             test_simulate_from_single_locus_replicates },
+        { "test_simulate_from_multilocus", test_simulate_from_multilocus },
         { "test_simulate_from_empty", test_simulate_from_empty },
         { "test_simulate_from_completed", test_simulate_from_completed },
         { "test_simulate_from_incompatible", test_simulate_from_incompatible },

@@ -69,11 +69,8 @@ typedef tsk_id_t label_id_t;
 typedef struct segment_t_t {
     population_id_t population;
     label_id_t label;
-    /* During simulation we use genetic coordinates */
     double left;
     double right;
-    double left_mass;
-    double right_mass;
     tsk_id_t value;
     size_t id;
     struct segment_t_t *prev;
@@ -189,8 +186,8 @@ typedef struct _msp_t {
     double sequence_length;
     bool discrete_genome;
     rate_map_t recomb_map;
-    double gene_conversion_rate;
-    double gene_conversion_track_length;
+    rate_map_t gc_map;
+    double gc_track_length;
     uint32_t num_populations;
     uint32_t num_labels;
     uint32_t ploidy;
@@ -232,7 +229,8 @@ typedef struct _msp_t {
     avl_tree_t breakpoints;
     avl_tree_t overlap_counts;
     /* We keep an independent Fenwick tree for each label */
-    fenwick_t *links;
+    fenwick_t *recomb_mass_index;
+    fenwick_t *gc_mass_index;
     /* memory management */
     object_heap_t avl_node_heap;
     object_heap_t node_mapping_heap;
@@ -390,10 +388,13 @@ int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
 int msp_set_ploidy(msp_t *self, int ploidy);
 int msp_set_recombination_map(msp_t *self, size_t size, double *position, double *rate);
 int msp_set_recombination_rate(msp_t *self, double rate);
+int msp_set_gene_conversion_map(
+    msp_t *self, size_t size, double *position, double *rate);
+int msp_set_gene_conversion_rate(msp_t *self, double rate);
+int msp_set_gene_conversion_track_length(msp_t *self, double track_length);
 int msp_set_discrete_genome(msp_t *self, bool is_discrete);
 int msp_set_num_populations(msp_t *self, size_t num_populations);
 int msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels);
-int msp_set_gene_conversion_rate(msp_t *self, double rate, double track_length);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
@@ -450,8 +451,6 @@ int msp_is_completed(msp_t *self);
 simulation_model_t *msp_get_model(msp_t *self);
 const char *msp_get_model_name(msp_t *self);
 bool msp_get_store_migrations(msp_t *self);
-double msp_get_recombination_rate(msp_t *self);
-double msp_get_gene_conversion_rate(msp_t *self);
 double msp_get_time(msp_t *self);
 size_t msp_get_num_samples(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);

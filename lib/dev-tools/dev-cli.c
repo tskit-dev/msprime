@@ -668,8 +668,11 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_table_collection_t *tables,
         == CONFIG_FALSE) {
         fatal_error("gene_conversion_track_length is a required parameter");
     }
-    ret = msp_set_gene_conversion_rate(
-        msp, gene_conversion_rate, gene_conversion_track_length);
+    ret = msp_set_gene_conversion_rate(msp, gene_conversion_rate);
+    if (ret != 0) {
+        fatal_msprime_error(ret, __LINE__);
+    }
+    ret = msp_set_gene_conversion_track_length(msp, gene_conversion_track_length);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }

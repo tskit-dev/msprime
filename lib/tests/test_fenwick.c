@@ -166,6 +166,32 @@ test_fenwick_drift(void)
     }
 }
 
+static void
+test_fenwick_rebuild(void)
+{
+    fenwick_t t;
+    size_t n = 14;
+    size_t j;
+    double drift_before, drift_after;
+
+    CU_ASSERT(fenwick_alloc(&t, n) == 0);
+    for (j = 1; j <= n; j++) {
+        fenwick_set_value(&t, j, 0.1);
+    }
+    drift_before = fenwick_get_numerical_drift(&t);
+    CU_ASSERT_TRUE(fenwick_rebuild_required(&t));
+    fenwick_print_state(&t, _devnull);
+    fenwick_rebuild(&t);
+    drift_after = fenwick_get_numerical_drift(&t);
+    /* After we've rebuilt we signal that a rebuild is not required */
+    CU_ASSERT_FALSE(fenwick_rebuild_required(&t));
+    /* even though the drift values are identical (this is as good as
+     * we can do with these numbers) */
+    CU_ASSERT_EQUAL(drift_before, drift_after);
+
+    CU_ASSERT(fenwick_free(&t) == 0);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -174,6 +200,7 @@ main(int argc, char **argv)
         { "test_fenwick_expand", test_fenwick_expand },
         { "test_fenwick_zero_values", test_fenwick_zero_values },
         { "test_fenwick_drift", test_fenwick_drift },
+        { "test_fenwick_rebuild", test_fenwick_rebuild },
         CU_TEST_INFO_NULL,
     };
 

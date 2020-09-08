@@ -452,8 +452,10 @@ def create_simulation_runner(parser, arg_list):
     # ms uses a ratio to define the GC rate, but if the recombination rate
     # is zero we define the gc rate directly.
     gc_param, gc_track_length = args.gene_conversion
+    gc_rate = 0
     if r == 0.0:
-        gc_rate = gc_param
+        if num_loci > 1:
+            gc_rate = gc_param / (num_loci - 1)
     else:
         gc_rate = r * gc_param
 
