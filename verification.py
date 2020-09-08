@@ -3756,10 +3756,11 @@ class SimulateFrom(Test):
             logging.debug(f"running for m = {m}")
             T1 = np.zeros(num_replicates)
             num_trees1 = np.zeros(num_replicates)
-            recomb_map = msprime.RecombinationMap.uniform_map(m, 1 / m)
+            recomb_rate = 1 / m
             reps = msprime.simulate(
                 n,
-                recombination_map=recomb_map,
+                recombination_rate=recomb_rate,
+                length=m,
                 num_replicates=num_replicates,
                 discrete_genome=True,
             )
@@ -3773,13 +3774,17 @@ class SimulateFrom(Test):
                 reps = msprime.simulate(
                     n,
                     num_replicates=num_replicates,
-                    recombination_map=recomb_map,
+                    recombination_rate=recomb_rate,
+                    length=m,
                     end_time=t,
+                    discrete_genome=True,
                 )
                 for j, ts in enumerate(reps):
                     final_ts = msprime.simulate(
                         from_ts=ts,
-                        recombination_map=recomb_map,
+                        recombination_rate=recomb_rate,
+                        length=m,
+                        discrete_genome=True,
                         start_time=np.max(ts.tables.nodes.time),
                     )
                     final_ts = final_ts.simplify()
