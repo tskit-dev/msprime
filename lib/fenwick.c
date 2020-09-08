@@ -239,12 +239,17 @@ fenwick_increment(fenwick_t *self, size_t index, double value)
     const size_t size = self->size;
     double *restrict tree = self->tree;
 
-    assert(0 < index && index <= size);
-    fenwick_increment_total(self, value);
+    /* Short-circuiting this saves us a bit of time in higher level
+     * code where we don't have to reason about setting the segment
+     * mass to the same value. */
+    if (value != 0) {
+        assert(0 < index && index <= size);
+        fenwick_increment_total(self, value);
 
-    self->values[index] += value;
-    for (j = index; j <= size; j += (j & -j)) {
-        tree[j] += value;
+        self->values[index] += value;
+        for (j = index; j <= size; j += (j & -j)) {
+            tree[j] += value;
+        }
     }
 }
 

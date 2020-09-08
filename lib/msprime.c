@@ -1198,10 +1198,10 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
         assert(self->recomb_mass_index == NULL);
         assert(self->gc_mass_index == NULL);
     } else {
-        assert((self->recomb_mass_index != NULL) ==
-                (rate_map_get_total_mass(&self->recomb_map) > 0));
-        assert((self->gc_mass_index != NULL) ==
-                (rate_map_get_total_mass(&self->gc_map) > 0));
+        assert((self->recomb_mass_index != NULL)
+               == (rate_map_get_total_mass(&self->recomb_map) > 0));
+        assert((self->gc_mass_index != NULL)
+               == (rate_map_get_total_mass(&self->gc_map) > 0));
     }
 }
 
@@ -4448,6 +4448,14 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
     avl_tree_t *nodes;
     /* Only support a single structured coalescent label at the moment */
     label_id_t label = 0;
+
+    assert(self->recomb_mass_index == NULL);
+    assert(self->gc_mass_index == NULL);
+    if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
+        /* Could be, we just haven't implemented it */
+        ret = MSP_ERR_DTWF_GC_NOT_SUPPORTED;
+        goto out;
+    }
 
     n = malloc(self->num_populations * sizeof(int));
     mig_tmp = malloc(self->num_populations * sizeof(double));

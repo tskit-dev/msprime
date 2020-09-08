@@ -248,6 +248,9 @@ msp_strerror_internal(int err)
             ret = "The row sums of the migration matrix must not exceed one for "
                   "the discrete time Wright-Fisher model.";
             break;
+        case MSP_ERR_DTWF_GC_NOT_SUPPORTED:
+            ret = "Gene conversion is not supported in the DTWF model";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                   "report!";

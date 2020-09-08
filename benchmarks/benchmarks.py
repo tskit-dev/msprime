@@ -93,7 +93,6 @@ class Hudson(LargeSimulationBenchmark):
             Ne=10 ** 4,
             recombination_map=self.recomb_map_chr22,
             random_seed=234,
-            end_time=1000,
         )
 
     def time_human_chr22(self):
@@ -157,7 +156,7 @@ class DTWF(LargeSimulationBenchmark):
             Ne=10 ** 4,
             recombination_map=self.recomb_map_chr22,
             random_seed=234,
-            end_time=1000,
+            end_time=10000,
             model="dtwf",
         )
 

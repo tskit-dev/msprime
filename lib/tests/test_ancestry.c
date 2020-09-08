@@ -1208,6 +1208,43 @@ test_dtwf_migration_matrix_not_stochastic(void)
 }
 
 static void
+test_dtwf_gene_conversion(void)
+{
+    int ret;
+    uint32_t n = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t msp;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+
+    memset(samples, 0, n * sizeof(sample_t));
+
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 1.0;
+
+    ret = msp_alloc(&msp, n, samples, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_rate(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_track_length(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_GC_NOT_SUPPORTED);
+
+    msp_free(&msp);
+    gsl_rng_free(rng);
+    free(samples);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_pedigree_single_locus_simulation(void)
 {
     int ret;
@@ -1422,7 +1459,7 @@ test_pedigree_specification(void)
 }
 
 static void
-test_mixed_model_simulation(void)
+test_mixed_hudson_dtwf(void)
 {
     int ret;
     uint32_t j, k;
@@ -1497,14 +1534,88 @@ test_mixed_model_simulation(void)
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(msp_is_completed(msp));
-    CU_ASSERT_TRUE(j > 5);
+    CU_ASSERT_TRUE(j > 10);
 
     ret = msp_finalise_tables(msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    /* TODO remove this when populate tables takes table_collection as arg */
-    tables.sequence_length = msp->sequence_length;
-    CU_ASSERT_EQUAL_FATAL(tables.sequence_length, msp->sequence_length);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_treeseq_print_state(&ts, _devnull);
+    tsk_treeseq_free(&ts);
+    tsk_table_collection_free(&tables);
+
+    ret = msp_free(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(msp);
+    free(samples);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_mixed_hudson_smc(void)
+{
+    int ret;
+    uint32_t j;
+    uint32_t n = 10;
+    int model;
+    tsk_table_collection_t tables;
+    tsk_treeseq_t ts;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t *msp = malloc(sizeof(msp_t));
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    CU_ASSERT_FATAL(msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    CU_ASSERT_FATAL(rng != NULL);
+
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables.sequence_length = 10;
+    ret = msp_alloc(msp, n, samples, &tables, rng);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_segment_block_size(msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_rate(msp, 3);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_track_length(msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    /* Run for 1 event each for the models, interleaving */
+    j = 0;
+    while ((ret = msp_run(msp, DBL_MAX, 1)) == MSP_EXIT_MAX_EVENTS) {
+        msp_verify(msp, 0);
+        CU_ASSERT_FALSE(msp_is_completed(msp));
+        model = msp_get_model(msp)->type;
+        if (j % 2 == 1) {
+            CU_ASSERT_EQUAL(model, MSP_MODEL_SMC);
+            ret = msp_set_simulation_model_hudson(msp);
+            CU_ASSERT_EQUAL(ret, 0);
+        } else {
+            CU_ASSERT_EQUAL(model, MSP_MODEL_HUDSON);
+            ret = msp_set_simulation_model_smc(msp);
+            CU_ASSERT_EQUAL(ret, 0);
+        }
+        if (j == 10) {
+            msp_print_state(msp, _devnull);
+        }
+        j++;
+    }
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(msp_is_completed(msp));
+    CU_ASSERT_TRUE(j > 10);
+    CU_ASSERT_TRUE(msp_get_num_recombination_events(msp) > 1);
+    CU_ASSERT_TRUE(msp_get_num_gene_conversion_events(msp) > 1);
+
+    ret = msp_finalise_tables(msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
     ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tsk_treeseq_print_state(&ts, _devnull);
@@ -3122,13 +3233,15 @@ main(int argc, char **argv)
         { "test_dtwf_zero_pop_size", test_dtwf_zero_pop_size },
         { "test_dtwf_migration_matrix_not_stochastic",
             test_dtwf_migration_matrix_not_stochastic },
+        { "test_dtwf_gene_conversion", test_dtwf_gene_conversion },
 
         { "test_pedigree_single_locus_simulation",
             test_pedigree_single_locus_simulation },
         { "test_pedigree_multi_locus_simulation", test_pedigree_multi_locus_simulation },
         { "test_pedigree_specification", test_pedigree_specification },
 
-        { "test_mixed_model_simulation", test_mixed_model_simulation },
+        { "test_mixed_hudson_dtwf", test_mixed_hudson_dtwf },
+        { "test_mixed_hudson_smc", test_mixed_hudson_smc },
 
         { "test_gc_single_locus", test_gc_single_locus },
         { "test_gc_track_lengths", test_gc_track_lengths },
