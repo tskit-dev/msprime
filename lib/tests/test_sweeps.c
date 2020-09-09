@@ -286,7 +286,8 @@ test_sweep_genic_selection_gc(void)
     ret = msp_set_simulation_model_sweep_genic_selection(&msp, 5, 0.1, 0.9, 0.1, 0.01);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
-    CU_ASSERT_TRUE(ret >= 0);
+    /* GC rate in sweep model is not implemented */
+    CU_ASSERT_TRUE(ret == MSP_ERR_SWEEPS_GC_NOT_SUPPORTED);
     msp_print_state(&msp, _devnull);
     ret = msp_finalise_tables(&msp);
     CU_ASSERT_EQUAL(ret, 0);

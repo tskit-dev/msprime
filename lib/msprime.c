@@ -4732,6 +4732,12 @@ msp_run_sweep(msp_t *self)
     double p_rec_b, p_rec_B;
     bool sweep_over;
 
+    if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
+        /* Could be, we just haven't implemented it */
+        ret = MSP_ERR_SWEEPS_GC_NOT_SUPPORTED;
+        goto out;
+    }
+
     /* Keep the compiler happy */
     sweep_pop_tot_rate = 0;
     p_coal_b = 0;

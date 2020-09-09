@@ -103,6 +103,7 @@
 #define MSP_ERR_BAD_PLOIDY                                          -63
 #define MSP_ERR_DTWF_MIGRATION_MATRIX_NOT_STOCHASTIC                -64
 #define MSP_ERR_DTWF_GC_NOT_SUPPORTED                               -65
+#define MSP_ERR_SWEEPS_GC_NOT_SUPPORTED                             -66
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */

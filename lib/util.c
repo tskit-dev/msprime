@@ -251,6 +251,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_DTWF_GC_NOT_SUPPORTED:
             ret = "Gene conversion is not supported in the DTWF model";
             break;
+        case MSP_ERR_SWEEPS_GC_NOT_SUPPORTED:
+            ret = "Gene conversion is not supported in the selective sweep model";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                   "report!";
