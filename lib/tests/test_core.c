@@ -48,12 +48,82 @@ test_strerror_tskit(void)
     }
 }
 
+static void
+test_probability_list_select(void)
+{
+    double short_one = 1.0 - 0.5 * DBL_EPSILON;
+    CU_TEST(short_one == nexttoward(1.0, 0));
+    double short_half = 0.5 - 0.25 * DBL_EPSILON;
+    CU_TEST(short_half == nexttoward(0.5, 0));
+    double long_half = 0.5 + 0.5 * DBL_EPSILON;
+    CU_TEST(long_half == nexttoward(0.5, 1));
+    {
+        double probs[2] = { 0.5, 0.5 };
+        CU_ASSERT_EQUAL(0, probability_list_select(0.0, 2, probs))
+        CU_ASSERT_EQUAL(0, probability_list_select(short_half, 2, probs))
+        CU_ASSERT_EQUAL(1, probability_list_select(0.5, 2, probs))
+        CU_ASSERT_EQUAL(1, probability_list_select(1.0, 2, probs))
+        CU_ASSERT_EQUAL(1, probability_list_select(1.1, 2, probs))
+    }
+    {
+        double probs[2] = { 1.0, 0.0 };
+        CU_ASSERT_EQUAL(0, probability_list_select(short_one, 2, probs))
+        /* Note: gsl_ran_flat does not return 1.0 per documentation */
+        CU_ASSERT_EQUAL(1, probability_list_select(1.0, 2, probs))
+    }
+    {
+        double probs[2] = { 0.0, 1.0 };
+        CU_ASSERT_EQUAL(0, probability_list_select(0.0, 0, probs))
+        CU_ASSERT_EQUAL(0, probability_list_select(1.1, 0, probs))
+        CU_ASSERT_EQUAL(0, probability_list_select(0.0, 1, probs))
+        CU_ASSERT_EQUAL(0, probability_list_select(1.1, 1, probs))
+        CU_ASSERT_EQUAL(1, probability_list_select(0.0, 2, probs))
+        CU_ASSERT_EQUAL(1, probability_list_select(1.1, 2, probs))
+    }
+    {
+        double probs[10] = { 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1 };
+        CU_TEST(1.0 != 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1 + 0.1);
+        /* Note that 0.1 == 0x1.999999999999ap-4 in hexadecimal */
+        CU_ASSERT_EQUAL(0, probability_list_select(0.0, 10, probs))
+        CU_ASSERT_EQUAL(4, probability_list_select(short_half, 10, probs))
+        CU_ASSERT_EQUAL(5, probability_list_select(0.5, 10, probs))
+        CU_ASSERT_EQUAL(5, probability_list_select(long_half, 10, probs))
+        CU_ASSERT_EQUAL(9, probability_list_select(0.9, 10, probs))
+        CU_ASSERT_EQUAL(9, probability_list_select(short_one, 10, probs))
+        CU_ASSERT_EQUAL(9, probability_list_select(1.0, 10, probs))
+    }
+    {
+        double probs[5] = { 0.2, 0.2, 0.2, 0.2, 0.2 };
+        CU_ASSERT_EQUAL(0, probability_list_select(0.0, 5, probs))
+        CU_ASSERT_EQUAL(4, probability_list_select(0.8, 5, probs))
+        CU_ASSERT_EQUAL(4, probability_list_select(short_one, 5, probs))
+        CU_ASSERT_EQUAL(4, probability_list_select(1.0, 5, probs))
+    }
+    {
+        double probs[3] = { short_half, DBL_EPSILON / 8.0, 0.5 };
+        CU_TEST(1.0 == probs[0] + probs[1] + probs[2]);
+        CU_ASSERT_EQUAL(0, probability_list_select(0.0, 3, probs))
+        CU_ASSERT_EQUAL(1, probability_list_select(short_half, 3, probs))
+        CU_ASSERT_EQUAL(2, probability_list_select(0.5, 3, probs))
+        CU_ASSERT_EQUAL(2, probability_list_select(1.0, 3, probs))
+    }
+    {
+        double probs[3] = { short_half, DBL_EPSILON / 16.0, 0.5 };
+        CU_TEST(1.0 == probs[0] + probs[1] + probs[2]);
+        CU_ASSERT_EQUAL(0, probability_list_select(0.0, 3, probs))
+        CU_ASSERT_EQUAL(2, probability_list_select(short_half, 3, probs))
+        CU_ASSERT_EQUAL(2, probability_list_select(0.5, 3, probs))
+        CU_ASSERT_EQUAL(2, probability_list_select(1.0, 3, probs))
+    }
+}
+
 int
 main(int argc, char **argv)
 {
     CU_TestInfo tests[] = {
         { "test_strerror", test_strerror },
         { "test_strerror_tskit", test_strerror_tskit },
+        { "test_probability_list_select", test_probability_list_select },
         CU_TEST_INFO_NULL,
     };
 

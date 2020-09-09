@@ -118,4 +118,6 @@ void __msp_safe_free(void **ptr);
 size_t msp_binary_interval_search(double query, const double *values, size_t n_values);
 bool doubles_almost_equal(double a, double b, double eps);
 
+size_t probability_list_select(double u, size_t num_probs, double const *probs);
+
 #endif /*__UTIL_H__*/

@@ -146,41 +146,18 @@ mutation_matrix_print_state(mutation_model_t *self, FILE *out)
     fprintf(out, "\n");
 }
 
-static int MSP_WARN_UNUSED
-mutation_matrix_check_validity(mutation_matrix_t *self)
+static bool MSP_WARN_UNUSED
+valid_probabilities(size_t num_alleles, double *distribution)
 {
-    int ret = 0;
-    size_t j, k;
-    double prob, min_prob;
-    double *mutation_row;
-
+    double prob = 0;
+    double min_prob = 0;
+    size_t j;
     /* Check probabilities sum to one */
-    prob = 0;
-    min_prob = 0;
-    for (j = 0; j < self->num_alleles; j++) {
-        prob += self->root_distribution[j];
-        min_prob = GSL_MIN(min_prob, self->root_distribution[j]);
+    for (j = 0; j < num_alleles; j++) {
+        prob += distribution[j];
+        min_prob = GSL_MIN(min_prob, distribution[j]);
     }
-    if (!doubles_almost_equal(prob, 1.0, 1e-12) || min_prob < 0.0) {
-        ret = MSP_ERR_BAD_ROOT_PROBABILITIES;
-        goto out;
-    }
-    for (j = 0; j < self->num_alleles; j++) {
-        prob = 0;
-        min_prob = 0;
-        mutation_row = self->transition_matrix + j * self->num_alleles;
-        for (k = 0; k < self->num_alleles; k++) {
-            prob += mutation_row[k];
-            min_prob = GSL_MIN(min_prob, mutation_row[k]);
-        }
-        if (!doubles_almost_equal(prob, 1.0, 1e-12) || min_prob < 0.0) {
-            ret = MSP_ERR_BAD_TRANSITION_MATRIX;
-            goto out;
-        }
-    }
-
-out:
-    return ret;
+    return doubles_almost_equal(prob, 1.0, 1e-12) && min_prob >= 0.0;
 }
 
 static int MSP_WARN_UNUSED
@@ -227,13 +204,8 @@ mutation_matrix_choose_root_state(mutation_model_t *self, gsl_rng *rng, site_t *
     int ret = 0;
     mutation_matrix_t params = self->params.mutation_matrix;
     double u = gsl_ran_flat(rng, 0.0, 1.0);
-    tsk_size_t j = 0;
-
-    while (u > params.root_distribution[j]) {
-        u -= params.root_distribution[j];
-        j++;
-        assert(j < params.num_alleles);
-    }
+    size_t j = probability_list_select(u, params.num_alleles, params.root_distribution);
+    assert(j < params.num_alleles);
     site->ancestral_state = params.alleles[j];
     site->ancestral_state_length = params.allele_length[j];
     return ret;
@@ -261,12 +233,7 @@ mutation_matrix_transition(mutation_model_t *self, gsl_rng *rng,
         goto out;
     }
     probs = params.transition_matrix + (tsk_size_t) pi * params.num_alleles;
-    j = 0;
-    while (u > probs[j]) {
-        u -= probs[j];
-        j++;
-        assert(j < (tsk_id_t) params.num_alleles);
-    }
+    j = (tsk_id_t) probability_list_select(u, params.num_alleles, probs);
     ret = 1;
     if (j != pi) {
         /* Only return 0 in the case where we perform an actual transition */
@@ -543,11 +510,23 @@ matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles, char **a
 {
     int ret = 0;
     mutation_matrix_t *params = &self->params.mutation_matrix;
+    size_t i;
 
     memset(self, 0, sizeof(*self));
     if (num_alleles < 2) {
         ret = MSP_ERR_INSUFFICIENT_ALLELES;
         goto out;
+    }
+    if (!valid_probabilities(num_alleles, root_distribution)) {
+        ret = MSP_ERR_BAD_ROOT_PROBABILITIES;
+        goto out;
+    }
+    for (i = 0; i < num_alleles; ++i) {
+        double *probs = transition_matrix + i * num_alleles;
+        if (!valid_probabilities(num_alleles, probs)) {
+            ret = MSP_ERR_BAD_TRANSITION_MATRIX;
+            goto out;
+        }
     }
     params->num_alleles = num_alleles;
     params->alleles = calloc(num_alleles, sizeof(*params->alleles));
@@ -572,11 +551,6 @@ matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles, char **a
     self->transition = &mutation_matrix_transition;
     self->print_state = &mutation_matrix_print_state;
     self->free = &mutation_matrix_free;
-
-    ret = mutation_matrix_check_validity(params);
-    if (ret != 0) {
-        goto out;
-    }
 out:
     return ret;
 }
