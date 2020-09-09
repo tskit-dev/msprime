@@ -3,15 +3,20 @@ Python version of the simulation algorithm.
 """
 import argparse
 import heapq
+import logging
 import math
 import random
 import sys
 
 import bintrees
+import daiquiri
 import numpy as np
 import tskit
 
 import msprime
+
+
+logger = daiquiri.getLogger()
 
 
 class FenwickTree:
@@ -253,7 +258,7 @@ class Population:
 
     def iter_ancestors(self):
         """
-        Iterates over all ancestors in a population.
+        Iterates over all ancestors in a population over all labels.
         """
         for ancestors in self._ancestors:
             yield from ancestors
@@ -511,8 +516,16 @@ class RateMap:
         return cumulative
 
     @property
-    def total_rate(self):
+    def sequence_length(self):
+        return self.positions[-1]
+
+    @property
+    def total_mass(self):
         return self.cumulative[-1]
+
+    @property
+    def mean_rate(self):
+        return self.total_mass / self.sequence_length
 
     def mass_between(self, left, right):
         left_mass = self.position_to_mass(left)
@@ -679,13 +692,13 @@ class Simulator:
             self.segments[j + 1] = s
             self.segment_stack.append(s)
         self.P = [Population(id_, num_labels) for id_ in range(N)]
-        if self.recomb_map.total_rate == 0:
+        if self.recomb_map.total_mass == 0:
             self.recomb_mass_index = None
         else:
             self.recomb_mass_index = [
                 FenwickTree(self.max_segments) for j in range(num_labels)
             ]
-        if self.gc_map.total_rate == 0:
+        if self.gc_map.total_mass == 0:
             self.gc_mass_index = None
         else:
             self.gc_mass_index = [
@@ -953,6 +966,40 @@ class Simulator:
             total_rate = self.gc_mass_index[label].get_total()
         return total_rate
 
+    def get_total_gc_left_rate(self, label):
+        gc_left_total = self.get_total_gc_left(label)
+        # NOTE: this is an approximation. Should we be multiplying by the
+        # local GC rate when iterating over the segments?
+        mean_gc_rate = self.gc_map.mean_rate
+        return mean_gc_rate * self.track_length * gc_left_total
+
+    def get_individual_length(self, head):
+        tail = head
+        while tail.next is not None:
+            tail = tail.next
+        # TODO adjust for discrete/continuous genome here?
+        return tail.right - head.left - 1
+
+    def get_total_gc_left(self, label):
+        gc_left_total = 0
+        x = (self.track_length - 1) / self.track_length
+        for pop in self.P:
+            for ind in pop.iter_label(label):
+                dist = self.get_individual_length(ind)
+                gc_left_total += 1 - x ** dist
+        return gc_left_total
+
+    def find_cleft_individual(self, label, cleft_value):
+        gc_left_total = 0
+        x = (self.track_length - 1) / self.track_length
+        for pop in self.P:
+            for ind in pop.iter_label(label):
+                dist = self.get_individual_length(ind)
+                gc_left_total += 1 - x ** dist
+                if gc_left_total >= cleft_value:
+                    return ind
+        raise AssertionError()
+
     def hudson_simulate(self, end_time):
         """
         Simulates the algorithm until all loci have coalesced.
@@ -971,11 +1018,18 @@ class Simulator:
             t_re = infinity
             if re_rate > 0:
                 t_re = random.expovariate(re_rate)
+
             # Gene conversion can occur within segments ..
             gc_rate = self.get_total_gc_rate(label=0)
             t_gcin = infinity
             if gc_rate > 0:
                 t_gcin = random.expovariate(gc_rate)
+            # ... or to the left of the first segment.
+            gc_left_rate = self.get_total_gc_left_rate(label=0)
+            t_gc_left = infinity
+            if gc_left_rate > 0:
+                t_gc_left = random.expovariate(gc_left_rate)
+
             # Common ancestor events occur within demes.
             t_ca = infinity
             for index in non_empty_pops:
@@ -999,7 +1053,7 @@ class Simulator:
                         t_mig = t
                         mig_source = j
                         mig_dest = k
-            min_time = min(t_re, t_ca, t_gcin, t_mig)
+            min_time = min(t_re, t_ca, t_gcin, t_gc_left, t_mig)
             assert min_time != infinity
             if self.t + min_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
@@ -1011,26 +1065,36 @@ class Simulator:
                     pop.id for pop in self.P if pop.get_num_ancestors() > 0
                 }
                 potential_destinations = self.get_potential_destinations()
+                event = "MOD"
             else:
                 self.t += min_time
                 if min_time == t_re:
-                    # print("RE EVENT")
+                    event = "RE"
                     self.hudson_recombination_event(0)
                 elif min_time == t_gcin:
-                    # print("GCI EVENT")
+                    event = "GCI"
                     self.wiuf_gene_conversion_within_event(0)
+                elif min_time == t_gc_left:
+                    event = "GCL"
+                    self.wiuf_gene_conversion_left_event(0)
                 elif min_time == t_ca:
-                    # print("CA EVENT")
+                    event = "CA"
                     self.common_ancestor_event(ca_population, 0)
                     if self.P[ca_population].get_num_ancestors() == 0:
                         non_empty_pops.remove(ca_population)
                 else:
-                    # print("MIG EVENT")
+                    event = "MIG"
                     self.migration_event(mig_source, mig_dest)
                     if self.P[mig_source].get_num_ancestors() == 0:
                         non_empty_pops.remove(mig_source)
                     assert self.P[mig_dest].get_num_ancestors() > 0
                     non_empty_pops.add(mig_dest)
+            logger.info(
+                "%s time=%f n=%d",
+                event,
+                self.t,
+                sum(pop.get_num_ancestors() for pop in self.P),
+            )
 
             X = {pop.id for pop in self.P if pop.get_num_ancestors() > 0}
             assert non_empty_pops == X
@@ -1332,18 +1396,8 @@ class Simulator:
         return left_bound
 
     def get_gc_left_bound(self, seg):
-        """
-        Returns the left bound for genomic region over which the specified
-        segment represents gene conversion events. Note that because
-        GC events that affect the initial segment in a chain can begin
-        before the start of this segment, this goes back to 0.
-        """
-        if seg.prev is None:
-            left_bound = 1 if self.discrete_genome else 0
-            # left_bound = seg.left + 1 if self.discrete_genome else seg.left
-        else:
-            left_bound = seg.prev.right
-        return left_bound
+        # TODO remove me
+        return self.get_recomb_left_bound(seg)
 
     def set_segment_mass(self, seg):
         """
@@ -1446,6 +1500,10 @@ class Simulator:
         """
         Implements a gene conversion event that starts within a segment
         """
+        # TODO This is more complicated than it needs to be now because
+        # we're not trying to simulate the full GC process with this
+        # one event anymore. Look into what bits can be dropped now
+        # that we're simulating gc_left separately again.
         y, left_breakpoint = self.choose_breakpoint(
             self.gc_mass_index[label], self.gc_map
         )
@@ -1560,6 +1618,65 @@ class Simulator:
                 new_individual_head, new_individual_head.label
             )
 
+    def wiuf_gene_conversion_left_event(self, label):
+        """
+        Implements a gene conversion event that started left of a first segment.
+        """
+        self.num_gc_events += 1
+        random_gc_left = random.uniform(0, self.get_total_gc_left(label))
+        # Get segment where gene conversion starts from left
+        y = self.find_cleft_individual(label, random_gc_left)
+        assert y is not None
+        # Get the total length of ancestral material in this individual
+        distance = self.get_individual_length(y)
+
+        pc = (self.track_length - 1) / self.track_length
+        if self.track_length == 1:
+            lnpc = -math.inf
+        else:
+            lnpc = math.log(1.0 - 1.0 / self.track_length)
+        # generate tracklength
+        u = random.random()
+        tl = math.floor(1.0 + math.log(1.0 - u * (1.0 - pc ** distance)) / lnpc)
+
+        bp = y.left + tl
+        while y.right <= bp:
+            y = y.next
+        x = y.prev
+        if y.left < bp:
+            #  x          y
+            # =====   =====|====
+            #              bp
+            # becomes
+            #  x         y
+            # =====   =====
+            #              =====
+            #                α
+            alpha = self.copy_segment(y)
+            alpha.left = bp
+            alpha.prev = None
+            if alpha.next is not None:
+                alpha.next.prev = alpha
+            y.next = None
+            y.right = bp
+            self.set_segment_mass(y)
+        else:
+            #  x          y
+            # ===== |  =========
+            #       bp
+            # becomes
+            #  x
+            # =====
+            #          =========
+            #              α
+            # split the link between x and y.
+            x.next = None
+            y.prev = None
+            alpha = y
+        self.set_segment_mass(alpha)
+        assert alpha.prev is None
+        self.P[alpha.population].add(alpha, label)
+
     def hudson_recombination_event_sweep_phase(self, label, sweep_site, pop_freq):
         """
         Implements a recombination event in during a selective sweep.
@@ -1600,7 +1717,7 @@ class Simulator:
         seg_tails = [u, v]
 
         # TODO Should this be the recombination rate going foward from x.left?
-        if self.recomb_map.total_rate > 0:
+        if self.recomb_map.total_mass > 0:
             k = self.dtwf_generate_breakpoint(x.left)
         else:
             k = np.inf
@@ -1987,6 +2104,7 @@ class Simulator:
         for pop in self.P:
             for label in range(self.num_labels):
                 for head in pop.iter_label(label):
+                    assert head.prev is None
                     prev = head
                     u = head.next
                     while u is not None:
@@ -2081,7 +2199,7 @@ class Simulator:
             self.verify_overlaps()
             for label in range(self.num_labels):
                 if self.recomb_mass_index is None:
-                    assert self.recomb_map.total_rate == 0
+                    assert self.recomb_map.total_mass == 0
                 else:
                     self.verify_mass_index(
                         label,
@@ -2091,7 +2209,7 @@ class Simulator:
                     )
 
                 if self.gc_mass_index is None:
-                    assert self.gc_map.total_rate == 0
+                    assert self.gc_map.total_mass == 0
                 else:
                     self.verify_mass_index(
                         label,
@@ -2204,6 +2322,13 @@ def add_simulator_arguments(parser):
     parser.add_argument(
         "-v", "--verbose", help="increase output verbosity", action="store_true"
     )
+    parser.add_argument(
+        "-l",
+        "--log-level",
+        type=int,
+        help="Set log-level to the specified value",
+        default=logging.WARNING,
+    )
     parser.add_argument("--random-seed", "-s", type=int, default=1)
     parser.add_argument("--sequence-length", "-L", type=int, default=100)
     parser.add_argument("--discrete", "-d", action="store_true")
@@ -2283,6 +2408,11 @@ def main(args=None):
     parser = argparse.ArgumentParser()
     add_simulator_arguments(parser)
     args = parser.parse_args(args)
+    log_output = daiquiri.output.Stream(
+        sys.stdout,
+        formatter=daiquiri.formatter.ColorFormatter(fmt="[%(levelname)s] %(message)s"),
+    )
+    daiquiri.setup(level=args.log_level, outputs=[log_output])
     run_simulate(args)
 
 

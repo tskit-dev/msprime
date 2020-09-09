@@ -349,14 +349,7 @@ msp_get_recomb_left_bound(msp_t *self, segment_t *seg)
 static inline double
 msp_get_gc_left_bound(msp_t *self, segment_t *seg)
 {
-    double left_bound;
-    if (seg->prev == NULL) {
-        /* left_bound = self->discrete_genome ? seg->left + 1 : seg->left; */
-        left_bound = self->discrete_genome ? 1 : 0;
-    } else {
-        left_bound = seg->prev->right;
-    }
-    return left_bound;
+    return msp_get_recomb_left_bound(self, seg);
 }
 
 /* Set the mass of the specified segment to that between the segment's right endpoint
@@ -1078,6 +1071,7 @@ msp_print_segment_chain(msp_t *MSP_UNUSED(self), segment_t *head, FILE *out)
     fprintf(out, "\n");
 }
 
+/* TODO remove the left_at_zero option, it's for old GC version that didn't work. */
 static void
 msp_verify_segment_index(
     msp_t *self, fenwick_t *mass_index_array, rate_map_t *rate_map, bool left_at_zero)
@@ -1191,7 +1185,7 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
             self, self->recomb_mass_index, &self->recomb_map, false);
     }
     if (self->gc_mass_index != NULL) {
-        msp_verify_segment_index(self, self->gc_mass_index, &self->gc_map, true);
+        msp_verify_segment_index(self, self->gc_mass_index, &self->gc_map, false);
     }
     /* Check that the mass indexes are set appropriately */
     if (self->model.type == MSP_MODEL_DTWF || self->model.type == MSP_MODEL_WF_PED) {
@@ -3910,6 +3904,171 @@ out:
     return ret;
 }
 
+static double
+get_individual_length(segment_t *head)
+{
+    segment_t *tail = head;
+
+    while (tail->next != NULL) {
+        tail = tail->next;
+    }
+    /* TODO correct for continuous genome here? */
+    return tail->right - head->left - 1;
+}
+
+static double
+msp_get_total_gc_left(msp_t *self, label_id_t label)
+{
+    double total = 0;
+    size_t j;
+    avl_node_t *node;
+    double dist;
+    const double x = (self->gc_track_length - 1) / self->gc_track_length;
+
+    for (j = 0; j < self->num_populations; j++) {
+        for (node = self->populations[j].ancestors[label].head; node != NULL;
+             node = node->next) {
+            dist = get_individual_length((segment_t *) node->item);
+            total += 1 - pow(x, dist);
+        }
+    }
+    return total;
+}
+
+static segment_t *
+msp_find_gc_left_individual(
+    msp_t *self, label_id_t label, double value, double *ret_distance)
+{
+    double total = 0;
+    size_t j;
+    avl_node_t *node;
+    segment_t *ind;
+    double dist;
+    const double x = (self->gc_track_length - 1) / self->gc_track_length;
+
+    for (j = 0; j < self->num_populations; j++) {
+        for (node = self->populations[j].ancestors[label].head; node != NULL;
+             node = node->next) {
+            ind = (segment_t *) node->item;
+            dist = get_individual_length(ind);
+            total += 1 - pow(x, dist);
+            if (total >= value) {
+                *ret_distance = dist;
+                return ind;
+            }
+        }
+    }
+    return NULL;
+}
+
+static double
+msp_get_total_gc_left_rate(msp_t *self, label_id_t label)
+{
+    double mean_gc_rate = rate_map_get_total_mass(&self->gc_map) / self->sequence_length;
+    double ret = 0;
+    double total_gc_left;
+
+    if (mean_gc_rate > 0) {
+        total_gc_left = msp_get_total_gc_left(self, label);
+        ret = total_gc_left * self->gc_track_length * mean_gc_rate;
+    }
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
+msp_sample_gc_left_waiting_time(msp_t *self, label_id_t label, double *ret_t_wait)
+{
+    int ret = 0;
+    double lambda = msp_get_total_gc_left_rate(self, label);
+    double t_wait = DBL_MAX;
+
+    if (lambda > 0.0) {
+        t_wait = gsl_ran_exponential(self->rng, 1.0 / lambda);
+    }
+    *ret_t_wait = t_wait;
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
+msp_gene_conversion_left_event(msp_t *self, label_id_t label)
+{
+    int ret = 0;
+    const double track_length = self->gc_track_length;
+    const double gc_left_total = msp_get_total_gc_left(self, label);
+    double h = gsl_rng_uniform(self->rng) * gc_left_total;
+    double distance, u, p, logp, tl, bp;
+    segment_t *y, *x, *alpha;
+
+    self->num_gc_events++;
+
+    y = msp_find_gc_left_individual(self, label, h, &distance);
+    assert(y != NULL);
+
+    tl = 1.0;
+    if (track_length > 1.0) {
+        /* p is the proba of continuing the track */
+        p = (track_length - 1.0) / track_length;
+        logp = log(1.0 - 1.0 / track_length);
+        u = gsl_rng_uniform(self->rng);
+        tl = floor(1.0 + log(1.0 - u * (1.0 - pow(p, distance))) / logp);
+    }
+    assert(tl > 0);
+    bp = y->left + tl;
+
+    while (y->right <= bp) {
+        y = y->next;
+    }
+    assert(y != NULL);
+    x = y->prev;
+
+    if (y->left < bp) {
+        //  x          y
+        // =====   =====|====
+        //              bp
+        // becomes
+        //  x         y
+        // =====   =====
+        //              =====
+        //                α
+        alpha = msp_copy_segment(self, y);
+        if (alpha == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        alpha->left = bp;
+        alpha->prev = NULL;
+        if (alpha->next != NULL) {
+            alpha->next->prev = alpha;
+        }
+        y->next = NULL;
+        y->right = bp;
+        msp_set_segment_mass(self, y);
+        if (!msp_has_breakpoint(self, bp)) {
+            ret = msp_insert_breakpoint(self, bp);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    } else {
+        //  x          y
+        // ===== |  =========
+        //       bp
+        // becomes
+        //  x
+        // =====
+        //          =========
+        //              α
+        x->next = NULL;
+        y->prev = NULL;
+        alpha = y;
+    }
+    msp_set_segment_mass(self, alpha);
+    assert(alpha->prev == NULL);
+    ret = msp_insert_individual(self, alpha);
+out:
+    return ret;
+}
+
 /* The main event loop for continuous time coalescent models. Runs until either
  * coalescence; or the time of a simulated event would have exceeded the
  * specified max_time; or for a specified number of events. The num_events
@@ -3929,8 +4088,8 @@ static int MSP_WARN_UNUSED
 msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
-    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, gc_t_wait, mig_t_wait,
-        sampling_event_time, demographic_event_time;
+    double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, gc_t_wait, gc_left_t_wait,
+        mig_t_wait, sampling_event_time, demographic_event_time;
     uint32_t n;
     tsk_id_t i, pop_id, pop_id_j, pop_id_k, ca_pop_id, mig_source_pop, mig_dest_pop;
     const tsk_id_t N = (tsk_id_t) self->num_populations;
@@ -3958,9 +4117,15 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         if (ret != 0) {
             goto out;
         }
+
         /* Gene conversion */
         gc_t_wait = DBL_MAX;
         ret = msp_sample_waiting_time(self, self->gc_mass_index, label, &gc_t_wait);
+        if (ret != 0) {
+            goto out;
+        }
+        gc_left_t_wait = DBL_MAX;
+        ret = msp_sample_gc_left_waiting_time(self, label, &gc_left_t_wait);
         if (ret != 0) {
             goto out;
         }
@@ -4006,7 +4171,8 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             }
         }
 
-        t_wait = GSL_MIN(mig_t_wait, GSL_MIN(gc_t_wait, GSL_MIN(re_t_wait, ca_t_wait)));
+        t_wait = GSL_MIN(mig_t_wait,
+            GSL_MIN(gc_t_wait, GSL_MIN(gc_left_t_wait, GSL_MIN(re_t_wait, ca_t_wait))));
         if (self->next_demographic_event == NULL
             && self->next_sampling_event == self->num_sampling_events
             && t_wait == DBL_MAX) {
@@ -4078,6 +4244,8 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                 ret = msp_recombination_event(self, label, NULL, NULL);
             } else if (gc_t_wait == t_wait) {
                 ret = msp_gene_conversion_event(self, label);
+            } else if (gc_left_t_wait == t_wait) {
+                ret = msp_gene_conversion_left_event(self, label);
             } else if (ca_t_wait == t_wait) {
                 ret = self->common_ancestor_event(self, ca_pop_id, label);
                 if (ret == 1) {

@@ -256,11 +256,12 @@ class Test:
             v2 = df2[stat]
             if stat == "breakpoints":
                 plot_breakpoints_hist(flatten(v1), flatten(v2), df1_name, df2_name)
+                pyplot.xlabel("genome")
             else:
                 plot_qq(v1, v2)
+                pyplot.xlabel(df1_name)
+                pyplot.ylabel(df2_name)
             f = self._build_filename(stats_type, stat)
-            pyplot.xlabel(df1_name)
-            pyplot.ylabel(df2_name)
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
@@ -480,16 +481,27 @@ class MsDemography(MsTest):
 
 
 class MsGeneConversion(MsTest):
+    def _run(self, cmd):
+        # The mutation stats are a waste of time for GC, they tell us basically
+        # nothing.
+        self._run_coalescent_stats(cmd)
+
     def test_gene_conversion_c10_r0(self):
         self._run("100 10000 -t 5.0 -r 0 2501 -c 10 1")
 
-    def test_gene_conversion_c1000(self):
+    def test_gene_conversion_c100_tl1000_r0(self):
+        self._run("100 10000 -t 5.0 -r 0 2501 -c 100 1000")
+
+    def test_gene_conversion_c1000_tl_1(self):
         self._run("100 10000 -t 5.0 -r 0.01 2501 -c 1000 1")
 
-    def test_gene_conversion_c2(self):
+    def test_gene_conversion_c1000_tl_1000(self):
+        self._run("100 10000 -t 5.0 -r 0.01 2501 -c 1000 1000")
+
+    def test_gene_conversion_c2_r10(self):
         self._run("100 10000 -t 5.0 -r 10 2501 -c 2 1")
 
-    def test_gene_conversion_c2_tl_10(self):
+    def test_gene_conversion_c2_tl_10_r10(self):
         self._run("100 10000 -t 5.0 -r 10 2501 -c 2 10")
 
     def test_gene_conversion_c2_tl_100(self):
