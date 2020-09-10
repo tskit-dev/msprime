@@ -78,13 +78,13 @@ insert_single_tree(tsk_table_collection_t *tables, int alphabet)
         ret = tsk_site_table_add_row(&tables->sites, 0.1, "0", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
         ret = tsk_mutation_table_add_row(
-            &tables->mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "1", 1, NULL, 0);
+            &tables->mutations, 0, 0, -1, 0.0, "1", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
     } else if (alphabet == ALPHABET_NUCLEOTIDE) {
         ret = tsk_site_table_add_row(&tables->sites, 0.1, "A", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
         ret = tsk_mutation_table_add_row(
-            &tables->mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
+            &tables->mutations, 0, 0, -1, 0.0, "C", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
     }
 
@@ -297,6 +297,7 @@ test_single_tree_mutgen(void)
     CU_ASSERT_TRUE(tables1.mutations.num_rows > 0);
     CU_ASSERT_TRUE(tables1.mutations.num_rows == tables1.sites.num_rows);
     for (j = 0; j < tables1.mutations.num_rows; j++) {
+        CU_ASSERT_TRUE(tables1.mutations.time[j] >= 0.0);
         CU_ASSERT_TRUE(tables1.mutations.site[j] == j);
         CU_ASSERT_TRUE(tables1.sites.position[j] <= 1.0);
         CU_ASSERT_TRUE(tables1.mutations.node[j] < 6);

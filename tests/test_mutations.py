@@ -406,9 +406,8 @@ class TestFiniteSites(TestMutate):
             parents = {}
             for mut in site.mutations:
                 n = mut.node
-                # TODO: once mutations have times
-                # self.assertGreaterEqual(mut.time, ts.node(n).time)
-                # self.assertLess(mut.time, ts.node(t.parent(n)).time)
+                self.assertGreaterEqual(mut.time, ts.node(n).time)
+                self.assertLess(mut.time, ts.node(t.parent(n)).time)
                 while n != tskit.NULL and n not in parents:
                     n = t.parent(n)
                 if n == tskit.NULL:
@@ -416,8 +415,7 @@ class TestFiniteSites(TestMutate):
                     pa = site.ancestral_state
                 else:
                     self.assertEqual(mut.parent, parents[n].id)
-                    # TODO: once mutations have times
-                    # self.assertLess(mut.time, parents[n].time)
+                    self.assertLess(mut.time, parents[n].time)
                     pa = parents[n].derived_state
                 self.assertNotEqual(mut.derived_state, pa)
                 if check_probs:
@@ -502,6 +500,9 @@ class TestFiniteSites(TestMutate):
             self.verify_provenance(t1, t2)
             if keep:
                 self.assertEqual(t1.sites, t2.sites)
+                print(t1.mutations)
+                print("---")
+                print(t2.mutations)
                 self.assertEqual(t1.mutations, t2.mutations)
             else:
                 self.assertEqual(t2.sites.num_rows, 0)
@@ -833,6 +834,8 @@ class TestKeep(unittest.TestCase):
             msprime.simulate(10, recombination_rate=1, random_seed=2)
         )
         self.assertGreater(ts.num_sites, 1)
+        print("got here!!!!!!!!!!!!!!!!1")
+        print(ts.tables.mutations)
         self.verify(ts, 3, random_seed=7)
 
     def test_multichar_mutations(self):
@@ -1649,6 +1652,7 @@ class PythonMutationGenerator:
                         mutation.derived_state,
                         parent=parent_id,
                         metadata=mutation.metadata,
+                        time=mutation.time,
                     )
                     assert mutation_id > parent_id
                     mutation.id = mutation_id
