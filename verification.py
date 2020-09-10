@@ -1667,7 +1667,7 @@ class DtwfVsSlim(Test):
         cmd = _slim_executable + [slim_script]
         for _ in range(kwargs["num_replicates"]):
             subprocess.check_output(cmd)
-            ts = msprime.load(outfile)
+            ts = tskit.load(outfile)
             ts = subsample_simplify_slim_treesequence(ts, slim_args["sample_sizes"])
 
             t_mrca = np.zeros(ts.num_trees)
