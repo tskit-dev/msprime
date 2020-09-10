@@ -700,7 +700,7 @@ class Simulator:
         self.pedigree = pedigree
 
         if from_ts is None:
-            self.tables = msprime.TableCollection(sequence_length=num_loci)
+            self.tables = tskit.TableCollection(sequence_length=num_loci)
             for pop_index in range(N):
                 self.tables.populations.add_row()
                 sample_size = sample_configuration[pop_index]
@@ -710,14 +710,14 @@ class Simulator:
                     self.set_segment_mass(x)
                     self.P[pop_index].add(x)
                     self.tables.nodes.add_row(
-                        flags=msprime.NODE_IS_SAMPLE, time=0, population=pop_index
+                        flags=tskit.NODE_IS_SAMPLE, time=0, population=pop_index
                     )
                     j += 1
             self.S[0] = self.n
             self.S[self.m] = -1
             self.t = 0
         else:
-            ts = msprime.load(from_ts)
+            ts = tskit.load(from_ts)
             if ts.sequence_length != self.m:
                 raise ValueError("Sequence length in from_ts must match")
             if ts.num_populations != N:
@@ -902,7 +902,7 @@ class Simulator:
         Stores the specified edge to the output tree sequence.
         """
         self.edge_buffer.append(
-            msprime.Edge(left=left, right=right, parent=parent, child=child)
+            tskit.Edge(left=left, right=right, parent=parent, child=child)
         )
 
     def finalise(self):
