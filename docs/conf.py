@@ -12,7 +12,6 @@
 # serve to show the default.
 import os
 import sys
-from unittest.mock import MagicMock
 
 import pkg_resources
 from docutils import nodes
@@ -23,16 +22,7 @@ from sphinx.util.docfields import TypedField
 # documentation build on readthedocs, so we mock the module. Follows
 # the recommended pattern at
 # http://docs.readthedocs.org/en/latest/faq.html
-
-
-class Mock(MagicMock):
-    @classmethod
-    def __getattr__(cls, name):
-        return MagicMock()
-
-
-MOCK_MODULES = ["msprime._msprime"]
-sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+autodoc_mock_imports = ["msprime._msprime"]
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the

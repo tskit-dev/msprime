@@ -39,7 +39,6 @@
   ``simulate`` and ``mutate``. These sub-commands are provided by the ``tskit``
   CLI or the ``TreeSequence`` API in ``tskit``.
 
-
 **Deprecations**:
 
 - Deprecate module attributes that were moved to tskit.
