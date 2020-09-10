@@ -4,7 +4,7 @@ Tests for the algorithms.py script.
 import pathlib
 import platform
 import tempfile
-import unittest
+import unittest.mock
 
 import numpy as np
 import tskit
@@ -38,7 +38,9 @@ class TestAlgorithms(unittest.TestCase):
         # print("RUN", cmd)
         with tempfile.TemporaryDirectory() as tmpdir:
             outfile = pathlib.Path(tmpdir) / "out.trees"
-            algorithms.main(cmd.split() + [str(outfile)])
+            # Avoid dairquiri mucking up the logging setup for unittest.
+            with unittest.mock.patch("daiquiri.setup"):
+                algorithms.main(cmd.split() + [str(outfile)])
             return tskit.load(outfile)
 
     def test_defaults(self):
