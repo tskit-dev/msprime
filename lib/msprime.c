@@ -335,7 +335,7 @@ msp_set_gene_conversion_rate(msp_t *self, double rate)
 }
 
 static inline double
-msp_get_recomb_left_bound(msp_t *self, segment_t *seg)
+msp_get_recomb_mass(msp_t *self, segment_t *seg)
 {
     double left_bound;
     if (seg->prev == NULL) {
@@ -343,13 +343,28 @@ msp_get_recomb_left_bound(msp_t *self, segment_t *seg)
     } else {
         left_bound = seg->prev->right;
     }
-    return left_bound;
+    return rate_map_mass_between(&self->recomb_map, left_bound, seg->right);
 }
 
 static inline double
-msp_get_gc_left_bound(msp_t *self, segment_t *seg)
+msp_get_gc_mass(msp_t *self, segment_t *seg)
 {
-    return msp_get_recomb_left_bound(self, seg);
+    double start, left_bound, mean_rate, gc_mass;
+    double gc_left_mass = 0;
+
+    if (seg->prev == NULL) {
+        start = self->discrete_genome? 1 : 0;
+        if (seg->left > start) {
+            gc_mass = rate_map_mass_between(&self->gc_map, start, seg->left);
+            mean_rate = gc_mass / (seg->left - start);
+            gc_left_mass = mean_rate * self->gc_track_length;
+        }
+        left_bound = self->discrete_genome ? seg->left + 1 : seg->left;
+    } else {
+        left_bound = seg->prev->right;
+    }
+    assert(gc_left_mass >= 0);
+    return gc_left_mass + rate_map_mass_between(&self->gc_map, left_bound, seg->right);
 }
 
 /* Set the mass of the specified segment to that between the segment's right endpoint
@@ -358,19 +373,14 @@ msp_get_gc_left_bound(msp_t *self, segment_t *seg)
 static void
 msp_set_segment_mass(msp_t *self, segment_t *seg)
 {
-    double left_bound, mass;
+    double mass;
 
     if (self->recomb_mass_index != NULL) {
-        left_bound = msp_get_recomb_left_bound(self, seg);
-        mass = rate_map_mass_between(&self->recomb_map, left_bound, seg->right);
+        mass = msp_get_recomb_mass(self, seg);
         fenwick_set_value(&self->recomb_mass_index[seg->label], seg->id, mass);
     }
     if (self->gc_mass_index != NULL) {
-        /* NOTE: it looks like the gc_left_bound doesn't actually give us the
-         * right distribution of gc events, so we'll probably get rid of this
-         * and use the same left bound for both. */
-        left_bound = msp_get_gc_left_bound(self, seg);
-        mass = rate_map_mass_between(&self->gc_map, left_bound, seg->right);
+        mass = msp_get_gc_mass(self, seg);
         fenwick_set_value(&self->gc_mass_index[seg->label], seg->id, mass);
     }
 }
@@ -1074,11 +1084,11 @@ msp_print_segment_chain(msp_t *MSP_UNUSED(self), segment_t *head, FILE *out)
 /* TODO remove the left_at_zero option, it's for old GC version that didn't work. */
 static void
 msp_verify_segment_index(
-    msp_t *self, fenwick_t *mass_index_array, rate_map_t *rate_map, bool left_at_zero)
+    msp_t *self, fenwick_t *mass_index_array,
+    double (*compute_mass)(msp_t *, segment_t*))
 {
 
-    double left, right, left_bound;
-    double s, ss, total_mass, alt_total_mass;
+    double s, ss, total_mass;
     size_t j, k;
     const double epsilon = 1e-10;
     avl_node_t *node;
@@ -1086,24 +1096,12 @@ msp_verify_segment_index(
 
     for (k = 0; k < self->num_labels; k++) {
         total_mass = 0;
-        alt_total_mass = 0;
         for (j = 0; j < self->num_populations; j++) {
             node = (&self->populations[j].ancestors[k])->head;
             while (node != NULL) {
                 u = (segment_t *) node->item;
-                left = u->left;
                 while (u != NULL) {
-                    if (u->prev != NULL) {
-                        s = rate_map_mass_between(rate_map, u->prev->right, u->right);
-                    } else {
-                        if (left_at_zero) {
-                            left_bound = self->discrete_genome ? 1 : 0;
-                        } else {
-                            left_bound = self->discrete_genome ? u->left + 1 : u->left;
-                        }
-                        assert(left_bound <= u->right);
-                        s = rate_map_mass_between(rate_map, left_bound, u->right);
-                    }
+                    s = compute_mass(self, u);
                     assert(s >= 0);
                     ss = fenwick_get_value(&mass_index_array[k], u->id);
                     assert(doubles_almost_equal(s, ss, epsilon));
@@ -1111,22 +1109,13 @@ msp_verify_segment_index(
                     if (s == ss) {
                         /* do nothing; just to keep compiler happy - see below also */
                     }
-                    right = u->right;
                     u = u->next;
                 }
-                if (left_at_zero) {
-                    left_bound = self->discrete_genome ? 1 : 0;
-                } else {
-                    left_bound = self->discrete_genome ? left + 1 : left;
-                }
-                s = rate_map_mass_between(rate_map, left_bound, right);
-                alt_total_mass += s;
                 node = node->next;
             }
         }
         assert(doubles_almost_equal(
             total_mass, fenwick_get_total(&mass_index_array[k]), epsilon));
-        assert(doubles_almost_equal(total_mass, alt_total_mass, epsilon));
     }
 }
 
@@ -1182,10 +1171,10 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
     }
     if (self->recomb_mass_index != NULL) {
         msp_verify_segment_index(
-            self, self->recomb_mass_index, &self->recomb_map, false);
+            self, self->recomb_mass_index, msp_get_recomb_mass);
     }
     if (self->gc_mass_index != NULL) {
-        msp_verify_segment_index(self, self->gc_mass_index, &self->gc_map, false);
+        msp_verify_segment_index(self, self->gc_mass_index, msp_get_gc_mass);
     }
     /* Check that the mass indexes are set appropriately */
     if (self->model.type == MSP_MODEL_DTWF || self->model.type == MSP_MODEL_WF_PED) {
@@ -3962,17 +3951,20 @@ msp_find_gc_left_individual(
 }
 
 static double
-msp_get_total_gc_left_rate(msp_t *self, label_id_t label)
+msp_get_total_gc_left_rate(msp_t *MSP_UNUSED(self), label_id_t MSP_UNUSED(label))
 {
-    double mean_gc_rate = rate_map_get_total_mass(&self->gc_map) / self->sequence_length;
-    double ret = 0;
-    double total_gc_left;
+    /* double mean_gc_rate = rate_map_get_total_mass(&self->gc_map) / self->sequence_length; */
+    /* double ret = 0; */
+    /* double total_gc_left; */
 
-    if (mean_gc_rate > 0) {
-        total_gc_left = msp_get_total_gc_left(self, label);
-        ret = total_gc_left * self->gc_track_length * mean_gc_rate;
-    }
-    return ret;
+    /* if (mean_gc_rate > 0) { */
+    /*     total_gc_left = msp_get_total_gc_left(self, label); */
+    /*     ret = total_gc_left * self->gc_track_length * mean_gc_rate; */
+    /* } */
+    /* return ret; */
+    /* FIXME disabling the gc_left process to experiment with doing everything
+     * with gc_in */
+    return 0;
 }
 
 static int MSP_WARN_UNUSED

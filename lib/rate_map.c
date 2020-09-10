@@ -140,6 +140,7 @@ rate_map_mass_between(rate_map_t *self, double left, double right)
 {
     double left_mass = rate_map_position_to_mass(self, left);
     double right_mass = rate_map_position_to_mass(self, right);
+    assert(left <= right);
     return right_mass - left_mass;
 }
 

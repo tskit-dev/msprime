@@ -528,6 +528,7 @@ class RateMap:
         return self.total_mass / self.sequence_length
 
     def mass_between(self, left, right):
+        assert left <= right
         left_mass = self.position_to_mass(left)
         right_mass = self.position_to_mass(right)
         return right_mass - left_mass
@@ -967,11 +968,14 @@ class Simulator:
         return total_rate
 
     def get_total_gc_left_rate(self, label):
-        gc_left_total = self.get_total_gc_left(label)
+        # gc_left_total = self.get_total_gc_left(label)
         # NOTE: this is an approximation. Should we be multiplying by the
         # local GC rate when iterating over the segments?
-        mean_gc_rate = self.gc_map.mean_rate
-        return mean_gc_rate * self.track_length * gc_left_total
+        # mean_gc_rate = self.gc_map.mean_rate
+        # return mean_gc_rate * self.track_length * gc_left_total
+        # FIXME returning 0 for now to turn this event off so we can
+        # experiment with the single process.
+        return 0
 
     def get_individual_length(self, head):
         tail = head
@@ -1384,20 +1388,32 @@ class Simulator:
             u.population = k
             u = u.next
 
-    def get_recomb_left_bound(self, seg):
+    def get_recomb_mass(self, seg):
         """
-        Returns the left bound for genomic region over which the specified
-        segment represents recombination events.
+        Returns the recombination mass for the genomic region over which
+        the specified segment subtends.
         """
         if seg.prev is None:
             left_bound = seg.left + 1 if self.discrete_genome else seg.left
         else:
             left_bound = seg.prev.right
-        return left_bound
+        return self.recomb_map.mass_between(left_bound, seg.right)
 
-    def get_gc_left_bound(self, seg):
-        # TODO remove me
-        return self.get_recomb_left_bound(seg)
+    def get_gc_mass(self, seg):
+        gc_left_mass = 0
+        if seg.prev is None:
+            # If this is the initial segment we have to take into account
+            # the extra events that are initiated to the left.
+            start = 1 if self.discrete_genome else 0
+            if seg.left > start:
+                gc_mass = self.gc_map.mass_between(start, seg.left)
+                mean_rate = gc_mass / (seg.left - start)
+                gc_left_mass = mean_rate * self.track_length
+            left_bound = seg.left + 1 if self.discrete_genome else seg.left
+        else:
+            left_bound = seg.prev.right
+        assert gc_left_mass >= 0
+        return gc_left_mass + self.gc_map.mass_between(left_bound, seg.right)
 
     def set_segment_mass(self, seg):
         """
@@ -1406,14 +1422,10 @@ class Simulator:
         """
         if self.recomb_mass_index is not None:
             mass_index = self.recomb_mass_index[seg.label]
-            recomb_left_bound = self.get_recomb_left_bound(seg)
-            recomb_mass = self.recomb_map.mass_between(recomb_left_bound, seg.right)
-            mass_index.set_value(seg.index, recomb_mass)
+            mass_index.set_value(seg.index, self.get_recomb_mass(seg))
         if self.gc_mass_index is not None:
             mass_index = self.gc_mass_index[seg.label]
-            gc_left_bound = self.get_gc_left_bound(seg)
-            gc_mass = self.gc_map.mass_between(gc_left_bound, seg.right)
-            mass_index.set_value(seg.index, gc_mass)
+            mass_index.set_value(seg.index, self.get_gc_mass(seg))
 
     def set_labels(self, segment, new_label):
         """
@@ -1434,9 +1446,16 @@ class Simulator:
 
     def choose_breakpoint(self, mass_index, rate_map):
         assert mass_index.get_total() > 0
+        # Having an extra mass "outside" of the rate map here doesn't work
+        # because the code below assumes the mass is all from the rate
+        # map when it tries to convert from a random mass value to a position.
         random_mass = random.uniform(0, mass_index.get_total())
         y = self.segments[mass_index.find(random_mass)]
         y_cumulative_mass = mass_index.get_cumulative_sum(y.index)
+        # I _guess_ we could check to see what the mass on this specific
+        # segment is and then in the GC case we could see if the random mass
+        # is within or before the segment. We could then probably generate
+        # a breakpoint appropriately?
         y_right_mass = rate_map.position_to_mass(y.right)
         bp_mass = y_right_mass - (y_cumulative_mass - random_mass)
         bp = rate_map.mass_to_position(bp_mass)
@@ -2078,8 +2097,7 @@ class Simulator:
                     s = self.recomb_mass_index[label].get_value(j)
                     if s != 0:
                         seg = self.segments[j]
-                        left_bound = self.get_recomb_left_bound(seg)
-                        sp = self.recomb_map.mass_between(left_bound, seg.right)
+                        sp = self.get_recomb_mass(seg)
                         print("\t", j, "->", s, sp)
             if self.gc_mass_index is not None:
                 print(
@@ -2090,8 +2108,7 @@ class Simulator:
                     s = self.gc_mass_index[label].get_value(j)
                     if s != 0:
                         seg = self.segments[j]
-                        left_bound = self.get_gc_left_bound(seg)
-                        sp = self.gc_map.mass_between(left_bound, seg.right)
+                        sp = self.get_gc_mass(seg)
                         print("\t", j, "->", s, sp)
         print("nodes")
         print(self.tables.nodes)
@@ -2160,20 +2177,16 @@ class Simulator:
                 j = k
         assert list(A.items()) == list(self.S.items())
 
-    def verify_mass_index(self, label, mass_index, rate_map, compute_left_bound):
+    def verify_mass_index(self, label, mass_index, rate_map, compute_seg_mass):
         assert mass_index is not None
         total_mass = 0
-        alt_total_mass = 0
         for pop_index, pop in enumerate(self.P):
             for u in pop.iter_label(label):
                 assert u.prev is None
-                left = compute_left_bound(u)
                 while u is not None:
                     assert u.population == pop_index
                     assert u.left < u.right
-                    left_bound = compute_left_bound(u)
-                    s = rate_map.mass_between(left_bound, u.right)
-                    right = u.right
+                    s = compute_seg_mass(u)
                     index_value = mass_index.get_value(u.index)
                     total_mass += index_value
                     assert math.isclose(s, index_value, abs_tol=1e-6)
@@ -2182,11 +2195,7 @@ class Simulator:
                         assert v.prev == u
                         assert u.right <= v.left
                     u = v
-
-                s = rate_map.mass_between(left, right)
-                alt_total_mass += s
         assert math.isclose(total_mass, mass_index.get_total(), abs_tol=1e-6)
-        assert math.isclose(total_mass, alt_total_mass, abs_tol=1e-6)
 
     def verify(self):
         """
@@ -2205,17 +2214,14 @@ class Simulator:
                         label,
                         self.recomb_mass_index[label],
                         self.recomb_map,
-                        self.get_recomb_left_bound,
+                        self.get_recomb_mass,
                     )
 
                 if self.gc_mass_index is None:
                     assert self.gc_map.total_mass == 0
                 else:
                     self.verify_mass_index(
-                        label,
-                        self.gc_mass_index[label],
-                        self.gc_map,
-                        self.get_gc_left_bound,
+                        label, self.gc_mass_index[label], self.gc_map, self.get_gc_mass,
                     )
 
 
