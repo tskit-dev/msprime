@@ -223,7 +223,7 @@ msp_set_start_time(msp_t *self, double start_time)
 {
     int ret = 0;
 
-    if (start_time < 0.0) {
+    if (!isfinite(start_time)) {
         ret = MSP_ERR_BAD_START_TIME;
         goto out;
     }
@@ -469,64 +469,33 @@ out:
     return ret;
 }
 
-int
-msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels)
+static int
+msp_alloc_populations(msp_t *self)
 {
     int ret = 0;
-    size_t j, k;
+    size_t j;
+    size_t N = self->num_populations * self->num_populations;
 
-    if (num_populations < 1 || num_populations > UINT32_MAX) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-    if (num_labels < 1 || num_labels > UINT32_MAX) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
-
-    /* Free any memory, if it has been allocated */
-    for (j = 0; j < self->num_populations; j++) {
-        msp_safe_free(self->populations[j].ancestors);
-        msp_safe_free(self->populations[j].potential_destinations);
-    }
-    msp_safe_free(self->populations);
-    msp_safe_free(self->initial_populations);
-    msp_safe_free(self->initial_migration_matrix);
-    msp_safe_free(self->migration_matrix);
-    msp_safe_free(self->num_migration_events);
-    msp_safe_free(self->segment_heap);
-
-    self->num_populations = (uint32_t) num_populations;
-    self->num_labels = (uint32_t) num_labels;
-    self->initial_migration_matrix = calloc(
-        num_populations * num_populations, sizeof(*self->initial_migration_matrix));
-    self->migration_matrix
-        = calloc(num_populations * num_populations, sizeof(*self->migration_matrix));
-    self->num_migration_events
-        = calloc(num_populations * num_populations, sizeof(*self->num_migration_events));
+    self->initial_migration_matrix = calloc(N, sizeof(*self->initial_migration_matrix));
+    self->migration_matrix = calloc(N, sizeof(*self->migration_matrix));
+    self->num_migration_events = calloc(N, sizeof(*self->num_migration_events));
     self->initial_populations
-        = calloc(num_populations, sizeof(*self->initial_populations));
-    self->populations = calloc(num_populations, sizeof(*self->populations));
-    self->segment_heap = calloc(self->num_labels, sizeof(*self->segment_heap));
+        = calloc(self->num_populations, sizeof(*self->initial_populations));
+    self->populations = calloc(self->num_populations, sizeof(*self->populations));
+
     if (self->migration_matrix == NULL || self->initial_migration_matrix == NULL
         || self->num_migration_events == NULL || self->initial_populations == NULL
-        || self->populations == NULL || self->segment_heap == NULL) {
+        || self->populations == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-
-    for (j = 0; j < num_populations; j++) {
-        self->populations[j].ancestors
-            = malloc(self->num_labels * sizeof(*self->populations[j].ancestors));
-        self->populations[j].potential_destinations = malloc(
-            num_populations * sizeof(*self->populations[j].potential_destinations));
-        if (self->populations[j].ancestors == NULL
-            || self->populations[j].potential_destinations == NULL) {
+    for (j = 0; j < self->num_populations; j++) {
+        self->populations[j].potential_destinations
+            = malloc(self->num_populations
+                     * sizeof(*self->populations[j].potential_destinations));
+        if (self->populations[j].potential_destinations == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
-        }
-        for (k = 0; k < num_labels; k++) {
-            avl_init_tree(&self->populations[j].ancestors[k], cmp_individual, NULL);
         }
         /* Set the default sizes and growth rates. */
         self->initial_populations[j].growth_rate = 0.0;
@@ -538,9 +507,42 @@ out:
 }
 
 int
-msp_set_num_populations(msp_t *self, size_t num_populations)
+msp_set_num_labels(msp_t *self, size_t num_labels)
 {
-    return msp_set_dimensions(self, num_populations, 1);
+    int ret = 0;
+    size_t j, k;
+
+    if (num_labels < 1 || num_labels > UINT32_MAX) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+
+    /* Free any memory, if it has been allocated */
+    for (j = 0; j < self->num_populations; j++) {
+        msp_safe_free(self->populations[j].ancestors);
+    }
+    msp_safe_free(self->segment_heap);
+
+    self->num_labels = (uint32_t) num_labels;
+    self->segment_heap = calloc(self->num_labels, sizeof(*self->segment_heap));
+    if (self->segment_heap == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    for (j = 0; j < self->num_populations; j++) {
+        self->populations[j].ancestors
+            = malloc(self->num_labels * sizeof(*self->populations[j].ancestors));
+        if (self->populations[j].ancestors == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        for (k = 0; k < num_labels; k++) {
+            avl_init_tree(&self->populations[j].ancestors[k], cmp_individual, NULL);
+        }
+    }
+out:
+    return ret;
 }
 
 int
@@ -549,7 +551,7 @@ msp_set_population_configuration(
 {
     int ret = MSP_ERR_BAD_POPULATION_CONFIGURATION;
 
-    if (population_id < 0 || population_id > (int) self->num_populations) {
+    if (population_id < 0 || population_id >= (int) self->num_populations) {
         ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
@@ -693,11 +695,9 @@ msp_copy_segment(msp_t *self, segment_t *seg)
 /* Top level allocators and initialisation */
 
 int
-msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
-    tsk_table_collection_t *tables, gsl_rng *rng)
+msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng)
 {
     int ret = -1;
-    size_t j;
 
     memset(self, 0, sizeof(msp_t));
     if (rng == NULL || tables == NULL) {
@@ -715,7 +715,12 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
     self->tables = tables;
     self->sequence_length = tables->sequence_length;
     if (self->sequence_length <= 0) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
+        ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
+        goto out;
+    }
+    self->num_populations = self->tables->populations.num_rows;
+    if (self->num_populations == 0) {
+        ret = MSP_ERR_ZERO_POPULATIONS;
         goto out;
     }
     ret = msp_set_recombination_rate(self, 0.0);
@@ -726,60 +731,17 @@ msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
     if (ret != 0) {
         goto out;
     }
-
-    if (num_samples > 0) {
-        if (num_samples < 2 || samples == NULL || self->tables->nodes.num_rows > 0) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-        self->num_samples = (uint32_t) num_samples;
-        self->samples = malloc(num_samples * sizeof(sample_t));
-        if (self->samples == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        for (j = 0; j < num_samples; j++) {
-            self->samples[j].population = samples[j].population;
-            self->samples[j].time = samples[j].time;
-            if (self->samples[j].time < 0) {
-                ret = MSP_ERR_BAD_PARAM_VALUE;
-                goto out;
-            }
-        }
-    } else {
-        if (self->tables->nodes.num_rows == 0) {
-            ret = MSP_ERR_BAD_PARAM_VALUE;
-            goto out;
-        }
-        self->from_ts = malloc(sizeof(*self->from_ts));
-        if (self->from_ts == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        ret = tsk_treeseq_init(self->from_ts, self->tables, TSK_BUILD_INDEXES);
-        if (ret != 0) {
-            ret = msp_set_tsk_error(ret);
-            goto out;
-        }
-        ret = tsk_table_collection_record_num_rows(self->tables, &self->from_position);
-        if (ret != 0) {
-            ret = msp_set_tsk_error(ret);
-            goto out;
-        }
-        if (self->sequence_length != self->tables->sequence_length) {
-            ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
-            goto out;
-        }
-    }
-
-    self->start_time = -1;
-    /* We have one population and one label by default */
-    ret = msp_set_dimensions(self, 1, 1);
+    ret = msp_alloc_populations(self);
     if (ret != 0) {
         goto out;
     }
-    /* Set sensible defaults for the sample_config and migration matrix */
-    self->initial_migration_matrix[0] = 0.0;
+    ret = msp_set_num_labels(self, 1);
+    if (ret != 0) {
+        goto out;
+    }
+
+    /* If the start_time is not set, we default to the minimum root time */
+    self->start_time = -DBL_MAX;
     /* Set the memory defaults */
     self->store_migrations = false;
     self->store_full_arg = false;
@@ -852,6 +814,27 @@ msp_is_completed(msp_t *self)
     return self->state == MSP_STATE_SIMULATING && n == 0;
 }
 
+static int
+msp_free_pedigree(msp_t *self)
+{
+    individual_t *ind = NULL;
+    size_t i;
+
+    ind = self->pedigree->inds;
+    if (ind != NULL) {
+        assert(self->pedigree->num_inds > 0);
+        for (i = 0; i < self->pedigree->num_inds; i++) {
+            msp_safe_free(ind->parents);
+            msp_safe_free(ind->segments);
+            ind++;
+        }
+    }
+    msp_safe_free(self->pedigree->inds);
+    msp_safe_free(self->pedigree->samples);
+    msp_safe_free(self->pedigree);
+    return 0;
+}
+
 int
 msp_free(msp_t *self)
 {
@@ -889,18 +872,15 @@ msp_free(msp_t *self)
     msp_safe_free(self->num_migration_events);
     msp_safe_free(self->initial_populations);
     msp_safe_free(self->populations);
-    msp_safe_free(self->samples);
     msp_safe_free(self->sampling_events);
     msp_safe_free(self->buffered_edges);
+    msp_safe_free(self->root_segments);
+    msp_safe_free(self->initial_overlaps);
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
     object_heap_free(&self->node_mapping_heap);
     rate_map_free(&self->recomb_map);
     rate_map_free(&self->gc_map);
-    if (self->from_ts != NULL) {
-        tsk_treeseq_free(self->from_ts);
-        free(self->from_ts);
-    }
     if (self->model.free != NULL) {
         self->model.free(&self->model);
     }
@@ -1136,11 +1116,21 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
     size_t j, k;
     size_t label_segments = 0;
     size_t total_avl_nodes = 0;
+    size_t num_root_segments = 0;
     avl_node_t *node;
     segment_t *u;
 
+    for (j = 0; j < self->input_position.nodes; j++) {
+        for (u = self->root_segments[j]; u != NULL; u = u->next) {
+            num_root_segments++;
+        }
+    }
+
     for (k = 0; k < self->num_labels; k++) {
         label_segments = 0;
+        if (k == 0) {
+            label_segments += num_root_segments;
+        }
         for (j = 0; j < self->num_populations; j++) {
             node = (&self->populations[j].ancestors[k])->head;
             while (node != NULL) {
@@ -1320,23 +1310,29 @@ msp_verify_overlaps(msp_t *self)
 {
     avl_node_t *node;
     node_mapping_t *nm;
+    sampling_event_t se;
     segment_t *u;
-    uint32_t j, label, count;
+    size_t j;
+    uint32_t label, count;
     overlap_counter_t counter;
-    int remaining_samples
-        = (int) (self->num_sampling_events - self->next_sampling_event);
 
-    int ok = overlap_counter_alloc(&counter, self->sequence_length, remaining_samples);
+    int ok = overlap_counter_alloc(&counter, self->sequence_length, 0);
     assert(ok == 0);
+
+    /* add in the overlaps for ancient samples */
+    for (j = self->next_sampling_event; j < self->num_sampling_events; j++) {
+        se = self->sampling_events[j];
+        for (u = self->root_segments[se.sample]; u != NULL; u = u->next) {
+            overlap_counter_increment_interval(&counter, u->left, u->right);
+        }
+    }
 
     for (label = 0; label < self->num_labels; label++) {
         for (j = 0; j < self->num_populations; j++) {
             for (node = (&self->populations[j].ancestors[label])->head; node != NULL;
                  node = node->next) {
-                u = (segment_t *) node->item;
-                while (u != NULL) {
+                for (u = (segment_t *) node->item; u != NULL; u = u->next) {
                     overlap_counter_increment_interval(&counter, u->left, u->right);
-                    u = u->next;
                 }
             }
         }
@@ -1404,15 +1400,123 @@ msp_verify_migration_destinations(msp_t *self)
     }
 }
 
+static void
+msp_verify_initial_state(msp_t *self)
+{
+    overlap_count_t *overlap;
+    double last_overlap_left = -1;
+    tsk_size_t j;
+    segment_t *head, *seg, *prev;
+
+    for (overlap = self->initial_overlaps; overlap->left < self->sequence_length;
+         overlap++) {
+        assert(overlap->left > last_overlap_left);
+        last_overlap_left = overlap->left;
+    }
+    /* Last overlap should be a sentinal */
+    overlap->left = self->sequence_length;
+    overlap->count = UINT32_MAX;
+
+    /* First overlap should be 0 */
+    assert(self->initial_overlaps->left == 0);
+
+    /* Check the root segments */
+    for (j = 0; j < self->input_position.nodes; j++) {
+        head = self->root_segments[j];
+        if (head != NULL) {
+            prev = NULL;
+            for (seg = head; seg != NULL; seg = seg->next) {
+                if (prev != NULL) {
+                    assert(prev->next == seg);
+                    assert(seg->prev == prev);
+                    assert(prev->right <= seg->left);
+                }
+                assert(seg->left < seg->right);
+                assert(seg->value == (tsk_id_t) j);
+                prev = seg;
+            }
+        }
+    }
+}
+
 void
 msp_verify(msp_t *self, int options)
 {
+    msp_verify_initial_state(self);
     msp_verify_segments(self, options & MSP_VERIFY_BREAKPOINTS);
     msp_verify_overlaps(self);
     if (self->model.type == MSP_MODEL_HUDSON && self->state == MSP_STATE_SIMULATING) {
         msp_verify_non_empty_populations(self);
         msp_verify_migration_destinations(self);
     }
+}
+
+static void
+msp_print_individual(msp_t *self, individual_t *ind, FILE *out)
+{
+    size_t j;
+
+    fprintf(out, "\tID: %d - Time: %f, Parents: [", ind->id, ind->time);
+
+    for (j = 0; j < self->ploidy; j++) {
+        if (ind->parents[j] != NULL) {
+            fprintf(out, " %d", ind->parents[j]->id);
+        } else {
+            fprintf(out, " None");
+        }
+    }
+    fprintf(out, " ]\n");
+}
+
+static void
+msp_print_pedigree_inds(msp_t *self, FILE *out)
+{
+    individual_t *ind;
+    size_t i;
+
+    assert(self->pedigree != NULL);
+    assert(self->pedigree->inds != NULL);
+    assert(self->pedigree->num_inds > 0);
+    fprintf(out, "Pedigree:\n");
+
+    for (i = 0; i < self->pedigree->num_inds; i++) {
+        ind = &self->pedigree->inds[i];
+        msp_print_individual(self, ind, out);
+    }
+}
+
+static void
+msp_print_root_segments(msp_t *self, FILE *out)
+{
+    segment_t *seg, *head;
+    tsk_size_t j;
+
+    fprintf(out, "Root segments\n");
+    for (j = 0; j < self->input_position.nodes; j++) {
+        head = self->root_segments[j];
+        if (head != NULL) {
+            fprintf(out, "\t%d", j);
+            for (seg = head; seg != NULL; seg = seg->next) {
+                fprintf(out, "(%f, %f)", seg->left, seg->right);
+            }
+            fprintf(out, "\n");
+        }
+    }
+}
+
+static void
+msp_print_initial_overlaps(msp_t *self, FILE *out)
+{
+    overlap_count_t *overlap;
+
+    fprintf(out, "Initial overlaps\n");
+
+    for (overlap = self->initial_overlaps; overlap->left < self->sequence_length;
+         overlap++) {
+        fprintf(out, "\t%f -> %d\n", overlap->left, overlap->count);
+    }
+    assert(overlap->left == self->sequence_length);
+    fprintf(out, "\t%f -> %d\n", overlap->left, overlap->count);
 }
 
 int
@@ -1450,22 +1554,20 @@ msp_print_state(msp_t *self, FILE *out)
         fprintf(out, "\tsweep @ locus = %f\n", self->model.params.sweep.position);
         self->model.params.sweep.print_state(&self->model.params.sweep, out);
     }
-    fprintf(out, "n = %d\n", self->num_samples);
     fprintf(out, "L = %.14g\n", self->sequence_length);
     fprintf(out, "discrete_genome = %d\n", self->discrete_genome);
-    fprintf(out, "from_ts    = %p\n", (void *) self->from_ts);
     fprintf(out, "start_time = %f\n", self->start_time);
-    fprintf(out, "Samples    = \n");
-    for (j = 0; j < self->num_samples; j++) {
-        fprintf(out, "\t%d\tpopulation=%d\ttime=%f\n", j,
-            (int) self->samples[j].population, self->samples[j].time);
-    }
     fprintf(out, "recombination map:\n");
     rate_map_print_state(&self->recomb_map, out);
     fprintf(out, "gene_conversion_track_length = %f\n", self->gc_track_length);
     fprintf(out, "gene conversion map:\n");
     rate_map_print_state(&self->gc_map, out);
 
+    if (self->pedigree != NULL) {
+        msp_print_pedigree_inds(self, out);
+    }
+    msp_print_root_segments(self, out);
+    msp_print_initial_overlaps(self, out);
     fprintf(out, "Sampling events:\n");
     for (j = 0; j < self->num_sampling_events; j++) {
         if (j == self->next_sampling_event) {
@@ -1895,6 +1997,7 @@ msp_copy_overlap_count(msp_t *self, double k)
     ret = msp_insert_overlap_count(self, k, nm->value);
     return ret;
 }
+
 static int
 msp_compress_overlap_counts(msp_t *self, double l, double r)
 {
@@ -1992,8 +2095,6 @@ alloc_individual(individual_t *ind, size_t ploidy)
     int ret;
     size_t i;
 
-    ind->id = -1;
-    ind->tsk_id = TSK_NULL;
     ind->sex = -1;
     ind->time = -1;
     ind->queued = false;
@@ -2019,14 +2120,12 @@ static int MSP_WARN_UNUSED
 msp_reset_individual(msp_t *self, individual_t *ind)
 {
     int ret = 0;
-    /* avl_node_t *node; */
     size_t i;
 
-    ind->tsk_id = TSK_NULL;
     ind->queued = false;
     ind->merged = false;
 
-    for (i = 0; i < self->pedigree->ploidy; i++) {
+    for (i = 0; i < self->ploidy; i++) {
         /* TODO: We don't yet support terminating pedigree simulations before
            reaching the pedigree founders, which means all segments are moved
            back into the population pool before a reset is possible. Might need
@@ -2065,14 +2164,12 @@ out:
     return ret;
 }
 
-int MSP_WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_alloc_pedigree(msp_t *self, size_t num_inds, size_t ploidy)
 {
     int ret;
-    size_t i, num_samples;
+    size_t i;
     individual_t *ind;
-
-    num_samples = self->num_samples / ploidy;
 
     self->pedigree = malloc(sizeof(pedigree_t));
     if (self->pedigree == NULL) {
@@ -2092,7 +2189,7 @@ msp_alloc_pedigree(msp_t *self, size_t num_inds, size_t ploidy)
         }
         ind++;
     }
-    self->pedigree->samples = malloc(num_samples * sizeof(individual_t *));
+    self->pedigree->samples = malloc(num_inds * sizeof(individual_t *));
     if (self->pedigree->samples == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -2100,8 +2197,6 @@ msp_alloc_pedigree(msp_t *self, size_t num_inds, size_t ploidy)
     avl_init_tree(&self->pedigree->ind_heap, cmp_pedigree_individual, NULL);
 
     self->pedigree->num_inds = num_inds;
-    self->pedigree->ploidy = ploidy;
-    self->pedigree->num_samples = num_samples;
     self->pedigree->state = MSP_PED_STATE_UNCLIMBED;
 
     ret = 0;
@@ -2109,35 +2204,11 @@ out:
     return ret;
 }
 
-int MSP_WARN_UNUSED
-msp_free_pedigree(msp_t *self)
+/* TODO merge this method into where it's called - we don't really need these
+ * arrays any more. */
+static int MSP_WARN_UNUSED
+msp_set_pedigree(msp_t *self, tsk_id_t *parents, double *times, tsk_flags_t *is_sample)
 {
-    int ret;
-    individual_t *ind = NULL;
-    size_t i;
-
-    ind = self->pedigree->inds;
-    if (ind != NULL) {
-        assert(self->pedigree->num_inds > 0);
-        for (i = 0; i < self->pedigree->num_inds; i++) {
-            msp_safe_free(ind->parents);
-            msp_safe_free(ind->segments);
-            ind++;
-        }
-    }
-    msp_safe_free(self->pedigree->inds);
-    msp_safe_free(self->pedigree->samples);
-    msp_safe_free(self->pedigree);
-
-    ret = 0;
-    return ret;
-}
-
-int MSP_WARN_UNUSED
-msp_set_pedigree(msp_t *self, size_t num_rows, tsk_id_t *inds, tsk_id_t *parents,
-    double *times, tsk_flags_t *is_sample)
-{
-    int ret;
     size_t i, j;
     tsk_id_t parent_ix;
     tsk_flags_t sample_flag;
@@ -2145,31 +2216,21 @@ msp_set_pedigree(msp_t *self, size_t num_rows, tsk_id_t *inds, tsk_id_t *parents
     individual_t *ind = NULL;
 
     assert(self->pedigree != NULL);
-    if (num_rows != self->pedigree->num_inds) {
-        ret = MSP_ERR_BAD_PARAM_VALUE;
-        goto out;
-    }
 
     ind = self->pedigree->inds;
     sample_num = 0;
     for (i = 0; i < self->pedigree->num_inds; i++) {
-        ind->id = inds[i];
-
-        if (ind->id <= 0) {
-            ret = MSP_ERR_BAD_PEDIGREE_ID;
-            goto out;
-        }
-
+        ind = &self->pedigree->inds[i];
+        ind->id = (tsk_id_t) i;
         ind->time = times[i];
 
         // Link individuals to parents
-        for (j = 0; j < self->pedigree->ploidy; j++) {
-            parent_ix = parents[i * self->pedigree->ploidy + j];
-            if (parent_ix >= 0) {
-                *(ind->parents + j) = self->pedigree->inds + parent_ix;
+        for (j = 0; j < self->ploidy; j++) {
+            parent_ix = parents[i * self->ploidy + j];
+            if (parent_ix != TSK_NULL) {
+                ind->parents[j] = &self->pedigree->inds[parent_ix];
             }
         }
-
         // Set samples
         sample_flag = is_sample[i];
         if (sample_flag != 0) {
@@ -2177,20 +2238,12 @@ msp_set_pedigree(msp_t *self, size_t num_rows, tsk_id_t *inds, tsk_id_t *parents
             self->pedigree->samples[sample_num] = ind;
             sample_num++;
         }
-        ind++;
     }
-    if (sample_num != self->pedigree->num_samples) {
-        /* TODO: Should be something like MSP_ERR_PEDIGREE_BAD_NUM_SAMPLES */
-        ret = MSP_ERR_BAD_PEDIGREE_ID;
-        goto out;
-    }
-
-    ret = 0;
-out:
-    return ret;
+    self->pedigree->num_samples = sample_num;
+    return 0;
 }
 
-void
+static void
 msp_check_samples(msp_t *self)
 {
     // Samples should have a single segment for each copy of their genome
@@ -2199,13 +2252,37 @@ msp_check_samples(msp_t *self)
 
     for (i = 0; i < self->pedigree->num_samples; i++) {
         sample = self->pedigree->samples[i];
-        for (j = 0; j < self->pedigree->ploidy; j++) {
+        for (j = 0; j < self->ploidy; j++) {
             assert(avl_count(&sample->segments[j]) == 1);
         }
     }
 }
 
-int MSP_WARN_UNUSED
+static int MSP_WARN_UNUSED
+msp_pedigree_add_individual_segment(
+    msp_t *self, individual_t *ind, segment_t *segment, size_t parent_ix)
+{
+    int ret;
+    avl_node_t *node;
+
+    assert(ind->segments != NULL);
+    assert(parent_ix < self->ploidy);
+
+    node = msp_alloc_avl_node(self);
+    if (node == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    avl_init_node(node, segment);
+    node = avl_insert_node(&ind->segments[parent_ix], node);
+    assert(node != NULL);
+
+    ret = 0;
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
 msp_pedigree_load_pop(msp_t *self)
 {
     int ret;
@@ -2217,15 +2294,17 @@ msp_pedigree_load_pop(msp_t *self)
     label_id_t label = 0;
 
     assert(self->num_populations == 1); // Only support single pop for now
-    assert(self->pedigree->ploidy > 0);
+    assert(self->ploidy > 0);
 
     pop = &self->populations[0];
-    ploidy = self->pedigree->ploidy;
+    ploidy = self->ploidy;
     if (avl_count(&pop->ancestors[label]) != self->pedigree->num_samples * ploidy) {
         ret = MSP_ERR_BAD_PEDIGREE_NUM_SAMPLES;
         goto out;
     }
-
+    /* JK: We can make this much more robust now. We should be initialising
+     * the state of the simulation directly for the pedigree rather than
+     * back-inferring like we're doing here. */
     // Move segments from population into pedigree samples
     i = 0;
     while (avl_count(&pop->ancestors[label]) > 0) {
@@ -2249,53 +2328,7 @@ out:
     return ret;
 }
 
-int MSP_WARN_UNUSED
-msp_pedigree_add_individual_segment(
-    msp_t *self, individual_t *ind, segment_t *segment, size_t parent_ix)
-{
-    int ret;
-    avl_node_t *node;
-
-    assert(ind->segments != NULL);
-    assert(parent_ix < self->pedigree->ploidy);
-
-    node = msp_alloc_avl_node(self);
-    if (node == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    avl_init_node(node, segment);
-    node = avl_insert_node(&ind->segments[parent_ix], node);
-    assert(node != NULL);
-
-    ret = 0;
-out:
-    return ret;
-}
-
-int MSP_WARN_UNUSED
-msp_pedigree_build_ind_queue(msp_t *self)
-{
-    int ret;
-    size_t i;
-    individual_t *ind;
-
-    assert(self->pedigree->num_samples > 0);
-    assert(self->pedigree->samples != NULL);
-
-    for (i = 0; i < self->pedigree->num_samples; i++) {
-        ind = self->pedigree->samples[i];
-        ret = msp_pedigree_push_ind(self, ind);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    ret = 0;
-out:
-    return ret;
-}
-
-int MSP_WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_pedigree_push_ind(msp_t *self, individual_t *ind)
 {
     int ret;
@@ -2318,7 +2351,29 @@ out:
     return ret;
 }
 
-int MSP_WARN_UNUSED
+static int MSP_WARN_UNUSED
+msp_pedigree_build_ind_queue(msp_t *self)
+{
+    int ret;
+    size_t i;
+    individual_t *ind;
+
+    assert(self->pedigree->num_samples > 0);
+    assert(self->pedigree->samples != NULL);
+
+    for (i = 0; i < self->pedigree->num_samples; i++) {
+        ind = self->pedigree->samples[i];
+        ret = msp_pedigree_push_ind(self, ind);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
 msp_pedigree_pop_ind(msp_t *self, individual_t **ind)
 {
     int ret;
@@ -2336,41 +2391,6 @@ msp_pedigree_pop_ind(msp_t *self, individual_t **ind)
 
     ret = 0;
     return ret;
-}
-
-static void
-msp_print_individual(msp_t *self, individual_t ind, FILE *out)
-{
-    size_t j;
-
-    fprintf(
-        out, "ID: %d, TSK_ID %u - Time: %f, Parents: [", ind.id, ind.tsk_id, ind.time);
-
-    for (j = 0; j < self->pedigree->ploidy; j++) {
-        if (ind.parents[j] != NULL) {
-            fprintf(out, " %d", ind.parents[j]->id);
-        } else {
-            fprintf(out, " None");
-        }
-    }
-    fprintf(out, " ]\n");
-}
-
-void
-msp_print_pedigree_inds(msp_t *self, FILE *out)
-{
-    individual_t ind;
-    size_t i;
-
-    assert(self->pedigree != NULL);
-    assert(self->pedigree->inds != NULL);
-    assert(self->pedigree->num_inds > 0);
-
-    for (i = 0; i < self->pedigree->num_inds; i++) {
-        ind = self->pedigree->inds[i];
-        assert(ind.id > 0);
-        msp_print_individual(self, ind, out);
-    }
 }
 
 static int MSP_WARN_UNUSED
@@ -3323,27 +3343,63 @@ msp_reset_memory_state(msp_t *self)
     return ret;
 }
 
-static int MSP_WARN_UNUSED
-msp_insert_sample(msp_t *self, tsk_id_t sample, population_id_t population)
+static int
+msp_insert_root_segments(msp_t *self, segment_t *head)
 {
-    int ret = MSP_ERR_GENERIC;
-    double seq_len = self->sequence_length;
-    segment_t *u;
+    int ret = 0;
+    segment_t *copy, *seg, *prev;
+    double breakpoints[2];
+    int j;
 
-    if (self->populations[population].initial_size == 0) {
+    prev = NULL;
+    for (seg = head; seg != NULL; seg = seg->next) {
+        /* Insert breakpoints, if we need to */
+        breakpoints[0] = seg->left;
+        breakpoints[1] = seg->right;
+        for (j = 0; j < 2; j++) {
+            if (breakpoints[j] != 0 && breakpoints[j] != self->sequence_length
+                && !msp_has_breakpoint(self, breakpoints[j])) {
+                ret = msp_insert_breakpoint(self, breakpoints[j]);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        }
+        /* Copy the segment and insert into the global state */
+        copy = msp_copy_segment(self, seg);
+        if (copy == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        copy->prev = prev;
+        if (prev == NULL) {
+            ret = msp_insert_individual(self, copy);
+            if (ret != 0) {
+                goto out;
+            }
+
+        } else {
+            prev->next = copy;
+        }
+        msp_set_segment_mass(self, copy);
+        prev = copy;
+    }
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
+msp_insert_sample(msp_t *self, tsk_id_t node)
+{
+    int ret = 0;
+    segment_t *root_seg;
+
+    root_seg = self->root_segments[node];
+    if (self->populations[root_seg->population].initial_size == 0) {
         ret = MSP_ERR_BAD_SAMPLES;
         goto out;
     }
-    u = msp_alloc_segment(self, 0, seq_len, sample, population, 0, NULL, NULL);
-    if (u == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    ret = msp_insert_individual(self, u);
-    if (ret != 0) {
-        goto out;
-    }
-    msp_set_segment_mass(self, u);
+    ret = msp_insert_root_segments(self, root_seg);
 out:
     return ret;
 }
@@ -3353,17 +3409,16 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree, double left, double ri
     segment_t *restrict *root_segments_head, segment_t *restrict *root_segments_tail)
 {
     int ret = 0;
-    tsk_table_collection_t *tables = self->from_ts->tables;
-    const population_id_t *node_population = tables->nodes.population;
-    population_id_t population;
     tsk_id_t root;
     segment_t *seg, *tail;
+    population_id_t population;
+    const population_id_t *restrict node_population = self->tables->nodes.population;
     label_id_t label = 0; /* For now only support label 0 */
 
     for (root = tree->left_root; root != TSK_NULL; root = tree->right_sib[root]) {
         population = node_population[root];
-        /* Reference integrity has alreay been checked, but the null population
-         * is still possibile */
+        /* tskit will make sure that population references are good, but
+         * we can still have NULL refs. */
         if (population == TSK_NULL) {
             ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
             goto out;
@@ -3398,149 +3453,114 @@ out:
 }
 
 static int
-msp_reset_from_ts(msp_t *self)
+msp_process_input_trees(msp_t *self)
 {
     int ret = 0;
     int t_iter;
-    tsk_tree_t t;
-    tsk_id_t root;
-    segment_t *seg;
-    uint32_t num_roots, overlap, last_overlap;
-    size_t num_nodes = self->tables->nodes.num_rows;
-    segment_t **root_segments_head = calloc(num_nodes, sizeof(*root_segments_head));
-    segment_t **root_segments_tail = calloc(num_nodes, sizeof(*root_segments_tail));
+    tsk_treeseq_t ts;
+    tsk_tree_t tree;
+    tsk_size_t num_trees, num_roots, overlap_count, last_overlap_count;
+    const size_t num_nodes = self->tables->nodes.num_rows;
+    overlap_count_t *overlap;
+    segment_t **root_segments_tail = NULL;
 
-    ret = tsk_tree_init(&t, self->from_ts, 0);
+    /* Initialise the memory for the tree and tree sequence so we can
+     * safely free them in all cases */
+    memset(&ts, 0, sizeof(ts));
+    memset(&tree, 0, sizeof(tree));
+
+    ret = tsk_treeseq_init(&ts, self->tables, TSK_BUILD_INDEXES);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
     }
-    if (root_segments_head == NULL || root_segments_tail == NULL) {
+    num_trees = tsk_treeseq_get_num_trees(&ts);
+
+    root_segments_tail = calloc(num_nodes + 1, sizeof(*root_segments_tail));
+    self->root_segments = calloc(num_nodes + 1, sizeof(*self->root_segments));
+    /* We can't have more than num_trees intervals, and allow for one sentinel */
+    self->initial_overlaps = calloc(num_trees + 1, sizeof(*self->initial_overlaps));
+
+    if (self->root_segments == NULL || root_segments_tail == NULL
+        || self->initial_overlaps == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    /* Reset the tables to their correct position for replication */
-    ret = tsk_table_collection_truncate(self->tables, &self->from_position);
+
+    ret = tsk_tree_init(&tree, &ts, 0);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
     }
 
-    last_overlap = UINT32_MAX;
-    for (t_iter = tsk_tree_first(&t); t_iter == 1; t_iter = tsk_tree_next(&t)) {
-        num_roots = (uint32_t) tsk_tree_get_num_roots(&t);
-        overlap = 0;
+    overlap = self->initial_overlaps;
+    last_overlap_count = UINT32_MAX;
+    for (t_iter = tsk_tree_first(&tree); t_iter == 1; t_iter = tsk_tree_next(&tree)) {
+        num_roots = tsk_tree_get_num_roots(&tree);
+        overlap_count = 0;
         if (num_roots > 1) {
-            overlap = num_roots;
-            ret = msp_allocate_root_segments(
-                self, &t, t.left, t.right, root_segments_head, root_segments_tail);
+            overlap_count = num_roots;
+            ret = msp_allocate_root_segments(self, &tree, tree.left, tree.right,
+                self->root_segments, root_segments_tail);
             if (ret != 0) {
                 goto out;
             }
         }
-        if (overlap != last_overlap) {
-            ret = msp_insert_overlap_count(self, t.left, overlap);
-            if (ret != 0) {
-                goto out;
-            }
+        if (overlap_count != last_overlap_count) {
+            overlap->left = tree.left;
+            overlap->count = overlap_count;
+            overlap++;
+            last_overlap_count = overlap_count;
         }
     }
     if (t_iter != 0) {
         ret = msp_set_tsk_error(t_iter);
         goto out;
     }
-
-    ret = msp_insert_overlap_count(self, self->sequence_length, UINT32_MAX);
-    if (ret != 0) {
-        goto out;
-    }
-
-    /* Insert the segment chains into the algorithm state */
-    for (root = 0; root < (tsk_id_t) num_nodes; root++) {
-        seg = root_segments_head[root];
-        if (seg != NULL) {
-            ret = msp_insert_individual(self, seg);
-            if (ret != 0) {
-                goto out;
-            }
-            while (seg != NULL) {
-                msp_set_segment_mass(self, seg);
-                seg = seg->next;
-            }
-        }
-    }
+    overlap->left = self->sequence_length;
+    overlap->count = UINT32_MAX;
 
 out:
-    tsk_tree_free(&t);
-    msp_safe_free(root_segments_head);
+    tsk_treeseq_free(&ts);
+    tsk_tree_free(&tree);
     msp_safe_free(root_segments_tail);
     return ret;
 }
 
 static int
-msp_reset_from_samples(msp_t *self)
+msp_reset_population_state(msp_t *self)
 {
     int ret = 0;
-    char id_str[100];
-    tsk_size_t id_str_len;
-    size_t sample_idx, j;
-    individual_t *ind = NULL;
-    tsk_id_t u;
-    tsk_id_t tsk_ind;
+    tsk_id_t root;
+    segment_t *seg;
+    const size_t num_nodes = self->input_position.nodes;
+    const double *restrict node_time = self->tables->nodes.time;
 
-    tsk_table_collection_clear(self->tables);
+    overlap_count_t *overlap;
 
-    for (j = 0; j < self->num_populations; j++) {
-        ret = tsk_population_table_add_row(&self->tables->populations, NULL, 0);
-        if (ret < 0) {
-            ret = msp_set_tsk_error(ret);
-            goto out;
-        }
-    }
-    /* Set up the sample */
-    for (u = 0; u < (tsk_id_t) self->num_samples; u++) {
-        if (self->samples[u].time <= self->start_time) {
-            ret = msp_insert_sample(self, u, self->samples[u].population);
-            if (ret != 0) {
-                goto out;
-            }
-        }
-        tsk_ind = TSK_NULL;
-        if (self->pedigree != NULL) {
-            /* If we're doing pedigree simulations, assign 'ploidy' nodes
-             * per individual. */
-            assert(self->pedigree->num_samples * self->pedigree->ploidy
-                   == self->num_samples);
-            sample_idx = (size_t) u / self->pedigree->ploidy;
-
-            // TODO: When pedigrees and populations are properly sorted out,
-            //       add population to individual here
-            ind = self->pedigree->samples[sample_idx];
-            id_str_len = (tsk_size_t) ceil(log10(ind->id + 1));
-            sprintf(id_str, "%d", ind->id);
-            if (ind->tsk_id == TSK_NULL) {
-                ret = tsk_individual_table_add_row(
-                    &self->tables->individuals, 0, NULL, 0, id_str, id_str_len);
-                if (ret < 0) {
-                    goto out;
-                }
-                ind->tsk_id = ret;
-            }
-            tsk_ind = ind->tsk_id;
-        }
-        ret = msp_store_node(self, TSK_NODE_IS_SAMPLE, self->samples[u].time,
-            self->samples[u].population, tsk_ind);
+    overlap = self->initial_overlaps;
+    while (true) {
+        ret = msp_insert_overlap_count(self, overlap->left, overlap->count);
         if (ret != 0) {
             goto out;
         }
+        if (overlap->left == self->sequence_length) {
+            break;
+        }
+        overlap++;
     }
-    ret = msp_insert_overlap_count(self, 0, self->num_samples);
-    if (ret != 0) {
-        goto out;
-    }
-    ret = msp_insert_overlap_count(self, self->sequence_length, self->num_samples + 1);
-    if (ret != 0) {
-        goto out;
+
+    /* Insert the segment chains into the algorithm state */
+    for (root = 0; root < (tsk_id_t) num_nodes; root++) {
+        seg = self->root_segments[root];
+        if (seg != NULL) {
+            if (node_time[root] <= self->start_time) {
+                ret = msp_insert_sample(self, root);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        }
     }
 out:
     return ret;
@@ -3576,7 +3596,6 @@ out:
 int
 msp_reset(msp_t *self)
 {
-    // TODO: This will need to be updated to allow replicates within pedigree sims
     int ret = 0;
     size_t N = self->num_populations;
     population_id_t population_id;
@@ -3595,7 +3614,6 @@ msp_reset(msp_t *self)
     }
     /* Set up the initial segments and algorithm state */
     self->time = self->start_time;
-    assert(self->time >= 0);
     for (population_id = 0; population_id < (population_id_t) N; population_id++) {
         pop = self->populations + population_id;
         /* Set the initial population parameters */
@@ -3604,11 +3622,15 @@ msp_reset(msp_t *self)
         pop->initial_size = initial_pop->initial_size;
         pop->start_time = self->time;
     }
-    if (self->from_ts == NULL) {
-        ret = msp_reset_from_samples(self);
-    } else {
-        ret = msp_reset_from_ts(self);
+    /* Reset the tables to their correct position for replication */
+    ret = tsk_table_collection_truncate(self->tables, &self->input_position);
+    if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
+        goto out;
     }
+    assert(self->tables->populations.num_rows == self->num_populations);
+
+    ret = msp_reset_population_state(self);
     if (ret != 0) {
         goto out;
     }
@@ -3630,29 +3652,60 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-msp_initialise_from_samples(msp_t *self)
+msp_initialise_simulation_state(msp_t *self)
 {
     int ret = 0;
-    size_t j, k, initial_samples;
-    population_id_t pop;
+    tsk_size_t num_ancient_samples;
+    size_t j;
+    double min_root_time;
+    segment_t *head;
+    tsk_id_t root;
+    const double *restrict node_time = self->tables->nodes.time;
+    const tsk_id_t *restrict node_population = self->tables->nodes.population;
+    tsk_id_t *ancient_samples
+        = malloc(self->tables->nodes.num_rows * sizeof(*ancient_samples));
 
-    if (self->start_time < 0) {
-        self->start_time = 0;
+    if (ancient_samples == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
     }
-    initial_samples = 0;
-    for (j = 0; j < self->num_samples; j++) {
-        /* Check that the sample configuration makes sense */
-        pop = self->samples[j].population;
-        if (pop < 0 || pop >= (population_id_t) self->num_populations) {
-            ret = MSP_ERR_BAD_SAMPLES;
-            goto out;
-        }
-        if (self->samples[j].time <= self->start_time) {
-            initial_samples++;
+
+    ret = msp_process_input_trees(self);
+    if (ret != 0) {
+        goto out;
+    }
+
+    /* Process the root segments to split up the samples into the initial set and
+     * ancients */
+    min_root_time = DBL_MAX;
+    for (j = 0; j < self->input_position.nodes; j++) {
+        head = self->root_segments[j];
+        if (head != NULL) {
+            root = head->value;
+            min_root_time = GSL_MIN(node_time[root], min_root_time);
         }
     }
+    /* Make sure that the start-time is no less than the time of the
+     * youngest root */
+    self->start_time = GSL_MAX(self->start_time, min_root_time);
+
+    /* Anything that has min_root_time is an initial sample, otherwise we
+     * register them as sampling events */
+    num_ancient_samples = 0;
+
+    for (j = 0; j < self->input_position.nodes; j++) {
+        head = self->root_segments[j];
+        if (head != NULL) {
+            root = head->value;
+            if (node_time[root] > self->start_time) {
+                ancient_samples[num_ancient_samples] = root;
+                num_ancient_samples++;
+            }
+        }
+    }
+
     /* Set up the historical sampling events */
-    self->num_sampling_events = self->num_samples - initial_samples;
+    self->num_sampling_events = num_ancient_samples;
     self->sampling_events = NULL;
     if (self->num_sampling_events > 0) {
         self->sampling_events
@@ -3661,67 +3714,20 @@ msp_initialise_from_samples(msp_t *self)
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        k = 0;
-        for (j = 0; j < self->num_samples; j++) {
-            if (self->samples[j].time > self->start_time) {
-                self->sampling_events[k].sample = (tsk_id_t) j;
-                self->sampling_events[k].time = self->samples[j].time;
-                self->sampling_events[k].population = self->samples[j].population;
-                k++;
-            }
+        for (j = 0; j < num_ancient_samples; j++) {
+            root = ancient_samples[j];
+            self->sampling_events[j].sample = root;
+            self->sampling_events[j].time = node_time[root];
+            self->sampling_events[j].population = node_population[root];
         }
-        assert(k == self->num_sampling_events);
         /* Now we must sort the sampling events by time. */
         qsort(self->sampling_events, self->num_sampling_events, sizeof(sampling_event_t),
             cmp_sampling_event);
     }
-out:
-    return ret;
-}
 
-static int MSP_WARN_UNUSED
-msp_initialise_from_ts(msp_t *self)
-{
-    int ret = 0;
-    double root_time;
-    uint32_t num_samples;
-    size_t num_nodes = self->tables->nodes.num_rows;
-    population_id_t pop;
-    size_t j;
-
-    if (self->num_populations != self->tables->populations.num_rows) {
-        ret = MSP_ERR_INCOMPATIBLE_FROM_TS;
-        goto out;
-    }
-    /* Find the maximum time among the existing nodes */
-    num_samples = 0;
-    root_time = 0.0;
-    for (j = 0; j < num_nodes; j++) {
-        root_time = GSL_MAX(self->tables->nodes.time[j], root_time);
-        /* TODO we can catch ancient samples here and insert them as sampling
-         * events, if we wish to support this. */
-        if (self->tables->nodes.flags[j] & TSK_NODE_IS_SAMPLE) {
-            num_samples++;
-        }
-        pop = self->tables->nodes.population[j];
-        if (pop < 0 || pop >= (population_id_t) self->num_populations) {
-            ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
-            goto out;
-        }
-    }
-    if (self->start_time < 0) {
-        self->start_time = root_time;
-    } else {
-        if (root_time > self->start_time) {
-            ret = MSP_ERR_BAD_START_TIME_FROM_TS;
-            goto out;
-        }
-    }
-    if (num_samples < 2) {
-        ret = MSP_ERR_INSUFFICIENT_SAMPLES;
-        goto out;
-    }
+    /* ret = msp_compress_overlap_counts(self, 0, self->sequence_length); */
 out:
+    msp_safe_free(ancient_samples);
     return ret;
 }
 
@@ -3733,8 +3739,13 @@ msp_initialise(msp_t *self)
 {
     int ret = -1;
 
-    /* These should really be proper checks with a return value */
-    assert(self->num_populations >= 1);
+    /* Bookmark the tables so that we know where to reset once for each
+     * simulation. */
+    ret = tsk_table_collection_record_num_rows(self->tables, &self->input_position);
+    if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
+        goto out;
+    }
 
     ret = msp_alloc_memory_blocks(self);
     if (ret != 0) {
@@ -3744,25 +3755,12 @@ msp_initialise(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    if (self->from_ts == NULL) {
-        ret = msp_initialise_from_samples(self);
-    } else {
-        ret = msp_initialise_from_ts(self);
-    }
+    ret = msp_initialise_simulation_state(self);
     if (ret != 0) {
         goto out;
     }
-
     /* Copy the state of the simulation model into the initial model */
     memcpy(&self->initial_model, &self->model, sizeof(self->model));
-    /* If any demographic events have time < than the start_time then
-     * raise an error */
-    if (self->demographic_events_head != NULL) {
-        if (self->demographic_events_head->time < self->start_time) {
-            ret = MSP_ERR_BAD_DEMOGRAPHIC_EVENT_TIME;
-            goto out;
-        }
-    }
     ret = msp_reset(self);
     if (ret != 0) {
         goto out;
@@ -4205,7 +4203,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                    && self->sampling_events[self->next_sampling_event].time
                           == sampling_event_time) {
                 se = self->sampling_events + self->next_sampling_event;
-                ret = msp_insert_sample(self, se->sample, se->population);
+                ret = msp_insert_sample(self, se->sample);
                 if (ret != 0) {
                     goto out;
                 }
@@ -4278,20 +4276,17 @@ out:
     return ret;
 }
 
-int MSP_WARN_UNUSED
+static int MSP_WARN_UNUSED
 msp_pedigree_climb(msp_t *self)
 {
     int ret, ix;
-    char id_str[100];
     size_t i, j;
-    tsk_size_t id_str_len;
-    tsk_id_t node_tsk_id = TSK_NULL;
+    tsk_id_t parent_id;
     individual_t *ind = NULL;
     individual_t *parent = NULL;
     segment_t *merged_segment = NULL;
     segment_t *u[2]; // Will need to update for different ploidy
     avl_tree_t *segments = NULL;
-    /* avl_node_t *node; */
 
     assert(self->num_populations == 1);
     assert(avl_count(&self->pedigree->ind_heap) > 0);
@@ -4310,7 +4305,7 @@ msp_pedigree_climb(msp_t *self)
         assert(ind->time >= self->time);
         self->time = ind->time;
 
-        for (i = 0; i < self->pedigree->ploidy; i++) {
+        for (i = 0; i < self->ploidy; i++) {
             parent = ind->parents[i];
             if (parent != NULL && ind->time >= parent->time) {
                 ret = MSP_ERR_TIME_TRAVEL;
@@ -4324,30 +4319,14 @@ msp_pedigree_climb(msp_t *self)
                 continue;
             }
 
-            /* If the parent did contribute, we add them to the individual table */
-            // TODO: This adds the parents of all individuals who are reached by
-            // climbing - wasteful, since few visited individuals become nodes
-            // through CA events
-            if (parent != NULL && parent->tsk_id == TSK_NULL) {
-                sprintf(id_str, "%d", parent->id);
-                id_str_len = (tsk_size_t) ceil(log10(parent->id + 1));
-                assert(id_str_len > 0);
-                ret = tsk_individual_table_add_row(
-                    &self->tables->individuals, 0, NULL, 0, id_str, id_str_len);
-                if (ret < 0) {
-                    goto out;
-                }
-                parent->tsk_id = ret;
-            }
-            node_tsk_id = TSK_NULL;
+            parent_id = TSK_NULL;
             if (parent != NULL) {
-                node_tsk_id = parent->tsk_id;
+                parent_id = parent->id;
             }
 
             /* Merge segments inherited from this ind and recombine */
             // TODO: Make sure population gets properly set when more than one
-            ret = msp_merge_ancestors(
-                self, segments, 0, 0, &merged_segment, node_tsk_id);
+            ret = msp_merge_ancestors(self, segments, 0, 0, &merged_segment, parent_id);
             if (ret != 0) {
                 goto out;
             }
@@ -4380,7 +4359,7 @@ msp_pedigree_climb(msp_t *self)
                 u[1] = NULL;
                 u[ix] = merged_segment;
             }
-            for (j = 0; j < self->pedigree->ploidy; j++) {
+            for (j = 0; j < self->ploidy; j++) {
                 if (u[j] == NULL) {
                     continue;
                 }
@@ -4401,6 +4380,13 @@ msp_pedigree_climb(msp_t *self)
     }
     self->pedigree->state = MSP_PED_STATE_CLIMB_COMPLETE;
 
+    if (self->next_demographic_event != NULL
+        && self->next_demographic_event->time <= self->time) {
+        /* We can't have demographic events happening during the
+         * pedigree sim */
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
     ret = 0;
 out:
     return ret;
@@ -4746,7 +4732,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
             se = self->sampling_events + self->next_sampling_event;
             /* The sampling event doesn't modify the tables, so we don't need to
              * catch it here */
-            ret = msp_insert_sample(self, se->sample, se->population);
+            ret = msp_insert_sample(self, se->sample);
             if (ret != 0) {
                 goto out;
             }
@@ -5236,7 +5222,7 @@ msp_debug_demography(msp_t *self, double *end_time)
         while (self->next_sampling_event < self->num_sampling_events
                && self->sampling_events[self->next_sampling_event].time <= de->time) {
             se = self->sampling_events + self->next_sampling_event;
-            ret = msp_insert_sample(self, se->sample, se->population);
+            ret = msp_insert_sample(self, se->sample);
             if (ret != 0) {
                 goto out;
             }
@@ -5321,12 +5307,6 @@ msp_get_model_name(msp_t *self)
             break;
     }
     return ret;
-}
-
-size_t
-msp_get_num_samples(msp_t *self)
-{
-    return (size_t) self->num_samples;
 }
 
 bool
@@ -5454,13 +5434,6 @@ msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
     size_t N = self->num_populations;
 
     memcpy(num_migration_events, self->num_migration_events, N * N * sizeof(size_t));
-    return 0;
-}
-
-int MSP_WARN_UNUSED
-msp_get_samples(msp_t *self, sample_t **samples)
-{
-    *samples = self->samples;
     return 0;
 }
 
@@ -6671,7 +6644,6 @@ static int
 msp_set_simulation_model(msp_t *self, int model)
 {
     int ret = 0;
-    bool update_mass_indexes = false;
 
     if (model != MSP_MODEL_HUDSON && model != MSP_MODEL_SMC
         && model != MSP_MODEL_SMC_PRIME && model != MSP_MODEL_DIRAC
@@ -6680,19 +6652,15 @@ msp_set_simulation_model(msp_t *self, int model)
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
-    if (self->model.type != -1) {
-        if (self->model.free != NULL) {
-            self->model.free(&self->model);
-        }
-        /* If this isn't the first time we've set the model then we
-         * need to update the mass indexes */
-        update_mass_indexes = true;
+    if (self->model.free != NULL) {
+        self->model.free(&self->model);
     }
     self->model.type = model;
-
     self->get_common_ancestor_waiting_time = msp_std_get_common_ancestor_waiting_time;
     self->common_ancestor_event = msp_std_common_ancestor_event;
-    if (update_mass_indexes) {
+    if (self->state != MSP_STATE_NEW) {
+        /* We only need to setup the mass indexes if we are already simulating
+         * another model */
         ret = msp_setup_mass_indexes(self);
         if (ret != 0) {
             goto out;
@@ -6729,7 +6697,86 @@ msp_set_simulation_model_dtwf(msp_t *self)
 int
 msp_set_simulation_model_wf_ped(msp_t *self)
 {
-    return msp_set_simulation_model(self, MSP_MODEL_WF_PED);
+    int ret;
+    tsk_size_t j, k;
+    tsk_size_t num_individuals = self->tables->individuals.num_rows;
+    tsk_id_t *parents = NULL;
+    const tsk_id_t *ind_parents;
+    tsk_individual_t ind;
+    tsk_node_t node;
+    double *time = NULL;
+    tsk_flags_t *is_sample = NULL;
+
+    /* TODO better error codes here */
+    if (self->ploidy != 2) {
+        ret = MSP_ERR_BAD_PLOIDY;
+        goto out;
+    }
+    if (num_individuals == 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+
+    ret = msp_alloc_pedigree(self, num_individuals, self->ploidy);
+    if (ret != 0) {
+        goto out;
+    }
+
+    parents = malloc(num_individuals * self->ploidy * sizeof(*parents));
+    time = malloc(num_individuals * sizeof(*time));
+    is_sample = malloc(num_individuals * sizeof(*is_sample));
+    if (parents == NULL || time == NULL || is_sample == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    /* Extract the pedigree information from the tables. This is a hacky
+     * workaround, we can do this much better. */
+
+    /* Decode the parent arrays from the individual metadata. Note:
+     * this should really be done via a proper column in the
+     * individual table: https://github.com/tskit-dev/tskit/issues/852
+     */
+    for (j = 0; j < num_individuals; j++) {
+        ret = tsk_individual_table_get_row(
+            &self->tables->individuals, (tsk_id_t) j, &ind);
+        assert(ret == 0);
+        ind_parents = (const tsk_id_t *) ind.metadata;
+        /* This is a temporary hack anyway */
+        assert(ind.metadata_length == self->ploidy * sizeof(tsk_id_t));
+        for (k = 0; k < self->ploidy; k++) {
+            if (ind_parents[k] < TSK_NULL
+                || ind_parents[k] >= (tsk_id_t) num_individuals) {
+                ret = TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS;
+                goto out;
+            }
+            parents[j * self->ploidy + k] = ind_parents[k];
+        }
+    }
+    /* Every individual should have ploidy nodes associated with it in the
+     * tables. We get the time from there - we're not really doing any error
+     * checking here, just getting it sort-of working for now. */
+    for (j = 0; j < self->tables->nodes.num_rows; j++) {
+        ret = tsk_node_table_get_row(&self->tables->nodes, (tsk_id_t) j, &node);
+        assert(ret == 0);
+        assert(node.individual != TSK_NULL);
+        is_sample[node.individual] = !!(node.flags & TSK_NODE_IS_SAMPLE);
+        time[node.individual] = node.time;
+    }
+    /* JK: This next method isn't really needed, I'm just calling into
+     * the existing code to minimise changes at this point. The pedigree
+     * code needs a full going over to take the new table-based approach
+     * into account */
+    ret = msp_set_pedigree(self, parents, time, is_sample);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_set_simulation_model(self, MSP_MODEL_WF_PED);
+out:
+    msp_safe_free(parents);
+    msp_safe_free(time);
+    msp_safe_free(is_sample);
+    return ret;
 }
 
 int

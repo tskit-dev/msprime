@@ -160,73 +160,6 @@ out:
 }
 
 static int
-parse_samples(PyObject *py_samples, Py_ssize_t num_populations,
-        Py_ssize_t *num_samples, sample_t **samples)
-{
-    int ret = -1;
-    long tmp_long;
-    Py_ssize_t j, n;
-    PyObject *sample, *value;
-    sample_t *ret_samples = NULL;
-
-    n = PyList_Size(py_samples);
-    ret_samples = PyMem_Malloc(n * sizeof(sample_t));
-    if (ret_samples == NULL) {
-        PyErr_NoMemory();
-        goto out;
-    }
-    for (j = 0; j < n; j++) {
-        sample = PyList_GetItem(py_samples, j);
-        if (!PyTuple_Check(sample)) {
-            PyErr_SetString(PyExc_TypeError, "not a tuple");
-            goto out;
-        }
-        if (PyTuple_Size(sample) != 2) {
-            PyErr_SetString(PyExc_ValueError,
-                    "sample must be (population,time) tuple");
-            goto out;
-        }
-        value = PyTuple_GetItem(sample, 0);
-        if (!PyNumber_Check(value)) {
-            PyErr_Format(PyExc_TypeError, "'population' is not number");
-            goto out;
-        }
-        tmp_long = PyLong_AsLong(value);
-        if (tmp_long < 0) {
-            PyErr_Format(PyExc_ValueError,
-                "Negative population ID in sample at index %d", (int) j);
-            goto out;
-        }
-        if (tmp_long >= num_populations) {
-            PyErr_Format(PyExc_ValueError,
-                "Invalid population reference '%d' in sample at index %d",
-                (int) tmp_long, (int) j);
-            goto out;
-        }
-        ret_samples[j].population = (population_id_t) tmp_long;
-        value = PyTuple_GetItem(sample, 1);
-        if (!PyNumber_Check(value)) {
-            PyErr_Format(PyExc_TypeError, "'time' is not number");
-            goto out;
-        }
-        ret_samples[j].time = PyFloat_AsDouble(value);
-        if (ret_samples[j].time < 0) {
-            PyErr_SetString(PyExc_ValueError, "negative times not valid");
-            goto out;
-        }
-    }
-    *samples = ret_samples;
-    *num_samples = n;
-    ret = 0;
-    ret_samples = NULL;
-out:
-    if (ret_samples != NULL) {
-        PyMem_Free(ret_samples);
-    }
-    return ret;
-}
-
-static int
 parse_rate_map(PyObject *py_rate_map, size_t *ret_size,
         PyArrayObject **ret_position, PyArrayObject **ret_rate)
 {
@@ -2685,107 +2618,6 @@ out:
 }
 
 static int
-Simulator_parse_pedigree(Simulator *self, PyObject *pedigree_dict)
-{
-    int ret = -1;
-    size_t num_inds = 0;
-    int ploidy;
-    npy_intp *shape;
-    int *inds = NULL;
-    int *parents = NULL;
-    double *times = NULL;
-    uint32_t *is_sample = NULL;
-    PyObject *inds_input = NULL;
-    PyArrayObject *inds_array = NULL;
-    PyObject *parents_input = NULL;
-    PyArrayObject *parents_array = NULL;
-    PyObject *times_input = NULL;
-    PyArrayObject *times_array = NULL;
-    PyObject *is_sample_input = NULL;
-    PyArrayObject *is_sample_array = NULL;
-
-    // Steps to loading arrays from dict (tentative) - taken from
-    //    parse_node_table_dict()
-    // 1) For each array, declare PyObject *arrayname_input,
-    //    PyArrayObject *arrayname_array, and dtype* arrayname_data
-    // 2) Using get_table_dict_value(), load array from dict into
-    //    *arrayname_input
-    // 3) Using table_read_column_array(), load arrayname_input
-    //    into arrayname_array
-    // 4) Set arrayname_data = PyArray_DATA(arrayname_array)
-    // 5) In out: include Py_XDECREF(arrayname_array) for all arrays
-
-    inds_input = get_table_dict_value(pedigree_dict, "individual", true);
-    if (inds_input == NULL) {
-        goto out;
-    }
-    parents_input = get_table_dict_value(pedigree_dict, "parents", true);
-    if (parents_input == NULL) {
-        goto out;
-    }
-    times_input = get_table_dict_value(pedigree_dict, "time", true);
-    if (times_input == NULL) {
-        goto out;
-    }
-    is_sample_input = get_table_dict_value(pedigree_dict, "is_sample", true);
-    if (is_sample_input == NULL) {
-        goto out;
-    }
-
-    /* Create the arrays */
-    parents_array = (PyArrayObject *) PyArray_FROMANY(parents_input, NPY_INT32,
-            2, 2, NPY_ARRAY_IN_ARRAY);
-    if (parents_array == NULL) {
-        goto out;
-    }
-
-    shape = PyArray_DIMS(parents_array);
-    parents = PyArray_DATA(parents_array);
-    num_inds = (size_t) shape[0];
-    /* If NDIMS == 1 this is out of range - in that case set ploidy = 1 (see above) */
-    ploidy = (int) shape[1];
-
-    inds_array = table_read_column_array(inds_input, NPY_INT32, &num_inds, true);
-    if (inds_array == NULL) {
-        goto out;
-    }
-    inds = PyArray_DATA(inds_array);
-
-    times_array = table_read_column_array(times_input, NPY_FLOAT64, &num_inds, true);
-    if (times_array == NULL) {
-        goto out;
-    }
-    times = PyArray_DATA(times_array);
-
-    is_sample_array = table_read_column_array(is_sample_input, NPY_UINT32, &num_inds,
-            true);
-    if (is_sample_array == NULL) {
-        goto out;
-    }
-    is_sample = PyArray_DATA(is_sample_array);
-
-    ret = msp_alloc_pedigree(self->sim, num_inds, ploidy);
-    if (ret != 0) {
-        handle_input_error("pedigree", ret);
-        goto out;
-    }
-    ret = msp_set_pedigree(self->sim, num_inds, inds, parents, times, is_sample);
-    if (ret != 0) {
-        /* TODO: Is this right to set here? */
-        handle_input_error("pedigree", ret);
-        goto out;
-    }
-    ret = 0;
-out:
-    Py_XDECREF(inds_array);
-    Py_XDECREF(parents_array);
-    Py_XDECREF(times_array);
-    Py_XDECREF(is_sample_array);
-
-    return ret;
-}
-
-static int
 Simulator_parse_migration_matrix(Simulator *self, PyObject *py_migration_matrix)
 {
     int ret = -1;
@@ -3323,25 +3155,22 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int sim_ret;
-    static char *kwlist[] = {"samples", "recombination_map", "random_generator",
-        "tables", "population_configuration", "pedigree", "migration_matrix",
+    static char *kwlist[] = {
+        "tables", "random_generator", "recombination_map",
+        "population_configuration", "migration_matrix",
         "demographic_events", "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time",
         "store_full_arg", "num_labels", "gene_conversion_rate",
         "gene_conversion_track_length", "discrete_genome",
         "ploidy", NULL};
-    PyObject *py_samples = NULL;
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
-    PyObject *pedigree = Py_None;
     PyObject *demographic_events = NULL;
     PyObject *py_model = NULL;
     LightweightTableCollection *tables = NULL;
     RandomGenerator *random_generator = NULL;
     PyObject *recombination_map = NULL;
-    sample_t *samples = NULL;
     /* parameter defaults */
-    Py_ssize_t num_samples = 2;
     Py_ssize_t avl_node_block_size = 10;
     Py_ssize_t segment_block_size = 10;
     Py_ssize_t node_mapping_block_size = 10;
@@ -3357,14 +3186,13 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O!|O!OOO!O!nnnidinddii", kwlist,
-            &PyList_Type, &py_samples,
-            &PyDict_Type, &recombination_map,
-            &RandomGeneratorType, &random_generator,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds,
+            "O!O!|O!O!OO!O!nnnidinddii", kwlist,
             &LightweightTableCollectionType, &tables,
+            &RandomGeneratorType, &random_generator,
             /* optional */
+            &PyDict_Type, &recombination_map,
             &PyList_Type, &population_configuration,
-            &pedigree,
             &migration_matrix,
             &PyList_Type, &demographic_events,
             &PyDict_Type, &py_model,
@@ -3390,16 +3218,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    if (parse_samples(py_samples, num_populations, &num_samples, &samples) != 0) {
-        goto out;
-    }
     self->sim = PyMem_Malloc(sizeof(msp_t));
     if (self->sim == NULL) {
         PyErr_NoMemory();
         goto out;
     }
-    sim_ret = msp_alloc(self->sim, (size_t) num_samples, samples,
-            tables->tables, self->random_generator->rng);
+    sim_ret = msp_alloc(self->sim, tables->tables, self->random_generator->rng);
     if (sim_ret != 0) {
         handle_input_error("simulator alloc", sim_ret);
         goto out;
@@ -3452,8 +3276,10 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    if (Simulator_parse_recombination_map(self, recombination_map) != 0) {
-        goto out;
+    if (recombination_map != NULL) {
+        if (Simulator_parse_recombination_map(self, recombination_map) != 0) {
+            goto out;
+        }
     }
     msp_set_discrete_genome(self->sim, discrete_genome);
 
@@ -3463,26 +3289,10 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
 
-    sim_ret = msp_set_dimensions(self->sim, (size_t) num_populations, (size_t) num_labels);
+    sim_ret = msp_set_num_labels(self->sim, (size_t) num_labels);
     if (sim_ret != 0) {
-        handle_input_error("set_dimensions", sim_ret);
+        handle_input_error("set_num_labels", sim_ret);
         goto out;
-    }
-    if (pedigree != Py_None) {
-        if (!PyDict_Check(pedigree)) {
-            PyErr_SetString(PyExc_TypeError, "Pedigree must be a dictionary");
-            goto out;
-        }
-        if (self->sim->model.type != MSP_MODEL_WF_PED) {
-            PyErr_SetString(PyExc_ValueError,
-                "A pedigree can only be supplied under the "
-                "`msprime.WrightFisherPedigree` simulation model");
-            goto out;
-        }
-        sim_ret = Simulator_parse_pedigree(self, pedigree);
-        if (sim_ret != 0) {
-            goto out;
-        }
     }
     if (population_configuration != NULL) {
         if (Simulator_parse_population_configuration(self, population_configuration) != 0) {
@@ -3517,9 +3327,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     ret = 0;
 out:
-    if (samples != NULL) {
-        PyMem_Free(samples);
-    }
     return ret;
 }
 
@@ -3648,18 +3455,6 @@ Simulator_get_store_migrations(Simulator *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("i", (Py_ssize_t) msp_get_store_migrations(self->sim));
-out:
-    return ret;
-}
-
-static PyObject *
-Simulator_get_num_samples(Simulator *self, void *closure)
-{
-    PyObject *ret = NULL;
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_samples(self->sim));
 out:
     return ret;
 }
@@ -4163,47 +3958,6 @@ out:
 }
 
 static PyObject *
-Simulator_get_samples(Simulator *self, void *closure)
-{
-    PyObject *ret = NULL;
-    PyObject *l = NULL;
-    PyObject *t = NULL;
-    sample_t *samples = NULL;
-    size_t j = 0;
-    size_t num_samples;
-    int population;
-    int sim_ret = 0;
-
-    if (Simulator_check_sim(self) != 0) {
-        goto out;
-    }
-    num_samples = msp_get_num_samples(self->sim);
-    sim_ret = msp_get_samples(self->sim, &samples);
-    if (sim_ret != 0) {
-        handle_library_error(sim_ret);
-        goto out;
-    }
-    l = PyList_New(num_samples);
-    if (l == NULL) {
-        goto out;
-    }
-    for (j = 0; j < num_samples; j++) {
-        population = samples[j].population == TSK_NULL? -1:
-            samples[j].population;
-        t = Py_BuildValue("id", population, samples[j].time);
-        if (t == NULL) {
-            goto out;
-        }
-        PyList_SET_ITEM(l, j, t);
-    }
-    ret = l;
-    l = NULL;
-out:
-    Py_XDECREF(l);
-    return ret;
-}
-
-static PyObject *
 Simulator_get_random_generator(Simulator *self, void *closure)
 {
     return Py_BuildValue("O", self->random_generator);
@@ -4538,9 +4292,6 @@ static PyGetSetDef Simulator_getsetters[] = {
     {"num_rejected_common_ancestor_events",
             (getter) Simulator_get_num_rejected_common_ancestor_events, NULL,
             "The number of rejected common_ancestor_events" },
-    {"num_samples",
-            (getter) Simulator_get_num_samples, NULL,
-            "The sample size" },
     {"num_segment_blocks",
             (getter) Simulator_get_num_segment_blocks, NULL,
             "The number of segment memory blocks"},
@@ -4553,9 +4304,6 @@ static PyGetSetDef Simulator_getsetters[] = {
     {"random_generator",
             (getter) Simulator_get_random_generator, NULL,
             "The random generator"},
-    {"samples",
-            (getter) Simulator_get_samples, NULL,
-            "The samples"},
     {"segment_block_size",
             (getter) Simulator_get_segment_block_size, NULL,
             "The segment block size." },

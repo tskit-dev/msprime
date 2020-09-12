@@ -79,13 +79,8 @@ typedef struct segment_t_t {
 
 typedef struct {
     double position;
-    uint32_t value;
+    tsk_size_t value;
 } node_mapping_t;
-
-typedef struct {
-    population_id_t population;
-    double time;
-} sample_t;
 
 typedef struct {
     double initial_size;
@@ -96,9 +91,16 @@ typedef struct {
     tsk_id_t *potential_destinations;
 } population_t;
 
+/* Note: we might want to make a distinction here between "individual"
+ * and "pedigree individual". We might want to have a more generic
+ * individual type at some point which just consists of an array of
+ * ploidy segment pointers (one head for each strand). This struct
+ * is quite specialised for the purpose of running the pedigree
+ * simulation. */
 typedef struct individual_t_t {
     tsk_id_t id;
-    tsk_id_t tsk_id;
+    /* Note: probably simpler to make parents a list of tsk_id_ts,
+     * save a bit of pointer fiddling */
     struct individual_t_t **parents;
     avl_tree_t *segments;
     int sex;
@@ -111,7 +113,8 @@ typedef struct individual_t_t {
 typedef struct {
     individual_t *inds;
     size_t num_inds;
-    size_t ploidy;
+    /* JK We don't need the samples any more, as we can derive this
+     * from the tables. */
     individual_t **samples;
     size_t num_samples;
     avl_tree_t ind_heap;
@@ -176,13 +179,17 @@ typedef struct {
     double *cumulative_mass;
 } rate_map_t;
 
+typedef struct {
+    double left;
+    tsk_size_t count;
+} overlap_count_t;
+
 typedef struct _msp_t {
     gsl_rng *rng;
     /* input parameters */
     simulation_model_t model;
     bool store_migrations;
     bool store_full_arg;
-    uint32_t num_samples;
     double sequence_length;
     bool discrete_genome;
     rate_map_t recomb_map;
@@ -191,13 +198,14 @@ typedef struct _msp_t {
     uint32_t num_populations;
     uint32_t num_labels;
     uint32_t ploidy;
-    sample_t *samples;
     double start_time;
-    tsk_treeseq_t *from_ts;
+    pedigree_t *pedigree;
+    /* Initial state for replication */
+    segment_t **root_segments;
+    overlap_count_t *initial_overlaps;
     simulation_model_t initial_model;
     double *initial_migration_matrix;
     population_t *initial_populations;
-    pedigree_t *pedigree;
     /* allocation block sizes */
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
@@ -238,7 +246,7 @@ typedef struct _msp_t {
     object_heap_t *segment_heap;
     /* The tables used to store the simulation state */
     tsk_table_collection_t *tables;
-    tsk_bookmark_t from_position;
+    tsk_bookmark_t input_position;
     /* edges are buffered in a flat array until they are squashed and flushed */
     tsk_edge_t *buffered_edges;
     tsk_size_t num_buffered_edges;
@@ -370,8 +378,7 @@ typedef struct {
     mutation_model_t *model;
 } mutgen_t;
 
-int msp_alloc(msp_t *self, size_t num_samples, sample_t *samples,
-    tsk_table_collection_t *tables, gsl_rng *rng);
+int msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng);
 int msp_set_simulation_model_hudson(msp_t *self);
 int msp_set_simulation_model_smc(msp_t *self);
 int msp_set_simulation_model_smc_prime(msp_t *self);
@@ -393,8 +400,7 @@ int msp_set_gene_conversion_map(
 int msp_set_gene_conversion_rate(msp_t *self, double rate);
 int msp_set_gene_conversion_track_length(msp_t *self, double track_length);
 int msp_set_discrete_genome(msp_t *self, bool is_discrete);
-int msp_set_num_populations(msp_t *self, size_t num_populations);
-int msp_set_dimensions(msp_t *self, size_t num_populations, size_t num_labels);
+int msp_set_num_labels(msp_t *self, size_t num_labels);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
@@ -414,20 +420,6 @@ int msp_add_instantaneous_bottleneck(
     msp_t *self, double time, int population_id, double strength);
 int msp_add_census_event(msp_t *self, double time);
 
-int msp_alloc_pedigree(msp_t *self, size_t num_inds, size_t ploidy);
-int msp_free_pedigree(msp_t *self);
-int msp_set_pedigree(msp_t *self, size_t num_rows, int *inds, int *parents,
-    double *times, uint32_t *is_sample);
-int msp_pedigree_load_pop(msp_t *self);
-void msp_check_samples(msp_t *self);
-int msp_pedigree_build_ind_queue(msp_t *self);
-int msp_pedigree_push_ind(msp_t *self, individual_t *ind);
-int msp_pedigree_pop_ind(msp_t *self, individual_t **ind);
-int msp_pedigree_add_individual_segment(
-    msp_t *self, individual_t *ind, segment_t *segment, size_t parent_ix);
-int msp_pedigree_climb(msp_t *self);
-void msp_print_pedigree_inds(msp_t *self, FILE *out);
-
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
 int msp_debug_demography(msp_t *self, double *end_time);
@@ -441,7 +433,6 @@ int msp_get_ancestors(msp_t *self, segment_t **ancestors);
 int msp_get_breakpoints(msp_t *self, size_t *breakpoints);
 int msp_get_migration_matrix(msp_t *self, double *migration_matrix);
 int msp_get_num_migration_events(msp_t *self, size_t *num_migration_events);
-int msp_get_samples(msp_t *self, sample_t **samples);
 int msp_get_population_configuration(
     msp_t *self, size_t population_id, double *initial_size, double *growth_rate);
 int msp_compute_population_size(

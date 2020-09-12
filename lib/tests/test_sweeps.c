@@ -25,18 +25,13 @@ verify_simple_genic_selection_trajectory(
 {
     int ret;
     msp_t msp;
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    gsl_rng *rng = safe_rng_alloc();
     sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 } };
     tsk_table_collection_t tables;
     size_t j, num_steps;
     double *allele_frequency, *time;
 
-    CU_ASSERT_FATAL(rng != NULL);
-    ret = tsk_table_collection_init(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    tables.sequence_length = 1.0;
-
-    ret = msp_alloc(&msp, 2, samples, &tables, rng);
+    ret = build_sim(&msp, &tables, rng, 1.0, 1, samples, 2);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_sweep_genic_selection(
         &msp, 0.5, start_frequency, end_frequency, alpha, dt);
@@ -83,15 +78,11 @@ test_sweep_genic_selection_bad_parameters(void)
 {
     int ret;
     msp_t msp;
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    gsl_rng *rng = safe_rng_alloc();
     sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 } };
     tsk_table_collection_t tables;
 
-    CU_ASSERT_FATAL(rng != NULL);
-    ret = tsk_table_collection_init(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    tables.sequence_length = 1.0;
-    ret = msp_alloc(&msp, 2, samples, &tables, rng);
+    ret = build_sim(&msp, &tables, rng, 1.0, 1, samples, 2);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_set_simulation_model_sweep_genic_selection(
@@ -122,15 +113,19 @@ test_sweep_genic_selection_bad_parameters(void)
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_POSITION);
     ret = msp_set_simulation_model_sweep_genic_selection(&msp, 5.0, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_POSITION);
+    ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, -666, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_GENIC_SELECTION_ALPHA);
 
     ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
 
-    ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, -666, 0.1);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_GENIC_SELECTION_ALPHA);
     /* The incorrect number of populations was specified */
-    ret = msp_set_dimensions(&msp, 2, 2);
-    CU_ASSERT_EQUAL(ret, 0);
+    ret = build_sim(&msp, &tables, rng, 1.0, 2, samples, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, 0.1, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
@@ -146,20 +141,15 @@ test_sweep_genic_selection_events(void)
 {
     int ret;
     msp_t msp;
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    gsl_rng *rng = safe_rng_alloc();
     sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 }, { 0, 0.0 } };
     tsk_table_collection_t tables;
 
-    CU_ASSERT_FATAL(rng != NULL);
-    ret = tsk_table_collection_init(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    tables.sequence_length = 1.0;
-
-    ret = msp_alloc(&msp, 2, samples, &tables, rng);
+    ret = build_sim(&msp, &tables, rng, 1.0, 1, samples, 2);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_set_dimensions(&msp, 1, 2);
+    ret = msp_set_num_labels(&msp, 2);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_add_population_parameters_change(&msp, 0.1, 0, 1, 0);
     CU_ASSERT_EQUAL(ret, 0);
@@ -168,14 +158,14 @@ test_sweep_genic_selection_events(void)
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_EVENTS_DURING_SWEEP);
     msp_free(&msp);
+    tsk_table_collection_free(&tables);
 
-    tsk_table_collection_clear(&tables);
     samples[1].time = 0.1;
-    ret = msp_alloc(&msp, 3, samples, &tables, rng);
+    ret = build_sim(&msp, &tables, rng, 1, 1, samples, 3);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_set_dimensions(&msp, 1, 2);
+    ret = msp_set_num_labels(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -194,26 +184,19 @@ verify_sweep_genic_selection(double sequence_length, double growth_rate)
     uint32_t n = 10;
     unsigned long seed = 133;
     msp_t msp;
-    sample_t *samples = malloc(n * sizeof(sample_t));
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables[2];
 
-    CU_ASSERT_FATAL(samples != NULL);
-    CU_ASSERT_FATAL(rng != NULL);
-    memset(samples, 0, n * sizeof(sample_t));
     for (j = 0; j < 2; j++) {
-        ret = tsk_table_collection_init(&tables[j], 0);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-        tables[j].sequence_length = sequence_length;
         gsl_rng_set(rng, seed);
-        ret = msp_alloc(&msp, n, samples, &tables[j], rng);
+        ret = build_sim(&msp, &tables[j], rng, sequence_length, 1, NULL, n);
         CU_ASSERT_EQUAL(ret, 0);
         CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1), 0);
-        ret = msp_set_dimensions(&msp, 1, 2);
+        ret = msp_set_num_labels(&msp, 2);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_simulation_model_sweep_genic_selection(
             &msp, sequence_length / 2, 0.1, 0.9, 0.1, 0.01);
-        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = msp_set_population_configuration(&msp, 0, 1.0, growth_rate);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(&msp);
@@ -232,7 +215,6 @@ verify_sweep_genic_selection(double sequence_length, double growth_rate)
     CU_ASSERT_TRUE(tsk_edge_table_equals(&tables[0].edges, &tables[1].edges));
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
-    free(samples);
     for (j = 0; j < 2; j++) {
         tsk_table_collection_free(&tables[j]);
     }
@@ -261,22 +243,16 @@ test_sweep_genic_selection_gc(void)
     uint32_t n = 100;
     unsigned long seed = 133;
     msp_t msp;
-    sample_t *samples = malloc(n * sizeof(sample_t));
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
 
-    memset(samples, 0, n * sizeof(sample_t));
-
-    ret = tsk_table_collection_init(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    tables.sequence_length = 10;
     gsl_rng_set(rng, seed);
-    ret = msp_alloc(&msp, n, samples, &tables, rng);
+    ret = build_sim(&msp, &tables, rng, 10.0, 1, NULL, n);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1), 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_gene_conversion_rate(&msp, 1), 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_gene_conversion_track_length(&msp, 1), 0);
-    ret = msp_set_dimensions(&msp, 1, 2);
+    ret = msp_set_num_labels(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -294,7 +270,6 @@ test_sweep_genic_selection_gc(void)
     msp_free(&msp);
 
     gsl_rng_free(rng);
-    free(samples);
     tsk_table_collection_free(&tables);
 }
 
@@ -307,22 +282,14 @@ test_sweep_genic_selection_time_change(void)
     unsigned long seed = 133234;
     double t;
     msp_t msp;
-    sample_t *samples = malloc(n * sizeof(sample_t));
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
 
-    CU_ASSERT_FATAL(samples != NULL);
-    CU_ASSERT_FATAL(rng != NULL);
-    memset(samples, 0, n * sizeof(sample_t));
-
-    ret = tsk_table_collection_init(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    tables.sequence_length = num_loci;
     gsl_rng_set(rng, seed);
-    ret = msp_alloc(&msp, n, samples, &tables, rng);
+    ret = build_sim(&msp, &tables, rng, num_loci, 1, NULL, n);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1), 0);
-    ret = msp_set_dimensions(&msp, 1, 2);
+    ret = msp_set_num_labels(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -347,7 +314,6 @@ test_sweep_genic_selection_time_change(void)
     msp_free(&msp);
 
     gsl_rng_free(rng);
-    free(samples);
     tsk_table_collection_free(&tables);
 }
 
@@ -368,26 +334,17 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
     double start_frequency = 0.5 / 10000;
     double end_frequency = 0.9;
     double dt = 1.0 / 400000;
-
     msp_t msp;
-    sample_t *samples = malloc(n * sizeof(sample_t));
-    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
 
     // Test over differnt seeds
     gsl_rng_set(rng, seed);
 
-    CU_ASSERT_FATAL(samples != NULL);
-    CU_ASSERT_FATAL(rng != NULL);
-    memset(samples, 0, n * sizeof(sample_t));
-
-    ret = tsk_table_collection_init(&tables, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    tables.sequence_length = num_loci;
-    ret = msp_alloc(&msp, n, samples, &tables, rng);
+    ret = build_sim(&msp, &tables, rng, num_loci, 1, NULL, n);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, recom_rate), 0);
-    ret = msp_set_dimensions(&msp, 1, 2);
+    ret = msp_set_num_labels(&msp, 2);
     CU_ASSERT_EQUAL(ret, 0);
 
     // To mimic the verfication.py call
@@ -412,7 +369,6 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
 
     msp_free(&msp);
     gsl_rng_free(rng);
-    free(samples);
     tsk_table_collection_free(&tables);
 }
 

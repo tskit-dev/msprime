@@ -604,7 +604,7 @@ class TestMixedModels(unittest.TestCase):
         )
         bad_demographic_event = msprime.PopulationParametersChange(t, initial_size=2)
         self.assertRaises(
-            NotImplementedError,
+            _msprime.LibraryError,
             msprime.simulate,
             4,
             pedigree=ped,

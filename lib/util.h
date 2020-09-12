@@ -104,6 +104,9 @@
 #define MSP_ERR_DTWF_MIGRATION_MATRIX_NOT_STOCHASTIC                -64
 #define MSP_ERR_DTWF_GC_NOT_SUPPORTED                               -65
 #define MSP_ERR_SWEEPS_GC_NOT_SUPPORTED                             -66
+#define MSP_ERR_BAD_SEQUENCE_LENGTH                                 -67
+#define MSP_ERR_ZERO_POPULATIONS                                    -68
+#define MSP_ERR_BAD_ANCIENT_SAMPLE_NODE                             -69
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */
