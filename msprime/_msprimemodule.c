@@ -2463,7 +2463,7 @@ InfiniteAllelesMutationModel_check_state(InfiniteAllelesMutationModel *self)
 {
     int ret = 0;
     if (self->mutation_model == NULL) {
-        PyErr_SetString(PyExc_SystemError, "SLiMMutationModel not initialised");
+        PyErr_SetString(PyExc_SystemError, "InfiniteAllelesMutationModel not initialised");
         ret = -1;
     }
     return ret;
