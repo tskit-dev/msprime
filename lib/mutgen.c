@@ -425,6 +425,7 @@ infinite_alleles_print_state(mutation_model_t *self, FILE *out)
     infinite_alleles_t params = self->params.infinite_alleles;
     fprintf(out, "infinite alleles:\n");
     fprintf(out, "\tstart_allele:%" PRIu64 "\n", params.start_allele);
+    fprintf(out, "\tnext_allele:%" PRIu64 "\n", params.next_allele);
 }
 
 /* The maximum number of digits for an unsigned 64 bit integer is 20
@@ -469,9 +470,6 @@ static int
 infinite_alleles_choose_root_state(
     mutation_model_t *self, gsl_rng *MSP_UNUSED(rng), site_t *site)
 {
-    infinite_alleles_t *params = &self->params.infinite_alleles;
-
-    params->next_allele = params->start_allele;
     return infinite_alleles_make_allele(
         self, &site->ancestral_state, &site->ancestral_state_length);
 }
@@ -612,6 +610,7 @@ infinite_alleles_mutation_model_alloc(
         goto out;
     }
     params->start_allele = start_allele;
+    params->next_allele = start_allele;
 out:
     return ret;
 }

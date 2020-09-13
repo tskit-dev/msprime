@@ -2595,13 +2595,12 @@ class TestInfiniteAllelesMutationModel(unittest.TestCase):
         for start_allele in [0, 10, 2 ** 64 - 1]:
             iamm = _msprime.InfiniteAllelesMutationModel(start_allele)
             self.assertEqual(iamm.start_allele, start_allele)
-            self.assertEqual(iamm.next_allele, 0)
+            self.assertEqual(iamm.next_allele, start_allele)
 
     def test_start_allele_overflow(self):
         for start_allele in [2 ** 64, 2 ** 65 + 1]:
             iamm = _msprime.InfiniteAllelesMutationModel(start_allele)
             self.assertEqual(iamm.start_allele, start_allele % 2 ** 64)
-            self.assertEqual(iamm.next_allele, 0)
 
 
 class TestSimMutations(unittest.TestCase):
@@ -2768,7 +2767,7 @@ class TestSimMutations(unittest.TestCase):
         model = _msprime.InfiniteAllelesMutationModel(1234)
         _msprime.sim_mutations(tables, rng, imap, model)
         self.assertEqual(model.start_allele, 1234)
-        self.assertEqual(model.next_allele, 0)
+        self.assertEqual(model.next_allele, 1234)
 
     def test_time_interval(self):
         rng = _msprime.RandomGenerator(1)
