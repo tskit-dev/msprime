@@ -1622,7 +1622,7 @@ class PythonMutationGenerator:
             )
             while mutation_row is not None and mutation_row.site == site_id:
                 time = mutation_row.time
-                if (tskit.util.is_unknown_time(time)):
+                if tskit.util.is_unknown_time(time):
                     time = nodes.time[mutation_row.node]
                 site.add_mutation(
                     node=mutation_row.node,
@@ -1630,7 +1630,7 @@ class PythonMutationGenerator:
                     new=False,
                     derived_state=mutation_row.derived_state,
                     metadata=mutation_row.metadata,
-                    unknown_time = tskit.util.is_unknown_time(mutation_row.time),
+                    unknown_time=tskit.util.is_unknown_time(mutation_row.time),
                     id=j,
                 )
                 j += 1
@@ -1705,7 +1705,9 @@ class PythonMutationGenerator:
                         self.add_site(position=position, new=True)
                     site = self.sites[position]
                     time = self.rng.flat(branch_start, branch_end)
-                    site.add_mutation(node=edge.child, time=time, new=True, unknown_time=False)
+                    site.add_mutation(
+                        node=edge.child, time=time, new=True, unknown_time=False
+                    )
                 index += 1
                 left = right
 
