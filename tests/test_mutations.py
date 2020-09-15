@@ -1572,11 +1572,8 @@ def cmp_mutation(a, b):
     # in order already). Kept mutations are given an id that is
     # their order in the initial tables, and new mutations have id -1.
     out = a.id * (not a.new) - b.id * (not b.new)
-    either_unknown = tskit.util.is_unknown_time(a.time) or tskit.util.is_unknown_time(b.time)
-    if out == 0 and not either_unknown:
-        out = b.time - a.time
     if out == 0:
-        out = b.id - a.id
+        out = b.time - a.time
     return out
 
 
