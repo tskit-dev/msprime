@@ -36,6 +36,9 @@ msHOT:
 discoal:
 	wget https://github.com/kern-lab/discoal/archive/v0.1.5.tar.gz
 	tar -xf v0.1.5.tar.gz
+	# To allow larger num_sites, a macro in the header file is updated
+	sed -i -e 's/^#define MAXSITES.*$$/#define MAXSITES 500000/' \
+		discoal-0.1.5/discoal.h 
 	cd discoal-0.1.5/ && make
 	cp discoal-0.1.5/discoal ./
 
