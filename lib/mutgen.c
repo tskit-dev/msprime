@@ -1019,8 +1019,7 @@ mutgen_initialise_sites(mutgen_t *self, bool discrete_sites)
             if (tsk_is_unknown_time(time)) {
                 time = nodes->time[mutations->node[j]];
             }
-            if (time < start_time && !discrete_sites) {
-                printf("not supported kept muts\n");
+            if (time < start_time && discrete_sites) {
                 ret = MSP_ERR_KEPT_MUTATIONS_NOT_SUPPORTED;
                 goto out;
             }

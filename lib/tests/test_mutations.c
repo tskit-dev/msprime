@@ -72,19 +72,19 @@ insert_single_tree(tsk_table_collection_t *tables, int alphabet)
 
     ret = tsk_population_table_add_row(&tables->populations, NULL, 0);
     CU_ASSERT_FATAL(ret == 0);
-
+    
     /* Add a site and a mutation */
     if (alphabet == ALPHABET_BINARY) {
         ret = tsk_site_table_add_row(&tables->sites, 0.1, "0", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
         ret = tsk_mutation_table_add_row(
-            &tables->mutations, 0, 0, -1, 0.0, "1", 1, NULL, 0);
+            &tables->mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "1", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
     } else if (alphabet == ALPHABET_NUCLEOTIDE) {
         ret = tsk_site_table_add_row(&tables->sites, 0.1, "A", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
         ret = tsk_mutation_table_add_row(
-            &tables->mutations, 0, 0, -1, 0.0, "C", 1, NULL, 0);
+            &tables->mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
         CU_ASSERT_FATAL(ret >= 0);
     }
 
@@ -189,6 +189,7 @@ test_mutgen_errors(void)
     /* we shouldn't error the first time since existing site is nucleotide
      * but not at an integer loction */
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
+    printf("this error mutgenerror: %d\n", ret);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutgen_free(&mutgen);
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
@@ -535,7 +536,52 @@ test_single_tree_mutgen_keep_sites_many_mutations(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
     }
     CU_ASSERT_TRUE(tables.sites.num_rows > 2);
+    
+    mutgen_free(&mutgen);
+    mutation_model_free(&mut_model);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
 
+static void
+test_mutation_time(void)
+{
+    int ret = 0;
+    int j;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+    mutgen_t mutgen;
+    mutation_model_t mut_model;
+
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    insert_single_tree(&tables, ALPHABET_BINARY);
+    ret = matrix_mutation_model_factory(&mut_model, ALPHABET_BINARY);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    for (j = 0; j < 8; j++) {
+        ret = tsk_mutation_table_add_row(
+            &tables.mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "1", 1, NULL, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, j + 1);
+    }
+
+    gsl_rng_set(rng, 2);
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_set_rate(&mutgen, 10);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    
+    /* should error out with discrete times and keeping mutations above 
+     * start_time */
+    tsk_mutation_table_print_state(&tables.mutations, stdout);
+    ret = mutgen_set_time_interval(&mutgen, 2, DBL_MAX);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_KEPT_MUTATIONS_NOT_SUPPORTED);
+    tsk_mutation_table_print_state(&tables.mutations, stdout);
+    tsk_site_table_print_state(&tables.sites, stdout);
+    CU_ASSERT_TRUE(tables.sites.num_rows > 0);
+    
     mutgen_free(&mutgen);
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
@@ -686,8 +732,8 @@ test_single_tree_mutgen_do_nothing_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(tables.mutations.num_rows, 0);
     CU_ASSERT_EQUAL_FATAL(tables.sites.num_rows, 0);
+    
     mutgen_free(&mutgen);
-
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     tsk_table_collection_free(&copy);
@@ -718,8 +764,8 @@ test_single_tree_mutgen_many_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER);
-    mutgen_free(&mutgen);
 
+    mutgen_free(&mutgen);
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
@@ -1196,6 +1242,8 @@ main(int argc, char **argv)
         { "test_single_tree_mutgen_keep_sites", test_single_tree_mutgen_keep_sites },
         { "test_single_tree_mutgen_discrete_sites",
             test_single_tree_mutgen_discrete_sites },
+        { "test_mutation_time",
+            test_mutation_time },
         { "test_single_tree_mutgen_keep_sites_many_mutations",
             test_single_tree_mutgen_keep_sites_many_mutations },
         { "test_single_tree_mutgen_interval", test_single_tree_mutgen_interval },
