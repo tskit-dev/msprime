@@ -1183,7 +1183,7 @@ out:
 
 static int MSP_WARN_UNUSED
 mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_mutation,
-    tsk_size_t num_nodes, site_t *site)
+    tsk_size_t num_nodes, site_t *site, bool allow_ancestral)
 {
     int ret = 0;
     const char *pa, *pm;
@@ -1221,7 +1221,8 @@ mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_muta
         } else {
             parent_mut = bottom_mutation[u];
             mut->parent = parent_mut;
-            if (mut->time > parent_mut->time || (parent_mut->new && !mut->new)) {
+            if (mut->time > parent_mut->time
+                || (!allow_ancestral && (parent_mut->new && !mut->new))) {
                 ret = MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER;
                 goto out;
             }
@@ -1260,7 +1261,7 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_apply_mutations(mutgen_t *self)
+mutgen_apply_mutations(mutgen_t *self, bool allow_ancestral)
 {
     int ret = 0;
     const tsk_id_t *I, *O;
@@ -1321,7 +1322,8 @@ mutgen_apply_mutations(mutgen_t *self)
                 break;
             }
             ret = mutgen_choose_alleles(
-                self, parent, bottom_mutation, nodes.num_rows, site);
+                self, parent, bottom_mutation, nodes.num_rows, site,
+                allow_ancestral);
             if (ret != 0) {
                 goto out;
             }
@@ -1342,6 +1344,7 @@ mutgen_generate(mutgen_t *self, int flags)
 {
     int ret = 0;
     bool discrete_sites = flags & MSP_DISCRETE_SITES;
+    bool allow_ancestral = flags & MSP_ALLOW_ANCESTRAL_MUTATIONS;
 
     avl_clear_tree(&self->sites);
 
@@ -1373,7 +1376,7 @@ mutgen_generate(mutgen_t *self, int flags)
     if (ret != 0) {
         goto out;
     }
-    ret = mutgen_apply_mutations(self);
+    ret = mutgen_apply_mutations(self, allow_ancestral);
     if (ret != 0) {
         goto out;
     }

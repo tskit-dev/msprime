@@ -57,6 +57,7 @@
 /* Flags for mutgen */
 #define MSP_KEEP_SITES 1
 #define MSP_DISCRETE_SITES 2
+#define MSP_ALLOW_ANCESTRAL_MUTATIONS 3
 
 /* Pedigree states */
 #define MSP_PED_STATE_UNCLIMBED 0
