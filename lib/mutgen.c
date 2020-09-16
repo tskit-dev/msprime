@@ -984,7 +984,7 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_initialise_sites(mutgen_t *self, bool discrete_sites)
+mutgen_initialise_sites(mutgen_t *self, bool discrete_sites, bool allow_ancestral)
 {
     int ret = 0;
     tsk_site_table_t *sites = &self->tables->sites;
@@ -1019,8 +1019,8 @@ mutgen_initialise_sites(mutgen_t *self, bool discrete_sites)
             if (tsk_is_unknown_time(time)) {
                 time = nodes->time[mutations->node[j]];
             }
-            if (time < start_time && discrete_sites) {
-                ret = MSP_ERR_KEPT_MUTATIONS_NOT_SUPPORTED;
+            if (discrete_sites && time < start_time && !allow_ancestral) {
+                ret = MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER;
                 goto out;
             }
             state = mutations->derived_state + mutations->derived_state_offset[j];
@@ -1220,8 +1220,7 @@ mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_muta
         } else {
             parent_mut = bottom_mutation[u];
             mut->parent = parent_mut;
-            if (mut->time > parent_mut->time
-                || (!allow_ancestral && (parent_mut->new && !mut->new))) {
+            if (!allow_ancestral && (mut->time > parent_mut->time || (parent_mut->new && !mut->new))) {
                 ret = MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER;
                 goto out;
             }
@@ -1357,7 +1356,7 @@ mutgen_generate(mutgen_t *self, int flags)
         goto out;
     }
     if (flags & MSP_KEEP_SITES) {
-        ret = mutgen_initialise_sites(self, discrete_sites);
+        ret = mutgen_initialise_sites(self, discrete_sites, allow_ancestral);
         if (ret != 0) {
             goto out;
         }

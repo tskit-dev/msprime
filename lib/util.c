@@ -199,7 +199,7 @@ msp_strerror_internal(int err)
         case MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER:
             ret = "Tree sequence contains mutations that would descend from "
                   "existing mutations: finite site mutations must be generated on "
-                  "older time periods first.";
+                  "older time periods first";
             break;
         case MSP_ERR_INSUFFICIENT_ALLELES:
             ret = "Must have at least two alleles.";
@@ -253,12 +253,6 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_SWEEPS_GC_NOT_SUPPORTED:
             ret = "Gene conversion is not supported in the selective sweep model";
-            break;
-        case MSP_ERR_KEPT_MUTATIONS_NOT_SUPPORTED:
-            ret = "Cannot generate mutations under finite sites above kept "
-                  "mutations. Either specify a start_time that is greater "
-                  "than the times of the kept mutations or simulate under "
-                  " the infinite sites model.";
             break;
         default:
             ret = "Error occurred generating error string. Please file a bug "

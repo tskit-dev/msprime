@@ -189,7 +189,6 @@ test_mutgen_errors(void)
     /* we shouldn't error the first time since existing site is nucleotide
      * but not at an integer loction */
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
-    printf("this error mutgenerror: %d\n", ret);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutgen_free(&mutgen);
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
@@ -249,7 +248,9 @@ test_mutgen_bad_mutation_order(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_time_interval(&mutgen, 0.5, 1.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_ALLOW_ANCESTRAL_MUTATIONS);
+    mutgen_free(&mutgen);
+    printf("error code: %d\n", ret);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER);
 
     mutgen_free(&mutgen);
@@ -577,10 +578,14 @@ test_mutation_time(void)
     ret = mutgen_set_time_interval(&mutgen, 2, DBL_MAX);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_KEPT_MUTATIONS_NOT_SUPPORTED);
-    tsk_mutation_table_print_state(&tables.mutations, stdout);
-    tsk_site_table_print_state(&tables.sites, stdout);
-    CU_ASSERT_TRUE(tables.sites.num_rows > 0);
+    printf("error code: %d\n", ret);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER);
+    //tsk_mutation_table_print_state(&tables.mutations, stdout);
+    //tsk_site_table_print_state(&tables.sites, stdout);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_ALLOW_ANCESTRAL_MUTATIONS);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    //tsk_mutation_table_print_state(&tables.mutations, stdout);
+    //tsk_site_table_print_state(&tables.sites, stdout);
     
     mutgen_free(&mutgen);
     mutation_model_free(&mut_model);
@@ -761,6 +766,7 @@ test_single_tree_mutgen_many_mutations(void)
     ret = mutgen_set_rate(&mutgen, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
+    printf("error code: %d\n", ret);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER);
