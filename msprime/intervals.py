@@ -90,6 +90,32 @@ class RateMap:
             weights[0] = 0
         return np.average(self.rate, weights=weights)
 
+    def at(self, x):
+        """
+        Return the rate at a list of specified positions along the map. Any positions
+        beyond the end of the map will return the final rate value.
+
+        :param numpy.ndarray x: The positions for which to return values.
+
+        :return: An array of rates, the same length as ``x``.
+        :rtype: numpy.ndarray(dtype=np.float64)
+        """
+        loc = np.searchsorted(self.position, x, side="right") - 1
+        if np.any(loc < 0):
+            raise ValueError("No rate exists for positions below the minimum map pos")
+        return self.rate[np.minimum(loc, len(self.rate) - 1)]
+
+    def cumulative_at(self, x):
+        """
+        Return the cumulative rate at a list of specified positions along the map.
+
+        :param numpy.ndarray x: The positions for which to return values.
+
+        :return: An array of cumulative rates, the same length as ``x``
+        :rtype: numpy.ndarray(dtype=np.float64)
+        """
+        return np.interp(x, self.position, self.cumulative)
+
     def slice(self, start=None, end=None, trim=False):  # noqa: A003
         """
         Returns a subset of this rate map between the specified end
@@ -265,8 +291,27 @@ class RecombinationMap:
         """
         return self.map.cumulative[-1]
 
+    def at(self, x):
+        """
+        Return the recombination rates at a set of positions along the chromosome
+
+        :param numpy.ndarray x: The physical positions along the chromosome.
+
+        :return: An array of rates, the same length as ``x``
+        :rtype: numpy.ndarray(dtype=np.float64)
+        """
+        return self.map.at(x)
+
     def physical_to_genetic(self, x):
-        return np.interp(x, self.map.position, self.map.cumulative)
+        """
+        Convert physical positions into genetic coordinates
+
+        :param numpy.ndarray x: The physical positions along the chromosome.
+
+        :return: An array of genetic positions, the same length as ``x``
+        :rtype: numpy.ndarray(dtype=np.float64)
+        """
+        return self.map.cumulative_at(x)
 
     def genetic_to_physical(self, genetic_x):
         if self.map.cumulative[-1] == 0:

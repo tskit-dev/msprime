@@ -115,6 +115,18 @@ class PythonRecombinationMap:
             y = last_phys_x - (s - u) / rate
         return y
 
+    def at(self, x):
+        ret = []
+        for target_pos in x:
+            for i in range(len(self._positions)):
+                if target_pos < self._positions[i]:
+                    ret.append(self._rates[i - 1])
+                    break
+            else:
+                # Any points past the last position have the final rate too
+                ret.append(self._rates[-2])
+        return ret
+
 
 class TestCoordinateConversion(unittest.TestCase):
     """
@@ -255,6 +267,13 @@ class TestCoordinateConversion(unittest.TestCase):
                 for x in range(L + 1):
                     self.assertAlmostEqual(x, rm.genetic_to_physical(x))
 
+    def test_bad_pos(self):
+        rm = msprime.RecombinationMap.uniform_map(10, 1)
+        with pytest.raises(ValueError):
+            rm.physical_to_genetic(-0.5)
+        with pytest.raises(ValueError):
+            rm.physical_to_genetic(20)
+
 
 class TestReadHapmap(unittest.TestCase):
     """
@@ -369,6 +388,31 @@ class TestRecombinationMapInterface(unittest.TestCase):
         assert recomb_map.get_rates() == [1, 0]
         assert recomb_map.get_positions() == [0, 10]
         assert recomb_map.get_size() == 2
+
+    def test_rate_at(self):
+        seq_len = 10
+        positions = [0, seq_len / 2, seq_len]
+        rates = [0.2, 1.0, 0]
+        rm = msprime.RecombinationMap(positions, rates)
+        assert len(rm.at([])) == 0
+        other_rm = PythonRecombinationMap(positions, rates)
+        np.random.seed(123)
+        test_positions = np.random.uniform(0, seq_len, size=6)
+        assert np.all(rm.at(test_positions) == other_rm.at(test_positions))
+        test_exact = positions
+        assert np.all(rm.at(test_exact) == other_rm.at(test_exact))
+
+    def test_rate_at_bad(self):
+        seq_len = 10
+        positions = [0, seq_len / 2, seq_len]
+        rates = [0.2, 1.0, 0]
+        rm = msprime.RecombinationMap(positions, rates)
+        with pytest.raises(ValueError):
+            assert rm.at(-0.1)
+        with pytest.raises(ValueError):
+            assert rm.at([-1, 1])
+        with pytest.raises(TypeError):
+            assert rm.at(None)
 
     def test_zero_recombination_map(self):
         # test that beginning and trailing zero recombination regions in the
