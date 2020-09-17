@@ -202,7 +202,6 @@ test_mutgen_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(
         &mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_ALLOW_ANCESTRAL_MUTATIONS);
-    printf("error code: %d", ret);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNKNOWN_ALLELE);
 
     mutgen_free(&mutgen);
@@ -763,8 +762,8 @@ test_single_tree_mutgen_do_nothing_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(tables.mutations.num_rows, 0);
     CU_ASSERT_EQUAL_FATAL(tables.sites.num_rows, 0);
-
     mutgen_free(&mutgen);
+
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     tsk_table_collection_free(&copy);
@@ -795,8 +794,8 @@ test_single_tree_mutgen_many_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER);
-
     mutgen_free(&mutgen);
+
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
