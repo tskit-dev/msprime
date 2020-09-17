@@ -221,7 +221,7 @@ class Population:
 
     def get_ind_range(self, t):
         """ Returns ind labels at time t """
-        first_ind = np.sum([self.get_size(t_prev) for t_prev in range(0, t)])
+        first_ind = np.sum([self.get_size(t_prev) for t_prev in range(0, int(t))])
         last_ind = first_ind + self.get_size(t)
 
         return range(int(first_ind), int(last_ind) + 1)
@@ -270,6 +270,8 @@ class Population:
         return self._ancestors[indv.label].index(indv)
 
 
+# TODO this needs to be refactored a bit and cleaned up. We can integrate
+# better with tskit for this.
 class Pedigree:
     """
     Class representing a pedigree for use with the DTWF model, as implemented
@@ -290,6 +292,7 @@ class Pedigree:
 
     def set_pedigree(self, inds, parents, times, is_sample):
         self.ploidy = parents.shape[1]
+        self.is_sample = is_sample
         self.inds = [
             Individual(ploidy=self.ploidy) for i in range(self.num_individuals)
         ]
@@ -637,12 +640,10 @@ class Simulator:
 
     def __init__(
         self,
-        sample_size,
-        num_loci,
-        recombination_rate,
+        *,
+        tables,
         recombination_map,
         migration_matrix,
-        sample_configuration,
         population_growth_rates,
         population_sizes,
         population_growth_rate_changes,
@@ -651,7 +652,6 @@ class Simulator:
         bottlenecks,
         census_times,
         model="hudson",
-        from_ts=None,
         max_segments=100,
         num_labels=1,
         sweep_trajectory=None,
@@ -664,20 +664,19 @@ class Simulator:
     ):
         # Must be a square matrix.
         N = len(migration_matrix)
-        assert len(sample_configuration) == N
+        assert len(tables.populations) == N
         assert len(population_growth_rates) == N
         assert len(population_sizes) == N
         for j in range(N):
             assert N == len(migration_matrix[j])
             assert migration_matrix[j][j] == 0
-        assert sum(sample_configuration) == sample_size
         assert gene_conversion_length > 1
 
+        self.tables = tables
         self.model = model
-        self.n = sample_size
-        self.m = num_loci
+        self.L = tables.sequence_length
         self.recomb_map = recombination_map
-        self.gc_map = RateMap([0, self.m], [gene_conversion_rate, 0])
+        self.gc_map = RateMap([0, self.L], [gene_conversion_rate, 0])
         self.track_length = gene_conversion_length
         self.discrete_genome = discrete_genome
         self.migration_matrix = migration_matrix
@@ -709,33 +708,9 @@ class Simulator:
             pop.set_start_size(population_sizes[pop.id])
             pop.set_growth_rate(population_growth_rates[pop.id], 0)
         self.edge_buffer = []
-        self.from_ts = from_ts
         self.pedigree = pedigree
 
-        if from_ts is None:
-            self.tables = tskit.TableCollection(sequence_length=num_loci)
-            for pop_index in range(N):
-                self.tables.populations.add_row()
-                sample_size = sample_configuration[pop_index]
-                for _ in range(sample_size):
-                    j = len(self.tables.nodes)
-                    x = self.alloc_segment(0, self.m, j, pop_index,)
-                    self.set_segment_mass(x)
-                    self.P[pop_index].add(x)
-                    self.tables.nodes.add_row(
-                        flags=tskit.NODE_IS_SAMPLE, time=0, population=pop_index
-                    )
-                    j += 1
-            self.S[0] = self.n
-            self.S[self.m] = -1
-            self.t = 0
-        else:
-            ts = tskit.load(from_ts)
-            if ts.sequence_length != self.m:
-                raise ValueError("Sequence length in from_ts must match")
-            if ts.num_populations != N:
-                raise ValueError("Number of populations in from_ts must match")
-            self.initialise_from_ts(ts)
+        self.initialise(tables.tree_sequence())
 
         if pedigree is not None:
             assert N == 1  # <- only support single pop/pedigree for now
@@ -747,7 +722,7 @@ class Simulator:
         self.num_gc_events = 0
 
         # Sweep variables
-        self.sweep_site = (self.m // 2) - 1  # need to add options here
+        self.sweep_site = (self.L // 2) - 1  # need to add options here
         self.sweep_trajectory = sweep_trajectory
         self.time_slice = time_slice
 
@@ -780,8 +755,7 @@ class Simulator:
             self.modifier_events.append((time[0], self.census_event, time))
         self.modifier_events.sort()
 
-    def initialise_from_ts(self, ts):
-        self.tables = ts.dump_tables()
+    def initialise(self, ts):
         root_time = np.max(self.tables.nodes.time)
         self.t = root_time
 
@@ -813,7 +787,7 @@ class Simulator:
                             )
                             tail.next = seg
                             root_segments_tail[root] = seg
-        self.S[self.m] = -1
+        self.S[self.L] = -1
 
         # Insert the segment chains into the algorithm state.
         for node in range(ts.num_nodes):
@@ -1820,7 +1794,7 @@ class Simulator:
             alpha = None
             left = H[0][0]
             X = []
-            r_max = self.m
+            r_max = self.L
             while len(H) > 0 and H[0][0] == left:
                 x = heapq.heappop(H)[1]
                 X.append(x)
@@ -1922,7 +1896,7 @@ class Simulator:
         # Defrag the breakpoints set
         j = 0
         k = 0
-        while k < self.m:
+        while k < self.L:
             k = self.S.succ_key(j)
             if self.S[j] == self.S[k]:
                 del self.S[k]
@@ -2117,7 +2091,7 @@ class Simulator:
                         u = u.next
 
     def verify_overlaps(self):
-        overlap_counter = OverlapCounter(self.m)
+        overlap_counter = OverlapCounter(self.L)
         for pop in self.P:
             for label in range(self.num_labels):
                 for u in pop.iter_label(label):
@@ -2126,14 +2100,14 @@ class Simulator:
                         u = u.next
 
         for pos, count in self.S.items():
-            if pos != self.m:
+            if pos != self.L:
                 assert count == overlap_counter.overlaps_at(pos)
 
-        assert self.S[self.m] == -1
+        assert self.S[self.L] == -1
         # Check the ancestry tracking.
         A = bintrees.AVLTree()
         A[0] = 0
-        A[self.m] = -1
+        A[self.L] = -1
         for pop in self.P:
             for label in range(self.num_labels):
                 for u in pop.iter_label(label):
@@ -2152,7 +2126,7 @@ class Simulator:
         # Now, defrag A
         j = 0
         k = 0
-        while k < self.m:
+        while k < self.L:
             k = A.succ_key(j)
             if A[j] == A[k]:
                 del A[k]
@@ -2265,6 +2239,8 @@ def run_simulate(args):
         num_labels = 2
     pedigree = None
     if args.pedigree_file is not None:
+        # TODO we should be ignoring the sample number and instead reading
+        # the is_sample status from the file.
         if n % 2 != 0:
             raise ValueError(
                 "Must specify an even number of sample lineages for "
@@ -2284,22 +2260,46 @@ def run_simulate(args):
         )
     random.seed(args.random_seed)
     np.random.seed(args.random_seed + 1)
+
+    if args.from_ts is None:
+        tables = tskit.TableCollection(m)
+        if pedigree is None:
+            for pop_id, sample_count in enumerate(sample_configuration):
+                tables.populations.add_row()
+                for _ in range(sample_count):
+                    tables.nodes.add_row(
+                        flags=tskit.NODE_IS_SAMPLE, time=0, population=pop_id
+                    )
+        else:
+            # Assume one population for now.
+            tables.populations.add_row()
+            for is_sample, ind in zip(pedigree.is_sample, pedigree.inds):
+                # TODO add information about the individual.
+                ind_id = tables.individuals.add_row()
+                if is_sample:
+                    for _ in range(ind.ploidy):
+                        tables.nodes.add_row(
+                            flags=tskit.NODE_IS_SAMPLE,
+                            time=ind.time,
+                            population=0,
+                            individual=ind_id,
+                        )
+    else:
+        from_ts = tskit.load(args.from_ts)
+        tables = from_ts.dump_tables()
+
     s = Simulator(
-        n,
-        m,
-        rho,
-        recombination_map,
-        migration_matrix,
-        sample_configuration,
-        population_growth_rates,
-        population_sizes,
-        args.population_growth_rate_change,
-        args.population_size_change,
-        args.migration_matrix_element_change,
-        args.bottleneck,
-        args.census_time,
-        args.model,
-        from_ts=args.from_ts,
+        tables=tables,
+        recombination_map=recombination_map,
+        migration_matrix=migration_matrix,
+        model=args.model,
+        population_growth_rates=population_growth_rates,
+        population_sizes=population_sizes,
+        population_growth_rate_changes=args.population_growth_rate_change,
+        population_size_changes=args.population_size_change,
+        migration_matrix_element_changes=args.migration_matrix_element_change,
+        bottlenecks=args.bottleneck,
+        census_times=args.census_time,
         max_segments=100000,
         num_labels=num_labels,
         full_arg=args.full_arg,

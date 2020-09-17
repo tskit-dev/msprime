@@ -169,10 +169,10 @@ class TestAlgorithms(unittest.TestCase):
     def test_pedigree(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             ped_path = pathlib.Path(tmpdir) / "tmp.ped"
-            individual = np.array([1, 2, 3, 4])
-            parents = np.array([2, 3, 2, 3, -1, -1, -1, -1]).reshape(-1, 2)
+            individual = np.array([1, 2, 3, 4], dtype=int)
+            parents = np.array([2, 3, 2, 3, -1, -1, -1, -1], dtype=int).reshape(-1, 2)
             time = np.array([0, 0, 1, 1])
-            is_sample = np.array([1, 1, 0, 0])
+            is_sample = np.array([1, 1, 0, 0], dtype=int)
             ped = msprime.Pedigree(
                 individual, parents, time, is_sample, sex=None, ploidy=2
             )
@@ -180,3 +180,5 @@ class TestAlgorithms(unittest.TestCase):
             ts = self.run_script(f"2 --pedigree-file {ped_path} --model=wf_ped")
             for tree in ts.trees():
                 self.assertGreater(tree.num_roots, 1)
+            self.assertEqual(ts.num_individuals, len(individual))
+            self.assertEqual(ts.num_samples, 4)

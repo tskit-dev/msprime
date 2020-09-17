@@ -29,6 +29,19 @@ import numpy as np
 # NOTE This functionality is preliminary and undocumented. It
 # *will change*.
 
+# TODO the main thing we need to do here is get rid of the 1-based
+# IDs and the "individual" column so that it maps directly into the
+# individual table in tskit. We can integrate with PED files by
+# putting in a null individual if necessary, but it's horribly
+# confusing working with external IDs here.
+
+# Another major issue here is that the sampling strategy is
+# bound up with the representation of the pedigree itself. We should
+# remove any idea of sampling from this class and instead make the
+# samples argument to simulate specify *individual* IDs, ie.
+# ts = msprime.sim_ancestry([0, 1], pedigree=pedigree)
+# sets the individuals 0 and 1 to be the samples.
+
 
 class Pedigree:
     """
@@ -139,6 +152,8 @@ class Pedigree:
             "is_sample": self.is_sample,
         }
 
+    # FIXME this shouldn't be a static method, but should be called automatically
+    # if a time isn't specified.
     @staticmethod
     def get_times(individual, parent_IDs=None, parents=None, check=False):
         """
@@ -348,7 +363,7 @@ class Pedigree:
         where time is given in generations.
         """
         pedarray = self.build_array()
-        np.save(os.path.expanduser(fname), pedarray)
+        np.save(fname, pedarray)
 
     def asdict(self):
         """
