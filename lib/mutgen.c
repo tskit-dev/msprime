@@ -264,25 +264,25 @@ mutation_matrix_free(mutation_model_t *self)
     return 0;
 }
 
-/***********************
- * SLiM mutation model */
+    /***********************
+     * SLiM mutation model */
 
-/* Typedefs from MutationMetadataRec in slim_sim.h:
- * line 125 in v3.4, git hash b2c2b634199f35e53c4e7e513bd26c91c6d99fd9
- *  int32_t mutation_type_id_; // 4 bytes (int32_t): the id of the mutation type the
- *                             // mutation belongs to
- *  float selection_coeff_;    // 4 bytes (float): the selection coefficient
- *  int32_t subpop_index_; // 4 bytes (int32_t): the id of the subpopulation in which
- * the
- *                         // mutation arose
- *  int32_t origin_generation_; // 4 bytes (int32_t): the generation in which the
- *                              // mutation arose
- *  int8_t nucleotide_; // 1 byte (int8_t): the nucleotide for the mutation (0='A',
- *                      // 1='C', 2='G', 3='T'), or -1
- *
- * Note that these are defined there as a __packed__ struct, like
- * typedef struct __attribute__((__packed__))  but this is not available
- * in Windows compilers, so we're just copying the info in directly */
+    /* Typedefs from MutationMetadataRec in slim_sim.h:
+     * line 125 in v3.4, git hash b2c2b634199f35e53c4e7e513bd26c91c6d99fd9
+     *  int32_t mutation_type_id_; // 4 bytes (int32_t): the id of the mutation type the
+     *                             // mutation belongs to
+     *  float selection_coeff_;    // 4 bytes (float): the selection coefficient
+     *  int32_t subpop_index_; // 4 bytes (int32_t): the id of the subpopulation in which
+     * the
+     *                         // mutation arose
+     *  int32_t origin_generation_; // 4 bytes (int32_t): the generation in which the
+     *                              // mutation arose
+     *  int8_t nucleotide_; // 1 byte (int8_t): the nucleotide for the mutation (0='A',
+     *                      // 1='C', 2='G', 3='T'), or -1
+     *
+     * Note that these are defined there as a __packed__ struct, like
+     * typedef struct __attribute__((__packed__))  but this is not available
+     * in Windows compilers, so we're just copying the info in directly */
 
 #define SLIM_MUTATION_METADATA_SIZE 17 // = 4 + 4 + 4 + 4 + 1
 
@@ -1220,7 +1220,8 @@ mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_muta
         } else {
             parent_mut = bottom_mutation[u];
             mut->parent = parent_mut;
-            if (!allow_ancestral && (mut->time > parent_mut->time || (parent_mut->new && !mut->new))) {
+            if (!allow_ancestral
+                && (mut->time > parent_mut->time || (parent_mut->new && !mut->new))) {
                 ret = MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER;
                 goto out;
             }
@@ -1320,8 +1321,7 @@ mutgen_apply_mutations(mutgen_t *self, bool allow_ancestral)
                 break;
             }
             ret = mutgen_choose_alleles(
-                self, parent, bottom_mutation, nodes.num_rows, site,
-                allow_ancestral);
+                self, parent, bottom_mutation, nodes.num_rows, site, allow_ancestral);
             if (ret != 0) {
                 goto out;
             }
