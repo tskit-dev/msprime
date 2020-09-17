@@ -1075,6 +1075,36 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         self.bonferroni(lower_pvals)
         self.bonferroni(upper_pvals)
 
+    def find_start_end_times(self, ts, mutation_node, site_id):
+        tables = ts.tables
+        pos = tables.sites[site_id].position
+        is_within = np.logical_and(pos >= tables.edges.left, pos < tables.edges.right)
+        node_is_child = tables.edges.child == mutation_node
+        both = np.logical_and(is_within, node_is_child)
+        self.assertTrue(np.sum(both) == 1)
+        parent_node = tables.edges.parent[both]
+        end = tables.nodes.time[parent_node]
+        start = tables.nodes.time[parent_node]
+        assert end >= start
+        return (start, end)
+
+    def verify_mutation_times_ts(self, ts):
+        start = np.full(ts.num_mutations, -1)
+        end = np.full(ts.num_mutations, -1)
+        time = np.full(ts.num_mutations, -1)
+        for mut in ts.mutations():
+            time[mut.id] = mut.time
+            start[mut.id], end[mut.id] = self.find_start_end_times(
+                ts, mut.node, mut.site
+            )
+        assert np.all(start >= 0)
+        assert np.all(end >= 0)
+        assert np.all(time >= 0)
+        scaled_time = np.floor(100 * (time - start) / (end - start))
+        uniform_time = np.random.default_rng(seed=1).uniform(0, 100)
+        res = stats.ks_2samp(scaled_time, uniform_time)
+        self.assertLess(res[1], 0.05)
+
     def test_binary_model(self):
         model = msprime.BinaryMutations()
         self.verify_model(model)
