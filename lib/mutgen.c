@@ -37,12 +37,12 @@ cmp_site(const void *a, const void *b)
 static int
 cmp_mutationp(const void *a, const void *b)
 {
-    int out = 0;
+    int out;
     /* the extra cast is to avoid a gcc bug in -Werror=cast-qual:
      * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=81631 */
     const mutation_t *ia = *(const mutation_t **) (uintptr_t) a;
     const mutation_t *ib = *(const mutation_t **) (uintptr_t) b;
-    /* if either mutation is new, then sort by time if known.  */
+    // if either mutation is new, then sort by time (or node time if unknown).
     out = (ia->new || ib->new) ? 0 : (ia->id - ib->id) - (ib->id - ia->id);
     if (out == 0) {
         out = (ib->time > ia->time) - (ib->time < ia->time);

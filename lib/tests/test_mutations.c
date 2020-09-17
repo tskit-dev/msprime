@@ -187,11 +187,12 @@ test_mutgen_errors(void)
     ret = mutgen_set_time_interval(&mutgen, 0.5, 10.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     /*TODO: Change the check in initialise_sites to not be triggered with
-     * mixed types of alleles. */
+     * mixed types of alleles. For now I just allowed ancestral muts. */
     /* we shouldn't error the first time since existing site is nucleotide
-     * but not at an integer loction
-     * ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
-     * CU_ASSERT_EQUAL_FATAL(ret, 0);*/
+     * but not at an integer loction*/
+    ret = mutgen_generate(
+        &mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_ALLOW_ANCESTRAL_MUTATIONS);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutgen_free(&mutgen);
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
