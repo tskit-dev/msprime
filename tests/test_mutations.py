@@ -1404,7 +1404,7 @@ class TestInfiniteAllelesMutationModel(unittest.TestCase):
         t.nodes.add_row(time=0)
         t.nodes.add_row(time=10)
         t.sites.add_row(ancestral_state="0", position=0)
-        t.mutations.add_row(derived_state="1", node=1, site=0)
+        t.mutations.add_row(derived_state="1", node=1, site=0, time=10)
         t.edges.add_row(parent=1, child=0, left=0, right=1)
         model = msprime.InfiniteAllelesMutationModel(start_allele=2)
         ts = msprime.mutate(
