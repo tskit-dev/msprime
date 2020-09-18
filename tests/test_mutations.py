@@ -947,7 +947,7 @@ class StatisticalTestMixin:
 
 
 class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
-    def verify_model(self, model, verify_roots=True):
+    def verify_model(self, model, verify_roots=True, state_independent=False):
         ots = msprime.simulate(10, random_seed=5, recombination_rate=0.05, length=20)
         # "large enough sample"-condition for the chisquare test
         if len(model.alleles) > 4:
@@ -960,7 +960,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
                     ots, random_seed=6, rate=rate, model=model, discrete=discrete
                 )
                 self.verify_model_ts_general(ts, model, discrete, verify_roots, rate)
-                if not discrete:
+                if (not discrete) or state_independent:
                     self.verify_mutation_times_ts(ts)
 
     def verify_model_ts(self, ts, model, discrete, verify_roots):
@@ -1092,9 +1092,9 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         return (start, end)
 
     def verify_mutation_times_ts(self, ts):
-        start = np.full(ts.num_mutations, -1)
-        end = np.full(ts.num_mutations, -1)
-        time = np.full(ts.num_mutations, -1)
+        start = np.full(ts.num_mutations, -1, dtype=np.float32)
+        end = np.full(ts.num_mutations, -1, dtype=np.float32)
+        time = np.full(ts.num_mutations, -1, dtype=np.float32)
         for mut in ts.mutations():
             time[mut.id] = mut.time
             start[mut.id], end[mut.id] = self.find_start_end_times(
@@ -1107,14 +1107,11 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         centered_time = time[greater_end] - start[greater_end]
         time_inter = end[greater_end] - start[greater_end]
         rng = random.Random(3937)
-        generated_times = np.array([rng.randint(0, high) for high in time_inter])
-        print(np.sort(centered_time))
-        print(np.sort(generated_times))
+        generated_times = np.array([rng.uniform(0, high) for high in time_inter])
         if centered_time.shape[0] > 0:
-            print("entrei")
             res = stats.ks_2samp(centered_time, generated_times)
             print(res)
-            self.assertGreater(res[1], 0.05)
+            self.assertGreater(res[1], 0.01)
 
     def test_binary_model(self):
         model = msprime.BinaryMutations()
@@ -1123,7 +1120,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
 
     def test_jukes_cantor(self):
         model = msprime.JukesCantor()
-        self.verify_model(model)
+        self.verify_model(model, state_independent=True)
         self.verify_mutation_rates(model)
 
     def test_HKY(self):
