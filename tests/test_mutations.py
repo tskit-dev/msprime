@@ -918,6 +918,17 @@ class TestKeep(unittest.TestCase):
         t2.provenances.clear()
         self.assertEqual(t1, t2)
 
+    def test_keep_and_discrete(self):
+        ts = msprime.simulate(12, recombination_rate=3, random_seed=3)
+        ts_mut = msprime.mutate(ts, rate=1, random_seed=1, discrete=True)
+        self.assertGreater(ts_mut.num_sites, 0)
+        with self.assertRaises(_msprime.LibraryError):
+            msprime.mutate(ts_mut, rate=1, random_seed=1, keep=True, discrete=True)
+        ts_2mut = msprime.mutate(
+            ts_mut, rate=1, random_seed=3, discrete=True, allow_ancestral=True
+        )
+        self.assertGreater(ts_2mut.num_mutations, ts_mut.num_mutations)
+
 
 class StatisticalTestMixin:
 
