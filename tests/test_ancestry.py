@@ -409,11 +409,14 @@ class TestSimulatorFactory(unittest.TestCase):
         self.assertRaises(ValueError, msprime.simulator_factory, sample_size=1)
         for n in [2, 100, 1000]:
             sim = msprime.simulator_factory(n)
-            self.assertEqual(sim.num_samples, n)
-            self.assertEqual(len(sim.samples), n)
-            for sample in sim.samples:
-                self.assertEqual(sample[0], 0)
-                self.assertEqual(sample[1], 0)
+            tables = sim.copy_tables()
+            self.assertEqual(len(tables.populations), 1)
+            self.assertEqual(len(tables.individuals), 0)
+            self.assertEqual(len(tables.edges), 0)
+            self.assertEqual(len(tables.nodes), n)
+            self.assertTrue(np.all(tables.nodes.flags == tskit.NODE_IS_SAMPLE))
+            self.assertTrue(np.all(tables.nodes.time == 0))
+            self.assertTrue(np.all(tables.nodes.individual == tskit.NULL))
 
     def test_effective_population_size(self):
         def f(Ne):
@@ -456,7 +459,8 @@ class TestSimulatorFactory(unittest.TestCase):
             for pop, pop_config in zip(sim.demography.populations, pop_configs):
                 self.assertEqual(pop.initial_size, pop_config.initial_size)
                 self.assertEqual(pop.growth_rate, pop_config.growth_rate)
-            self.assertEqual(len(sim.samples), sample_size)
+            tables = sim.copy_tables()
+            self.assertEqual(len(tables.nodes), sample_size)
             self.assertEqual(len(sim.population_configuration), N)
         # The default is a single population
         sim = msprime.simulator_factory(10)
@@ -471,11 +475,16 @@ class TestSimulatorFactory(unittest.TestCase):
             )
             configs = [msprime.PopulationConfiguration(2) for _ in range(d)]
             sim = msprime.simulator_factory(population_configurations=configs)
-            self.assertEqual(len(sim.samples), 2 * d)
-            samples = []
+            tables = sim.copy_tables()
+            self.assertEqual(len(tables.nodes), 2 * d)
+            i = 0
             for j in range(d):
-                samples += [msprime.Sample(population=j, time=0) for _ in range(2)]
-            self.assertEqual(sim.samples, samples)
+                for _ in range(2):
+                    node = tables.nodes[i]
+                    self.assertEqual(node.population, j)
+                    self.assertEqual(node.time, 0)
+                    self.assertEqual(node.flags, tskit.NODE_IS_SAMPLE)
+                    i += 1
 
     def test_migration_matrix(self):
         # Cannot specify a migration matrix without population
@@ -650,7 +659,12 @@ class TestSimulatorFactory(unittest.TestCase):
         sim = msprime.simulator_factory(
             samples=samples, population_configurations=pop_configs
         )
-        self.assertEqual(sim.samples, samples)
+        tables = sim.copy_tables()
+        self.assertEqual(len(tables.nodes), len(samples))
+        for node, sample in zip(tables.nodes, samples):
+            self.assertEqual(node.population, sample.population)
+            self.assertEqual(node.time, sample.time)
+            self.assertEqual(node.flags, tskit.NODE_IS_SAMPLE)
 
     def test_new_old_style_model_changes_equal(self):
         models = [

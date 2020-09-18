@@ -1557,16 +1557,14 @@ class TestEventTimes(unittest.TestCase):
     def test_event_before_start_time(self):
         for start_time in [10, 20]:
             for time in [start_time - 1, start_time - 1e-6]:
-                with self.assertRaises(_msprime.InputError):
-                    msprime.simulate(
-                        sample_size=10,
-                        start_time=start_time,
-                        demographic_events=[
-                            msprime.PopulationParametersChange(
-                                time=time, initial_size=2
-                            )
-                        ],
-                    )
+                ts = msprime.simulate(
+                    sample_size=10,
+                    start_time=start_time,
+                    demographic_events=[
+                        msprime.PopulationParametersChange(time=time, initial_size=2)
+                    ],
+                )
+                self.assertEqual(ts.first().num_roots, 1)
 
 
 class TestCoalescenceLocations(unittest.TestCase):
@@ -2692,6 +2690,30 @@ class HistoricalSamplingMixin:
                 else:
                     self.assertAlmostEqual(offset, time[2] - start_time)
 
+    def test_negative_start_time(self):
+        ts = msprime.simulate(2, Ne=10, start_time=-1, model=self.model, random_seed=2)
+        tables = ts.tables
+        self.assertEqual(tables.nodes[0].time, 0)
+        self.assertEqual(tables.nodes[1].time, 0)
+        self.assertEqual(len(tables.edges), 2)
+
+    def test_start_time_before_sample_time(self):
+        # If all samples are > than the start time, it doesn't affect
+        # the simulation.
+        samples = [msprime.Sample(population=0, time=10)] * 2
+        for start_time in [-100, 0, 9, 9.999]:
+            ts = msprime.simulate(
+                samples=samples,
+                Ne=10,
+                start_time=start_time,
+                model=self.model,
+                random_seed=2,
+            )
+            tables = ts.tables
+            self.assertEqual(tables.nodes[0].time, 10)
+            self.assertEqual(tables.nodes[1].time, 10)
+            self.assertEqual(len(tables.edges), 2)
+
     def test_two_samples_mass_migration(self):
         N = 200
         sampling_time = 2.01 * N
@@ -2716,6 +2738,25 @@ class HistoricalSamplingMixin:
         self.assertEqual(t.get_population(0), 0)
         self.assertEqual(t.get_population(1), 1)
         self.assertEqual(t.get_population(2), 0)
+
+    def test_events_before_sampling(self):
+        # Demographic events that are scheduled for before sampling time
+        # should go ahead and be applied.
+        ts = msprime.simulate(
+            model=self.model,
+            samples=[msprime.Sample(0, time=100), msprime.Sample(1, time=100)],
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=10),
+                msprime.PopulationConfiguration(initial_size=10),
+            ],
+            # Without this migration rate change, we would never coalesce
+            demographic_events=[msprime.MigrationRateChange(99, rate=0.1)],
+            record_migrations=True,
+            random_seed=2,
+        )
+        tables = ts.tables
+        self.assertEqual(len(tables.edges), 2)
+        self.assertGreater(len(tables.migrations), 1)
 
     def test_interleaved_migrations(self):
         N = 100
@@ -2884,6 +2925,20 @@ class EndTimeMixin:
         self.verify_incomplete_tree_sequence(n, max_time, ts)
         nodes = ts.tables.nodes
         self.assertTrue(np.array_equal(nodes.time[:n], np.arange(n)))
+        self.assertGreater(len(nodes), n)
+        tree = ts.first()
+        self.assertGreater(tree.num_roots, 1)
+
+    def test_all_ancient_samples(self):
+        n = 40
+        samples = [msprime.Sample(time=j + 1, population=0) for j in range(n)]
+        max_time = 20
+        ts = msprime.simulate(
+            samples=samples, Ne=10, end_time=max_time, model=self.model, random_seed=100
+        )
+        self.verify_incomplete_tree_sequence(n, max_time, ts)
+        nodes = ts.tables.nodes
+        self.assertTrue(np.array_equal(nodes.time[:n], np.arange(n) + 1))
         self.assertGreater(len(nodes), n)
         tree = ts.first()
         self.assertGreater(tree.num_roots, 1)

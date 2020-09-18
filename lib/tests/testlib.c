@@ -23,6 +23,95 @@
 char *_tmp_file_name;
 FILE *_devnull;
 
+/* Utility function to create a simulation from tables and a set
+ * of samples */
+int
+build_sim(msp_t *msp, tsk_table_collection_t *tables, gsl_rng *rng,
+    double sequence_length, size_t num_populations, sample_t *samples,
+    size_t num_samples)
+{
+    size_t j;
+    int ret;
+    double time = 0.0;
+    tsk_id_t population = 0;
+
+    ret = tsk_table_collection_init(tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables->sequence_length = sequence_length;
+
+    for (j = 0; j < num_samples; j++) {
+        /* If the input samples are NULL, default to n samples from first
+         * population */
+        if (samples != NULL) {
+            time = samples[j].time;
+            population = samples[j].population;
+        }
+        ret = tsk_node_table_add_row(
+            &tables->nodes, TSK_NODE_IS_SAMPLE, time, population, TSK_NULL, NULL, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, j);
+    }
+    for (j = 0; j < num_populations; j++) {
+        ret = tsk_population_table_add_row(&tables->populations, NULL, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, j);
+    }
+    ret = msp_alloc(msp, tables, rng);
+    return ret;
+}
+
+/* Utility function to create a pedigree simulation */
+int
+build_pedigree_sim(msp_t *msp, tsk_table_collection_t *tables, gsl_rng *rng,
+    double sequence_length, size_t ploidy, size_t num_individuals, tsk_id_t *parents,
+    double *time, tsk_flags_t *is_sample)
+{
+    int ret;
+    size_t j, k;
+    tsk_id_t ind_id;
+    tsk_flags_t flags;
+
+    ret = tsk_table_collection_init(tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tables->sequence_length = sequence_length;
+
+    ret = tsk_population_table_add_row(&tables->populations, NULL, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Insert the pedigree individuals */
+    for (j = 0; j < num_individuals; j++) {
+        ret = tsk_individual_table_add_row(&tables->individuals, 0, NULL, 0,
+            /* encode the parents in the metadata */
+            (void *) (parents + j * ploidy), ploidy * sizeof(tsk_id_t));
+        CU_ASSERT_EQUAL_FATAL(ret, j);
+        ind_id = ret;
+        for (k = 0; k < ploidy; k++) {
+            flags = is_sample[j] ? TSK_NODE_IS_SAMPLE : 0;
+            ret = tsk_node_table_add_row(
+                &tables->nodes, flags, time[j], 0, ind_id, NULL, 0);
+            CU_ASSERT_FATAL(ret >= 0);
+        }
+    }
+    ret = msp_alloc(msp, tables, rng);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_set_ploidy(msp, ploidy);
+    if (ret != 0) {
+        goto out;
+    }
+
+    ret = msp_set_simulation_model_wf_ped(msp);
+out:
+    return ret;
+}
+
+gsl_rng *
+safe_rng_alloc(void)
+{
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    CU_ASSERT_FATAL(rng != NULL);
+    return rng;
+}
+
 static int
 msprime_suite_init(void)
 {

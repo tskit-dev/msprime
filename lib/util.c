@@ -254,6 +254,15 @@ msp_strerror_internal(int err)
         case MSP_ERR_SWEEPS_GC_NOT_SUPPORTED:
             ret = "Gene conversion is not supported in the selective sweep model";
             break;
+        case MSP_ERR_BAD_SEQUENCE_LENGTH:
+            ret = "Sequence length must be > 0";
+            break;
+        case MSP_ERR_ZERO_POPULATIONS:
+            ret = "At least one population must be defined";
+            break;
+        case MSP_ERR_BAD_ANCIENT_SAMPLE_NODE:
+            ret = "Only isolated sample nodes are supported as ancient samples";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                   "report!";

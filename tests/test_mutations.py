@@ -1301,13 +1301,18 @@ class TestInfiniteAllelesMutationModel(unittest.TestCase):
     """
 
     def validate(self, ts, start_allele=0):
+        allele = start_allele
         for site in ts.sites():
-            allele = start_allele
             self.assertEqual(int(site.ancestral_state), allele)
             allele += 1
             for mutation in site.mutations:
                 self.assertEqual(int(mutation.derived_state), allele)
                 allele += 1
+
+    def validate_unique_alleles(self, ts):
+        for site in ts.sites():
+            alleles = [m.derived_state for m in site.mutations] + [site.ancestral_state]
+            self.assertEqual(len(alleles), len(set(alleles)))
 
     def run_mutate(self, ts, rate=1, random_seed=42, start_allele=0):
 
@@ -1366,13 +1371,20 @@ class TestInfiniteAllelesMutationModel(unittest.TestCase):
 
     def test_allele_overflow(self):
         ts = msprime.simulate(4, length=2, random_seed=5)
-        model = msprime.InfiniteAllelesMutationModel(start_allele=2 ** 64 - 1)
+        start_allele = 2 ** 64 - 1
+        model = msprime.InfiniteAllelesMutationModel(start_allele=start_allele)
         mts = msprime.mutate(ts, rate=1, random_seed=32, model=model, discrete=True)
         self.assertGreater(mts.num_sites, 0)
         self.assertGreater(mts.num_mutations, 0)
+        allele = start_allele
+        first_allele = True
         for site in mts.sites():
-            self.assertEqual(int(site.ancestral_state), 2 ** 64 - 1)
-            allele = 0
+            self.assertEqual(int(site.ancestral_state), allele)
+            if first_allele:
+                allele = 0
+                first_allele = False
+            else:
+                allele += 1
             for mutation in site.mutations:
                 self.assertEqual(int(mutation.derived_state), allele)
                 allele += 1
@@ -1383,11 +1395,28 @@ class TestInfiniteAllelesMutationModel(unittest.TestCase):
         mts = msprime.mutate(ts, rate=1, random_seed=32, model=model, discrete=False)
         self.assertGreater(mts.num_sites, 0)
         self.assertEqual(mts.num_mutations, mts.num_sites)
+        self.validate(mts)
         for site in mts.sites():
-            self.assertEqual(int(site.ancestral_state), 0)
             self.assertEqual(len(site.mutations), 1)
-            for mutation in site.mutations:
-                self.assertEqual(int(mutation.derived_state), 1)
+
+    def test_keep_mutations(self):
+        t = tskit.TableCollection(sequence_length=1)
+        t.nodes.add_row(time=0)
+        t.nodes.add_row(time=10)
+        t.sites.add_row(ancestral_state="0", position=0)
+        t.mutations.add_row(derived_state="1", node=1, site=0)
+        t.edges.add_row(parent=1, child=0, left=0, right=1)
+        model = msprime.InfiniteAllelesMutationModel(start_allele=2)
+        ts = msprime.mutate(
+            t.tree_sequence(),
+            rate=1,
+            model=model,
+            start_time=2,
+            random_seed=1,
+            keep=True,
+            discrete=True,
+        )
+        self.validate_unique_alleles(ts)
 
 
 class TestPythonMutationGenerator(unittest.TestCase):
@@ -1567,13 +1596,15 @@ class PythonInfiniteAllelesMutationModel(PythonMutationModel):
     start_allele = attr.ib(default=0)
     next_allele = attr.ib(default=0)
 
+    def __init__(self):
+        self.next_allele = self.start_allele
+
     def make_allele(self):
         ret = str(self.next_allele)
         self.next_allele += 1
         return ret
 
     def root_allele(self, rng):
-        self.next_allele = self.start_allele
         return self.make_allele()
 
     def transition_allele(self, rng, current_allele):

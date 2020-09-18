@@ -24,6 +24,7 @@ import copy
 import inspect
 import logging
 import math
+import struct
 
 import attr
 import numpy as np
@@ -161,7 +162,7 @@ def _check_population_configurations(population_configurations):
             raise TypeError(err)
 
 
-def samples_factory(sample_size, samples, pedigree, population_configurations):
+def samples_factory(sample_size, samples, population_configurations):
     """
     Returns a list of Sample objects, given the specified inputs.
     """
@@ -175,12 +176,6 @@ def samples_factory(sample_size, samples, pedigree, population_configurations):
                 "simultaneously."
             )
         s = demog.Sample(population=0, time=0.0)
-        # NOTE: we need to review this before finalising the interface
-        # and see if this gels with the idea of having ploidy and
-        # individuals.
-        # In pedigrees samples are diploid individuals
-        if pedigree is not None:
-            sample_size *= 2  # TODO: Update for different ploidy
         the_samples = [s for _ in range(sample_size)]
     # If we have population configurations we may have embedded sample_size
     # values telling us how many samples to take from each population.
@@ -238,6 +233,39 @@ def demography_factory(
     return demography
 
 
+def build_initial_tables(*, sequence_length, samples, ploidy, demography, pedigree):
+    tables = tskit.TableCollection(sequence_length)
+
+    if pedigree is None:
+        for index, (population, time) in enumerate(samples):
+            tables.nodes.add_row(
+                flags=tskit.NODE_IS_SAMPLE, time=time, population=population
+            )
+            if population < 0:
+                raise ValueError(f"Negative population ID in sample at index {index}")
+            if population >= demography.num_populations:
+                raise ValueError(
+                    f"Invalid population reference '{population}' in sample "
+                    f"at index {index}"
+                )
+    else:
+        for parents, time, is_sample in zip(
+            pedigree.parents, pedigree.time, pedigree.is_sample
+        ):
+            # We encode the parents in the metadata for now, but see
+            # https://github.com/tskit-dev/tskit/issues/852
+            encoded_parents = struct.pack("=ii", *parents)
+            ind_id = tables.individuals.add_row(0, metadata=encoded_parents)
+            node_flags = tskit.NODE_IS_SAMPLE if is_sample else 0
+            for _ in range(ploidy):
+                tables.nodes.add_row(node_flags, time, population=0, individual=ind_id)
+
+    for population in demography.populations:
+        md = population.temporary_hack_for_encoding_old_style_metadata()
+        tables.populations.add_row(metadata=md)
+    return tables
+
+
 def simulator_factory(
     sample_size=None,
     *,
@@ -284,7 +312,7 @@ def simulator_factory(
             "Either sample_size, samples, population_configurations or from_ts must "
             "be specified"
         )
-    samples = samples_factory(sample_size, samples, pedigree, population_configurations)
+    samples = samples_factory(sample_size, samples, population_configurations)
 
     model, model_change_events = parse_model_arg(model)
     if demographic_events is not None:
@@ -358,9 +386,6 @@ def simulator_factory(
                 "Recombination map and from_ts must have identical " "sequence_length"
             )
 
-    if start_time is not None and start_time < 0:
-        raise ValueError("start_time cannot be negative")
-
     if num_labels is not None and num_labels < 1:
         raise ValueError("Must have at least one structured coalescent label")
 
@@ -390,16 +415,25 @@ def simulator_factory(
     if ploidy is None:
         ploidy = 2
 
+    if from_ts is None:
+        tables = build_initial_tables(
+            sequence_length=recombination_map.sequence_length,
+            samples=samples,
+            ploidy=ploidy,
+            demography=demography,
+            pedigree=pedigree,
+        )
+    else:
+        tables = from_ts.tables
+
     sim = Simulator(
-        samples=samples,
+        tables=tables,
         recombination_map=recombination_map,
         discrete_genome=discrete_genome,
         ploidy=ploidy,
         Ne=Ne,
         random_generator=random_generator,
-        pedigree=pedigree,
         model=model,
-        from_ts=from_ts,
         store_migrations=record_migrations,
         store_full_arg=record_full_arg,
         start_time=start_time,
@@ -779,7 +813,7 @@ class Simulator(_msprime.Simulator):
     def __init__(
         self,
         *,
-        samples,
+        tables,
         recombination_map,
         discrete_genome,
         ploidy,
@@ -787,9 +821,7 @@ class Simulator(_msprime.Simulator):
         random_generator,
         demography,
         model_change_events,
-        pedigree=None,
         model=None,
-        from_ts=None,
         store_migrations=False,
         store_full_arg=False,
         start_time=None,
@@ -799,7 +831,7 @@ class Simulator(_msprime.Simulator):
     ):
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
-        num_samples = len(samples) if samples is not None else from_ts.num_samples
+        num_samples = len(tables.nodes)
         block_size = 64 * 1024
         segment_block_size = max(block_size, num_samples)
         avl_node_block_size = block_size
@@ -810,37 +842,24 @@ class Simulator(_msprime.Simulator):
 
         # Now, convert the high-level values into their low-level
         # counterparts.
-        ll_pedigree = None
-        if pedigree is not None:
-            # TODO see notes on the WrightFisherPedigree; the pedigree should
-            # be a parameter of the *model*.
-            pedigree = self._check_pedigree(
-                pedigree, samples, model, demography, model_change_events
-            )
-            ll_pedigree = pedigree.get_ll_representation()
         ll_simulation_model = model.get_ll_representation()
         ll_population_configuration = [pop.asdict() for pop in demography.populations]
         ll_demographic_events = [
             event.get_ll_representation() for event in demography.events
         ]
         ll_recomb_map = recombination_map.asdict()
-        ll_tables = _msprime.LightweightTableCollection(
-            recombination_map.sequence_length
-        )
-        if from_ts is not None:
-            from_ts_tables = from_ts.tables.asdict()
-            ll_tables.fromdict(from_ts_tables)
+        ll_tables = _msprime.LightweightTableCollection(tables.sequence_length)
+        ll_tables.fromdict(tables.asdict())
+
         start_time = -1 if start_time is None else start_time
         super().__init__(
-            samples=samples,
-            recombination_map=ll_recomb_map,
             tables=ll_tables,
+            recombination_map=ll_recomb_map,
             start_time=start_time,
             random_generator=random_generator,
             model=ll_simulation_model,
             migration_matrix=demography.migration_matrix,
             population_configuration=ll_population_configuration,
-            pedigree=ll_pedigree,
             demographic_events=ll_demographic_events,
             store_migrations=store_migrations,
             store_full_arg=store_full_arg,
@@ -853,68 +872,29 @@ class Simulator(_msprime.Simulator):
             discrete_genome=discrete_genome,
             ploidy=ploidy,
         )
-        # attributes that are internal to the highlevel Simulator class
-        self._hl_from_ts = from_ts
         # highlevel attributes used externally that have no lowlevel equivalent
         self.model_change_events = model_change_events
         self.demography = demography
 
+    def copy_tables(self):
+        """
+        Returns a copy of the underlying table collection. This is useful
+        for testing and avoids using the LightweightTableCollection object,
+        which is returned by self.tables.
+        """
+        return tskit.TableCollection.fromdict(self.tables.asdict())
+
     @property
     def sample_configuration(self):
         """
-        Returns the number of samples from each popuation.
+        Returns a list of the number of samples in each of the populations.
         """
-        ret = [0 for _ in range(self.num_populations)]
-        for ll_sample in self.samples:
-            sample = demog.Sample(*ll_sample)
-            ret[sample.population] += 1
-        return ret
-
-    def _check_pedigree(
-        self, pedigree, samples, model, demography, model_change_events
-    ):
-        # TODO this functionality is preliminary and undocumented, so this
-        # code should be expected to change.
-        # TODO Remove this code from the Simulator class and call it somewhere
-        # in the simulator_factory somewhere instead.
-        if demography.num_populations != 1:
-            raise ValueError(
-                "Cannot yet specify population structure "
-                "and pedigrees simultaneously"
-            )
-        if not isinstance(model, WrightFisherPedigree):
-            raise ValueError("Pedigree can only be specified for wf_ped model")
-
-        if len(samples) % 2 != 0:
-            raise ValueError(
-                "In (diploid) pedigrees, must specify two lineages per individual."
-            )
-
-        if pedigree.is_sample is None:
-            pedigree.set_samples(num_samples=len(samples) // 2)
-
-        if sum(pedigree.is_sample) * 2 != len(samples):
-            raise ValueError(
-                "{} sample lineages to be simulated, but {} in pedigree".format(
-                    len(samples), pedigree.num_samples * 2
-                )
-            )
-
-        pedigree_max_time = np.max(pedigree.time)
-        if len(demography.events) > 0:
-            de_min_time = min([x.time for x in demography.events])
-            if de_min_time <= pedigree_max_time:
-                raise NotImplementedError(
-                    "Demographic events must be older than oldest pedigree founder."
-                )
-        if len(model_change_events) > 0:
-            mc_min_time = min([x.time for x in model_change_events])
-            if mc_min_time < pedigree_max_time:
-                raise NotImplementedError(
-                    "Model change events earlier than founders of pedigree unsupported."
-                )
-
-        return pedigree
+        tables = self.copy_tables()
+        num_samples = [0 for _ in tables.populations]
+        for node in tables.nodes:
+            if (node.flags & tskit.NODE_IS_SAMPLE) != 0:
+                num_samples[node.population] += 1
+        return num_samples
 
     def _choose_num_labels(self, model, model_change_events):
         """
@@ -966,6 +946,13 @@ class Simulator(_msprime.Simulator):
                     f"current time = {current_time}; start_time = {model_start_time}"
                 )
             self._run_until(model_start_time, event_chunk, debug_func)
+            if self.time > model_start_time:
+                raise NotImplementedError(
+                    "The previously running model does not support ending early "
+                    "and the requested model change cannot be performed. Please "
+                    "open an issue on GitHub if this functionality is something "
+                    "you require"
+                )
             ll_new_model = event.model.get_ll_representation()
             self.model = ll_new_model
         end_time = np.inf if end_time is None else end_time
@@ -1003,6 +990,7 @@ class Simulator(_msprime.Simulator):
 
         for j in range(num_replicates):
             self.run(end_time)
+
             if mutation_rate is not None:
                 mutations._simple_mutate(
                     self.tables,
@@ -1011,23 +999,13 @@ class Simulator(_msprime.Simulator):
                     rate=mutation_rate,
                     discrete_sites=discrete_sites,
                 )
-            tables = tskit.TableCollection().fromdict(self.tables.asdict())
+            tables = tskit.TableCollection.fromdict(self.tables.asdict())
             replicate_provenance = None
             if encoded_provenance is not None:
                 replicate_provenance = encoded_provenance.replace(
                     f'"{placeholder}"', str(j)
                 )
                 tables.provenances.add_row(replicate_provenance)
-            # TODO this is super ugly - we should be preparing the state of the
-            # tables at the start and not updating then at all during the reps.
-            # Make sure we remove this _hl_from_ts property too.
-            if self._hl_from_ts is None:
-                # Add the populations with metadata
-                assert len(tables.populations) == self.demography.num_populations
-                tables.populations.clear()
-                for population in self.demography.populations:
-                    md = population.temporary_hack_for_encoding_old_style_metadata()
-                    tables.populations.add_row(metadata=md)
             yield tables.tree_sequence()
             self.reset()
 

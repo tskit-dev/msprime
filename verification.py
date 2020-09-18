@@ -835,19 +835,17 @@ class MsmsSweeps(Test):
     Compare msms with msprime/discoal for selective sweeps.
 
     NOTE:
-    1. As msms and msprime use different numbers of seeds, the specified
-    seed(s) in the testing cmd string will be ignored.
-    2. Msms allows user to specify selection starting time/frequency (-SI),
-    or, alternatively, specify selectiy selection ending time/frequency (-SF);
-    msprime is able to simulate selection similar to the '-SF' option in msms
-    3. Msms allows user to specify different selection coefficient for AA and Aa,
-    but in msprime only selection coefficient for AA can be specified, and
-    use h=0.5 to calculate that for Aa.
+    1. Msms allows user to specify selection starting time/frequency (-SI), or,
+    alternatively, specify selection ending time/frequency (-SF); msprime is
+    able to simulate selection similar to the '-SF' option in msms
+    2. Msms allows user to specify different selection coefficients for AA and
+    Aa, but in msprime/disocal only the selection coefficient for aA can be
+    specified, and use h=0.5 to calculate that for AA.
     """
 
     def _msms_str_to_parameters(self, msms_cmd):
         """
-        Parse msms cmdline arguments into a dictionary.  This method is called
+        Parse msms cmdline arguments into a dictionary. This method is called
         by `_run_msp_sample_stats`
 
         msms cmdline pattern:
@@ -857,7 +855,7 @@ class MsmsSweeps(Test):
         eg. "5 1 -t 200 -r 200 500000 -SF 0.002 0.9 -Sp 0.5"\
             " -SaA 5000 -SAA 10000 -N 10000 -seed 1"
         """
-        # intialize local variables
+        # initialize local variables
         end_time_lst = []  # use list for multiple sweeps
         end_frequency_lst = []
         num_sweeps = 0
@@ -876,7 +874,7 @@ class MsmsSweeps(Test):
                 theta = float(tokens[ind + 1])
             elif tokens[ind] == "-r":
                 rho = float(tokens[ind + 1])
-                num_sites = int(tokens[ind + 2]) + 1
+                num_sites = int(tokens[ind + 2])
             elif tokens[ind] == "-SF":
                 num_sweeps += 1
                 end_time_lst.append(float(tokens[ind + 1]))
@@ -898,7 +896,7 @@ class MsmsSweeps(Test):
         if abs(saA * 2 - sAA) > 1e-5:
             logging.warning(
                 "If 2 * saA is not equal to sAA, saA is set to sAA / 2,"
-                "that is h can only be 0.5 in msprime"
+                "that is, h can only be 0.5 in msprime"
             )
             saA = sAA / 2.0
 
@@ -909,7 +907,7 @@ class MsmsSweeps(Test):
             "end_time_lst": end_time_lst,
             "end_frequency_lst": end_frequency_lst,
             "refsize": refsize,
-            "alpha": sAA,
+            "alpha": saA,
             "theta": theta,
             "rho": rho,
             "num_sites": num_sites,
@@ -917,19 +915,62 @@ class MsmsSweeps(Test):
             "rand_seed": rand_seed,
         }
 
-    def _msms_parms_to_run_msp(self, params):
+    def _update_msms_cmd_to_match_discoal(self, msms_cmd):
         """
-        Run smulation for a single sample and return a tree sequence. This
+        NOTE: discoal does not have options to specify allele frequencies
+        and instead it calculates the frequency internally according to
+        refsize. When msp or msms is compared with discoal, the
+        "end_frequency_lst" from msms command arguments will be replaced by the
+        following calculations.
+        """
+        msms_params = self._msms_str_to_parameters(msms_cmd)
+        if msms_params["num_sweeps"] == 0:
+            return msms_cmd
+
+        logging.warning(
+            "When compared with discoal, selected allele frequency options are"
+            " recalculated following discoal's way"
+        )
+
+        # recalculate frequencies
+        refsize = msms_params["refsize"]
+        end_frequency_lst = msms_params["end_frequency_lst"]
+        end_frequency_lst = [1 - 0.5 / refsize for _ in end_frequency_lst]
+
+        # construct new msms cmd
+        new_cmd = [
+            str(msms_params["nsam"]),
+            str(msms_params["nrep"]),
+            "-t",
+            str(msms_params["theta"]),
+            "-r",
+            str(msms_params["rho"]),
+            str(msms_params["num_sites"]),
+        ]
+        for i in range(len(end_frequency_lst)):
+            new_cmd += [
+                "-SF",
+                str(msms_params["end_time_lst"][i]),
+                str(end_frequency_lst[i]),
+                "-Sp",
+                str(msms_params["sel_pos"]),
+            ]
+        new_cmd += [
+            "-SaA",
+            str(msms_params["alpha"]),
+            "-SAA",
+            str(msms_params["alpha"] * 2),
+            "-N",
+            str(msms_params["refsize"]),
+        ]
+        new_msms_cmd = " ".join(new_cmd)
+        return new_msms_cmd
+
+    def _msms_params_to_run_msp(self, params):
+        """
+        Run simulation for a single sample and return a tree sequence. This
         method is called by `_run_msp_sample_stats` in a loop to generate nrep
         samples.
-
-        NOTE:
-            1. There is some scaling inconsistency between Hudson and genic
-            selection model. (See scale_factor in the following code)
-            2. For the SweepGenicSelection model, we need to specify the Ne
-            parameter of the msprime.simulate method to 0.25. Similar usage is
-            found in verficatin.py / DiscoalTest class /
-            _discoal_str_to_simulation method.
         """
         if params["num_sweeps"] > 0:
             model = [None]
@@ -937,42 +978,29 @@ class MsmsSweeps(Test):
                 temp_model = msprime.SweepGenicSelection(
                     position=params["sel_pos"],
                     end_frequency=params["end_frequency_lst"][i],
-                    start_frequency=0.5 / params["refsize"],  # should be small
+                    start_frequency=0.5 / params["refsize"],
                     alpha=params["alpha"],
-                    dt=1.0 / (40 * params["refsize"]),  # should be small enough?
+                    dt=1.0 / (40 * params["refsize"]),
                 )
                 t_start = params["end_time_lst"][i]
                 model.append((t_start, temp_model))
             model.append((None, None))
 
-            scale_factor = params["num_sites"]
-            recombination_rate = params["rho"] / scale_factor
-            mutation_rate = params["theta"] / scale_factor
-
-            ts = msprime.simulate(
-                sample_size=params["nsam"],
-                Ne=0.25,
-                length=params["num_sites"],
-                mutation_rate=mutation_rate,
-                recombination_rate=recombination_rate,
-                model=model,
-            )
-
         else:
             model = "hudson"
 
-            scale_factor = 4 * params["num_sites"] * params["refsize"]
-            recombination_rate = params["rho"] / scale_factor
-            mutation_rate = params["theta"] / scale_factor
+        scale_factor = params["num_sites"]
+        recombination_rate = params["rho"] / (scale_factor - 1)
+        mutation_rate = params["theta"] / scale_factor
 
-            ts = msprime.simulate(
-                sample_size=params["nsam"],
-                Ne=params["refsize"],
-                length=params["num_sites"],
-                mutation_rate=mutation_rate,
-                recombination_rate=recombination_rate,
-                model=model,
-            )
+        ts = msprime.simulate(
+            sample_size=params["nsam"],
+            Ne=0.25,
+            length=params["num_sites"],
+            mutation_rate=mutation_rate,
+            recombination_rate=recombination_rate,
+            model=model,
+        )
 
         return ts
 
@@ -981,10 +1009,6 @@ class MsmsSweeps(Test):
         Call methods to parse cmdline options and run simulation,
         and then output in ms format, pipe thru sample_stats and finally return
         stats dataframe.
-
-        For now, the method uses the code from cli.py. In the future, mspms_dev
-        should have cmdline options to specify selection related parameters.
-        Then we should be able call the method in parent Test class to do this.
         """
         temp_file = tempfile.gettempdir() + "/tmp_msp_out"
         output = open(temp_file, "w")
@@ -996,7 +1020,7 @@ class MsmsSweeps(Test):
         self._ms_random_seeds = msms_params["rand_seed"] = self.get_ms_seeds()
 
         for _ in range(num_replicates):
-            tree_sequence = self._msms_parms_to_run_msp(msms_params)
+            tree_sequence = self._msms_params_to_run_msp(msms_params)
             print(file=output)
             print("//", file=output)
             if msms_params["theta"] > 0:
@@ -1045,9 +1069,11 @@ class MsmsSweeps(Test):
         """
         called by _run_discoal_sample_stats to convert msms cmdline args
         to discoal cmdline args
+
+        NOTE: if -N option is not specified, discoal internally use N=1,000,000
         """
         params = self._msms_str_to_parameters(msms_cmd)
-        return "%d %d %d -t %f -r %f -ws %f -a %f -x %f" % (
+        return "%d %d %d -t %f -r %f -ws %f -a %f -x %f -N %f" % (
             params["nsam"],
             params["nrep"],
             params["num_sites"],
@@ -1056,64 +1082,52 @@ class MsmsSweeps(Test):
             params["end_time_lst"][0],
             params["alpha"],
             params["sel_pos"],
+            params["refsize"],
         )
 
     def _run_discoal_sample_stats(self, msms_cmd):
         discoal_cmd = self._convert_to_discoal_cmd(msms_cmd)
         return self._run_sample_stats(_discoal_executable + discoal_cmd.split(" "))
 
-    def _run_msms_vs_msp(self, cmd):
+    def _cmp_msms_vs_msp(self, cmd):
         df_msp = self._run_msp_sample_stats(cmd)
         df_msms = self._run_msms_sample_stats(cmd)
         self._plot_stats("msp_msms", df_msp, df_msms, "msp", "msms")
 
-    def _run_msms_vs_discoal(self, cmd):
+    def _cmp_discoal_vs_msp_via_msms_cmd(self, cmd):
+        cmd = self._update_msms_cmd_to_match_discoal(cmd)
+        df_discoal = self._run_discoal_sample_stats(cmd)
+        df_msp = self._run_msp_sample_stats(cmd)
+        self._plot_stats("msp_discoal", df_msp, df_discoal, "msp", "discoal")
+
+    def _cmp_msms_vs_discoal(self, cmd):
+        cmd = self._update_msms_cmd_to_match_discoal(cmd)
         df_discoal = self._run_discoal_sample_stats(cmd)
         df_msms = self._run_msms_sample_stats(cmd)
         self._plot_stats("discoal_msms", df_discoal, df_msms, "discoal", "msms")
 
     def test_neutral_msms_vs_msp(self):
-        self._run_msms_vs_msp("100 300 -t 200 -r 200 500000 -N 10000")
+        self._cmp_msms_vs_msp("100 300 -t 200 -r 200 500000 -N 10000")
+
+    def test_selective_discoal_vs_msp(self):
+        self._cmp_discoal_vs_msp_via_msms_cmd(
+            "100 300 -t 20 -r 20 50000"
+            " -SF 0 0.99995 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
+        )
 
     def test_selective_msms_vs_msp(self):
-        """
-        NOTE:
-            This and the following test methods invoke the seletive sweep
-            simulation and tend to throw the following assertion error:
-
-                python3: lib/msprime.c:5845: msp_std_common_ancestor_event:
-                    Assertion `y_node != NULL' failed.
-                Aborted (core dumped).
-
-            See issue#1111 for more information.
-
-            To avoid test crashes, all these tests are hiden by prefix '_'.
-            (I tried to use smaller numbers in cmd parameters. It reduces the
-            probilities of crashes but the error still happens. So just hide
-            all of the seletive sweep tests until the bug is fixed)
-
-            To reproduce the error or to resume seletive sweep simulations,
-            just remove the prefix.
-
-            prefix "_"
-            |
-            |
-            V
-        def _test_selective_msms_vs_msp(self):
-
-        """
-        self._run_msms_vs_msp(
+        self._cmp_msms_vs_msp(
             "100 300 -t 200 -r 200 500000"
             " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
         )
 
     def test_selective_msms_vs_msp_small_s(self):
-        self._run_msms_vs_msp(
+        self._cmp_msms_vs_msp(
             "100 300 -t 200 -r 200 500000 -SF 0 0.9 -Sp 0.5 -SaA 1 -SAA 2 -N 10000"
         )
 
     def test_selective_msms_vs_msp_multiple_sweeps(self):
-        self._run_msms_vs_msp(
+        self._cmp_msms_vs_msp(
             "100 300 -t 200 -r 200 500000"
             " -SF 0 0.9 -Sp 0.5"
             " -SF 0.1 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
@@ -1123,18 +1137,55 @@ class MsmsSweeps(Test):
         """
         Test runtime of msprime for long chromosomes
         """
-        self._run_msp_sample_stats(
+        self._cmp_msp_sample_stats(
             "1000 1 -t 20000 -r 20000 50000000"
             " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
         )
 
-    def _test_selective_msms_vs_discoal(self):
-        """
-        Direct comparison between msms and discoal
-        """
-        self._run_msms_vs_discoal(
-            "100 300 -t 20 -r 20 50000"
+    def test_selective_msms_vs_discoal(self):
+        self._cmp_msms_vs_discoal(
+            # "100 300 -t 20 -r 20 50000"
+            "100 300 -t 20 -r 20 5000"
             " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
+        )
+
+    def test_selective_msms_vs_msp_use_discoal_paper_param(self):
+        self._cmp_msms_vs_msp(
+            "100 300 -t 100 -r 100 250000"
+            " -SF 0 0.99995 -Sp 0.5 -SaA 2000 -SAA 4000 -N 10000"
+        )
+
+    def test_selective_msms_vs_discoal_use_discoal_paper_param(self):
+        """
+        NOTE: tests calling discoal will take a much longer time to finish
+        especially when large num_sites are used. Use the lines commented out
+        instead if we want to reproduce the results posted in issue # 1173
+        """
+        self._cmp_msms_vs_discoal(
+            # "100 300 -t 100 -r 100 250000"
+            "100 300 -t 100 -r 100 2500"
+            " -SF 0 0.99995 -Sp 0.5 -SaA 2000 -SAA 4000 -N 10000"
+        )
+
+    def test_selective_msms_vs_discoal_random_param(self):
+        self._cmp_msms_vs_discoal(
+            # "100 300 -t 40 -r 40 50000"
+            "100 300 -t 40 -r 40 5000"
+            " -SF 0 0.99995 -Sp 0.5 -SaA 1000 -SAA 2000 -N 10000"
+        )
+
+    def test_selective_discoal_vs_msp_use_discoal_paper_param(self):
+        self._cmp_discoal_vs_msp_via_msms_cmd(
+            # "100 300 -t 100 -r 100 250000"
+            "100 300 -t 100 -r 100 2500"
+            " -SF 0 0.99995 -Sp 0.5 -SaA 2000 -SAA 4000 -N 10000"
+        )
+
+    def test_selective_discoal_vs_msp_random_param(self):
+        self._cmp_discoal_vs_msp_via_msms_cmd(
+            # "100 300 -t 40 -r 40 50000"
+            "100 300 -t 40 -r 40 5000"
+            " -SF 0 0.99995 -Sp 0.5 -SaA 1000 -SAA 2000 -N 10000"
         )
 
 
