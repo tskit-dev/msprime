@@ -22,6 +22,7 @@ Test cases for mutation generation.
 import functools
 import itertools
 import json
+import random
 import struct
 import unittest
 
@@ -959,6 +960,8 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
                     ots, random_seed=6, rate=rate, model=model, discrete=discrete
                 )
                 self.verify_model_ts_general(ts, model, discrete, verify_roots, rate)
+                if not discrete:
+                    self.verify_mutation_times_ts(ts)
 
     def verify_model_ts(self, ts, model, discrete, verify_roots):
         alleles = model.alleles
@@ -1082,9 +1085,9 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         node_is_child = tables.edges.child == mutation_node
         both = np.logical_and(is_within, node_is_child)
         self.assertTrue(np.sum(both) == 1)
-        parent_node = tables.edges.parent[both]
+        parent_node = tables.edges.parent[both][0]
         end = tables.nodes.time[parent_node]
-        start = tables.nodes.time[parent_node]
+        start = tables.nodes.time[mutation_node]
         assert end >= start
         return (start, end)
 
@@ -1100,10 +1103,18 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         assert np.all(start >= 0)
         assert np.all(end >= 0)
         assert np.all(time >= 0)
-        scaled_time = np.floor(100 * (time - start) / (end - start))
-        uniform_time = np.random.default_rng(seed=1).uniform(0, 100)
-        res = stats.ks_2samp(scaled_time, uniform_time)
-        self.assertLess(res[1], 0.05)
+        greater_end = end > start
+        centered_time = time[greater_end] - start[greater_end]
+        time_inter = end[greater_end] - start[greater_end]
+        rng = random.Random(3937)
+        generated_times = np.array([rng.randint(0, high) for high in time_inter])
+        print(np.sort(centered_time))
+        print(np.sort(generated_times))
+        if centered_time.shape[0] > 0:
+            print("entrei")
+            res = stats.ks_2samp(centered_time, generated_times)
+            print(res)
+            self.assertGreater(res[1], 0.05)
 
     def test_binary_model(self):
         model = msprime.BinaryMutations()
