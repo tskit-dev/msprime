@@ -55,7 +55,10 @@ class RateMap:
         if np.any(self.rate < 0):
             raise ValueError("Rates must be non-negative")
 
-        # TODO more
+        self.cumulative = np.insert(np.cumsum(np.diff(self.position) * self.rate), 0, 0)
+
+    def __len__(self):
+        return len(self.rate)
 
     @staticmethod
     def uniform(sequence_length, rate):
@@ -67,6 +70,10 @@ class RateMap:
     @property
     def sequence_length(self):
         return self.position[-1]
+
+    @property
+    def total_mass(self):
+        return self.cumulative[-1]
 
     @property
     def size(self):
@@ -206,11 +213,6 @@ class RecombinationMap:
                 )
         self.map = RateMap(positions, rates[:-1])
         self.map_start = map_start
-        # Used for genetic/physical conversions which are part of the
-        # legacy interface.
-        self.cumulative = np.insert(
-            np.cumsum(np.diff(self.map.position) * self.map.rate), 0, 0
-        )
 
     @classmethod
     def uniform_map(cls, length, rate, num_loci=None):
@@ -261,22 +263,22 @@ class RecombinationMap:
         Returns the effective recombination rate for this genetic map.
         This is the weighted mean of the rates across all intervals.
         """
-        return self.cumulative[-1]
+        return self.map.cumulative[-1]
 
     def physical_to_genetic(self, x):
-        return np.interp(x, self.map.position, self.cumulative)
+        return np.interp(x, self.map.position, self.map.cumulative)
 
     def genetic_to_physical(self, genetic_x):
-        if self.cumulative[-1] == 0:
+        if self.map.cumulative[-1] == 0:
             # If we have a zero recombination rate throughout then everything
             # except L maps to 0.
             return self.get_sequence_length() if genetic_x > 0 else 0
         if genetic_x == 0:
             return self.map.position[0]
-        index = np.searchsorted(self.cumulative, genetic_x) - 1
+        index = np.searchsorted(self.map.cumulative, genetic_x) - 1
         y = (
             self.map.position[index]
-            + (genetic_x - self.cumulative[index]) / self.map.rate[index]
+            + (genetic_x - self.map.cumulative[index]) / self.map.rate[index]
         )
         return y
 

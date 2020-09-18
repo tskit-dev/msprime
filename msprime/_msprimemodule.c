@@ -2012,7 +2012,7 @@ out:
 }
 
 static PyObject *
-RandomGenerator_get_seed(RandomGenerator *self)
+RandomGenerator_get_seed(RandomGenerator *self, void *closure)
 {
     PyObject *ret = NULL;
 
@@ -2075,19 +2075,19 @@ out:
     return ret;
 }
 
-static PyMemberDef RandomGenerator_members[] = {
-    {NULL}  /* Sentinel */
-};
-
 static PyMethodDef RandomGenerator_methods[] = {
-    {"get_seed", (PyCFunction) RandomGenerator_get_seed,
-        METH_NOARGS, "Returns the random seed for this generator."},
     {"flat", (PyCFunction) RandomGenerator_flat,
         METH_VARARGS, "Interface for gsl_ran_flat"},
     {"poisson", (PyCFunction) RandomGenerator_poisson,
         METH_VARARGS, "Interface for gsl_ran_poisson"},
     {"uniform_int", (PyCFunction) RandomGenerator_uniform_int,
         METH_VARARGS, "Interface for gsl_rng_uniform_int"},
+    {NULL}  /* Sentinel */
+};
+
+static PyGetSetDef RandomGenerator_getsetters[] = {
+    {"seed", (getter) RandomGenerator_get_seed, NULL,
+            "The initial seed for this random generator" },
     {NULL}  /* Sentinel */
 };
 
@@ -2099,7 +2099,7 @@ static PyTypeObject RandomGeneratorType = {
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "RandomGenerator objects",
     .tp_methods = RandomGenerator_methods,
-    .tp_members = RandomGenerator_members,
+    .tp_getset = RandomGenerator_getsetters,
     .tp_init = (initproc)RandomGenerator_init,
     .tp_new = PyType_GenericNew,
 };
@@ -3448,16 +3448,29 @@ out:
 }
 
 static PyObject *
-Simulator_get_store_migrations(Simulator *self, void *closure)
+Simulator_get_record_migrations(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("i", (Py_ssize_t) msp_get_store_migrations(self->sim));
+    ret = Py_BuildValue("i", msp_get_store_migrations(self->sim));
 out:
     return ret;
 }
+
+static PyObject *
+Simulator_get_record_full_arg(Simulator *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("i",  self->sim->store_full_arg);
+out:
+    return ret;
+}
+
 
 static PyObject *
 Simulator_get_num_populations(Simulator *self, void *closure)
@@ -3491,6 +3504,30 @@ Simulator_get_sequence_length(Simulator *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("d", self->sim->sequence_length);
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_start_time(Simulator *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->sim->start_time);
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_gene_conversion_track_length(Simulator *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("d", self->sim->gc_track_length);
 out:
     return ret;
 }
@@ -4310,9 +4347,18 @@ static PyGetSetDef Simulator_getsetters[] = {
     {"sequence_length",
             (getter) Simulator_get_sequence_length, NULL,
             "The sequence length for this simulator."},
-    {"store_migrations",
-            (getter) Simulator_get_store_migrations, NULL,
+    {"start_time",
+            (getter) Simulator_get_start_time, NULL,
+            "The start time for this simulator."},
+    {"gene_conversion_track_length",
+            (getter) Simulator_get_gene_conversion_track_length, NULL,
+            "The gene conversion track length for this simulator."},
+    {"record_migrations",
+            (getter) Simulator_get_record_migrations, NULL,
             "True if the simulator should store migration records." },
+    {"record_full_arg",
+            (getter) Simulator_get_record_full_arg, NULL,
+            "True if the simulator should store the full ARG." },
     {"discrete_genome",
             (getter) Simulator_get_discrete_genome, NULL,
             "True if the simulator has a discrete genome." },

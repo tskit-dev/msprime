@@ -19,12 +19,13 @@
 """
 Module responsible for defining and running ancestry simulations.
 """
-import collections
+import collections.abc
 import copy
 import inspect
 import logging
 import math
 import struct
+import sys
 
 import attr
 import numpy as np
@@ -40,7 +41,7 @@ from msprime import _msprime
 logger = logging.getLogger(__name__)
 
 
-def model_factory(model):
+def _model_factory(model):
     """
     Returns a simulation model corresponding to the specified model.
     - If model is None, the default simulation model is returned.
@@ -75,7 +76,7 @@ def model_factory(model):
     return model_instance
 
 
-def parse_model_change_events(events):
+def _parse_model_change_events(events):
     """
     Parses the specified list of events provided in model_arg[1:] into
     SimulationModelChange events. There are two different forms supported,
@@ -100,18 +101,18 @@ def parse_model_change_events(events):
                         "Model change times must be either a floating point "
                         "value or None"
                     )
-            event = SimulationModelChange(t, model_factory(event[1]))
+            event = SimulationModelChange(t, _model_factory(event[1]))
         elif isinstance(event, SimulationModelChange):
             # We don't want to modify our inputs, so take a deep copy.
             event = copy.copy(event)
-            event.model = model_factory(event.model)
+            event.model = _model_factory(event.model)
         else:
             raise TypeError(err)
         model_change_events.append(event)
     return model_change_events
 
 
-def parse_model_arg(model_arg):
+def _parse_model_arg(model_arg):
     """
     Parses the specified model argument from the simulate function,
     returning the initial model and any model change events.
@@ -126,15 +127,15 @@ def parse_model_arg(model_arg):
     if isinstance(model_arg, (list, tuple)):
         if len(model_arg) < 1:
             raise ValueError(err)
-        model = model_factory(model_arg[0])
-        model_change_events = parse_model_change_events(model_arg[1:])
+        model = _model_factory(model_arg[0])
+        model_change_events = _parse_model_change_events(model_arg[1:])
     else:
-        model = model_factory(model_arg)
+        model = _model_factory(model_arg)
         model_change_events = []
     return model, model_change_events
 
 
-def filter_events(demographic_events):
+def _filter_events(demographic_events):
     """
     Returns a tuple (demographic_events, model_change_events) which separates
     out the SimulationModelChange events from the list. This is to support the
@@ -149,7 +150,7 @@ def filter_events(demographic_events):
         else:
             filtered_events.append(event)
     # Make sure any model references are resolved.
-    model_change_events = parse_model_change_events(model_change_events)
+    model_change_events = _parse_model_change_events(model_change_events)
     return filtered_events, model_change_events
 
 
@@ -162,7 +163,7 @@ def _check_population_configurations(population_configurations):
             raise TypeError(err)
 
 
-def samples_factory(sample_size, samples, population_configurations):
+def _samples_factory(sample_size, samples, population_configurations):
     """
     Returns a list of Sample objects, given the specified inputs.
     """
@@ -199,7 +200,7 @@ def samples_factory(sample_size, samples, population_configurations):
     return the_samples
 
 
-def demography_factory(
+def _demography_factory(
     Ne, demography, population_configurations, migration_matrix, demographic_events
 ):
     if demography is not None:
@@ -233,7 +234,7 @@ def demography_factory(
     return demography
 
 
-def build_initial_tables(*, sequence_length, samples, ploidy, demography, pedigree):
+def _build_initial_tables(*, sequence_length, samples, ploidy, demography, pedigree):
     tables = tskit.TableCollection(sequence_length)
 
     if pedigree is None:
@@ -266,7 +267,7 @@ def build_initial_tables(*, sequence_length, samples, ploidy, demography, pedigr
     return tables
 
 
-def simulator_factory(
+def _parse_simulate(
     sample_size=None,
     *,
     Ne=1,
@@ -285,6 +286,7 @@ def simulator_factory(
     record_migrations=False,
     from_ts=None,
     start_time=None,
+    end_time=None,
     record_full_arg=False,
     num_labels=None,
     gene_conversion_rate=None,
@@ -293,8 +295,8 @@ def simulator_factory(
     ploidy=None,
 ):
     """
-    Convenience method to create a simulator instance using the same
-    parameters as the `simulate` function.
+    Argument parser for the simulate frontend. Interprets all the parameters
+    and returns an appropriate instance of Simulator.
     """
     if Ne <= 0:
         raise ValueError("Population size must be positive")
@@ -312,11 +314,11 @@ def simulator_factory(
             "Either sample_size, samples, population_configurations or from_ts must "
             "be specified"
         )
-    samples = samples_factory(sample_size, samples, population_configurations)
+    samples = _samples_factory(sample_size, samples, population_configurations)
 
-    model, model_change_events = parse_model_arg(model)
+    model, model_change_events = _parse_model_arg(model)
     if demographic_events is not None:
-        demographic_events, old_style_model_change_events = filter_events(
+        demographic_events, old_style_model_change_events = _filter_events(
             demographic_events
         )
         if len(old_style_model_change_events) > 0:
@@ -327,7 +329,7 @@ def simulator_factory(
                 )
             model_change_events = old_style_model_change_events
 
-    demography = demography_factory(
+    demography = _demography_factory(
         Ne, demography, population_configurations, migration_matrix, demographic_events
     )
 
@@ -389,8 +391,7 @@ def simulator_factory(
     if num_labels is not None and num_labels < 1:
         raise ValueError("Must have at least one structured coalescent label")
 
-    # FIXME check the valid inputs for GC. Should we allow it when we
-    # have a non-trivial genetic map?
+    # TODO should we allow a rate map in the same way as sim_ancestry?
     if gene_conversion_rate is None:
         gene_conversion_rate = 0
     else:
@@ -401,6 +402,9 @@ def simulator_factory(
             )
     if gene_conversion_track_length is None:
         gene_conversion_track_length = 1
+    gene_conversion_map = intervals.RateMap.uniform(
+        recombination_map.sequence_length, gene_conversion_rate
+    )
 
     # For the simulate code-path the rng will already be set, but
     # for convenience we allow it to be null to help with writing
@@ -416,7 +420,7 @@ def simulator_factory(
         ploidy = 2
 
     if from_ts is None:
-        tables = build_initial_tables(
+        tables = _build_initial_tables(
             sequence_length=recombination_map.sequence_length,
             samples=samples,
             ploidy=ploidy,
@@ -429,21 +433,54 @@ def simulator_factory(
     sim = Simulator(
         tables=tables,
         recombination_map=recombination_map,
+        gene_conversion_map=gene_conversion_map,
+        gene_conversion_track_length=gene_conversion_track_length,
         discrete_genome=discrete_genome,
         ploidy=ploidy,
-        Ne=Ne,
         random_generator=random_generator,
         model=model,
         store_migrations=record_migrations,
         store_full_arg=record_full_arg,
         start_time=start_time,
+        end_time=end_time,
         num_labels=num_labels,
-        gene_conversion_rate=gene_conversion_rate,
-        gene_conversion_track_length=gene_conversion_track_length,
         demography=demography,
         model_change_events=model_change_events,
     )
     return sim
+
+
+def _parse_random_seed(seed):
+    """
+    Parse the specified random seed value and return a RandomGenerator
+    object. If no seed is provided, generate a high-quality random seed.
+    """
+    if seed is None:
+        seed = core.get_random_seed()
+    seed = int(seed)
+    return _msprime.RandomGenerator(seed)
+
+
+def _build_provenance(command, random_seed, frame):
+    """
+    Builds a provenance dictionary suitable for use as the basis
+    of tree sequence provenance in replicate simulations. Uses the
+    specified stack frame to determine the values of the arguments
+    passed in, with a few exceptions.
+    """
+    argspec = inspect.getargvalues(frame)
+    # num_replicates is excluded as provenance is per replicate
+    # replicate index is excluded as it is inserted for each replicate
+    parameters = {
+        "command": command,
+        **{
+            arg: argspec.locals[arg]
+            for arg in argspec.args
+            if arg not in ["num_replicates", "replicate_index"]
+        },
+    }
+    parameters["random_seed"] = random_seed
+    return provenance.get_provenance_dict(parameters)
 
 
 def simulate(
@@ -610,28 +647,11 @@ def simulate(
         underlying object may be used for every TreeSequence
         returned which will most likely lead to unexpected behaviour.
     """
-
-    seed = random_seed
-    if random_seed is None:
-        seed = core.get_random_seed()
-    seed = int(seed)
-    rng = _msprime.RandomGenerator(seed)
-
+    rng = _parse_random_seed(random_seed)
     provenance_dict = None
     if record_provenance:
-        argspec = inspect.getargvalues(inspect.currentframe())
-        # num_replicates is excluded as provenance is per replicate
-        # replicate index is excluded as it is inserted for each replicate
-        parameters = {
-            "command": "simulate",
-            **{
-                arg: argspec.locals[arg]
-                for arg in argspec.args
-                if arg not in ["num_replicates", "replicate_index"]
-            },
-        }
-        parameters["random_seed"] = seed
-        provenance_dict = provenance.get_provenance_dict(parameters)
+        frame = inspect.currentframe()
+        provenance_dict = _build_provenance("simulate", rng.seed, frame)
 
     if mutation_generator is not None:
         # This error was added in version 0.6.1.
@@ -664,7 +684,7 @@ def simulate(
             )
         mutation_rate = float(mutation_rate)
 
-    sim = simulator_factory(
+    sim = _parse_simulate(
         sample_size=sample_size,
         random_generator=rng,
         Ne=Ne,
@@ -681,12 +701,37 @@ def simulate(
         record_migrations=record_migrations,
         from_ts=from_ts,
         start_time=start_time,
+        end_time=end_time,
         record_full_arg=record_full_arg,
         num_labels=num_labels,
         gene_conversion_rate=gene_conversion_rate,
         gene_conversion_track_length=gene_conversion_track_length,
         demography=demography,
     )
+
+    return _wrap_replicates(
+        sim,
+        random_seed=random_seed,
+        replicate_index=replicate_index,
+        num_replicates=num_replicates,
+        provenance_dict=provenance_dict,
+        mutation_rate=mutation_rate,
+    )
+
+
+def _wrap_replicates(
+    simulator,
+    *,
+    random_seed,
+    replicate_index,
+    num_replicates,
+    provenance_dict,
+    mutation_rate=None,
+):
+    """
+    Wrapper for the logic used to run replicate simulations for the two
+    frontends.
+    """
 
     if replicate_index is not None and random_seed is None:
         raise ValueError(
@@ -706,12 +751,8 @@ def simulate(
     if replicate_index is not None:
         num_replicates = replicate_index + 1
 
-    iterator = sim.run_replicates(
-        num_replicates,
-        end_time=end_time,
-        mutation_rate=mutation_rate,
-        discrete_sites=sim.discrete_genome,
-        provenance_dict=provenance_dict,
+    iterator = simulator.run_replicates(
+        num_replicates, mutation_rate=mutation_rate, provenance_dict=provenance_dict,
     )
     if replicate_index is not None:
         # Return the last element of the iterator
@@ -721,93 +762,367 @@ def simulate(
         return iterator
 
 
-# This is the initial prototype interface for sim_ancestry. A bunch of
-# parameters have been left out in the interest of simplicity so that
-# we can get an initial version in as soon as possible.
-def sim_ancestry(
-    sample_size=None,
-    *,
-    ploidy=None,
-    sequence_length=None,
-    samples=None,
-    discrete_genome=None,
-    recombination_rate=None,
-    population_size=None,
-    demography=None,
-    model=None,
-    random_seed=None,
-    num_replicates=None,
-):
-    if discrete_genome is None:
-        discrete_genome = True
-    if ploidy is None:
-        ploidy = 1
-    if population_size is None:
-        population_size = 1
-    # Samples are interpreted as k-ploid individuals here. For the
-    # initial hack we just multiply by this value.
-    if sample_size is not None:
-        sample_size *= ploidy
-    elif samples is not None:
-        old_samples = samples
-        samples = [None] * (len(samples) * ploidy)
-        j = 0
-        for sample in old_samples:
-            for _ in range(ploidy):
-                samples[j] = sample
-                j += 1
+def _parse_rate_map(rate_param, sequence_length, name):
+    """
+    Parse the specified input rate parameter value into a rate map.
+    """
+    # Note: in the future we might have another clause here where we
+    # allow for a different  map per population. This could be
+    # accepted as either a list of N rate maps, or a dictionary mapping
+    # population names to maps.
+    # See https://github.com/tskit-dev/msprime/issues/1095
 
-    recomb_map = None
-    if recombination_rate is None:
-        if sequence_length is None:
-            # We've no recombination, so this is a single locus simulation.
-            # Defaulting to length of 1 is fine.
-            sequence_length = 1
+    msg_head = f"Error in parsing rate map for {name}: "
+    if isinstance(rate_param, intervals.RateMap):
+        rate_map = rate_param
+        if rate_map.sequence_length != sequence_length:
+            raise ValueError(msg_head + "sequence_length must match")
     else:
-        # The recombination_rate argument is more flexible.
-        if isinstance(recombination_rate, intervals.RateMap):
-            recomb_map = recombination_rate
-            recombination_rate = None
-        else:
-            if sequence_length is None:
-                raise ValueError(
-                    "Must specify a sequence_length for simulations of a "
-                    "genome with recombination or gene conversion without "
-                    "rate map"
+        rate_param = 0 if rate_param is None else float(rate_param)
+        rate_map = intervals.RateMap.uniform(sequence_length, rate_param)
+    return rate_map
+
+
+def _insert_integer_samples(n, ploidy, tables):
+    """
+    Insert n individuals with the specified ploidy into the tables.
+    """
+    # Doing this with numpy is slighty obscure, but it's *much* faster
+    # than simple loops. For 10^7 samples with ploidy=2 we go from
+    # several minutes to a few seconds.
+    ind_flags = np.zeros(n, dtype=np.uint32)
+    tables.individuals.set_columns(flags=ind_flags)
+    node_individual = np.repeat(np.arange(n, dtype=np.int32), ploidy)
+    N = n * ploidy
+    tables.nodes.set_columns(
+        flags=np.full(N, tskit.NODE_IS_SAMPLE, dtype=np.uint32),
+        time=np.zeros(N),
+        population=np.zeros(N, dtype=np.int32),
+        individual=node_individual,
+    )
+
+
+def _parse_samples(samples, ploidy, tables):
+    """
+    Parse the specified "samples" value and insert them into the specified
+    tables. How the samples argument is interpreted depends on the state
+    of the tables.
+    """
+    if isinstance(samples, collections.abc.Iterable):
+        # We check if the samples can be interpreted as a list first because
+        # we may want to extend the semantics here later to include specifying
+        # a set of individuals from a pedigree defined in the initial state.
+        # The most natural way to do this would be a numpy array of individual
+        # IDs. By checking the iterable condition first, we make sure that we're
+        # not interpreting input numpy arrays of length 1 as a numeric argument.
+        # Interpret as a list of Sample objects.
+
+        # TODO this should probably be recast to using numpy input types for
+        # efficiency here. We could regard the input array as a numpy struct
+        # array, which would be a lot more efficient.
+        # See https://github.com/tskit-dev/msprime/issues/1211
+        for sample in samples:
+            if not isinstance(sample, demog.Sample):
+                raise TypeError("msprime.Sample object required")
+            if not core.isinteger(sample.population):
+                raise TypeError("Sample population references must be integers")
+            population = int(sample.population)
+            if population < 0:
+                raise ValueError("Negative population ID")
+            if sample.population >= len(tables.populations):
+                raise ValueError("Sample population ID out of bounds")
+            ind_id = tables.individuals.add_row(flags=0)
+            for _ in range(ploidy):
+                tables.nodes.add_row(
+                    flags=tskit.NODE_IS_SAMPLE,
+                    time=sample.time,
+                    population=population,
+                    individual=ind_id,
                 )
 
-    sim = simulator_factory(
-        sample_size=sample_size,
-        samples=samples,
-        ploidy=ploidy,
-        length=sequence_length,
+    elif core.isinteger(samples):
+        n = int(samples)
+        if n < 0:
+            raise ValueError("Cannot have a negative number of samples")
+        if len(tables.populations) != 1:
+            raise ValueError(
+                "Numeric samples can only be used in single population models. "
+                "Please use Demography.sample() to generate a list of samples "
+                "for your model, which can be used instead."
+            )
+        _insert_integer_samples(n, ploidy, tables)
+    else:
+        raise TypeError(
+            "The samples argument must be either an integer (for single population "
+            "models) or a list of msprime.Sample objects. The Demography.sample() "
+            "function is useful for generating samples for complex demographic "
+            "models."
+        )
+
+
+def _parse_flag(value, *, default):
+    """
+    Parses a boolean flag, which can be either True, False, or None.
+    If the input value is None, return the default. Otherwise,
+    check that the input value is a bool.
+
+    Note that we do *not* cast to a bool as this would accept
+    truthy values like the empty list, etc. In this case None
+    would be converted to False, potentially conflicting with
+    the default value.
+    """
+    assert isinstance(default, bool)
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise TypeError("Boolean flag must be True, False, or None (the default value)")
+    return value
+
+
+def _parse_sim_ancestry(
+    samples=None,
+    *,
+    sequence_length=None,
+    recombination_rate=None,
+    gene_conversion_rate=None,
+    gene_conversion_track_length=None,
+    discrete_genome=None,
+    population_size=None,
+    demography=None,
+    ploidy=None,
+    model=None,
+    initial_state=None,
+    start_time=None,
+    end_time=None,
+    record_migrations=None,
+    record_full_arg=None,
+    num_labels=None,
+    random_seed=None,
+    random_generator=None,
+    num_replicates=None,
+    replicate_index=None,
+):
+    """
+    Argument parser for the sim_ancestry frontend. Interprets all the parameters
+    and returns an appropriate instance of Simulator.
+    """
+    # As a general rule we try to cast any input value to the required types
+    # early and in a way that provides an interpretable traceback.
+
+    # Simple defaults.
+    start_time = 0 if start_time is None else float(start_time)
+    end_time = sys.float_info.max if end_time is None else float(end_time)
+    discrete_genome = _parse_flag(discrete_genome, default=True)
+    record_full_arg = _parse_flag(record_full_arg, default=False)
+    record_migrations = _parse_flag(record_migrations, default=False)
+
+    if initial_state is not None:
+        if isinstance(initial_state, tskit.TreeSequence):
+            initial_state = initial_state.dump_tables()
+        elif not isinstance(initial_state, tskit.TableCollection):
+            raise TypeError(
+                "initial_state must either be a TreeSequence or TableCollection instance"
+            )
+
+    if sequence_length is None:
+        # These are all the cases in which we derive the sequence_length
+        # from somewhere else.
+        if initial_state is not None:
+            sequence_length = initial_state.sequence_length
+        elif recombination_rate is None and gene_conversion_rate is None:
+            # In this case, we're doing single-locus simulations, so a sequence
+            # length of 1 makes sense.
+            sequence_length = 1
+        elif isinstance(recombination_rate, intervals.RateMap):
+            sequence_length = recombination_rate.sequence_length
+        elif isinstance(gene_conversion_rate, intervals.RateMap):
+            sequence_length = gene_conversion_rate.sequence_length
+        else:
+            raise ValueError(
+                "A sequence_length value must be specified. This can be either "
+                "via the the sequence_length parameter itself, of implicitly "
+                "through using a RateMap instance for the recombination_rate "
+                "or gene_conversion_rate parameters, or via the initial_state "
+                "tables. "
+            )
+    else:
+        sequence_length = float(sequence_length)
+    assert sequence_length is not None
+
+    if discrete_genome and math.floor(sequence_length) != sequence_length:
+        raise ValueError("Must have integer sequence length with discrete_genome=True")
+
+    recombination_map = _parse_rate_map(
+        recombination_rate, sequence_length, "recombination"
+    )
+    gene_conversion_map = _parse_rate_map(
+        gene_conversion_rate, sequence_length, "gene conversion"
+    )
+    if gene_conversion_track_length is None:
+        if gene_conversion_rate is None:
+            # It doesn't matter what the track_length is, just set a
+            # value to keep the low-level code happy.
+            gene_conversion_track_length = 1
+        else:
+            raise ValueError(
+                "Must specify track length when simulating gene conversion"
+            )
+    else:
+        if gene_conversion_rate is None:
+            raise ValueError(
+                "Must specify gene conversion rate along with track length"
+            )
+        gene_conversion_track_length = float(gene_conversion_track_length)
+
+    # Default to diploid
+    ploidy = 2 if ploidy is None else ploidy
+    if not core.isinteger(ploidy):
+        raise TypeError("ploidy must be an integer")
+    ploidy = int(ploidy)
+    if ploidy < 1:
+        raise ValueError("ploidy must be >= 1")
+
+    model, model_change_events = _parse_model_arg(model)
+    is_dtwf = isinstance(model, DiscreteTimeWrightFisher)
+
+    # Check the demography. If no demography is specified, we default to a
+    # single-population model with a given population size.
+    if demography is None:
+        if is_dtwf:
+            # A default size of 1 isn't so smart for DTWF and almost certainly
+            # an error.
+            if population_size is None:
+                raise ValueError(
+                    "When using the DTWF model, the population size must be set "
+                    "explicitly, either using the population_size or demography "
+                    "arguments."
+                )
+        population_size = 1 if population_size is None else float(population_size)
+        demography = demog.Demography.simple_model(population_size)
+    elif isinstance(demography, demog.Demography):
+        if population_size is not None:
+            raise ValueError("Cannot specify demography and population size")
+    else:
+        raise TypeError("demography argument must be an instance of msprime.Demography")
+    demography.validate()
+
+    if initial_state is None:
+        if samples is None:
+            raise ValueError(
+                "Either the samples or initial_state arguments must be provided"
+            )
+        initial_state = tskit.TableCollection(sequence_length)
+        demography.insert_populations(initial_state)
+        _parse_samples(samples, ploidy, initial_state)
+    else:
+        if samples is not None:
+            raise ValueError("Cannot specify both samples and initial_state")
+        if sequence_length != initial_state.sequence_length:
+            raise ValueError(
+                "The initial_state sequence length must be consistent with the"
+                "value derived from either the sequence_length, "
+                "recombination_rate or gene_conversion_rate parameters."
+            )
+        if len(initial_state.populations) == 0:
+            raise ValueError(
+                "initial_state tables must define at least one population."
+            )
+
+    # For the standard code path, random_generator should always be set. But,
+    # we can also use the parser code elsewhere, so it's useful to be able
+    # to either provide a random seed, or get a good one.
+    if random_generator is None:
+        random_generator = _parse_random_seed(random_seed)
+    elif random_seed is not None:
+        raise ValueError("Cannot specify both random seed and random generator")
+
+    return Simulator(
+        tables=initial_state,
+        random_generator=random_generator,
+        recombination_map=recombination_map,
+        gene_conversion_map=gene_conversion_map,
+        gene_conversion_track_length=gene_conversion_track_length,
         discrete_genome=discrete_genome,
-        recombination_rate=recombination_rate,
-        recombination_map=recomb_map,
-        Ne=population_size,
+        ploidy=ploidy,
         demography=demography,
-        random_seed=random_seed,
         model=model,
+        model_change_events=model_change_events,
+        store_migrations=record_migrations,
+        store_full_arg=record_full_arg,
+        start_time=start_time,
+        end_time=end_time,
+        num_labels=num_labels,
     )
 
-    # TODO abstract out the running of replicates stuff a bit more
-    # so that it's a method of the tree sequence.
-    return_single = False
-    if num_replicates is None:
-        num_replicates = 1
-        return_single = True
-    iterator = sim.run_replicates(
-        num_replicates,
-        # provenance_dict=provenance_dict,
+
+def sim_ancestry(
+    samples=None,
+    *,
+    sequence_length=None,
+    recombination_rate=None,
+    gene_conversion_rate=None,
+    gene_conversion_track_length=None,
+    discrete_genome=None,
+    population_size=None,
+    demography=None,
+    ploidy=None,
+    model=None,
+    initial_state=None,
+    start_time=None,
+    end_time=None,
+    record_migrations=None,
+    record_full_arg=None,
+    num_labels=None,
+    random_seed=None,
+    num_replicates=None,
+    replicate_index=None,
+    record_provenance=None,
+):
+
+    random_generator = _parse_random_seed(random_seed)
+    record_provenance = True if record_provenance is None else record_provenance
+    provenance_dict = None
+    if record_provenance:
+        frame = inspect.currentframe()
+        provenance_dict = _build_provenance(
+            "sim_ancestry", random_generator.seed, frame
+        )
+
+    sim = _parse_sim_ancestry(
+        samples=samples,
+        sequence_length=sequence_length,
+        recombination_rate=recombination_rate,
+        gene_conversion_rate=gene_conversion_rate,
+        gene_conversion_track_length=gene_conversion_track_length,
+        discrete_genome=discrete_genome,
+        population_size=population_size,
+        demography=demography,
+        ploidy=ploidy,
+        model=model,
+        initial_state=initial_state,
+        start_time=start_time,
+        end_time=end_time,
+        record_migrations=record_migrations,
+        record_full_arg=record_full_arg,
+        num_labels=num_labels,
+        random_generator=random_generator,
     )
-    if return_single:
-        return next(iterator)
-    return iterator
+    return _wrap_replicates(
+        sim,
+        random_seed=random_seed,
+        replicate_index=replicate_index,
+        num_replicates=num_replicates,
+        provenance_dict=provenance_dict,
+    )
 
 
 class Simulator(_msprime.Simulator):
     """
     Class to simulate trees under a variety of population models.
+
+    Note: this class is not intended to be instantiated directly
+    and is only for internal library use. The interface may change
+    arbitrarily between versions.
     """
 
     def __init__(
@@ -815,9 +1130,10 @@ class Simulator(_msprime.Simulator):
         *,
         tables,
         recombination_map,
+        gene_conversion_map,
+        gene_conversion_track_length,
         discrete_genome,
         ploidy,
-        Ne,
         random_generator,
         demography,
         model_change_events,
@@ -825,9 +1141,8 @@ class Simulator(_msprime.Simulator):
         store_migrations=False,
         store_full_arg=False,
         start_time=None,
+        end_time=None,
         num_labels=None,
-        gene_conversion_rate=0,
-        gene_conversion_track_length=1,
     ):
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
@@ -851,6 +1166,11 @@ class Simulator(_msprime.Simulator):
         ll_tables = _msprime.LightweightTableCollection(tables.sequence_length)
         ll_tables.fromdict(tables.asdict())
 
+        # FIXME support arbitrary gene conversion maps.
+        # https://github.com/tskit-dev/msprime/issues/1212
+        assert len(gene_conversion_map) == 1
+        gene_conversion_rate = gene_conversion_map.rate[0]
+
         start_time = -1 if start_time is None else start_time
         super().__init__(
             tables=ll_tables,
@@ -873,8 +1193,12 @@ class Simulator(_msprime.Simulator):
             ploidy=ploidy,
         )
         # highlevel attributes used externally that have no lowlevel equivalent
+        self.end_time = end_time
         self.model_change_events = model_change_events
         self.demography = demography
+        # Temporary, until we add the low-level infrastructure for the gc map
+        # when we'll take the same approach as the recombination map.
+        self.gene_conversion_map = gene_conversion_map
 
     def copy_tables(self):
         """
@@ -895,6 +1219,10 @@ class Simulator(_msprime.Simulator):
             if (node.flags & tskit.NODE_IS_SAMPLE) != 0:
                 num_samples[node.population] += 1
         return num_samples
+
+    @property
+    def recombination_map(self):
+        return intervals.RateMap(**super().recombination_map)
 
     def _choose_num_labels(self, model, model_change_events):
         """
@@ -924,7 +1252,7 @@ class Simulator(_msprime.Simulator):
             if debug_func is not None:
                 debug_func(self)
 
-    def run(self, end_time=None, event_chunk=None, debug_func=None):
+    def run(self, event_chunk=None, debug_func=None):
         """
         Runs the simulation until complete coalescence has occurred.
         """
@@ -955,7 +1283,7 @@ class Simulator(_msprime.Simulator):
                 )
             ll_new_model = event.model.get_ll_representation()
             self.model = ll_new_model
-        end_time = np.inf if end_time is None else end_time
+        end_time = np.inf if self.end_time is None else self.end_time
         self._run_until(end_time, event_chunk, debug_func)
         self.finalise_tables()
         logger.info(
@@ -966,13 +1294,7 @@ class Simulator(_msprime.Simulator):
         )
 
     def run_replicates(
-        self,
-        num_replicates,
-        *,
-        mutation_rate=None,
-        discrete_sites=False,
-        end_time=None,
-        provenance_dict=None,
+        self, num_replicates, *, mutation_rate=None, provenance_dict=None,
     ):
         """
         Sequentially yield the specified number of simulation replicates.
@@ -989,7 +1311,7 @@ class Simulator(_msprime.Simulator):
             )
 
         for j in range(num_replicates):
-            self.run(end_time)
+            self.run()
 
             if mutation_rate is not None:
                 mutations._simple_mutate(
@@ -997,7 +1319,7 @@ class Simulator(_msprime.Simulator):
                     self.random_generator,
                     sequence_length=self.sequence_length,
                     rate=mutation_rate,
-                    discrete_sites=discrete_sites,
+                    discrete_sites=self.discrete_genome,
                 )
             tables = tskit.TableCollection.fromdict(self.tables.asdict())
             replicate_provenance = None
