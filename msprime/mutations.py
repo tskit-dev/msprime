@@ -146,15 +146,28 @@ class SLiMMutationModel(_msprime.SLiMMutationModel, MutationModel):
     """
     An infinite-alleles model of mutation producing "SLiM-style" mutations.
 
-    The ancestral state of each new site is set to the empty string,
-    and each derived state is produced by appending the "next allele" to the previous
-    state. The result is a comma-separated string of all mutations that have occurred
-    up to the root.
+    To agree with mutations produced by SLiM, the ancestral state of each new
+    site is set to the empty string, and each derived state is produced by
+    appending the "next allele" to the previous state. The result is that each
+    allele is a comma-separated string of all mutations that have occurred up
+    to the root.
+
+    Mutations produced by SLiM carry both a ``time`` attribute, in units of "time ago"
+    as usual for tskit, as well as a metadata attributed called "origin_generation",
+    in units of time since the start of the simulation. Adding these two together -
+    time since the start of the simulation plus time until the end - is equal to the
+    total number of generations of the simulation. The origin_generation is not
+    currently used by SLiM, but for consistency, the origin_genration attribute for
+    mutations produced by this model is set equal to ``slim_generation`` minus
+    ``floor(mut.time)``, where ``mut.time`` is the (tskit) time ago of the mutation.
 
     :param int type: The nonnegative integer defining the "type" of SLiM mutation
         that will be recorded in metadata.
     :param int next_id: The nonnegative integer to start assigning alleles from.
         (default: 0)
+    :param int slim_generation: The "SLiM generation" time used in determining the
+        "origin_generation" metadata attribute of mutations. This can usually
+        be left at its default, which is 1.
     :param int block_size: The block size for allocating derived states.
         You do not need to change this unless you get an "out of memory" error
         due to a very large number of stacked mutations.
