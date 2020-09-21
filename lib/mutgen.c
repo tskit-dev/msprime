@@ -1319,8 +1319,8 @@ mutgen_apply_mutations(mutgen_t *self, bool kept_before_end_time)
             if (site->position >= right) {
                 break;
             }
-            ret = mutgen_choose_alleles(
-                self, parent, bottom_mutation, nodes.num_rows, site, kept_before_end_time);
+            ret = mutgen_choose_alleles(self, parent, bottom_mutation, nodes.num_rows,
+                site, kept_before_end_time);
             if (ret != 0) {
                 goto out;
             }
@@ -1341,7 +1341,7 @@ mutgen_generate(mutgen_t *self, int flags)
 {
     int ret = 0;
     bool discrete_sites = flags & MSP_DISCRETE_SITES;
-    bool kept_before_end_time = flags & MSP_KEPT_MUTATIONS_BEFORE_END_TIME; 
+    bool kept_before_end_time = flags & MSP_KEPT_MUTATIONS_BEFORE_END_TIME;
 
     avl_clear_tree(&self->sites);
 
