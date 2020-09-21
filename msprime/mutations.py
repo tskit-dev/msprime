@@ -67,7 +67,7 @@ def mutation_model_factory(model):
 
     # String names here should match Seq-Gen where possible
     model_map = {
-        # "slim": SlimMutationModel(), Needs type argument so can't be string init'd
+        # "slim": SLiMMutationModel(), Needs type argument so can't be string init'd
         "infinite_alleles": InfiniteAllelesMutationModel(),
         "binary": BinaryMutationModel(),
         "jc69": JC69MutationModel(),
