@@ -782,7 +782,7 @@ def mutate(
     this would create an extra transition (from the new allele to the old
     one below it) that may be incorrect according to the model of mutation.
     Under a parent-independent mutation model, however (e.g., Jukes-Cantor),
-    there is no problem, and ``kept_mutations_before_end_time=True``may be
+    there is no problem, and ``kept_mutations_before_end_time=True`` may be
     set to allow adding new mutations around or above existing ones.
 
     The time interval over which mutations can occur may be controlled
