@@ -16,12 +16,15 @@
 ** You should have received a copy of the GNU General Public License
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include <stdio.h>
+
+#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
 #include "util.h"
-#include "msprime.h"
+#include "rate_map.h"
+
+#include <tskit/core.h>
 
 void
 rate_map_print_state(rate_map_t *self, FILE *out)
