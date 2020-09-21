@@ -42,7 +42,6 @@ cmp_mutationp(const void *a, const void *b)
      * https://gcc.gnu.org/bugzilla/show_bug.cgi?id=81631 */
     const mutation_t *ia = *(const mutation_t **) (uintptr_t) a;
     const mutation_t *ib = *(const mutation_t **) (uintptr_t) b;
-    // if either mutation is new, then sort by time (or node time if unknown).
     out = (ia->new || ib->new) ? 0 : (ia->id - ib->id) - (ib->id - ia->id);
     if (out == 0) {
         out = (ib->time > ia->time) - (ib->time < ia->time);
@@ -272,8 +271,7 @@ mutation_matrix_free(mutation_model_t *self)
  *  int32_t mutation_type_id_; // 4 bytes (int32_t): the id of the mutation type the
  *                             // mutation belongs to
  *  float selection_coeff_;    // 4 bytes (float): the selection coefficient
- *  int32_t subpop_index_; // 4 bytes (int32_t): the id of the subpopulation in which
- * the
+ *  int32_t subpop_index_; // 4 bytes (int32_t): the id of the subpopulation in which the
  *                         // mutation arose
  *  int32_t origin_generation_; // 4 bytes (int32_t): the generation in which the
  *                              // mutation arose
@@ -983,7 +981,7 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_initialise_sites(mutgen_t *self, bool discrete_sites, bool allow_ancestral)
+mutgen_initialise_sites(mutgen_t *self, bool check_kept_times)
 {
     int ret = 0;
     tsk_site_table_t *sites = &self->tables->sites;
@@ -992,7 +990,7 @@ mutgen_initialise_sites(mutgen_t *self, bool discrete_sites, bool allow_ancestra
     tsk_id_t site_id;
     site_t *site;
     double time;
-    const double start_time = self->start_time;
+    const double end_time = self->end_time;
     char *state, *metadata;
     tsk_size_t j, length, metadata_length;
 
@@ -1018,7 +1016,9 @@ mutgen_initialise_sites(mutgen_t *self, bool discrete_sites, bool allow_ancestra
             if (tsk_is_unknown_time(time)) {
                 time = nodes->time[mutations->node[j]];
             }
-            if (discrete_sites && time < start_time && !allow_ancestral) {
+            // check if any kept mutations are younger than
+            // the time period where new mutations can be added
+            if (check_kept_times && time < end_time) {
                 ret = MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER;
                 goto out;
             }
@@ -1181,7 +1181,7 @@ out:
 
 static int MSP_WARN_UNUSED
 mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_mutation,
-    tsk_size_t num_nodes, site_t *site, bool allow_ancestral)
+    tsk_size_t num_nodes, site_t *site, bool kept_before_end_time)
 {
     int ret = 0;
     const char *pa, *pm;
@@ -1219,8 +1219,8 @@ mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_muta
         } else {
             parent_mut = bottom_mutation[u];
             mut->parent = parent_mut;
-            if (!allow_ancestral
-                && (mut->time > parent_mut->time || (parent_mut->new && !mut->new))) {
+            assert(mut->time <= parent_mut->time);
+            if (!kept_before_end_time && parent_mut->new && !mut->new) {
                 ret = MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER;
                 goto out;
             }
@@ -1259,7 +1259,7 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_apply_mutations(mutgen_t *self, bool allow_ancestral)
+mutgen_apply_mutations(mutgen_t *self, bool kept_before_end_time)
 {
     int ret = 0;
     const tsk_id_t *I, *O;
@@ -1320,7 +1320,7 @@ mutgen_apply_mutations(mutgen_t *self, bool allow_ancestral)
                 break;
             }
             ret = mutgen_choose_alleles(
-                self, parent, bottom_mutation, nodes.num_rows, site, allow_ancestral);
+                self, parent, bottom_mutation, nodes.num_rows, site, kept_before_end_time);
             if (ret != 0) {
                 goto out;
             }
@@ -1341,7 +1341,7 @@ mutgen_generate(mutgen_t *self, int flags)
 {
     int ret = 0;
     bool discrete_sites = flags & MSP_DISCRETE_SITES;
-    bool allow_ancestral = flags & MSP_ALLOW_ANCESTRAL_MUTATIONS;
+    bool kept_before_end_time = flags & MSP_KEPT_MUTATIONS_BEFORE_END_TIME; 
 
     avl_clear_tree(&self->sites);
 
@@ -1355,7 +1355,7 @@ mutgen_generate(mutgen_t *self, int flags)
         goto out;
     }
     if (flags & MSP_KEEP_SITES) {
-        ret = mutgen_initialise_sites(self, discrete_sites, allow_ancestral);
+        ret = mutgen_initialise_sites(self, discrete_sites && !kept_before_end_time);
         if (ret != 0) {
             goto out;
         }
@@ -1373,7 +1373,7 @@ mutgen_generate(mutgen_t *self, int flags)
     if (ret != 0) {
         goto out;
     }
-    ret = mutgen_apply_mutations(self, allow_ancestral);
+    ret = mutgen_apply_mutations(self, kept_before_end_time);
     if (ret != 0) {
         goto out;
     }

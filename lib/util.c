@@ -199,7 +199,7 @@ msp_strerror_internal(int err)
         case MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER:
             ret = "Tree sequence contains mutations that would descend from "
                   "existing mutations: finite site mutations must be generated on "
-                  "older time periods first";
+                  "older time periods first.";
             break;
         case MSP_ERR_INSUFFICIENT_ALLELES:
             ret = "Must have at least two alleles.";

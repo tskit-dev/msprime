@@ -925,7 +925,11 @@ class TestKeep(unittest.TestCase):
         with self.assertRaises(_msprime.LibraryError):
             msprime.mutate(ts_mut, rate=1, random_seed=1, keep=True, discrete=True)
         ts_2mut = msprime.mutate(
-            ts_mut, rate=1, random_seed=3, discrete=True, allow_ancestral=True
+            ts_mut,
+            rate=1,
+            random_seed=3,
+            discrete=True,
+            kept_mutations_before_end_time=True,
         )
         self.assertGreater(ts_2mut.num_mutations, ts_mut.num_mutations)
 

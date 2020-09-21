@@ -4401,10 +4401,10 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
     size_t size;
     mutation_model_t *model = NULL;
     int discrete_sites = false;
-    int allow_ancestral = false;
+    int kept_mutations_before_end_time = false;
     static char *kwlist[] = {
         "tables", "random_generator", "rate_map", "model",
-        "discrete_sites", "keep", "allow_ancestral",
+        "discrete_sites", "keep", "kept_mutations_before_end_time",
         "start_time", "end_time", NULL};
     mutgen_t mutgen;
     int err;
@@ -4414,7 +4414,7 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
             &LightweightTableCollectionType, &tables,
             &RandomGeneratorType, &random_generator,
             &PyDict_Type, &rate_map,
-            &py_model, &discrete_sites, &keep, &allow_ancestral,
+            &py_model, &discrete_sites, &keep, &kept_mutations_before_end_time,
             &start_time, &end_time)) {
         goto out;
     }
@@ -4456,8 +4456,8 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
     if (keep) {
         flags |= MSP_KEEP_SITES;
     }
-    if (allow_ancestral) {
-        flags |= MSP_ALLOW_ANCESTRAL_MUTATIONS;
+    if (kept_mutations_before_end_time) {
+        flags |= MSP_KEPT_MUTATIONS_BEFORE_END_TIME; 
     }
     err = mutgen_generate(&mutgen, flags);
     if (err != 0) {
