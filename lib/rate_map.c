@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <float.h>
 
 #include "util.h"
 #include "rate_map.h"
@@ -89,6 +90,7 @@ rate_map_alloc(rate_map_t *self, size_t size, double *position, double *rate)
             sum += (position[j + 1] - position[j]) * rate[j];
         }
     }
+    fast_search_lookup_alloc(&self->position_lookup, self->position, size + 1);
 out:
     return ret;
 }
@@ -103,6 +105,7 @@ rate_map_alloc_single(rate_map_t *self, double sequence_length, double rate)
 int
 rate_map_free(rate_map_t *self)
 {
+    fast_search_lookup_free(&(self->position_lookup));
     msp_safe_free(self->position);
     msp_safe_free(self->rate);
     msp_safe_free(self->cumulative_mass);
@@ -153,6 +156,7 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
 {
     const double *position = self->position;
     const double *rate = self->rate;
+    const double *ptr;
     double offset;
     size_t index;
 
@@ -165,8 +169,11 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
     if (pos >= position[self->size]) {
         return self->cumulative_mass[self->size];
     }
-    /* TODO replace this with tsk_search_sorted */
-    index = msp_binary_interval_search(pos, position, self->size + 1);
+    ptr = fast_search_lookup_find(&(self->position_lookup), pos);
+    index = (size_t)(ptr - position);
+    if (index == self->size + 1) {
+        index--;
+    }
     assert(index > 0);
     index--;
     offset = pos - position[index];
@@ -202,4 +209,96 @@ rate_map_shift_by_mass(rate_map_t *self, double pos, double mass)
 {
     double result_mass = rate_map_position_to_mass(self, pos) + mass;
     return rate_map_mass_to_position(self, result_mass);
+}
+
+#ifdef _Static_assert
+_Static_assert(FLT_RADIX == 2, "Base 2 floating point types required");
+#endif
+
+static int
+fast_search_lookup_init_lookups(
+    fast_search_lookup_t *self, const double *values, size_t n_values)
+{
+    int ret = 0;
+    const double *lower, *strict_upper;
+    uint32_t i;
+    double query = -INFINITY;
+
+    lower = values;
+    for (i = 0; i < self->num_lookups; i++) {
+        while (*lower <= query) {
+            lower++;
+        }
+        self->lookups[i].start = lower;
+        strict_upper = lower;
+        query = ldexp(i, -(self->power_shift));
+        assert(strict_upper < values + n_values);
+        while (strict_upper < values + n_values && *strict_upper <= query) {
+            strict_upper++;
+        }
+        const int64_t num = strict_upper - lower;
+        if (num > INT32_MAX) {
+            ret = MSP_ERR_BAD_PARAM_VALUE; // TODO: consider new err code
+            goto out;
+        }
+        self->lookups[i].num = (size_t) num;
+    }
+out:
+    return ret;
+}
+
+static inline long
+ceil_to_long(double x)
+{
+    return lrint(ceil(x)); // TODO: test use of fast non-portable equivalent
+}
+
+int
+fast_search_lookup_alloc(
+    fast_search_lookup_t *self, const double *values, size_t n_values)
+{
+    int ret = 0;
+    const double max = values[n_values - 1];
+    const int power = ilogb((double) n_values) + 1;
+
+    if (*values != 0.0 || !isfinite(max) || max < 0) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    self->power_shift = power - (ilogb(max) + 1);
+    const long max_index = ceil_to_long(ldexp(max, self->power_shift));
+    self->num_lookups = 1 + (size_t) max_index;
+    self->lookups = malloc(self->num_lookups * sizeof(*(self->lookups)));
+    ret = fast_search_lookup_init_lookups(self, values, n_values);
+out:
+    if (ret != 0) {
+        if (self->lookups != NULL) {
+            msp_safe_free(self->lookups);
+        }
+    }
+    return ret;
+}
+
+int
+fast_search_lookup_free(fast_search_lookup_t *self)
+{
+    msp_safe_free(self->lookups);
+    return 0;
+}
+
+/*  PRE-CONDITIONS:
+ *      1) query >= 0.0
+ *      2) self is valid fast_search_lookup_t
+ */
+const double *
+fast_search_lookup_find(fast_search_lookup_t *self, double query)
+{
+    assert(query >= 0.0);
+    search_range_t *back = self->lookups + self->num_lookups - 1;
+    if (query > back->start[back->num - 1]) {
+        return back->start + back->num;
+    }
+    size_t i = (size_t) ceil_to_long(ldexp(query, self->power_shift));
+    search_range_t *range = self->lookups + i;
+    return find_first_upper_bound(range->start, range->num, query);
 }

@@ -29,6 +29,7 @@
 
 #include <tskit/core.h>
 #include "util.h"
+#include "rate_map.h"
 
 static const char *
 msp_strerror_internal(int err)
@@ -312,8 +313,8 @@ __msp_safe_free(void **ptr)
  * Will find the leftmost such index
  * Assumes `values` are sorted
  */
-size_t
-msp_binary_interval_search(double query, const double *values, size_t n_values)
+static size_t
+find_first_upper_bound_or_back(const double *values, size_t n_values, double query)
 {
     if (n_values == 0) {
         return 0;
@@ -332,6 +333,50 @@ msp_binary_interval_search(double query, const double *values, size_t n_values)
         }
     }
     return l;
+}
+
+/* This function follows standard semantics of:
+   numpy.searchsorted(..., side='left') and
+   std::lower_bound() from the standard C++ <algorithm> library
+ */
+const double *
+find_first_upper_bound(const double *values, size_t n_values, double query)
+{
+    if (query > values[n_values - 1]) {
+        return values + n_values;
+    }
+    return values + find_first_upper_bound_or_back(values, n_values, query);
+}
+
+static size_t
+slow_emulate_msp_binary_interval_search(
+    double query, const double *values, size_t n_values)
+{
+    fast_search_lookup_t table;
+    const double *ptr;
+    size_t ret;
+
+    assert(0 == fast_search_lookup_alloc(&table, values, n_values));
+    ptr = fast_search_lookup_find(&table, query);
+    ret = (size_t)(ptr - values);
+    assert(ret <= n_values);
+    if (ret == n_values) {
+        ret--;
+    }
+    fast_search_lookup_free(&table);
+    return ret;
+}
+
+size_t
+msp_binary_interval_search(double query, const double *values, size_t n_values)
+{
+    size_t ret = find_first_upper_bound_or_back(values, n_values, query);
+#ifndef __OPTIMIZE__
+    if (query >= 0.0 && n_values > 0 && values[0] == 0.0 && values[n_values - 1] > 0.0) {
+        assert(ret == slow_emulate_msp_binary_interval_search(query, values, n_values));
+    }
+#endif
+    return ret;
 }
 
 bool

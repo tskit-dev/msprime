@@ -119,6 +119,8 @@ void __msp_safe_free(void **ptr);
 
 #define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
 
+const double *find_first_upper_bound(
+    const double *values, size_t n_values, double query);
 size_t msp_binary_interval_search(double query, const double *values, size_t n_values);
 bool doubles_almost_equal(double a, double b, double eps);
 

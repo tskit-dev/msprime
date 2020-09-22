@@ -24,11 +24,28 @@
 #include <stdio.h>
 
 typedef struct {
+    const double *start;
+    size_t num;
+} search_range_t;
+
+typedef struct {
+    int power_shift;
+    size_t num_lookups;
+    search_range_t *lookups;
+} fast_search_lookup_t;
+
+typedef struct {
     size_t size;
     double *position;
     double *rate;
     double *cumulative_mass;
+    fast_search_lookup_t position_lookup;
 } rate_map_t;
+
+int fast_search_lookup_alloc(
+    fast_search_lookup_t *self, const double *values, size_t n_values);
+int fast_search_lookup_free(fast_search_lookup_t *self);
+const double *fast_search_lookup_find(fast_search_lookup_t *self, double query);
 
 int rate_map_alloc(rate_map_t *self, size_t size, double *position, double *value);
 int rate_map_alloc_single(rate_map_t *self, double sequence_length, double value);
