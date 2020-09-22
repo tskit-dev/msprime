@@ -419,24 +419,65 @@ of different random mutational processes on top of a single simulated topology,
 or if we have obtained the tree sequence from another program and wish to
 overlay neutral mutations on this tree sequence.
 
-
-.. autoclass:: msprime.InfiniteSites
-
-.. data:: msprime.BINARY == 0
-
-    The binary mutation alphabet where ancestral states are always "0" and
-    derived states "1".
-
-.. data:: msprime.NUCLEOTIDES == 1
-
-    The nucleotides mutation alphabet in which ancestral and derived states are
-    chosen from the characters "A", "C", "G" and "T".
-
 .. autofunction:: msprime.mutate
 
+
+.. _sec_api_mutation_models:
+
+***************
+Mutation Models
+***************
+
+Mutation models are specified using the ``model`` parameter to
+:func:`.mutate`. This parameter can either take the form of a
+string describing the model (e.g. ``model="jc69"``) or an instance of a
+model definition class (e.g ``model=msprime.JC69MutationModel()``).
+The available models are documented below.
+
+.. _sec_api_mutation_matrix_models:
+
 ++++++++++++++++++++++
-Mutation Matrix Models
+Matrix Mutation Models
 ++++++++++++++++++++++
+
+These classes are defined by an alphabet of possible alleles (`alleles`); an array of
+probabilities that determines how likely each allele is to be the root, ancestral allele
+(`root_distribution`); and a transition matrix specifying the probability for each allele
+to mutate to every other allele. Each class has specific values of these parameters to
+create the specific model. For your own custom model these parameters can be set using
+:class:`msprime.MatrixMutationModel`. For more detail about how mutations are simulated
+in these models see :ref:`sec_api_mutation_matrix_models_details`.
+
+.. autoclass:: msprime.BinaryMutationModel()
+
+.. autoclass:: msprime.JC69MutationModel()
+
+.. autoclass:: msprime.HKYMutationModel()
+
+.. autoclass:: msprime.F84MutationModel()
+
+.. autoclass:: msprime.GTRMutationModel()
+
+.. autoclass:: msprime.BLOSUM62MutationModel()
+
+.. autoclass:: msprime.PAMMutationModel()
+
+.. autoclass:: msprime.MatrixMutationModel()
+
+
+++++++++++++++++++++++
+Other Mutation Models
+++++++++++++++++++++++
+
+.. autoclass:: msprime.InfiniteAllelesMutationModel()
+
+.. autoclass:: msprime.SLiMMutationModel()
+
+.. _sec_api_mutation_matrix_models_details:
+
+++++++++++++++++++++++++++++++
+Mutation Matrix Models Details
+++++++++++++++++++++++++++++++
 
 Mutation matrix models are specified by three things: an alphabet,
 a root distribution, and a transition matrix.

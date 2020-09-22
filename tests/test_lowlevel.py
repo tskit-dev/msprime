@@ -2100,26 +2100,26 @@ class TestMatrixMutationModel(unittest.TestCase):
             _msprime.MatrixMutationModel(alleles, [0, 1], matrix)
 
 
-class TestSlimMutationModel(unittest.TestCase):
+class TestSLiMMutationModel(unittest.TestCase):
     """
     Tests for the slim mutation model class.
     """
 
     def test_constructor_errors(self):
-        self.assertRaises(TypeError, _msprime.SlimMutationModel)
+        self.assertRaises(TypeError, _msprime.SLiMMutationModel)
 
         for bad_type in ["sdr", 0.222, None]:
             with self.assertRaises(TypeError):
-                _msprime.SlimMutationModel(type=bad_type, next_id=234)
-                _msprime.SlimMutationModel(type=0, next_id=bad_type)
-                _msprime.SlimMutationModel(type=0, next_id=0, block_size=bad_type)
+                _msprime.SLiMMutationModel(type=bad_type, next_id=234)
+                _msprime.SLiMMutationModel(type=0, next_id=bad_type)
+                _msprime.SLiMMutationModel(type=0, next_id=0, block_size=bad_type)
 
         with self.assertRaises(_msprime.LibraryError):
-            _msprime.SlimMutationModel(type=-1, next_id=0)
-            _msprime.SlimMutationModel(type=1, next_id=-1)
+            _msprime.SLiMMutationModel(type=-1, next_id=0)
+            _msprime.SLiMMutationModel(type=1, next_id=-1)
 
     def test_uninitialised(self):
-        model = _msprime.SlimMutationModel.__new__(_msprime.SlimMutationModel)
+        model = _msprime.SLiMMutationModel.__new__(_msprime.SLiMMutationModel)
         with self.assertRaises(SystemError):
             model.type
         with self.assertRaises(SystemError):
@@ -2127,13 +2127,13 @@ class TestSlimMutationModel(unittest.TestCase):
 
     def test_type(self):
         for mutation_type in [0, 10, 2 ** 31 - 1]:
-            model = _msprime.SlimMutationModel(type=mutation_type)
+            model = _msprime.SLiMMutationModel(type=mutation_type)
             self.assertEqual(model.type, mutation_type)
             self.assertEqual(model.next_id, 0)
 
     def test_next_id(self):
         for next_id in [0, 10, 2 ** 63 - 1]:
-            model = _msprime.SlimMutationModel(0, next_id=next_id)
+            model = _msprime.SLiMMutationModel(0, next_id=next_id)
             self.assertEqual(model.type, 0)
             self.assertEqual(model.next_id, next_id)
 
@@ -2312,7 +2312,7 @@ class TestSimMutations(unittest.TestCase):
                     tables, rng, rate_map=imap, model=bad_type,
                 )
         model_classes = [
-            _msprime.SlimMutationModel,
+            _msprime.SLiMMutationModel,
             _msprime.InfiniteAllelesMutationModel,
             _msprime.MatrixMutationModel,
         ]
@@ -2327,7 +2327,7 @@ class TestSimMutations(unittest.TestCase):
         rng = _msprime.RandomGenerator(1)
         imap = uniform_rate_map(1)
         tables = _msprime.LightweightTableCollection(1.0)
-        model = _msprime.SlimMutationModel(1234, 5678)
+        model = _msprime.SLiMMutationModel(1234, 5678)
         _msprime.sim_mutations(tables, rng, imap, model)
         self.assertEqual(model.next_id, 5678)
 

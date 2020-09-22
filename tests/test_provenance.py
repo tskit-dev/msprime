@@ -287,17 +287,18 @@ class TestBuildObjects(unittest.TestCase):
         self.assertEqual(decoded.parameters.end_time, 100)
         self.assertEqual(decoded.parameters.keep, False)
         self.assertEqual(
-            decoded.parameters.model["__class__"], "msprime.mutations.BinaryMutations"
+            decoded.parameters.model["__class__"],
+            "msprime.mutations.BinaryMutationModel",
         )
 
     def test_mutate_model(self):
         ts = msprime.simulate(5, random_seed=1)
-        ts = msprime.mutate(ts, model=msprime.JukesCantor())
+        ts = msprime.mutate(ts, model="jc69")
         decoded = self.decode(ts.provenance(1).record)
         self.assertEqual(decoded.schema_version, "1.0.0")
         self.assertEqual(decoded.parameters.command, "mutate")
         self.assertEqual(
-            decoded.parameters.model["__class__"], "msprime.mutations.JukesCantor"
+            decoded.parameters.model["__class__"], "msprime.mutations.JC69MutationModel"
         )
 
     def test_mutate_map(self):

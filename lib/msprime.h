@@ -30,6 +30,7 @@
 #include "avl.h"
 #include "fenwick.h"
 #include "object_heap.h"
+#include "rate_map.h"
 
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1
@@ -172,13 +173,6 @@ typedef struct _simulation_model_t {
     /* If the model allocates memory this function should be non-null. */
     void (*free)(struct _simulation_model_t *model);
 } simulation_model_t;
-
-typedef struct {
-    size_t size;
-    double *position;
-    double *rate;
-    double *cumulative_mass;
-} rate_map_t;
 
 typedef struct {
     double left;
@@ -462,21 +456,6 @@ size_t msp_get_num_common_ancestor_events(msp_t *self);
 size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
 size_t msp_get_num_gene_conversion_events(msp_t *self);
-
-int rate_map_alloc(rate_map_t *self, size_t size, double *position, double *value);
-int rate_map_alloc_single(rate_map_t *self, double sequence_length, double value);
-int rate_map_copy(rate_map_t *to, rate_map_t *from);
-int rate_map_free(rate_map_t *self);
-void rate_map_print_state(rate_map_t *self, FILE *out);
-double rate_map_get_sequence_length(rate_map_t *self);
-size_t rate_map_get_size(rate_map_t *self);
-size_t rate_map_get_num_intervals(rate_map_t *self);
-size_t rate_map_get_index(rate_map_t *self, double x);
-double rate_map_get_total_mass(rate_map_t *self);
-double rate_map_mass_between(rate_map_t *self, double left, double right);
-double rate_map_mass_to_position(rate_map_t *self, double mass);
-double rate_map_position_to_mass(rate_map_t *self, double position);
-double rate_map_shift_by_mass(rate_map_t *self, double pos, double mass);
 
 int matrix_mutation_model_factory(mutation_model_t *self, int model);
 int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
