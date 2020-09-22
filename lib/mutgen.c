@@ -1355,7 +1355,8 @@ mutgen_generate(mutgen_t *self, int flags)
         goto out;
     }
     if (flags & MSP_KEEP_SITES) {
-        ret = mutgen_initialise_sites(self, discrete_sites && !kept_mutations_before_end_time);
+        ret = mutgen_initialise_sites(
+                self, discrete_sites && !kept_mutations_before_end_time);
         if (ret != 0) {
             goto out;
         }
