@@ -348,6 +348,7 @@ find_first_upper_bound(const double *values, size_t n_values, double query)
     return values + find_first_upper_bound_or_back(values, n_values, query);
 }
 
+#ifndef __OPTIMIZE__
 static size_t
 slow_emulate_msp_binary_interval_search(
     double query, const double *values, size_t n_values)
@@ -366,6 +367,7 @@ slow_emulate_msp_binary_interval_search(
     fast_search_lookup_free(&table);
     return ret;
 }
+#endif
 
 size_t
 msp_binary_interval_search(double query, const double *values, size_t n_values)
