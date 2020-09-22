@@ -27,9 +27,11 @@ import struct
 import unittest
 
 import attr
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats as stats
 import tskit
+from matplotlib.backends.backend_pdf import PdfPages
 
 import msprime
 import tests.wright_fisher as wf
@@ -1131,27 +1133,37 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         for t in ts.trees():
             for mut in t.mutations():
                 mut_time[mut.id] = mut.time
-                start_time[mut.id] = t.time(t.parent(mut.node))
-                end_time[mut.id] = t.time(mut.node)
+                end_time[mut.id] = t.time(t.parent(mut.node))
+                start_time[mut.id] = t.time(mut.node)
                 if mut.parent != tskit.NULL:
-                    start_time[mut.id] = min(
-                        start_time[mut.id], ts.mutation(mut.parent).time
+                    end_time[mut.id] = min(
+                        end_time[mut.id], ts.mutation(mut.parent).time
                     )
-                    end_time[mut.parent] = max(end_time[mut.parent], t.time(mut.node))
-        centered_times = mut_time - start_time
-        time_inter = end_time - start_time
-        rng = random.Random(3937)
-        generated_times = np.array([rng.uniform(0, high) for high in time_inter])
-        self.sign_tst(generated_times - centered_times)
+                    start_time[mut.parent] = max(
+                        start_time[mut.parent], t.time(mut.node)
+                    )
+        rng = random.Random(337)
+        generated_times = np.array(
+            [
+                rng.uniform(start_time[i], end_time[i])
+                for i in range(start_time.shape[0])
+            ]
+        )
+        pdf = PdfPages("out.pdf")
+        fig = plt.figure()
+        plt.scatter(mut_time, generated_times)
+        pdf.savefig(fig)
+        pdf.close()
+        self.sign_tst(generated_times - mut_time)
 
     def test_binary_model(self):
         model = msprime.BinaryMutationModel()
-        self.verify_model(model, state_independent=False)
+        self.verify_model(model, state_independent=True)
         self.verify_mutation_rates(model)
 
     def test_jukes_cantor(self):
         model = msprime.JC69MutationModel()
-        self.verify_model(model, state_independent=False)
+        self.verify_model(model, state_independent=True)
         self.verify_mutation_rates(model)
 
     def test_HKY(self):
@@ -1193,7 +1205,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
             root_distribution=[0.8, 0.0, 0.2],
             transition_matrix=[[0.2, 0.4, 0.4], [0.1, 0.2, 0.7], [0.5, 0.3, 0.2]],
         )
-        self.verify_model(model, state_independent=False)
+        self.verify_model(model, state_independent=True)
         self.verify_mutation_rates(model)
 
 
