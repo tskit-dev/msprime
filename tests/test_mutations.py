@@ -1146,12 +1146,12 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
 
     def test_binary_model(self):
         model = msprime.BinaryMutationModel()
-        self.verify_model(model)
+        self.verify_model(model, state_independent=False)
         self.verify_mutation_rates(model)
 
     def test_jukes_cantor(self):
         model = msprime.JC69MutationModel()
-        self.verify_model(model)
+        self.verify_model(model, state_independent=False)
         self.verify_mutation_rates(model)
 
     def test_HKY(self):
@@ -1193,7 +1193,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
             root_distribution=[0.8, 0.0, 0.2],
             transition_matrix=[[0.2, 0.4, 0.4], [0.1, 0.2, 0.7], [0.5, 0.3, 0.2]],
         )
-        self.verify_model(model)
+        self.verify_model(model, state_independent=False)
         self.verify_mutation_rates(model)
 
 
