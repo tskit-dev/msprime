@@ -1112,40 +1112,25 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         self.bonferroni(lower_pvals)
         self.bonferroni(upper_pvals)
 
-    def find_start_end_times(self, ts, mutation_node, site_id):
-        tables = ts.tables
-        pos = tables.sites[site_id].position
-        is_within = np.logical_and(pos >= tables.edges.left, pos < tables.edges.right)
-        node_is_child = tables.edges.child == mutation_node
-        both = np.logical_and(is_within, node_is_child)
-        self.assertTrue(np.sum(both) == 1)
-        parent_node = tables.edges.parent[both][0]
-        end = tables.nodes.time[parent_node]
-        start = tables.nodes.time[mutation_node]
-        assert end >= start
-        return (start, end)
-
     def verify_mutation_times_ts(self, ts):
-        start = np.full(ts.num_mutations, -1, dtype=np.float32)
-        end = np.full(ts.num_mutations, -1, dtype=np.float32)
-        time = np.full(ts.num_mutations, -1, dtype=np.float32)
-        for mut in ts.mutations():
-            time[mut.id] = mut.time
-            start[mut.id], end[mut.id] = self.find_start_end_times(
-                ts, mut.node, mut.site
-            )
-        assert np.all(start >= 0)
-        assert np.all(end >= 0)
-        assert np.all(time >= 0)
-        greater_end = end > start
-        centered_time = time[greater_end] - start[greater_end]
-        time_inter = end[greater_end] - start[greater_end]
+        start_time = np.full(ts.num_mutations, -1, dtype=np.float32)
+        end_time = np.full(ts.num_mutations, -1, dtype=np.float32)
+        mut_time = np.full(ts.num_mutations, -1, dtype=np.float32)
+        for t in ts.trees():
+            for mut in t.mutations():
+                mut_time[mut.id] = mut.time
+                start_time[mut.id] = t.time(t.parent(mut.node))
+                end_time[mut.id] = t.time(mut.node)
+                if mut.parent != tskit.NULL:
+                    start_time[mut.id] = min(
+                        start_time[mut.id], ts.mutation(mut.parent).time
+                    )
+                    end_time[mut.parent] = max(end_time[mut.parent], t.time(mut.node))
+        centered_times = mut_time - start_time
+        time_inter = end_time - start_time
         rng = random.Random(3937)
         generated_times = np.array([rng.uniform(0, high) for high in time_inter])
-        if centered_time.shape[0] > 0:
-            res = stats.ks_2samp(centered_time, generated_times)
-            print(res)
-            self.assertGreater(res[1], 0.01)
+        self.sign_tst(generated_times - centered_times)
 
     def test_binary_model(self):
         model = msprime.BinaryMutationModel()
