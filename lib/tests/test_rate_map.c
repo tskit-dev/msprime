@@ -339,6 +339,244 @@ test_binary_search_edge_cases(void)
 }
 
 static void
+verify_search(fast_search_t *fastie, const double *values, size_t n)
+{
+    int i;
+    double x;
+    size_t expect, got;
+
+    for (i = 0; i < n; i++) {
+        x = values[i];
+        expect = idx_1st_strict_upper_bound(values, n, x);
+        got = fast_search_idx_strict_upper(fastie, x);
+        CU_ASSERT_EQUAL(expect, got);
+
+        x = nextafter(x, INFINITY);
+        expect = idx_1st_strict_upper_bound(values, n, x);
+        got = fast_search_idx_strict_upper(fastie, x);
+        CU_ASSERT_EQUAL(expect, got);
+    }
+}
+
+static bool
+fast_search_verify(fast_search_t *self)
+{
+    size_t start, stop;
+    size_t idx;
+
+    if (!(self->query_multiplier >= 0.0)) { // NaN not valid
+        return false;
+    }
+    if (self->num_lookups < 2) {
+        return false;
+    }
+    for (idx = 1; idx < self->num_lookups; idx++) {
+        if (self->lookups[idx - 1] > self->lookups[idx]) {
+            return false;
+        }
+    }
+    start = self->lookups[0];
+    stop = self->lookups[self->num_lookups - 1];
+    if (stop <= start || start != 0 || self->elements[0] != 0.0) {
+        return false;
+    }
+    return true;
+}
+
+static void
+fast_search_alloc_verify(fast_search_t *self, const double *elements, size_t n_elements)
+{
+    CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(self, elements, n_elements));
+    CU_ASSERT(fast_search_verify(self));
+}
+
+static void
+test_fast_search_identity(void)
+{
+    size_t expect, got;
+    double p[] = { 0.0, 1.0, 2.0, 3.0, 4.0, 5.0 };
+    for (size_t n = 2; n <= 6; n++) {
+        fast_search_t fastie;
+        fast_search_alloc_verify(&fastie, p, n);
+        CU_ASSERT_EQUAL(1.0, fastie.query_multiplier);
+        CU_ASSERT_EQUAL(n + 1, fastie.num_lookups);
+        for (size_t i = 0; i <= n; i++) {
+            CU_ASSERT_EQUAL(i, fastie.lookups[i]);
+        }
+        verify_search(&fastie, p, n);
+        {
+            expect = idx_1st_strict_upper_bound(p, n, n);
+            got = fast_search_idx_strict_upper(&fastie, n);
+            CU_ASSERT_EQUAL(expect, got);
+
+            double x = nextafter(n, INFINITY);
+            expect = idx_1st_strict_upper_bound(p, n, x);
+            got = fast_search_idx_strict_upper(&fastie, x);
+            CU_ASSERT_EQUAL(expect, got);
+        }
+    }
+}
+
+static void
+test_fast_search_2powers(void)
+{
+    {
+        double p[] = { 0, 2 };
+        size_t n = 2;
+        fast_search_t fastie;
+        fast_search_alloc_verify(&fastie, p, n);
+        CU_ASSERT_EQUAL(0.5, fastie.query_multiplier);
+        CU_ASSERT_EQUAL(3, fastie.num_lookups);
+        CU_ASSERT_EQUAL(0, fastie.lookups[0]);
+        CU_ASSERT_EQUAL(n, fastie.lookups[n]);
+        verify_search(&fastie, p, n);
+        CU_ASSERT_EQUAL(n, fast_search_idx_strict_upper(&fastie, 2.1));
+        CU_ASSERT_EQUAL(n, fast_search_idx_strict_upper(&fastie, 4.0));
+        fast_search_free(&fastie);
+    }
+    {
+        double p[] = { 0, 0.25 };
+        size_t n = 2;
+        fast_search_t fastie;
+        fast_search_alloc_verify(&fastie, p, n);
+        CU_ASSERT_EQUAL(4.0, fastie.query_multiplier);
+        CU_ASSERT_EQUAL(3, fastie.num_lookups);
+        CU_ASSERT_EQUAL(0, fastie.lookups[0]);
+        CU_ASSERT_EQUAL(n, fastie.lookups[n]);
+        verify_search(&fastie, p, n);
+        fast_search_free(&fastie);
+    }
+    {
+        double p[] = { 0, 8 };
+        size_t n = 2;
+        fast_search_t fastie;
+        fast_search_alloc_verify(&fastie, p, n);
+        CU_ASSERT_EQUAL(0.125, fastie.query_multiplier);
+        CU_ASSERT_EQUAL(3, fastie.num_lookups);
+        CU_ASSERT_EQUAL(0, fastie.lookups[0]);
+        CU_ASSERT_EQUAL(n, fastie.lookups[n]);
+        verify_search(&fastie, p, n);
+        fast_search_free(&fastie);
+    }
+}
+
+static void
+test_fast_search(void)
+{
+    {
+        double p[] = { 0, 0.3, 0.3, 0.5, 1.1, 1.1 };
+        size_t n = 6;
+        fast_search_t fastie;
+        fast_search_alloc_verify(&fastie, p, n);
+        CU_ASSERT_EQUAL(4.0, fastie.query_multiplier);
+        CU_ASSERT_EQUAL(6, fastie.num_lookups);
+        CU_ASSERT_EQUAL(0, fastie.lookups[0]);
+        CU_ASSERT_EQUAL(1, fastie.lookups[1]);
+        CU_ASSERT_EQUAL(3, fastie.lookups[2]);
+        CU_ASSERT_EQUAL(4, fastie.lookups[3]);
+        CU_ASSERT_EQUAL(4, fastie.lookups[4]);
+        CU_ASSERT_EQUAL(6, fastie.lookups[5]);
+        verify_search(&fastie, p, n);
+        fast_search_free(&fastie);
+    }
+    {
+        double p[] = { 0, 6, 13 };
+        size_t n = 3;
+        fast_search_t fastie;
+        fast_search_alloc_verify(&fastie, p, n);
+        CU_ASSERT_EQUAL(0.125, fastie.query_multiplier);
+        CU_ASSERT_EQUAL(3, fastie.num_lookups);
+        CU_ASSERT_EQUAL(0, fastie.lookups[0]);
+        CU_ASSERT_EQUAL(2, fastie.lookups[1]);
+        CU_ASSERT_EQUAL(3, fastie.lookups[2]);
+        verify_search(&fastie, p, n);
+        fast_search_free(&fastie);
+    }
+}
+
+static void
+test_fast_search_zeros(void)
+{
+    const double highest_power = exp2(DBL_MAX_EXP - 1);
+    CU_ASSERT_EQUAL_FATAL(2, highest_power * DBL_MIN);
+    double p[] = { 0.0, 0.0, 0.0, nextafter(0.0, 1), DBL_MIN, DBL_MIN };
+    {
+        size_t n = 1;
+        fast_search_t fastie;
+        fast_search_alloc_verify(&fastie, p, n);
+        CU_ASSERT_EQUAL(2, fastie.num_lookups);
+        CU_ASSERT_EQUAL(0, fastie.lookups[0]);
+        CU_ASSERT_EQUAL(n, fastie.lookups[1]);
+        verify_search(&fastie, p, n);
+        fast_search_free(&fastie);
+    }
+    {
+        size_t n = 3;
+        fast_search_t fastie;
+        fast_search_alloc_verify(&fastie, p, n);
+        CU_ASSERT_EQUAL(highest_power, fastie.query_multiplier);
+        CU_ASSERT_EQUAL(2, fastie.num_lookups);
+        CU_ASSERT_EQUAL(0, fastie.lookups[0]);
+        CU_ASSERT_EQUAL(n, fastie.lookups[1]);
+        verify_search(&fastie, p, n);
+        fast_search_free(&fastie);
+    }
+    {
+        size_t n = 4;
+        fast_search_t fastie;
+        fast_search_alloc_verify(&fastie, p, n);
+        CU_ASSERT_EQUAL(highest_power, fastie.query_multiplier);
+        CU_ASSERT_EQUAL(2, fastie.num_lookups);
+        CU_ASSERT_EQUAL(0, fastie.lookups[0]);
+        CU_ASSERT_EQUAL(n, fastie.lookups[1]);
+        verify_search(&fastie, p, n);
+        fast_search_free(&fastie);
+    }
+    {
+        size_t n = 6;
+        fast_search_t fastie;
+        fast_search_alloc_verify(&fastie, p, n);
+        CU_ASSERT_EQUAL(highest_power, fastie.query_multiplier);
+        CU_ASSERT_EQUAL(4, fastie.num_lookups);
+        CU_ASSERT_EQUAL(0, fastie.lookups[0]);
+        CU_ASSERT_EQUAL(4, fastie.lookups[1]);
+        CU_ASSERT_EQUAL(4, fastie.lookups[2]);
+        CU_ASSERT_EQUAL(n, fastie.lookups[3]);
+        verify_search(&fastie, p, n);
+        fast_search_free(&fastie);
+    }
+}
+
+static void
+test_fast_search_bad_input(void)
+{
+    {
+        double p[] = {};
+        fast_search_t fastie;
+        CU_ASSERT_EQUAL(fast_search_alloc(&fastie, p, 0), MSP_ERR_BAD_PARAM_VALUE);
+        fast_search_free(&fastie);
+    }
+    {
+        double p[] = { 1, 2 };
+        fast_search_t fastie;
+        CU_ASSERT_EQUAL(fast_search_alloc(&fastie, p, 2), MSP_ERR_BAD_PARAM_VALUE);
+        fast_search_free(&fastie);
+    }
+    {
+        double p[] = { 0, 1, INFINITY };
+        fast_search_t fastie;
+        CU_ASSERT_EQUAL(fast_search_alloc(&fastie, p, 3), MSP_ERR_BAD_PARAM_VALUE);
+        fast_search_free(&fastie);
+    }
+    {
+        double p[] = { 0, 2, 1 };
+        fast_search_t fastie;
+        CU_ASSERT_EQUAL(fast_search_alloc(&fastie, p, 3), MSP_ERR_BAD_PARAM_VALUE);
+        fast_search_free(&fastie);
+    }
+}
+
+static void
 test_interval_map(void)
 {
     int ret;
@@ -392,6 +630,11 @@ main(int argc, char **argv)
         { "test_binary_search", test_binary_search },
         { "test_binary_search_repeating", test_binary_search_repeating },
         { "test_binary_search_edge_cases", test_binary_search_edge_cases },
+        { "test_fast_search_identity", test_fast_search_identity },
+        { "test_fast_search_2powers", test_fast_search_2powers },
+        { "test_fast_search", test_fast_search },
+        { "test_fast_search_zeros", test_fast_search_zeros },
+        { "test_fast_search_bad_input", test_fast_search_bad_input },
         { "test_interval_map", test_interval_map },
         CU_TEST_INFO_NULL,
     };

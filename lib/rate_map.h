@@ -23,11 +23,14 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "util.h"
+
 typedef struct {
     size_t size;
     double *position;
     double *rate;
     double *cumulative_mass;
+    fast_search_t position_lookup;
 } rate_map_t;
 
 int rate_map_alloc(rate_map_t *self, size_t size, double *position, double *value);

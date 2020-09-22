@@ -20,6 +20,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <float.h>
 
 #include "util.h"
 #include "rate_map.h"
@@ -93,6 +94,7 @@ rate_map_alloc(rate_map_t *self, size_t size, double *position, double *rate)
        This trailing zero simplifies calcs like rate_map_position_to_mass by
        gracefully handling positions past the max position */
     self->rate[size] = 0.0;
+    ret = fast_search_alloc(&self->position_lookup, self->position, size + 1);
 out:
     return ret;
 }
@@ -107,6 +109,7 @@ rate_map_alloc_single(rate_map_t *self, double sequence_length, double rate)
 int
 rate_map_free(rate_map_t *self)
 {
+    fast_search_free(&self->position_lookup);
     msp_safe_free(self->position);
     msp_safe_free(self->rate);
     msp_safe_free(self->cumulative_mass);
@@ -164,7 +167,8 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
         return 0;
     }
     assert(pos <= position[self->size]);
-    index = idx_1st_strict_upper_bound(position, self->size + 1, pos);
+    index = fast_search_idx_strict_upper(&self->position_lookup, pos);
+    assert(index == idx_1st_strict_upper_bound(position, self->size + 1, pos));
     assert(index > 0);
     index--;
     base = self->cumulative_mass[index];
