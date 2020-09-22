@@ -440,7 +440,7 @@ class TestFiniteSites(TestMutate):
         lib_tables.provenances.clear()
         py_tables = py_ts.dump_tables()
         py_tables.provenances.clear()
-        self.assertEqual(lib_tables.mutations, py_tables.mutations)
+        self.assertEqual(lib_tables, py_tables)
         return lib_ts
 
     def mutate_binary(
@@ -1430,6 +1430,7 @@ class TestInfiniteAllelesMutationModel(unittest.TestCase):
             random_seed=1,
             keep=True,
             discrete=True,
+            kept_mutations_before_end_time=True,
         )
         self.validate_unique_alleles(ts)
 
@@ -1445,7 +1446,14 @@ class TestPythonMutationGenerator(unittest.TestCase):
         discretes = [True, False]
         keeps = [True, False]
         for rate, keep, discrete in itertools.product(rates, keeps, discretes):
-            ts1 = msprime.mutate(ts, rate=rate, keep=keep, discrete=discrete, **kwargs)
+            ts1 = msprime.mutate(
+                ts,
+                rate=rate,
+                keep=keep,
+                discrete=discrete,
+                kept_mutations_before_end_time=True,
+                **kwargs,
+            )
             ts2 = py_mutate(ts, rate=rate, keep=keep, discrete=discrete, **kwargs)
             tables1 = ts1.dump_tables()
             tables2 = ts2.dump_tables()
@@ -1692,7 +1700,7 @@ class PythonMutationGenerator:
         self.sites[position] = site
         return site
 
-    def initialise_sites(self, tables, discrete):
+    def initialise_sites(self, tables):
         nodes = tables.nodes
         mutation_rows = iter(tables.mutations)
         mutation_row = next(mutation_rows, None)
@@ -1861,7 +1869,7 @@ class PythonMutationGenerator:
     def generate(self, tables, seed, keep=False, discrete=False, sequential_only=True):
         self.rng = _msprime.RandomGenerator(seed)
         if keep:
-            self.initialise_sites(tables, discrete=discrete)
+            self.initialise_sites(tables)
         tables.sites.clear()
         tables.mutations.clear()
         self.place_mutations(tables, discrete=discrete)
