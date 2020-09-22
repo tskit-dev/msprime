@@ -937,18 +937,30 @@ class TestKeep(unittest.TestCase):
         t2.provenances.clear()
         self.assertEqual(t1, t2)
 
-    def test_keep_and_discrete(self):
-        ts = msprime.simulate(12, recombination_rate=3, random_seed=3)
+    def test_kept_mutations_before_end_time(self):
+        ts = msprime.simulate(12, recombination_rate=3, random_seed=3, length=10)
         ts_mut = msprime.mutate(ts, rate=1, random_seed=1, discrete=True)
         self.assertGreater(ts_mut.num_sites, 0)
         with self.assertRaises(_msprime.LibraryError):
             msprime.mutate(ts_mut, rate=1, random_seed=1, keep=True, discrete=True)
         ts_2mut = msprime.mutate(
             ts_mut,
-            rate=1,
+            rate=10,
             random_seed=3,
             discrete=True,
             kept_mutations_before_end_time=True,
+        )
+        self.assertGreater(ts_2mut.num_mutations, ts_mut.num_mutations)
+
+    def test_kept_all_ancestral(self):
+        # if timespan where mutations will be generated is younger than all
+        # kept mutations, it shouldn't error out
+        ts = msprime.simulate(12, recombination_rate=3, random_seed=3, length=10)
+        ts_mut = msprime.mutate(
+            ts, rate=1, random_seed=1, discrete=True, start_time=1.0, end_time=2.0
+        )
+        ts_2mut = msprime.mutate(
+            ts_mut, rate=1, random_seed=3, discrete=True, start_time=0.0, end_time=1.0,
         )
         self.assertGreater(ts_2mut.num_mutations, ts_mut.num_mutations)
 
