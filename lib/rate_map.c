@@ -250,7 +250,7 @@ out:
 static inline long
 ceil_to_long(double x)
 {
-    return lrint(ceil(x)); // TODO: test use of fast non-portable equivalent
+    return (long) ceil(x); // TODO: test use of fast non-portable equivalent
 }
 
 int
@@ -261,6 +261,7 @@ fast_search_lookup_alloc(
     const double max = values[n_values - 1];
     const int power = ilogb((double) n_values) + 1;
 
+    memset(self, 0, sizeof(*self));
     if (*values != 0.0 || !isfinite(max) || max < 0) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
@@ -269,13 +270,12 @@ fast_search_lookup_alloc(
     const long max_index = ceil_to_long(ldexp(max, self->power_shift));
     self->num_lookups = 1 + (size_t) max_index;
     self->lookups = malloc(self->num_lookups * sizeof(*(self->lookups)));
+    if (self->lookups == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     ret = fast_search_lookup_init_lookups(self, values, n_values);
 out:
-    if (ret != 0) {
-        if (self->lookups != NULL) {
-            msp_safe_free(self->lookups);
-        }
-    }
     return ret;
 }
 
