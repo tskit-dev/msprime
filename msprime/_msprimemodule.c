@@ -71,7 +71,7 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     mutation_model_t *mutation_model;
-} SlimMutationModel;
+} SLiMMutationModel;
 
 typedef struct {
     PyObject_HEAD
@@ -2348,18 +2348,18 @@ static PyTypeObject MatrixMutationModelType = {
  */
 
 static int
-SlimMutationModel_check_state(SlimMutationModel *self)
+SLiMMutationModel_check_state(SLiMMutationModel *self)
 {
     int ret = 0;
     if (self->mutation_model == NULL) {
-        PyErr_SetString(PyExc_SystemError, "SlimMutationModel not initialised");
+        PyErr_SetString(PyExc_SystemError, "SLiMMutationModel not initialised");
         ret = -1;
     }
     return ret;
 }
 
 static void
-SlimMutationModel_dealloc(SlimMutationModel* self)
+SLiMMutationModel_dealloc(SLiMMutationModel* self)
 {
     if (self->mutation_model != NULL) {
         mutation_model_free(self->mutation_model);
@@ -2370,7 +2370,7 @@ SlimMutationModel_dealloc(SlimMutationModel* self)
 }
 
 static int
-SlimMutationModel_init(SlimMutationModel *self, PyObject *args, PyObject *kwds)
+SLiMMutationModel_init(SLiMMutationModel *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
@@ -2405,12 +2405,12 @@ out:
 }
 
 static PyObject *
-SlimMutationModel_get_type(SlimMutationModel *self, void *closure)
+SLiMMutationModel_get_type(SLiMMutationModel *self, void *closure)
 {
     slim_mutator_t *params;
     PyObject *ret = NULL;
 
-    if (SlimMutationModel_check_state(self) != 0) {
+    if (SLiMMutationModel_check_state(self) != 0) {
         goto out;
     }
     params = &self->mutation_model->params.slim_mutator;
@@ -2420,12 +2420,12 @@ out:
 }
 
 static PyObject *
-SlimMutationModel_get_next_id(SlimMutationModel *self, void *closure)
+SLiMMutationModel_get_next_id(SLiMMutationModel *self, void *closure)
 {
     slim_mutator_t *params;
     PyObject *ret = NULL;
 
-    if (SlimMutationModel_check_state(self) != 0) {
+    if (SLiMMutationModel_check_state(self) != 0) {
         goto out;
     }
     params = &self->mutation_model->params.slim_mutator;
@@ -2434,22 +2434,22 @@ out:
     return ret;
 }
 
-static PyGetSetDef SlimMutationModel_getsetters[] = {
-    {"type", (getter) SlimMutationModel_get_type, NULL,
+static PyGetSetDef SLiMMutationModel_getsetters[] = {
+    {"type", (getter) SLiMMutationModel_get_type, NULL,
         "Return the mutation type"},
-    {"next_id", (getter) SlimMutationModel_get_next_id, NULL,
+    {"next_id", (getter) SLiMMutationModel_get_next_id, NULL,
         "Return the next mutation id"},
     {NULL}  /* Sentinel */
 };
 
-static PyTypeObject SlimMutationModelType = {
-    .tp_name = "_msprime.SlimMutationModel",
-    .tp_basicsize = sizeof(SlimMutationModel),
-    .tp_dealloc = (destructor)SlimMutationModel_dealloc,
+static PyTypeObject SLiMMutationModelType = {
+    .tp_name = "_msprime.SLiMMutationModel",
+    .tp_basicsize = sizeof(SLiMMutationModel),
+    .tp_dealloc = (destructor)SLiMMutationModel_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-    .tp_doc = "SlimMutationModel objects",
-    .tp_getset = SlimMutationModel_getsetters,
-    .tp_init = (initproc)SlimMutationModel_init,
+    .tp_doc = "SLiMMutationModel objects",
+    .tp_getset = SLiMMutationModel_getsetters,
+    .tp_init = (initproc)SLiMMutationModel_init,
     .tp_new = PyType_GenericNew,
 };
 
@@ -2463,7 +2463,7 @@ InfiniteAllelesMutationModel_check_state(InfiniteAllelesMutationModel *self)
 {
     int ret = 0;
     if (self->mutation_model == NULL) {
-        PyErr_SetString(PyExc_SystemError, "SlimMutationModel not initialised");
+        PyErr_SetString(PyExc_SystemError, "SLiMMutationModel not initialised");
         ret = -1;
     }
     return ret;
@@ -4352,7 +4352,7 @@ parse_mutation_model(PyObject *py_model)
 {
     mutation_model_t *model = NULL;
     MatrixMutationModel *matrix_mutation_model = NULL;
-    SlimMutationModel *slim_mutation_model = NULL;
+    SLiMMutationModel *slim_mutation_model = NULL;
     InfiniteAllelesMutationModel *infinite_alleles_model = NULL;
 
     if (PyObject_TypeCheck(py_model, &MatrixMutationModelType)) {
@@ -4361,9 +4361,9 @@ parse_mutation_model(PyObject *py_model)
             goto out;
         }
         model = matrix_mutation_model->mutation_model;
-    } else if (PyObject_TypeCheck(py_model, &SlimMutationModelType)) {
-        slim_mutation_model = (SlimMutationModel *) py_model;
-        if (SlimMutationModel_check_state(slim_mutation_model) != 0) {
+    } else if (PyObject_TypeCheck(py_model, &SLiMMutationModelType)) {
+        slim_mutation_model = (SLiMMutationModel *) py_model;
+        if (SLiMMutationModel_check_state(slim_mutation_model) != 0) {
             goto out;
         }
         model = slim_mutation_model->mutation_model;
@@ -4377,7 +4377,7 @@ parse_mutation_model(PyObject *py_model)
     } else {
         PyErr_SetString(PyExc_TypeError,
             "model must be an instance of MatrixMutationModel, "
-            "SlimMutationModel or InfiniteAllelesMutationModel.");
+            "SLiMMutationModel or InfiniteAllelesMutationModel.");
         goto out;
     }
 out:
@@ -4606,14 +4606,14 @@ PyInit__msprime(void)
     PyModule_AddObject(module, "MatrixMutationModel",
             (PyObject *) &MatrixMutationModelType);
 
-    /* SlimMutationModel type */
-    SlimMutationModelType.tp_base = &BaseMutationModelType;
-    if (PyType_Ready(&SlimMutationModelType) < 0) {
+    /* SLiMMutationModel type */
+    SLiMMutationModelType.tp_base = &BaseMutationModelType;
+    if (PyType_Ready(&SLiMMutationModelType) < 0) {
         return NULL;
     }
-    Py_INCREF(&SlimMutationModelType);
-    PyModule_AddObject(module, "SlimMutationModel",
-            (PyObject *) &SlimMutationModelType);
+    Py_INCREF(&SLiMMutationModelType);
+    PyModule_AddObject(module, "SLiMMutationModel",
+            (PyObject *) &SLiMMutationModelType);
 
     /* InfiniteAllelesMutationModel type */
     InfiniteAllelesMutationModelType.tp_base = &BaseMutationModelType;

@@ -21,6 +21,7 @@ Module responsible for generating mutations on a given tree sequence.
 """
 import inspect
 import sys
+import warnings
 
 import numpy as np
 import tskit
@@ -29,7 +30,6 @@ from . import core
 from . import intervals
 from . import provenance
 from msprime import _msprime
-from msprime._msprime import BaseMutationModel
 
 _ACGT_ALLELES = ["A", "C", "G", "T"]
 _AMINO_ACIDS = [
@@ -56,29 +56,80 @@ _AMINO_ACIDS = [
 ]
 
 
-# NOTE we're doing this hack of monkey-patching asdict onto the
-# MutationModel subclasses because of a bug in sphinx, where it's
-# not possible to have muliple inheritance with mocked out classes.
-def safe_asdict(self):
-    # This version of asdict makes sure that we have sufficient parameters
-    # to call the contructor and recreate the class. However, this means
-    # that subclasses *must* have an instance variable of the same name.
-    # This is essential for Provenance round-tripping to work.
-    return {
-        key: getattr(self, key)
-        for key in inspect.signature(self.__init__).parameters.keys()
-        if hasattr(self, key)
+def mutation_model_factory(model):
+    """
+    Returns a mutation model corresponding to the specified model.
+    - If model is None, the default mutation model is returned.
+    - If model is a string, return the corresponding model instance.
+    - If model is an instance of MutationModel, return a copy of it.
+    - Otherwise raise a type error.
+    """
+
+    # String names here should match Seq-Gen where possible
+    model_map = {
+        # "slim": SLiMMutationModel(), Needs type argument so can't be string init'd
+        "infinite_alleles": InfiniteAllelesMutationModel(),
+        "binary": BinaryMutationModel(),
+        "jc69": JC69MutationModel(),
+        # "hky": HKYMutationModel(), Needs kappa argument
+        # "f84": F84MutationModel(), Needs kappa argument
+        # "gtr": GTRMutationModel(), Needs relative_rates argument
+        "blosum62": BLOSUM62MutationModel(),
+        "pam": PAMMutationModel(),
     }
 
+    if model is None:
+        model_instance = BinaryMutationModel()
+    elif isinstance(model, str):
+        lower_model = model.lower()
+        if lower_model not in model_map:
+            raise ValueError(
+                "Model '{}' unknown. Choose from {}".format(
+                    model, list(model_map.keys())
+                )
+            )
+        model_instance = model_map[lower_model]
+    elif not isinstance(model, MutationModel):
+        raise TypeError(
+            "Mutation model must be a string or an instance of MutationModel"
+        )
+    else:
+        model_instance = model
+    return model_instance
 
-class MatrixMutationModel(_msprime.MatrixMutationModel):
+
+class MutationModel:
+    def asdict(self):
+        # This version of asdict makes sure that we have sufficient parameters
+        # to call the constructor and recreate the class. However, this means
+        # that subclasses *must* have an instance variable of the same name as
+        # each parameter.
+        # This is essential for Provenance round-tripping to work.
+        return {
+            key: getattr(self, key)
+            for key in inspect.signature(self.__init__).parameters.keys()
+            if hasattr(self, key)
+        }
+
+
+class MatrixMutationModel(_msprime.MatrixMutationModel, MutationModel):
     """
-    Superclass of mutation models. Allows you to build your own mutation model.
+    Superclass of the specific matrix mutation models. This class can be used to create
+    a matrix mutation model with custom alleles and probabilities. For details of
+    how this works see :ref:`sec_api_mutation_matrix_models_details`.
 
-    TODO document properly.
+    :param list[str] alleles: A list of the possible alleleic states in the model, each
+        entry is a string.
+    :param array-like[float] root_distribution: An array of float values the same length
+        as ``alleles`` which should sum to 1. These values are used to determine the
+        ancestral state of each mutational site. For example if ``alleles`` is
+        ``['A','B']`` and ``root_distribution`` is ``[1,0]`` all ancestral states will be
+        ``'A'``.
+    :param array-like[float] transition_matrix: A square 2d-matrix of transition
+        probabilities where both dimensions are equal to the length of the ``alleles``
+        argument. These are used to determine the derived state at each mutation. Note
+        that rows should sum to 1.
     """
-
-    asdict = safe_asdict
 
     def __str__(self):
         s = f"Mutation model with alleles {self.alleles}\n"
@@ -91,19 +142,49 @@ class MatrixMutationModel(_msprime.MatrixMutationModel):
         return s
 
 
-class SlimMutationModel(_msprime.SlimMutationModel):
-    asdict = safe_asdict
-
-
-class InfiniteAllelesMutationModel(_msprime.InfiniteAllelesMutationModel):
-    asdict = safe_asdict
-
-
-class BinaryMutations(MatrixMutationModel):
+class SLiMMutationModel(_msprime.SLiMMutationModel, MutationModel):
     """
-    The simplest mutational model with 0/1 states.
+    Implements the SLiM mutation model.
 
-    TODO document properly.
+    TODO Complete docs
+
+    :param type: TODO
+    :param next_id: TODO
+    :param block_size: TODO
+    """
+
+    def __str__(self):
+        return (
+            f"Mutation model for SLiM mutations of type m{self.type}\n"
+            f"  next ID: {self.next_id}\n"
+        )
+
+
+class InfiniteAllelesMutationModel(
+    _msprime.InfiniteAllelesMutationModel, MutationModel
+):
+    """
+    This mutation model assigns a new allele at every mutation. To do this it uses
+    a numerical counter, such that the resulting allelic states are string
+    representations of the allele number.
+
+    :param int start_allele: The numeric allele to start at, subsequent alleles
+       will be created by incrementing from this number.
+
+    """
+
+    def __str__(self):
+        return (
+            f"Infinite alleles mutation model, beginning with allele"
+            f" {self.start_allele}\n    next allele: {self.next_allele}\n"
+        )
+
+
+class BinaryMutationModel(MatrixMutationModel):
+    """
+    Basic binary mutation model with two alleles: ``"0"`` and ``"1"``. The ancestral
+    allele is always ``"0"`` and the transition probabilities are set such that each
+    mutation always transitions to the other state.
     """
 
     def __init__(self):
@@ -113,11 +194,11 @@ class BinaryMutations(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class JukesCantor(MatrixMutationModel):
+class JC69MutationModel(MatrixMutationModel):
     """
-    The Jukes-Cantor mutation model.
-
-    .. todo: documentation
+    Jukes-Cantor mutation model (Jukes and Cantor 1969). Based on the standard ACGT
+    nucleotides as alleleic states, this model assumes equal probabilities for
+    ancestral state and equal probabilities for transitions to other alleles.
     """
 
     def __init__(self):
@@ -129,14 +210,31 @@ class JukesCantor(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class HKY(MatrixMutationModel):
+class HKYMutationModel(MatrixMutationModel):
     """
-    The Hasegawa, Kishino and Yano mutation model (Hasegawa et al. 1985).
+    The Hasegawa, Kishino and Yano mutation model (Hasegawa et al. 1985). Based on the
+    standard ACGT nucleotides as alleleic states, this model takes into account
+    transitions and transversions, and sets an equilibrium frequency for each nucleotide.
+    In addition a custom ancestral frequency (``root_distribution``) can be specified.
+    With ``kappa=1.0`` and the default values of the other arguments this model is equal
+    to :class:`JC69MutationModel`. This model is similar to :class:`F84MutationModel`
+    but with a differing parametrisation for ``kappa``.
 
-    .. todo: documentation
+    :param float kappa: Scaling parameter by which the transition matrix is modified for
+        transitions (A<>G, C<>T). For example a value of ``0`` means that no transitions
+        will occur, ``1`` makes the probability of transitions and
+        transversions equal.
+    :param array-like[float] equilibrium_frequencies: An array of float values of length
+        4 which should sum to 1. These values are used to determine equilibrium
+        frequencies (long-term averages) of the alleles. Defaults to
+        [0.25, 0.25, 0.25, 0.25], i.e all nucleotides equally likely.
+    :param array-like[float] root_distribution: An array of float values of length 4
+        which should sum to 1. These values are used to determine the ancestral state of
+        each mutational site. Defaults to the value of ``equilibrium_frequencies``.
+
     """
 
-    def __init__(self, kappa=1.0, equilibrium_frequencies=None, root_distribution=None):
+    def __init__(self, kappa, equilibrium_frequencies=None, root_distribution=None):
         alleles = _ACGT_ALLELES
         if equilibrium_frequencies is None:
             equilibrium_frequencies = np.array(
@@ -147,7 +245,7 @@ class HKY(MatrixMutationModel):
 
         transition_matrix = np.full((4, 4), 1.0)
         np.fill_diagonal(transition_matrix, 0.0)
-        # positions in transition matrix for transversions
+        # positions in transition matrix for transitions
         transition_pos = ((0, 1, 2, 3), (2, 3, 0, 1))
         transition_matrix[transition_pos] = kappa
         transition_matrix *= equilibrium_frequencies
@@ -158,16 +256,31 @@ class HKY(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class F84(MatrixMutationModel):
+class F84MutationModel(MatrixMutationModel):
     """
-    The F84 mutation model (Felsenstein and Churchill, 1996).
-    2 types of events
-    I: no change/transition
-    II: no change/transition/transversion
-    .. todo: documentation
+    The F84 mutation model (Felsenstein and Churchill, 1996). Based on the
+    standard ACGT nucleotides as alleleic states, this model takes into account
+    transitions and transversions, and sets an equilibrium frequency for each nucleotide.
+    In addition a custom ancestral frequency (``root_distribution``) can be specified.
+    With ``kappa=1.0`` and the default values of the other arguments this model is equal
+    to :class:`JC69MutationModel`. This model is similar to :class:`HKYMutationModel`
+    but with a differing parametrisation for ``kappa``.
+
+    :param float kappa: Scaling parameter by which the transition matrix is modified for
+        transitions (A<>G, C<>T). Must be greater than or equal to 0.5. For example a
+        value of ``0.5`` means that no transitions will occur, ``1`` makes the
+        probability of transitions and transversions equal.
+    :param array-like[float] equilibrium_frequencies: An array of float values of length
+        4 which should sum to 1. These values are used to determine equilibrium
+        frequencies (long-term averages) of the alleles. Defaults to
+        [0.25, 0.25, 0.25, 0.25], i.e all nucleotides equally likely.
+    :param array-like[float] root_distribution: An array of float values of length 4
+        which should sum to 1. These values are used to determine the ancestral state of
+        each mutational site. Defaults to the value of ``equilibrium_frequencies``.
+
     """
 
-    def __init__(self, kappa=1.0, equilibrium_frequencies=None, root_distribution=None):
+    def __init__(self, kappa, equilibrium_frequencies=None, root_distribution=None):
         alleles = _ACGT_ALLELES
         if equilibrium_frequencies is None:
             equilibrium_frequencies = [0.25, 0.25, 0.25, 0.25]
@@ -176,7 +289,7 @@ class F84(MatrixMutationModel):
 
         transition_matrix = np.full((4, 4), 1.0, dtype="float64")
         np.fill_diagonal(transition_matrix, 0.0)
-        # positions in transition matrix for transversions
+        # positions in transition matrix for transitions
         transition_pos_AG = ((0, 2), (2, 0))
         transition_pos_CT = ((1, 3), (3, 1))
         p_AG = equilibrium_frequencies[0] + equilibrium_frequencies[2]
@@ -193,9 +306,9 @@ class F84(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class GTR(MatrixMutationModel):
+class GTRMutationModel(MatrixMutationModel):
     """
-    The  Generalised time-reversible mutation model (Tavaré et al. 1986).
+    The Generalised time-reversible mutation model (Tavaré et al. 1986).
     .. todo: documentation
     """
 
@@ -223,7 +336,7 @@ class GTR(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class BLOSUM62(MatrixMutationModel):
+class BLOSUM62MutationModel(MatrixMutationModel):
     """
     values copied from Seqgen: http://tree.bio.ed.ac.uk/software/seqgen/
     original paper: Henikoff, S., and J. G. Henikoff. 1992. PNAS USA 89:10915-10919.
@@ -461,7 +574,7 @@ class BLOSUM62(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class PAM(MatrixMutationModel):
+class PAMMutationModel(MatrixMutationModel):
     """
     Dayhoff DCMut as described in Kosiol, C., and Goldman, N. 2005.
     Different versions of the Dayhoff rate matrix.
@@ -713,8 +826,14 @@ class InfiniteSites(MatrixMutationModel):
     # of an earlier design. The class should be formally deprecated and removed at
     # some point.
     def __init__(self, alphabet=BINARY):
+        warnings.warn(
+            "The mutation model class InfiniteSites was deprecated in 1.0."
+            " Use an appropriate alternative such as InfiniteAllelesMutationModel,"
+            " BinaryMutationModel or JC69MutationModel",
+            FutureWarning,
+        )
         self.alphabet = alphabet
-        models = {BINARY: BinaryMutations(), NUCLEOTIDES: JukesCantor()}
+        models = {BINARY: BinaryMutationModel(), NUCLEOTIDES: JC69MutationModel()}
         if alphabet not in models:
             raise ValueError("Bad alphabet")
         model = models[alphabet]
@@ -729,7 +848,7 @@ def _simple_mutate(tables, rng, rate, sequence_length, discrete_sites=False):
         tables,
         rng,
         rate_map.asdict(),
-        model=BinaryMutations(),
+        model=BinaryMutationModel(),
         discrete_sites=discrete_sites,
     )
 
@@ -757,11 +876,9 @@ def mutate(
     then one is generated automatically.
 
     If the ``model`` parameter is specified, this determines the model under
-    which mutations are generated. Currently only the :class:`.InfiniteSites`
-    mutation model is supported. This parameter is useful if you wish to obtain
-    sequences with letters from the nucleotide alphabet rather than the default
-    0/1 states. By default mutations from the infinite sites model with a binary
-    alphabet are generated.
+    which mutations are generated. The default mutation model is
+    :class:`msprime.BinaryMutationModel` a simple binary model with alleles
+    0 and 1. See :ref:`sec_api_mutation_models` for details of avaliable models.
 
     By default, sites and mutations in the parameter tree sequence are
     discarded. If the ``keep`` parameter is true, however, *additional*
@@ -785,8 +902,13 @@ def mutate(
         random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
     :param MutationModel model: The mutation model to use when generating
-        mutations. If not specified or None, the :class:`.BinaryMutations`
-        mutation model is used.
+        mutations. This can either be a string (e.g., ``"jc69"``) or
+        an instance of a simulation model class
+        e.g, ``msprime.F84MutationModel(kappa=0.5)``.
+        If not specified or None, the :class:`.BinaryMutationModel`
+        mutation model is used. Please see the
+        :ref:`sec_api_simulation_models` section for more details
+        on specifying simulations models.
     :param bool keep: Whether to keep existing mutations (default: False).
     :param float start_time: The minimum time ago at which a mutation can
         occur. (Default: no restriction.)
@@ -832,10 +954,7 @@ def mutate(
     keep = bool(keep)
     discrete = bool(discrete)
 
-    if model is None:
-        model = BinaryMutations()
-    if not isinstance(model, BaseMutationModel):
-        raise TypeError("model must be a MutationModel")
+    model = mutation_model_factory(model)
 
     argspec = inspect.getargvalues(inspect.currentframe())
     parameters = {

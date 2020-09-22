@@ -4267,21 +4267,21 @@ class SeqGenTest(MutationTest):
         for plotting.
         """
         model_dict = {
-            "JC69": {"model_id": msprime.JukesCantor(), "par": ["-m", "HKY"]},
+            "JC69": {"model_id": msprime.JC69MutationModel(), "par": ["-m", "HKY"]},
             "HKY": {
-                "model_id": msprime.HKY(
+                "model_id": msprime.HKYMutationModel(
                     kappa=1.5, equilibrium_frequencies=[0.2, 0.3, 0.1, 0.4]
                 ),
                 "par": ["-m", "HKY", "-t", "0.75", "-f", "0.2,0.3,0.1,0.4"],
             },
             "F84": {
-                "model_id": msprime.F84(
+                "model_id": msprime.F84MutationModel(
                     kappa=1.0, equilibrium_frequencies=[0.3, 0.25, 0.2, 0.25]
                 ),
                 "par": ["-m", "F84", "-t", "0.5", "-f", "0.3,0.25,0.2,0.25"],
             },
             "GTR": {
-                "model_id": msprime.GTR(
+                "model_id": msprime.GTRMutationModel(
                     relative_rates=[0.4, 0.1, 0.4, 0.2, 0.4, 0.4],
                     equilibrium_frequencies=[0.3, 0.2, 0.3, 0.2],
                 ),
@@ -4294,8 +4294,11 @@ class SeqGenTest(MutationTest):
                     "0.3,0.2,0.3,0.2",
                 ],
             },
-            "PAM": {"model_id": msprime.PAM(), "par": ["-m", "PAM"]},
-            "BLOSUM62": {"model_id": msprime.BLOSUM62(), "par": ["-m", "BLOSUM"]},
+            "PAM": {"model_id": msprime.PAMMutationModel(), "par": ["-m", "PAM"]},
+            "BLOSUM62": {
+                "model_id": msprime.BLOSUM62MutationModel(),
+                "par": ["-m", "BLOSUM"],
+            },
         }
 
         num_replicates = 250
@@ -4477,11 +4480,11 @@ class PyvolveTest(MutationTest):
 
         model_dict = {
             "JC69": {
-                "model_id": msprime.JukesCantor(),
+                "model_id": msprime.JC69MutationModel(),
                 "pyvolve_model": pyvolve.Model("nucleotide"),
             },
             "HKY": {
-                "model_id": msprime.HKY(
+                "model_id": msprime.HKYMutationModel(
                     kappa=1.5, equilibrium_frequencies=[0.2, 0.3, 0.1, 0.4]
                 ),
                 "pyvolve_model": pyvolve.Model(
@@ -4489,11 +4492,11 @@ class PyvolveTest(MutationTest):
                 ),
             },
             "PAM": {
-                "model_id": msprime.PAM(),
+                "model_id": msprime.PAMMutationModel(),
                 "pyvolve_model": pyvolve.Model("DAYHOFFDCMUT"),
             },
             "BLOSUM62": {
-                "model_id": msprime.BLOSUM62(),
+                "model_id": msprime.BLOSUM62MutationModel(),
                 "pyvolve_model": pyvolve.Model("BLOSUM62"),
             },
         }
