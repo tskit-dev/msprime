@@ -183,23 +183,6 @@ There are simple scripts in the root of the project (currently: ``msp_dev.py``,
 ``mspms_dev.py``) which are used for development. For example, to run the
 development version of ``mspms`` use ``python3 mspms_dev.py``.
 
-++++++++++
-Benchmarks
-++++++++++
-
-TODO intro about asv. These are JK's notes about how to use ASV, stolen
-from various sources.
-
-- Specifying the range of commits to run uses the same syntax as git log.
-  For example, to run for a single commit, use ``asv run 88fbbc33^!``
-
-- GOTCHA! Be careful when running ``asv dev`` or using ``python=same`` as
-  this can use the *installed* version of msprime rather than the local
-  development version. This can lead to confusing results! When tuning
-  benchmarks it's better to commit often and use (e.g.)
-  ``asv run HEAD^! --show-stderr -b Hudson.time_large_sample_size``.
-
-
 *********
 C Library
 *********
@@ -573,24 +556,38 @@ directory.
 Please the comments at the top of the ``verification.py`` script for details
 on how to write and run these tests.
 
+
 ************
 Benchmarking
 ************
 
 Benchmarks to measure performance are in the ``benchmarks`` folder and are run using
-`airspeed velocity <https://asv.readthedocs.io/en/stable/index.html>`_. These
-benchmarks can be run locally to compare your branch with the master branch. Your
-changes must be in a commit to be measured. To run the benchmarks::
+`airspeed velocity <https://asv.readthedocs.io/en/stable/index.html>`_. 
+An automated system runs the benchmarks on each push to the main branch and uploads
+the results to `this github pages site` <https://tskit-dev.github.io/msprime-asv>_.
+These benchmarks can also be run locally to compare your branch with the master branch.
+Your changes must be in a commit to be measured. To run the benchmarks::
 
-    asv run HEAD...master~1
+    asv run asv run HEAD...main~1
 
-This will run the benchmarks for the latest master commit and all commits on
+This will run the benchmarks for the latest main branch commit and all commits on
 your current branch (the syntax for choosing commits is the same as ``git log``).
-The following commands then make a browsable report (link given by output of
+The following commands then make a browsable report (link given in output of
 the command)::
 
     asv publish
     asv preview
+
+Note the following tips:
+
+- Specifying the range of commits to run uses the same syntax as git log.
+  For example, to run for a single commit, use ``asv run 88fbbc33^!``
+
+- GOTCHA! Be careful when running ``asv dev`` or using ``python=same`` as
+  this can use the *installed* version of msprime rather than the local
+  development version. This can lead to confusing results! When tuning
+  benchmarks it's better to commit often and use (e.g.)
+  ``asv run HEAD^! --show-stderr -b Hudson.time_large_sample_size``.
 
 
 ****************

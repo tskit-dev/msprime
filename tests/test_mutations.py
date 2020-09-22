@@ -96,8 +96,9 @@ class TestMatrixMutationModel(unittest.TestCase):
         self.assertTrue(np.allclose(sum(model.root_distribution), 1.0))
         for j in range(num_alleles):
             self.assertTrue(np.allclose(sum(model.transition_matrix[j]), 1.0))
-        s = model.__str__()
+        s = str(model)
         self.assertIsInstance(s, str)
+        print(s)
         self.assertTrue(s.startswith("Mutation model with alleles"))
 
     def validate_stationary(self, model):
@@ -165,36 +166,36 @@ class TestMatrixMutationModel(unittest.TestCase):
                 )
 
     def test_binary(self):
-        model = msprime.BinaryMutations()
+        model = msprime.BinaryMutationModel()
         self.validate_model(model)
 
     def test_jukes_cantor(self):
-        model = msprime.JukesCantor()
+        model = msprime.JC69MutationModel()
         self.validate_model(model)
         self.validate_stationary(model)
 
     def test_HKY_default(self):
-        model = msprime.HKY()
+        model = msprime.HKYMutationModel(0.75)
         self.validate_model(model)
         self.validate_stationary(model)
 
     def test_F84_default(self):
-        model = msprime.F84()
+        model = msprime.F84MutationModel(0.75)
         self.validate_model(model)
         self.validate_stationary(model)
 
     def test_GTR_default(self):
-        model = msprime.GTR([1 / 6] * 6)
+        model = msprime.GTRMutationModel([1 / 6] * 6)
         self.validate_model(model)
         self.validate_stationary(model)
 
     def test_PAM(self):
-        model = msprime.PAM()
+        model = msprime.PAMMutationModel()
         self.validate_model(model)
         self.validate_stationary(model)
 
     def test_BLOSUM62(self):
-        model = msprime.BLOSUM62()
+        model = msprime.BLOSUM62MutationModel()
         self.validate_model(model)
         self.validate_stationary(model)
 
@@ -251,7 +252,7 @@ class TestMutate(unittest.TestCase, MutateMixin):
 
     def test_unicode_alleles(self):
         alleles = ["🎄🌳", "💩" * 5]
-        binary = msprime.BinaryMutations()
+        binary = msprime.BinaryMutationModel()
         model = msprime.MatrixMutationModel(
             alleles, binary.root_distribution, binary.transition_matrix
         )
@@ -318,8 +319,10 @@ class TestMutate(unittest.TestCase, MutateMixin):
 
     def test_bad_models(self):
         ts = msprime.simulate(2, random_seed=2)
-        for bad_type in [{}, "234"]:
+        for bad_type in [{}, True, 123]:
             self.assertRaises(TypeError, msprime.mutate, ts, rate=0, model=bad_type)
+        for bad_name in ["", "coffee"]:
+            self.assertRaises(ValueError, msprime.mutate, ts, rate=0, model=bad_name)
 
     def test_bad_tree_sequence(self):
         for bad_type in [None, {}, "sdrf"]:
@@ -350,31 +353,46 @@ class TestMutate(unittest.TestCase, MutateMixin):
 
     def test_deprecated_alphabet_binary(self):
         ts = msprime.simulate(10, random_seed=2)
-        mutated = msprime.mutate(
-            ts, rate=1, random_seed=2, model=msprime.InfiniteSites(msprime.BINARY)
-        )
+        with self.assertWarns(FutureWarning):
+            mutated = msprime.mutate(
+                ts, rate=1, random_seed=2, model=msprime.InfiniteSites(msprime.BINARY)
+            )
         self.verify_binary_alphabet(mutated)
 
     def test_deprecated_alphabet_nucleotides(self):
         ts = msprime.simulate(10, random_seed=2)
-        mutated = msprime.mutate(
-            ts, rate=1, random_seed=2, model=msprime.InfiniteSites(msprime.NUCLEOTIDES)
-        )
+        with self.assertWarns(FutureWarning):
+            mutated = msprime.mutate(
+                ts,
+                rate=1,
+                random_seed=2,
+                model=msprime.InfiniteSites(msprime.NUCLEOTIDES),
+            )
         self.verify_nucleotides_alphabet(mutated)
 
     def test_deprecated_bad_alphabet(self):
         ts = msprime.simulate(10, random_seed=2)
-        with self.assertRaises(ValueError):
-            msprime.mutate(ts, rate=1, random_seed=2, model=msprime.InfiniteSites(-1))
-        with self.assertRaises(ValueError):
-            msprime.mutate(ts, rate=1, random_seed=2, model=msprime.InfiniteSites(2))
+        with self.assertWarns(FutureWarning):
+            with self.assertRaises(ValueError):
+                msprime.mutate(
+                    ts, rate=1, random_seed=2, model=msprime.InfiniteSites(-1)
+                )
+        with self.assertWarns(FutureWarning):
+            with self.assertRaises(ValueError):
+                msprime.mutate(
+                    ts, rate=1, random_seed=2, model=msprime.InfiniteSites(2)
+                )
 
     def test_deprecated_identical_seed_alphabets(self):
         ts = msprime.simulate(10, random_seed=2)
         binary = msprime.mutate(ts, rate=1, random_seed=2)
-        nucs = msprime.mutate(
-            ts, rate=1, random_seed=2, model=msprime.InfiniteSites(msprime.NUCLEOTIDES)
-        )
+        with self.assertWarns(FutureWarning):
+            nucs = msprime.mutate(
+                ts,
+                rate=1,
+                random_seed=2,
+                model=msprime.InfiniteSites(msprime.NUCLEOTIDES),
+            )
         self.assertGreater(binary.num_sites, 0)
         self.assertGreater(binary.num_mutations, 0)
         self.assertEqual(binary.num_sites, nucs.num_sites)
@@ -818,12 +836,13 @@ class TestKeep(unittest.TestCase):
         self.verify(ts, 1, random_seed=2)
 
     def test_deprecated_simple_nucleotide(self):
-        ts = msprime.mutate(
-            msprime.simulate(10, random_seed=2),
-            rate=1,
-            random_seed=2,
-            model=msprime.InfiniteSites(msprime.NUCLEOTIDES),
-        )
+        with self.assertWarns(FutureWarning):
+            ts = msprime.mutate(
+                msprime.simulate(10, random_seed=2),
+                rate=1,
+                random_seed=2,
+                model=msprime.InfiniteSites(msprime.NUCLEOTIDES),
+            )
         self.assertGreater(ts.num_sites, 0)
         self.verify(ts, 2, random_seed=3)
 
@@ -1129,19 +1148,19 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
             self.assertGreater(res[1], 0.01)
 
     def test_binary_model(self):
-        model = msprime.BinaryMutations()
+        model = msprime.BinaryMutationModel()
         self.verify_model(model)
         self.verify_mutation_rates(model)
 
     def test_jukes_cantor(self):
-        model = msprime.JukesCantor()
-        self.verify_model(model, state_independent=True)
+        model = msprime.JC69MutationModel()
+        self.verify_model(model)
         self.verify_mutation_rates(model)
 
     def test_HKY(self):
         equilibrium_frequencies = [0.3, 0.2, 0.3, 0.2]
         kappa = 0.75
-        model = msprime.HKY(
+        model = msprime.HKYMutationModel(
             kappa=kappa, equilibrium_frequencies=equilibrium_frequencies
         )
         self.verify_model(model)
@@ -1149,7 +1168,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
     def test_F84(self):
         equilibrium_frequencies = [0.4, 0.1, 0.1, 0.4]
         kappa = 0.75
-        model = msprime.F84(
+        model = msprime.F84MutationModel(
             kappa=kappa, equilibrium_frequencies=equilibrium_frequencies
         )
         self.verify_model(model)
@@ -1157,18 +1176,18 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
     def test_GTR(self):
         relative_rates = [0.2, 0.1, 0.7, 0.5, 0.3, 0.4]
         equilibrium_frequencies = [0.3, 0.4, 0.2, 0.1]
-        model = msprime.GTR(
+        model = msprime.GTRMutationModel(
             relative_rates=relative_rates,
             equilibrium_frequencies=equilibrium_frequencies,
         )
         self.verify_model(model)
 
     def test_PAM(self):
-        model = msprime.PAM()
+        model = msprime.PAMMutationModel()
         self.verify_model(model)
 
     def test_BLOSUM62(self):
-        model = msprime.BLOSUM62()
+        model = msprime.BLOSUM62MutationModel()
         self.verify_model(model)
 
     def test_arbitrary_model(self):
@@ -1190,7 +1209,7 @@ class SlimMetadata:
     nucleotide = attr.ib()
 
 
-class TestSlimMutationModel(unittest.TestCase):
+class TestSLiMMutationModel(unittest.TestCase):
     """
     Tests for the SLiM mutation generator.
     """
@@ -1233,13 +1252,13 @@ class TestSlimMutationModel(unittest.TestCase):
 
     def run_mutate(self, ts, rate=1, random_seed=42, mutation_type=0, mutation_id=0):
 
-        model = msprime.SlimMutationModel(type=mutation_type, next_id=mutation_id)
+        model = msprime.SLiMMutationModel(type=mutation_type, next_id=mutation_id)
         mts1 = msprime.mutate(
             ts, rate=rate, random_seed=random_seed, model=model, discrete=True
         )
         self.assertEqual(mts1.num_mutations, model.next_id)
 
-        model = PythonSlimMutationModel(
+        model = PythonSLiMMutationModel(
             mutation_type=mutation_type, next_id=mutation_id
         )
         mts2 = py_mutate(
@@ -1496,7 +1515,7 @@ def py_mutate(
     if rate is None:
         rate = 0
     if model is None:
-        model = msprime.BinaryMutations()
+        model = msprime.BinaryMutationModel()
     if isinstance(model, PythonMutationModel):
         py_model = model
     else:
@@ -1590,7 +1609,7 @@ class PythonMutationModel:
 
 
 @attr.s
-class PythonSlimMutationModel(PythonMutationModel):
+class PythonSLiMMutationModel(PythonMutationModel):
     mutation_type = attr.ib(default=0)
     next_id = attr.ib(default=0)
 
@@ -1882,3 +1901,68 @@ class PythonMutationGenerator:
         provenance_dict = msprime.provenance.get_provenance_dict(parameters)
         encoded_provenance = msprime.provenance.json_encode_provenance(provenance_dict)
         tables.provenances.add_row(encoded_provenance)
+
+
+class TestMutationModelFactory(unittest.TestCase):
+    """
+    Tests that the mutation_model_factory function.
+    """
+
+    def test_bad_model_names(self):
+        for bad_model in ["NOT", "", "MODEL", "gtr", "slim"]:
+            with self.assertRaises(ValueError):
+                msprime.mutation_model_factory(bad_model)
+
+    def test_named_model_variants(self):
+        mutation_models = {
+            "infinite_alleles": msprime.InfiniteAllelesMutationModel,
+            "binary": msprime.BinaryMutationModel,
+            "jc69": msprime.JC69MutationModel,
+            "blosum62": msprime.BLOSUM62MutationModel,
+            "pam": msprime.PAMMutationModel,
+        }
+        for name, model_class in mutation_models.items():
+
+            model = msprime.mutation_model_factory(model=name.upper())
+            self.assertIsInstance(model, model_class)
+            model = msprime.mutation_model_factory(model=name.title())
+            self.assertIsInstance(model, model_class)
+            model = msprime.mutation_model_factory(model=name)
+            self.assertIsInstance(model, model_class)
+
+    def test_bad_models(self):
+        for bad_type in [1234, {}]:
+            self.assertRaises(TypeError, msprime.mutation_model_factory, model=bad_type)
+
+    def test_model_instances(self):
+        models = [
+            msprime.SLiMMutationModel(0, 0),
+            msprime.InfiniteAllelesMutationModel(),
+            msprime.BinaryMutationModel(),
+            msprime.JC69MutationModel(),
+            msprime.HKYMutationModel(0.75),
+            msprime.F84MutationModel(0.75),
+            msprime.GTRMutationModel([1 / 6] * 6),
+            msprime.BLOSUM62MutationModel(),
+            msprime.PAMMutationModel(),
+        ]
+        for model in models:
+            new_model = msprime.mutation_model_factory(model=model)
+            self.assertTrue(new_model is model)
+            self.assertEqual(new_model.__dict__, model.__dict__)
+
+
+class TestModelClasses(unittest.TestCase):
+    def test_slim(self):
+        m = msprime.SLiMMutationModel(type=1, next_id=2)
+        self.assertEqual(
+            str(m), "Mutation model for SLiM mutations of type m1\n" "  next ID: 2\n"
+        )
+
+    def test_infinite_alleles(self):
+        m = msprime.InfiniteAllelesMutationModel(start_allele=1)
+        self.assertEqual(
+            str(m),
+            "Infinite alleles mutation model, beginning with"
+            " allele 1\n    next allele: 1\n",
+        )

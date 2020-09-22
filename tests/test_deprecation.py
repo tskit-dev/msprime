@@ -67,5 +67,5 @@ class TestDeprecation(unittest.TestCase):
             "FORWARD",
             "REVERSE",
         ]:
-            with self.assertWarns(Warning):
+            with self.assertWarns(UserWarning):
                 getattr(msprime, name)
