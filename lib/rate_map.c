@@ -189,8 +189,8 @@ rate_map_mass_to_position(rate_map_t *self, double mass)
     if (mass <= 0.0) {
         return position[0];
     }
-    /* search for upper bounds strictly before the max position
-       any position greather than or equal to max position returns self->size */
+    /* search for upper bounds strictly before the final cum mass
+       any mass greather than or equal to final cum mass returns self->size */
     index = msp_binary_interval_search(mass, self->cumulative_mass, self->size);
     assert(index > 0);
     index--;
