@@ -230,10 +230,10 @@ test_msp_binary_interval_search(void)
     CU_ASSERT_EQUAL(idx, 3);
     // from the top - return last element
     idx = msp_binary_interval_search(31, values, size);
-    CU_ASSERT_EQUAL(idx, 3);
-    // way above - same
+    CU_ASSERT_EQUAL(idx, 4);
+    // way above - one past, like numpy.searchsorted and C++ std::lower_bound
     idx = msp_binary_interval_search(300, values, size);
-    CU_ASSERT_EQUAL(idx, 3);
+    CU_ASSERT_EQUAL(idx, 4);
 }
 
 static void
@@ -275,7 +275,7 @@ test_msp_binary_interval_search_edge_cases(void)
     CU_ASSERT_EQUAL(idx, 0);
     // above
     idx = msp_binary_interval_search(11, values_one, 1);
-    CU_ASSERT_EQUAL(idx, 0);
+    CU_ASSERT_EQUAL(idx, 1);
 
     // Size 2 list
     double values_two[] = { 10, 20 };
@@ -288,7 +288,7 @@ test_msp_binary_interval_search_edge_cases(void)
     idx = msp_binary_interval_search(20, values_two, 2);
     CU_ASSERT_EQUAL(idx, 1);
     idx = msp_binary_interval_search(21, values_two, 2);
-    CU_ASSERT_EQUAL(idx, 1);
+    CU_ASSERT_EQUAL(idx, 2);
 
     // All zeros
     double values_zeros[] = { 0, 0, 0 };
@@ -297,7 +297,7 @@ test_msp_binary_interval_search_edge_cases(void)
     idx = msp_binary_interval_search(0, values_zeros, 3);
     CU_ASSERT_EQUAL(idx, 0);
     idx = msp_binary_interval_search(1, values_zeros, 3);
-    CU_ASSERT_EQUAL(idx, 2);
+    CU_ASSERT_EQUAL(idx, 3);
 }
 
 static void
