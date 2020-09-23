@@ -27,11 +27,9 @@ import struct
 import unittest
 
 import attr
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy.stats as stats
 import tskit
-from matplotlib.backends.backend_pdf import PdfPages
 
 import msprime
 import tests.wright_fisher as wf
@@ -1139,9 +1137,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
                     end_time[mut.id] = min(
                         end_time[mut.id], ts.mutation(mut.parent).time
                     )
-                    start_time[mut.parent] = max(
-                        start_time[mut.parent], t.time(mut.node)
-                    )
+                    start_time[mut.parent] = max(start_time[mut.parent], mut.time)
         rng = random.Random(337)
         generated_times = np.array(
             [
@@ -1149,28 +1145,12 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
                 for i in range(start_time.shape[0])
             ]
         )
-        pdf = PdfPages("out.pdf")
-        fig = plt.figure(figsize=[9, 6])
-        plt.ylim(0, 12)
-        plt.plot(
-            range(generated_times.shape[0]), generated_times, c="black", linewidth=0.1
-        )
-        plt.plot(range(generated_times.shape[0]), start_time, c="blue", linewidth=0.1)
-        plt.plot(range(generated_times.shape[0]), end_time, c="red", linewidth=0.1)
-        pdf.savefig(fig, dpi=300)
-        fig = plt.figure(figsize=[9, 6])
-        plt.scatter(generated_times, mut_time, s=1)
-        pdf.savefig(fig, dpi=300)
-        pdf.close()
         self.sign_tst(generated_times - mut_time)
 
     def test_binary_model(self):
         model = msprime.BinaryMutationModel()
         self.verify_model(model, state_independent=True)
         self.verify_mutation_rates(model)
-
-
-"""
 
     def test_jukes_cantor(self):
         model = msprime.JC69MutationModel()
@@ -1218,7 +1198,6 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         )
         self.verify_model(model, state_independent=True)
         self.verify_mutation_rates(model)
-"""
 
 
 @attr.s
