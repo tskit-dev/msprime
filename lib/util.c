@@ -29,7 +29,6 @@
 
 #include <tskit/core.h>
 #include "util.h"
-#include "rate_map.h"
 
 static const char *
 msp_strerror_internal(int err)
@@ -320,8 +319,8 @@ __msp_safe_free(void **ptr)
  *   If `query` is not strictly greather than all values, then::w
  *     values[index-1] < query <= values[index]
  */
-static size_t
-find_first_upper_bound_index(const double *values, size_t n_values, double query)
+size_t
+msp_binary_interval_search(double query, const double *values, size_t n_values)
 {
     size_t l = 0;
     size_t r = n_values;
@@ -337,42 +336,6 @@ find_first_upper_bound_index(const double *values, size_t n_values, double query
         }
     }
     return l;
-}
-
-const double *
-find_first_upper_bound(const double *values, size_t n_values, double query)
-{
-    if (query > values[n_values - 1]) {
-        return values + n_values;
-    }
-    return values + find_first_upper_bound_index(values, n_values, query);
-}
-
-#ifndef __OPTIMIZE__
-static size_t
-slow_emulate_msp_binary_interval_search(
-    double query, const double *values, size_t n_values)
-{
-    fast_search_lookup_t table;
-    const double *ptr;
-
-    assert(0 == fast_search_lookup_alloc(&table, values, n_values));
-    ptr = fast_search_lookup_find(&table, query);
-    fast_search_lookup_free(&table);
-    return (size_t)(ptr - values);
-}
-#endif
-
-size_t
-msp_binary_interval_search(double query, const double *values, size_t n_values)
-{
-    size_t ret = find_first_upper_bound_index(values, n_values, query);
-#ifndef __OPTIMIZE__
-    if (query >= 0.0 && n_values > 0 && values[0] == 0.0 && values[n_values - 1] > 0.0) {
-        assert(ret == slow_emulate_msp_binary_interval_search(query, values, n_values));
-    }
-#endif
-    return ret;
 }
 
 bool

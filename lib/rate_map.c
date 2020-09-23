@@ -173,12 +173,28 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
     ptr = fast_search_lookup_find(&(self->position_lookup), pos);
     /* any `pos` greather than or equal to max position has `index == self->size` */
     index = (size_t)(ptr - position);
+    expensive_assert(index == msp_binary_interval_search(pos, position, self->size));
     assert(index > 0);
     index--;
     offset = pos - position[index];
 
     return self->cumulative_mass[index] + offset * rate[index];
 }
+
+#ifndef __OPTIMIZE__
+static size_t
+slow_emulate_msp_binary_interval_search(
+    double query, const double *values, size_t n_values)
+{
+    fast_search_lookup_t table;
+    const double *ptr;
+
+    assert(0 == fast_search_lookup_alloc(&table, values, n_values));
+    ptr = fast_search_lookup_find(&table, query);
+    fast_search_lookup_free(&table);
+    return (size_t)(ptr - values);
+}
+#endif
 
 /* Finds the physical coordinate such that the sequence up to (but not
  * including) that position has the specified recombination mass.
@@ -198,6 +214,9 @@ rate_map_mass_to_position(rate_map_t *self, double mass)
     /* search for upper bounds strictly before the final cum mass
        any mass greather than or equal to final cum mass returns self->size */
     index = msp_binary_interval_search(mass, self->cumulative_mass, self->size);
+    expensive_assert(index
+                     == slow_emulate_msp_binary_interval_search(
+                            mass, self->cumulative_mass, self->size));
     assert(index > 0);
     index--;
     mass_in_interval = mass - self->cumulative_mass[index];
@@ -294,12 +313,15 @@ fast_search_lookup_free(fast_search_lookup_t *self)
 const double *
 fast_search_lookup_find(fast_search_lookup_t *self, double query)
 {
+    size_t idx;
+
     assert(query >= 0.0);
     search_range_t *back = self->lookups + self->num_lookups - 1;
     if (query > back->start[back->num - 1]) {
         return back->start + back->num;
     }
-    size_t i = (size_t) ceil_to_long(ldexp(query, self->power_shift));
-    search_range_t *range = self->lookups + i;
-    return find_first_upper_bound(range->start, range->num, query);
+    idx = (size_t) ceil_to_long(ldexp(query, self->power_shift));
+    search_range_t *range = self->lookups + idx;
+    idx = msp_binary_interval_search(query, range->start, range->num);
+    return range->start + idx;
 }
