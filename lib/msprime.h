@@ -311,7 +311,6 @@ typedef struct mutation_t {
     struct mutation_t *next;
     bool new;
     bool keep;
-    bool unknown_time;
 } mutation_t;
 
 typedef struct {

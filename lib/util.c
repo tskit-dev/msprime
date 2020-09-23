@@ -263,6 +263,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_ANCIENT_SAMPLE_NODE:
             ret = "Only isolated sample nodes are supported as ancient samples";
             break;
+        case MSP_ERR_UNKNOWN_TIME_NOT_SUPPORTED:
+            ret = "Kept mutations must have known mutation times.";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                   "report!";
