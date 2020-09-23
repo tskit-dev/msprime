@@ -1158,6 +1158,9 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         plt.plot(range(generated_times.shape[0]), start_time, c="blue", linewidth=0.1)
         plt.plot(range(generated_times.shape[0]), end_time, c="red", linewidth=0.1)
         pdf.savefig(fig, dpi=300)
+        fig = plt.figure(figsize=[9, 6])
+        plt.scatter(generated_times, mut_time, s=1)
+        pdf.savefig(fig, dpi=300)
         pdf.close()
         self.sign_tst(generated_times - mut_time)
 
