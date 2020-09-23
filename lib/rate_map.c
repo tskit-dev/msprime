@@ -90,7 +90,9 @@ rate_map_alloc(rate_map_t *self, size_t size, double *position, double *rate)
             sum += (position[j + 1] - position[j]) * rate[j];
         }
     }
-    fast_search_lookup_alloc(&self->position_lookup, self->position, size + 1);
+    /* search for upper bounds strictly before the max position
+       any position greather than or equal to max position returns self->size */
+    fast_search_lookup_alloc(&self->position_lookup, self->position, size);
 out:
     return ret;
 }
@@ -160,20 +162,17 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
     double offset;
     size_t index;
 
-    /* TODO we should add an LRU cache with ~3 items here to cache recent
-     * hits and avoid looking up the map for them. This will make a difference
-     * in the large recombination map case.*/
-    if (pos == position[0]) {
+    assert(pos >= 0.0);
+    if (pos <= position[0]) {
         return 0;
     }
+    assert(pos <= position[self->size]);
     if (pos >= position[self->size]) {
         return self->cumulative_mass[self->size];
     }
     ptr = fast_search_lookup_find(&(self->position_lookup), pos);
+    /* any `pos` greather than or equal to max position has `index == self->size` */
     index = (size_t)(ptr - position);
-    if (index == self->size + 1) {
-        index--;
-    }
     assert(index > 0);
     index--;
     offset = pos - position[index];
@@ -192,11 +191,13 @@ rate_map_mass_to_position(rate_map_t *self, double mass)
     double mass_in_interval, pos;
     size_t index;
 
-    if (mass == 0.0) {
+    assert(mass >= 0.0);
+    if (mass <= 0.0) {
         return position[0];
     }
-    /* replace with tsk_search_sorted */
-    index = msp_binary_interval_search(mass, self->cumulative_mass, self->size + 1);
+    /* search for upper bounds strictly before the final cum mass
+       any mass greather than or equal to final cum mass returns self->size */
+    index = msp_binary_interval_search(mass, self->cumulative_mass, self->size);
     assert(index > 0);
     index--;
     mass_in_interval = mass - self->cumulative_mass[index];

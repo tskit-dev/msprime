@@ -308,24 +308,28 @@ __msp_safe_free(void **ptr)
     }
 }
 
-/* Find the `index` of the interval within `values` the `query` fits, such that
- * values[index-1] < query <= values[index]
- * Will find the leftmost such index
- * Assumes `values` are sorted
+/* This function follows standard semantics of:
+ *   numpy.searchsorted(..., side='left') and
+ *   std::lower_bound() from the standard C++ <algorithm> library
+ * PRE-CONDITION:
+ *   1) `values` are sorted and not NaN
+ * RETURNS:
+ *   First (leftmost) `index` of upper bounds of `query`
+ *   **or** `n_values` if no such upper bound is in `values`
+ * POST-CONDITION:
+ *   If `query` is not strictly greather than all values, then::w
+ *     values[index-1] < query <= values[index]
  */
 static size_t
-find_first_upper_bound_or_back(const double *values, size_t n_values, double query)
+find_first_upper_bound_index(const double *values, size_t n_values, double query)
 {
-    if (n_values == 0) {
-        return 0;
-    }
     size_t l = 0;
-    size_t r = n_values - 1;
+    size_t r = n_values;
     size_t m;
 
     while (l < r) {
         m = (l + r) / 2UL;
-
+        expensive_assert(values[l] <= values[m]);
         if (values[m] < query) {
             l = m + 1;
         } else {
@@ -335,17 +339,13 @@ find_first_upper_bound_or_back(const double *values, size_t n_values, double que
     return l;
 }
 
-/* This function follows standard semantics of:
-   numpy.searchsorted(..., side='left') and
-   std::lower_bound() from the standard C++ <algorithm> library
- */
 const double *
 find_first_upper_bound(const double *values, size_t n_values, double query)
 {
     if (query > values[n_values - 1]) {
         return values + n_values;
     }
-    return values + find_first_upper_bound_or_back(values, n_values, query);
+    return values + find_first_upper_bound_index(values, n_values, query);
 }
 
 #ifndef __OPTIMIZE__
@@ -355,24 +355,18 @@ slow_emulate_msp_binary_interval_search(
 {
     fast_search_lookup_t table;
     const double *ptr;
-    size_t ret;
 
     assert(0 == fast_search_lookup_alloc(&table, values, n_values));
     ptr = fast_search_lookup_find(&table, query);
-    ret = (size_t)(ptr - values);
-    assert(ret <= n_values);
-    if (ret == n_values) {
-        ret--;
-    }
     fast_search_lookup_free(&table);
-    return ret;
+    return (size_t)(ptr - values);
 }
 #endif
 
 size_t
 msp_binary_interval_search(double query, const double *values, size_t n_values)
 {
-    size_t ret = find_first_upper_bound_or_back(values, n_values, query);
+    size_t ret = find_first_upper_bound_index(values, n_values, query);
 #ifndef __OPTIMIZE__
     if (query >= 0.0 && n_values > 0 && values[0] == 0.0 && values[n_values - 1] > 0.0) {
         assert(ret == slow_emulate_msp_binary_interval_search(query, values, n_values));
