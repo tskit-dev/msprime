@@ -904,6 +904,7 @@ class TestKeep(unittest.TestCase):
                 tables.mutations.add_row(
                     site=site.id, node=mutation.node, derived_state="T" * site.id
                 )
+        tables.compute_mutation_times()
         original = tables.tree_sequence()
         updated = msprime.mutate(original, rate=1, random_seed=1, keep=True)
         self.verify_sites(original, updated)
@@ -937,7 +938,22 @@ class TestKeep(unittest.TestCase):
         t2.provenances.clear()
         self.assertEqual(t1, t2)
 
-    def test_kept_mutations_before_end_time(self):
+    def test_keep_unknown_time_muts(self):
+        ts = msprime.simulate(12, random_seed=3)
+        ts = msprime.mutate(ts, rate=1, random_seed=1)
+        self.assertGreater(ts.num_sites, 2)
+        tables = ts.dump_tables()
+        tables.mutations.set_columns(
+            site=tables.mutations.site,
+            node=tables.mutations.node,
+            derived_state=tables.mutations.derived_state,
+            derived_state_offset=tables.mutations.derived_state_offset,
+        )
+        ts = tables.tree_sequence()
+        with self.assertRaises(_msprime.LibraryError):
+            msprime.mutate(ts, rate=1, random_seed=1, keep=True)
+
+    def test_keep_mutations_before_end_time(self):
         ts = msprime.simulate(12, recombination_rate=3, random_seed=3, length=10)
         ts_mut = msprime.mutate(ts, rate=1, random_seed=1, discrete=True)
         self.assertGreater(ts_mut.num_sites, 0)
@@ -952,7 +968,7 @@ class TestKeep(unittest.TestCase):
         )
         self.assertGreater(ts_2mut.num_mutations, ts_mut.num_mutations)
 
-    def test_kept_all_ancestral(self):
+    def test_keep_only_ancestral(self):
         # if timespan where mutations will be generated is younger than all
         # kept mutations, it shouldn't error out
         ts = msprime.simulate(12, recombination_rate=3, random_seed=3, length=10)
@@ -1564,7 +1580,6 @@ class Site:
         node,
         time,
         new,
-        unknown_time,
         derived_state=None,
         metadata=b"",
         id=tskit.NULL,  # noqa: A002
@@ -1577,7 +1592,6 @@ class Site:
             time=time,
             new=new,
             keep=True,
-            unknown_time=unknown_time,
             id=id,
         )
         self.mutations.append(mutation)
@@ -1592,7 +1606,6 @@ class Mutation:
     time = attr.ib()
     new = attr.ib()
     keep = attr.ib()
-    unknown_time = attr.ib()
     id = attr.ib()  # noqa: A003
 
     def __str__(self):
@@ -1602,7 +1615,7 @@ class Mutation:
             parent_id = self.parent.id
         s = f"\t{self.id}\t\tnode: {self.node}\tparent: {parent_id}"
         s += f"\ttime: {self.time}\t{self.derived_state}\t{self.metadata}"
-        s += f"\t(new: {self.new})\tkeep: {self.keep}]\t{self.unknown_time}"
+        s += f"\t(new: {self.new})\tkeep: {self.keep}]"
         return s
 
 
@@ -1720,7 +1733,6 @@ class PythonMutationGenerator:
         return site
 
     def initialise_sites(self, tables):
-        nodes = tables.nodes
         mutation_rows = iter(tables.mutations)
         mutation_row = next(mutation_rows, None)
         j = 0
@@ -1732,16 +1744,12 @@ class PythonMutationGenerator:
                 metadata=site_row.metadata,
             )
             while mutation_row is not None and mutation_row.site == site_id:
-                time = mutation_row.time
-                if tskit.util.is_unknown_time(time):
-                    time = nodes.time[mutation_row.node]
                 site.add_mutation(
                     node=mutation_row.node,
-                    time=time,
+                    time=mutation_row.time,
                     new=False,
                     derived_state=mutation_row.derived_state,
                     metadata=mutation_row.metadata,
-                    unknown_time=tskit.util.is_unknown_time(mutation_row.time),
                     id=j,
                 )
                 j += 1
@@ -1760,16 +1768,13 @@ class PythonMutationGenerator:
                     else:
                         parent_id = mutation.parent.id
                         assert parent_id >= 0
-                    time = mutation.time
-                    if mutation.unknown_time:
-                        time = tskit.UNKNOWN_TIME
                     mutation_id = tables.mutations.add_row(
                         site_id,
                         mutation.node,
                         mutation.derived_state,
                         parent=parent_id,
                         metadata=mutation.metadata,
-                        time=time,
+                        time=mutation.time,
                     )
                     assert mutation_id > parent_id
                     mutation.id = mutation_id
@@ -1816,9 +1821,7 @@ class PythonMutationGenerator:
                         self.add_site(position=position, new=True)
                     site = self.sites[position]
                     time = self.rng.flat(branch_start, branch_end)
-                    site.add_mutation(
-                        node=edge.child, time=time, new=True, unknown_time=False
-                    )
+                    site.add_mutation(node=edge.child, time=time, new=True)
                 index += 1
                 left = right
 
