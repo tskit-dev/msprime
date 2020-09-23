@@ -307,24 +307,28 @@ __msp_safe_free(void **ptr)
     }
 }
 
-/* Find the `index` of the interval within `values` the `query` fits, such that
- * values[index-1] < query <= values[index]
- * Will find the leftmost such index
- * Assumes `values` are sorted
+/* This function follows standard semantics of:
+ *   numpy.searchsorted(..., side='left') and
+ *   std::lower_bound() from the standard C++ <algorithm> library
+ * PRE-CONDITION:
+ *   1) `values` are sorted and not NaN
+ * RETURNS:
+ *   First (leftmost) `index` of upper bounds of `query`
+ *   **or** `n_values` if no such upper bound is in `values`
+ * POST-CONDITION:
+ *   If `query` is not strictly greather than all values, then::w
+ *     values[index-1] < query <= values[index]
  */
 size_t
 msp_binary_interval_search(double query, const double *values, size_t n_values)
 {
-    if (n_values == 0) {
-        return 0;
-    }
     size_t l = 0;
-    size_t r = n_values - 1;
+    size_t r = n_values;
     size_t m;
 
     while (l < r) {
         m = (l + r) / 2UL;
-
+        expensive_assert(values[l] <= values[m]);
         if (values[m] < query) {
             l = m + 1;
         } else {
