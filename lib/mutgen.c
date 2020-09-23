@@ -963,6 +963,7 @@ mutgen_add_existing_mutation(mutgen_t *self, site_t *site, tsk_id_t id, tsk_id_t
     }
     mutation->id = id;
     mutation->new = false;
+
     /* Need to copy the derived state and metadata */
     ret = copy_string(&self->allocator, derived_state, derived_state_length,
         &mutation->derived_state, &mutation->derived_state_length);
@@ -1306,8 +1307,8 @@ mutgen_apply_mutations(mutgen_t *self)
             if (site->position >= right) {
                 break;
             }
-            ret = mutgen_choose_alleles(self, parent, bottom_mutation, nodes.num_rows,
-                site);
+            ret = mutgen_choose_alleles(
+                self, parent, bottom_mutation, nodes.num_rows, site);
             if (ret != 0) {
                 goto out;
             }
