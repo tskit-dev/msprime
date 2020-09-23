@@ -211,8 +211,8 @@ rate_map_shift_by_mass(rate_map_t *self, double pos, double mass)
     return rate_map_mass_to_position(self, result_mass);
 }
 
-#ifdef _Static_assert
-_Static_assert(FLT_RADIX == 2, "Base 2 floating point types required");
+#if FLT_RADIX != 2
+#error "Base 2 floating point types required"
 #endif
 
 static int
