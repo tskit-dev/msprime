@@ -1041,7 +1041,14 @@ class InfiniteSites(MatrixMutationModel):
         )
 
 
-def _simple_mutate(tables, rng, rate, sequence_length, discrete_sites=False):
+def _simple_mutate(
+    tables,
+    rng,
+    rate,
+    sequence_length,
+    discrete_sites=False,
+    kept_mutations_before_end_time=False,
+):
     rate_map = intervals.RateMap.uniform(sequence_length, rate)
     _msprime.sim_mutations(
         tables,
@@ -1049,6 +1056,7 @@ def _simple_mutate(tables, rng, rate, sequence_length, discrete_sites=False):
         rate_map.asdict(),
         model=BinaryMutationModel(),
         discrete_sites=discrete_sites,
+        kept_mutations_before_end_time=kept_mutations_before_end_time,
     )
 
 
@@ -1061,6 +1069,7 @@ def mutate(
     start_time=None,
     end_time=None,
     discrete=False,
+    kept_mutations_before_end_time=False,
 ):
     """
     Simulates mutations on the specified ancestry and returns the resulting
@@ -1079,11 +1088,18 @@ def mutate(
     :class:`msprime.BinaryMutationModel` a simple binary model with alleles
     0 and 1. See :ref:`sec_api_mutation_models` for details of avaliable models.
 
-    By default, sites and mutations in the parameter tree sequence are
+    By default, sites and mutations in the input tree sequence are
     discarded. If the ``keep`` parameter is true, however, *additional*
     mutations are simulated. Under the infinite sites mutation model, all new
     mutations generated will occur at distinct positions from each other and
-    from any existing mutations (by rejection sampling).
+    from any existing mutations (by rejection sampling). Furthermore, if sites
+    are discrete, trying to simulate mutations at time periods that are older
+    than mutations kept from the original tree sequence is an error, because
+    this would create an extra transition (from the new allele to the old
+    one below it) that may be incorrect according to the model of mutation.
+    Under a state-independent mutation model, however (e.g., Jukes-Cantor),
+    there is no problem, and ``kept_mutations_before_end_time=True`` may be
+    set to allow adding new mutations around or above existing ones.
 
     The time interval over which mutations can occur may be controlled
     using the ``start_time`` and ``end_time`` parameters. The ``start_time``
@@ -1116,7 +1132,10 @@ def mutate(
     :param bool discrete: Whether to generate mutations at only integer positions
         along the genome.  Default is False, which produces infinite-sites
         mutations at floating-point positions.
-    :return: The :class:`tskit.TreeSequence` object  resulting from overlaying
+    :param bool kept_mutations_before_end_time: Whether to allow mutations to be added
+        ancestrally to existing (kept) mutations. This flag has no effect
+        if either keep or discrete are False.
+    :return: The :class:`tskit.TreeSequence` object resulting from overlaying
         mutations on the input tree sequence.
     :rtype: :class:`tskit.TreeSequence`
     """
@@ -1152,6 +1171,7 @@ def mutate(
         raise ValueError("start_time must be <= end_time")
     keep = bool(keep)
     discrete = bool(discrete)
+    kept_mutations_before_end_time = bool(kept_mutations_before_end_time)
 
     model = mutation_model_factory(model)
 
@@ -1175,6 +1195,7 @@ def mutate(
         model=model,
         discrete_sites=discrete,
         keep=keep,
+        kept_mutations_before_end_time=kept_mutations_before_end_time,
         start_time=start_time,
         end_time=end_time,
     )

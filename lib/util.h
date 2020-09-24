@@ -107,6 +107,7 @@
 #define MSP_ERR_BAD_SEQUENCE_LENGTH                                 -67
 #define MSP_ERR_ZERO_POPULATIONS                                    -68
 #define MSP_ERR_BAD_ANCIENT_SAMPLE_NODE                             -69
+#define MSP_ERR_UNKNOWN_TIME_NOT_SUPPORTED                          -70
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */
