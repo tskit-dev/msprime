@@ -173,7 +173,7 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
     ptr = fast_search_lookup_find(&(self->position_lookup), pos);
     /* any `pos` greather than or equal to max position has `index == self->size` */
     index = (size_t)(ptr - position);
-    expensive_assert(index == msp_binary_interval_search(pos, position, self->size));
+    assert(index == msp_binary_interval_search(pos, position, self->size));
     assert(index > 0);
     index--;
     offset = pos - position[index];
@@ -181,7 +181,7 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
     return self->cumulative_mass[index] + offset * rate[index];
 }
 
-#ifndef __OPTIMIZE__
+#ifndef NDEBUG
 static size_t
 slow_emulate_msp_binary_interval_search(
     double query, const double *values, size_t n_values)
@@ -214,9 +214,9 @@ rate_map_mass_to_position(rate_map_t *self, double mass)
     /* search for upper bounds strictly before the final cum mass
        any mass greather than or equal to final cum mass returns self->size */
     index = msp_binary_interval_search(mass, self->cumulative_mass, self->size);
-    expensive_assert(index
-                     == slow_emulate_msp_binary_interval_search(
-                            mass, self->cumulative_mass, self->size));
+    assert(index
+           == slow_emulate_msp_binary_interval_search(
+                  mass, self->cumulative_mass, self->size));
     assert(index > 0);
     index--;
     mass_in_interval = mass - self->cumulative_mass[index];
