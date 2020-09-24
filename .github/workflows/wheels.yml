@@ -3,7 +3,7 @@ name: Build and test wheels
 on:
   push:
     branches:
-      - master
+      - main
       - test
     tags:
       - '*'
