@@ -207,6 +207,8 @@ Variable recombination rates
 .. autoclass:: msprime.RecombinationMap
     :members:
 
+.. autofunction:: msprime.read_hapmap
+
 .. _sec_api_simulation_models:
 
 *****************

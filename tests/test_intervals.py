@@ -96,6 +96,19 @@ class TestSlice(unittest.TestCase):
         self.assertTrue(np.array_equal([0, 150, 160, 400], b.position))
         self.assertTrue(np.array_equal([0, 1, 0], b.rate))
 
+        # If we take an end-slice into a trailing zero-rate region,
+        # we should recover the same map.
+        a = msprime.RateMap([0, 100, 200, 300, 400], [0, 1, 2, 0])
+        b = a.slice(end=350)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal(a.position, b.position))
+        self.assertTrue(np.array_equal(a.rate, b.rate))
+
+        b = a.slice(end=300)
+        self.assertEqual(a.sequence_length, b.sequence_length)
+        self.assertTrue(np.array_equal(a.position, b.position))
+        self.assertTrue(np.array_equal(a.rate, b.rate))
+
     def test_slice_with_floats(self):
         #  test RateMap.slice(..., trim=False) with floats
         a = msprime.RateMap([np.pi * x for x in [0, 100, 200, 300, 400]], [0, 1, 2, 3])
