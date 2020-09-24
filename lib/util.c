@@ -328,7 +328,8 @@ msp_binary_interval_search(double query, const double *values, size_t n_values)
 
     while (l < r) {
         m = (l + r) / 2UL;
-        expensive_assert(values[l] <= values[m]);
+        /* TODO: uncomment assert when #1203 done and this longer slows down release
+           assert(values[l] <= values[m]); */
         if (values[m] < query) {
             l = m + 1;
         } else {

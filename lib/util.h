@@ -124,10 +124,4 @@ bool doubles_almost_equal(double a, double b, double eps);
 
 size_t probability_list_select(double u, size_t num_probs, double const *probs);
 
-#ifdef __OPTIMIZE__
-#define expensive_assert(expr) ((void) (0))
-#else
-#define expensive_assert(expr) assert(expr)
-#endif
-
 #endif /*__UTIL_H__*/
