@@ -38,6 +38,16 @@
 #define restrict
 #endif
 
+#define bug_assert(condition)                                                           \
+    if (!(condition)) {                                                                 \
+        fprintf(stderr,                                                                 \
+            "Bug detected in %s at line %d. Please open an issue on GitHub, "           \
+            "ideally with a reproducible example. "                                     \
+            "https://github.com/tskit-dev/msprime/issues\n",                            \
+            __FILE__, __LINE__);                                                        \
+        abort();                                                                        \
+    }
+
 /* clang-format off */
 /* Error codes */
 #define MSP_ERR_GENERIC                                             -1

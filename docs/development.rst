@@ -453,6 +453,22 @@ of the declaration.
 Error codes are defined in ``err.h``, and these can be translated into a
 message using ``msp_strerror(err)``.
 
++++++++++++++++++
+Using assertions
++++++++++++++++++
+
+There are two different ways to express assertions in the msprime code.
+The first is using the custom ``bug_assert`` macro, which is used to
+make inexpensive checks at key points during execution. These assertions
+are always run, regardless of the compiler settings, and should not
+contribute significantly to the overall runtime.
+
+More expensive assertions, used, for example, to check pre and post conditions
+on performance critical loops should be expressed using the standard
+``assert`` macro from ``assert.h``. These assertions will be checked
+during the execution of C unit tests, but will not be enabled when
+compiled into the Python C module.
+
 ++++++++++++++++
 Running valgrind
 ++++++++++++++++
