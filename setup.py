@@ -84,7 +84,7 @@ libdir = "lib"
 tskroot = os.path.join(libdir, "subprojects", "tskit")
 tskdir = os.path.join(tskroot, "tskit")
 kasdir = os.path.join(libdir, "subprojects", "kastore")
-includes = [libdir, tskroot, tskdir, kasdir]
+includes = ["lwt_interface", libdir, tskroot, tskdir, kasdir]
 
 configurator = PathConfigurator()
 msp_source_files = [

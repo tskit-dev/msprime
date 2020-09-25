@@ -820,8 +820,8 @@ test_dtwf_deterministic(void)
         CU_ASSERT(tables[j].nodes.num_rows > 0);
         CU_ASSERT(tables[j].edges.num_rows > 0);
     }
-    CU_ASSERT_TRUE(tsk_node_table_equals(&tables[0].nodes, &tables[1].nodes));
-    CU_ASSERT_TRUE(tsk_edge_table_equals(&tables[0].edges, &tables[1].edges));
+    CU_ASSERT_TRUE(tsk_node_table_equals(&tables[0].nodes, &tables[1].nodes, 0));
+    CU_ASSERT_TRUE(tsk_edge_table_equals(&tables[0].edges, &tables[1].edges, 0));
 
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
@@ -2502,7 +2502,7 @@ verify_simulate_from(int model, rate_map_t *recomb_map,
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tsk_table_collection_truncate(&tables, &pos);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        CU_ASSERT_TRUE(tsk_table_collection_equals(from_tables, &tables));
+        CU_ASSERT_TRUE(tsk_table_collection_equals(from_tables, &tables, 0));
 
         tsk_treeseq_free(&final);
 
