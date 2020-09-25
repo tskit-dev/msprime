@@ -407,6 +407,8 @@ flags values are defined:
     The node was created by a :class:`msprime.CensusEvent`.
 
 
+.. _sec_api_simulating_mutations:
+
 ********************
 Simulating mutations
 ********************
@@ -432,9 +434,20 @@ Mutation models are specified using the ``model`` parameter to
 :func:`.mutate`. This parameter can either take the form of a
 string describing the model (e.g. ``model="jc69"``) or an instance of a
 model definition class (e.g ``model=msprime.JC69MutationModel()``).
-The available models are documented below.
+Here are the available models; they are documented in more detail below.
 
-.. _sec_api_mutation_matrix_models:
+- :class:`.BinaryMutationModel`: 0/1 flip-flopping alleles
+- :class:`.JC69MutationModel`: Jukes & Cantor '69, nucleotides
+- :class:`.HKYMutationModel`: Hasegawa, Kishino & Yano '85, nucleotides
+- :class:`.F84MutationModel`: Felsenstein '84, nucleotides
+- :class:`.GTRMutationModel`: general time-reversible, nucleotides
+- :class:`.BLOSUM62MutationModel`: amino acids
+- :class:`.PAMMutationModel`: amino acids
+- :class:`.MatrixMutationModel`: general finite-state mutations
+- :class:`.InfiniteAllelesMutationModel`: a generic infinite-alleles model
+- :class:`.SLiMMutationModel`: infinite-alleles model generating SLiM mutations
+
+.. _sec_api_matrix_mutations_models:
 
 ++++++++++++++++++++++
 Matrix Mutation Models
@@ -446,7 +459,7 @@ probabilities that determines how likely each allele is to be the root, ancestra
 to mutate to every other allele. Each class has specific values of these parameters to
 create the specific model. For your own custom model these parameters can be set using
 :class:`msprime.MatrixMutationModel`. For more detail about how mutations are simulated
-in these models see :ref:`sec_api_mutation_matrix_models_details`.
+in these models see :ref:`sec_api_matrix_mutation_models_details`.
 
 .. autoclass:: msprime.BinaryMutationModel()
 
@@ -462,18 +475,9 @@ in these models see :ref:`sec_api_mutation_matrix_models_details`.
 
 .. autoclass:: msprime.PAMMutationModel()
 
-.. autoclass:: msprime.MatrixMutationModel()
 
 
-++++++++++++++++++++++
-Other Mutation Models
-++++++++++++++++++++++
-
-.. autoclass:: msprime.InfiniteAllelesMutationModel()
-
-.. autoclass:: msprime.SLiMMutationModel()
-
-.. _sec_api_mutation_matrix_models_details:
+.. _sec_api_matrix_mutation_models_details:
 
 ++++++++++++++++++++++++++++++
 Mutation Matrix Models Details
@@ -490,8 +494,79 @@ with instantaneous transition rate from ``i`` to ``j`` that is equal to
 ``rate`` multiplied by ``transition_matrix[i,j]``.
 The ``root distribution`` and every row in the ``transition_matrix``
 must give *probabilities*, i.e., they must be nonnegative numbers summing to 1.
+For the precise interpretation of these parameters
+(especially when the transition matrix has nonzero entries on the diagonal)
+see :ref:`sec_api_matrix_mutation_theory`.
 
-To interpret the implications,
+.. autoclass:: msprime.MatrixMutationModel()
+
+You can define your own, but you probably don't need to:
+there are several mutation matrix models already implemented in msprime,
+using binary (0/1), nucleotide, or amino acid alphabets:
+
+
+
+++++++++++++++++++++++++++++++++++++
+Defining your own finite-sites model
+++++++++++++++++++++++++++++++++++++
+
+If you want to define your own :class:`.MatrixMutationModel`, you have a good
+deal of freedom. For instance, here's a "decomposition/growth/disturbance"
+mutation model, where the only possible transitions are 🎄 to 🔥, 🔥 to 💩, and
+💩 to 🎄, with the first transition happening at one-fifth the rate of the
+other two:
+
+.. code-block:: python
+
+   alleles = ["💩", "🎄", "🔥"]
+   model = msprime.MatrixMutationModel(
+       alleles,
+       root_distribution = [1.0, 0.0, 0.0],
+       transition_matrix = [[0.0, 1.0, 0.0],
+                            [0.0, 0.8, 0.2],
+                            [1.0, 0.0, 0.0]]
+   )
+   ts = msprime.simulate(12, Ne=10, random_seed=2, length=7)
+   mts = msprime.mutate(ts, rate=2, random_seed=1, model=model, discrete=True)
+
+We have simulated from this model at rate 2, so the overall rate of mutation
+from 💩 to 🎄 and 🔥 to 💩 is 2, and from 🎄 to 🔥 is :math:`2 \times 0.2
+= 0.4`. As a result, roughly 5/7th of the states will be 🎄, with the remainder
+divided evenly between 💩 and 🔥. Here is the resulting "genotype matrix":
+
+.. code-block::
+
+   for v in mts.variants():
+      print("".join(v.alleles[k] for k in v.genotypes))
+
+   🔥🎄🎄🎄💩🎄🎄🎄🎄🎄🎄🎄
+   💩💩💩🎄🎄🎄🎄💩🎄🎄🎄🎄
+   🎄🎄🔥🔥💩🎄🎄🎄🎄🎄🎄🎄
+   🎄🎄💩🔥🎄🎄🎄🎄💩💩🔥💩
+   💩🎄🎄🎄🔥🎄🎄🎄🎄🎄🔥🎄
+   🎄🎄🎄🎄🎄🎄🎄🎄🎄🎄🎄🎄
+   💩🎄🎄🎄🎄💩🎄🎄🎄💩🎄💩
+
+
+.. _sec_api_matrix_mutation_theory:
+
+++++++++++++++++++++++++++++++++++++++++++
+Parameterization of Matrix Mutation Models
+++++++++++++++++++++++++++++++++++++++++++
+
+Mutation matrix models are specified by three things: an alphabet,
+a root distribution, and a transition matrix.
+These leave one free parameter: an overall mutation rate,
+specified by the mutation ``rate`` in the call to :func:`.mutate`.
+Concisely,
+the underlying model of mutation is a continuous-time Markov chain on the alphabet,
+started by a draw from ``root_distribution``, and
+with instantaneous transition rate from ``i`` to ``j`` that is equal to
+``rate`` multiplied by ``transition_matrix[i,j]``.
+The ``root distribution`` and every row in the ``transition_matrix``
+must give *probabilities*, i.e., they must be nonnegative numbers summing to 1.
+
+To interpret these parameters,
 it helps to know how the underlying mutational process is implemented.
 First, "possible" mutations are placed on the tree,
 with a mean density equal to the ``rate``, per unit of time and sequence length.
@@ -577,8 +652,139 @@ which can be computed as follows:
    Pt = scipy.linalg.expm(t * rate * Q)[i,j]
 
 If the top of a branch of length :math:`t` has allele :math:`i`,
-the bottom of the branch has allele :math:`j` with probability :math:`P[i,j]`.
+the bottom of the branch has allele :math:`j` with probability ``Pt[i,j]``.
 
+
+.. _sec_api_mutation_infinite_alleles:
+
+++++++++++++++++++++++++++++++++
+Infinite Alleles Mutation Models
+++++++++++++++++++++++++++++++++
+
+You can also use a model of *infinite alleles* mutation: where each new mutation produces a unique,
+never-before-seen allele. The underlying mutation model just assigns the derived state
+to be a new integer every time a new mutation appears.
+By default these integers start at zero, but a different starting point can be chosen,
+with the ``start_allele`` argument.
+It does this globally across all mutations, so that the first assigned allele will be ``start_allele``,
+and if ``n`` alleles are assigned in total (across ancestral and derived states),
+these will be the next ``n-1`` integers.
+Many theoretical results are derived based on this mutation model (e.g., Ewens' sampling formula).
+
+.. autoclass:: msprime.InfiniteAllelesMutationModel()
+
+For instance, here we'll simulate with the infinite alleles model on a single tree,
+and print the resulting tree, labeling each mutation with its derived state:
+
+.. code-block:: python
+
+   ts = msprime.simulate(12, random_seed=2, length=1)
+   model = msprime.InfiniteAllelesMutationModel()
+   mts = msprime.mutate(ts, rate=2, random_seed=1, model=model, discrete=True)
+   t = mts.first()
+   ml = {m.id: m.derived_state for m in mts.mutations()}
+   t.draw_svg('infinite_alleles.svg', mutation_labels=ml, node_labels={}, size=(400, 300))
+
+Apparently, there were 20 mutations at this site, but the alleles present in the population are
+"13" (in five copies), "17" (in two copies), and one copy each of "14", "15", "19", and "20".
+
+.. image:: _static/infinite_alleles.svg
+
+.. warning::
+
+   Neither this nor the next infinite alleles mutation model check to see if the alleles
+   they produce already exist at the mutated sites. So, if you are using these
+   models to add mutations to an already-mutated tree sequence, it is up to you
+   to set the starting allele appropriately, and to make sure the results make sense!
+
+.. _sec_api_mutation_slim_mutations:
+
+++++++++++++++
+SLiM mutations
+++++++++++++++
+
+A special class of infinite alleles model is provided for use with `SLiM <https://messerlab.org/slim/>`_,
+to agree with the underlying mutation model in SLiM.
+As with the InfiniteAlleles model, it assigns each new mutation a unique integer,
+by keeping track of the ``next_id`` and incrementing it each time a new mutation appears.
+
+.. autoclass:: msprime.SLiMMutationModel()
+
+This differs from the :class:`.InfiniteAllelesMutationmodel` because mutations
+in SLiM can "stack": new mutations can add to the existing state, rather than
+replacing the previous state. So, derived states are comma-separated lists of
+mutation IDs, and the ancestral state is always the empty string. For instance,
+if a new mutation with ID 5 occurs at a site, and then later another mutation
+appears with ID 64, the sequence of alleles moving along this line of descent
+would be `""`, then `"5"`, and finally `"5,64"`. Furthermore, the mutation
+model adds SLiM metadata to each mutation, which records, among other things,
+the SLiM mutation type of each mutation, and the selection coefficient (which
+is always 0.0, since adding mutations in this way only makes sense if they are
+neutral). For this reason, the model has one required parameter: the ``type``
+of the mutation, a nonnegative integer. If, for instance, you specify
+``type=1``, then the mutations in SLiM will be of type ``m1``. For more
+information, and for how to modify the metadata (e.g., changing the selection
+coefficients), see
+`the pyslim documentation <https://pyslim.readthedocs.io/en/latest/>`_.
+For instance,
+
+.. code-block:: python
+
+   model = msprime.SLiMMutationModel(type=1)
+   mts = msprime.mutate(ts, rate=1, random_seed=1, model=model, discrete=True)
+   t = mts.first()
+   ml = {m.id: m.derived_state for m in mts.mutations()}
+   t.draw_svg('slim_alleles.svg', mutation_labels=ml, node_labels={}, size=(400, 300))
+
+The resulting alleles show how derived states are built:
+
+.. image:: _static/slim_alleles.svg
+
+The behavior of this mutation model when used to add mutations to a previously mutated
+tree sequence can be subtle. Let's look at a simple example.
+Here, we first lay down mutations of type 1, starting from ID 0:
+
+.. code-block:: python
+
+   model_1 = msprime.SLiMMutationModel(type=1)
+   mts_1 = msprime.mutate(ts, rate=0.5, random_seed=2, model=model_1, discrete=True)
+   t = mts_1.first()
+   ml = {m.id: m.derived_state for m in mts_1.mutations()}
+   t.draw_svg(f'slim_alleles_1.svg', mutation_labels=ml, node_labels={}, size=(400, 300))
+
+.. image:: _static/slim_alleles_1.svg
+
+Next, we lay down mutations of type 2.
+These we assign starting from ID 100,
+to make it easy to see which are which:
+in general just need to make sure that we start at an ID greater than any
+previously assigned.
+Note the ``allow_ancestral=True`` parameter:
+this would error, otherwise because we are adding mutations above existing ones.
+
+.. code-block:: python
+
+   model_2 = msprime.SLiMMutationModel(type=2, next_id=100)
+   mts = msprime.mutate(mts_1, rate=0.5, random_seed=3, model=model_2, discrete=True,
+                        keep=True, allow_ancestral=True)
+   t = mts.first()
+   ml = {m.id: m.derived_state for m in mts.mutations()}
+   t.draw_svg(f'slim_alleles_12.svg', mutation_labels=ml, node_labels={}, size=(400, 300))
+
+.. image:: _static/slim_alleles_12.svg
+
+Note what has happened here: on the top branch on the right side of the tree,
+with the first model we added two mutations: first a mutation with ID ``0``,
+then a mutation with ID ``3``.
+Then, with the second model, we added two more mutations to this same branch,
+with IDs ``100`` and ``102``, between these two mutations.
+These were added to mutation ``0``, obtaining alleles ``0,100`` and ``0,100,102``.
+But then, moving down the branch, we come upon the mutation with ID ``3``.
+This was already present in the tree sequence, so its derived state is not modified:
+``0,3``. We can rationalize this, post-hoc, by saying that the type 1 mutation ``3``
+has "erased" the type 2 mutations ``100`` and ``102``.
+If you want a different arrangment,
+you can go back and edit the derived states (and metadata) as you like.
 
 
 *********************************

@@ -22,6 +22,7 @@ Test cases for mutation generation.
 import functools
 import itertools
 import json
+import random
 import struct
 import unittest
 
@@ -424,9 +425,8 @@ class TestFiniteSites(TestMutate):
             parents = {}
             for mut in site.mutations:
                 n = mut.node
-                # TODO: once mutations have times
-                # self.assertGreaterEqual(mut.time, ts.node(n).time)
-                # self.assertLess(mut.time, ts.node(t.parent(n)).time)
+                self.assertGreaterEqual(mut.time, ts.node(n).time)
+                self.assertLess(mut.time, ts.node(t.parent(n)).time)
                 while n != tskit.NULL and n not in parents:
                     n = t.parent(n)
                 if n == tskit.NULL:
@@ -434,8 +434,7 @@ class TestFiniteSites(TestMutate):
                     pa = site.ancestral_state
                 else:
                     self.assertEqual(mut.parent, parents[n].id)
-                    # TODO: once mutations have times
-                    # self.assertLess(mut.time, parents[n].time)
+                    self.assertLess(mut.time, parents[n].time)
                     pa = parents[n].derived_state
                 self.assertNotEqual(mut.derived_state, pa)
                 if check_probs:
@@ -905,6 +904,7 @@ class TestKeep(unittest.TestCase):
                 tables.mutations.add_row(
                     site=site.id, node=mutation.node, derived_state="T" * site.id
                 )
+        tables.compute_mutation_times()
         original = tables.tree_sequence()
         updated = msprime.mutate(original, rate=1, random_seed=1, keep=True)
         self.verify_sites(original, updated)
@@ -938,6 +938,48 @@ class TestKeep(unittest.TestCase):
         t2.provenances.clear()
         self.assertEqual(t1, t2)
 
+    def test_keep_unknown_time_muts(self):
+        ts = msprime.simulate(12, random_seed=3)
+        ts = msprime.mutate(ts, rate=1, random_seed=1)
+        self.assertGreater(ts.num_sites, 2)
+        tables = ts.dump_tables()
+        tables.mutations.set_columns(
+            site=tables.mutations.site,
+            node=tables.mutations.node,
+            derived_state=tables.mutations.derived_state,
+            derived_state_offset=tables.mutations.derived_state_offset,
+        )
+        ts = tables.tree_sequence()
+        with self.assertRaises(_msprime.LibraryError):
+            msprime.mutate(ts, rate=1, random_seed=1, keep=True)
+
+    def test_keep_mutations_before_end_time(self):
+        ts = msprime.simulate(12, recombination_rate=3, random_seed=3, length=10)
+        ts_mut = msprime.mutate(ts, rate=1, random_seed=1, discrete=True)
+        self.assertGreater(ts_mut.num_sites, 0)
+        with self.assertRaises(_msprime.LibraryError):
+            msprime.mutate(ts_mut, rate=1, random_seed=1, keep=True, discrete=True)
+        ts_2mut = msprime.mutate(
+            ts_mut,
+            rate=10,
+            random_seed=3,
+            discrete=True,
+            kept_mutations_before_end_time=True,
+        )
+        self.assertGreater(ts_2mut.num_mutations, ts_mut.num_mutations)
+
+    def test_keep_only_ancestral(self):
+        # if timespan where mutations will be generated is younger than all
+        # kept mutations, it shouldn't error out
+        ts = msprime.simulate(12, recombination_rate=3, random_seed=3, length=10)
+        ts_mut = msprime.mutate(
+            ts, rate=1, random_seed=1, discrete=True, start_time=1.0, end_time=2.0
+        )
+        ts_2mut = msprime.mutate(
+            ts_mut, rate=1, random_seed=3, discrete=True, start_time=0.0, end_time=1.0,
+        )
+        self.assertGreater(ts_2mut.num_mutations, ts_mut.num_mutations)
+
 
 class StatisticalTestMixin:
 
@@ -967,7 +1009,7 @@ class StatisticalTestMixin:
 
 
 class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
-    def verify_model(self, model, verify_roots=True):
+    def verify_model(self, model, verify_roots=True, state_independent=False):
         ots = msprime.simulate(10, random_seed=5, recombination_rate=0.05, length=20)
         # "large enough sample"-condition for the chisquare test
         if len(model.alleles) > 4:
@@ -980,6 +1022,8 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
                     ots, random_seed=6, rate=rate, model=model, discrete=discrete
                 )
                 self.verify_model_ts_general(ts, model, discrete, verify_roots, rate)
+                if (not discrete) or state_independent:
+                    self.verify_mutation_times_ts(ts)
 
     def verify_model_ts(self, ts, model, discrete, verify_roots):
         alleles = model.alleles
@@ -1096,14 +1140,37 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
         self.bonferroni(lower_pvals)
         self.bonferroni(upper_pvals)
 
+    def verify_mutation_times_ts(self, ts):
+        start_time = np.full(ts.num_mutations, -1, dtype=np.float32)
+        end_time = np.full(ts.num_mutations, -1, dtype=np.float32)
+        mut_time = np.full(ts.num_mutations, -1, dtype=np.float32)
+        for t in ts.trees():
+            for mut in t.mutations():
+                mut_time[mut.id] = mut.time
+                end_time[mut.id] = t.time(t.parent(mut.node))
+                start_time[mut.id] = t.time(mut.node)
+                if mut.parent != tskit.NULL:
+                    end_time[mut.id] = min(
+                        end_time[mut.id], ts.mutation(mut.parent).time
+                    )
+                    start_time[mut.parent] = max(start_time[mut.parent], mut.time)
+        rng = random.Random(337)
+        generated_times = np.array(
+            [
+                rng.uniform(start_time[i], end_time[i])
+                for i in range(start_time.shape[0])
+            ]
+        )
+        self.sign_tst(generated_times - mut_time)
+
     def test_binary_model(self):
         model = msprime.BinaryMutationModel()
-        self.verify_model(model)
+        self.verify_model(model, state_independent=True)
         self.verify_mutation_rates(model)
 
     def test_jukes_cantor(self):
         model = msprime.JC69MutationModel()
-        self.verify_model(model)
+        self.verify_model(model, state_independent=True)
         self.verify_mutation_rates(model)
 
     def test_HKY(self):
@@ -1145,7 +1212,7 @@ class TestMutationStatistics(unittest.TestCase, StatisticalTestMixin):
             root_distribution=[0.8, 0.0, 0.2],
             transition_matrix=[[0.2, 0.4, 0.4], [0.1, 0.2, 0.7], [0.5, 0.3, 0.2]],
         )
-        self.verify_model(model)
+        self.verify_model(model, state_independent=True)
         self.verify_mutation_rates(model)
 
 
@@ -1223,6 +1290,7 @@ class TestSLiMMutationModel(unittest.TestCase):
             site=t1.mutations.site,
             node=t1.mutations.node,
             parent=t1.mutations.parent,
+            time=t1.mutations.time,
             derived_state=t1.mutations.derived_state,
             derived_state_offset=t1.mutations.derived_state_offset,
         )
@@ -1386,7 +1454,7 @@ class TestInfiniteAllelesMutationModel(unittest.TestCase):
         t.nodes.add_row(time=0)
         t.nodes.add_row(time=10)
         t.sites.add_row(ancestral_state="0", position=0)
-        t.mutations.add_row(derived_state="1", node=1, site=0)
+        t.mutations.add_row(derived_state="1", node=1, site=0, time=10)
         t.edges.add_row(parent=1, child=0, left=0, right=1)
         model = msprime.InfiniteAllelesMutationModel(start_allele=2)
         ts = msprime.mutate(
@@ -1397,6 +1465,7 @@ class TestInfiniteAllelesMutationModel(unittest.TestCase):
             random_seed=1,
             keep=True,
             discrete=True,
+            kept_mutations_before_end_time=True,
         )
         self.validate_unique_alleles(ts)
 
@@ -1412,7 +1481,14 @@ class TestPythonMutationGenerator(unittest.TestCase):
         discretes = [True, False]
         keeps = [True, False]
         for rate, keep, discrete in itertools.product(rates, keeps, discretes):
-            ts1 = msprime.mutate(ts, rate=rate, keep=keep, discrete=discrete, **kwargs)
+            ts1 = msprime.mutate(
+                ts,
+                rate=rate,
+                keep=keep,
+                discrete=discrete,
+                kept_mutations_before_end_time=True,
+                **kwargs,
+            )
             ts2 = py_mutate(ts, rate=rate, keep=keep, discrete=discrete, **kwargs)
             tables1 = ts1.dump_tables()
             tables2 = ts2.dump_tables()
@@ -1539,7 +1615,7 @@ class Mutation:
             parent_id = self.parent.id
         s = f"\t{self.id}\t\tnode: {self.node}\tparent: {parent_id}"
         s += f"\ttime: {self.time}\t{self.derived_state}\t{self.metadata}"
-        s += f"\t(new: {self.new})\tkeep: {self.keep}"
+        s += f"\t(new: {self.new})\tkeep: {self.keep}]"
         return s
 
 
@@ -1657,7 +1733,6 @@ class PythonMutationGenerator:
         return site
 
     def initialise_sites(self, tables):
-        nodes = tables.nodes
         mutation_rows = iter(tables.mutations)
         mutation_row = next(mutation_rows, None)
         j = 0
@@ -1671,7 +1746,7 @@ class PythonMutationGenerator:
             while mutation_row is not None and mutation_row.site == site_id:
                 site.add_mutation(
                     node=mutation_row.node,
-                    time=nodes.time[mutation_row.node],
+                    time=mutation_row.time,
                     new=False,
                     derived_state=mutation_row.derived_state,
                     metadata=mutation_row.metadata,
@@ -1699,6 +1774,7 @@ class PythonMutationGenerator:
                         mutation.derived_state,
                         parent=parent_id,
                         metadata=mutation.metadata,
+                        time=mutation.time,
                     )
                     assert mutation_id > parent_id
                     mutation.id = mutation_id
