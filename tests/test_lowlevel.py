@@ -2372,7 +2372,7 @@ class TestSimMutations(unittest.TestCase):
         tables.nodes.add_row(0)
         tables.sites.add_row(0, "a")
         for _ in range(8192):
-            tables.mutations.add_row(0, node=0, derived_state="b")
+            tables.mutations.add_row(0, node=0, time=0, derived_state="b")
         tables.build_index()
         tables.compute_mutation_parents()
         self.verify_block_size(tables)
@@ -2389,7 +2389,7 @@ class TestSimMutations(unittest.TestCase):
         tables.nodes.add_row(0)
         tables.sites.add_row(0, "a")
         big_alloc = 64 * 1024
-        tables.mutations.add_row(0, node=0, derived_state="b" * big_alloc)
+        tables.mutations.add_row(0, node=0, time=0, derived_state="b" * big_alloc)
         self.verify_block_size(tables)
 
     def test_keep_mutations_block_size_metadata(self):
@@ -2398,7 +2398,7 @@ class TestSimMutations(unittest.TestCase):
         tables.nodes.add_row(0)
         tables.sites.add_row(0, "a", metadata=b"x" * big_alloc)
         self.verify_block_size(tables)
-        tables.mutations.add_row(0, node=0, derived_state="b" * 2 * big_alloc)
+        tables.mutations.add_row(0, node=0, time=0, derived_state="b" * 2 * big_alloc)
         self.verify_block_size(tables)
 
 
