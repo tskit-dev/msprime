@@ -19,8 +19,6 @@
 """
 Utilities for working with intervals and interval maps.
 """
-import bisect
-import gzip
 import warnings
 
 import numpy as np
@@ -37,11 +35,12 @@ class RateMap:
     genome.
     """
 
-    def __init__(self, position, rate):
+    def __init__(self, position, rate, map_start=0):
         # We take copies to make sure there are no unintended consequences
         # later when a user modifies the arrays in this map.
-        self.position = np.array(position, copy=True)
-        self.rate = np.array(rate, copy=True)
+        self.position = np.array(position, dtype=float, copy=True)
+        self.rate = np.array(rate, dtype=float, copy=True)
+        self.map_start = map_start
         size = len(self.rate)
         if size < 1:
             raise ValueError("Must have at least two positions")
@@ -73,6 +72,17 @@ class RateMap:
     def size(self):
         return self.rate.shape[0]
 
+    @property
+    def mean_rate(self):
+        """
+        Return the weighted mean across all windows of the entire map.
+        """
+        window_sizes = self.position[1:] - self.position[:-1]
+        weights = window_sizes / self.sequence_length
+        if self.map_start != 0:
+            weights[0] = 0
+        return np.average(self.rate, weights=weights)
+
     def slice(self, start=None, end=None, trim=False):  # noqa: A003
         """
         Returns a subset of this rate map between the specified end
@@ -81,60 +91,62 @@ class RateMap:
         zero rate regions such that the sequence length of the
         new rate map is end - start.
         """
-        # TODO change this to use numpy operations. We can keep the existing
-        # implentation using lists in the tests as a useful comparison.
-        positions = list(self.position)
-        rates = list(self.rate) + [0]
-
         if start is None:
             i = 0
             start = 0
         if end is None:
-            end = positions[-1]
-            j = len(positions)
+            end = self.position[-1]
+            j = len(self.position)
 
         if (
             start < 0
             or end < 0
-            or start > positions[-1]
-            or end > positions[-1]
+            or start > self.position[-1]
+            or end > self.position[-1]
             or start > end
         ):
             raise IndexError(f"Invalid subset: start={start}, end={end}")
 
         if start != 0:
-            i = bisect.bisect_left(positions, start)
-            if start < positions[i]:
+            i = np.searchsorted(self.position, start, side="left")
+            if start < self.position[i]:
                 i -= 1
-        if end != positions[-1]:
-            j = bisect.bisect_right(positions, end, lo=i)
+        if end != self.position[-1]:
+            j = i + np.searchsorted(self.position[i:], end, side="right")
+            if end > self.position[j - 1]:
+                j += 1
 
-        new_positions = list(positions[i:j])
-        new_rates = list(rates[i:j])
-        new_positions[0] = start
-        if end > new_positions[-1]:
-            new_positions.append(end)
-            new_rates.append(0)
-        else:
-            new_rates[-1] = 0
+        position = self.position[i:j].copy()
+        rate = self.rate[i : j - 1].copy()
+        position[0] = start
+        position[-1] = end
+        map_start = 0
+
         if trim:
-            new_positions = [pos - start for pos in new_positions]
+            position -= start
         else:
-            if new_positions[0] != 0:
-                if new_rates[0] == 0:
-                    new_positions[0] = 0
+            # Prepend or extend zero-rate region at start of map.
+            if position[0] != 0:
+                map_start = position[0]  # TODO: is this what we want here?
+                if rate[0] == 0:
+                    position[0] = 0
                 else:
-                    new_positions.insert(0, 0)
-                    new_rates.insert(0, 0.0)
-            if new_positions[-1] != positions[-1]:
-                new_positions.append(positions[-1])
-                new_rates.append(0)
-        return self.__class__(new_positions, new_rates[:-1])
+                    position = np.insert(position, 0, 0)
+                    rate = np.insert(rate, 0, 0)
+            # Append or extend zero-rate region at end of map.
+            if position[-1] != self.position[-1]:
+                if rate[-1] == 0:
+                    position[-1] = self.position[-1]
+                else:
+                    position = np.append(position, self.position[-1])
+                    rate = np.append(rate, 0)
+
+        return self.__class__(position, rate, map_start=map_start)
 
     def __getitem__(self, key):
         """
         Use slice syntax for obtaining a rate map subset. E.g.
-            >>> recomb_map_4m_to_5m = recomb_map[4e6:5e6]
+            >>> rate_map_4m_to_5m = rate_map[4e6:5e6]
         """
         if not isinstance(key, slice) or key.step is not None:
             raise TypeError("Only interval slicing is supported")
@@ -214,87 +226,35 @@ class RecombinationMap:
         """
         return cls([0, length], [rate, 0], num_loci=num_loci)
 
-    # TODO port this code to be a top-level function, msprime.read_hapmap, which
-    # will return a RateMap. We can keep this function here for compatability,
-    # but use the other definition.
     @classmethod
     def read_hapmap(cls, filename):
         """
-        Parses the specified file in HapMap format. These files must be
-        white-space-delimited, and contain a single header line (which is
-        ignored), and then each subsequent line contains the starting position
-        and recombination rate for the segment from that position (inclusive)
-        to the starting position on the next line (exclusive). Starting
-        positions of each segment are given in units of bases, and
-        recombination rates in centimorgans/Megabase. The first column in this
-        file is ignored, as are additional columns after the third (Position is
-        assumed to be the second column, and Rate is assumed to be the third).
-        If the first starting position is not equal to zero, then a
-        zero-recombination region is inserted at the start of the chromosome.
+        Parses the specified file in HapMap format.
 
-        A sample of this format is as follows::
-
-            Chromosome	Position(bp)	Rate(cM/Mb)	Map(cM)
-            chr1	55550	        2.981822	0.000000
-            chr1	82571	        2.082414	0.080572
-            chr1	88169	        2.081358	0.092229
-            chr1	254996	        3.354927	0.439456
-            chr1	564598	        2.887498	1.478148
-            ...
-            chr1	182973428	2.512769	122.832331
-            chr1	183630013	0.000000	124.482178
+        .. warning::
+            This method is deprecated, use the module-level
+            :func:`read_hapmap` function instead.
 
         :param str filename: The name of the file to be parsed. This may be
             in plain text or gzipped plain text.
+        :return: A RecombinationMap object.
         """
-        positions = []
-        rates = []
-        if filename.endswith(".gz"):
-            f = gzip.open(filename)
-        else:
-            f = open(filename)
-        try:
-            # Skip the header line
-            f.readline()
-            for j, line in enumerate(f):
-                pos, rate, = map(float, line.split()[1:3])
-                if j == 0:
-                    map_start = pos
-                    if pos != 0:
-                        positions.append(0)
-                        rates.append(0)
-                positions.append(pos)
-                # Rate is expressed in centimorgans per megabase, which
-                # we convert to per-base rates
-                rates.append(rate * 1e-8)
-            if rate != 0:
-                raise ValueError(
-                    "The last rate provided in the recombination map must be zero"
-                )
-        finally:
-            f.close()
-        return cls(positions, rates, map_start=map_start)
+        warnings.warn(
+            "RecombinationMap.read_hapmap() is deprecated. "
+            "Use msprime.read_hapmap() instead.",
+            FutureWarning,
+        )
+        rate_map = read_hapmap(filename)
+        rate = np.append(rate_map.rate, 0)
+        return cls(rate_map.position, rate, map_start=rate_map.map_start)
 
-    # TODO add this functionality to the RateMap class and put in a call to
-    # that here.
     @property
     def mean_recombination_rate(self):
         """
         Return the weighted mean recombination rate
         across all windows of the entire recombination map.
         """
-        chrom_length = self.map.sequence_length
-
-        positions = self.map.position
-        positions_diff = positions[1:]
-        positions_diff = np.append(positions_diff, chrom_length)
-        window_sizes = positions_diff - positions
-
-        weights = window_sizes / chrom_length
-        if self.map_start != 0:
-            weights[0] = 0
-        rates = self.get_rates()
-        return np.average(rates, weights=weights)
+        return self.map.mean_rate
 
     def get_total_recombination_rate(self):
         """
@@ -347,3 +307,52 @@ class RecombinationMap:
 
     def asdict(self):
         return self.map.asdict()
+
+
+def read_hapmap(filename):
+    # Black barfs with an INTERNAL_ERROR trying to reformat this docstring,
+    # so we explicitly disable reformatting here.
+    # fmt: off
+    """
+    Parses the specified file in HapMap format. These files must be
+    white-space-delimited, and contain a single header line (which is
+    ignored), and then each subsequent line contains the starting position
+    and recombination rate for the segment from that position (inclusive)
+    to the starting position on the next line (exclusive). Starting
+    positions of each segment are given in units of bases, and
+    recombination rates in centimorgans/Megabase. The first column in this
+    file is ignored, as are additional columns after the third (Position is
+    assumed to be the second column, and Rate is assumed to be the third).
+    If the first starting position is not equal to zero, then a
+    zero-recombination region is inserted at the start of the chromosome.
+
+    A sample of this format is as follows::
+
+        Chromosome	Position(bp)	Rate(cM/Mb)	Map(cM)
+        chr1	55550	        2.981822	0.000000
+        chr1	82571	        2.082414	0.080572
+        chr1	88169	        2.081358	0.092229
+        chr1	254996	        3.354927	0.439456
+        chr1	564598	        2.887498	1.478148
+        ...
+        chr1	182973428	2.512769	122.832331
+        chr1	183630013	0.000000	124.482178
+
+    :param str filename: The name of the file to be parsed. This may be
+        in plain text or gzipped plain text.
+    :return: A RateMap object.
+    """
+    # fmt: on
+    hapmap = np.loadtxt(filename, skiprows=1, usecols=(1, 2))
+    position = hapmap[:, 0]
+    # Rate is expressed in centimorgans per megabase, which
+    # we convert to per-base rates
+    rate = 1e-8 * hapmap[:, 1]
+
+    map_start = position[0]
+    if map_start != 0:
+        position = np.insert(position, 0, 0)
+        rate = np.insert(rate, 0, 0)
+    if rate[-1] != 0:
+        raise ValueError("The last rate provided in the recombination map must be zero")
+    return RateMap(position, rate[:-1], map_start=map_start)
