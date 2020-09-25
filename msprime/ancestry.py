@@ -123,6 +123,7 @@ def parse_model_arg(model_arg):
         "elements are model change events. These can either be described "
         "by a (time, model) tuple or SimulationModelChange instances."
     )
+
     if isinstance(model_arg, (list, tuple)):
         if len(model_arg) < 1:
             raise ValueError(err)
