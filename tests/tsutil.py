@@ -78,6 +78,7 @@ def insert_branch_mutations(ts, mutations_per_branch=1):
                         )
                         parent = mutation[u]
     add_provenance(tables.provenances, "insert_branch_mutations")
+    tables.compute_mutation_times()
     return tables.tree_sequence()
 
 
@@ -115,6 +116,7 @@ def insert_multichar_mutations(ts, seed=1, max_len=10):
             derived_state = rng.choice(letters) * rng.randint(0, max_len)
         tables.mutations.add_row(site=site, node=u, derived_state=derived_state)
     add_provenance(tables.provenances, "insert_multichar_mutations")
+    tables.compute_mutation_times()
     return tables.tree_sequence()
 
 
@@ -184,6 +186,7 @@ def add_random_metadata(ts, seed=1, max_length=10):
     mutations.set_columns(
         site=mutations.site,
         node=mutations.node,
+        time=mutations.time,
         parent=mutations.parent,
         derived_state=mutations.derived_state,
         derived_state_offset=mutations.derived_state_offset,

@@ -4401,18 +4401,21 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
     size_t size;
     mutation_model_t *model = NULL;
     int discrete_sites = false;
+    int kept_mutations_before_end_time = false;
     static char *kwlist[] = {
         "tables", "random_generator", "rate_map", "model",
-        "discrete_sites", "keep", "start_time", "end_time", NULL};
+        "discrete_sites", "keep", "kept_mutations_before_end_time",
+        "start_time", "end_time", NULL};
     mutgen_t mutgen;
     int err;
 
     memset(&mutgen, 0, sizeof(mutgen));
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O|iidd", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O|iiidd", kwlist,
             &LightweightTableCollectionType, &tables,
             &RandomGeneratorType, &random_generator,
             &PyDict_Type, &rate_map,
-            &py_model, &discrete_sites, &keep, &start_time, &end_time)) {
+            &py_model, &discrete_sites, &keep, &kept_mutations_before_end_time,
+            &start_time, &end_time)) {
         goto out;
     }
     if (LightweightTableCollection_check_state(tables) != 0
@@ -4452,6 +4455,9 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
     }
     if (keep) {
         flags |= MSP_KEEP_SITES;
+    }
+    if (kept_mutations_before_end_time) {
+        flags |= MSP_KEPT_MUTATIONS_BEFORE_END_TIME; 
     }
     err = mutgen_generate(&mutgen, flags);
     if (err != 0) {
