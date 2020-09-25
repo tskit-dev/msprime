@@ -69,3 +69,16 @@ def get_random_seed():
         # be unique, even across different processes.
         _seed_rng_map[pid] = random.Random()
     return _seed_rng_map[pid].randint(1, 2 ** 32 - 1)
+
+
+def isinteger(value):
+    """
+    Returns True if the specified value can be converted losslessly to an
+    integer.
+    """
+    try:
+        int_val = int(value)
+        float_val = float(value)
+        return int_val == float_val
+    except (ValueError, TypeError):
+        return False

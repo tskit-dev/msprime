@@ -1105,7 +1105,7 @@ test_dtwf_migration_matrix_not_stochastic(void)
 }
 
 static void
-test_dtwf_gene_conversion(void)
+test_dtwf_errors(void)
 {
     int ret;
     uint32_t n = 10;
@@ -1113,6 +1113,7 @@ test_dtwf_gene_conversion(void)
     gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
 
+    /* GC is supported */
     ret = build_sim(&msp, &tables, rng, 1, 1, NULL, n);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_gene_conversion_rate(&msp, 1);
@@ -1125,10 +1126,24 @@ test_dtwf_gene_conversion(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_GC_NOT_SUPPORTED);
-
     msp_free(&msp);
-    gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
+
+    /* Any ploidy other than 2 is an error */
+    ret = build_sim(&msp, &tables, rng, 1, 1, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_ploidy(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DTWF_DIPLOID_ONLY);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    gsl_rng_free(rng);
 }
 
 static void
@@ -2927,7 +2942,7 @@ main(int argc, char **argv)
         { "test_dtwf_zero_pop_size", test_dtwf_zero_pop_size },
         { "test_dtwf_migration_matrix_not_stochastic",
             test_dtwf_migration_matrix_not_stochastic },
-        { "test_dtwf_gene_conversion", test_dtwf_gene_conversion },
+        { "test_dtwf_errors", test_dtwf_errors },
 
         { "test_pedigree_single_locus_simulation",
             test_pedigree_single_locus_simulation },

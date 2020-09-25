@@ -4610,6 +4610,10 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
         ret = MSP_ERR_DTWF_GC_NOT_SUPPORTED;
         goto out;
     }
+    if (self->ploidy != 2) {
+        ret = MSP_ERR_DTWF_DIPLOID_ONLY;
+        goto out;
+    }
 
     n = malloc(self->num_populations * sizeof(int));
     mig_tmp = malloc(self->num_populations * sizeof(double));

@@ -515,7 +515,7 @@ class TestSimulationState(LowLevelTestCase):
             else:
                 self.assertEqual(segment_am + record_am, n)
         self.assertEqual(len(tables.migrations), sim.num_migrations)
-        if sim.store_migrations:
+        if sim.record_migrations:
             self.assertGreaterEqual(
                 sim.num_migrations, np.sum(sim.num_migration_events)
             )
@@ -1304,7 +1304,7 @@ class TestSimulator(LowLevelTestCase):
             self.assertRaises(TypeError, f, store_migrations=bad_type)
         for store_records in [True, False]:
             sim = f(store_migrations=store_records)
-            self.assertEqual(sim.store_migrations, store_records)
+            self.assertEqual(sim.record_migrations, store_records)
             sim.run()
             if store_records:
                 self.assertGreater(sim.num_migrations, 0)
@@ -1321,7 +1321,7 @@ class TestSimulator(LowLevelTestCase):
                 self.assertGreater(migration.time, 0)
         # By default, this should be off.
         sim = f()
-        self.assertFalse(sim.store_migrations)
+        self.assertFalse(sim.record_migrations)
 
     def test_deleting_tables(self):
         rng = _msprime.RandomGenerator(1)
@@ -1900,12 +1900,12 @@ class TestRandomGenerator(unittest.TestCase):
     def test_seed(self):
         for s in [1, 10, 2 ** 32 - 1]:
             rng = _msprime.RandomGenerator(s)
-            self.assertEqual(rng.get_seed(), s)
+            self.assertEqual(rng.seed, s)
 
     def test_uninitialised(self):
         uninitialised_rng = _msprime.RandomGenerator.__new__(_msprime.RandomGenerator)
         with self.assertRaises(SystemError):
-            uninitialised_rng.get_seed()
+            uninitialised_rng.seed
         with self.assertRaises(SystemError):
             uninitialised_rng.flat()
         with self.assertRaises(SystemError):

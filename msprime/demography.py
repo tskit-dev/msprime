@@ -114,6 +114,17 @@ class Demography:
                     "Demographic events must be a list of DemographicEvent "
                     "instances sorted in non-decreasing order of time."
                 )
+        for population in self.populations:
+            population.validate()
+
+    def insert_populations(self, tables):
+        """
+        Insert population definitions for this demography into the specified
+        set of tables.
+        """
+        assert len(tables.populations) == 0
+        for population in self.populations:
+            tables.populations.add_row(metadata=population.temporary_hack_for_metadata)
 
     def sample(self, *args, **kwargs):
         """
@@ -226,6 +237,16 @@ class Demography:
         return demography
 
     @staticmethod
+    def simple_model(population_size=1):
+        """
+        Returns a simple single-population model.
+        """
+        check_population_size(population_size)
+        pop = Population(initial_size=population_size, name="pop_0")
+        model = Demography(populations=[pop])
+        return model
+
+    @staticmethod
     def island_model(num_populations, migration_rate, Ne=1):
         """
         Returns a :class:`.Demography` object with the specified number of
@@ -257,6 +278,7 @@ class Demography:
         np.fill_diagonal(model.migration_matrix, 0)
         return model
 
+    # FIXME change Ne to population_size.
     @staticmethod
     def stepping_stone_1d(num_populations, migration_rate, Ne=1, circular=True):
         """
@@ -450,6 +472,11 @@ class Population:
             growth_rate=pop_config.growth_rate,
             temporary_hack_for_metadata=pop_config.metadata,
         )
+
+    def validate(self):
+        # TODO more checks, and put in population ID/names
+        if self.initial_size < 0:
+            raise ValueError("Negative population size")
 
 
 # This was lifted out of older code as-is. No point in updating it
@@ -839,13 +866,14 @@ class DemographyDebugger:
     def _make_epochs(self):
         self.epochs = []
         # Create some samples to keep the simulator factory happy
+        # FIXME samples shouldn't be needed here any more.
         for j, pop in enumerate(self.demography.populations):
             if pop.initial_size is None or pop.initial_size > 0:
                 samples = 2 * [Sample(population=j, time=0)]
                 break
         else:
             raise ValueError("No population with non-zero initial size.")
-        simulator = ancestry.simulator_factory(
+        simulator = ancestry._parse_simulate(
             samples=samples, demography=self.demography
         )
         start_time = 0

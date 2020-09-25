@@ -34,6 +34,7 @@ import tskit
 
 import msprime
 from msprime import _msprime
+from msprime import ancestry
 
 
 class TestNePopulationSizeEquivalence(unittest.TestCase):
@@ -2559,7 +2560,7 @@ class TestLowLevelConversions(unittest.TestCase):
 
     def test_migration_matrix(self):
         m = [[0, 1, 2], [3, 0, 4], [5, 6, 0]]
-        sim = msprime.simulator_factory(
+        sim = ancestry._parse_simulate(
             population_configurations=[
                 msprime.PopulationConfiguration(1),
                 msprime.PopulationConfiguration(1),

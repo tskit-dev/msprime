@@ -29,7 +29,8 @@ import sys
 import tskit
 
 import msprime
-from msprime import _msprime
+from . import _msprime
+from . import ancestry
 
 
 def set_sigpipe_handler():
@@ -238,7 +239,7 @@ class SimulationRunner:
         # msprime measure's time in units of generations, given a specific
         # Ne value whereas ms uses coalescent time. To be compatible with ms,
         # we therefore need to use an Ne value of 1/4.
-        self._simulator = msprime.simulator_factory(
+        self._simulator = ancestry._parse_simulate(
             Ne=0.25,
             sample_size=sample_size,
             recombination_map=self._recomb_map,
@@ -313,22 +314,29 @@ class SimulationRunner:
         # The first line of ms's output is the command line.
         print(" ".join(sys.argv), file=output)
         print(" ".join(str(s) for s in self._ms_random_seeds), file=output)
-        replicates = self._simulator.run_replicates(
-            self._num_replicates, mutation_rate=self._mutation_rate
-        )
-        for tree_sequence in replicates:
+        for ts in self._simulator.run_replicates(self._num_replicates):
+            # This is a hack. We should have some sort of "mutator" argument
+            # to run_replicates that passes in various args or something
+            seed = 1 + self._simulator.random_generator.uniform_int(2 ** 31 - 2)
+            ts = msprime.mutate(
+                ts,
+                self._mutation_rate,
+                model=msprime.BinaryMutationModel(),
+                random_seed=seed,
+            )
             print(file=output)
             print("//", file=output)
             if self._print_trees:
-                self.print_trees(tree_sequence, output)
+                self.print_trees(ts, output)
             if self._mutation_rate > 0:
-                s = tree_sequence.get_num_mutations()
+                assert ts.num_sites == ts.num_mutations
+                s = ts.num_sites
                 print("segsites:", s, file=output)
                 if s != 0:
                     print("positions: ", end="", file=output)
                     positions = [
                         mutation.position / self._num_loci
-                        for mutation in tree_sequence.mutations()
+                        for mutation in ts.mutations()
                     ]
                     positions.sort()
                     for position in positions:
@@ -338,11 +346,10 @@ class SimulationRunner:
                             file=output,
                         )
                     print(file=output)
-                    for h in tree_sequence.haplotypes():
+                    for h in ts.haplotypes():
                         print(h, file=output)
                 else:
                     print(file=output)
-            self._simulator.reset()
 
 
 def convert_int(value, parser):
