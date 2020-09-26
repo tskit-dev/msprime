@@ -20,6 +20,7 @@
 Tests for the provenance information attached to tree sequences.
 """
 import base64
+import inspect
 import json
 import marshal
 import unittest
@@ -30,6 +31,7 @@ import tskit
 
 import msprime
 from msprime import _msprime
+from msprime import ancestry
 
 
 class TestProvenance(unittest.TestCase):
@@ -45,6 +47,41 @@ class TestProvenance(unittest.TestCase):
             libs["gsl"], {"version": ".".join(map(str, _msprime.get_gsl_version()))}
         )
         self.assertEqual(libs["tskit"], {"version": tskit.__version__})
+
+
+class TestBuildProvenance(unittest.TestCase):
+    """
+    Tests for the provenance dictionary building. This dictionary is used
+    to encode the parameters for the msprime simulations.
+    """
+
+    def test_basic(self):
+        def somefunc(a, b):
+            frame = inspect.currentframe()
+            return ancestry._build_provenance("cmd", 1234, frame)
+
+        d = somefunc(42, 43)
+        tskit.validate_provenance(d)
+        params = d["parameters"]
+        self.assertEqual(params["command"], "cmd")
+        self.assertEqual(params["random_seed"], 1234)
+        self.assertEqual(params["a"], 42)
+        self.assertEqual(params["b"], 43)
+
+    def test_replicates(self):
+        def somefunc(*, a, b, num_replicates, replicate_index):
+            frame = inspect.currentframe()
+            return ancestry._build_provenance("the_cmd", 42, frame)
+
+        d = somefunc(b="b", a="a", num_replicates=100, replicate_index=1234)
+        tskit.validate_provenance(d)
+        params = d["parameters"]
+        self.assertEqual(params["command"], "the_cmd")
+        self.assertEqual(params["random_seed"], 42)
+        self.assertEqual(params["a"], "a")
+        self.assertEqual(params["b"], "b")
+        self.assertFalse("num_replicates" in d)
+        self.assertFalse("replicate_index" in d)
 
 
 class ValidateSchemas(unittest.TestCase):

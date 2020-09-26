@@ -26,6 +26,8 @@ import tempfile
 import unittest
 import warnings
 
+import numpy as np
+
 import msprime
 
 
@@ -274,27 +276,25 @@ class TestReadHapmap(unittest.TestCase):
             print("chr1 0 1", file=f)
             print("chr1 1 5 x", file=f)
             print("s    2 0 x x x", file=f)
-        rm = msprime.RecombinationMap.read_hapmap(self.temp_file)
-        self.assertEqual(rm.get_positions(), [0, 1, 2])
-        self.assertEqual(rm.get_rates(), [1e-8, 5e-8, 0])
+        rm = msprime.read_hapmap(self.temp_file)
+        np.testing.assert_array_equal(rm.position, [0, 1, 2])
+        np.testing.assert_array_equal(rm.rate, [1e-8, 5e-8])
 
     def test_read_hapmap_nonzero_start(self):
         with open(self.temp_file, "w+") as f:
             print("HEADER", file=f)
             print("chr1 1 5 x", file=f)
             print("s    2 0 x x x", file=f)
-        rm = msprime.RecombinationMap.read_hapmap(self.temp_file)
-        self.assertEqual(rm.get_positions(), [0, 1, 2])
-        self.assertEqual(rm.get_rates(), [0, 5e-8, 0])
+        rm = msprime.read_hapmap(self.temp_file)
+        np.testing.assert_array_equal(rm.position, [0, 1, 2])
+        np.testing.assert_array_equal(rm.rate, [0, 5e-8])
 
     def test_read_hapmap_nonzero_end(self):
         with open(self.temp_file, "w+") as f:
             print("HEADER", file=f)
             print("chr1 0 5 x", file=f)
             print("s    2 1 x x x", file=f)
-        self.assertRaises(
-            ValueError, msprime.RecombinationMap.read_hapmap, self.temp_file
-        )
+        self.assertRaises(ValueError, msprime.read_hapmap, self.temp_file)
 
     def test_read_hapmap_gzipped(self):
         try:
@@ -304,11 +304,24 @@ class TestReadHapmap(unittest.TestCase):
                 f.write(b"chr1 0 1\n")
                 f.write(b"chr1 1 5.5\n")
                 f.write(b"s    2 0\n")
-            rm = msprime.RecombinationMap.read_hapmap(filename)
-            self.assertEqual(rm.get_positions(), [0, 1, 2])
-            self.assertEqual(rm.get_rates(), [1e-8, 5.5e-8, 0])
+            rm = msprime.read_hapmap(filename)
+            np.testing.assert_array_equal(rm.position, [0, 1, 2])
+            np.testing.assert_array_equal(rm.rate, [1e-8, 5.5e-8])
         finally:
             os.unlink(filename)
+
+    def test_read_hapmap_deprecation_warning(self):
+        with open(self.temp_file, "w+") as f:
+            print("HEADER", file=f)
+            print("chr1 0 1", file=f)
+            print("chr1 1 5 x", file=f)
+            print("s    2 0 x x x", file=f)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            rm = msprime.RecombinationMap.read_hapmap(self.temp_file)
+            self.assertEqual(len(w), 1)
+        self.assertEqual(rm.get_positions(), [0, 1, 2])
+        self.assertEqual(rm.get_rates(), [1e-8, 5e-8, 0])
 
 
 class TestRecombinationMapInterface(unittest.TestCase):
@@ -379,7 +392,7 @@ class TestRecombinationMapInterface(unittest.TestCase):
         self.assertEqual(mean_rr, 0.0)
 
         # Test mean_recombination_rate is correct after reading from
-        # a hapmap file. RecombinationMap.read_hapmap() ignores the cM
+        # a hapmap file. read_hapmap() ignores the cM
         # field, so here we test against using the cM field directly.
         def hapmap_rr(hapmap_file):
             first_pos = 0
@@ -405,7 +418,7 @@ class TestRecombinationMapInterface(unittest.TestCase):
             hapfile = os.path.join(temp_dir, "hapmap.txt")
             with open(hapfile, "w") as f:
                 f.write(hapmap)
-            recomb_map = msprime.RecombinationMap.read_hapmap(f.name)
-            mean_rr = recomb_map.mean_recombination_rate
+            recomb_map = msprime.read_hapmap(f.name)
+            mean_rr = recomb_map.mean_rate
             mean_rr2 = hapmap_rr(hapfile)
         self.assertAlmostEqual(mean_rr, mean_rr2, places=15)

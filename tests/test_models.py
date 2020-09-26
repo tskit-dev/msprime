@@ -26,6 +26,7 @@ import numpy as np
 
 import msprime
 from msprime import _msprime
+from msprime import ancestry
 
 
 class TestIntrospectionInterface(unittest.TestCase):
@@ -95,7 +96,7 @@ class TestModelFactory(unittest.TestCase):
 
     def test_bad_model_names(self):
         for bad_model in ["NOT", "", "MODEL"]:
-            self.assertRaises(ValueError, msprime.model_factory, model=bad_model)
+            self.assertRaises(ValueError, ancestry._model_factory, model=bad_model)
 
     def test_named_model_variants(self):
         simulation_models = [
@@ -106,22 +107,22 @@ class TestModelFactory(unittest.TestCase):
             ("wf_ped", msprime.WrightFisherPedigree),
         ]
         for name, model_class in simulation_models:
-            model = msprime.model_factory(model=name.upper())
+            model = ancestry._model_factory(model=name.upper())
             self.assertIsInstance(model, model_class)
-            model = msprime.model_factory(model=name.title())
+            model = ancestry._model_factory(model=name.title())
             self.assertIsInstance(model, model_class)
-            model = msprime.model_factory(model=name)
+            model = ancestry._model_factory(model=name)
             self.assertIsInstance(model, model_class)
 
     def test_named_parametric_models_fail(self):
         parametric_models = ["beta", "dirac"]
         for name in parametric_models:
             with self.assertRaises(ValueError):
-                msprime.model_factory(model=name)
+                ancestry._model_factory(model=name)
 
     def test_bad_models(self):
         for bad_type in [1234, {}]:
-            self.assertRaises(TypeError, msprime.model_factory, model=bad_type)
+            self.assertRaises(TypeError, ancestry._model_factory, model=bad_type)
 
     def test_model_instances(self):
         models = [
@@ -141,7 +142,7 @@ class TestModelFactory(unittest.TestCase):
             msprime.DiracCoalescent(psi=1, c=1),
         ]
         for model in models:
-            new_model = msprime.model_factory(model=model)
+            new_model = ancestry._model_factory(model=model)
             self.assertTrue(new_model is model)
             self.assertEqual(new_model.__dict__, model.__dict__)
 
@@ -152,50 +153,50 @@ class TestParseModel(unittest.TestCase):
     """
 
     def test_none(self):
-        model, events = msprime.parse_model_arg(None)
+        model, events = ancestry._parse_model_arg(None)
         self.assertEqual(model, msprime.StandardCoalescent())
         self.assertEqual(events, [])
 
     def test_single_model(self):
-        model, events = msprime.parse_model_arg("hudson")
+        model, events = ancestry._parse_model_arg("hudson")
         self.assertEqual(model, msprime.StandardCoalescent())
         self.assertEqual(events, [])
 
-        model, events = msprime.parse_model_arg(msprime.StandardCoalescent())
+        model, events = ancestry._parse_model_arg(msprime.StandardCoalescent())
         self.assertEqual(model, msprime.StandardCoalescent())
         self.assertEqual(events, [])
 
-        model, events = msprime.parse_model_arg("dtwf")
+        model, events = ancestry._parse_model_arg("dtwf")
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, [])
 
-        model, events = msprime.parse_model_arg(msprime.DiscreteTimeWrightFisher())
+        model, events = ancestry._parse_model_arg(msprime.DiscreteTimeWrightFisher())
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, [])
 
     def test_single_model_list(self):
-        model, events = msprime.parse_model_arg([None])
+        model, events = ancestry._parse_model_arg([None])
         self.assertEqual(model, msprime.StandardCoalescent())
         self.assertEqual(events, [])
 
         # Tuples are also accepted as input.
-        model, events = msprime.parse_model_arg((None,))
+        model, events = ancestry._parse_model_arg((None,))
         self.assertEqual(model, msprime.StandardCoalescent())
         self.assertEqual(events, [])
 
-        model, events = msprime.parse_model_arg(["hudson"])
+        model, events = ancestry._parse_model_arg(["hudson"])
         self.assertEqual(model, msprime.StandardCoalescent())
         self.assertEqual(events, [])
 
-        model, events = msprime.parse_model_arg([msprime.StandardCoalescent()])
+        model, events = ancestry._parse_model_arg([msprime.StandardCoalescent()])
         self.assertEqual(model, msprime.StandardCoalescent())
         self.assertEqual(events, [])
 
-        model, events = msprime.parse_model_arg(["dtwf"])
+        model, events = ancestry._parse_model_arg(["dtwf"])
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, [])
 
-        model, events = msprime.parse_model_arg([msprime.DiscreteTimeWrightFisher()])
+        model, events = ancestry._parse_model_arg([msprime.DiscreteTimeWrightFisher()])
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, [])
 
@@ -203,27 +204,27 @@ class TestParseModel(unittest.TestCase):
         expected_event = msprime.SimulationModelChange(
             time=1.33, model=msprime.StandardCoalescent()
         )
-        model, events = msprime.parse_model_arg(["dtwf", (1.33, "hudson")])
+        model, events = ancestry._parse_model_arg(["dtwf", (1.33, "hudson")])
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, [expected_event])
 
-        model, events = msprime.parse_model_arg(["dtwf", (1.33, None)])
+        model, events = ancestry._parse_model_arg(["dtwf", (1.33, None)])
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, [expected_event])
 
-        model, events = msprime.parse_model_arg(
+        model, events = ancestry._parse_model_arg(
             ["dtwf", (1.33, msprime.StandardCoalescent())]
         )
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, [expected_event])
 
-        model, events = msprime.parse_model_arg(["dtwf", expected_event])
+        model, events = ancestry._parse_model_arg(["dtwf", expected_event])
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, [expected_event])
         # We should take a copy of the event.
         self.assertIsNot(events[0], expected_event)
 
-        model, events = msprime.parse_model_arg(["dtwf", (None, None)])
+        model, events = ancestry._parse_model_arg(["dtwf", (None, None)])
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(
             events,
@@ -239,30 +240,30 @@ class TestParseModel(unittest.TestCase):
             msprime.SimulationModelChange(time=1, model=msprime.StandardCoalescent()),
             msprime.SimulationModelChange(time=2, model=msprime.SmcApproxCoalescent()),
         ]
-        model, events = msprime.parse_model_arg(["dtwf", (1, "hudson"), (2, "smc")])
+        model, events = ancestry._parse_model_arg(["dtwf", (1, "hudson"), (2, "smc")])
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, expected_events)
 
-        model, events = msprime.parse_model_arg(
+        model, events = ancestry._parse_model_arg(
             ["dtwf", (1, None), (2, msprime.SmcApproxCoalescent())]
         )
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, expected_events)
 
-        model, events = msprime.parse_model_arg(
+        model, events = ancestry._parse_model_arg(
             ["dtwf", expected_events[0], (2, msprime.SmcApproxCoalescent())]
         )
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, expected_events)
 
-        model, events = msprime.parse_model_arg(
+        model, events = ancestry._parse_model_arg(
             ["dtwf", expected_events[0], (2, msprime.SmcApproxCoalescent())]
         )
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, expected_events)
         self.assertIsNot(events[0], expected_events[0])
 
-        model, events = msprime.parse_model_arg(["dtwf"] + expected_events)
+        model, events = ancestry._parse_model_arg(["dtwf"] + expected_events)
         self.assertEqual(model, msprime.DiscreteTimeWrightFisher())
         self.assertEqual(events, expected_events)
         self.assertIsNot(events[0], expected_events[0])
@@ -270,28 +271,28 @@ class TestParseModel(unittest.TestCase):
 
     def test_errors(self):
         with self.assertRaises(ValueError):
-            msprime.parse_model_arg([])
+            ancestry._parse_model_arg([])
         with self.assertRaises(ValueError):
-            msprime.parse_model_arg("X")
+            ancestry._parse_model_arg("X")
         # Anything that's not a list or tuple is interpreted as a model
         with self.assertRaises(TypeError):
-            msprime.parse_model_arg({})
+            ancestry._parse_model_arg({})
 
         for bad_model_change_type in [None, "str", {}]:
             with self.assertRaises(TypeError):
-                msprime.parse_model_arg([None, bad_model_change_type])
+                ancestry._parse_model_arg([None, bad_model_change_type])
 
         for bad_model_change_tuple in [[], [1, None, None]]:
             with self.assertRaises(ValueError):
-                msprime.parse_model_arg(["hudson", bad_model_change_tuple])
+                ancestry._parse_model_arg(["hudson", bad_model_change_tuple])
 
         for bad_time in ["sdf", [], {}]:
             with self.assertRaises(ValueError):
-                msprime.parse_model_arg(["hudson", (bad_time, "hudson")])
+                ancestry._parse_model_arg(["hudson", (bad_time, "hudson")])
 
         for bad_model_type in [[], {}]:
             with self.assertRaises(TypeError):
-                msprime.parse_model_arg(["hudson", (1, bad_model_type)])
+                ancestry._parse_model_arg(["hudson", (1, bad_model_type)])
 
 
 class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
@@ -302,7 +303,7 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
 
     def test_hudson(self):
         threshold = 20
-        sim = msprime.simulator_factory(
+        sim = ancestry._parse_simulate(
             sample_size=10,
             recombination_rate=10,
             random_generator=_msprime.RandomGenerator(2),
@@ -312,7 +313,7 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
         self.assertGreater(sim.num_recombination_events, threshold)
         self.assertEqual(sim.num_rejected_common_ancestor_events, 0)
 
-        sim2 = msprime.simulator_factory(
+        sim2 = ancestry._parse_simulate(
             sample_size=10,
             recombination_rate=10,
             model="hudson",
@@ -328,11 +329,8 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
     def test_smc_variants(self):
         for model in ["smc", "smc_prime"]:
             threshold = 20
-            sim = msprime.simulator_factory(
-                sample_size=10,
-                recombination_rate=5,
-                model=model,
-                random_generator=_msprime.RandomGenerator(3),
+            sim = ancestry._parse_simulate(
+                sample_size=10, recombination_rate=5, model=model,
             )
             sim.run()
             self.assertGreater(sim.num_rejected_common_ancestor_events, 0)

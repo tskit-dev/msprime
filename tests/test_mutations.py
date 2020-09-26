@@ -98,7 +98,6 @@ class TestMatrixMutationModel(unittest.TestCase):
             self.assertTrue(np.allclose(sum(model.transition_matrix[j]), 1.0))
         s = str(model)
         self.assertIsInstance(s, str)
-        print(s)
         self.assertTrue(s.startswith("Mutation model with alleles"))
 
     def validate_stationary(self, model):

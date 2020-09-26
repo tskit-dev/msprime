@@ -265,6 +265,8 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_UNKNOWN_TIME_NOT_SUPPORTED:
             ret = "Kept mutations must have known mutation times.";
+        case MSP_ERR_DTWF_DIPLOID_ONLY:
+            ret = "The DTWF model only supports ploidy = 2";
             break;
         default:
             ret = "Error occurred generating error string. Please file a bug "

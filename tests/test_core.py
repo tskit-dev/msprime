@@ -22,6 +22,8 @@ Test cases for the high level interface to utils.
 import multiprocessing
 import unittest
 
+import numpy as np
+
 import msprime.core as core
 
 
@@ -70,3 +72,44 @@ class TestDefaultRandomSeeds(unittest.TestCase):
         self.assertEqual(len(set(seeds)), n)
         pool.terminate()
         pool.join()
+
+
+class TestIsInteger(unittest.TestCase):
+    """
+    Tests for the function used to determine if a value can be interpreted
+    as an integer.
+    """
+
+    def test_good_values(self):
+        numpy_int_array = np.array([100], dtype=int)
+        numpy_float_array = np.array([100], dtype=np.float64)
+        good_values = [
+            -1,
+            0,
+            10 ** 6,
+            "1",
+            "100_000",
+            0x123,
+            1.0,
+            numpy_int_array[0],
+            numpy_int_array,
+            numpy_float_array,
+            numpy_float_array[0],
+        ]
+        for good_value in good_values:
+            self.assertTrue(core.isinteger(good_value))
+
+    def test_bad_values(self):
+        numpy_float_array = np.array([100.1], dtype=np.float64)
+        bad_values = [
+            [],
+            None,
+            {},
+            numpy_float_array,
+            numpy_float_array[0],
+            1.1,
+            "1.1",
+            1e-3,
+        ]
+        for bad_value in bad_values:
+            self.assertFalse(core.isinteger(bad_value))
