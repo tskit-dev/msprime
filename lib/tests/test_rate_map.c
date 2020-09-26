@@ -301,6 +301,121 @@ test_msp_binary_interval_search_edge_cases(void)
 }
 
 static void
+verify_search(fast_search_lookup_t *zoom, const double *values, size_t n)
+{
+    const double step = values[n - 1] / (n * 3.14159);
+    const double stop = values[n - 1] + 2 * step;
+    double x;
+    size_t expect, got;
+    for (x = 0; x < stop; x += step) {
+        expect = msp_binary_interval_search(x, values, n);
+        got = fast_search_lookup_find(zoom, x) - values;
+        CU_ASSERT_EQUAL(expect, got);
+    }
+}
+
+static void
+test_fast_search_lookup(void)
+{
+    {
+        double p[] = { 0.0 };
+        size_t n = 1;
+        fast_search_lookup_t speedy;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        CU_ASSERT_EQUAL(0.0, speedy.query_multiplier);
+        CU_ASSERT_EQUAL(2, speedy.num_lookups);
+        CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
+        CU_ASSERT_EQUAL(p + n, speedy.lookups[1]);
+        verify_search(&speedy, p, n);
+        fast_search_lookup_free(&speedy);
+    }
+    {
+        double p[] = { 0.0, 0.0, 0.0 };
+        size_t n = 3;
+        fast_search_lookup_t speedy;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        CU_ASSERT_EQUAL(2.0 / DBL_MIN, speedy.query_multiplier);
+        CU_ASSERT_EQUAL(2, speedy.num_lookups);
+        CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
+        CU_ASSERT_EQUAL(p + n, speedy.lookups[1]);
+        verify_search(&speedy, p, n);
+        fast_search_lookup_free(&speedy);
+    }
+    fast_search_lookup_t speedy;
+    {
+        double p[] = { 0.0, 1.0 };
+        size_t n = 2;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        CU_ASSERT_EQUAL(1.0, speedy.query_multiplier);
+        CU_ASSERT_EQUAL(3, speedy.num_lookups);
+        CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
+        CU_ASSERT_EQUAL(p + 1, speedy.lookups[1]);
+        CU_ASSERT_EQUAL(p + 2, speedy.lookups[2]);
+        verify_search(&speedy, p, n);
+    }
+    {
+        double p[] = { 0, 1, 2 };
+        size_t n = 3;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        CU_ASSERT_EQUAL(1.0, speedy.query_multiplier);
+        CU_ASSERT_EQUAL(4, speedy.num_lookups);
+        verify_search(&speedy, p, n);
+    }
+    {
+        double p[] = { 0, 2 };
+        size_t n = 2;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        CU_ASSERT_EQUAL(0.5, speedy.query_multiplier);
+        CU_ASSERT_EQUAL(3, speedy.num_lookups);
+        verify_search(&speedy, p, n);
+    }
+    {
+        double p[] = { 0, 0.25 };
+        size_t n = 2;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        CU_ASSERT_EQUAL(4.0, speedy.query_multiplier);
+        CU_ASSERT_EQUAL(3, speedy.num_lookups);
+        verify_search(&speedy, p, n);
+    }
+    {
+        double p[] = { 0, 8 };
+        size_t n = 2;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        CU_ASSERT_EQUAL(0.125, speedy.query_multiplier);
+        CU_ASSERT_EQUAL(3, speedy.num_lookups);
+        verify_search(&speedy, p, n);
+    }
+    {
+        double p[] = { 0, 1, 2, 3 };
+        size_t n = 4;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        CU_ASSERT_EQUAL(1.0, speedy.query_multiplier);
+        CU_ASSERT_EQUAL(5, speedy.num_lookups);
+        verify_search(&speedy, p, n);
+    }
+    fast_search_lookup_free(&speedy);
+}
+
+static void
+test_fast_search_lookup_bad_input(void)
+{
+    fast_search_lookup_t speedy;
+    {
+        double p[] = {};
+        CU_ASSERT(0 != fast_search_lookup_alloc(&speedy, p, 0));
+    }
+    {
+        double p[] = { 1, 2 };
+        CU_ASSERT(0 != fast_search_lookup_alloc(&speedy, p, 2));
+    }
+    {
+        double p[] = { -1, 2 };
+        CU_ASSERT(0 != fast_search_lookup_alloc(&speedy, p, 2));
+    }
+    fast_search_lookup_free(&speedy);
+}
+
+static void
 test_interval_map(void)
 {
     int ret;
@@ -354,6 +469,8 @@ main(int argc, char **argv)
         { "test_binary_search", test_msp_binary_interval_search },
         { "test_binary_search_repeating", test_msp_binary_interval_search_repeating },
         { "test_binary_search_edge_cases", test_msp_binary_interval_search_edge_cases },
+        { "test_fast_search_lookup_bad_input", test_fast_search_lookup_bad_input },
+        { "test_fast_search_lookup", test_fast_search_lookup },
         { "test_interval_map", test_interval_map },
         CU_TEST_INFO_NULL,
     };

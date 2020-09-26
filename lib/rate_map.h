@@ -24,14 +24,9 @@
 #include <stdio.h>
 
 typedef struct {
-    const double *start;
-    size_t num;
-} search_range_t;
-
-typedef struct {
-    int power_shift;
+    double query_multiplier;
     size_t num_lookups;
-    search_range_t *lookups;
+    const double **lookups;
 } fast_search_lookup_t;
 
 typedef struct {
