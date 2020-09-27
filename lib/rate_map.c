@@ -163,13 +163,10 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
     size_t index;
 
     assert(pos >= 0.0);
-    if (pos <= position[0]) {
+    if (pos <= 0.0) {
         return 0;
     }
     assert(pos <= position[self->size]);
-    if (pos >= position[self->size]) {
-        return self->cumulative_mass[self->size];
-    }
     ptr = fast_search_lookup_find(&(self->position_lookup), pos);
     /* any `pos` greather than or equal to max position has `index == self->size` */
     index = (size_t)(ptr - position);
@@ -255,12 +252,18 @@ static bool
 fast_search_lookup_valid(fast_search_lookup_t *self)
 {
     const double *start, *stop;
+    size_t idx;
 
     if (!(self->query_multiplier >= 0.0)) { // NaN not valid
         return false;
     }
     if (self->num_lookups < 2) {
         return false;
+    }
+    for (idx = 1; idx < self->num_lookups; idx++) {
+        if (self->lookups[idx - 1] > self->lookups[idx]) {
+            return false;
+        }
     }
     start = self->lookups[0];
     stop = self->lookups[self->num_lookups - 1];
@@ -317,7 +320,7 @@ fast_search_lookup_alloc(
     fast_search_lookup_t *self, const double *elements, size_t n_elements)
 {
     int ret = 0;
-    double max_element, upper_bound;
+    double max_element;
 
     const size_t max_input_size = 1L << (DBL_MANT_DIG - 1); // 4096 terabytes
 
@@ -340,9 +343,13 @@ fast_search_lookup_alloc(
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    upper_bound = fmax(max_element, DBL_MIN); // want a positive upper bound
+
     self->query_multiplier
-        = higher_power_of_2((double) n_elements - 1) / higher_power_of_2(upper_bound);
+        = higher_power_of_2((double) n_elements - 1) / higher_power_of_2(max_element);
+    if (!isfinite(self->query_multiplier)) {
+        self->query_multiplier = exp2(DBL_MAX_EXP - 1); // largest possible power of 2
+    }
+    assert(isfinite(self->query_multiplier));
 
     self->num_lookups = 2 + (size_t)(max_element * self->query_multiplier);
 
@@ -371,21 +378,24 @@ fast_search_lookup_free(fast_search_lookup_t *self)
 const double *
 fast_search_lookup_find(fast_search_lookup_t *self, double query)
 {
-    size_t idx;
+    const double **lookups = self->lookups;
+    size_t lookup_idx, element_idx, n_subelements;
+    const double *subelements;
 
     assert(query >= 0.0);
     assert(fast_search_lookup_valid(self));
 
-    const double **back = self->lookups + self->num_lookups - 1;
-    idx = (size_t)(query * self->query_multiplier);
-    if (idx >= self->num_lookups - 1) {
-        return *back;
+    lookup_idx = (size_t)(query * self->query_multiplier);
+    if (lookup_idx + 1 >= self->num_lookups) {
+        return lookups[self->num_lookups - 1];
     }
-    const double **range = self->lookups + idx;
-    idx = msp_binary_interval_search(query, *range, (size_t)(*(range + 1) - *range));
-    size_t hack = (size_t)(*range - self->lookups[0]);
-    assert(idx + hack
-           == msp_binary_interval_search(query, self->lookups[0],
-                  (size_t)(self->lookups[self->num_lookups - 1] - self->lookups[0])));
-    return *range + idx;
+    subelements = lookups[lookup_idx];
+    n_subelements = (size_t)(lookups[lookup_idx + 1] - subelements);
+    element_idx = msp_binary_interval_search(query, subelements, n_subelements);
+
+    assert(element_idx + (size_t)(subelements - lookups[0])
+           == msp_binary_interval_search(query, lookups[0],
+                  (size_t)(lookups[self->num_lookups - 1] - lookups[0])));
+
+    return subelements + element_idx;
 }
