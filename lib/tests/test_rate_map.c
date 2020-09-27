@@ -177,6 +177,12 @@ test_translate_position_and_recomb_mass(void)
     /* inside recombination interval */
     CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, 8), 18);
 
+    /* max valid position */
+    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, 20), 25);
+
+    /* fishy input */
+    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, -DBL_EPSILON), 0);
+
     rate_map_free(&map);
 }
 
@@ -195,108 +201,140 @@ test_rate_map_mass_between(void)
     rate_map_free(&discrete_map);
 }
 
+static size_t
+get_equal_upper_bounds(const double *values, size_t n_values, double query)
+{
+    size_t ret;
+    ret = idx_1st_upper_bound(values, n_values, query);
+    CU_ASSERT_EQUAL(ret, idx_1st_strict_upper_bound(values, n_values, query));
+    return ret;
+}
+
+static size_t
+get_adjacent_upper_bounds(const double *values, size_t n_values, double query)
+{
+    size_t ret;
+    ret = idx_1st_upper_bound(values, n_values, query);
+    CU_ASSERT_EQUAL(ret + 1, idx_1st_strict_upper_bound(values, n_values, query));
+    return ret;
+}
+
 static void
-test_msp_binary_interval_search(void)
+test_binary_search(void)
 {
     double values[] = { -10, 10, 20, 30 };
     size_t size = 4;
     size_t idx;
 
     // Search from bottom
-    idx = msp_binary_interval_search(-11, values, size);
+    idx = get_equal_upper_bounds(values, size, -INFINITY);
     CU_ASSERT_EQUAL(idx, 0);
-    // Exact match returns index of value
-    idx = msp_binary_interval_search(-10, values, size);
+    idx = get_equal_upper_bounds(values, size, -11);
+    CU_ASSERT_EQUAL(idx, 0);
+    // Exact match
+    idx = get_adjacent_upper_bounds(values, size, -10);
     CU_ASSERT_EQUAL(idx, 0);
     // values[index-1] < query <= values[index]
-    idx = msp_binary_interval_search(9, values, size);
+    idx = get_equal_upper_bounds(values, size, 9);
     CU_ASSERT_EQUAL(idx, 1);
     // exact match
-    idx = msp_binary_interval_search(10, values, size);
+    idx = get_adjacent_upper_bounds(values, size, 10);
     CU_ASSERT_EQUAL(idx, 1);
     // Within mid interval
-    idx = msp_binary_interval_search(11, values, size);
+    idx = get_equal_upper_bounds(values, size, 11);
     CU_ASSERT_EQUAL(idx, 2);
-    idx = msp_binary_interval_search(19, values, size);
+    idx = get_equal_upper_bounds(values, size, 19);
     CU_ASSERT_EQUAL(idx, 2);
     // Exact
-    idx = msp_binary_interval_search(20, values, size);
+    idx = get_adjacent_upper_bounds(values, size, 20);
     CU_ASSERT_EQUAL(idx, 2);
     // Within
-    idx = msp_binary_interval_search(21, values, size);
+    idx = get_equal_upper_bounds(values, size, 21);
     CU_ASSERT_EQUAL(idx, 3);
     // Exact
-    idx = msp_binary_interval_search(30, values, size);
+    idx = get_adjacent_upper_bounds(values, size, 30);
     CU_ASSERT_EQUAL(idx, 3);
     // from the top - return last element
-    idx = msp_binary_interval_search(31, values, size);
+    idx = get_equal_upper_bounds(values, size, 31);
     CU_ASSERT_EQUAL(idx, 4);
-    // way above - one past, like numpy.searchsorted and C++ std::lower_bound
-    idx = msp_binary_interval_search(300, values, size);
+    // way above - one past, like numpy.searchsorted and C++ std::lower_bound/upper_bound
+    idx = get_equal_upper_bounds(values, size, 300);
+    CU_ASSERT_EQUAL(idx, 4);
+    idx = get_equal_upper_bounds(values, size, INFINITY);
+    CU_ASSERT_EQUAL(idx, 4);
+    // NaNnoying case
+    // like C++ std::lower_bound/upper_bound
+    idx = idx_1st_upper_bound(values, size, NAN);
+    CU_ASSERT_EQUAL(idx, 0);
+    idx = idx_1st_strict_upper_bound(values, size, NAN);
     CU_ASSERT_EQUAL(idx, 4);
 }
 
 static void
-test_msp_binary_interval_search_repeating(void)
+test_binary_search_repeating(void)
 {
     double values_repeating[] = { 0, 10, 10, 30 };
     size_t size = 4;
     size_t idx;
 
     // Same as above
-    idx = msp_binary_interval_search(-1, values_repeating, size);
+    idx = get_equal_upper_bounds(values_repeating, size, -1);
     CU_ASSERT_EQUAL(idx, 0);
     // Want leftmost interval
-    idx = msp_binary_interval_search(10, values_repeating, size);
+    idx = idx_1st_upper_bound(values_repeating, size, 10);
     CU_ASSERT_EQUAL(idx, 1);
+    idx = idx_1st_strict_upper_bound(values_repeating, size, 10);
+    CU_ASSERT_EQUAL(idx, 3);
     // Same as above
-    idx = msp_binary_interval_search(11, values_repeating, size);
+    idx = get_equal_upper_bounds(values_repeating, size, 11);
     CU_ASSERT_EQUAL(idx, 3);
 }
 
 static void
-test_msp_binary_interval_search_edge_cases(void)
+test_binary_search_edge_cases(void)
 {
     double values_empty[] = {};
     size_t idx;
 
     // Empty list
-    idx = msp_binary_interval_search(0, values_empty, 0);
+    idx = get_equal_upper_bounds(values_empty, 0, 0);
     CU_ASSERT_EQUAL(idx, 0);
 
     // Size 1 list
     double values_one[] = { 10 };
 
     // below
-    idx = msp_binary_interval_search(9, values_one, 1);
+    idx = get_equal_upper_bounds(values_one, 1, 9);
     CU_ASSERT_EQUAL(idx, 0);
     // exact
-    idx = msp_binary_interval_search(10, values_one, 1);
+    idx = get_adjacent_upper_bounds(values_one, 1, 10);
     CU_ASSERT_EQUAL(idx, 0);
     // above
-    idx = msp_binary_interval_search(11, values_one, 1);
+    idx = get_equal_upper_bounds(values_one, 1, 11);
     CU_ASSERT_EQUAL(idx, 1);
 
     // Size 2 list
     double values_two[] = { 10, 20 };
-    idx = msp_binary_interval_search(9, values_two, 2);
+    idx = get_equal_upper_bounds(values_two, 2, 9);
     CU_ASSERT_EQUAL(idx, 0);
-    idx = msp_binary_interval_search(10, values_two, 2);
+    idx = get_adjacent_upper_bounds(values_two, 2, 10);
     CU_ASSERT_EQUAL(idx, 0);
-    idx = msp_binary_interval_search(15, values_two, 2);
+    idx = get_equal_upper_bounds(values_two, 2, 15);
     CU_ASSERT_EQUAL(idx, 1);
-    idx = msp_binary_interval_search(20, values_two, 2);
+    idx = get_adjacent_upper_bounds(values_two, 2, 20);
     CU_ASSERT_EQUAL(idx, 1);
-    idx = msp_binary_interval_search(21, values_two, 2);
+    idx = get_equal_upper_bounds(values_two, 2, 21);
     CU_ASSERT_EQUAL(idx, 2);
 
     // All zeros
     double values_zeros[] = { 0, 0, 0 };
-    idx = msp_binary_interval_search(-1, values_zeros, 3);
+    idx = get_equal_upper_bounds(values_zeros, 3, -1);
     CU_ASSERT_EQUAL(idx, 0);
-    idx = msp_binary_interval_search(0, values_zeros, 3);
+    idx = idx_1st_upper_bound(values_zeros, 3, 0);
     CU_ASSERT_EQUAL(idx, 0);
-    idx = msp_binary_interval_search(1, values_zeros, 3);
+    idx = idx_1st_strict_upper_bound(values_zeros, 3, 0);
+    CU_ASSERT_EQUAL(idx, 3);
+    idx = get_equal_upper_bounds(values_zeros, 3, 1);
     CU_ASSERT_EQUAL(idx, 3);
 }
 
@@ -351,9 +389,9 @@ main(int argc, char **argv)
         { "test_translate_position_and_recomb_mass",
             test_translate_position_and_recomb_mass },
         { "test_rate_map_mass_between", test_rate_map_mass_between },
-        { "test_binary_search", test_msp_binary_interval_search },
-        { "test_binary_search_repeating", test_msp_binary_interval_search_repeating },
-        { "test_binary_search_edge_cases", test_msp_binary_interval_search_edge_cases },
+        { "test_binary_search", test_binary_search },
+        { "test_binary_search_repeating", test_binary_search_repeating },
+        { "test_binary_search_edge_cases", test_binary_search_edge_cases },
         { "test_interval_map", test_interval_map },
         CU_TEST_INFO_NULL,
     };
