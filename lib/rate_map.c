@@ -178,7 +178,7 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
     return self->cumulative_mass[index] + offset * rate[index];
 }
 
-#ifndef NDEBUG
+#ifdef EXTRAVAGANT_ASSERTS
 static size_t
 slow_emulate_msp_binary_interval_search(
     double query, const double *values, size_t n_values)
@@ -211,9 +211,11 @@ rate_map_mass_to_position(rate_map_t *self, double mass)
     /* search for upper bounds strictly before the final cum mass
        any mass greather than or equal to final cum mass returns self->size */
     index = msp_binary_interval_search(mass, self->cumulative_mass, self->size);
+#ifdef EXTRAVAGANT_ASSERTS
     assert(index
            == slow_emulate_msp_binary_interval_search(
                   mass, self->cumulative_mass, self->size));
+#endif
     assert(index > 0);
     index--;
     mass_in_interval = mass - self->cumulative_mass[index];
@@ -371,6 +373,13 @@ fast_search_lookup_free(fast_search_lookup_t *self)
     return 0;
 }
 
+static inline const double *
+ptr_first_upper_bound(const double *start, const double *stop, double query)
+{
+    assert(start <= stop);
+    return start + msp_binary_interval_search(query, start, (size_t)(stop - start));
+}
+
 /*  PRE-CONDITIONS:
  *      1) query >= 0.0
  *      2) self is valid fast_search_lookup_t
@@ -379,23 +388,17 @@ const double *
 fast_search_lookup_find(fast_search_lookup_t *self, double query)
 {
     const double **lookups = self->lookups;
-    size_t lookup_idx, element_idx, n_subelements;
-    const double *subelements;
+    size_t idx;
+    const double *ret;
 
     assert(query >= 0.0);
-    assert(fast_search_lookup_valid(self));
-
-    lookup_idx = (size_t)(query * self->query_multiplier);
-    if (lookup_idx + 1 >= self->num_lookups) {
-        return lookups[self->num_lookups - 1];
+    idx = (size_t)(query * self->query_multiplier);
+    if (idx + 1 >= self->num_lookups) {
+        ret = lookups[self->num_lookups - 1];
+    } else {
+        ret = ptr_first_upper_bound(lookups[idx], lookups[idx + 1], query);
     }
-    subelements = lookups[lookup_idx];
-    n_subelements = (size_t)(lookups[lookup_idx + 1] - subelements);
-    element_idx = msp_binary_interval_search(query, subelements, n_subelements);
-
-    assert(element_idx + (size_t)(subelements - lookups[0])
-           == msp_binary_interval_search(query, lookups[0],
-                  (size_t)(lookups[self->num_lookups - 1] - lookups[0])));
-
-    return subelements + element_idx;
+    assert(
+        ret == ptr_first_upper_bound(lookups[0], lookups[self->num_lookups - 1], query));
+    return ret;
 }
