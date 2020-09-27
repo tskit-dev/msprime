@@ -281,19 +281,18 @@ fast_search_lookup_init_lookups(
 {
     int ret = 0;
     const double *ptr, *stop;
-    uint32_t i;
-    double query = 0.0;
+    uint32_t idx;
+    double query;
 
+    self->lookups[0] = elements;
     ptr = elements;
     stop = elements + n_elements;
-    for (i = 0; i < self->num_lookups; i++) {
+    for (idx = 1; idx < self->num_lookups; idx++) {
+        query = idx / self->query_multiplier;
         while (ptr < stop && *ptr < query) {
             ptr++;
         }
-        self->lookups[i] = ptr;
-        if (ptr < stop) {
-            query = (i + 1) / self->query_multiplier;
-        }
+        self->lookups[idx] = ptr;
     }
     if (!fast_search_lookup_valid(self)) {
         ret = MSP_ERR_ASSERTION_FAILED;
@@ -303,14 +302,18 @@ out:
     return ret;
 }
 
-/* Returns the least power of 2 higher than (or equal to) `x` for positive numbers,
+/* Returns the least power of 2 greater than or equal to `x` for positive numbers,
  * otherwise returns zero.
  */
 static double
 higher_power_of_2(double x)
 {
     assert(x >= 0);
-    return (x > 0 ? exp2(ceil(logb(x))) : 0.0);
+    if (x <= 0) {
+        return 0.0;
+    }
+    double floor = exp2(logb(x));
+    return (floor < x ? floor * 2.0 : floor);
 }
 
 /* PRE-CONDITIONS:
