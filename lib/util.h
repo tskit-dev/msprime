@@ -122,6 +122,8 @@ void __msp_safe_free(void **ptr);
 #define msp_safe_free(pointer) __msp_safe_free((void **) &(pointer))
 
 size_t msp_binary_interval_search(double query, const double *values, size_t n_values);
+size_t find_first_strict_upper_bound(
+    const double *elements, size_t n_elements, double query);
 bool doubles_almost_equal(double a, double b, double eps);
 
 size_t probability_list_select(double u, size_t num_probs, double const *probs);

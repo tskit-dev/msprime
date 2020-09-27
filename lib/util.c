@@ -344,6 +344,26 @@ msp_binary_interval_search(double query, const double *values, size_t n_values)
     return l;
 }
 
+size_t
+find_first_strict_upper_bound(
+    const double *restrict elements, size_t n_elements, double query)
+{
+    size_t start = 0;
+    size_t stop = n_elements;
+    size_t mid;
+
+    while (start < stop) {
+        mid = (start + stop) / 2;
+        // assert(elements[start] <= elements[mid]);
+        if (elements[mid] <= query) {
+            start = mid + 1;
+        } else {
+            stop = mid;
+        }
+    }
+    return stop;
+}
+
 bool
 doubles_almost_equal(double a, double b, double eps)
 {
