@@ -226,7 +226,7 @@ def _human_readable_size(size, decimal_places=2):
 
 def json_encode_provenance(provenance_dict, num_replicates=1):
     """
-        Return a JSON representation of the provenance
+    Return a JSON representation of the provenance
     """
     prov = ProvenanceEncoderDecoder().encode(provenance_dict)
     if len(prov) > 2_097_152:

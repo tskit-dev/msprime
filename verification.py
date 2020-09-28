@@ -102,8 +102,8 @@ _scrm_executable = ["./data/scrm"]
 _msms_executable = ["java", "-Xmx1G", "-jar", "data/msms.jar"]
 
 
-def flatten(l):
-    return [x for sublist in l for x in sublist]
+def flatten(li):
+    return [x for sublist in li for x in sublist]
 
 
 def harmonic_number(n):
@@ -284,7 +284,7 @@ class MsTest(Test):
 
     def _deserialize_breakpoints(self, df):
         breakpoints_strs = df["breakpoints"]
-        breakpoints = [ast.literal_eval(l) for l in breakpoints_strs]
+        breakpoints = [ast.literal_eval(literal) for literal in breakpoints_strs]
         df["breakpoints"] = breakpoints
         return df
 
@@ -528,7 +528,7 @@ class MsDocExamples(MsTest):
         self._run("15 1000 -t 2.0 -I 3 10 4 1 5.0 -m 1 2 10.0 -m 2 1 9.0")
 
     def test_msdoc_structure_ex3(self):
-        self._run("15 1000 -t 10.0 -I 3 10 4 1 -ma x 1.0 2.0 3.0 x 4.0 5.0 6.0 x",)
+        self._run("15 1000 -t 10.0 -I 3 10 4 1 -ma x 1.0 2.0 3.0 x 4.0 5.0 6.0 x")
 
     def test_msdoc_outgroup_sequence(self):
         self._run("11 1000 -t 2.0 -I 2 1 10 -ej 6.0 1 2")
@@ -633,7 +633,7 @@ class MsHotTest(MsTest):
         self._run_variable_recombination_coalescent_stats(cmd)
 
     def test_mshotdoc_hotspot_ex(self):
-        self._run("10 1000 -t 10.4 -r 10.0 25000 -v 2 100 200 10 7000 8000 20",)
+        self._run("10 1000 -t 10.4 -r 10.0 25000 -v 2 100 200 10 7000 8000 20")
 
     def test_mshot_zero_recomb_interval(self):
         self._run("10 1000 -t 10.4 -r 10.0 25000 -v 1 5000 13000 0")
@@ -745,7 +745,7 @@ class DiscoalTest(Test):
         mod_list.append((None, None))
         # scale theta and rho and create recomb_map
         recomb_map = msprime.RecombinationMap.uniform_map(
-            seq_length, rho / (seq_length - 1),
+            seq_length, rho / (seq_length - 1)
         )
         mu = theta / seq_length
         replicates = msprime.simulate(
@@ -1035,9 +1035,7 @@ class MsmsSweeps(Test):
                     ]
                     positions.sort()
                     for position in positions:
-                        print(
-                            "{0:.{1}f}".format(position, 8), end=" ", file=output,
-                        )
+                        print("{0:.{1}f}".format(position, 8), end=" ", file=output)
                     print(file=output)
                     for h in tree_sequence.haplotypes():
                         print(h, file=output)
@@ -1254,7 +1252,7 @@ class SweepAnalytical(Test):
         sm.qqplot_2samples(df["exp_means"], df["alpha_means"], line="45")
         pyplot.xlabel("expected sojourn time")
         pyplot.ylabel("simulated sojourn time")
-        f = self.output_dir / f"sojourn.png"
+        f = self.output_dir / "sojourn.png"
         pyplot.savefig(f, dpi=72)
         pyplot.close("all")
 
@@ -1466,7 +1464,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
 
     def test_dtwf_vs_coalescent_single_forced_recombination(self):
         recombination_map = msprime.RecombinationMap(
-            positions=[0, 100, 101, 201], rates=[0, 1, 0, 0],
+            positions=[0, 100, 101, 201], rates=[0, 1, 0, 0]
         )
         self._run(
             sample_size=10,
@@ -1504,7 +1502,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
             )
         ]
         recombination_map = msprime.RecombinationMap(
-            positions=[0, int(5e7)], rates=[1e-8, 0],
+            positions=[0, int(5e7)], rates=[1e-8, 0]
         )
         self._run(
             population_configurations=population_configurations,
@@ -1521,7 +1519,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
             )
         ]
         recombination_map = msprime.RecombinationMap(
-            positions=[0, int(1e7)], rates=[1e-8, 0],
+            positions=[0, int(1e7)], rates=[1e-8, 0]
         )
         demographic_events = [
             msprime.PopulationParametersChange(
@@ -1635,7 +1633,7 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
             )
 
         recombination_map = msprime.RecombinationMap(
-            positions=[0, num_loci], rates=[recombination_rate, 0],
+            positions=[0, num_loci], rates=[recombination_rate, 0]
         )
 
         if migration_matrix is None:
@@ -1663,17 +1661,28 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
 
     def test_dtwf_vs_coalescent_2_pops(self):
         self._run(
-            [500, 500], [5, 5], int(1e6), 1e-8, num_replicates=500,
+            [500, 500],
+            [5, 5],
+            int(1e6),
+            1e-8,
+            num_replicates=500,
         )
 
     def test_dtwf_vs_coalescent_3_pops(self):
         self._run(
-            [500, 500, 500], [5, 2, 0], int(1e7), 1e-8,
+            [500, 500, 500],
+            [5, 2, 0],
+            int(1e7),
+            1e-8,
         )
 
     def test_dtwf_vs_coalescent_4_pops(self):
         self._run(
-            [1000, 1000, 1000, 1000], [0, 20, 0, 0], int(1e6), 1e-8, num_replicates=500,
+            [1000, 1000, 1000, 1000],
+            [0, 20, 0, 0],
+            int(1e6),
+            1e-8,
+            num_replicates=500,
         )
 
     def test_dtwf_vs_coalescent_3_pops_asymm_mig(self):
@@ -1831,7 +1840,7 @@ class DtwfVsSlim(Test):
 
         num_loci = int(num_loci)
         recombination_map = msprime.RecombinationMap(
-            positions=[0, num_loci], rates=[recombination_rate, 0],
+            positions=[0, num_loci], rates=[recombination_rate, 0]
         )
         slim_args["RHO"] = recombination_rate
         slim_args["NUM_LOCI"] = num_loci
@@ -1866,7 +1875,7 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
         num_loci = np.random.randint(1e5, 1e7)
         rho = 1e-8
         recombination_map = msprime.RecombinationMap(
-            positions=[0, num_loci], rates=[rho, 0],
+            positions=[0, num_loci], rates=[rho, 0]
         )
 
         population_configurations = []
@@ -1934,24 +1943,16 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
         )
 
     def test_dtwf_vs_coalescent_random_1(self):
-        self._run(
-            num_populations=2, num_replicates=200, num_demographic_events=3,
-        )
+        self._run(num_populations=2, num_replicates=200, num_demographic_events=3)
 
     def test_dtwf_vs_coalescent_random_2(self):
-        self._run(
-            num_populations=3, num_replicates=200, num_demographic_events=3,
-        )
+        self._run(num_populations=3, num_replicates=200, num_demographic_events=3)
 
     def test_dtwf_vs_coalescent_random_3(self):
-        self._run(
-            num_populations=2, num_replicates=200, num_demographic_events=6,
-        )
+        self._run(num_populations=2, num_replicates=200, num_demographic_events=6)
 
     def test_dtwf_vs_coalescent_random_4(self):
-        self._run(
-            num_populations=1, num_replicates=200, num_demographic_events=8,
-        )
+        self._run(num_populations=1, num_replicates=200, num_demographic_events=8)
 
 
 class RecombinationBreakpointTest(Test):
@@ -2380,30 +2381,14 @@ class DiracSFS(KnownSFS):
         )
 
     def test_xi_dirac_expected_sfs_n3(self):
-        self._run(
-            sample_size=3, ploidy=2, psi=0.1, c=10, sfs=[0.6667343, 0.3332657],
-        )
-        self._run(
-            sample_size=3, ploidy=2, psi=0.3, c=10, sfs=[0.6682113, 0.3317887],
-        )
-        self._run(
-            sample_size=3, ploidy=2, psi=0.5, c=10, sfs=[0.6721853, 0.3278147],
-        )
-        self._run(
-            sample_size=3, ploidy=2, psi=0.9, c=10, sfs=[0.6852703, 0.3147297],
-        )
-        self._run(
-            sample_size=3, ploidy=1, psi=0.1, c=10000, sfs=[0.678571, 0.321429],
-        )
-        self._run(
-            sample_size=3, ploidy=1, psi=0.3, c=10000, sfs=[0.708333, 0.291667],
-        )
-        self._run(
-            sample_size=3, ploidy=1, psi=0.5, c=10000, sfs=[0.750000, 0.250000],
-        )
-        self._run(
-            sample_size=3, ploidy=1, psi=0.9, c=10000, sfs=[0.916667, 0.083333],
-        )
+        self._run(sample_size=3, ploidy=2, psi=0.1, c=10, sfs=[0.6667343, 0.3332657])
+        self._run(sample_size=3, ploidy=2, psi=0.3, c=10, sfs=[0.6682113, 0.3317887])
+        self._run(sample_size=3, ploidy=2, psi=0.5, c=10, sfs=[0.6721853, 0.3278147])
+        self._run(sample_size=3, ploidy=2, psi=0.9, c=10, sfs=[0.6852703, 0.3147297])
+        self._run(sample_size=3, ploidy=1, psi=0.1, c=10000, sfs=[0.678571, 0.321429])
+        self._run(sample_size=3, ploidy=1, psi=0.3, c=10000, sfs=[0.708333, 0.291667])
+        self._run(sample_size=3, ploidy=1, psi=0.5, c=10000, sfs=[0.750000, 0.250000])
+        self._run(sample_size=3, ploidy=1, psi=0.9, c=10000, sfs=[0.916667, 0.083333])
 
     def test_xi_dirac_expected_sfs_psi_0_1_c_10(self):
         self._run(
@@ -2795,7 +2780,7 @@ class XiGrowth(Test):
         sim = msprime.simulator_factory(
             population_configurations=[
                 msprime.PopulationConfiguration(
-                    sample_size=2, initial_size=pop_size, growth_rate=growth_rate,
+                    sample_size=2, initial_size=pop_size, growth_rate=growth_rate
                 )
             ],
             model=model,
@@ -2927,7 +2912,7 @@ class ContinuousVsDiscreteRecombination(Test):
 
 class UniformRecombination(ContinuousVsDiscreteRecombination):
     def _run(self, model):
-        recomb_map = msprime.RecombinationMap.uniform_map(2000000, 1e-5,)
+        recomb_map = msprime.RecombinationMap.uniform_map(2000000, 1e-5)
         self.run_cont_discrete_comparison(model, recomb_map)
 
     def test_hudson_cont_discrete_uniform(self):
@@ -3337,7 +3322,7 @@ class HudsonAnalytical(Test):
             ms_mean[j] = np.mean(T)
 
             T = self.get_num_trees(
-                _mspms_executable + cmd.split() + self.get_ms_seeds(), num_replicates,
+                _mspms_executable + cmd.split() + self.get_ms_seeds(), num_replicates
             )
             msp_mean[j] = np.mean(T)
         pyplot.plot(rho, ms_mean, "o")
@@ -3650,13 +3635,13 @@ class SmcTest(Test):
                 n, num_replicates, rho[j], num_loci[j]
             )
             T = self.get_scrm_oldest_time(
-                _scrm_executable + cmd.split() + self.get_ms_seeds(), num_replicates,
+                _scrm_executable + cmd.split() + self.get_ms_seeds(), num_replicates
             )
             scrm_mean[j] = np.mean(T)
 
             cmd += " -l 0"
             T = self.get_scrm_oldest_time(
-                _scrm_executable + cmd.split() + self.get_ms_seeds(), num_replicates,
+                _scrm_executable + cmd.split() + self.get_ms_seeds(), num_replicates
             )
             scrm_smc_mean[j] = np.mean(T)
 
@@ -3711,7 +3696,7 @@ class SmcTest(Test):
             # Run SCRM under the SMC to see if we get the correct variance.
             cmd = "{} {} -L -r {} {} -l 0".format(n, num_replicates, rho[j], L[j])
             T = self.get_scrm_num_trees(
-                _scrm_executable + cmd.split() + self.get_ms_seeds(), num_replicates,
+                _scrm_executable + cmd.split() + self.get_ms_seeds(), num_replicates
             )
             mean_scrm[j] = np.mean(T)
             var_scrm[j] = np.var(T)
@@ -3992,7 +3977,7 @@ class SimulateFrom(Test):
             sim.reset()
 
         logging.debug(
-            "{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}".format(
+            "{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}".format(
                 -1,
                 np.mean(num_trees1),
                 np.mean(num_nodes1),
@@ -4050,7 +4035,7 @@ class SimulateFrom(Test):
                 sim.reset()
 
             logging.debug(
-                "{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}".format(
+                "{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}".format(
                     t,
                     np.mean(num_trees2),
                     np.mean(num_nodes2),
@@ -4864,16 +4849,16 @@ def main():
     )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
-        "--quiet", "-q", action="store_true", help="Do not write any output",
+        "--quiet", "-q", action="store_true", help="Do not write any output"
     )
     group.add_argument(
-        "--debug", "-D", action="store_true", help="Write out debug output",
+        "--debug", "-D", action="store_true", help="Write out debug output"
     )
     parser.add_argument(
-        "--no-progress", "-n", action="store_true", help="Do not show progress bar",
+        "--no-progress", "-n", action="store_true", help="Do not show progress bar"
     )
     parser.add_argument(
-        "--list", "-l", action="store_true", help="List available checks and exit",
+        "--list", "-l", action="store_true", help="List available checks and exit"
     )
     args = parser.parse_args()
     if args.list:

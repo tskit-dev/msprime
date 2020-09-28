@@ -1008,7 +1008,7 @@ def get_mspms_parser(error_handler=None):
         "num_replicates", type=positive_int, help="Number of independent replicates"
     )
     init_parser.add_argument(
-        "-V", "--version", action="version", version=f"%(prog)s {msprime.__version__}",
+        "-V", "--version", action="version", version=f"%(prog)s {msprime.__version__}"
     )
     init_parser.add_argument(
         "-f",
@@ -1072,7 +1072,7 @@ def get_msp_parser():
         description="Command line interface for msprime.", epilog=msprime_citation_text
     )
     top_parser.add_argument(
-        "-V", "--version", action="version", version=f"%(prog)s {msprime.__version__}",
+        "-V", "--version", action="version", version=f"%(prog)s {msprime.__version__}"
     )
     subparsers = top_parser.add_subparsers(dest="subcommand")
     subparsers.required = True

@@ -2600,7 +2600,7 @@ class HistoricalSamplingMixin:
                 Ne=N,
                 model=self.model,
                 recombination_map=msprime.RecombinationMap.uniform_map(
-                    length=1, rate=recombination_rate,
+                    length=1, rate=recombination_rate
                 ),
                 samples=[msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
                 random_seed=3,
