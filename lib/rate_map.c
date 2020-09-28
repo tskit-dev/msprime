@@ -391,14 +391,16 @@ const double *
 fast_search_lookup_find(fast_search_lookup_t *self, double query)
 {
     const double **lookups = self->lookups;
+    double fidx;
     size_t idx;
     const double *ret;
 
     assert(query >= 0.0);
-    idx = (size_t)(query * self->query_multiplier);
-    if (idx + 1 >= self->num_lookups) {
+    fidx = query * self->query_multiplier;
+    if (fidx >= self->num_lookups - 1) {
         ret = lookups[self->num_lookups - 1];
     } else {
+        idx = (size_t) fidx;
         ret = ptr_first_upper_bound(lookups[idx], lookups[idx + 1], query);
     }
     assert(
