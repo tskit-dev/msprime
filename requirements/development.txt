@@ -21,6 +21,7 @@ sphinx
 sphinx-argparse
 sphinx_rtd_theme
 sphinx-issues
+jupyter-sphinx
 
 newick
 # We use JSON-schema to test out metadata handling.

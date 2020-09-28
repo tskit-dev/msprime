@@ -1059,10 +1059,10 @@ def sim_ancestry(
     samples=None,
     *,
     sequence_length=None,
+    discrete_genome=None,
     recombination_rate=None,
     gene_conversion_rate=None,
     gene_conversion_track_length=None,
-    discrete_genome=None,
     population_size=None,
     demography=None,
     ploidy=None,
@@ -1078,7 +1078,44 @@ def sim_ancestry(
     replicate_index=None,
     record_provenance=None,
 ):
+    """
+    Simulates an ancestral process described by a given model, demography and
+    set of samples and return the output as a
+    :class:`tskit.TreeSequence` (or a sequence of replicate tree sequences).
 
+    :param samples: The sampled individuals as either an integer, specifying
+        the number of individuals to sample at time zero in a single-population
+        model; or a list of :class:`.Sample` objects explicitly specifying the
+        time and population of every sample individual. Each sampled individual
+        corresponds to :math:`k` sample *nodes* when ``ploidy`` = :math:`k`.
+        Either ``samples`` or ``initial_state`` must be specified.
+        See :ref:`sec_ancestry_samples_ploidy` for usage examples.
+    :param int ploidy: The number of monoploid genomes per sample individual
+        (Default=2). See :ref:`sec_ancestry_samples_ploidy` for usage examples.
+    :param float sequence_length: The length of the genome sequence to simulate.
+        See :ref:`sec_ancestry_genome_length` for usage examples
+        for this parameter and how it interacts with other parameters.
+    :param bool discrete_genome: If True (the default) simulation occurs
+        in discrete genome coordinates such that recombination and
+        gene conversion breakpoints always occur at integer positions.
+        Thus, multiple (e.g.) recombinations can occur at the same
+        genome position. If ``discrete_genome`` is False simulations
+        are performed using continuous genome coordinates. In this
+        case multiple events at precisely the same genome location are very
+        unlikely (but technically possible).
+    :param recombination_rate: The rate of recombination along the sequence;
+        can be either a single value (specifying a single rate over the entire
+        sequence) or an instance of :class:`RateMap`.
+        See :ref:`sec_ancestry_recombination` for usage examples
+        for this parameter and how it interacts with other parameters.
+    :param gene_conversion_rate: The rate of gene conversion along the sequence;
+        can be either a single value (specifying a single rate over the entire
+        sequence) or an instance of :class:`RateMap`. If provided, a value
+        for ``gene_conversion_track_length`` must also be specified.
+        See :ref:`sec_ancestry_gene_conversion` for usage examples
+        for this parameter and how it interacts with other parameters.
+    :param gene_conversion_track_length: TODO
+    """
     random_generator = _parse_random_seed(random_seed)
     record_provenance = True if record_provenance is None else record_provenance
     provenance_dict = None
@@ -1087,7 +1124,6 @@ def sim_ancestry(
         provenance_dict = _build_provenance(
             "sim_ancestry", random_generator.seed, frame
         )
-
     sim = _parse_sim_ancestry(
         samples=samples,
         sequence_length=sequence_length,

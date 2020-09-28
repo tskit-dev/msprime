@@ -15,6 +15,10 @@ question to fellow ``msprime`` users, please send an email to the
 questions on the mailing list, you can help to build a searchable knowledge
 base.
 
+.. This TOC is a work in progress while we refactor the documentation for 1.0.
+   The idea is we refactor all the stuff that's currently in the tutorial and
+   API sections into the appropriate high-level sections.
+
 Contents:
 =========
 
@@ -23,12 +27,16 @@ Contents:
 
    introduction
    installation
-   tutorial
-   api
+   ancestry
+   mutations
+   demography
    cli
    development
    CITATION
    changelog
+
+   tutorial
+   api
 
 Indices and tables
 ==================
