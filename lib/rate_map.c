@@ -160,7 +160,6 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
     double base, offset;
     size_t index;
 
-    assert(pos >= 0.0);
     if (pos <= 0.0) {
         return 0;
     }
@@ -170,7 +169,6 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
     index--;
     base = self->cumulative_mass[index];
     offset = pos - position[index];
-    assert(offset >= 0);
     if (offset <= 0) {
         return base;
     }
