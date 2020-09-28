@@ -555,7 +555,7 @@ scikit-allel haplotype array.
     sequence it's extracted from, in most realistically-sized
     simulations!)
 
-.. _sec_demography:
+.. _sec_demography_old:
 
 Demography
 **********
