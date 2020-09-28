@@ -1964,7 +1964,7 @@ class RecombinationBreakpointTest(Test):
     def verify_breakpoint_distribution(
         self, name, sample_size, Ne, r, L, ploidy, model, growth_rate=0
     ):
-        sim = msprime.simulator_factory(
+        sim = msprime.ancestry._parse_simulate(
             Ne=Ne,
             recombination_rate=r,
             length=L,
@@ -2087,7 +2087,7 @@ class RecombinationMutationTest(Test):
         empirical_theta = []
         empirical_rho = []
         for _ in range(num_replicates):
-            sim = msprime.simulator_factory(
+            sim = msprime.ancestry._parse_simulate(
                 Ne=Ne,
                 recombination_rate=r,
                 length=L,
@@ -2185,7 +2185,7 @@ class XiVsHudsonTest(Test):
                 )
             logging.debug(f"Running: {simulate_args}")
             # replicates = msprime.simulate(**simulate_args)
-            sim = msprime.simulator_factory(**simulate_args)
+            sim = msprime.ancestry._parse_simulate(**simulate_args)
             replicates = sim.run_replicates(num_replicates)
             data = collections.defaultdict(list)
             for ts in replicates:
@@ -2255,7 +2255,7 @@ class KnownSFS(Test):
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
         tot_bl_sum = [0]
-        sim = msprime.simulator_factory(sample_size, ploidy=ploidy, model=model)
+        sim = msprime.ancestry._parse_simulate(sample_size, ploidy=ploidy, model=model)
         replicates = sim.run_replicates(num_replicates)
         for ts in replicates:
             for tree in ts.trees():
@@ -2777,7 +2777,7 @@ class XiGrowth(Test):
     def compare_tmrca(
         self, pop_size, growth_rate, model, num_replicates, a, b, ploidy, name
     ):
-        sim = msprime.simulator_factory(
+        sim = msprime.ancestry._parse_simulate(
             population_configurations=[
                 msprime.PopulationConfiguration(
                     sample_size=2, initial_size=pop_size, growth_rate=growth_rate
@@ -3705,7 +3705,7 @@ class SmcTest(Test):
             # of trees if we use the tree sequence. There is a significant
             # number of common ancestor events that result in a recombination
             # being undone.
-            exact_sim = msprime.simulator_factory(
+            exact_sim = msprime.ancestry._parse_simulate(
                 sample_size=n, recombination_rate=r, Ne=Ne, length=L[j]
             )
             for k in range(num_replicates):
@@ -3715,7 +3715,7 @@ class SmcTest(Test):
             mean_exact[j] = np.mean(num_trees)
             var_exact[j] = np.var(num_trees)
 
-            smc_sim = msprime.simulator_factory(
+            smc_sim = msprime.ancestry._parse_simulate(
                 sample_size=n, recombination_rate=r, Ne=Ne, length=L[j], model="smc"
             )
             for k in range(num_replicates):
@@ -3725,7 +3725,7 @@ class SmcTest(Test):
             mean_smc[j] = np.mean(num_trees)
             var_smc[j] = np.var(num_trees)
 
-            smc_prime_sim = msprime.simulator_factory(
+            smc_prime_sim = msprime.ancestry._parse_simulate(
                 sample_size=n,
                 recombination_rate=r,
                 Ne=Ne,
@@ -3956,7 +3956,7 @@ class SimulateFrom(Test):
         num_edges1 = np.zeros(num_replicates)
         num_nodes1 = np.zeros(num_replicates)
 
-        sim = msprime.simulator_factory(
+        sim = msprime.ancestry._parse_simulate(
             samples=samples,
             population_configurations=population_configurations,
             migration_matrix=migration_matrix,
@@ -3996,14 +3996,15 @@ class SimulateFrom(Test):
             num_ca_events2 = np.zeros(num_replicates)
             num_re_events2 = np.zeros(num_replicates)
             num_mig_events2 = np.zeros(num_replicates)
-            sim = msprime.simulator_factory(
+            sim = msprime.ancestry._parse_simulate(
                 samples=samples,
                 population_configurations=population_configurations,
                 migration_matrix=migration_matrix,
                 demographic_events=demographic_events,
                 recombination_rate=recombination_rate,
+                end_time=t,
             )
-            for j, ts in enumerate(sim.run_replicates(num_replicates, end_time=t)):
+            for j, ts in enumerate(sim.run_replicates(num_replicates)):
                 num_ca_events2[j] = sim.num_common_ancestor_events
                 num_re_events2[j] = sim.num_recombination_events
                 num_mig_events2[j] = sum(
@@ -4011,7 +4012,7 @@ class SimulateFrom(Test):
                 )
 
                 max_time = max(node.time for node in ts.nodes())
-                sim2 = msprime.simulator_factory(
+                sim2 = msprime.ancestry._parse_simulate(
                     from_ts=ts,
                     population_configurations=population_configurations,
                     migration_matrix=migration_matrix,
