@@ -356,7 +356,7 @@ verify_search(fast_search_lookup_t *zoom, const double *values, size_t n)
     }
     stop = values[n - 1] + 2 * step;
     for (x = 0; x < stop; x += step) {
-        expect = msp_binary_interval_search(x, values, n);
+        expect = idx_1st_strict_upper_bound(values, n, x);
         got = fast_search_lookup_find(zoom, x) - values;
         CU_ASSERT_EQUAL(expect, got);
     }

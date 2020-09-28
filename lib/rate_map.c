@@ -171,6 +171,7 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
     ptr = fast_search_lookup_find(&(self->position_lookup), pos);
     index = (size_t)(ptr - position);
     assert(index == idx_1st_strict_upper_bound(position, self->size + 1, pos));
+    assert(index > 0);
     index--;
     base = self->cumulative_mass[index];
     offset = pos - position[index];
@@ -358,13 +359,6 @@ fast_search_lookup_free(fast_search_lookup_t *self)
     return 0;
 }
 
-static inline const double *
-ptr_first_upper_bound(const double *start, const double *stop, double query)
-{
-    assert(start <= stop);
-    return start + msp_binary_interval_search(query, start, (size_t)(stop - start));
-}
-
 /*  PRE-CONDITIONS:
  *      1) query >= 0.0
  *      2) self is valid fast_search_lookup_t
@@ -383,9 +377,9 @@ fast_search_lookup_find(fast_search_lookup_t *self, double query)
         ret = lookups[self->num_lookups - 1];
     } else {
         idx = (size_t) fidx;
-        ret = ptr_first_upper_bound(lookups[idx], lookups[idx + 1], query);
+        ret = ptr_1st_strict_upper_bound(lookups[idx], lookups[idx + 1], query);
     }
     assert(
-        ret == ptr_first_upper_bound(lookups[0], lookups[self->num_lookups - 1], query));
+        ret == ptr_1st_strict_upper_bound(lookups[0], lookups[self->num_lookups - 1], query));
     return ret;
 }
