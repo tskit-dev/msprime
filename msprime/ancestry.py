@@ -1500,42 +1500,47 @@ class BetaCoalescent(ParametricSimulationModel):
     of each chromosome per parent. All lineages within each group merge simultaneously.
 
     Secondly, the number of generations between common ancestor events predicted by the
-    Beta-coalescent is proportional to :math:`N_e^{\\alpha - 1}`, where :math:`N_e` is
-    the effective population size. Specifically, the mean number of generations until
+    Beta-coalescent is proportional to :math:`N^{\\alpha - 1}`, where :math:`N` is
+    the population size. Specifically, the mean number of generations until
     two lineages undergo a common ancestor event is
 
     .. math::
-        G = \\frac{m^{\\alpha} N_e^{\\alpha - 1}}{\\alpha B(2 - \\alpha, \\alpha)},
+        G = \\frac{m^{\\alpha} N^{\\alpha - 1}}{\\alpha B(2 - \\alpha, \\alpha)},
 
     if ploidy = 1, and
 
     .. math::
-        G = \\frac{m^{\\alpha} (N_e / 2)^{\\alpha - 1}}
+        G = \\frac{m^{\\alpha} (N / 2)^{\\alpha - 1}}
             {2 p \\alpha B(2 - \\alpha, \\alpha)},
 
     if ploidy = :math:`p > 1`, where :math:`m` is the mean number of juveniles per
-    family, and is given by
+    family given by
 
     .. math::
-        m = q + \\frac{2^{\\alpha}}{3^{\\alpha - 1} (\\alpha - 1)},
+        m = 2 + \\frac{2^{\\alpha}}{3^{\\alpha - 1} (\\alpha - 1)},
 
-    where :math:`q = 1` ploidy = 1, and :math:`q = 2` if ploidy > 1.
+    if ploidy > 1, and
 
-    In the polyploid case we divide the effective population size :math:`N_e` by two
-    because we assume the :math:`N_e` polyploid individuals form :math:`N_e / 2`
+    .. math::
+        m = 1 + \\frac{1}{2^{\\alpha - 1} (\\alpha - 1)},
+
+    if ploidy = 1.
+
+    In the polyploid case we divide the population size :math:`N` by two
+    because we assume the :math:`N` polyploid individuals form :math:`N / 2`
     two-parent families in which reproduction takes place.
 
     .. warning::
         The number of generations between common ancestor events :math:`G` depends
-        both on the effective population size :math:`N_e` and :math:`\\alpha`,
+        both on the population size :math:`N` and :math:`\\alpha`,
         and can be dramatically shorter than in the case of the
         standard coalescent. For :math:`\\alpha \\approx 1` that is due to
-        insensitivity of :math:`G` to :math:`N_e` --- see
+        insensitivity of :math:`G` to :math:`N` --- see
         :ref:`sec_api_simulation_models_multiple_mergers` for an illustration.
         For :math:`\\alpha \\approx 2`, :math:`G` is almost linear in
-        :math:`N_e`, but can nevertheless be small because
+        :math:`N`, but can nevertheless be small because
         :math:`B(2 - \\alpha, \\alpha) \\rightarrow \\infty` as
-        :math:`\\alpha \\rightarrow 2`. As a result, effective population sizes
+        :math:`\\alpha \\rightarrow 2`. As a result, population sizes
         must often be many orders of magnitude larger than census population sizes
         to obtain realistic amounts of diversity in simulated samples.
 
@@ -1554,22 +1559,24 @@ class BetaCoalescent(ParametricSimulationModel):
         distribution, and must satisfy :math:`1 < \\alpha < 2`. Smaller values of
         :math:`\\alpha` correspond to greater skewness, and :math:`\\alpha = 2`
         would coincide with the standard coalescent.
-    :param float truncation_point: Determines the maximum fraction of the
-        population replaced by offspring in one reproduction event, and must
-        satisfy :math:`0 < \\tau \\leq 1`, where :math:`\\tau` is the truncation point.
-        The default is :math:`\\tau = 1`, which corresponds to the standard
-        Beta-coalescent. When :math:`\\tau < 1`, the number of lineages
-        participating in a common ancestor event is determined by moments
+    :param float truncation_point: The maximum number of juveniles :math:`K` born to
+        one family as a fraction of the population size :math:`N`. Must satisfy
+        :math:`0 < K \\leq \\inf`. Determines the maximum fraction of the population
+        replaced by offspring in one reproduction event, :math:`\\tau`, via
+        :math:`\\tau = K / (K + m)`, where :math:`m` is the mean juvenile number
+        above. The default is :math:`K = \\inf`, which corresponds to the standard
+        Beta-coalescent with :math:`\\tau = 1`. When :math:`K < \\inf`, the number of
+        lineages participating in a common ancestor event is determined by moments
         of the Beta:math:`(2 - \\alpha, \\alpha)` distribution conditioned on not
         exceeding :math:`\\tau`, and the Beta-function in the expression
-        for :math:`G` is also replaced by the incomplete Beta-function
+        for :math:`G` is replaced by the incomplete Beta-function
         :math:`B(\\tau; 2 - \\alpha, \\alpha)`.
     """
 
     name = "beta"
 
     alpha = attr.ib(default=None)
-    truncation_point = attr.ib(default=1)
+    truncation_point = attr.ib(default=sys.float_info.max)
 
 
 @attr.s
@@ -1595,8 +1602,8 @@ class DiracCoalescent(ParametricSimulationModel):
     .. warning::
         The Dirac-coalescent is obtained as a scaling limit of Moran models,
         rather than Wright-Fisher models. As a consequence, the number of generations
-        between coalescence events is proportional to :math:`N_e^2`,
-        rather than :math:`N_e` generations as in the standard coalescent.
+        between coalescence events is proportional to :math:`N^2`,
+        rather than :math:`N` generations as in the standard coalescent.
         See :ref:`sec_tutorial_multiple_mergers` for an illustration of how this
         affects simulation output in practice.
 
