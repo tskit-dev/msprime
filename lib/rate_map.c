@@ -310,7 +310,7 @@ fast_search_lookup_alloc(
     int ret = 0;
     double max_element;
 
-    const size_t max_input_size = 1L << (DBL_MANT_DIG - 1); // 4096 terabytes
+    const size_t max_input_size = 1LL << (DBL_MANT_DIG - 1); // 4096 terabytes
 
     memset(self, 0, sizeof(*self));
 
@@ -367,7 +367,7 @@ const double *
 fast_search_lookup_find(fast_search_lookup_t *self, double query)
 {
     const double **lookups = self->lookups;
-    double fidx;
+    double fidx; // index that can be way larger than max size_t
     size_t idx;
     const double *ret;
 
@@ -379,7 +379,8 @@ fast_search_lookup_find(fast_search_lookup_t *self, double query)
         idx = (size_t) fidx;
         ret = ptr_1st_strict_upper_bound(lookups[idx], lookups[idx + 1], query);
     }
-    assert(
-        ret == ptr_1st_strict_upper_bound(lookups[0], lookups[self->num_lookups - 1], query));
+    assert(ret
+           == ptr_1st_strict_upper_bound(
+                  lookups[0], lookups[self->num_lookups - 1], query));
     return ret;
 }
