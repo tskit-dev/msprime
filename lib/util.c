@@ -23,7 +23,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <assert.h>
 
 #include <gsl/gsl_math.h>
 
@@ -319,13 +318,15 @@ __msp_safe_free(void **ptr)
  *   1) `values` are sorted and not NaN
  * RETURNS:
  *   First (leftmost) `index` of upper bounds of `query`
- *   **or** `n_values` if no such upper bound is in `values`
+ *   **or** `n_values` if all `values` are strict lower bounds of `query`
+ *   **or** zero if `query` is NaN
  * POST-CONDITION:
- *   If `query` is not strictly greather than all values, then::w
+ *   If `query` is not NaN:
  *     values[index-1] < query <= values[index]
+ *     (ignore comparisons with invalid [] indexing)
  */
 size_t
-msp_binary_interval_search(double query, const double *values, size_t n_values)
+idx_1st_upper_bound(const double *values, size_t n_values, double query)
 {
     size_t l = 0;
     size_t r = n_values;
@@ -344,9 +345,21 @@ msp_binary_interval_search(double query, const double *values, size_t n_values)
     return l;
 }
 
+/* This function follows standard semantics of:
+ *   std::upper_bound() from the standard C++ <algorithm> library
+ *   and numpy.searchsorted(..., side='right') (except numpy NaN query differs)
+ * PRE-CONDITION:
+ *   1) `values` are sorted and not NaN
+ * RETURNS:
+ *   First (leftmost) `index` of strict upper bounds of `query`
+ *   **or** `n_values` if all `values` are lower bounds of `query` or `query` is NaN
+ * POST-CONDITION:
+ *   If `query` is not NaN:
+ *     values[index-1] <= query < values[index]
+ *     (ignore comparisons with invalid [] indexing)
+ */
 size_t
-find_first_strict_upper_bound(
-    const double *restrict elements, size_t n_elements, double query)
+idx_1st_strict_upper_bound(const double *elements, size_t n_elements, double query)
 {
     size_t start = 0;
     size_t stop = n_elements;
@@ -354,8 +367,9 @@ find_first_strict_upper_bound(
 
     while (start < stop) {
         mid = (start + stop) / 2;
-        // assert(elements[start] <= elements[mid]);
-        if (elements[mid] <= query) {
+        /* TODO: uncomment assert when #1203 done and this longer slows down release
+        assert(elements[start] <= elements[mid]); */
+        if (!(elements[mid] > query)) {
             start = mid + 1;
         } else {
             stop = mid;
@@ -363,6 +377,12 @@ find_first_strict_upper_bound(
     }
     return stop;
 }
+
+extern inline const double *ptr_1st_upper_bound(
+    const double *start, const double *stop, double query);
+
+extern inline const double *ptr_1st_strict_upper_bound(
+    const double *start, const double *stop, double query);
 
 bool
 doubles_almost_equal(double a, double b, double eps)
@@ -389,7 +409,7 @@ doubles_almost_equal(double a, double b, double eps)
  *
  */
 static inline size_t
-positive_interval_select(double x, size_t num_intervals, double const *restrict lengths)
+positive_interval_select(double x, size_t num_intervals, const double *lengths)
 {
     size_t i = 0;
     double sum = 0.0;
