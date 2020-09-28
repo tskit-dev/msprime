@@ -125,7 +125,7 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
                 "defaults": obj.__defaults__,
             }
 
-        if isinstance(obj, tskit.TreeSequence):
+        if isinstance(obj, (tskit.TreeSequence, tskit.TableCollection)):
             # If a tree sequence is an argument to a function, then that tree sequence
             # can be recreated from its provenance, which will be the provenance record
             # before the one produced by the function being called. Hence we do not

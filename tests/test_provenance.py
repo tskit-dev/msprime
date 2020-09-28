@@ -120,7 +120,7 @@ class TestBuildObjects(unittest.TestCase):
         ns = builder.build_classes()
         return ns.TskitProvenance.from_json(prov)
 
-    def test_simulation(self):
+    def test_simulate(self):
         ts = msprime.simulate(5, random_seed=1)
         prov = ts.provenance(0).record
         decoded = self.decode(prov)
@@ -128,16 +128,25 @@ class TestBuildObjects(unittest.TestCase):
         self.assertEqual(decoded.parameters.command, "simulate")
         self.assertEqual(decoded.parameters.random_seed, 1)
 
+    def test_sim_ancestry(self):
+        ts = msprime.sim_ancestry(5, random_seed=1)
+        prov = ts.provenance(0).record
+        decoded = self.decode(prov)
+        self.assertEqual(decoded.schema_version, "1.0.0")
+        self.assertEqual(decoded.parameters.command, "sim_ancestry")
+        self.assertEqual(decoded.parameters.random_seed, 1)
+
     def test_no_provenance(self):
         ts = msprime.simulate(5, record_provenance=False)
         self.assertEqual(len(list(ts.provenances())), 0)
+        ts = msprime.sim_ancestry(5, record_provenance=False)
+        self.assertEqual(len(list(ts.provenances())), 0)
 
-    def test_encode_simulation_models(self):
+    def verify_simulation_models(self, sim_func):
         simple_model = ["hudson", [10, "dtwf"], [20, "smc"], [None, None]]
-        ts = msprime.simulate(10, model=simple_model)
+        ts = sim_func(10, model=simple_model)
         decoded = self.decode(ts.provenance(0).record)
         parameters = decoded.parameters
-        self.assertEqual(parameters.sample_size, 10)
         self.assertEqual(list(parameters.model), simple_model)
 
         model_instances = [
@@ -146,10 +155,9 @@ class TestBuildObjects(unittest.TestCase):
             msprime.SimulationModelChange(20, msprime.SmcApproxCoalescent()),
             msprime.SimulationModelChange(30, msprime.BetaCoalescent(alpha=1.1)),
         ]
-        ts = msprime.simulate(10, model=model_instances)
+        ts = sim_func(10, model=model_instances)
         decoded = self.decode(ts.provenance(0).record)
         parameters = decoded.parameters
-        self.assertEqual(parameters.sample_size, 10)
         self.assertEqual(
             parameters.model[0], {"__class__": "msprime.ancestry.StandardCoalescent"}
         )
@@ -181,6 +189,12 @@ class TestBuildObjects(unittest.TestCase):
                 "time": 30,
             },
         )
+
+    def test_encode_simulation_models_simulate(self):
+        self.verify_simulation_models(msprime.simulate)
+
+    def test_encode_simulation_models_sim_ancestry(self):
+        self.verify_simulation_models(msprime.sim_ancestry)
 
     def test_encode_numpy_functions_and_classes(self):
         seeds = np.ones(1, dtype=int)

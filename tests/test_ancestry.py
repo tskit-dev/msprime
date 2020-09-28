@@ -1514,6 +1514,18 @@ class TestSimAncestryInterface(unittest.TestCase):
             flags = ts.tables.nodes.flags
             self.assertEqual(np.sum(flags == msprime.NODE_IS_RE_EVENT), 0)
 
+    def test_initial_tables_recapitate(self):
+        # Simple recapitate scenario
+        ts = msprime.sim_ancestry(5, end_time=0.5, random_seed=53)
+        self.assertGreater(ts.first().num_roots, 1)
+        recapitated1 = msprime.sim_ancestry(initial_state=ts, random_seed=234)
+        self.assertEqual(recapitated1.num_trees, 1)
+        self.assertEqual(recapitated1.first().num_roots, 1)
+
+        # We should get the same answer from the providing the tables argument.
+        recapitated2 = msprime.sim_ancestry(initial_state=ts.tables, random_seed=234)
+        self.assertTrue(tree_sequences_equal(recapitated1, recapitated2))
+
 
 class TestSimulateInterface(unittest.TestCase):
     """
