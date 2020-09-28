@@ -906,7 +906,7 @@ class TestSlimOutput(unittest.TestCase):
             start_time=1,
             population_configurations=population_configurations,
             recombination_map=msprime.RecombinationMap.uniform_map(
-                from_ts.sequence_length, recombination_rate,
+                from_ts.sequence_length, recombination_rate
             ),
             discrete_genome=True,
             random_seed=seed,

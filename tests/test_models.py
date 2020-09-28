@@ -330,7 +330,7 @@ class TestRejectedCommonAncestorEventCounts(unittest.TestCase):
         for model in ["smc", "smc_prime"]:
             threshold = 20
             sim = ancestry._parse_simulate(
-                sample_size=10, recombination_rate=5, model=model,
+                sample_size=10, recombination_rate=5, model=model
             )
             sim.run()
             self.assertGreater(sim.num_rejected_common_ancestor_events, 0)
@@ -395,9 +395,7 @@ class TestParametricModels(unittest.TestCase):
             self.assertEqual(model.alpha, alpha)
             self.assertEqual(model.truncation_point, 1)
             d = model.get_ll_representation()
-            self.assertEqual(
-                d, {"name": "beta", "alpha": alpha, "truncation_point": 1},
-            )
+            self.assertEqual(d, {"name": "beta", "alpha": alpha, "truncation_point": 1})
         alpha = 1.5
         for truncation_point in [0.01, 0.5, 1]:
             model = msprime.BetaCoalescent(alpha, truncation_point)
@@ -503,7 +501,7 @@ class TestDtwf(unittest.TestCase):
         self.assertEqual(ts.num_trees, 1)
 
     def test_single_recombination(self):
-        recombination_map = msprime.RecombinationMap([0, 100, 101, 200], [0, 1, 0, 0],)
+        recombination_map = msprime.RecombinationMap([0, 100, 101, 200], [0, 1, 0, 0])
         ts = msprime.simulate(
             10,
             Ne=10,
@@ -565,7 +563,7 @@ class TestMixedModels(unittest.TestCase):
             inds, parent_indices, times, is_sample, sex=None, ploidy=2
         )
         ts = msprime.simulate(
-            sample_size=4, Ne=2, pedigree=ped, model=(model, (t, "dtwf")),
+            sample_size=4, Ne=2, pedigree=ped, model=(model, (t, "dtwf"))
         )
         tree = ts.first()
         self.assertEqual(tree.num_roots, 1)
@@ -642,7 +640,7 @@ class TestMixedModels(unittest.TestCase):
         Ne = 100
         t = 10
         ts = msprime.simulate(
-            sample_size=10, Ne=Ne, model=["dtwf", (t, "hudson")], random_seed=2,
+            sample_size=10, Ne=Ne, model=["dtwf", (t, "hudson")], random_seed=2
         )
         tree = ts.first()
         self.assertEqual(tree.num_roots, 1)
@@ -762,7 +760,7 @@ class TestMixedModels(unittest.TestCase):
                 msprime.SimulationModelChange(30, msprime.SmcPrimeApproxCoalescent()),
                 msprime.SimulationModelChange(40, msprime.DiscreteTimeWrightFisher()),
                 msprime.SimulationModelChange(
-                    50, msprime.BetaCoalescent(alpha=1.1, truncation_point=1),
+                    50, msprime.BetaCoalescent(alpha=1.1, truncation_point=1)
                 ),
                 msprime.SimulationModelChange(60, msprime.StandardCoalescent()),
             ],
@@ -915,7 +913,7 @@ class TestSweepGenicSelection(unittest.TestCase):
     def test_sweep_start_time_incomplete(self):
         # Short sweep that doesn't make complete coalescence.
         sweep_model = msprime.SweepGenicSelection(
-            position=0.5, start_frequency=0.69, end_frequency=0.7, alpha=800, dt=0.001,
+            position=0.5, start_frequency=0.69, end_frequency=0.7, alpha=800, dt=0.001
         )
         t_start = 0.1
         ts = msprime.simulate(
@@ -931,7 +929,7 @@ class TestSweepGenicSelection(unittest.TestCase):
         # Short sweep that doesn't coalesce followed
         # by Hudson phase to finish up coalescent
         sweep_model = msprime.SweepGenicSelection(
-            position=0.5, start_frequency=0.69, end_frequency=0.7, alpha=1e5, dt=1,
+            position=0.5, start_frequency=0.69, end_frequency=0.7, alpha=1e5, dt=1
         )
         ts = msprime.simulate(
             10,
@@ -957,14 +955,14 @@ class TestSweepGenicSelection(unittest.TestCase):
 
         # Make sure that the Hudson phase did something.
         ts = msprime.simulate(
-            10, Ne=0.25, recombination_rate=2, model=sweep_model, random_seed=2,
+            10, Ne=0.25, recombination_rate=2, model=sweep_model, random_seed=2
         )
         self.assertTrue(any(tree.num_roots > 1 for tree in ts.trees()))
 
     def test_many_sweeps(self):
         sweep_models = [
             msprime.SweepGenicSelection(
-                position=j, start_frequency=0.69, end_frequency=0.7, alpha=1e5, dt=0.1,
+                position=j, start_frequency=0.69, end_frequency=0.7, alpha=1e5, dt=0.1
             )
             for j in range(10)
         ]

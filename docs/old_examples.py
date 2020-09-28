@@ -2,16 +2,15 @@
 Examples that are used in the tutorial but haven't been ported to
 using the new framework for test examples that get tested.
 """
-import matplotlib
-
-# Force matplotlib to not use any Xwindows backend.
-matplotlib.use("Agg")  # noqa: E402
 import matplotlib.collections
 import matplotlib.pyplot as pyplot
 import numpy as np
 import scipy.stats
 
 import msprime
+
+# Force matplotlib to not use any Xwindows backend.
+matplotlib.use("Agg")  # noqa: E402
 
 
 # TODO this example is a bit of a pain because we either need to put

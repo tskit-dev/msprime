@@ -59,7 +59,7 @@ rate_map_alloc(rate_map_t *self, size_t size, double *position, double *rate)
         ret = MSP_ERR_INTERVAL_MAP_START_NON_ZERO;
         goto out;
     }
-    self->rate = malloc(size * sizeof(*self->rate));
+    self->rate = malloc((size + 1) * sizeof(*self->rate));
     self->position = malloc((size + 1) * sizeof(*self->position));
     self->cumulative_mass = malloc((size + 1) * sizeof(*self->cumulative_mass));
     if (self->position == NULL || self->rate == NULL || self->cumulative_mass == NULL) {
@@ -90,9 +90,11 @@ rate_map_alloc(rate_map_t *self, size_t size, double *position, double *rate)
             sum += (position[j + 1] - position[j]) * rate[j];
         }
     }
-    /* search for upper bounds strictly before the max position
-       any position greather than or equal to max position returns self->size */
-    ret = fast_search_lookup_alloc(&self->position_lookup, self->position, size);
+    /* Consider the rate after the max position as zero.
+       This trailing zero simplifies calcs like rate_map_position_to_mass by
+       gracefully handling positions past the max position */
+    self->rate[size] = 0.0;
+    ret = fast_search_lookup_alloc(&self->position_lookup, self->position, size + 1);
 out:
     return ret;
 }
@@ -159,39 +161,24 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
     const double *position = self->position;
     const double *rate = self->rate;
     const double *ptr;
-    double offset;
+    double base, offset;
     size_t index;
 
-    assert(pos >= 0.0);
     if (pos <= 0.0) {
         return 0;
     }
     assert(pos <= position[self->size]);
     ptr = fast_search_lookup_find(&(self->position_lookup), pos);
-    /* any `pos` greather than or equal to max position has `index == self->size` */
     index = (size_t)(ptr - position);
-    assert(index == msp_binary_interval_search(pos, position, self->size));
-    assert(index > 0);
+    assert(index == idx_1st_strict_upper_bound(position, self->size + 1, pos));
     index--;
+    base = self->cumulative_mass[index];
     offset = pos - position[index];
-
-    return self->cumulative_mass[index] + offset * rate[index];
+    if (offset <= 0) {
+        return base;
+    }
+    return base + offset * rate[index];
 }
-
-#ifdef EXTRAVAGANT_ASSERTS
-static size_t
-slow_emulate_msp_binary_interval_search(
-    double query, const double *values, size_t n_values)
-{
-    fast_search_lookup_t table;
-    const double *ptr;
-
-    assert(0 == fast_search_lookup_alloc(&table, values, n_values));
-    ptr = fast_search_lookup_find(&table, query);
-    fast_search_lookup_free(&table);
-    return (size_t)(ptr - values);
-}
-#endif
 
 /* Finds the physical coordinate such that the sequence up to (but not
  * including) that position has the specified recombination mass.
@@ -210,12 +197,7 @@ rate_map_mass_to_position(rate_map_t *self, double mass)
     }
     /* search for upper bounds strictly before the final cum mass
        any mass greather than or equal to final cum mass returns self->size */
-    index = msp_binary_interval_search(mass, self->cumulative_mass, self->size);
-#ifdef EXTRAVAGANT_ASSERTS
-    assert(index
-           == slow_emulate_msp_binary_interval_search(
-                  mass, self->cumulative_mass, self->size));
-#endif
+    index = idx_1st_upper_bound(self->cumulative_mass, self->size, mass);
     assert(index > 0);
     index--;
     mass_in_interval = mass - self->cumulative_mass[index];

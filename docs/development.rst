@@ -565,7 +565,7 @@ Benchmarks to measure performance are in the ``benchmarks`` folder and are run u
 `airspeed velocity <https://asv.readthedocs.io/en/stable/index.html>`_. 
 An automated system runs the benchmarks on each push to the main branch and uploads
 the results to `this github pages site` <https://tskit-dev.github.io/msprime-asv>_.
-These benchmarks can also be run locally to compare your branch with the master branch.
+These benchmarks can also be run locally to compare your branch with the main branch.
 Your changes must be in a commit to be measured. To run the benchmarks::
 
     asv run asv run HEAD...main~1

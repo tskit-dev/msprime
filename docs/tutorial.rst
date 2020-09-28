@@ -495,7 +495,7 @@ Finite sites mutations
 Variants
 ********
 
-We are often interesting in accessing the sequence data that results from
+We are often interested in accessing the sequence data that results from
 simulations directly. The most efficient way to do this is by using
 the :meth:`tskit.TreeSequence.variants` method, which returns an iterator
 over all the :class:`tskit.Variant` objects arising from the trees and mutations.

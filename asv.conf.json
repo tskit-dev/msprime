@@ -9,9 +9,9 @@
     "project_url": "https://github.com/tskit-dev/msprime/",
     "show_commit_url": "https://github.com/tskit-dev/msprime/commit/",
 
-    // Use HEAD here as well as upstream/master to allow us to plot benchmarks
+    // Use HEAD here as well as upstream/main to allow us to plot benchmarks
     // on the local branch as well as the upstream using asv publish
-    "branches": ["HEAD", "upstream/master"], 
+    "branches": ["HEAD", "upstream/main"],
 
     // We include stdpopsim in the requirements matrix here because we use 
     // in the benchmarking scripts to get recombination maps.
