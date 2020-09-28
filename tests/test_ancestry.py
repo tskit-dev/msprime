@@ -190,7 +190,7 @@ class TestSimulator(unittest.TestCase):
         recomb_map = msprime.RecombinationMap.uniform_map(m, r)
         rng = _msprime.RandomGenerator(1)
         sim = ancestry._parse_simulate(
-            n, recombination_map=recomb_map, random_generator=rng, discrete_genome=True,
+            n, recombination_map=recomb_map, random_generator=rng, discrete_genome=True
         )
         self.assertEqual(sim.random_generator, rng)
         sim.run()
@@ -1173,7 +1173,7 @@ class TestParseSimulate(unittest.TestCase):
     def test_new_old_style_model_changes_equal(self):
         models = [
             msprime.SweepGenicSelection(
-                position=j, start_frequency=j, end_frequency=j, alpha=j, dt=j,
+                position=j, start_frequency=j, end_frequency=j, alpha=j, dt=j
             )
             for j in range(1, 10)
         ]
@@ -1216,7 +1216,7 @@ class TestParseSimulate(unittest.TestCase):
 
         # This should be the same in new notation
         sim = ancestry._parse_simulate(
-            Ne=100, sample_size=2, model=[main_model, (1, "dtwf"), (2, None)],
+            Ne=100, sample_size=2, model=[main_model, (1, "dtwf"), (2, None)]
         )
         self.assertEqual(len(sim.model_change_events), 2)
         self.assertEqual(sim.model_change_events[0].time, 1)
@@ -1435,7 +1435,7 @@ class TestSimAncestryInterface(unittest.TestCase):
 
     def test_dtwf(self):
         ts = msprime.sim_ancestry(
-            10, population_size=100, model="dtwf", ploidy=2, random_seed=1234,
+            10, population_size=100, model="dtwf", ploidy=2, random_seed=1234
         )
         self.assertEqual(ts.num_trees, 1)
         self.assertEqual(ts.first().num_roots, 1)
@@ -1447,7 +1447,7 @@ class TestSimAncestryInterface(unittest.TestCase):
         for ploidy in [1, 3, 7]:
             with self.assertRaises(_msprime.LibraryError):
                 msprime.sim_ancestry(
-                    10, population_size=100, model="dtwf", ploidy=ploidy,
+                    10, population_size=100, model="dtwf", ploidy=ploidy
                 )
 
     def test_sweep_coalescence(self):
@@ -1862,7 +1862,7 @@ class TestReprRoundTrip(unittest.TestCase):
             msprime.DiracCoalescent(),
             msprime.DiracCoalescent(psi=1234, c=56),
             msprime.SweepGenicSelection(
-                position=1, start_frequency=0.5, end_frequency=0.9, alpha=1, dt=1e-4,
+                position=1, start_frequency=0.5, end_frequency=0.9, alpha=1, dt=1e-4
             ),
         ]
         self.assert_repr_round_trip(examples)
