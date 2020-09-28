@@ -774,7 +774,7 @@ class Simulator:
                 for root in tree.roots:
                     population = ts.node(root).population
                     if root_segments_head[root] is None:
-                        seg = self.alloc_segment(left, right, root, population,)
+                        seg = self.alloc_segment(left, right, root, population)
                         root_segments_head[root] = seg
                         root_segments_tail[root] = seg
                     else:
@@ -783,7 +783,7 @@ class Simulator:
                             tail.right = right
                         else:
                             seg = self.alloc_segment(
-                                left, right, root, population, tail,
+                                left, right, root, population, tail
                             )
                             tail.next = seg
                             root_segments_tail[root] = seg
@@ -1804,7 +1804,7 @@ class Simulator:
             if len(X) == 1:
                 x = X[0]
                 if len(H) > 0 and H[0][0] < x.right:
-                    alpha = self.alloc_segment(x.left, H[0][0], x.node, x.population,)
+                    alpha = self.alloc_segment(x.left, H[0][0], x.node, x.population)
                     alpha.label = label
                     x.left = H[0][0]
                     heapq.heappush(H, (x.left, x))
@@ -1836,7 +1836,7 @@ class Simulator:
                     while right < r_max and self.S[right] != len(X):
                         self.S[right] -= len(X) - 1
                         right = self.S.succ_key(right)
-                    alpha = self.alloc_segment(left, right, u, pop_id,)
+                    alpha = self.alloc_segment(left, right, u, pop_id)
                 # Update the heaps and make the record.
                 for x in X:
                     self.store_edge(left, right, u, x.node)
@@ -2400,7 +2400,7 @@ def add_simulator_arguments(parser):
         ),
     )
     parser.add_argument(
-        "--end-time", type=float, default=np.inf, help="The end for simulations.",
+        "--end-time", type=float, default=np.inf, help="The end for simulations."
     )
 
 

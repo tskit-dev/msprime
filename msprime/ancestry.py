@@ -752,7 +752,7 @@ def _wrap_replicates(
         num_replicates = replicate_index + 1
 
     iterator = simulator.run_replicates(
-        num_replicates, mutation_rate=mutation_rate, provenance_dict=provenance_dict,
+        num_replicates, mutation_rate=mutation_rate, provenance_dict=provenance_dict
     )
     if replicate_index is not None:
         # Return the last element of the iterator
@@ -1294,7 +1294,7 @@ class Simulator(_msprime.Simulator):
         )
 
     def run_replicates(
-        self, num_replicates, *, mutation_rate=None, provenance_dict=None,
+        self, num_replicates, *, mutation_rate=None, provenance_dict=None
     ):
         """
         Sequentially yield the specified number of simulation replicates.

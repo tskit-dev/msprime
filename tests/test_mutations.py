@@ -975,7 +975,7 @@ class TestKeep(unittest.TestCase):
             ts, rate=1, random_seed=1, discrete=True, start_time=1.0, end_time=2.0
         )
         ts_2mut = msprime.mutate(
-            ts_mut, rate=1, random_seed=3, discrete=True, start_time=0.0, end_time=1.0,
+            ts_mut, rate=1, random_seed=3, discrete=True, start_time=0.0, end_time=1.0
         )
         self.assertGreater(ts_2mut.num_mutations, ts_mut.num_mutations)
 
@@ -985,8 +985,8 @@ class StatisticalTestMixin:
     p_threshold = 0.01
 
     def chisquare(self, observed, expected, p_th=p_threshold):
-        obs = observed.reshape((np.product(observed.shape)),)
-        exp = expected.reshape((np.product(observed.shape)),)
+        obs = observed.reshape(np.product(observed.shape))
+        exp = expected.reshape(np.product(observed.shape))
         not_zeros = exp > 0
         self.assertSequenceEqual(
             list(obs[np.logical_not(not_zeros)]),

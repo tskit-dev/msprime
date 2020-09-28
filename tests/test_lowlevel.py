@@ -760,7 +760,7 @@ class TestSimulationState(LowLevelTestCase):
         n = 10
         m = 100
         sim = make_sim(
-            n, sequence_length=m, recombination_map=uniform_rate_map(L=m, rate=1),
+            n, sequence_length=m, recombination_map=uniform_rate_map(L=m, rate=1)
         )
         # We run until time 0 to for initialisation
         sim.run(0)
@@ -1435,9 +1435,7 @@ class TestSimulator(LowLevelTestCase):
                 get_population_configuration(0) for j in range(N - 1)
             ]
             with self.assertRaises(ValueError):
-                make_sim(
-                    2, num_populations=N, population_configuration=pop_conf,
-                )
+                make_sim(2, num_populations=N, population_configuration=pop_conf)
 
     def test_get_migration_matrix(self):
         for N in range(1, 10):
@@ -2223,7 +2221,7 @@ class TestSimMutations(unittest.TestCase):
                 )
         self.assertIsNone(
             _msprime.sim_mutations(
-                tables=tables, random_generator=rng, rate_map=rate_map, model=model,
+                tables=tables, random_generator=rng, rate_map=rate_map, model=model
             )
         )
 
@@ -2257,14 +2255,14 @@ class TestSimMutations(unittest.TestCase):
         for bad_type in ["x", {}, None]:
             with self.assertRaises(TypeError):
                 _msprime.sim_mutations(
-                    tables=bad_type, random_generator=rng, rate_map=imap, model=model,
+                    tables=bad_type, random_generator=rng, rate_map=imap, model=model
                 )
         tables = _msprime.LightweightTableCollection.__new__(
             _msprime.LightweightTableCollection
         )
         with self.assertRaises(SystemError):
             _msprime.sim_mutations(
-                tables=tables, random_generator=rng, rate_map=imap, model=model,
+                tables=tables, random_generator=rng, rate_map=imap, model=model
             )
 
     def test_rng(self):
@@ -2294,12 +2292,12 @@ class TestSimMutations(unittest.TestCase):
         for bad_type in ["x", None, [[], []]]:
             with self.assertRaises(TypeError):
                 _msprime.sim_mutations(
-                    tables, rng, rate_map=bad_type, model=get_mutation_model(),
+                    tables, rng, rate_map=bad_type, model=get_mutation_model()
                 )
         for bad_mutation_map in [{}, {"position": [], "rate": []}]:
             with self.assertRaises(ValueError):
                 _msprime.sim_mutations(
-                    tables, rng, rate_map=bad_mutation_map, model=get_mutation_model(),
+                    tables, rng, rate_map=bad_mutation_map, model=get_mutation_model()
                 )
 
     def test_model(self):
@@ -2308,9 +2306,7 @@ class TestSimMutations(unittest.TestCase):
         tables = _msprime.LightweightTableCollection(1.0)
         for bad_type in ["x", {}, None, [[], []]]:
             with self.assertRaises(TypeError):
-                _msprime.sim_mutations(
-                    tables, rng, rate_map=imap, model=bad_type,
-                )
+                _msprime.sim_mutations(tables, rng, rate_map=imap, model=bad_type)
         model_classes = [
             _msprime.SLiMMutationModel,
             _msprime.InfiniteAllelesMutationModel,
@@ -2320,7 +2316,7 @@ class TestSimMutations(unittest.TestCase):
             uninitialised_model = cls.__new__(cls)
             with self.assertRaises(SystemError):
                 _msprime.sim_mutations(
-                    tables, rng, rate_map=imap, model=uninitialised_model,
+                    tables, rng, rate_map=imap, model=uninitialised_model
                 )
 
     def test_slim_model(self):
@@ -2408,7 +2404,7 @@ class TestDemographyDebugger(unittest.TestCase):
     """
 
     def get_simulator(self, events):
-        return make_sim(samples=2, demographic_events=events,)
+        return make_sim(samples=2, demographic_events=events)
 
     def test_zero_events(self):
         sim = self.get_simulator([])
