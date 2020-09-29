@@ -213,6 +213,45 @@ rate_map_shift_by_mass(rate_map_t *self, double pos, double mass)
     return rate_map_mass_to_position(self, result_mass);
 }
 
+/* The `fast_search_lookup_t` structure and functions
+ *
+ * `fast_search_lookup_t` is a lookup table pointing to an array of `double`s
+ * (the "elements"). It does not own the array but does point to all its memory.
+ *
+ * It's purpose is speed up the search for a "query" value in that array of
+ * elements. The `fast_search_lookup_find` function is essentially a drop-in
+ * replacement for the function `idx_1st_strict_upper_bound` (which in turn is
+ * a drop-in replacement for the C++ <algorithm> library function
+ * std::upper_bound).
+ *
+ * The key concept behind `fast_search_lookup_t` is that the bits inside a
+ * "query" `double` contain a good deal of information about where near-by
+ * values in the array of elements might be found in memory. The best
+ * performance is when the array of elements have values that increase roughly
+ * linearly. But this is not a requirement. The only requirement is that the
+ * elements be non-decreasing.
+ *
+ * Since the element values are not perfectly linear some re-mapping is
+ * required.  This is achieved through an array of "lookup" pointers into the
+ * array of elements.  Although there need not be a linear mapping between
+ * element values and the range of query values, the "lookup" pointer are
+ * linear with the range of query values.
+ *
+ * The `query_multiplier` determines the linear mapping between possible query
+ * values and indexes in the array of "lookup" pointers. Because the
+ * `query_multiplier` is a power of 2, a predictable range of possible "query"
+ * values will truncate to a specific lookup index.
+ *
+ * The number of lookup pointers could be adjustable, but this simple
+ * implementation chooses one simple strategy for the number of lookup
+ * pointers. For a perfectly linear sequence of element values, the lookup
+ * pointers will be a simple element-address-by-next-element-address
+ * progression of pointers. The extremely simple case of element values being
+ * the non-negative integers is coded in the `test_fast_search_lookup_identity`
+ * unit test.  An example of alternative linear sequences with different
+ * `query_multiplier` are coded in `test_fast_search_lookup_2powers`.
+ */
+
 #if FLT_RADIX != 2
 #error "Base 2 floating point types required"
 #endif
