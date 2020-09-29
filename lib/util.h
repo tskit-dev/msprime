@@ -22,6 +22,9 @@
 #include <stdbool.h>
 #include <math.h>
 #include <assert.h>
+#include <stdio.h>
+
+#include "tskit.h"
 
 #ifdef __GNUC__
 /*
@@ -37,16 +40,6 @@
 /* Don't bother with restrict for MSVC */
 #define restrict
 #endif
-
-#define bug_assert(condition)                                                           \
-    if (!(condition)) {                                                                 \
-        fprintf(stderr,                                                                 \
-            "Bug detected in %s at line %d. Please open an issue on GitHub, "           \
-            "ideally with a reproducible example. "                                     \
-            "https://github.com/tskit-dev/msprime/issues\n",                            \
-            __FILE__, __LINE__);                                                        \
-        abort();                                                                        \
-    }
 
 /* clang-format off */
 /* Error codes */

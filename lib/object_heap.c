@@ -132,7 +132,7 @@ object_heap_alloc_object(object_heap_t *self)
 inline void
 object_heap_free_object(object_heap_t *self, void *obj)
 {
-    bug_assert(self->top < self->size);
+    tsk_bug_assert(self->top < self->size);
     self->heap[self->top] = obj;
     self->top++;
 }
