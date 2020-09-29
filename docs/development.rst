@@ -69,31 +69,6 @@ combinations of tests on different platforms:
 
 4. `AppVeyor <https://www.appveyor.com/>`_ Runs Python tests on Windows using conda.
 
-+++++++++++++++++++++++++++++++++++++++++++++++++
-Running tests on multiple Python versions locally
-+++++++++++++++++++++++++++++++++++++++++++++++++
-
-On `Travis CI <https://travis-ci.org/>`_ all supported Python versions are tested.
-If you'd like to test multiple versions locally, you can use `tox`:
-
-.. code-block:: bash
-
-    echo \
-    '[tox]
-    envlist = py27,py35
-    [testenv]
-    deps= -rrequirements/development.txt
-    commands=nosetests' > tox.ini && tox
-
-Note that if the `requirements/development.txt` have been updated since
-initially running `tox`, you may need to `recreate them <http://tox.readthedocs.io/en/latest/example/basic.html#forcing-re-creation-of-virtual-environments>`_:
-
-them:
-
-.. code-block:: bash
-
-    tox --recreate -e py27,py35
-
 ********
 Overview
 ********
@@ -107,7 +82,7 @@ There are three main parts of ``msprime``, in increasing order of complexity:
    All of the code for this library is in the ``lib`` directory.
 
 3. Low-level Python-C interface. The interface between the Python and C code is the
-   ``_msprimemodule.c`` file, which defines the ``_msprime`` module.
+   ``msprime/_msprimemodule.c`` file, which defines the ``msprime._msprime`` module.
 
 
 Each of these aspects has its own coding conventions and development tools, which are
@@ -121,8 +96,10 @@ Throughout this document, we assume that the ``msprime`` package is built and
 run locally *within* the project directory. That is, ``msprime`` is *not* installed
 into the Python installation using ``pip install -e`` or setuptools `development
 mode <http://setuptools.readthedocs.io/en/latest/setuptools.html#id23>`_. Please
-ensure that you build the low-level module using (e.g.) ``make ext3`` and that
-the shared object file is in the project root.
+ensure that you build the low-level module using (e.g.) ``make`` and that
+the shared object file is in the ``msprime`` directory. This will have a name
+like ``_msprime.cpython-38-x86_64-linux-gnu.so``, depending on your platform
+and Python version.
 
 +++++++++++
 Conventions
@@ -193,9 +170,9 @@ Although the code is structured as a library, it is not intended to be used
 outside of the ``msprime`` project! The interfaces at the C level change
 considerably over time, and are deliberately undocumented.
 
-++++++
-Basics
-++++++
++++++++++
+Toolchain
++++++++++
 
 To compile and develop the C code, a few extra development libraries are needed.
 `Libconfig <http://www.hyperrealm.com/libconfig/>`_ is used for the development CLI
@@ -223,16 +200,6 @@ a combination of ``homebrew`` and ``pip`` can be used (working as of 2020-01-15)
     $ python3 -m pip install meson --user
     $ python3 -m pip install ninja --user
 
-Meson keeps all compiled binaries in a build directory (this has many advantages
-such as allowing multiple builds with different options to coexist). It depends on
-a ``meson.build`` file which is in the ``lib`` directory. To set up the initial build
-directory, run
-
-.. code-block:: bash
-
-    $ cd lib
-    $ meson build
-
 On macOS, conda builds are generally done using ``clang`` packages that are kept up to date:
 
 .. code-block:: bash
@@ -255,14 +222,30 @@ On more recent macOS releases, you may omit the ``CONDA_BUILD_SYSROOT`` prefix.
    was written on 23 January, 2020 and was validated by a few ``msprime`` contributors.
    Caveat emptor, etc..
 
-To compile the code, ``cd`` into the ``build`` directory and run ``ninja``. All the
-compiled binaries are then in the ``build`` directory:
++++++++++
+Compiling
++++++++++
+
+Meson keeps all compiled binaries in a build directory (this has many advantages
+such as allowing multiple builds with different options to coexist). It depends on
+a ``meson.build`` file which is in the ``lib`` directory. To set up the initial build
+directory, run
 
 .. code-block:: bash
 
-    $ cd build
-    $ ninja
-    $ ./tests
+    $ cd lib
+    $ meson build
+
+The easiest way to compile the :ref:`sec-development-c-unit-tests`
+is to run ``ninja -C build``. (Alternatively,
+you can ``cd`` into the ``build`` directory and run ``ninja``). All the
+compiled binaries are then in the ``build`` directory, so to run, for example, the
+``test_ancestry`` unit tests, use ``./build/test_ancestry``. A handy shortcut
+to compile the code and run all the unit tests is:
+
+.. code-block:: bash
+
+    $ ninja -C build test
 
 The `mesonic <www.vim.org/scripts/script.php?script_id=5378>`_ plugin for vim
 simplifies this process and allows code to be compiled seamlessly within the
@@ -323,6 +306,9 @@ to be self-explanatory.
     scaled coalescent units. The high-level Python API defines values in units
     of generations, but for the C code all time is measured in coalescent units.
 
+
+.. _sec-development-c-unit-tests:
+
 ++++++++++
 Unit Tests
 ++++++++++
@@ -333,13 +319,16 @@ low-level APIs work correctly over a variety of inputs, and particularly, that
 the tests don't result in leaked memory or illegal memory accesses. The tests should be
 periodically run under valgrind to make sure of this.
 
-Tests are defined in the ``tests/tests.c`` file. To run all the tests
-in a given suite, type ``./build/tests``. To run a specific test, provide
-this test name as a command line argument, e.g.:
+Tests are defined in the ``tests`` directory, roughly split into suites
+defined in different files. For example, the tests associated with Fenwick
+trees are defined in the ``tests/tests_fenwick.c`` file. To run all the
+tests in this suite, use run using ``./build/test_fenwick``.
+To run a specific test in a particular suite, provide the name of the
+test name as a command line argument, e.g.:
 
 .. code-block:: bash
 
-    $ ./build/tests test_fenwick
+    $ ./build/test_fenwick test_fenwick_expand
 
 While 100% test coverage is not feasible for C code, we aim to cover all code
 that can be reached. (Some classes of error such as malloc failures
@@ -357,9 +346,10 @@ To ensure that your code is correctly formatted, you can run
 
 .. code-block:: bash
 
-   clang-format -i lib/tests/* lib/!(avl).{c,h}
+   make clang-format
 
-before submitting a pull request.
+in the project root before submitting a pull request. Alternatively,
+you can run ``clang-format -i *.[c,h]`` in the ``lib`` directory.
 
 Vim users may find the
 `vim-clang-format <https://github.com/rhysd/vim-clang-format>`_
@@ -404,8 +394,9 @@ and use ``self`` to refer to the current instance.
 Most objects also provide a ``print_state`` method, which is useful for
 debugging.
 
-This object-oriented structure means that the code is fully thread safe.
-
+Please see the documentation for the `tskit C API
+<https://tskit.readthedocs.io/en/stable/c-api.html#sec-c-api-overview-structure>`_
+for more details on the how APIs are structured.
 
 ++++++++++++++
 Error handling
@@ -481,48 +472,18 @@ memory accesses that have been overlooked.
 Python C Interface
 ******************
 
-++++++++
-Overview
-++++++++
-
 The Python C interface is written using the
 `Python C API <https://docs.python.org/3.6/c-api/>`_ and the code is in the
-``_msprimemodule.c`` file. When compiled, this produces the ``_msprime`` module,
+``msprime/_msprimemodule.c`` file. When compiled, this produces the
+``msprime._msprime`` module,
 which is imported by the high-level module. The low-level Python module is
 not intended to be used directly and may change arbitrarily over time.
 
-The usual pattern in the low-level Python API is to define a Python class
-which corresponds to a given "class" in the C API. For example, we define
-a ``RecombinationMap`` class, which is essentially a thin wrapper around the
-``recomb_map_t`` type from the C library.
-
-The ``_msprimemodule.c`` file follows the standard conventions given in the
-`Python documentation <https://docs.python.org/3.6/extending/index.html>`_.
-
-
-+++++++++
-Compiling
-+++++++++
-
-The ``setup.py`` file descibes the requirements for the low-level ``_msprime``
-module and how it is built from source. To build the module so that it is available
-for use in the current working directory, run
-
-.. code-block:: bash
-
-    $ python3 setup.py build_ext --inplace
-
-A development Makefile is also provided in the project root, so that running
-``make`` should build the extension module.
-
-++++++++++++++++++++++++
-Testing for memory leaks
-++++++++++++++++++++++++
-
-The Python C API can be subtle, and it is easy to get the reference counting wrong.
-The ``stress_lowlevel.py`` script makes it easier to track down memory leaks
-when they do occur. The script runs the unit tests in a loop, and outputs
-memory usage statistics.
+The conventions used within the low-level module here closely follow
+those in ``tskit``; please see the
+`documentation
+<https://tskit.readthedocs.io/en/stable/development.html#python-c-interface>`_
+for more information.
 
 *****************
 Statistical tests
@@ -562,7 +523,7 @@ Benchmarking
 ************
 
 Benchmarks to measure performance are in the ``benchmarks`` folder and are run using
-`airspeed velocity <https://asv.readthedocs.io/en/stable/index.html>`_. 
+`airspeed velocity <https://asv.readthedocs.io/en/stable/index.html>`_.
 An automated system runs the benchmarks on each push to the main branch and uploads
 the results to `this github pages site` <https://tskit-dev.github.io/msprime-asv>_.
 These benchmarks can also be run locally to compare your branch with the main branch.
@@ -583,7 +544,7 @@ Note the following tips:
 - Specifying the range of commits to run uses the same syntax as git log.
   For example, to run for a single commit, use ``asv run 88fbbc33^!``
 
-- GOTCHA! Be careful when running ``asv dev`` or using ``python=same`` as
+- Be careful when running ``asv dev`` or using ``python=same`` as
   this can use the *installed* version of msprime rather than the local
   development version. This can lead to confusing results! When tuning
   benchmarks it's better to commit often and use (e.g.)

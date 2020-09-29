@@ -1,3 +1,4 @@
+// clang-format off
 /*
 ** Copyright (C) 2014-2020 University of Oxford
 **
@@ -4503,7 +4504,7 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
         flags |= MSP_KEEP_SITES;
     }
     if (kept_mutations_before_end_time) {
-        flags |= MSP_KEPT_MUTATIONS_BEFORE_END_TIME; 
+        flags |= MSP_KEPT_MUTATIONS_BEFORE_END_TIME;
     }
     err = mutgen_generate(&mutgen, flags);
     if (err != 0) {
@@ -4701,3 +4702,4 @@ PyInit__msprime(void)
 
     return module;
 }
+// clang-format on

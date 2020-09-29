@@ -166,7 +166,7 @@ msp_strerror_internal(int err)
             ret = "Bad alpha. Must have 1 < alpha < 2";
             break;
         case MSP_ERR_BAD_TRUNCATION_POINT:
-            ret = "Bad truncation_point. Must have 0 < truncation_point <= 1";
+            ret = "Bad truncation_point. Must have 0 < truncation_point.";
             break;
         case MSP_ERR_BAD_RATE_VALUE:
             ret = "Rates must be non-negative and finite";
@@ -264,6 +264,7 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_UNKNOWN_TIME_NOT_SUPPORTED:
             ret = "Kept mutations must have known mutation times.";
+            break;
         case MSP_ERR_DTWF_DIPLOID_ONLY:
             ret = "The DTWF model only supports ploidy = 2";
             break;
