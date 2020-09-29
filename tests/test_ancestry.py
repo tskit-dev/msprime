@@ -219,14 +219,14 @@ class TestSimulator(unittest.TestCase):
             self.verify_simulation(n, m, r)
 
     def test_perf_parameters(self):
-        sim = ancestry._parse_simulate(10)
+        sim = ancestry._parse_simulate(10, random_seed=42)
         sim.run()
         self.assertGreater(sim.avl_node_block_size, 0)
         self.assertGreater(sim.segment_block_size, 0)
         self.assertGreater(sim.node_mapping_block_size, 0)
 
     def test_event_chunk(self):
-        sim = ancestry._parse_simulate(10)
+        sim = ancestry._parse_simulate(10, random_seed=42)
         for bad_chunk in [-(2 ** 32), -1, 0]:
             with self.assertRaises(ValueError):
                 sim.run(event_chunk=bad_chunk)
@@ -236,7 +236,7 @@ class TestSimulator(unittest.TestCase):
         sim.run(event_chunk=2 ** 64 + 1)
 
     def test_debug_func(self):
-        sim = ancestry._parse_simulate(10)
+        sim = ancestry._parse_simulate(10, random_seed=42)
         count = 0
 
         def f(sim):
@@ -247,7 +247,7 @@ class TestSimulator(unittest.TestCase):
         self.assertGreater(count, 0)
 
     def test_info_logging(self):
-        sim = ancestry._parse_simulate(10)
+        sim = ancestry._parse_simulate(10, random_seed=42)
         with self.assertLogs("msprime.ancestry", logging.INFO) as log:
             sim.run()
             self.assertEqual(len(log.output), 2)
@@ -263,7 +263,7 @@ class TestSimulator(unittest.TestCase):
             )
 
     def test_debug_logging(self):
-        sim = ancestry._parse_simulate(3)
+        sim = ancestry._parse_simulate(3, random_seed=42)
         with self.assertLogs("msprime.ancestry", logging.DEBUG) as log:
             sim.run(event_chunk=1)
             self.assertEqual(len(log.output), 3)
@@ -272,10 +272,10 @@ class TestSimulator(unittest.TestCase):
             self.assertTrue(log.output[1].startswith("DEBUG:msprime.ancestry:time="))
 
     def test_debug_logging_dtwf(self):
-        sim = ancestry._parse_simulate(3, Ne=10, model="dtwf")
+        sim = ancestry._parse_simulate(3, Ne=10, model="dtwf", random_seed=42)
         with self.assertLogs("msprime.ancestry", logging.DEBUG) as log:
             sim.run(event_chunk=1)
-            self.assertGreaterEqual(len(log.output), 3)
+            self.assertEqual(len(log.output), 5)
             self.assertTrue(log.output[0].startswith("INFO"))
             self.assertTrue(log.output[-1].startswith("INFO"))
             self.assertTrue(log.output[1].startswith("DEBUG:msprime.ancestry:time="))
