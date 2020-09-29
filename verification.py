@@ -2615,7 +2615,7 @@ class BetaSFS(KnownSFS):
         Runs simulations of the xi beta model and compares to the expected SFS.
         """
         logging.debug(f"running Beta SFS for {sample_size} {alpha}")
-        model = (msprime.BetaCoalescent(alpha=alpha, truncation_point=1),)
+        model = (msprime.BetaCoalescent(alpha=alpha),)
         name = f"n={sample_size}_alpha={alpha}_ploidy={ploidy}"
         self.compare_sfs(sample_size, ploidy, model, num_replicates, sfs, name)
 
@@ -2800,7 +2800,7 @@ class BetaGrowth(XiGrowth):
     def _run(self, pop_size, alpha, growth_rate, num_replicates=10000):
         logging.debug(f"running Beta growth for {pop_size} {alpha} {growth_rate}")
         b = growth_rate * (alpha - 1)
-        model = (msprime.BetaCoalescent(alpha=alpha, truncation_point=1),)
+        model = (msprime.BetaCoalescent(alpha=alpha),)
         ploidy = 2
         a = 1 / (2 * ploidy * self.compute_beta_timescale(pop_size, alpha, ploidy))
         name = f"N={pop_size}_alpha={alpha}_growth_rate={growth_rate}_ploidy={ploidy}"
@@ -2815,11 +2815,14 @@ class BetaGrowth(XiGrowth):
         )
 
     def compute_beta_timescale(self, pop_size, alpha, ploidy):
-        m = 1 + np.exp(alpha * np.log(2) + (1 - alpha) * np.log(3) - np.log(alpha - 1))
-        N = pop_size
         if ploidy > 1:
             N = pop_size / 2
-            m = m + 1
+            m = 2 + np.exp(
+                alpha * np.log(2) + (1 - alpha) * np.log(3) - np.log(alpha - 1)
+            )
+        else:
+            N = pop_size
+            m = 1 + np.exp((1 - alpha) * np.log(2) - np.log(alpha - 1))
         ret = np.exp(
             alpha * np.log(m)
             + (alpha - 1) * np.log(N)
@@ -2945,7 +2948,7 @@ class ArgRecordTest(Test):
     we simplify an ARG as we get in a direct simulation.
     """
 
-    def _run(self, num_replicates=10000, **kwargs):
+    def _run(self, num_replicates=1000, **kwargs):
 
         ts_node_counts = np.array([])
         arg_node_counts = np.array([])
@@ -2991,7 +2994,7 @@ class ArgRecordTest(Test):
         self._run(sample_size=1000, recombination_rate=0.2)
 
     def test_arg_beta_n100_rho_2(self):
-        model = msprime.BetaCoalescent(alpha=1.1, truncation_point=1)
+        model = msprime.BetaCoalescent(alpha=1.1)
         self._run(sample_size=100, recombination_rate=2, model=model)
 
     def test_arg_dirac_n100_rho_2(self):

@@ -6355,22 +6355,49 @@ out:
  **************************************************************/
 
 static double
+beta_compute_juvenile_mean(msp_t *self)
+{
+    double alpha = self->model.params.beta_coalescent.alpha;
+    double m;
+    if (self->ploidy > 1) {
+        m = 2 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
+    } else {
+        m = 1 + exp((1 - alpha) * log(2) - log(alpha - 1));
+    }
+    return m;
+}
+
+static double
+beta_compute_truncation(msp_t *self)
+{
+    double truncation_point = self->model.params.beta_coalescent.truncation_point;
+    double m;
+    if (truncation_point < DBL_MAX) {
+        m = beta_compute_juvenile_mean(self);
+        truncation_point /= (truncation_point + m);
+    } else {
+        truncation_point = 1.0;
+    }
+    return truncation_point;
+}
+
+static double
 beta_compute_timescale(msp_t *self, population_t *pop)
 {
     double alpha = self->model.params.beta_coalescent.alpha;
-    double truncation_point = self->model.params.beta_coalescent.truncation_point;
-    double m = 1 + exp(alpha * log(2) + (1 - alpha) * log(3) - log(alpha - 1));
+    double truncation_point = beta_compute_truncation(self);
+    double m = beta_compute_juvenile_mean(self);
     double pop_size = pop->initial_size;
+    double timescale;
     /* For ploidy > 1 we assume N/2 two-parent families, so that the rate
      * with which 2 lineages belong to a common family is based on "population size"
      * N/2 */
     if (self->ploidy > 1) {
         pop_size /= 2.0;
-        m += 1.0;
     }
-    double timescale = exp(alpha * log(m) + (alpha - 1) * log(pop_size) - log(alpha)
-                           - gsl_sf_lnbeta(2 - alpha, alpha)
-                           - log(gsl_sf_beta_inc(2 - alpha, alpha, truncation_point)));
+    timescale = exp(alpha * log(m) + (alpha - 1) * log(pop_size) - log(alpha)
+                    - gsl_sf_lnbeta(2 - alpha, alpha)
+                    - log(gsl_sf_beta_inc(2 - alpha, alpha, truncation_point)));
     return timescale;
 }
 
@@ -6467,6 +6494,8 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
     int ret = 0;
     uint32_t j, n, num_participants, num_parental_copies;
     avl_tree_t *ancestors, Q[4]; /* MSVC won't let us use num_pots here */
+    double alpha = self->model.params.beta_coalescent.alpha;
+    double truncation_point = beta_compute_truncation(self);
     double beta_x, u, increment;
 
     /* We assume haploid reproduction is single-parent, while all other ploidies
@@ -6482,9 +6511,7 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
     }
     ancestors = &self->populations[pop_id].ancestors[label];
     n = avl_count(ancestors);
-    beta_x = ran_inc_beta(self->rng, 2.0 - self->model.params.beta_coalescent.alpha,
-        self->model.params.beta_coalescent.alpha,
-        self->model.params.beta_coalescent.truncation_point);
+    beta_x = ran_inc_beta(self->rng, 2.0 - alpha, alpha, truncation_point);
 
     /* We calculate the probability of accepting the event */
     if (beta_x > 1e-9) {
@@ -6819,7 +6846,7 @@ msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point
         goto out;
     }
 
-    if (truncation_point <= 0.0 || truncation_point > 1.0) {
+    if (truncation_point <= 0.0 || (!isfinite(truncation_point))) {
         ret = MSP_ERR_BAD_TRUNCATION_POINT;
         goto out;
     }

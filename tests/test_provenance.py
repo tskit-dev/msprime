@@ -153,7 +153,9 @@ class TestBuildObjects(unittest.TestCase):
             msprime.StandardCoalescent(),
             msprime.SimulationModelChange(10, msprime.DiscreteTimeWrightFisher()),
             msprime.SimulationModelChange(20, msprime.SmcApproxCoalescent()),
-            msprime.SimulationModelChange(30, msprime.BetaCoalescent(alpha=1.1)),
+            msprime.SimulationModelChange(
+                30, msprime.BetaCoalescent(alpha=1.1, truncation_point=1)
+            ),
         ]
         ts = sim_func(10, model=model_instances)
         decoded = self.decode(ts.provenance(0).record)

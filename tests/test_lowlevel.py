@@ -1178,7 +1178,7 @@ class TestSimulator(LowLevelTestCase):
             model = get_simulation_model("beta", alpha=alpha, truncation_point=1)
             with self.assertRaises(_msprime.InputError):
                 sim = make_sim(model=model)
-        for truncation_point in [-1e9, -1, 0, 1.1, 2, 1e9]:
+        for truncation_point in [-1e9, -1, 0]:
             model = get_simulation_model(
                 "beta", alpha=1.5, truncation_point=truncation_point
             )

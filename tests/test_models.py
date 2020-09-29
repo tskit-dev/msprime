@@ -391,7 +391,7 @@ class TestParametricModels(unittest.TestCase):
 
     def test_beta_coalescent_parameters(self):
         for alpha in [1.01, 1.5, 1.99]:
-            model = msprime.BetaCoalescent(alpha)
+            model = msprime.BetaCoalescent(alpha, truncation_point=1)
             self.assertEqual(model.alpha, alpha)
             self.assertEqual(model.truncation_point, 1)
             d = model.get_ll_representation()
@@ -458,7 +458,7 @@ class TestMultipleMergerModels(unittest.TestCase):
         self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
 
     def test_beta_coalescent(self):
-        model = msprime.BetaCoalescent(alpha=1.5, truncation_point=1)
+        model = msprime.BetaCoalescent(alpha=1.5)
         ts = msprime.simulate(Ne=5, sample_size=10, model=model)
         self.assertTrue(all(tree.num_roots == 1 for tree in ts.trees()))
 
@@ -759,9 +759,7 @@ class TestMixedModels(unittest.TestCase):
                 msprime.SimulationModelChange(20, msprime.SmcApproxCoalescent()),
                 msprime.SimulationModelChange(30, msprime.SmcPrimeApproxCoalescent()),
                 msprime.SimulationModelChange(40, msprime.DiscreteTimeWrightFisher()),
-                msprime.SimulationModelChange(
-                    50, msprime.BetaCoalescent(alpha=1.1, truncation_point=1)
-                ),
+                msprime.SimulationModelChange(50, msprime.BetaCoalescent(alpha=1.1)),
                 msprime.SimulationModelChange(60, msprime.StandardCoalescent()),
             ],
             random_seed=10,
