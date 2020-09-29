@@ -180,14 +180,8 @@ test_translate_position_and_recomb_mass(void)
     /* max valid position */
     CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, 20), 25);
 
-    /* NaNnoying cases */
-#ifdef NDEBUG // test via `meson -Db_ndebug=true ndebug_build`
-    CU_ASSERT(isnan(rate_map_position_to_mass(&map, NAN)));
-    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, -INFINITY), 0);
-    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, -1), 0);
-    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, 200), 25);
-    CU_ASSERT(isnan(rate_map_position_to_mass(&map, INFINITY)));
-#endif
+    /* fishy input */
+    CU_ASSERT_EQUAL(rate_map_position_to_mass(&map, -DBL_EPSILON), 0);
 
     rate_map_free(&map);
 }
