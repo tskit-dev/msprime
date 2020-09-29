@@ -1,24 +1,30 @@
 # simple makefile for development.
-
 SRC=msprime/_msprimemodule.c
 
-ext3: ${SRC}
+# The default target builds the C module in the simplest way.
+cmodule: ${SRC}
 	python3 setup.py build_ext --inplace
 
+# allchecks turns on as many checks as make sense when building
+# Python-C extensions.
 allchecks: ${SRC}
-	CFLAGS="-std=c99 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-field-initializers -Wno-cast-function-type" \
+	CFLAGS="-std=c99 -Wall -Wextra -Werror -Wno-unused-parameter "\
+	"-Wno-missing-field-initializers -Wno-cast-function-type" \
 	python3 setup.py build_ext --inplace
 
-ext3-coverage: ${SRC}
+# Turn on coverage builds
+coverage: ${SRC}
 	rm -fR build
 	CFLAGS="-coverage" python3 setup.py build_ext --inplace
 
-docs: ext3
-	cd docs && make clean && make html
-	
+# Format the C code ready for a PR
+clang-format:
+	clang-format -i lib/tests/* lib/*.[c,h]
+
 tags:
 	ctags -f TAGS msprime/*.c lib/*.[c,h] msprime/*.py tests/*.py
 
+
 clean:
 	rm -fR build
-	rm -f msprime/*.o msprime/*.so
+	rm -f msprime/*.so
