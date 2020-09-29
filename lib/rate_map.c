@@ -256,6 +256,11 @@ rate_map_shift_by_mass(rate_map_t *self, double pos, double mass)
 #error "Base 2 floating point types required"
 #endif
 
+#if SIZE_MAX < ULLONG_MAX
+#error "size_t must be at least 64 bits"
+/* unsigned long long must be at least 64 bits */
+#endif
+
 static bool
 valid_sorted_nonempty_array(const double *array, size_t size)
 {
