@@ -1,3 +1,4 @@
+// clang-format off
 /*****************************************************************************
 
     avl.c - Source code for the AVL-tree library.
@@ -600,3 +601,4 @@ void avl_rebalance(avl_tree_t *avltree, avl_node_t *avlnode) {
 		avlnode = parent;
 	}
 }
+// clang-format on

@@ -1,3 +1,4 @@
+// clang-format off
 /*****************************************************************************
 
     avl.h - Source code for the AVL-tree library.
@@ -192,3 +193,4 @@ extern unsigned int avl_index(const avl_node_t *);
 }
 #endif
 #endif
+// clang-format on

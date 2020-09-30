@@ -48,8 +48,7 @@ jobs:
       - run:
           name: Compile Python
           command: |
-            CFLAGS="--coverage -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-field-initializers" \
-              python setup.py build_ext --inplace
+            make allchecks
 
       - run:
           name: Run highlevel tests and upload coverage
