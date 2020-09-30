@@ -1510,8 +1510,8 @@ class BetaCoalescent(ParametricSimulationModel):
     if ploidy = 1, and
 
     .. math::
-        G = \\frac{m^{\\alpha} (N / 2)^{\\alpha - 1}}
-            {2 p \\alpha B(2 - \\alpha, \\alpha)},
+        G = \\frac{2 p m^{\\alpha} (N / 2)^{\\alpha - 1}}
+            {\\alpha B(2 - \\alpha, \\alpha)},
 
     if ploidy = :math:`p > 1`, where :math:`m` is the mean number of juveniles per
     family given by
