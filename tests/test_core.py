@@ -20,7 +20,6 @@
 Test cases for the high level interface to utils.
 """
 import multiprocessing
-import unittest
 
 import numpy as np
 
@@ -32,7 +31,7 @@ def get_seed(x):
     return core.get_random_seed()
 
 
-class TestDefaultRandomSeeds(unittest.TestCase):
+class TestDefaultRandomSeeds:
     """
     Tests for the default random seed generator.
     """
@@ -40,17 +39,17 @@ class TestDefaultRandomSeeds(unittest.TestCase):
     def test_seed_generator_init(self):
         core.clear_seed_rng()
         seed = core.get_random_seed()
-        self.assertGreater(seed, 0)
-        self.assertIsNotNone(core.get_seed_rng())
+        assert seed > 0
+        assert core.get_seed_rng() is not None
 
     def test_unique(self):
         n = 100
         core.clear_seed_rng()
         seeds1 = [core.get_random_seed() for _ in range(n)]
-        self.assertEqual(len(set(seeds1)), n)
+        assert len(set(seeds1)) == n
         seeds2 = [core.get_random_seed() for _ in range(n)]
-        self.assertEqual(len(set(seeds2)), n)
-        self.assertEqual(len(set(seeds2)) + len(set(seeds2)), 2 * n)
+        assert len(set(seeds2)) == n
+        assert len(set(seeds2)) + len(set(seeds2)) == 2 * n
 
     def test_unique_multiple_processes_no_init(self):
         n = 100
@@ -58,23 +57,23 @@ class TestDefaultRandomSeeds(unittest.TestCase):
         # Would use with block here, but not supported in Py < 3.3.
         pool = multiprocessing.Pool(5)
         seeds = pool.map(get_seed, range(n))
-        self.assertEqual(len(set(seeds)), n)
+        assert len(set(seeds)) == n
         pool.terminate()
         pool.join()
 
     def test_unique_multiple_processes_init(self):
         n = 100
         core.get_random_seed()
-        self.assertIsNotNone(core.get_seed_rng())
+        assert core.get_seed_rng() is not None
         # Would use with block here, but not supported in Py < 3.3.
         pool = multiprocessing.Pool(5)
         seeds = pool.map(get_seed, range(n))
-        self.assertEqual(len(set(seeds)), n)
+        assert len(set(seeds)) == n
         pool.terminate()
         pool.join()
 
 
-class TestIsInteger(unittest.TestCase):
+class TestIsInteger:
     """
     Tests for the function used to determine if a value can be interpreted
     as an integer.
@@ -97,7 +96,7 @@ class TestIsInteger(unittest.TestCase):
             numpy_float_array[0],
         ]
         for good_value in good_values:
-            self.assertTrue(core.isinteger(good_value))
+            assert core.isinteger(good_value)
 
     def test_bad_values(self):
         numpy_float_array = np.array([100.1], dtype=np.float64)
@@ -112,4 +111,4 @@ class TestIsInteger(unittest.TestCase):
             1e-3,
         ]
         for bad_value in bad_values:
-            self.assertFalse(core.isinteger(bad_value))
+            assert not core.isinteger(bad_value)

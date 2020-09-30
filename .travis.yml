@@ -41,4 +41,8 @@ install:
   - pip install .
 
 script:
-  - nosetests -vs
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+      pytest -n `sysctl -n hw.ncpu` tests;
+    else
+      pytest -n `nproc` tests;
+    fi

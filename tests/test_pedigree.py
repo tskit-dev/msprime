@@ -4,6 +4,7 @@ import tempfile
 import unittest
 
 import numpy as np
+import pytest
 
 import msprime
 
@@ -33,7 +34,7 @@ class TestPedigree(unittest.TestCase):
             2, pedigree=ped, model=model, recombination_rate=1, num_replicates=100
         )
         for ts in replicates:
-            self.assertTrue(ts is not None)
+            assert ts is not None
 
     def test_pedigree_samples(self):
         individual = np.array([1, 2, 3, 4])
@@ -46,19 +47,20 @@ class TestPedigree(unittest.TestCase):
         # IDs. For now, let's just leave it as it is, though.
         ped.set_samples(2)
         ts = msprime.simulate(2, pedigree=ped, model="wf_ped")
-        self.assertGreater(ts.num_edges, 0)
+        assert ts.num_edges > 0
 
         ped.set_samples(sample_IDs=[1, 2])
         ts = msprime.simulate(2, pedigree=ped, model="wf_ped")
-        self.assertTrue(ts is not None)
-        self.assertRaises(ValueError, ped.set_samples, sample_IDs=[1, 1])
-        self.assertRaises(ValueError, ped.set_samples, sample_IDs=[1, 3])
-        self.assertRaises(
-            NotImplementedError, ped.set_samples, sample_IDs=[1, 3], probands_only=False
-        )
+        assert ts is not None
+        with pytest.raises(ValueError):
+            ped.set_samples(sample_IDs=[1, 1])
+        with pytest.raises(ValueError):
+            ped.set_samples(sample_IDs=[1, 3])
+        with pytest.raises(NotImplementedError):
+            ped.set_samples(sample_IDs=[1, 3], probands_only=False)
 
         ped.set_samples(sample_IDs=[1, 2])
-        self.assertEqual(ped.get_proband_indices(), [0, 1])
+        assert ped.get_proband_indices() == [0, 1]
 
     def test_pedigree_read_write(self):
         individual = np.array([1, 2, 3, 4])
@@ -69,12 +71,11 @@ class TestPedigree(unittest.TestCase):
         ped = msprime.Pedigree(individual, parents, time, is_sample, sex=None, ploidy=2)
 
         ped.save_txt(self.temp_pedigree_text_file)
-        self.assertRaises(
-            NotImplementedError,
-            msprime.Pedigree.read_txt,
-            self.temp_pedigree_text_file,
-            sex_col=4,
-        )
+        with pytest.raises(NotImplementedError):
+            msprime.Pedigree.read_txt(
+                self.temp_pedigree_text_file,
+                sex_col=4,
+            )
         # FIXME
         # The compute_times should be done automatically in this case .
         # ped_from_txt = msprime.Pedigree.read_txt(
@@ -91,7 +92,7 @@ class TestPedigree(unittest.TestCase):
         ped.save_npy(self.temp_pedigree_array_file)
         ped_from_npy = msprime.Pedigree.read_npy(self.temp_pedigree_array_file)
         # TODO compre this to the file above.
-        self.assertIsInstance(ped_from_npy, msprime.Pedigree)
+        assert isinstance(ped_from_npy, msprime.Pedigree)
 
     def test_pedigree_times(self):
         individual = np.array([1, 2, 3, 4])
@@ -101,7 +102,7 @@ class TestPedigree(unittest.TestCase):
         estimated_times = msprime.Pedigree.get_times(
             individual, parent_IDs=parent_IDs, check=True
         )
-        self.assertTrue((time == estimated_times).all())
+        assert (time == estimated_times).all()
 
     def test_pedigree_utils(self):
         individual = np.array([1, 2, 3, 4])
@@ -109,19 +110,14 @@ class TestPedigree(unittest.TestCase):
         parent_IDs = np.array([3, 4, 3, 4, 0, 0, 0, 0]).reshape(-1, 2)
 
         bad_individual = np.array([0, 1, 2, 3])
-        self.assertRaises(
-            ValueError, msprime.Pedigree.parent_ID_to_index, bad_individual, parent_IDs
-        )
-        self.assertTrue(
-            (
-                msprime.Pedigree.parent_ID_to_index(individual, parent_IDs) == parents
-            ).all()
-        )
-        self.assertTrue(
-            (
-                msprime.Pedigree.parent_index_to_ID(individual, parents) == parent_IDs
-            ).all()
-        )
+        with pytest.raises(ValueError):
+            msprime.Pedigree.parent_ID_to_index(bad_individual, parent_IDs)
+        assert (
+            msprime.Pedigree.parent_ID_to_index(individual, parent_IDs) == parents
+        ).all()
+        assert (
+            msprime.Pedigree.parent_index_to_ID(individual, parents) == parent_IDs
+        ).all()
 
     def test_pedigree_sanity_checks(self):
         individual = np.array([1, 2, 3, 4])
@@ -129,46 +125,46 @@ class TestPedigree(unittest.TestCase):
         time = np.array([0, 0, 1, 1])
         is_sample = np.array([1, 1, 0, 0])
 
-        self.assertRaises(
-            NotImplementedError,
-            msprime.Pedigree,
-            individual=individual,
-            parents=parents,
-            time=time,
-            ploidy=1,
-        )
+        with pytest.raises(NotImplementedError):
+            msprime.Pedigree(
+                individual=individual,
+                parents=parents,
+                time=time,
+                ploidy=1,
+            )
         bad_parents = np.array([2, 3, 2, 3, -1, -1, -1, -1]).reshape(-1, 4)
-        self.assertRaises(
-            ValueError,
-            msprime.Pedigree,
-            individual=individual,
-            parents=bad_parents,
-            time=time,
-        )
+        with pytest.raises(ValueError):
+            msprime.Pedigree(
+                individual=individual,
+                parents=bad_parents,
+                time=time,
+            )
         bad_individual = np.array([-1, 2, 3, 4])
-        self.assertRaises(
-            ValueError,
-            msprime.Pedigree,
-            individual=bad_individual,
-            parents=parents,
-            time=time,
-        )
+        with pytest.raises(ValueError):
+            msprime.Pedigree(
+                individual=bad_individual,
+                parents=parents,
+                time=time,
+            )
 
         bad_times = np.array([1, 1, 1, 1])
         ped = msprime.Pedigree(
             individual, parents, bad_times, is_sample, sex=None, ploidy=2
         )
-        self.assertRaises(
-            ValueError,
-            ped.check_times,
-            individual=ped.individual,
-            parents=ped.parents,
-            time=ped.time,
-        )
+        with pytest.raises(ValueError):
+            ped.check_times(
+                individual=ped.individual,
+                parents=ped.parents,
+                time=ped.time,
+            )
 
         ped = msprime.Pedigree(individual, parents, time, sex=None, ploidy=2)
-        self.assertRaises(ValueError, ped.set_samples)
-        self.assertRaises(ValueError, ped.set_samples, num_samples=10)
-        self.assertRaises(ValueError, ped.set_samples, num_samples=2, sample_IDs=[1, 2])
+        with pytest.raises(ValueError):
+            ped.set_samples()
+        with pytest.raises(ValueError):
+            ped.set_samples(num_samples=10)
+        with pytest.raises(ValueError):
+            ped.set_samples(num_samples=2, sample_IDs=[1, 2])
 
-        self.assertRaises(ValueError, ped.get_times, individual=ped.individual)
+        with pytest.raises(ValueError):
+            ped.get_times(individual=ped.individual)

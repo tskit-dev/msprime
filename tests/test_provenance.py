@@ -22,10 +22,11 @@ Tests for the provenance information attached to tree sequences.
 import base64
 import inspect
 import json
+import logging
 import marshal
-import unittest
 
 import numpy as np
+import pytest
 import python_jsonschema_objects as pjs
 import tskit
 
@@ -34,7 +35,7 @@ from msprime import _msprime
 from msprime import ancestry
 
 
-class TestProvenance(unittest.TestCase):
+class TestProvenance:
     """
     Basic tests for the provenance dict function.
     """
@@ -43,13 +44,13 @@ class TestProvenance(unittest.TestCase):
         ts = msprime.simulate(5, random_seed=1)
         prov = json.loads(ts.provenance(0).record)
         libs = prov["environment"]["libraries"]
-        self.assertEqual(
-            libs["gsl"], {"version": ".".join(map(str, _msprime.get_gsl_version()))}
-        )
-        self.assertEqual(libs["tskit"], {"version": tskit.__version__})
+        assert libs["gsl"] == {
+            "version": ".".join(map(str, _msprime.get_gsl_version()))
+        }
+        assert libs["tskit"] == {"version": tskit.__version__}
 
 
-class TestBuildProvenance(unittest.TestCase):
+class TestBuildProvenance:
     """
     Tests for the provenance dictionary building. This dictionary is used
     to encode the parameters for the msprime simulations.
@@ -63,10 +64,10 @@ class TestBuildProvenance(unittest.TestCase):
         d = somefunc(42, 43)
         tskit.validate_provenance(d)
         params = d["parameters"]
-        self.assertEqual(params["command"], "cmd")
-        self.assertEqual(params["random_seed"], 1234)
-        self.assertEqual(params["a"], 42)
-        self.assertEqual(params["b"], 43)
+        assert params["command"] == "cmd"
+        assert params["random_seed"] == 1234
+        assert params["a"] == 42
+        assert params["b"] == 43
 
     def test_replicates(self):
         def somefunc(*, a, b, num_replicates, replicate_index):
@@ -76,15 +77,15 @@ class TestBuildProvenance(unittest.TestCase):
         d = somefunc(b="b", a="a", num_replicates=100, replicate_index=1234)
         tskit.validate_provenance(d)
         params = d["parameters"]
-        self.assertEqual(params["command"], "the_cmd")
-        self.assertEqual(params["random_seed"], 42)
-        self.assertEqual(params["a"], "a")
-        self.assertEqual(params["b"], "b")
-        self.assertFalse("num_replicates" in d)
-        self.assertFalse("replicate_index" in d)
+        assert params["command"] == "the_cmd"
+        assert params["random_seed"] == 42
+        assert params["a"] == "a"
+        assert params["b"] == "b"
+        assert not ("num_replicates" in d)
+        assert not ("replicate_index" in d)
 
 
-class ValidateSchemas(unittest.TestCase):
+class ValidateSchemas:
     """
     Check that the schemas we produce in msprime are valid.
     """
@@ -93,24 +94,24 @@ class ValidateSchemas(unittest.TestCase):
         ts = msprime.simulate(5, random_seed=1)
         prov = json.loads(ts.provenance(0).record)
         tskit.validate_provenance(prov)
-        self.assertEqual(prov["parameters"]["command"], "simulate")
+        assert prov["parameters"]["command"] == "simulate"
 
     def test_mutate(self):
         ts = msprime.simulate(5, random_seed=1)
         ts = msprime.mutate(ts, rate=1, random_seed=1)
         prov = json.loads(ts.provenance(1).record)
         tskit.validate_provenance(prov)
-        self.assertEqual(prov["parameters"]["command"], "mutate")
+        assert prov["parameters"]["command"] == "mutate"
 
     def test_simplify(self):
         ts = msprime.simulate(5, random_seed=1)
         ts = ts.simplify()
         prov = json.loads(ts.provenance(1).record)
         tskit.validate_provenance(prov)
-        self.assertEqual(prov["parameters"]["command"], "simplify")
+        assert prov["parameters"]["command"] == "simplify"
 
 
-class TestBuildObjects(unittest.TestCase):
+class TestBuildObjects:
     """
     Check that we can build objects from the json schema as we'd expect.
     """
@@ -124,30 +125,30 @@ class TestBuildObjects(unittest.TestCase):
         ts = msprime.simulate(5, random_seed=1)
         prov = ts.provenance(0).record
         decoded = self.decode(prov)
-        self.assertEqual(decoded.schema_version, "1.0.0")
-        self.assertEqual(decoded.parameters.command, "simulate")
-        self.assertEqual(decoded.parameters.random_seed, 1)
+        assert decoded.schema_version == "1.0.0"
+        assert decoded.parameters.command == "simulate"
+        assert decoded.parameters.random_seed == 1
 
     def test_sim_ancestry(self):
         ts = msprime.sim_ancestry(5, random_seed=1)
         prov = ts.provenance(0).record
         decoded = self.decode(prov)
-        self.assertEqual(decoded.schema_version, "1.0.0")
-        self.assertEqual(decoded.parameters.command, "sim_ancestry")
-        self.assertEqual(decoded.parameters.random_seed, 1)
+        assert decoded.schema_version == "1.0.0"
+        assert decoded.parameters.command == "sim_ancestry"
+        assert decoded.parameters.random_seed == 1
 
     def test_no_provenance(self):
         ts = msprime.simulate(5, record_provenance=False)
-        self.assertEqual(len(list(ts.provenances())), 0)
+        assert len(list(ts.provenances())) == 0
         ts = msprime.sim_ancestry(5, record_provenance=False)
-        self.assertEqual(len(list(ts.provenances())), 0)
+        assert len(list(ts.provenances())) == 0
 
     def verify_simulation_models(self, sim_func):
         simple_model = ["hudson", [10, "dtwf"], [20, "smc"], [None, None]]
         ts = sim_func(10, model=simple_model)
         decoded = self.decode(ts.provenance(0).record)
         parameters = decoded.parameters
-        self.assertEqual(list(parameters.model), simple_model)
+        assert list(parameters.model) == simple_model
 
         model_instances = [
             msprime.StandardCoalescent(),
@@ -160,37 +161,28 @@ class TestBuildObjects(unittest.TestCase):
         ts = sim_func(10, model=model_instances)
         decoded = self.decode(ts.provenance(0).record)
         parameters = decoded.parameters
-        self.assertEqual(
-            parameters.model[0], {"__class__": "msprime.ancestry.StandardCoalescent"}
-        )
-        self.assertDictEqual(
-            parameters.model[1],
-            {
-                "__class__": "msprime.ancestry.SimulationModelChange",
-                "model": {"__class__": "msprime.ancestry.DiscreteTimeWrightFisher"},
-                "time": 10,
+        assert parameters.model[0] == {
+            "__class__": "msprime.ancestry.StandardCoalescent"
+        }
+        assert parameters.model[1] == {
+            "__class__": "msprime.ancestry.SimulationModelChange",
+            "model": {"__class__": "msprime.ancestry.DiscreteTimeWrightFisher"},
+            "time": 10,
+        }
+        assert parameters.model[2] == {
+            "__class__": "msprime.ancestry.SimulationModelChange",
+            "model": {"__class__": "msprime.ancestry.SmcApproxCoalescent"},
+            "time": 20,
+        }
+        assert parameters.model[3] == {
+            "__class__": "msprime.ancestry.SimulationModelChange",
+            "model": {
+                "__class__": "msprime.ancestry.BetaCoalescent",
+                "alpha": 1.1,
+                "truncation_point": 1.0,
             },
-        )
-        self.assertDictEqual(
-            parameters.model[2],
-            {
-                "__class__": "msprime.ancestry.SimulationModelChange",
-                "model": {"__class__": "msprime.ancestry.SmcApproxCoalescent"},
-                "time": 20,
-            },
-        )
-        self.assertDictEqual(
-            parameters.model[3],
-            {
-                "__class__": "msprime.ancestry.SimulationModelChange",
-                "model": {
-                    "__class__": "msprime.ancestry.BetaCoalescent",
-                    "alpha": 1.1,
-                    "truncation_point": 1.0,
-                },
-                "time": 30,
-            },
-        )
+            "time": 30,
+        }
 
     def test_encode_simulation_models_simulate(self):
         self.verify_simulation_models(msprime.simulate)
@@ -198,7 +190,7 @@ class TestBuildObjects(unittest.TestCase):
     def test_encode_simulation_models_sim_ancestry(self):
         self.verify_simulation_models(msprime.sim_ancestry)
 
-    def test_encode_numpy_functions_and_classes(self):
+    def test_encode_numpy_functions_and_classes(self, caplog):
         seeds = np.ones(1, dtype=int)
         pop_configs = [msprime.PopulationConfiguration(5) for _ in range(2)]
 
@@ -210,7 +202,7 @@ class TestBuildObjects(unittest.TestCase):
                 pass
             return t
 
-        with self.assertLogs("msprime.provenance", level="WARNING") as cm:
+        with caplog.at_level(logging.WARNING):
             ts = msprime.simulate(
                 random_seed=seeds[0],
                 population_configurations=pop_configs,
@@ -221,86 +213,73 @@ class TestBuildObjects(unittest.TestCase):
                     msprime.SimulationModelChange(time=lambda t: t + seeds[0]),
                 ],
             )
-        self.assertIn(
-            "WARNING:msprime.provenance:Configuration function bad_func refers"
+        assert (
+            "Configuration function bad_func refers"
             " to global variables ('msprime',) which are not currently"
-            " serialized",
-            cm.output,
+            " serialized" in caplog.text
         )
-        self.assertIn(
-            "WARNING:msprime.provenance:Configuration function <lambda> refers"
-            " to outer scope variables which are not currently serialized",
-            cm.output,
+        assert (
+            "Configuration function <lambda> refers"
+            " to outer scope variables which are not currently serialized"
+            in caplog.text
         )
         prov = ts.provenance(0).record
         decoded = self.decode(prov)
-        self.assertEqual(decoded.schema_version, "1.0.0")
-        self.assertEqual(decoded.parameters.command, "simulate")
+        assert decoded.schema_version == "1.0.0"
+        assert decoded.parameters.command == "simulate"
         parameters = decoded.parameters
-        self.assertEqual(parameters.random_seed, 1)
-        self.assertEqual(
-            parameters.population_configurations,
-            [
-                {
-                    "sample_size": 5,
-                    "initial_size": None,
-                    "growth_rate": 0.0,
-                    "metadata": None,
-                    "__class__": "msprime.demography.PopulationConfiguration",
-                },
-                {
-                    "sample_size": 5,
-                    "initial_size": None,
-                    "growth_rate": 0.0,
-                    "metadata": None,
-                    "__class__": "msprime.demography.PopulationConfiguration",
-                },
-            ],
-        )
-        self.assertEqual(parameters.migration_matrix, [[0, 1], [1, 0]])
-        self.assertDictEqual(
-            parameters.demographic_events[0],
+        assert parameters.random_seed == 1
+        assert parameters.population_configurations == [
             {
-                "time": {
-                    "__function__": base64.b64encode(
-                        marshal.dumps(time.__code__)
-                    ).decode("utf-8"),
-                    "defaults": None,
-                },
-                "model": None,
-                "__class__": "msprime.ancestry.SimulationModelChange",
+                "sample_size": 5,
+                "initial_size": None,
+                "growth_rate": 0.0,
+                "metadata": None,
+                "__class__": "msprime.demography.PopulationConfiguration",
             },
-        )
-        self.assertDictEqual(
-            parameters.demographic_events[1],
             {
-                "time": {
-                    "__error__": "Configuration function bad_func "
-                    "refers to global variables"
-                    " ('msprime',) which are not currently serialized"
-                },
-                "model": None,
-                "__class__": "msprime.ancestry.SimulationModelChange",
+                "sample_size": 5,
+                "initial_size": None,
+                "growth_rate": 0.0,
+                "metadata": None,
+                "__class__": "msprime.demography.PopulationConfiguration",
             },
-        ),
-        self.assertDictEqual(
-            parameters.demographic_events[2],
-            {
-                "time": {
-                    "__error__": "Configuration function <lambda> refers to outer scope"
-                    " variables which are not currently serialized"
-                },
-                "model": None,
-                "__class__": "msprime.ancestry.SimulationModelChange",
+        ]
+        assert parameters.migration_matrix == [[0, 1], [1, 0]]
+        assert parameters.demographic_events[0] == {
+            "time": {
+                "__function__": base64.b64encode(marshal.dumps(time.__code__)).decode(
+                    "utf-8"
+                ),
+                "defaults": None,
             },
-        )
+            "model": None,
+            "__class__": "msprime.ancestry.SimulationModelChange",
+        }
+        assert parameters.demographic_events[1] == {
+            "time": {
+                "__error__": "Configuration function bad_func "
+                "refers to global variables"
+                " ('msprime',) which are not currently serialized"
+            },
+            "model": None,
+            "__class__": "msprime.ancestry.SimulationModelChange",
+        }
+        assert parameters.demographic_events[2] == {
+            "time": {
+                "__error__": "Configuration function <lambda> refers to outer scope"
+                " variables which are not currently serialized"
+            },
+            "model": None,
+            "__class__": "msprime.ancestry.SimulationModelChange",
+        }
 
     def test_unencodable_function(self):
         class BadClass:
             def __call__(self, t):
                 return t
 
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             msprime.simulate(
                 5,
                 random_seed=1,
@@ -310,20 +289,19 @@ class TestBuildObjects(unittest.TestCase):
     def test_replicate_index(self):
         for i, ts in enumerate(msprime.simulate(5, num_replicates=3)):
             decoded = self.decode(ts.provenance(0).record)
-            self.assertEqual(decoded.parameters["replicate_index"], i)
+            assert decoded.parameters["replicate_index"] == i
 
-    def test_large_provenance_warning(self):
-        with self.assertLogs("msprime.provenance", level="WARNING") as cm:
+    def test_large_provenance_warning(self, caplog):
+        with caplog.at_level(logging.WARNING):
             msprime.provenance.json_encode_provenance(
                 {"test": np.zeros(shape=(500_000,))}, 5
             )
-        self.assertIn(
-            "WARNING:msprime.provenance:The provenance information for the resulting"
+        assert (
+            "The provenance information for the resulting"
             " tree sequence is 2.38MB. This is nothing to worry about as"
             " provenance is a good thing to have, but if you want to save this"
             " memory/storage space you can disable provenance recording by setting"
-            " record_provenance=False",
-            cm.output,
+            " record_provenance=False" in caplog.text
         )
 
     def test_mutate(self):
@@ -332,26 +310,27 @@ class TestBuildObjects(unittest.TestCase):
             ts, rate=2, random_seed=1, start_time=0, end_time=100, keep=False
         )
         decoded = self.decode(ts.provenance(1).record)
-        self.assertEqual(decoded.schema_version, "1.0.0")
-        self.assertEqual(decoded.parameters.command, "mutate")
-        self.assertEqual(decoded.parameters.random_seed, 1)
-        self.assertEqual(decoded.parameters.rate, 2)
-        self.assertEqual(decoded.parameters.start_time, 0)
-        self.assertEqual(decoded.parameters.end_time, 100)
-        self.assertEqual(decoded.parameters.keep, False)
-        self.assertEqual(
-            decoded.parameters.model["__class__"],
-            "msprime.mutations.BinaryMutationModel",
+        assert decoded.schema_version == "1.0.0"
+        assert decoded.parameters.command == "mutate"
+        assert decoded.parameters.random_seed == 1
+        assert decoded.parameters.rate == 2
+        assert decoded.parameters.start_time == 0
+        assert decoded.parameters.end_time == 100
+        assert not decoded.parameters.keep
+        assert (
+            decoded.parameters.model["__class__"]
+            == "msprime.mutations.BinaryMutationModel"
         )
 
     def test_mutate_model(self):
         ts = msprime.simulate(5, random_seed=1)
         ts = msprime.mutate(ts, model="jc69")
         decoded = self.decode(ts.provenance(1).record)
-        self.assertEqual(decoded.schema_version, "1.0.0")
-        self.assertEqual(decoded.parameters.command, "mutate")
-        self.assertEqual(
-            decoded.parameters.model["__class__"], "msprime.mutations.JC69MutationModel"
+        assert decoded.schema_version == "1.0.0"
+        assert decoded.parameters.command == "mutate"
+        assert (
+            decoded.parameters.model["__class__"]
+            == "msprime.mutations.JC69MutationModel"
         )
 
     def test_mutate_map(self):
@@ -359,17 +338,13 @@ class TestBuildObjects(unittest.TestCase):
         rate_map = msprime.RateMap(position=[0, 0.5, 1], rate=[0, 1])
         ts = msprime.mutate(ts, rate=rate_map)
         decoded = self.decode(ts.provenance(1).record)
-        self.assertEqual(decoded.schema_version, "1.0.0")
-        self.assertEqual(decoded.parameters.command, "mutate")
-        self.assertEqual(
-            decoded.parameters.rate["__class__"], "msprime.intervals.RateMap"
+        assert decoded.schema_version == "1.0.0"
+        assert decoded.parameters.command == "mutate"
+        assert decoded.parameters.rate["__class__"] == "msprime.intervals.RateMap"
+        assert decoded.parameters.rate["position"]["__ndarray__"] == list(
+            rate_map.position
         )
-        self.assertEqual(
-            decoded.parameters.rate["position"]["__ndarray__"], list(rate_map.position)
-        )
-        self.assertEqual(
-            decoded.parameters.rate["rate"]["__ndarray__"], list(rate_map.rate)
-        )
+        assert decoded.parameters.rate["rate"]["__ndarray__"] == list(rate_map.rate)
 
     def test_mutate_numpy(self):
         ts = msprime.simulate(5, random_seed=1)
@@ -382,19 +357,19 @@ class TestBuildObjects(unittest.TestCase):
             keep=np.array([False][0]),
         )
         decoded = self.decode(ts.provenance(1).record)
-        self.assertEqual(decoded.schema_version, "1.0.0")
-        self.assertEqual(decoded.parameters.command, "mutate")
-        self.assertEqual(decoded.parameters.random_seed, 1)
-        self.assertEqual(decoded.parameters.rate, 2)
-        self.assertEqual(decoded.parameters.start_time, 0)
-        self.assertEqual(decoded.parameters.end_time, 100)
-        self.assertEqual(decoded.parameters.keep, False)
+        assert decoded.schema_version == "1.0.0"
+        assert decoded.parameters.command == "mutate"
+        assert decoded.parameters.random_seed == 1
+        assert decoded.parameters.rate == 2
+        assert decoded.parameters.start_time == 0
+        assert decoded.parameters.end_time == 100
+        assert not decoded.parameters.keep
 
 
-class TestParseProvenance(unittest.TestCase):
+class TestParseProvenance:
     def test_parse_non_msprime(self):
         # Most testing of parsing is in the round tripping below
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             ts = msprime.simulate(5)
             prov = json.loads(ts.provenance(0).record)
             prov["software"]["name"] = "skynet"
@@ -409,11 +384,11 @@ class TestParseProvenance(unittest.TestCase):
         ts1 = msprime.simulate(5, random_seed=1)
         ts2 = msprime.mutate(ts1)
         command, prov = msprime.provenance.parse_provenance(ts2.provenance(1), ts1)
-        self.assertEquals(command, "mutate")
-        self.assertEquals(prov["tree_sequence"], ts1)
+        assert command == "mutate"
+        assert prov["tree_sequence"] == ts1
 
 
-class TestRoundTrip(unittest.TestCase):
+class TestRoundTrip:
     """
     Check that we can recreate tree sequences from their provenances
     """
@@ -424,7 +399,7 @@ class TestRoundTrip(unittest.TestCase):
         # We clear the provenances as they are not equal due to timestamps
         ts1_tables.provenances.clear()
         ts2_tables.provenances.clear()
-        self.assertEqual(ts1_tables, ts2_tables)
+        assert ts1_tables == ts2_tables
 
     def verify(self, ts, recurse=True):
         recreated = None
@@ -514,9 +489,9 @@ class TestMutateRoundTrip(TestRoundTrip):
         self.verify(ts)
 
 
-class TestRetainsProvenance(unittest.TestCase):
+class TestRetainsProvenance:
     def test_simulate_retains_provenance(self):
         from_ts = msprime.simulate(10, random_seed=5, end_time=0.5)
         ts = msprime.simulate(from_ts=from_ts, random_seed=2)
-        self.assertEqual(ts.num_provenances, from_ts.num_provenances + 1)
-        self.assertEqual(ts.provenance(0), from_ts.provenance(0))
+        assert ts.num_provenances == from_ts.num_provenances + 1
+        assert ts.provenance(0) == from_ts.provenance(0)

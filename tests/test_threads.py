@@ -21,7 +21,6 @@ Test cases for threading enabled aspects of the API.
 """
 import platform
 import threading
-import unittest
 
 import msprime
 
@@ -40,7 +39,7 @@ def run_threads(worker, num_threads):
     return results
 
 
-class TestSimulatorThreads(unittest.TestCase):
+class TestSimulatorThreads:
     """
     Tests that we can run simulations in separate threads and
     get the same results.
@@ -55,9 +54,9 @@ class TestSimulatorThreads(unittest.TestCase):
         results = run_threads(worker, self.num_threads)
         # Make sure the results are all the same.
         records = list(results[0].records())
-        self.assertGreater(len(records), 0)
+        assert len(records) > 0
         for ts in results[1:]:
-            self.assertEqual(records, list(ts.records()))
+            assert records == list(ts.records())
 
     def test_multiple_replicate_equality(self):
         num_replicates = 10
@@ -72,7 +71,7 @@ class TestSimulatorThreads(unittest.TestCase):
 
         results = run_threads(worker, self.num_threads)
         # Make sure the results are all the same.
-        self.assertEqual(len(results[0]), num_replicates)
-        self.assertGreater(len(results[0][0]), 0)
+        assert len(results[0]) == num_replicates
+        assert len(results[0][0]) > 0
         for result in results[1:]:
-            self.assertEqual(results[0], result)
+            assert results[0] == result

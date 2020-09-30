@@ -29,6 +29,7 @@ import warnings
 from unittest import mock
 
 import numpy as np
+import pytest
 import scipy.linalg
 import tskit
 
@@ -37,7 +38,7 @@ from msprime import _msprime
 from msprime import ancestry
 
 
-class TestNePopulationSizeEquivalence(unittest.TestCase):
+class TestNePopulationSizeEquivalence:
     """
     Test that setting Ne as a parameter of the population model and
     at individual populations is the same thing.
@@ -48,7 +49,7 @@ class TestNePopulationSizeEquivalence(unittest.TestCase):
         t2 = ts2.dump_tables()
         # We can't compare directly byte-for-byte because there'll be slight
         # differences in the computed times.
-        self.assertEqual(len(t1.nodes), len(t2.nodes))
+        assert len(t1.nodes) == len(t2.nodes)
         np.testing.assert_array_equal(t1.nodes.flags, t2.nodes.flags)
         np.testing.assert_array_almost_equal(t1.nodes.time, t2.nodes.time)
         np.testing.assert_array_equal(t1.nodes.population, t2.nodes.population)
@@ -57,7 +58,7 @@ class TestNePopulationSizeEquivalence(unittest.TestCase):
         np.testing.assert_array_equal(
             t1.nodes.metadata_offset, t2.nodes.metadata_offset
         )
-        self.assertEqual(len(t1.edges), len(t2.edges))
+        assert len(t1.edges) == len(t2.edges)
         np.testing.assert_array_almost_equal(t1.edges.left, t2.edges.left)
         np.testing.assert_array_almost_equal(t1.edges.right, t2.edges.right)
         np.testing.assert_array_equal(t1.edges.parent, t2.edges.parent)
@@ -149,7 +150,7 @@ class TestNePopulationSizeEquivalence(unittest.TestCase):
                 migration_matrix=migration_matrix,
                 random_seed=random_seed,
             )
-            self.assertGreater(ts1.num_trees, 1)
+            assert ts1.num_trees > 1
             ts2 = msprime.simulate(
                 samples=samples,
                 recombination_rate=recombination_rate,
@@ -207,7 +208,7 @@ class TestNePopulationSizeEquivalence(unittest.TestCase):
             self.assert_tree_sequences_equal(ts1, ts2)
 
 
-class TestIntrospectionInterface(unittest.TestCase):
+class TestIntrospectionInterface:
     """
     Tests that we have meaningful repr and str functions for all the
     classes used in the demography hierarchy.
@@ -219,13 +220,13 @@ class TestIntrospectionInterface(unittest.TestCase):
             "PopulationParametersChange(time=1.0, initial_size=2.0, "
             "growth_rate=None, population=1)"
         )
-        self.assertEqual(repr(event), repr_s)
+        assert repr(event) == repr_s
         str_s = "Population parameter change for 1: initial_size -> 2.0"
-        self.assertEqual(str(event), str_s)
+        assert str(event) == str_s
 
         event = msprime.PopulationParametersChange(1.0, population=1, growth_rate=2.0)
         str_s = "Population parameter change for 1: growth_rate -> 2.0"
-        self.assertEqual(str(event), str_s)
+        assert str(event) == str_s
 
         event = msprime.PopulationParametersChange(
             1.0, population=1, growth_rate=2.0, initial_size=4.0
@@ -233,20 +234,20 @@ class TestIntrospectionInterface(unittest.TestCase):
         str_s = (
             "Population parameter change for 1: initial_size -> 4.0 growth_rate -> 2.0"
         )
-        self.assertEqual(str(event), str_s)
+        assert str(event) == str_s
 
     def test_migration_rate_change(self):
         event = msprime.MigrationRateChange(time=1, rate=2)
         repr_s = "MigrationRateChange(time=1, rate=2, source=-1, dest=-1)"
         str_s = "Migration rate change to 2 everywhere"
-        self.assertEqual(repr(event), repr_s)
-        self.assertEqual(str(event), str_s)
+        assert repr(event) == repr_s
+        assert str(event) == str_s
 
         event = msprime.MigrationRateChange(time=1, rate=2, source=0, dest=1)
         repr_s = "MigrationRateChange(time=1, rate=2, source=0, dest=1)"
         str_s = "Migration rate change for (0, 1) to 2"
-        self.assertEqual(repr(event), repr_s)
-        self.assertEqual(str(event), str_s)
+        assert repr(event) == repr_s
+        assert str(event) == str_s
 
     def test_mass_migration(self):
         event = msprime.MassMigration(time=1, proportion=0.5, source=0, dest=1)
@@ -256,16 +257,16 @@ class TestIntrospectionInterface(unittest.TestCase):
             "with source 0 & dest 1 (equivalent to migration from 1 to 0 "
             "forwards in time)"
         )
-        self.assertEqual(repr(event), repr_s)
+        assert repr(event) == repr_s
         # Too much hassle to track the exact whitespace in the output string.
-        self.assertEqual(str(event).split(), str_s.split())
+        assert str(event).split() == str_s.split()
 
     def test_simple_bottleneck(self):
         event = msprime.SimpleBottleneck(time=1, population=1, proportion=0.5)
         repr_s = "SimpleBottleneck(time=1, population=1, proportion=0.5)"
         str_s = "Simple bottleneck: lineages in population 1 coalesce probability 0.5"
-        self.assertEqual(repr(event), repr_s)
-        self.assertEqual(str(event), str_s)
+        assert repr(event) == repr_s
+        assert str(event) == str_s
 
     def test_instantaneous_bottleneck(self):
         event = msprime.InstantaneousBottleneck(time=1, population=1, strength=1.5)
@@ -274,18 +275,18 @@ class TestIntrospectionInterface(unittest.TestCase):
             "Instantaneous bottleneck in population 1: equivalent to 1.5 "
             "generations of the coalescent"
         )
-        self.assertEqual(repr(event), repr_s)
-        self.assertEqual(str(event), str_s)
+        assert repr(event) == repr_s
+        assert str(event) == str_s
 
     def test_census(self):
         event = msprime.CensusEvent(time=1)
         repr_s = "CensusEvent(time=1)"
         str_s = "Census event"
-        self.assertEqual(repr(event), repr_s)
-        self.assertEqual(str(event), str_s)
+        assert repr(event) == repr_s
+        assert str(event) == str_s
 
 
-class TestDemographicEventsHaveExtraLLParameter(unittest.TestCase):
+class TestDemographicEventsHaveExtraLLParameter:
     """
     For legacy reasons the DemographicEvent.get_ll_representation took
     a "num_populations" argument. In versions of stdpopsim using
@@ -313,10 +314,10 @@ class TestDemographicEventsHaveExtraLLParameter(unittest.TestCase):
         for event in events:
             ll_config1 = event.get_ll_representation()
             ll_config2 = event.get_ll_representation(None)
-            self.assertEqual(ll_config1, ll_config2)
+            assert ll_config1 == ll_config2
 
 
-class TestTimeTravelErrors(unittest.TestCase):
+class TestTimeTravelErrors:
     """
     It is possible to specify models in msprime that result in malformed
     tree sequences where the parent node has time equal to its child.
@@ -324,7 +325,7 @@ class TestTimeTravelErrors(unittest.TestCase):
     """
 
     def test_multiple_bottlenecks(self):
-        with self.assertRaises(_msprime.LibraryError):
+        with pytest.raises(_msprime.LibraryError):
             for model in ["hudson", "smc"]:
                 msprime.simulate(
                     model=model,
@@ -357,7 +358,7 @@ class TestTimeTravelErrors(unittest.TestCase):
             msprime.MigrationRateChange(time=0.02, rate=0),
         ]
         M = [[0.0, 1.0, 1.0], [1.0, 0.0, 1.0], [1.0, 1.0, 0.0]]
-        with self.assertRaises(_msprime.LibraryError):
+        with pytest.raises(_msprime.LibraryError):
             msprime.simulate(
                 population_configurations=population_configurations,
                 demographic_events=demographic_events,
@@ -368,34 +369,31 @@ class TestTimeTravelErrors(unittest.TestCase):
             )
 
 
-class TestBadDemographicParameters(unittest.TestCase):
+class TestBadDemographicParameters:
     """
     Tests for nonsensical demographic parameters.
     """
 
     def test_bad_population_size(self):
         for bad_size in [-1, -1e300]:
-            self.assertRaises(
-                ValueError, msprime.PopulationParametersChange, 0, initial_size=bad_size
-            )
-            self.assertRaises(
-                ValueError,
-                msprime.PopulationConfiguration,
-                initial_size=bad_size,
-                sample_size=2,
-            )
+            with pytest.raises(ValueError):
+                msprime.PopulationParametersChange(0, initial_size=bad_size)
+            with pytest.raises(ValueError):
+                msprime.PopulationConfiguration(
+                    initial_size=bad_size,
+                    sample_size=2,
+                )
 
     def test_bad_sample_size(self):
         for bad_size in [-1, -1e300]:
-            self.assertRaises(
-                ValueError,
-                msprime.PopulationConfiguration,
-                initial_size=1,
-                sample_size=bad_size,
-            )
+            with pytest.raises(ValueError):
+                msprime.PopulationConfiguration(
+                    initial_size=1,
+                    sample_size=bad_size,
+                )
 
     def test_dtwf_bottleneck(self):
-        with self.assertRaises(_msprime.LibraryError):
+        with pytest.raises(_msprime.LibraryError):
             msprime.simulate(
                 sample_size=2,
                 model="dtwf",
@@ -404,18 +402,19 @@ class TestBadDemographicParameters(unittest.TestCase):
             )
 
 
-class TestBadDemographicEvents(unittest.TestCase):
+class TestBadDemographicEvents:
     """
     Tests for input errors when creating demographic events.
     """
 
     def test_growth_rate_or_initial_size(self):
-        self.assertRaises(ValueError, msprime.PopulationParametersChange, time=0)
+        with pytest.raises(ValueError):
+            msprime.PopulationParametersChange(time=0)
 
     def test_bad_simulation_model(self):
         for model in [[], {}]:
             des = [msprime.SimulationModelChange(time=0, model=model)]
-            with self.assertRaises(TypeError):
+            with pytest.raises(TypeError):
                 msprime.simulate(10, demographic_events=des)
 
 
@@ -458,9 +457,7 @@ class TestZeroPopulationSize(unittest.TestCase):
                 demographic_events=self.demographic_events,
                 samples=samples * 10,
             )
-            self.assertTrue(
-                all(tree.num_roots == 1 for tree in ts.trees()), msg=f"{samples}"
-            )
+            assert all(tree.num_roots == 1 for tree in ts.trees()), f"{samples}"
 
     def test_cant_sample_a_zero_sized_population(self):
         for bad_samples, err in [
@@ -468,7 +465,7 @@ class TestZeroPopulationSize(unittest.TestCase):
             # Check ancient sampling.
             ([msprime.Sample(1, self.T), msprime.Sample(1, 0)], _msprime.LibraryError),
         ]:
-            with self.assertRaises(err, msg=f"{bad_samples}"):
+            with pytest.raises(err):
                 msprime.simulate(
                     population_configurations=self.population_configurations,
                     demographic_events=self.demographic_events,
@@ -481,7 +478,7 @@ class TestZeroPopulationSize(unittest.TestCase):
             demographic_events=self.demographic_events,
         )
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             msprime.DemographyDebugger(
                 population_configurations=[
                     msprime.PopulationConfiguration(initial_size=0)
@@ -489,66 +486,64 @@ class TestZeroPopulationSize(unittest.TestCase):
             )
 
 
-class TestDeprecatedParameters(unittest.TestCase):
+class TestDeprecatedParameters:
     """
     Tests to check that aliased parameters are handled correctly.
     """
 
     def test_mass_migration_dest(self):
-        self.assertRaises(
-            ValueError, msprime.MassMigration, time=0, source=0, dest=0, destination=0
-        )
+        with pytest.raises(ValueError):
+            msprime.MassMigration(time=0, source=0, dest=0, destination=0)
         for j in range(10):
             e = msprime.MassMigration(time=0.1, source=0, dest=j, proportion=0.5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.source, 0)
-            self.assertEqual(e.dest, j)
-            self.assertEqual(e.proportion, 0.5)
+            assert e.time == 0.1
+            assert e.source == 0
+            assert e.dest == j
+            assert e.proportion == 0.5
             e = msprime.MassMigration(0.1, 0, j, 0.5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.source, 0)
-            self.assertEqual(e.dest, j)
-            self.assertEqual(e.proportion, 0.5)
+            assert e.time == 0.1
+            assert e.source == 0
+            assert e.dest == j
+            assert e.proportion == 0.5
             e = msprime.MassMigration(time=0.1, source=0, destination=j, proportion=0.5)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.source, 0)
-            self.assertEqual(e.dest, j)
-            self.assertEqual(e.proportion, 0.5)
+            assert e.time == 0.1
+            assert e.source == 0
+            assert e.dest == j
+            assert e.proportion == 0.5
 
     def test_population_parameters_population_id(self):
-        self.assertRaises(
-            ValueError,
-            msprime.PopulationParametersChange,
-            time=0,
-            initial_size=1.1,
-            growth_rate=0.1,
-            population=1,
-            population_id=1,
-        )
+        with pytest.raises(ValueError):
+            msprime.PopulationParametersChange(
+                time=0,
+                initial_size=1.1,
+                growth_rate=0.1,
+                population=1,
+                population_id=1,
+            )
 
         for j in range(10):
             e = msprime.PopulationParametersChange(
                 time=0.1, initial_size=1.1, growth_rate=0.1, population=j
             )
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.initial_size, 1.1)
-            self.assertEqual(e.growth_rate, 0.1)
-            self.assertEqual(e.population, j)
+            assert e.time == 0.1
+            assert e.initial_size == 1.1
+            assert e.growth_rate == 0.1
+            assert e.population == j
             e = msprime.PopulationParametersChange(0.1, 1.1, 0.1, j)
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.initial_size, 1.1)
-            self.assertEqual(e.growth_rate, 0.1)
-            self.assertEqual(e.population, j)
+            assert e.time == 0.1
+            assert e.initial_size == 1.1
+            assert e.growth_rate == 0.1
+            assert e.population == j
             e = msprime.PopulationParametersChange(
                 time=0.1, initial_size=1.1, growth_rate=0.1, population_id=j
             )
-            self.assertEqual(e.time, 0.1)
-            self.assertEqual(e.initial_size, 1.1)
-            self.assertEqual(e.growth_rate, 0.1)
-            self.assertEqual(e.population, j)
+            assert e.time == 0.1
+            assert e.initial_size == 1.1
+            assert e.growth_rate == 0.1
+            assert e.population == j
 
 
-class TestRateConversions(unittest.TestCase):
+class TestRateConversions:
     """
     Tests for the demographic events interface.
     """
@@ -563,7 +558,7 @@ class TestRateConversions(unittest.TestCase):
             "population": -1,
             "initial_size": new_size,
         }
-        self.assertEqual(event.get_ll_representation(), ll_event)
+        assert event.get_ll_representation() == ll_event
 
     def test_growth_rate_change(self):
         g = 512
@@ -577,7 +572,7 @@ class TestRateConversions(unittest.TestCase):
             "population": 1,
             "growth_rate": growth_rate,
         }
-        self.assertEqual(event.get_ll_representation(), ll_event)
+        assert event.get_ll_representation() == ll_event
 
     def test_growth_rate_and_size_change(self):
         g = 1024
@@ -593,7 +588,7 @@ class TestRateConversions(unittest.TestCase):
             "initial_size": initial_size,
             "growth_rate": growth_rate,
         }
-        self.assertEqual(event.get_ll_representation(), ll_event)
+        assert event.get_ll_representation() == ll_event
 
     def test_migration_rate_change(self):
         g = 1024
@@ -606,10 +601,10 @@ class TestRateConversions(unittest.TestCase):
             "dest": -1,
             "migration_rate": migration_rate,
         }
-        self.assertEqual(event.get_ll_representation(), ll_event)
+        assert event.get_ll_representation() == ll_event
 
 
-class TestDemographyDebuggerOutput(unittest.TestCase):
+class TestDemographyDebuggerOutput:
     """
     Tests for the demography debug interface.
     """
@@ -625,14 +620,14 @@ class TestDemographyDebuggerOutput(unittest.TestCase):
         )
         # Check the reprs
         s = repr(dd.epochs)
-        self.assertGreater(len(s), 0)
+        assert len(s) > 0
         buff = io.StringIO()
         dd.print_history(buff)
         debug_output = buff.getvalue()
-        self.assertEqual(debug_output, str(dd))
+        assert debug_output == str(dd)
         # TODO when there is better output, write some tests to
         # verify its format.
-        self.assertGreater(len(debug_output), 0)
+        assert len(debug_output) > 0
 
     def test_zero_samples(self):
         population_configurations = [msprime.PopulationConfiguration(0)]
@@ -679,7 +674,7 @@ class TestDemographyDebuggerOutput(unittest.TestCase):
         )
 
 
-class TestDemographyDebugger(unittest.TestCase):
+class TestDemographyDebugger:
     """
     Tests for the demography debugger. Ensure that we compute the correct
     population sizes etc.
@@ -691,13 +686,13 @@ class TestDemographyDebugger(unittest.TestCase):
         """
         pop_size = dd.population_size_history
         times = dd.epoch_times
-        self.assertEqual(dd.num_epochs, times.shape[0])
-        self.assertEqual(dd.num_epochs, pop_size.shape[1])
-        self.assertEqual(dd.num_populations, pop_size.shape[0])
+        assert dd.num_epochs == times.shape[0]
+        assert dd.num_epochs == pop_size.shape[1]
+        assert dd.num_populations == pop_size.shape[0]
         for j in range(dd.num_epochs):
-            self.assertEqual(dd.epochs[j].start_time, times[j])
+            assert dd.epochs[j].start_time == times[j]
             for k in range(dd.num_populations):
-                self.assertEqual(dd.epochs[j].populations[k].start_size, pop_size[k, j])
+                assert dd.epochs[j].populations[k].start_size == pop_size[k, j]
 
     def test_equal_after(self):
         population_configurations = [
@@ -705,13 +700,13 @@ class TestDemographyDebugger(unittest.TestCase):
             msprime.PopulationConfiguration(sample_size=20),
         ]
         msprime.DemographyDebugger(population_configurations=population_configurations)
-        self.assertEqual(population_configurations[0].sample_size, 10)
-        self.assertEqual(population_configurations[1].sample_size, 20)
+        assert population_configurations[0].sample_size == 10
+        assert population_configurations[1].sample_size == 20
 
     def test_model_change_events(self):
         population_configurations = [msprime.PopulationConfiguration(sample_size=10)]
         demographic_events = [msprime.SimulationModelChange(1, "hudson")]
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             msprime.DemographyDebugger(
                 population_configurations=population_configurations,
                 demographic_events=demographic_events,
@@ -721,20 +716,20 @@ class TestDemographyDebugger(unittest.TestCase):
         dd = msprime.DemographyDebugger(
             population_configurations=[msprime.PopulationConfiguration()]
         )
-        self.assertEqual(len(dd.epochs), 1)
+        assert len(dd.epochs) == 1
         self.verify_arrays(dd)
         e = dd.epochs[0]
-        self.assertEqual(e.start_time, 0)
-        self.assertEqual(dd.epoch_times[0], 0)
-        self.assertEqual(dd.population_size_history.shape[0], 1)
-        self.assertTrue(math.isinf(e.end_time))
-        self.assertEqual(len(e.demographic_events), 0)
-        self.assertEqual(len(e.populations), 1)
-        self.assertEqual(e.migration_matrix, [[0]])
+        assert e.start_time == 0
+        assert dd.epoch_times[0] == 0
+        assert dd.population_size_history.shape[0] == 1
+        assert math.isinf(e.end_time)
+        assert len(e.demographic_events) == 0
+        assert len(e.populations) == 1
+        assert e.migration_matrix == [[0]]
         pop = e.populations[0]
-        self.assertEqual(pop.growth_rate, 0)
-        self.assertEqual(pop.start_size, 1)
-        self.assertEqual(pop.end_size, 1)
+        assert pop.growth_rate == 0
+        assert pop.start_size == 1
+        assert pop.end_size == 1
 
     def test_two_pop_different_sizes(self):
         dd = msprime.DemographyDebugger(
@@ -744,21 +739,21 @@ class TestDemographyDebugger(unittest.TestCase):
             ]
         )
         self.verify_arrays(dd)
-        self.assertEqual(len(dd.epochs), 1)
+        assert len(dd.epochs) == 1
         e = dd.epochs[0]
-        self.assertEqual(e.start_time, 0)
-        self.assertEqual(dd.population_size_history.shape[0], 2)
-        self.assertEqual(dd.population_size_history[0][0], 10)
-        self.assertEqual(dd.population_size_history[1][0], 20)
-        self.assertTrue(math.isinf(e.end_time))
-        self.assertEqual(len(e.demographic_events), 0)
-        self.assertEqual(len(e.populations), 2)
+        assert e.start_time == 0
+        assert dd.population_size_history.shape[0] == 2
+        assert dd.population_size_history[0][0] == 10
+        assert dd.population_size_history[1][0] == 20
+        assert math.isinf(e.end_time)
+        assert len(e.demographic_events) == 0
+        assert len(e.populations) == 2
         np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
         for pop in e.populations:
-            self.assertEqual(pop.growth_rate, 0)
-            self.assertEqual(pop.start_size, pop.end_size)
-        self.assertEqual(e.populations[0].start_size, 10)
-        self.assertEqual(e.populations[1].start_size, 20)
+            assert pop.growth_rate == 0
+            assert pop.start_size == pop.end_size
+        assert e.populations[0].start_size == 10
+        assert e.populations[1].start_size == 20
 
     def test_two_pop_different_growth_rates(self):
         g1 = 0.1
@@ -777,35 +772,35 @@ class TestDemographyDebugger(unittest.TestCase):
         self.verify_arrays(dd)
         # Make sure we're testing the __repr__ paths.
         s = repr(dd)
-        self.assertGreater(len(s), 0)
-        self.assertEqual(len(dd.epochs), 2)
+        assert len(s) > 0
+        assert len(dd.epochs) == 2
         e = dd.epochs[0]
-        self.assertEqual(e.start_time, 0)
-        self.assertEqual(e.end_time, 10)
-        self.assertEqual(len(e.demographic_events), 0)
-        self.assertEqual(len(e.populations), 2)
+        assert e.start_time == 0
+        assert e.end_time == 10
+        assert len(e.demographic_events) == 0
+        assert len(e.populations) == 2
         np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
-        self.assertEqual(e.populations[0].start_size, 10)
-        self.assertEqual(e.populations[0].end_size, p0_end_size)
-        self.assertEqual(e.populations[1].start_size, 20)
-        self.assertEqual(e.populations[1].end_size, p1_end_size)
+        assert e.populations[0].start_size == 10
+        assert e.populations[0].end_size == p0_end_size
+        assert e.populations[1].start_size == 20
+        assert e.populations[1].end_size == p1_end_size
 
         e = dd.epochs[1]
-        self.assertEqual(e.start_time, 10)
-        self.assertTrue(math.isinf(e.end_time))
-        self.assertEqual(len(e.demographic_events), 1)
+        assert e.start_time == 10
+        assert math.isinf(e.end_time)
+        assert len(e.demographic_events) == 1
         d = e.demographic_events[0]
-        self.assertEqual(d.time, 10)
-        self.assertEqual(d.growth_rate, 0)
-        self.assertEqual(d.initial_size, None)
-        self.assertEqual(d.population, -1)
-        self.assertEqual(len(e.populations), 2)
+        assert d.time == 10
+        assert d.growth_rate == 0
+        assert d.initial_size is None
+        assert d.population == -1
+        assert len(e.populations) == 2
         np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
         for pop in e.populations:
-            self.assertEqual(pop.growth_rate, 0)
-            self.assertEqual(pop.start_size, pop.end_size)
-        self.assertEqual(e.populations[0].start_size, p0_end_size)
-        self.assertEqual(e.populations[1].start_size, p1_end_size)
+            assert pop.growth_rate == 0
+            assert pop.start_size == pop.end_size
+        assert e.populations[0].start_size == p0_end_size
+        assert e.populations[1].start_size == p1_end_size
 
     def test_two_pop_update_migration_rate(self):
         dd = msprime.DemographyDebugger(
@@ -820,47 +815,47 @@ class TestDemographyDebugger(unittest.TestCase):
             migration_matrix=[[0, 0.25], [0, 0]],
         )
         self.verify_arrays(dd)
-        self.assertEqual(len(dd.epochs), 3)
+        assert len(dd.epochs) == 3
         e = dd.epochs[0]
-        self.assertEqual(e.start_time, 0)
-        self.assertEqual(e.end_time, 20)
+        assert e.start_time == 0
+        assert e.end_time == 20
         np.testing.assert_array_equal(e.migration_matrix, [[0, 0.25], [0, 0]])
         for pop in e.populations:
-            self.assertEqual(pop.growth_rate, 0)
-            self.assertEqual(pop.start_size, pop.end_size)
-            self.assertEqual(pop.start_size, 100)
+            assert pop.growth_rate == 0
+            assert pop.start_size == pop.end_size
+            assert pop.start_size == 100
 
         e = dd.epochs[1]
-        self.assertEqual(e.start_time, 20)
-        self.assertTrue(e.end_time, 22)
-        self.assertEqual(len(e.demographic_events), 1)
+        assert e.start_time == 20
+        assert e.end_time, 22
+        assert len(e.demographic_events) == 1
         d = e.demographic_events[0]
-        self.assertEqual(d.source, -1)
-        self.assertEqual(d.dest, -1)
-        self.assertEqual(d.time, 20)
-        self.assertEqual(d.rate, 1)
-        self.assertEqual(len(e.populations), 2)
+        assert d.source == -1
+        assert d.dest == -1
+        assert d.time == 20
+        assert d.rate == 1
+        assert len(e.populations) == 2
         np.testing.assert_array_equal(e.migration_matrix, [[0, 1], [1, 0]])
         for pop in e.populations:
-            self.assertEqual(pop.growth_rate, 0)
-            self.assertEqual(pop.start_size, pop.end_size)
-            self.assertEqual(pop.start_size, 100)
+            assert pop.growth_rate == 0
+            assert pop.start_size == pop.end_size
+            assert pop.start_size == 100
 
         e = dd.epochs[2]
-        self.assertEqual(e.start_time, 22)
-        self.assertTrue(math.isinf(e.end_time))
-        self.assertEqual(len(e.demographic_events), 1)
+        assert e.start_time == 22
+        assert math.isinf(e.end_time)
+        assert len(e.demographic_events) == 1
         d = e.demographic_events[0]
-        self.assertEqual(d.source, 0)
-        self.assertEqual(d.dest, 1)
-        self.assertEqual(d.time, 22)
-        self.assertEqual(d.rate, 1.7)
-        self.assertEqual(len(e.populations), 2)
+        assert d.source == 0
+        assert d.dest == 1
+        assert d.time == 22
+        assert d.rate == 1.7
+        assert len(e.populations) == 2
         np.testing.assert_array_equal(e.migration_matrix, [[0, 1.7], [1, 0]])
         for pop in e.populations:
-            self.assertEqual(pop.growth_rate, 0)
-            self.assertEqual(pop.start_size, pop.end_size)
-            self.assertEqual(pop.start_size, 100)
+            assert pop.growth_rate == 0
+            assert pop.start_size == pop.end_size
+            assert pop.start_size == 100
 
     def test_two_pop_change_growth_rates(self):
         alpha = 0.33
@@ -891,57 +886,57 @@ class TestDemographyDebugger(unittest.TestCase):
             )
             self.verify_arrays(dd)
 
-            self.assertEqual(len(dd.epochs), 4)
+            assert len(dd.epochs) == 4
             e = dd.epochs[0]
-            self.assertEqual(e.start_time, 0)
-            self.assertEqual(e.end_time, t1)
-            self.assertEqual(dd.epoch_times[0], 0)
-            self.assertEqual(dd.epoch_times[1], t1)
-            self.assertEqual(len(e.demographic_events), 0)
-            self.assertEqual(len(e.populations), 2)
+            assert e.start_time == 0
+            assert e.end_time == t1
+            assert dd.epoch_times[0] == 0
+            assert dd.epoch_times[1] == t1
+            assert len(e.demographic_events) == 0
+            assert len(e.populations) == 2
             np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
-            self.assertEqual(e.populations[0].start_size, N0)
+            assert e.populations[0].start_size == N0
             n0 = N0 * math.exp(-alpha * t1)
-            self.assertEqual(e.populations[0].end_size, n0)
-            self.assertEqual(e.populations[1].start_size, N1)
-            self.assertEqual(e.populations[1].end_size, N1)
+            assert e.populations[0].end_size == n0
+            assert e.populations[1].start_size == N1
+            assert e.populations[1].end_size == N1
 
             e = dd.epochs[1]
-            self.assertEqual(e.start_time, t1)
-            self.assertEqual(e.end_time, t2)
-            self.assertEqual(len(e.demographic_events), 1)
-            self.assertEqual(len(e.populations), 2)
+            assert e.start_time == t1
+            assert e.end_time == t2
+            assert len(e.demographic_events) == 1
+            assert len(e.populations) == 2
             np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
-            self.assertEqual(e.populations[0].start_size, n0)
+            assert e.populations[0].start_size == n0
             n0 = N0 * math.exp(-alpha * t2)
-            self.assertEqual(e.populations[0].end_size, n0)
-            self.assertEqual(e.populations[1].start_size, N1)
+            assert e.populations[0].end_size == n0
+            assert e.populations[1].start_size == N1
             n1 = N1 * math.exp(-alpha * (t2 - t1))
-            self.assertEqual(e.populations[1].end_size, n1)
+            assert e.populations[1].end_size == n1
 
             e = dd.epochs[2]
-            self.assertEqual(e.start_time, t2)
-            self.assertEqual(e.end_time, t3)
-            self.assertEqual(len(e.demographic_events), 1)
-            self.assertEqual(len(e.populations), 2)
+            assert e.start_time == t2
+            assert e.end_time == t3
+            assert len(e.demographic_events) == 1
+            assert len(e.populations) == 2
             np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
-            self.assertEqual(e.populations[0].start_size, n0)
+            assert e.populations[0].start_size == n0
             n0 = n0 * math.exp(alpha * (t3 - t2))
-            self.assertEqual(e.populations[0].end_size, n0)
-            self.assertEqual(e.populations[1].start_size, n1)
+            assert e.populations[0].end_size == n0
+            assert e.populations[1].start_size == n1
             n1 = N1 * math.exp(-alpha * (t3 - t1))
-            self.assertEqual(e.populations[1].end_size, n1)
+            assert e.populations[1].end_size == n1
 
             e = dd.epochs[3]
-            self.assertEqual(e.start_time, t3)
-            self.assertTrue(math.isinf(e.end_time))
-            self.assertEqual(len(e.demographic_events), 1)
-            self.assertEqual(len(e.populations), 2)
+            assert e.start_time == t3
+            assert math.isinf(e.end_time)
+            assert len(e.demographic_events) == 1
+            assert len(e.populations) == 2
             np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
-            self.assertEqual(e.populations[0].start_size, n0)
-            self.assertEqual(e.populations[0].end_size, n0)
-            self.assertEqual(e.populations[1].start_size, n1)
-            self.assertEqual(e.populations[1].end_size, n1)
+            assert e.populations[0].start_size == n0
+            assert e.populations[0].end_size == n0
+            assert e.populations[1].start_size == n1
+            assert e.populations[1].end_size == n1
 
     def check_model_misspecification_warning(self, misspecify):
         population_configurations = [
@@ -963,12 +958,12 @@ class TestDemographyDebugger(unittest.TestCase):
     def test_misspecification_warning(self):
         with warnings.catch_warnings(record=True) as w:
             self.check_model_misspecification_warning(misspecify=True)
-            self.assertEqual(len(w), 1)
+            assert len(w) == 1
 
     def test_no_misspecification_no_warning(self):
         with warnings.catch_warnings(record=True) as w:
             self.check_model_misspecification_warning(misspecify=False)
-            self.assertEqual(len(w), 0)
+            assert len(w) == 0
 
 
 class TestDemographyTrajectories(unittest.TestCase):
@@ -1036,8 +1031,8 @@ class TestDemographyTrajectories(unittest.TestCase):
         steps = np.array([1000000 * k for k in range(1, 4)])
         rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2])
         for rA, pA in zip(rates, P):
-            self.assertTrue(np.isnan(rA))
-            self.assertEqual(pA, 0)
+            assert np.isnan(rA)
+            assert pA == 0
 
     def test_mean_one_pop(self):
         # As above. The mean time to coalescence should be
@@ -1051,26 +1046,25 @@ class TestDemographyTrajectories(unittest.TestCase):
             + 400 * np.exp(-100 / 200) * (1 - np.exp(-(300 - 100) / 400))
             + 200 * np.exp(-100 / 200 - (300 - 100) / 400)
         )
-        self.assertLess(abs(m - truth) / truth, 5e-3)
+        assert abs(m - truth) / truth < 5e-3
         # test passing steps
         m = ddb.mean_coalescence_time(num_samples=[2], steps=[0, 100, 1000])
-        self.assertLess(abs(m - truth) / truth, 5e-3)
+        assert abs(m - truth) / truth < 5e-3
 
     def test_logging(self):
         ddb = self.one_pop_example()
         with mock.patch("msprime.demography.logger.debug") as mocked_debug:
             ddb.mean_coalescence_time([2])
-        self.assertEqual(mocked_debug.call_count, 3)
+        assert mocked_debug.call_count == 3
 
     def test_mean_errors(self):
         ddb = self.one_pop_example()
-        self.assertRaises(
-            ValueError,
-            ddb.mean_coalescence_time,
-            num_samples=[2],
-            steps=[0, 10],
-            max_iter=1,
-        )
+        with pytest.raises(ValueError):
+            ddb.mean_coalescence_time(
+                num_samples=[2],
+                steps=[0, 10],
+                max_iter=1,
+            )
 
     def two_pop_example(self):
         # Have a history with two populations, with no migration;
@@ -1228,9 +1222,9 @@ class TestDemographyTrajectories(unittest.TestCase):
             + 400 * (1 - np.exp(-(300 - 200) / 400))
             + 200 * np.exp(-(300 - 200) / 400)
         )
-        self.assertLess(abs(mA - tA) / tA, 5e-3)
-        self.assertLess(abs(mB - tB) / tB, 5e-3)
-        self.assertLess(abs(mC - tC) / tC, 5e-3)
+        assert abs(mA - tA) / tA < 5e-3
+        assert abs(mB - tB) / tB < 5e-3
+        assert abs(mC - tC) / tC < 5e-3
 
     def test_constant_sizes(self):
         # With constant population sizes, results should not depend on the steps
@@ -1249,8 +1243,8 @@ class TestDemographyTrajectories(unittest.TestCase):
         steps2 = self.subdivide(steps)
         rates2, P2 = ddb.coalescence_rate_trajectory(steps=steps2, num_samples=[2])
         assert np.all(steps == steps2[::2])
-        self.assertLess(max(np.abs(rates - rates2[::2])), 1e-6)
-        self.assertLess(max(np.abs(P - P2[::2])), 1e-6)
+        assert max(np.abs(rates - rates2[::2])) < 1e-6
+        assert max(np.abs(P - P2[::2])) < 1e-6
 
     def test_convergence(self):
         # Have two populations with very high migration; check they act as a single
@@ -1372,7 +1366,7 @@ class TestDemographyTrajectories(unittest.TestCase):
             migration_matrix=[[0, 0], [0, 0]],
         )
         steps = np.linspace(0, 400, 2)
-        with self.assertWarns(UserWarning):
+        with pytest.warns(UserWarning):
             ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
         # Test coalescence rates without double step validation
         steps = np.linspace(0, 400, 401)
@@ -1391,15 +1385,15 @@ class TestDemographyTrajectories(unittest.TestCase):
         )
         steps = np.linspace(0, 10, 11)
         # Test when num_pops != len(num_samples), we throw error
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
         # Test that when steps are not strictly increasing values, we throw error.
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             ddb.coalescence_rate_trajectory(
                 steps=np.flip(steps, axis=0), num_samples=[2]
             )
         # Test that when steps are negative, we throw error
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             ddb.coalescence_rate_trajectory(
                 steps=np.linspace(-1, 10, 11), num_samples=[2]
             )
@@ -1461,19 +1455,19 @@ class TestDemographyTrajectories(unittest.TestCase):
         rates, P = ddb.coalescence_rate_trajectory(
             steps=np.linspace(0, 200, 2001), num_samples=num_samples
         )
-        self.assertTrue(np.all(rates >= 0))
-        self.assertTrue(np.all(P >= 0))
-        self.assertTrue(np.all(P <= 1))
-        self.assertTrue(np.all(np.diff(P) <= 0))
+        assert np.all(rates >= 0)
+        assert np.all(P >= 0)
+        assert np.all(P <= 1)
+        assert np.all(np.diff(P) <= 0)
         coaltime = ddb.mean_coalescence_time(num_samples=num_samples)
-        self.assertGreater(coaltime, 0)
+        assert coaltime > 0
         coaltime2 = ddb.mean_coalescence_time(
             num_samples=num_samples, steps=np.linspace(0, 200, 501)
         )
-        self.assertLess(abs(coaltime - coaltime2), 2)
+        assert abs(coaltime - coaltime2) < 2
 
 
-class TestMatrixExponential(unittest.TestCase):
+class TestMatrixExponential:
     """
     Test cases for the matrix exponential function.
     """
@@ -1481,8 +1475,8 @@ class TestMatrixExponential(unittest.TestCase):
     def verify(self, A):
         E1 = scipy.linalg.expm(A)
         E2 = msprime.demography._matrix_exponential(A)
-        self.assertEqual(E1.shape, E2.shape)
-        self.assertTrue(np.allclose(E1, E2))
+        assert E1.shape == E2.shape
+        assert np.allclose(E1, E2)
 
     def test_singleton(self):
         for j in range(10):
@@ -1508,17 +1502,17 @@ class TestMatrixExponential(unittest.TestCase):
         for t in [0, -1]:
             A = msprime.demography._matrix_exponential([[t]])
             B = np.exp(t)
-            self.assertEqual(A, B)
+            assert A == B
 
     def test_identity_exp(self):
         # (-1) * np.eye(k), compared to exp(-1) * np.eye(k)
         for k in range(2, 5):
             A = msprime.demography._matrix_exponential((-1) * np.eye(k))
             B = np.exp(-1) * np.eye(k)
-            self.assertTrue(np.allclose(A, B))
+            assert np.allclose(A, B)
 
 
-class TestEventTimes(unittest.TestCase):
+class TestEventTimes:
     """
     Tests that demographic events occur when they should.
     """
@@ -1538,16 +1532,16 @@ class TestEventTimes(unittest.TestCase):
                 record_migrations=True,
             )
             migrations = list(ts.migrations())
-            self.assertEqual(len(migrations), 2)
-            self.assertEqual(migrations[0].time, start_time)
-            self.assertEqual(migrations[1].time, start_time)
+            assert len(migrations) == 2
+            assert migrations[0].time == start_time
+            assert migrations[1].time == start_time
             nodes = list(ts.nodes())
-            self.assertEqual(nodes[0].population, 0)
-            self.assertEqual(nodes[1].population, 0)
-            self.assertEqual(nodes[2].population, 1)
+            assert nodes[0].population == 0
+            assert nodes[1].population == 0
+            assert nodes[2].population == 1
 
     def test_negative_times(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             msprime.simulate(
                 sample_size=10,
                 demographic_events=[
@@ -1565,10 +1559,10 @@ class TestEventTimes(unittest.TestCase):
                         msprime.PopulationParametersChange(time=time, initial_size=2)
                     ],
                 )
-                self.assertEqual(ts.first().num_roots, 1)
+                assert ts.first().num_roots == 1
 
 
-class TestCoalescenceLocations(unittest.TestCase):
+class TestCoalescenceLocations:
     """
     Tests that coalescences happen in demes that they are supposed to
     for simple models.
@@ -1591,17 +1585,17 @@ class TestCoalescenceLocations(unittest.TestCase):
             random_seed=1,
         )
         tree = next(ts.trees())
-        self.assertEqual(tree.root, 2)
-        self.assertGreater(tree.time(2), t)
-        self.assertEqual(tree.population(0), 0)
-        self.assertEqual(tree.population(1), 1)
-        self.assertEqual(tree.population(2), 2)
-        self.assertEqual(ts.node(0).population, 0)
-        self.assertEqual(ts.node(1).population, 1)
-        self.assertEqual(list(ts.samples()), [0, 1])
-        self.assertEqual(list(ts.samples(0)), [0])
-        self.assertEqual(list(ts.samples(1)), [1])
-        self.assertEqual(ts.num_populations, 3)
+        assert tree.root == 2
+        assert tree.time(2) > t
+        assert tree.population(0) == 0
+        assert tree.population(1) == 1
+        assert tree.population(2) == 2
+        assert ts.node(0).population == 0
+        assert ts.node(1).population == 1
+        assert list(ts.samples()) == [0, 1]
+        assert list(ts.samples(0)) == [0]
+        assert list(ts.samples(1)) == [1]
+        assert ts.num_populations == 3
 
     def test_two_pops_multiple_samples(self):
         # Made absolutely sure that all samples have coalesced within
@@ -1623,23 +1617,19 @@ class TestCoalescenceLocations(unittest.TestCase):
             random_seed=1,
         )
         tree = next(ts.trees())
-        self.assertEqual(tree.root, 2 * n - 2)
-        self.assertGreater(tree.time(tree.root), t)
+        assert tree.root == 2 * n - 2
+        assert tree.time(tree.root) > t
         for j in range(n // 2):
-            self.assertEqual(tree.population(j), 0)
-            self.assertEqual(tree.population(n // 2 + j), 1)
-            self.assertEqual(ts.get_population(j), 0)
-            self.assertEqual(ts.get_population(n // 2 + j), 1)
-        self.assertEqual(tree.population(tree.root), 2)
+            assert tree.population(j) == 0
+            assert tree.population(n // 2 + j) == 1
+            assert ts.get_population(j) == 0
+            assert ts.get_population(n // 2 + j) == 1
+        assert tree.population(tree.root) == 2
 
-        self.assertTrue(
-            np.array_equal(ts.samples(0), np.arange(n // 2, dtype=np.int32))
-        )
-        self.assertTrue(
-            np.array_equal(ts.samples(1), np.arange(n // 2, n, dtype=np.int32))
-        )
-        self.assertTrue(np.array_equal(ts.samples(2), np.array([], dtype=np.int32)))
-        self.assertEqual(ts.num_populations, 3)
+        assert np.array_equal(ts.samples(0), np.arange(n // 2, dtype=np.int32))
+        assert np.array_equal(ts.samples(1), np.arange(n // 2, n, dtype=np.int32))
+        assert np.array_equal(ts.samples(2), np.array([], dtype=np.int32))
+        assert ts.num_populations == 3
 
         # self.assertEqual(ts.samples(0), list(range(n // 2)))
         # self.assertEqual(ts.samples(1), list(range(n // 2, n)))
@@ -1664,36 +1654,30 @@ class TestCoalescenceLocations(unittest.TestCase):
             random_seed=1,
         )
         tree = next(ts.trees())
-        self.assertEqual(tree.root, 2 * n - 2)
-        self.assertGreater(tree.time(tree.root), t)
+        assert tree.root == 2 * n - 2
+        assert tree.time(tree.root) > t
         for j in range(n // 3):
-            self.assertEqual(tree.population(j), 0)
-            self.assertEqual(tree.population(n // 3 + j), 1)
-            self.assertEqual(tree.population(2 * (n // 3) + j), 2)
-            self.assertEqual(ts.get_population(j), 0)
-            self.assertEqual(ts.get_population(n // 3 + j), 1)
-            self.assertEqual(ts.get_population(2 * (n // 3) + j), 2)
+            assert tree.population(j) == 0
+            assert tree.population(n // 3 + j) == 1
+            assert tree.population(2 * (n // 3) + j) == 2
+            assert ts.get_population(j) == 0
+            assert ts.get_population(n // 3 + j) == 1
+            assert ts.get_population(2 * (n // 3) + j) == 2
         # The MRCAs of 0, 1 and 3 must have occured in deme 0
-        self.assertEqual(tree.population(tree.get_mrca(0, n // 3)), 0)
-        self.assertEqual(tree.population(tree.get_mrca(0, 2 * (n // 3))), 0)
+        assert tree.population(tree.get_mrca(0, n // 3)) == 0
+        assert tree.population(tree.get_mrca(0, 2 * (n // 3))) == 0
         # The MRCAs of all the samples within each deme must have
         # occured within that deme
         for k in range(3):
             deme_samples = range(k * (n // 3), (k + 1) * (n // 3))
             for u, v in itertools.combinations(deme_samples, 2):
                 mrca_pop = tree.population(tree.get_mrca(u, v))
-                self.assertEqual(k, mrca_pop)
-        self.assertTrue(
-            np.array_equal(ts.samples(0), np.arange(n // 3, dtype=np.int32))
+                assert k == mrca_pop
+        assert np.array_equal(ts.samples(0), np.arange(n // 3, dtype=np.int32))
+        assert np.array_equal(
+            ts.samples(1), np.arange(n // 3, 2 * (n // 3), dtype=np.int32)
         )
-        self.assertTrue(
-            np.array_equal(
-                ts.samples(1), np.arange(n // 3, 2 * (n // 3), dtype=np.int32)
-            )
-        )
-        self.assertTrue(
-            np.array_equal(ts.samples(2), np.arange(2 * (n // 3), n, dtype=np.int32))
-        )
+        assert np.array_equal(ts.samples(2), np.arange(2 * (n // 3), n, dtype=np.int32))
 
     def test_four_pops_three_mass_migrations(self):
         t1 = 1
@@ -1719,25 +1703,25 @@ class TestCoalescenceLocations(unittest.TestCase):
         tree = next(ts.trees())
         # Check the leaves have the correct population.
         for j in range(4):
-            self.assertEqual(tree.population(j), j)
-            self.assertEqual(ts.get_population(j), j)
-            self.assertEqual(ts.samples(j), [j])
+            assert tree.population(j) == j
+            assert ts.get_population(j) == j
+            assert ts.samples(j) == [j]
         # The MRCA of 0 and 1 should happen in 1 at time > t1, and < t2
         u = tree.get_mrca(0, 1)
-        self.assertEqual(u, 4)
-        self.assertEqual(tree.population(u), 1)
+        assert u == 4
+        assert tree.population(u) == 1
         g = tree.time(u) * 4
-        self.assertTrue(t1 < g < t2)
+        assert t1 < g < t2
         # The MRCA of 0, 1 and 2 should happen in 2 at time > t2 and < t3
         u = tree.get_mrca(0, 2)
-        self.assertEqual(u, 5)
-        self.assertEqual(tree.population(u), 2)
-        self.assertTrue(t2 < tree.time(u) < t3)
+        assert u == 5
+        assert tree.population(u) == 2
+        assert t2 < tree.time(u) < t3
         # The MRCA of 0, 1, 2 and 3 should happen in 3 at time > t3
         u = tree.get_mrca(0, 3)
-        self.assertEqual(u, 6)
-        self.assertEqual(tree.population(u), 3)
-        self.assertGreater(tree.time(u), t3)
+        assert u == 6
+        assert tree.population(u) == 3
+        assert tree.time(u) > t3
 
     def test_empty_demes(self):
         t1 = 1
@@ -1762,20 +1746,20 @@ class TestCoalescenceLocations(unittest.TestCase):
         )
         tree = next(ts.trees())
         # Check the leaves have the correct population.
-        self.assertEqual(tree.population(0), 0)
-        self.assertEqual(tree.population(1), 3)
-        self.assertEqual(ts.node(0).population, 0)
-        self.assertEqual(ts.node(1).population, 3)
-        self.assertEqual(list(ts.samples(0)), [0])
-        self.assertEqual(list(ts.samples(1)), [])
-        self.assertEqual(list(ts.samples(2)), [])
-        self.assertEqual(list(ts.samples(3)), [1])
+        assert tree.population(0) == 0
+        assert tree.population(1) == 3
+        assert ts.node(0).population == 0
+        assert ts.node(1).population == 3
+        assert list(ts.samples(0)) == [0]
+        assert list(ts.samples(1)) == []
+        assert list(ts.samples(2)) == []
+        assert list(ts.samples(3)) == [1]
         # The MRCA of 0, 1 in 3 at time > t3
         u = tree.get_mrca(0, 1)
-        self.assertEqual(u, 2)
-        self.assertEqual(tree.population(u), 3)
+        assert u == 2
+        assert tree.population(u) == 3
         g = tree.time(u) * 4
-        self.assertGreater(g, t3)
+        assert g > t3
 
     def test_empty_demes_model_changes(self):
         t1 = 1
@@ -1806,21 +1790,21 @@ class TestCoalescenceLocations(unittest.TestCase):
         )
         tree = next(ts.trees())
         # Check the leaves have the correct population.
-        self.assertEqual(tree.population(0), 0)
-        self.assertEqual(tree.population(1), 3)
-        self.assertEqual(ts.node(0).population, 0)
-        self.assertEqual(ts.node(1).population, 3)
-        self.assertEqual(list(ts.samples(0)), [0])
-        self.assertEqual(list(ts.samples(1)), [])
-        self.assertEqual(list(ts.samples(2)), [])
-        self.assertEqual(list(ts.samples(3)), [1])
+        assert tree.population(0) == 0
+        assert tree.population(1) == 3
+        assert ts.node(0).population == 0
+        assert ts.node(1).population == 3
+        assert list(ts.samples(0)) == [0]
+        assert list(ts.samples(1)) == []
+        assert list(ts.samples(2)) == []
+        assert list(ts.samples(3)) == [1]
         # The MRCA of 0, 1 in 3 at time > t3
         u = tree.get_mrca(0, 1)
-        self.assertEqual(u, 2)
-        self.assertEqual(tree.population(u), 3)
+        assert u == 2
+        assert tree.population(u) == 3
         g = tree.time(u) * 4
-        self.assertGreater(g, t3)
-        self.assertEqual(ts.num_populations, 4)
+        assert g > t3
+        assert ts.num_populations == 4
 
     def test_migration_rate_directionality(self):
         population_configurations = [
@@ -1839,16 +1823,16 @@ class TestCoalescenceLocations(unittest.TestCase):
             random_seed=1,
         )
         tree = next(ts.trees())
-        self.assertEqual(tree.root, 2)
-        self.assertGreater(tree.time(2), t / 4)
-        self.assertEqual(tree.population(0), 0)
-        self.assertEqual(tree.population(1), 1)
-        self.assertEqual(tree.population(2), 2)
-        self.assertEqual(ts.node(0).population, 0)
-        self.assertEqual(ts.node(1).population, 1)
-        self.assertEqual(list(ts.samples()), [0, 1])
-        self.assertEqual(list(ts.samples(0)), [0])
-        self.assertEqual(list(ts.samples(1)), [1])
+        assert tree.root == 2
+        assert tree.time(2) > t / 4
+        assert tree.population(0) == 0
+        assert tree.population(1) == 1
+        assert tree.population(2) == 2
+        assert ts.node(0).population == 0
+        assert ts.node(1).population == 1
+        assert list(ts.samples()) == [0, 1]
+        assert list(ts.samples(0)) == [0]
+        assert list(ts.samples(1)) == [1]
 
     def test_migration_rate_directionality_from_ts(self):
         tables = tskit.TableCollection(1)
@@ -1875,16 +1859,16 @@ class TestCoalescenceLocations(unittest.TestCase):
             random_seed=1,
         )
         tree = next(ts.trees())
-        self.assertEqual(tree.root, 2)
-        self.assertGreater(tree.time(2), t / 4)
-        self.assertEqual(tree.population(0), 0)
-        self.assertEqual(tree.population(1), 1)
-        self.assertEqual(tree.population(2), 2)
-        self.assertEqual(ts.node(0).population, 0)
-        self.assertEqual(ts.node(1).population, 1)
-        self.assertEqual(list(ts.samples()), [0, 1])
-        self.assertEqual(list(ts.samples(0)), [0])
-        self.assertEqual(list(ts.samples(1)), [1])
+        assert tree.root == 2
+        assert tree.time(2) > t / 4
+        assert tree.population(0) == 0
+        assert tree.population(1) == 1
+        assert tree.population(2) == 2
+        assert ts.node(0).population == 0
+        assert ts.node(1).population == 1
+        assert list(ts.samples()) == [0, 1]
+        assert list(ts.samples(0)) == [0]
+        assert list(ts.samples(1)) == [1]
 
     def test_many_demes(self):
         num_demes = 300
@@ -1903,13 +1887,13 @@ class TestCoalescenceLocations(unittest.TestCase):
             random_seed=1,
         )
         tree = next(ts.trees())
-        self.assertEqual(tree.root, 2)
-        self.assertGreater(tree.time(2), t)
-        self.assertEqual(tree.population(0), 0)
-        self.assertEqual(tree.population(1), num_demes - 1)
-        self.assertEqual(tree.population(2), num_demes - 1)
-        self.assertEqual(ts.node(0).population, 0)
-        self.assertEqual(ts.node(1).population, num_demes - 1)
+        assert tree.root == 2
+        assert tree.time(2) > t
+        assert tree.population(0) == 0
+        assert tree.population(1) == num_demes - 1
+        assert tree.population(2) == num_demes - 1
+        assert ts.node(0).population == 0
+        assert ts.node(1).population == num_demes - 1
 
     def test_many_demes_from_ts(self):
         num_demes = 300
@@ -1937,13 +1921,13 @@ class TestCoalescenceLocations(unittest.TestCase):
             random_seed=1,
         )
         tree = next(ts.trees())
-        self.assertEqual(tree.root, 2)
-        self.assertGreater(tree.time(2), t)
-        self.assertEqual(tree.population(0), 0)
-        self.assertEqual(tree.population(1), num_demes - 1)
-        self.assertEqual(tree.population(2), num_demes - 1)
-        self.assertEqual(ts.node(0).population, 0)
-        self.assertEqual(ts.node(1).population, num_demes - 1)
+        assert tree.root == 2
+        assert tree.time(2) > t
+        assert tree.population(0) == 0
+        assert tree.population(1) == num_demes - 1
+        assert tree.population(2) == num_demes - 1
+        assert ts.node(0).population == 0
+        assert ts.node(1).population == num_demes - 1
 
     def test_instantaneous_bottleneck_locations(self):
         population_configurations = [
@@ -1969,14 +1953,14 @@ class TestCoalescenceLocations(unittest.TestCase):
             random_seed=1,
         )
         tree = next(ts.trees())
-        self.assertGreater(tree.time(tree.root), t4)
-        self.assertEqual(tree.population(tree.root), 0)
+        assert tree.time(tree.root) > t4
+        assert tree.population(tree.root) == 0
         # The parent of all the samples from each deme should be in that deme.
         for pop in range(3):
             parents = [tree.get_parent(u) for u in ts.samples(population=pop)]
             for v in parents:
-                self.assertEqual(tree.population(v), pop)
-        self.assertEqual(ts.num_populations, 3)
+                assert tree.population(v) == pop
+        assert ts.num_populations == 3
 
 
 class MigrationRecordsMixin:
@@ -1990,34 +1974,34 @@ class MigrationRecordsMixin:
         have the required properties.
         """
         migrations = list(ts.migrations())
-        self.assertEqual(ts.num_migrations, len(migrations))
+        assert ts.num_migrations == len(migrations)
         oldest_t = max(node.time for node in ts.nodes())
         for mig in migrations:
-            self.assertGreaterEqual(mig.left, 0)
-            self.assertLessEqual(mig.right, ts.sequence_length)
-            self.assertNotEqual(mig.source, mig.dest)
-            self.assertTrue(0 <= mig.node < ts.num_nodes)
-            self.assertTrue(0 <= mig.time < oldest_t)
+            assert mig.left >= 0
+            assert mig.right <= ts.sequence_length
+            assert mig.source != mig.dest
+            assert 0 <= mig.node < ts.num_nodes
+            assert 0 <= mig.time < oldest_t
         # Migrations must be listed in non-decreasing time order.
         for j in range(1, len(migrations)):
-            self.assertTrue(migrations[j - 1].time <= migrations[j].time)
+            assert migrations[j - 1].time <= migrations[j].time
 
     def verify_two_pops_single_sample(self, ts, t):
         self.verify_migrations(ts)
         migrations = list(ts.migrations())
-        self.assertEqual(len(migrations), 2)
+        assert len(migrations) == 2
         m0 = migrations[0]
         m1 = migrations[1]
-        self.assertEqual(m0.left, 0)
-        self.assertEqual(m0.right, 1)
-        self.assertEqual(m0.source, 0)
-        self.assertEqual(m0.dest, 2)
-        self.assertEqual(m0.time, t)
-        self.assertEqual(m1.left, 0)
-        self.assertEqual(m1.right, 1)
-        self.assertEqual(m1.source, 1)
-        self.assertEqual(m1.dest, 2)
-        self.assertEqual(m1.time, t)
+        assert m0.left == 0
+        assert m0.right == 1
+        assert m0.source == 0
+        assert m0.dest == 2
+        assert m0.time == t
+        assert m1.left == 0
+        assert m1.right == 1
+        assert m1.source == 1
+        assert m1.dest == 2
+        assert m1.time == t
 
     def test_two_pops_single_sample(self):
         population_configurations = [
@@ -2069,18 +2053,18 @@ class MigrationRecordsMixin:
     def verify_two_pops_asymmetric_migrations(self, ts):
         self.verify_migrations(ts)
         migrations = list(ts.migrations())
-        self.assertGreater(len(migrations), 0)
+        assert len(migrations) > 0
         for mig in migrations:
-            self.assertGreater(mig.time, 0)
-            self.assertEqual(ts.node(mig.node).population, 1)
-            self.assertEqual(mig.source, 1)
-            self.assertEqual(mig.dest, 0)
-            self.assertEqual(mig.left, 0)
-            self.assertEqual(mig.right, 1)
+            assert mig.time > 0
+            assert ts.node(mig.node).population == 1
+            assert mig.source == 1
+            assert mig.dest == 0
+            assert mig.left == 0
+            assert mig.right == 1
         # All lineages should end up in population 1
         for tree in ts.trees():
             node = ts.node(tree.root)
-            self.assertEqual(node.population, 0)
+            assert node.population == 0
 
     def test_two_pops_asymmetric_migrations(self):
         population_configurations = [
@@ -2137,16 +2121,16 @@ class MigrationRecordsMixin:
             record_migrations=True,
         )
         self.verify_migrations(ts)
-        self.assertGreater(ts.num_trees, 1)
+        assert ts.num_trees > 1
         migrations = list(ts.migrations())
-        self.assertGreater(len(migrations), 0)
+        assert len(migrations) > 0
         for mig in migrations:
-            self.assertGreater(mig.time, 0)
-            self.assertEqual(ts.node(mig.node).population, 1)
-            self.assertEqual(mig.source, 1)
-            self.assertEqual(mig.dest, 0)
-            self.assertGreaterEqual(mig.left, 0)
-            self.assertLessEqual(mig.right, 1)
+            assert mig.time > 0
+            assert ts.node(mig.node).population == 1
+            assert mig.source == 1
+            assert mig.dest == 0
+            assert mig.left >= 0
+            assert mig.right <= 1
 
     def test_two_pops_mass_migration_recombination(self):
         population_configurations = [
@@ -2164,35 +2148,35 @@ class MigrationRecordsMixin:
             record_migrations=True,
         )
         self.verify_migrations(ts)
-        self.assertGreater(ts.num_trees, 10)
+        assert ts.num_trees > 10
         migrations = list(ts.migrations())
-        self.assertGreater(len(migrations), 0)
+        assert len(migrations) > 0
         for mig in migrations:
-            self.assertGreater(mig.time, 0)
-            self.assertEqual(mig.node, 1)
-            self.assertEqual(mig.source, 1)
-            self.assertEqual(mig.dest, 0)
-            self.assertGreaterEqual(mig.left, 0)
-            self.assertLessEqual(mig.right, 1)
+            assert mig.time > 0
+            assert mig.node == 1
+            assert mig.source == 1
+            assert mig.dest == 0
+            assert mig.left >= 0
+            assert mig.right <= 1
 
 
-class TestMigrationRecordsHudson(unittest.TestCase, MigrationRecordsMixin):
+class TestMigrationRecordsHudson(MigrationRecordsMixin):
     model = "hudson"
 
 
-class TestMigrationRecordsSmc(unittest.TestCase, MigrationRecordsMixin):
+class TestMigrationRecordsSmc(MigrationRecordsMixin):
     model = "smc"
 
 
-class TestMigrationRecordsSmcPrime(unittest.TestCase, MigrationRecordsMixin):
+class TestMigrationRecordsSmcPrime(MigrationRecordsMixin):
     model = "smc_prime"
 
 
-class TestMigrationRecordsDtwf(unittest.TestCase, MigrationRecordsMixin):
+class TestMigrationRecordsDtwf(MigrationRecordsMixin):
     model = "dtwf"
 
 
-class TestFullArgMigration(unittest.TestCase):
+class TestFullArgMigration:
     """
     Tests for migration with the full ARG.
     """
@@ -2202,27 +2186,27 @@ class TestFullArgMigration(unittest.TestCase):
         edges = ts.tables.edges
         nodes = ts.tables.nodes
         for mig in migrations:
-            self.assertEqual(nodes[mig.node].flags, msprime.NODE_IS_MIG_EVENT)
-            self.assertEqual(nodes[mig.node].time, mig.time)
-            self.assertEqual(nodes[mig.node].population, mig.dest)
+            assert nodes[mig.node].flags == msprime.NODE_IS_MIG_EVENT
+            assert nodes[mig.node].time == mig.time
+            assert nodes[mig.node].population == mig.dest
             e1 = np.where(edges.parent == mig.node)
             e2 = np.where(edges.left == mig.left)
             e = np.intersect1d(e1[0], e2[0])
-            self.assertEqual(len(e), 1)
+            assert len(e) == 1
             e = np.asscalar(e)
-            self.assertEqual(edges[e].right, mig.right)
-            self.assertEqual(nodes[edges[e].child].population, mig.source)
+            assert edges[e].right == mig.right
+            assert nodes[edges[e].child].population == mig.source
         for edge in edges:
             if nodes[edge.parent].flags == msprime.NODE_IS_MIG_EVENT:
                 m1 = np.where(migrations.node == edge.parent)
                 m2 = np.where(migrations.left == edge.left)
                 m = np.intersect1d(m1[0], m2[0])
-                self.assertEqual(len(m), 1)
+                assert len(m) == 1
                 m = np.asscalar(m)
-                self.assertEqual(migrations[m].right, edge.right)
-                self.assertEqual(migrations[m].time, nodes[edge.parent].time)
-                self.assertEqual(migrations[m].source, nodes[edge.child].population)
-                self.assertEqual(migrations[m].dest, nodes[edge.parent].population)
+                assert migrations[m].right == edge.right
+                assert migrations[m].time == nodes[edge.parent].time
+                assert migrations[m].source == nodes[edge.child].population
+                assert migrations[m].dest == nodes[edge.parent].population
 
     def test_full_arg_migration(self):
         population_configurations = [
@@ -2290,8 +2274,8 @@ class TimeUnitsMixin:
         for ts in reps:
             tree = ts.first()
             u = tree.get_mrca(0, 1)
-            self.assertEqual(u, 2)
-            self.assertLessEqual(g, tree.time(u))
+            assert u == 2
+            assert g <= tree.time(u)
 
 
 class TestTimeUnitsHudson(unittest.TestCase, TimeUnitsMixin):
@@ -2325,12 +2309,12 @@ class TestTimeUnitsHudson(unittest.TestCase, TimeUnitsMixin):
         )
         for ts in reps:
             migrations = list(ts.migrations())
-            self.assertGreater(len(migrations), 0)
+            assert len(migrations) > 0
             for mr in migrations:
                 self.assertAlmostEqual(g, mr.time)
             tree = next(ts.trees())
             u = tree.get_mrca(0, 1)
-            self.assertEqual(u, 2)
+            assert u == 2
             self.assertAlmostEqual(g, tree.time(u), places=1)
 
     # Bottlenecks are not supported in the DTWF.
@@ -2362,11 +2346,11 @@ class TestTimeUnitsHudson(unittest.TestCase, TimeUnitsMixin):
             self.assertAlmostEqual(t, tree.time(tree.root), places=5)
 
 
-class TestTimeUnitsWrightFisher(unittest.TestCase, TimeUnitsMixin):
+class TestTimeUnitsWrightFisher(TimeUnitsMixin):
     model = "dtwf"
 
 
-class TestLowLevelConversions(unittest.TestCase):
+class TestLowLevelConversions:
     """
     Checks that we convert to the correct low-level values when we
     do the rescalings from generations.
@@ -2374,7 +2358,7 @@ class TestLowLevelConversions(unittest.TestCase):
 
     def test_population_configuration_defaults(self):
         conf = msprime.PopulationConfiguration()
-        self.assertIsNone(conf.sample_size)
+        assert conf.sample_size is None
         d = conf.asdict()
         dp = {
             "initial_size": None,
@@ -2382,12 +2366,12 @@ class TestLowLevelConversions(unittest.TestCase):
             "metadata": None,
             "sample_size": None,
         }
-        self.assertEqual(d, dp)
+        assert d == dp
 
     def test_population_configuration_initial_size(self):
         for initial_size in [1, 10, 1000]:
             conf = msprime.PopulationConfiguration(initial_size=initial_size)
-            self.assertIsNone(conf.sample_size)
+            assert conf.sample_size is None
             d = conf.asdict()
             dp = {
                 "initial_size": initial_size,
@@ -2395,13 +2379,13 @@ class TestLowLevelConversions(unittest.TestCase):
                 "metadata": None,
                 "sample_size": None,
             }
-            self.assertEqual(d, dp)
+            assert d == dp
 
     def test_population_configuration_growth_rate(self):
         sample_size = 8
         for growth_rate in [1, 10, -10]:
             conf = msprime.PopulationConfiguration(sample_size, growth_rate=growth_rate)
-            self.assertEqual(conf.sample_size, sample_size)
+            assert conf.sample_size == sample_size
             d = conf.asdict()
             dp = {
                 "initial_size": None,
@@ -2409,7 +2393,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 "metadata": None,
                 "sample_size": sample_size,
             }
-            self.assertEqual(d, dp)
+            assert d == dp
 
     def test_population_parameters_change_time(self):
         for Ne in [1, 10, 1000]:
@@ -2422,7 +2406,7 @@ class TestLowLevelConversions(unittest.TestCase):
                     "type": "population_parameters_change",
                     "initial_size": Ne,
                 }
-                self.assertEqual(d, dp)
+                assert d == dp
 
     def test_population_parameters_change_initial_size(self):
         g = 100
@@ -2437,7 +2421,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 "type": "population_parameters_change",
                 "initial_size": initial_size,
             }
-            self.assertEqual(d, dp)
+            assert d == dp
 
     def test_population_parameters_change_growth_rate(self):
         g = 100
@@ -2450,7 +2434,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 "type": "population_parameters_change",
                 "growth_rate": growth_rate,
             }
-            self.assertEqual(d, dp)
+            assert d == dp
 
     def test_population_parameters_change_population(self):
         g = 100
@@ -2466,7 +2450,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 "type": "population_parameters_change",
                 "initial_size": Ne,
             }
-            self.assertEqual(d, dp)
+            assert d == dp
 
     def test_migration_rate_change_time(self):
         for g in [0.1, 1, 100, 1e6]:
@@ -2479,7 +2463,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 "source": -1,
                 "dest": -1,
             }
-            self.assertEqual(d, dp)
+            assert d == dp
 
     def test_migration_rate_change_matrix_index(self):
         g = 51
@@ -2496,12 +2480,12 @@ class TestLowLevelConversions(unittest.TestCase):
                     "source": index[0],
                     "dest": index[1],
                 }
-                self.assertEqual(d, dp)
+                assert d == dp
 
                 # Check the deprecated form
                 event = msprime.MigrationRateChange(time=g, rate=0, matrix_index=index)
                 d = event.get_ll_representation()
-                self.assertEqual(d, dp)
+                assert d == dp
 
     def test_migration_rate_change_rate(self):
         g = 1234
@@ -2515,7 +2499,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 "source": -1,
                 "dest": -1,
             }
-            self.assertEqual(d, dp)
+            assert d == dp
 
     def test_mass_migration_time(self):
         for g in [0.1, 1, 100, 1e6]:
@@ -2528,7 +2512,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 "dest": 1,
                 "proportion": 1,
             }
-            self.assertEqual(d, dp)
+            assert d == dp
 
     def test_mass_migration_source_dest(self):
         g = 51
@@ -2542,7 +2526,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 "dest": dest,
                 "proportion": 1,
             }
-            self.assertEqual(d, dp)
+            assert d == dp
 
     def test_mass_migration_proportion(self):
         g = 51
@@ -2556,7 +2540,7 @@ class TestLowLevelConversions(unittest.TestCase):
                 "dest": 1,
                 "proportion": p,
             }
-            self.assertEqual(d, dp)
+            assert d == dp
 
     def test_migration_matrix(self):
         m = [[0, 1, 2], [3, 0, 4], [5, 6, 0]]
@@ -2584,7 +2568,7 @@ class TestLowLevelConversions(unittest.TestCase):
                     "population": population,
                     "strength": strength,
                 }
-                self.assertEqual(d, dp)
+                assert d == dp
 
 
 class HistoricalSamplingMixin:
@@ -2607,11 +2591,11 @@ class HistoricalSamplingMixin:
                 discrete_genome=True,
             )
             for t in ts.trees():
-                self.assertEqual(t.get_time(0), 0)
-                self.assertEqual(t.get_time(1), sampling_time)
-                self.assertEqual(t.get_parent(0), t.get_parent(1))
-                self.assertEqual(t.get_parent(1), t.get_parent(0))
-                self.assertGreater(t.get_time(t.get_parent(0)), sampling_time)
+                assert t.get_time(0) == 0
+                assert t.get_time(1) == sampling_time
+                assert t.get_parent(0) == t.get_parent(1)
+                assert t.get_parent(1) == t.get_parent(0)
+                assert t.get_time(t.get_parent(0)) > sampling_time
 
     def test_two_samples_start_time(self):
         N = 10
@@ -2625,11 +2609,11 @@ class HistoricalSamplingMixin:
                 samples=[msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
             )
             nodes = list(ts.nodes())
-            self.assertEqual(ts.num_nodes, 3)
-            self.assertEqual(nodes[0].time, 0)
-            self.assertEqual(nodes[1].time, sampling_time)
-            self.assertGreater(nodes[2].time, sampling_time)
-            self.assertGreater(nodes[2].time, start_time)
+            assert ts.num_nodes == 3
+            assert nodes[0].time == 0
+            assert nodes[1].time == sampling_time
+            assert nodes[2].time > sampling_time
+            assert nodes[2].time > start_time
 
     def test_different_times(self):
         N = 50
@@ -2647,14 +2631,14 @@ class HistoricalSamplingMixin:
             ],
         )
         t = next(ts.trees())
-        self.assertEqual(t.get_time(0), 0)
-        self.assertEqual(t.get_time(1), st1)
-        self.assertEqual(t.get_time(2), st2)
-        self.assertEqual(t.get_time(3), st3)
-        self.assertGreater(t.get_time(t.get_parent(1)), st1)
-        self.assertGreater(t.get_time(t.get_parent(2)), st2)
-        self.assertGreater(t.get_time(t.get_parent(3)), st3)
-        self.assertGreater(t.get_time(t.get_root()), st3)
+        assert t.get_time(0) == 0
+        assert t.get_time(1) == st1
+        assert t.get_time(2) == st2
+        assert t.get_time(3) == st3
+        assert t.get_time(t.get_parent(1)) > st1
+        assert t.get_time(t.get_parent(2)) > st2
+        assert t.get_time(t.get_parent(3)) > st3
+        assert t.get_time(t.get_root()) > st3
 
     def test_old_sampling_time(self):
         # This is an enormously long time in coalescent time, so we should
@@ -2668,10 +2652,10 @@ class HistoricalSamplingMixin:
         ts = msprime.simulate(Ne=N, samples=samples, model=self.model, random_seed=4)
         time = [node.time for node in ts.nodes()]
         for j in range(n - 1):
-            self.assertEqual(time[j], sampling_time)
-        self.assertEqual(time[n - 1], 0)
+            assert time[j] == sampling_time
+        assert time[n - 1] == 0
         # Allow it to be within 10 coalescent time units.
-        self.assertLess(time[-1], sampling_time + 10 * N)
+        assert time[-1] < sampling_time + 10 * N
 
     def test_start_time_invariance(self):
         for N in [10, 100, 128]:
@@ -2683,9 +2667,9 @@ class HistoricalSamplingMixin:
                     2, Ne=N, start_time=start_time, model=self.model, random_seed=2
                 )
                 time = [node.time for node in ts.nodes()]
-                self.assertEqual(time[0], 0)
-                self.assertEqual(time[1], 0)
-                self.assertGreater(time[2], start_time)
+                assert time[0] == 0
+                assert time[1] == 0
+                assert time[2] > start_time
                 if offset is None:
                     offset = time[2] - start_time
                 else:
@@ -2694,9 +2678,9 @@ class HistoricalSamplingMixin:
     def test_negative_start_time(self):
         ts = msprime.simulate(2, Ne=10, start_time=-1, model=self.model, random_seed=2)
         tables = ts.tables
-        self.assertEqual(tables.nodes[0].time, 0)
-        self.assertEqual(tables.nodes[1].time, 0)
-        self.assertEqual(len(tables.edges), 2)
+        assert tables.nodes[0].time == 0
+        assert tables.nodes[1].time == 0
+        assert len(tables.edges) == 2
 
     def test_start_time_before_sample_time(self):
         # If all samples are > than the start time, it doesn't affect
@@ -2711,9 +2695,9 @@ class HistoricalSamplingMixin:
                 random_seed=2,
             )
             tables = ts.tables
-            self.assertEqual(tables.nodes[0].time, 10)
-            self.assertEqual(tables.nodes[1].time, 10)
-            self.assertEqual(len(tables.edges), 2)
+            assert tables.nodes[0].time == 10
+            assert tables.nodes[1].time == 10
+            assert len(tables.edges) == 2
 
     def test_two_samples_mass_migration(self):
         N = 200
@@ -2733,12 +2717,12 @@ class HistoricalSamplingMixin:
             ],
         )
         t = next(ts.trees())
-        self.assertEqual(t.get_time(0), 0)
-        self.assertEqual(t.get_time(1), sampling_time)
-        self.assertGreaterEqual(t.get_time(2), migration_time)
-        self.assertEqual(t.get_population(0), 0)
-        self.assertEqual(t.get_population(1), 1)
-        self.assertEqual(t.get_population(2), 0)
+        assert t.get_time(0) == 0
+        assert t.get_time(1) == sampling_time
+        assert t.get_time(2) >= migration_time
+        assert t.get_population(0) == 0
+        assert t.get_population(1) == 1
+        assert t.get_population(2) == 0
 
     def test_events_before_sampling(self):
         # Demographic events that are scheduled for before sampling time
@@ -2756,8 +2740,8 @@ class HistoricalSamplingMixin:
             random_seed=2,
         )
         tables = ts.tables
-        self.assertEqual(len(tables.edges), 2)
-        self.assertGreater(len(tables.migrations), 1)
+        assert len(tables.edges) == 2
+        assert len(tables.migrations) > 1
 
     def test_interleaved_migrations(self):
         N = 100
@@ -2787,20 +2771,20 @@ class HistoricalSamplingMixin:
             random_seed=2,
         )
         t = next(ts.trees())
-        self.assertEqual(t.get_time(0), 0)
-        self.assertEqual(t.get_time(1), t1)
-        self.assertEqual(t.get_time(2), t2)
-        self.assertEqual(t.get_time(3), t3)
-        self.assertEqual(t.get_population(0), 0)
-        self.assertEqual(t.get_population(1), 1)
-        self.assertEqual(t.get_population(2), 2)
-        self.assertEqual(t.get_population(3), 3)
-        self.assertEqual(t.get_population(4), 1)
-        self.assertEqual(t.get_population(5), 2)
-        self.assertEqual(t.get_population(6), 3)
-        self.assertTrue(t1 < t.get_time(4) < t2)
-        self.assertTrue(t2 < t.get_time(5) < t3)
-        self.assertGreater(t.get_time(6), t3)
+        assert t.get_time(0) == 0
+        assert t.get_time(1) == t1
+        assert t.get_time(2) == t2
+        assert t.get_time(3) == t3
+        assert t.get_population(0) == 0
+        assert t.get_population(1) == 1
+        assert t.get_population(2) == 2
+        assert t.get_population(3) == 3
+        assert t.get_population(4) == 1
+        assert t.get_population(5) == 2
+        assert t.get_population(6) == 3
+        assert t1 < t.get_time(4) < t2
+        assert t2 < t.get_time(5) < t3
+        assert t.get_time(6) > t3
 
 
 class TestHistoricalSamplingHudson(unittest.TestCase, HistoricalSamplingMixin):
@@ -2817,8 +2801,8 @@ class TestHistoricalSamplingHudson(unittest.TestCase, HistoricalSamplingMixin):
                     Ne=N, samples=samples, model=self.model, random_seed=2
                 )
                 time = [node.time for node in ts.nodes()]
-                self.assertEqual(time[0], sampling_time)
-                self.assertEqual(time[1], 0)
+                assert time[0] == sampling_time
+                assert time[1] == 0
                 if offset is None:
                     offset = time[2] - sampling_time
                 else:
@@ -2833,9 +2817,9 @@ class TestHistoricalSamplingWrightFisher(unittest.TestCase, HistoricalSamplingMi
         samples = [msprime.Sample(0, 0), msprime.Sample(0, 1.1), msprime.Sample(0, 1.2)]
         ts = msprime.simulate(Ne=N, samples=samples, model=self.model, random_seed=2)
         time = [node.time for node in ts.nodes()]
-        self.assertEqual(time[0], 0)
-        self.assertEqual(time[1], 1.1)
-        self.assertEqual(time[2], 1.2)
+        assert time[0] == 0
+        assert time[1] == 1.1
+        assert time[2] == 1.2
 
 
 class EndTimeMixin:
@@ -2844,15 +2828,15 @@ class EndTimeMixin:
     """
 
     def verify_empty_tree_sequence(self, n, ts):
-        self.assertEqual(ts.num_edges, 0)
-        self.assertEqual(ts.num_trees, 1)
-        self.assertEqual(ts.num_nodes, n)
-        self.assertEqual(ts.num_samples, n)
+        assert ts.num_edges == 0
+        assert ts.num_trees == 1
+        assert ts.num_nodes == n
+        assert ts.num_samples == n
         tree = ts.first()
-        self.assertEqual(tree.num_roots, n)
+        assert tree.num_roots == n
 
     def verify_incomplete_tree_sequence(self, n, max_time, ts):
-        self.assertEqual(ts.num_samples, n)
+        assert ts.num_samples == n
         time = ts.tables.nodes.time
         for tree in ts.trees():
             # Every sample with time <= max_time will end on a path
@@ -2861,11 +2845,11 @@ class EndTimeMixin:
                 if time[u] <= max_time:
                     while tree.parent(u) != tskit.NULL:
                         u = tree.parent(u)
-                    self.assertEqual(ts.node(u).time, max_time)
+                    assert ts.node(u).time == max_time
                 else:
-                    self.assertEqual(tree.parent(u), tskit.NULL)
+                    assert tree.parent(u) == tskit.NULL
         max_roots = max(tree.num_roots for tree in ts.trees())
-        self.assertGreater(max_roots, 1)
+        assert max_roots > 1
 
     def test_zero_time(self):
         n = 10
@@ -2874,7 +2858,7 @@ class EndTimeMixin:
             self.verify_empty_tree_sequence(n, ts)
 
     def test_negative(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             msprime.simulate(3, end_time=-1, model=self.model)
 
     def test_large_time(self):
@@ -2887,7 +2871,7 @@ class EndTimeMixin:
         tables2 = ts2.dump_tables()
         tables1.provenances.clear()
         tables2.provenances.clear()
-        self.assertEqual(tables1, tables2)
+        assert tables1 == tables2
 
     def test_small_time(self):
         n = 100
@@ -2913,8 +2897,8 @@ class EndTimeMixin:
             ],
         )
         self.verify_incomplete_tree_sequence(2 * n, max_time, ts)
-        self.assertGreater(ts.num_migrations, 0)
-        self.assertTrue(np.all(ts.tables.migrations.time < max_time))
+        assert ts.num_migrations > 0
+        assert np.all(ts.tables.migrations.time < max_time)
 
     def test_ancient_samples(self):
         n = 40
@@ -2925,10 +2909,10 @@ class EndTimeMixin:
         )
         self.verify_incomplete_tree_sequence(n, max_time, ts)
         nodes = ts.tables.nodes
-        self.assertTrue(np.array_equal(nodes.time[:n], np.arange(n)))
-        self.assertGreater(len(nodes), n)
+        assert np.array_equal(nodes.time[:n], np.arange(n))
+        assert len(nodes) > n
         tree = ts.first()
-        self.assertGreater(tree.num_roots, 1)
+        assert tree.num_roots > 1
 
     def test_all_ancient_samples(self):
         n = 40
@@ -2939,10 +2923,10 @@ class EndTimeMixin:
         )
         self.verify_incomplete_tree_sequence(n, max_time, ts)
         nodes = ts.tables.nodes
-        self.assertTrue(np.array_equal(nodes.time[:n], np.arange(n) + 1))
-        self.assertGreater(len(nodes), n)
+        assert np.array_equal(nodes.time[:n], np.arange(n) + 1)
+        assert len(nodes) > n
         tree = ts.first()
-        self.assertGreater(tree.num_roots, 1)
+        assert tree.num_roots > 1
 
     def test_ancient_samples_equal_time(self):
         max_time = 10
@@ -2958,8 +2942,8 @@ class EndTimeMixin:
             random_seed=1000,
         )
         self.verify_incomplete_tree_sequence(2, max_time, ts)
-        self.assertEqual(ts.num_nodes, 3)
-        self.assertEqual(ts.num_edges, 1)
+        assert ts.num_nodes == 3
+        assert ts.num_edges == 1
 
     def test_demographic_events(self):
         max_time = 100
@@ -2977,15 +2961,15 @@ class EndTimeMixin:
         self.verify_incomplete_tree_sequence(n, max_time, ts)
 
 
-class TestEndTimeHudson(unittest.TestCase, EndTimeMixin):
+class TestEndTimeHudson(EndTimeMixin):
     model = "hudson"
 
 
-class TestEndTimeWrightFisher(unittest.TestCase, EndTimeMixin):
+class TestEndTimeWrightFisher(EndTimeMixin):
     model = "dtwf"
 
 
-class TestEventsBetweenGenerationsWrightFisher(unittest.TestCase):
+class TestEventsBetweenGenerationsWrightFisher:
     """
     Tests that events occuring between generations in the DTWF are
     handled correctly.
@@ -3023,10 +3007,10 @@ class TestEventsBetweenGenerationsWrightFisher(unittest.TestCase):
             model="dtwf",
         )
         for node in ts.nodes():
-            self.assertEqual(node.time, int(node.time))
+            assert node.time == int(node.time)
 
 
-class TestPopulationMetadata(unittest.TestCase):
+class TestPopulationMetadata:
     """
     Tests for the metadata behaviour on populations.
     """
@@ -3037,18 +3021,18 @@ class TestPopulationMetadata(unittest.TestCase):
             population_configurations=[msprime.PopulationConfiguration(2, metadata=md)],
             random_seed=1,
         )
-        self.assertEqual(ts.num_populations, 1)
+        assert ts.num_populations == 1
         pop = ts.population(0)
-        self.assertEqual(md, json.loads(pop.metadata.decode()))
+        assert md == json.loads(pop.metadata.decode())
 
     def test_default(self):
         ts = msprime.simulate(
             population_configurations=[msprime.PopulationConfiguration(2)],
             random_seed=1,
         )
-        self.assertEqual(ts.num_populations, 1)
+        assert ts.num_populations == 1
         pop = ts.population(0)
-        self.assertEqual(b"", pop.metadata)
+        assert b"" == pop.metadata
 
         ts = msprime.simulate(
             population_configurations=[
@@ -3056,15 +3040,15 @@ class TestPopulationMetadata(unittest.TestCase):
             ],
             random_seed=1,
         )
-        self.assertEqual(ts.num_populations, 1)
+        assert ts.num_populations == 1
         pop = ts.population(0)
-        self.assertEqual(b"", pop.metadata)
+        assert b"" == pop.metadata
 
     def test_errors(self):
         for bad_metadata in [b"asdf", Exception]:
             popconf = msprime.PopulationConfiguration(2, metadata=bad_metadata)
             pop = msprime.Population.from_old_style(popconf)
-            with self.assertRaises(TypeError):
+            with pytest.raises(TypeError):
                 pop.temporary_hack_for_encoding_old_style_metadata()
 
     def test_multi_population(self):
@@ -3076,15 +3060,13 @@ class TestPopulationMetadata(unittest.TestCase):
             ts = msprime.simulate(
                 population_configurations=pop_configs, random_seed=1, end_time=1
             )
-            self.assertEqual(ts.num_populations, num_pops)
+            assert ts.num_populations == num_pops
             for j in range(num_pops):
                 pop = ts.population(j)
-                self.assertEqual(
-                    pop_configs[j].metadata, json.loads(pop.metadata.decode())
-                )
+                assert pop_configs[j].metadata == json.loads(pop.metadata.decode())
 
 
-class TestCensusEvent(unittest.TestCase):
+class TestCensusEvent:
     """
     Tests of the census demographic event.
     """
@@ -3095,18 +3077,18 @@ class TestCensusEvent(unittest.TestCase):
         """
         census_ids = np.where(ts.tables.nodes.flags == msprime.NODE_IS_CEN_EVENT)[0]
         for u in census_ids:
-            self.assertEqual(ts.tables.nodes.time[u], census_time)
-        self.assertGreater(len(census_ids), 1)
+            assert ts.tables.nodes.time[u] == census_time
+        assert len(census_ids) > 1
         # Check that all samples have a census ancestor on each tree.
         for tree in ts.trees():
             leaves = []
             census_nodes = [u for u in census_ids if u in list(tree.nodes())]
             for node in census_nodes:
-                self.assertEqual(len(tree.children(node)), 1)
+                assert len(tree.children(node)) == 1
                 le = list(tree.leaves(node))
                 leaves += le
             leaves.sort()
-            self.assertEqual(leaves, [i for i in range(0, ts.num_samples)])
+            assert leaves == [i for i in range(0, ts.num_samples)]
 
     def test_simple_case(self):
         census_time = 0.5
@@ -3145,12 +3127,10 @@ class TestCensusEvent(unittest.TestCase):
         nodes = ts.tables.nodes
         for row in ts.tables.edges:
             if row.parent in census_ids:
-                self.assertEqual(
-                    nodes.population[row.parent], nodes.population[row.child]
-                )
+                assert nodes.population[row.parent] == nodes.population[row.child]
 
     def test_census_at_existing_node_time(self):
-        with self.assertRaises(_msprime.LibraryError):
+        with pytest.raises(_msprime.LibraryError):
             msprime.simulate(
                 sample_size=2,
                 random_seed=3,
@@ -3175,9 +3155,7 @@ class TestCensusEvent(unittest.TestCase):
         nodes = ts.tables.nodes
         for row in ts.tables.edges:
             if row.parent in census_ids:
-                self.assertEqual(
-                    nodes.population[row.parent], nodes.population[row.child]
-                )
+                assert nodes.population[row.parent] == nodes.population[row.child]
         # If the census is after the migration in the list, census nodes should have
         # the same population as their parents.
         divergence = msprime.MassMigration(
@@ -3195,22 +3173,20 @@ class TestCensusEvent(unittest.TestCase):
         nodes = ts.tables.nodes
         for row in ts.tables.edges:
             if row.child in census_ids:
-                self.assertEqual(
-                    nodes.population[row.parent], nodes.population[row.child]
-                )
+                assert nodes.population[row.parent] == nodes.population[row.child]
 
     def test_no_census_nodes_above_root_nodes(self):
         ts = msprime.simulate(sample_size=2, random_seed=525)
-        self.assertTrue(all(ts.tables.nodes.flags) != msprime.NODE_IS_CEN_EVENT)
+        assert all(ts.tables.nodes.flags) != msprime.NODE_IS_CEN_EVENT
         tsc = msprime.simulate(
             sample_size=2,
             random_seed=525,
             demographic_events=[msprime.CensusEvent(time=2000)],
         )
-        self.assertEqual(ts.tables.nodes, tsc.tables.nodes)
+        assert ts.tables.nodes == tsc.tables.nodes
 
 
-class TestPossibleLineages(unittest.TestCase):
+class TestPossibleLineages:
     """
     Tests for checking where lineages are possible within the demography debugger.
     """
@@ -3237,11 +3213,11 @@ class TestPossibleLineages(unittest.TestCase):
             demographic_events=dem_events, population_configurations=pop_config
         )
         lineages = dd.possible_lineage_locations(samples=samples)
-        self.assertTrue(len(lineages) == 4)
-        self.assertTrue(np.all(lineages[(0, 50)] == [1, 1, 1, 1]))
-        self.assertTrue(np.all(lineages[(50, 100)] == [1, 1, 1, 0]))
-        self.assertTrue(np.all(lineages[(100, 150)] == [1, 1, 0, 0]))
-        self.assertTrue(np.all(lineages[(150, np.inf)] == [1, 0, 0, 0]))
+        assert len(lineages) == 4
+        assert np.all(lineages[(0, 50)] == [1, 1, 1, 1])
+        assert np.all(lineages[(50, 100)] == [1, 1, 1, 0])
+        assert np.all(lineages[(100, 150)] == [1, 1, 0, 0])
+        assert np.all(lineages[(150, np.inf)] == [1, 0, 0, 0])
 
     def test_possible_lineages_with_migration(self):
         # draw sample from first population, which has migrants from second
@@ -3260,8 +3236,8 @@ class TestPossibleLineages(unittest.TestCase):
                 migration_matrix=mig_mat,
             )
         lineages = dd.possible_lineage_locations(samples=samples)
-        self.assertTrue(len(lineages) == 1)
-        self.assertTrue(np.all(lineages[(0, np.inf)] == [1, 1]))
+        assert len(lineages) == 1
+        assert np.all(lineages[(0, np.inf)] == [1, 1])
 
     def test_possible_lineages_ancient_samples(self):
         samples = [
@@ -3281,11 +3257,11 @@ class TestPossibleLineages(unittest.TestCase):
             demographic_events=dem_events, population_configurations=pop_config
         )
         lineages = dd.possible_lineage_locations(samples=samples)
-        self.assertTrue(len(lineages) == 4)
-        self.assertTrue(np.all(lineages[(0, 50)] == [1, 1]))
-        self.assertTrue(np.all(lineages[(50, 100)] == [1, 0]))
-        self.assertTrue(np.all(lineages[(100, 150)] == [1, 1]))
-        self.assertTrue(np.all(lineages[(150, np.inf)] == [1, 0]))
+        assert len(lineages) == 4
+        assert np.all(lineages[(0, 50)] == [1, 1])
+        assert np.all(lineages[(50, 100)] == [1, 0])
+        assert np.all(lineages[(100, 150)] == [1, 1])
+        assert np.all(lineages[(150, np.inf)] == [1, 0])
 
     def test_possible_lineages_complex_history(self):
         samples = [
@@ -3323,17 +3299,17 @@ class TestPossibleLineages(unittest.TestCase):
             migration_matrix=mig_mat,
         )
         lineages = dd.possible_lineage_locations(samples=samples)
-        self.assertTrue(len(lineages) == 7)
-        self.assertTrue(np.all(lineages[(0, 100)] == [1, 0, 1, 1, 0]))
-        self.assertTrue(np.all(lineages[(100, 200)] == [1, 1, 1, 1, 0]))
-        self.assertTrue(np.all(lineages[(200, 300)] == [1, 1, 1, 0, 0]))
-        self.assertTrue(np.all(lineages[(300, 400)] == [1, 0, 1, 0, 0]))
-        self.assertTrue(np.all(lineages[(400, 600)] == [1, 0, 1, 0, 1]))
-        self.assertTrue(np.all(lineages[(600, 700)] == [1, 0, 0, 0, 1]))
-        self.assertTrue(np.all(lineages[(700, np.inf)] == [1, 0, 0, 0, 0]))
+        assert len(lineages) == 7
+        assert np.all(lineages[(0, 100)] == [1, 0, 1, 1, 0])
+        assert np.all(lineages[(100, 200)] == [1, 1, 1, 1, 0])
+        assert np.all(lineages[(200, 300)] == [1, 1, 1, 0, 0])
+        assert np.all(lineages[(300, 400)] == [1, 0, 1, 0, 0])
+        assert np.all(lineages[(400, 600)] == [1, 0, 1, 0, 1])
+        assert np.all(lineages[(600, 700)] == [1, 0, 0, 0, 1])
+        assert np.all(lineages[(700, np.inf)] == [1, 0, 0, 0, 0])
 
 
-class TestLineageProbabilities(unittest.TestCase):
+class TestLineageProbabilities:
     """
     Tests for checking where lineages are possible within the demography debugger.
     """
@@ -3396,10 +3372,10 @@ class TestLineageProbabilities(unittest.TestCase):
                 )
                 pop = lineage[0].population
                 for j, n in enumerate(lineage):
-                    self.assertGreater(probs[j, pop, n.population], 0.0)
+                    assert probs[j, pop, n.population] > 0.0
                     for epoch in locs:
                         if n.time >= epoch[0] and n.time < epoch[1]:
-                            self.assertTrue(locs[epoch][n.population])
+                            assert locs[epoch][n.population]
 
     def test_two_pop(self):
         for _b in [2, 0]:
@@ -3408,7 +3384,7 @@ class TestLineageProbabilities(unittest.TestCase):
             for st in [0.0, 2.5]:
                 P = dd.lineage_probabilities(times + st, sample_time=st)
                 for j, t in enumerate(times):
-                    self.assertTrue(np.allclose(P[j, :, :], f(t)))
+                    assert np.allclose(P[j, :, :], f(t))
             self.verify_simulation(dd)
 
     def test_lineage_probabilities_tree(self):
@@ -3427,10 +3403,10 @@ class TestLineageProbabilities(unittest.TestCase):
             demographic_events=dem_events, population_configurations=pop_config
         )
         P_out = dd.lineage_probabilities([10, 50, 60, 100, 101, 200])
-        self.assertTrue(np.all([np.sum(P) == len(pop_config) for P in P_out]))
-        self.assertTrue(np.all(np.diag(P_out[0]) == [1, 1, 1, 1]))
-        self.assertTrue(np.all(np.diag(P_out[1]) == [1, 1, 1, 1]))
-        self.assertTrue(np.all(probs == [1, 0, 0, 0] for probs in P_out[5]))
+        assert np.all([np.sum(P) == len(pop_config) for P in P_out])
+        assert np.all(np.diag(P_out[0]) == [1, 1, 1, 1])
+        assert np.all(np.diag(P_out[1]) == [1, 1, 1, 1])
+        assert np.all(probs == [1, 0, 0, 0] for probs in P_out[5])
         self.verify_simulation(dd)
 
     def test_lineage_probabilities_pulse(self):
@@ -3446,7 +3422,7 @@ class TestLineageProbabilities(unittest.TestCase):
             demographic_events=dem_events, population_configurations=pop_config
         )
         P_out = dd.lineage_probabilities([2])
-        self.assertTrue(np.allclose(P_out[0], [[1, 0], [f_pulse, 1 - f_pulse]]))
+        assert np.allclose(P_out[0], [[1, 0], [f_pulse, 1 - f_pulse]])
         self.verify_simulation(dd)
 
     def test_lineage_probabilities_continuous_migration(self):
@@ -3465,11 +3441,11 @@ class TestLineageProbabilities(unittest.TestCase):
             migration_matrix=mig_mat,
         )
         P_out = dd.lineage_probabilities([0, 50, 100, 150])
-        self.assertTrue(np.all(P_out[0] == np.eye(len(pop_config))))
-        self.assertTrue(np.all(P_out[1] > 0))
-        self.assertTrue(np.all(P_out[1] > 0))
+        assert np.all(P_out[0] == np.eye(len(pop_config)))
+        assert np.all(P_out[1] > 0)
+        assert np.all(P_out[1] > 0)
         # checking if close because of precision of _matrix_exponential function
-        self.assertTrue(np.all(np.isclose(P_out[3], [[1, 0], [1, 0]])))
+        assert np.all(np.isclose(P_out[3], [[1, 0], [1, 0]]))
         self.verify_simulation(dd)
 
         mig_mat = [[0, 0.01], [0, 0]]
@@ -3479,11 +3455,11 @@ class TestLineageProbabilities(unittest.TestCase):
             migration_matrix=mig_mat,
         )
         P_out = dd.lineage_probabilities([0, 50, 100, 150])
-        self.assertTrue(np.all(P_out[0] == np.eye(len(pop_config))))
-        self.assertTrue(abs(P_out[1][1][0]) < np.finfo(float).eps)
-        self.assertTrue(abs(P_out[2][1][0]) < np.finfo(float).eps)
+        assert np.all(P_out[0] == np.eye(len(pop_config)))
+        assert abs(P_out[1][1][0]) < np.finfo(float).eps
+        assert abs(P_out[2][1][0]) < np.finfo(float).eps
         # machine precision instead of zero because of _matrix_exponential function
-        self.assertTrue(np.all(np.isclose(P_out[3], [[1, 0], [1, 0]])))
+        assert np.all(np.isclose(P_out[3], [[1, 0], [1, 0]]))
         self.verify_simulation(dd)
 
     def test_sampling_time(self):
@@ -3502,134 +3478,130 @@ class TestLineageProbabilities(unittest.TestCase):
             migration_matrix=mig_mat,
         )
         P_out = dd.lineage_probabilities([0], sample_time=1)
-        self.assertTrue(np.all(P_out[0] == 0))
+        assert np.all(P_out[0] == 0)
         P_out = dd.lineage_probabilities([0, 1, 2], sample_time=1)
-        self.assertTrue(np.all(P_out[0] == 0))
-        self.assertTrue(np.all(P_out[1] == [[1, 0], [0, 1]]))
-        self.assertTrue(np.allclose(np.sum(P_out[2], axis=1), 1))
+        assert np.all(P_out[0] == 0)
+        assert np.all(P_out[1] == [[1, 0], [0, 1]])
+        assert np.allclose(np.sum(P_out[2], axis=1), 1)
         P_out = dd.lineage_probabilities([99, 100, 101], sample_time=1)
-        self.assertTrue(np.all(P_out[0] > 0))
-        self.assertTrue(np.all(P_out[1] > 0))
-        self.assertTrue(np.allclose(P_out[2], [[1, 0], [1, 0]]))
+        assert np.all(P_out[0] > 0)
+        assert np.all(P_out[1] > 0)
+        assert np.allclose(P_out[2], [[1, 0], [1, 0]])
         self.verify_simulation(dd)
 
 
-class TestPreCannedModels(unittest.TestCase):
+class TestPreCannedModels:
     """
     Tests for the specialised models returned by static methods
     on the Demography.
     """
 
     def assertZeroDiagonal(self, A):
-        self.assertTrue(np.all(np.diagonal(A)) == 0)
+        assert np.all(np.diagonal(A)) == 0
 
 
 class TestIslandModel(TestPreCannedModels):
     def test_errors(self):
         for bad_N in [-1, 0, 0.1]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.Demography.island_model(bad_N, 0.1)
         for bad_m in [-1, -1e5]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.Demography.island_model(1, bad_m)
 
         for bad_Ne in [-1, 0]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.Demography.island_model(1, 1, Ne=bad_Ne)
 
     def test_one_pop(self):
         model = msprime.Demography.island_model(1, 1)
-        self.assertEqual(len(model.populations), 1)
-        self.assertEqual(len(model.migration_matrix), 1)
+        assert len(model.populations) == 1
+        assert len(model.migration_matrix) == 1
         ts = msprime.simulate(samples=model.sample(2), demography=model, random_seed=1)
-        self.assertEqual(ts.num_populations, 1)
+        assert ts.num_populations == 1
 
     def test_migration(self):
         for N in [1, 2, 5]:
             model = msprime.Demography.island_model(N, 0.1)
-            self.assertEqual(len(model.populations), N)
-            self.assertEqual(model.migration_matrix.shape, (N, N))
+            assert len(model.populations) == N
+            assert model.migration_matrix.shape == (N, N)
             self.assertZeroDiagonal(model.migration_matrix)
-            self.assertTrue(
-                np.all(model.migration_matrix[~np.eye(N, dtype=bool)] == 0.1)
-            )
+            assert np.all(model.migration_matrix[~np.eye(N, dtype=bool)] == 0.1)
             ts = msprime.simulate(
                 samples=model.sample(*([2] * N)), demography=model, random_seed=1
             )
-            self.assertEqual(ts.num_populations, N)
-            self.assertEqual(ts.num_samples, 2 * N)
+            assert ts.num_populations == N
+            assert ts.num_samples == 2 * N
 
     def test_Ne(self):
         # By default, Ne is 1
         model = msprime.Demography.island_model(2, 0.1)
-        self.assertEqual(model.populations[0].initial_size, 1)
-        self.assertEqual(model.populations[1].initial_size, 1)
+        assert model.populations[0].initial_size == 1
+        assert model.populations[1].initial_size == 1
         for Ne in [0.1, 1, 10]:
             model = msprime.Demography.island_model(2, 0.1, Ne=Ne)
-            self.assertEqual(model.populations[0].initial_size, Ne)
-            self.assertEqual(model.populations[1].initial_size, Ne)
+            assert model.populations[0].initial_size == Ne
+            assert model.populations[1].initial_size == Ne
 
 
 class TestSteppingStoneModel(TestPreCannedModels):
     def test_errors(self):
         for bad_N in [-1, 0, 0.1]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.Demography.stepping_stone_1d(bad_N, 0.1)
         for bad_m in [-1, -1e5]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.Demography.stepping_stone_1d(1, bad_m)
 
         for bad_Ne in [-1, 0]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.Demography.stepping_stone_1d(1, 1, Ne=bad_Ne)
 
     def test_one_pop(self):
         for circular in [True, False]:
             model = msprime.Demography.stepping_stone_1d(1, 1, circular=circular)
-            self.assertEqual(len(model.populations), 1)
-            self.assertEqual(len(model.migration_matrix), 1)
+            assert len(model.populations) == 1
+            assert len(model.migration_matrix) == 1
             ts = msprime.simulate(
                 samples=model.sample(2), demography=model, random_seed=1
             )
-            self.assertEqual(ts.num_populations, 1)
+            assert ts.num_populations == 1
 
     def test_migration_circular(self):
         m = 0.3
         for N in [2, 3, 5]:
             model = msprime.Demography.stepping_stone_1d(N, m)
             # Circular is the default
-            self.assertEqual(
-                model, msprime.Demography.stepping_stone_1d(N, m, circular=True)
-            )
-            self.assertEqual(len(model.populations), N)
-            self.assertEqual(model.migration_matrix.shape, (N, N))
+            assert model == msprime.Demography.stepping_stone_1d(N, m, circular=True)
+            assert len(model.populations) == N
+            assert model.migration_matrix.shape == (N, N)
             self.assertZeroDiagonal(model.migration_matrix)
             for j in range(N):
                 adjacent = [(j - 1) % N, (j + 1) % N]
                 for k in range(N):
                     if k in adjacent:
-                        self.assertEqual(model.migration_matrix[j, k], m)
+                        assert model.migration_matrix[j, k] == m
                     else:
-                        self.assertEqual(model.migration_matrix[j, k], 0)
+                        assert model.migration_matrix[j, k] == 0
             ts = msprime.simulate(
                 samples=model.sample(*([2] * N)), demography=model, random_seed=1
             )
-            self.assertEqual(ts.num_populations, N)
-            self.assertEqual(ts.num_samples, 2 * N)
+            assert ts.num_populations == N
+            assert ts.num_samples == 2 * N
 
     def test_migration_line_two_pops(self):
         m = 1
         model = msprime.Demography.stepping_stone_1d(2, m, circular=False)
-        self.assertEqual(len(model.populations), 2)
-        self.assertEqual(model.migration_matrix.shape, (2, 2))
-        self.assertTrue(np.all(model.migration_matrix == 0))
+        assert len(model.populations) == 2
+        assert model.migration_matrix.shape == (2, 2)
+        assert np.all(model.migration_matrix == 0)
 
     def test_migration_line(self):
         m = 0.3
         for N in [3, 4, 5]:
             model = msprime.Demography.stepping_stone_1d(N, m, circular=False)
-            self.assertEqual(len(model.populations), N)
-            self.assertEqual(model.migration_matrix.shape, (N, N))
+            assert len(model.populations) == N
+            assert model.migration_matrix.shape == (N, N)
             self.assertZeroDiagonal(model.migration_matrix)
             for j in range(N):
                 adjacent = []
@@ -3639,27 +3611,27 @@ class TestSteppingStoneModel(TestPreCannedModels):
                     adjacent.append(j + 1)
                 for k in range(N):
                     if k in adjacent:
-                        self.assertEqual(model.migration_matrix[j, k], m)
+                        assert model.migration_matrix[j, k] == m
                     else:
-                        self.assertEqual(model.migration_matrix[j, k], 0)
+                        assert model.migration_matrix[j, k] == 0
             ts = msprime.simulate(
                 samples=model.sample(*([2] * N)), demography=model, random_seed=1
             )
-            self.assertEqual(ts.num_populations, N)
-            self.assertEqual(ts.num_samples, 2 * N)
+            assert ts.num_populations == N
+            assert ts.num_samples == 2 * N
 
     def test_Ne(self):
         # By default, Ne is 1
         model = msprime.Demography.stepping_stone_1d(2, 0.1)
-        self.assertEqual(model.populations[0].initial_size, 1)
-        self.assertEqual(model.populations[1].initial_size, 1)
+        assert model.populations[0].initial_size == 1
+        assert model.populations[1].initial_size == 1
         for Ne in [0.1, 1, 10]:
             model = msprime.Demography.stepping_stone_1d(2, 0.1, Ne=Ne)
-            self.assertEqual(model.populations[0].initial_size, Ne)
-            self.assertEqual(model.populations[1].initial_size, Ne)
+            assert model.populations[0].initial_size == Ne
+            assert model.populations[1].initial_size == Ne
 
 
-class TestDemographyObject(unittest.TestCase):
+class TestDemographyObject:
     """
     Basic tests for the demography object.
     """
@@ -3667,125 +3639,112 @@ class TestDemographyObject(unittest.TestCase):
     def test_equality(self):
         m1 = msprime.Demography.island_model(2, 1 / 3)
         m2 = msprime.Demography.island_model(2, 1 / 3)
-        self.assertEqual(m1, m2)
-        self.assertEqual(m2, m1)
-        self.assertEqual(m1, m1)
-        self.assertFalse(m1 != m2)
-        self.assertFalse(m1 != m1)
+        assert m1 == m2
+        assert m2 == m1
+        assert m1 == m1
+        assert not (m1 != m2)
+        assert not (m1 != m1)
 
         m3 = msprime.Demography.island_model(2, 1 / 3 + 0.001)
-        self.assertNotEqual(m1, m3)
-        self.assertTrue(m1 != m3)
+        assert m1 != m3
+        assert m1 != m3
 
-        self.assertNotEqual(m1, None)
-        self.assertNotEqual(m1, [])
+        assert m1 is not None
+        assert m1 != []
 
     def test_debug(self):
         model = msprime.Demography.island_model(2, 1 / 3)
         dbg1 = model.debug()
-        self.assertEqual(dbg1.demography, model)
+        assert dbg1.demography == model
         dbg2 = msprime.DemographyDebugger(demography=model)
-        self.assertEqual(dbg1.demography, dbg2.demography)
-        self.assertEqual(str(dbg1), str(dbg2))
+        assert dbg1.demography == dbg2.demography
+        assert str(dbg1) == str(dbg2)
 
     def test_positional_sampling_errors(self):
         model = msprime.Demography.island_model(2, 1)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             # Sampling from no populations is an error (this is almost
             # certainly a mistake by the user).
             model.sample()
         for bad_sample in [(1, -1), (-1,), (0, -10)]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 model.sample(*bad_sample)
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             model.sample(6.6)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             model.sample(0, 0, 1)
 
     def test_positional_samples_two_populations(self):
         model = msprime.Demography.island_model(2, 1)
-        self.assertEqual(model.sample(1), [msprime.Sample(0, 0)])
-        self.assertEqual(model.sample(0, 1), [msprime.Sample(1, 0)])
-        self.assertEqual(
-            model.sample(1, 1), [msprime.Sample(0, 0), msprime.Sample(1, 0)]
-        )
-        self.assertEqual(
-            model.sample(2, 0), [msprime.Sample(0, 0), msprime.Sample(0, 0)]
-        )
+        assert model.sample(1) == [msprime.Sample(0, 0)]
+        assert model.sample(0, 1) == [msprime.Sample(1, 0)]
+        assert model.sample(1, 1) == [msprime.Sample(0, 0), msprime.Sample(1, 0)]
+        assert model.sample(2, 0) == [msprime.Sample(0, 0), msprime.Sample(0, 0)]
         # Drawing 0 samples is OK
-        self.assertEqual(model.sample(0), [])
-        self.assertEqual(model.sample(0, 0), [])
-        self.assertEqual(
-            model.sample(3, 1), [msprime.Sample(0, 0)] * 3 + [msprime.Sample(1, 0)]
-        )
+        assert model.sample(0) == []
+        assert model.sample(0, 0) == []
+        assert model.sample(3, 1) == [msprime.Sample(0, 0)] * 3 + [msprime.Sample(1, 0)]
 
     def test_positional_samples_n_populations(self):
         for n in [1, 2, 3, 5]:
             model = msprime.Demography.island_model(n, 1)
             samples = model.sample(10)
-            self.assertEqual(samples, [msprime.Sample(0, 0)] * 10)
+            assert samples == [msprime.Sample(0, 0)] * 10
             samples = model.sample(*np.ones(n, dtype=int))
-            self.assertEqual(samples, [msprime.Sample(j, 0) for j in range(n)])
+            assert samples == [msprime.Sample(j, 0) for j in range(n)]
             samples = model.sample(*np.zeros(n, dtype=int))
-            self.assertEqual(samples, [])
+            assert samples == []
             samples = model.sample(*range(n))
-            self.assertEqual(
-                samples,
-                list(itertools.chain(*[[msprime.Sample(j, 0)] * j for j in range(n)])),
+            assert samples == list(
+                itertools.chain(*[[msprime.Sample(j, 0)] * j for j in range(n)])
             )
 
     def test_keyword_sampling_errors(self):
         model = msprime.Demography.island_model(2, 1)
         model.populations[0].name = "A"
         model.populations[1].name = "B"
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             # Sampling from no populations is an error (this is almost
             # certainly a mistake by the user).
             model.sample(**{})
         for bad_sample in [{"A": 1, "B": -1}, {"A": -1}, {"A": 0, "B": -10}]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 model.sample(**bad_sample)
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             model.sample(A=6.6)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             model.sample(C=1)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             model.sample(**{"AC": 1})
 
     def test_keyword_samples_two_populations(self):
         model = msprime.Demography.island_model(2, 1)
         model.populations[0].name = "A"
         model.populations[1].name = "B"
-        self.assertEqual(model.sample(A=1), [msprime.Sample(0, 0)])
-        self.assertEqual(model.sample(B=1), [msprime.Sample(1, 0)])
-        self.assertEqual(
-            model.sample(A=1, B=1), [msprime.Sample(0, 0), msprime.Sample(1, 0)]
-        )
+        assert model.sample(A=1) == [msprime.Sample(0, 0)]
+        assert model.sample(B=1) == [msprime.Sample(1, 0)]
+        assert model.sample(A=1, B=1) == [msprime.Sample(0, 0), msprime.Sample(1, 0)]
         # Samples are returned **in the order specified**. This is guaranteed
         # since Python 3.6
-        self.assertEqual(
-            model.sample(B=1, A=1), [msprime.Sample(1, 0), msprime.Sample(0, 0)]
-        )
-        self.assertEqual(
-            model.sample(A=2, B=0), [msprime.Sample(0, 0), msprime.Sample(0, 0)]
-        )
+        assert model.sample(B=1, A=1) == [msprime.Sample(1, 0), msprime.Sample(0, 0)]
+        assert model.sample(A=2, B=0) == [msprime.Sample(0, 0), msprime.Sample(0, 0)]
         # Drawing 0 samples is OK
-        self.assertEqual(model.sample(A=0), [])
-        self.assertEqual(model.sample(B=0), [])
-        self.assertEqual(model.sample(A=0, B=0), [])
-        self.assertEqual(
-            model.sample(A=3, B=1), [msprime.Sample(0, 0)] * 3 + [msprime.Sample(1, 0)]
-        )
+        assert model.sample(A=0) == []
+        assert model.sample(B=0) == []
+        assert model.sample(A=0, B=0) == []
+        assert model.sample(A=3, B=1) == [msprime.Sample(0, 0)] * 3 + [
+            msprime.Sample(1, 0)
+        ]
 
     def test_mixed_positional_and_keyword(self):
         model = msprime.Demography.island_model(2, 1)
         model.populations[0].name = "A"
         model.populations[1].name = "B"
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             model.sample(0, A=1)
 
 
-class TestDemographyFromOldStyle(unittest.TestCase):
+class TestDemographyFromOldStyle:
     """
     Tests the method for creating a demography object from the old
     style population_configurations, migration_matrix and demographic_events
@@ -3794,9 +3753,9 @@ class TestDemographyFromOldStyle(unittest.TestCase):
 
     def test_defaults(self):
         demog = msprime.Demography.from_old_style()
-        self.assertEqual(demog.num_populations, 1)
-        self.assertEqual(list(demog.migration_matrix), [[0]])
-        self.assertEqual(list(demog.events), [])
+        assert demog.num_populations == 1
+        assert list(demog.migration_matrix) == [[0]]
+        assert list(demog.events) == []
 
     def test_pop_configs_defaults(self):
         for n in range(1, 5):
@@ -3804,9 +3763,9 @@ class TestDemographyFromOldStyle(unittest.TestCase):
             demog = msprime.Demography.from_old_style(
                 population_configurations=pop_configs
             )
-            self.assertEqual(demog.num_populations, n)
+            assert demog.num_populations == n
             np.testing.assert_array_equal(demog.migration_matrix, np.zeros((n, n)))
-            self.assertEqual(list(demog.events), [])
+            assert list(demog.events) == []
 
     def test_migration_matrix(self):
         for n in range(1, 5):
@@ -3815,9 +3774,9 @@ class TestDemographyFromOldStyle(unittest.TestCase):
             demog = msprime.Demography.from_old_style(
                 population_configurations=pop_configs, migration_matrix=M
             )
-            self.assertEqual(demog.num_populations, n)
+            assert demog.num_populations == n
             np.testing.assert_array_equal(demog.migration_matrix, M)
-            self.assertEqual(list(demog.events), [])
+            assert list(demog.events) == []
 
     def test_demographic_events(self):
         events = [
@@ -3825,12 +3784,12 @@ class TestDemographyFromOldStyle(unittest.TestCase):
             for j in range(10)
         ]
         demog = msprime.Demography.from_old_style(demographic_events=events)
-        self.assertEqual(demog.num_populations, 1)
-        self.assertEqual(list(demog.migration_matrix), [[0]])
-        self.assertEqual(events, demog.events)
+        assert demog.num_populations == 1
+        assert list(demog.migration_matrix) == [[0]]
+        assert events == demog.events
 
 
-class TestPopulationFromOldStyle(unittest.TestCase):
+class TestPopulationFromOldStyle:
     """
     Tests the method for creating a Population object from the old
     style PopulationConfiguration.
@@ -3841,13 +3800,13 @@ class TestPopulationFromOldStyle(unittest.TestCase):
     def test_defaults(self):
         pop_config = msprime.PopulationConfiguration()
         pop = msprime.Population.from_old_style(pop_config)
-        self.assertEqual(pop_config.initial_size, pop.initial_size)
-        self.assertEqual(pop_config.growth_rate, pop.growth_rate)
+        assert pop_config.initial_size == pop.initial_size
+        assert pop_config.growth_rate == pop.growth_rate
 
     def test_values(self):
         pop_config = msprime.PopulationConfiguration(
             initial_size=1234, growth_rate=5678
         )
         pop = msprime.Population.from_old_style(pop_config)
-        self.assertEqual(pop_config.initial_size, pop.initial_size)
-        self.assertEqual(pop_config.growth_rate, pop.growth_rate)
+        assert pop_config.initial_size == pop.initial_size
+        assert pop_config.growth_rate == pop.growth_rate

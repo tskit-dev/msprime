@@ -21,6 +21,8 @@ Tests for the parsing of species trees in newick and StarBEAST format.
 """
 import unittest
 
+import pytest
+
 import msprime
 import msprime.species_trees as species_trees
 
@@ -39,18 +41,18 @@ def get_non_binary_tree(n):
     return tree
 
 
-class TestIsNumber(unittest.TestCase):
+class TestIsNumber:
     """
     Test the is_number function.
     """
 
     def test_good_examples(self):
         for x in ["2", "2.0", "1000", "-1e3", "1e-6"]:
-            self.assertTrue(species_trees.is_number(x))
+            assert species_trees.is_number(x)
 
     def test_bad_examples(self):
         for x in ["", "x2.0", "1000x", ";-1e3", ";;"]:
-            self.assertFalse(species_trees.is_number(x))
+            assert not species_trees.is_number(x)
 
 
 class TestSpeciesTreeRoundTrip(unittest.TestCase):
@@ -70,11 +72,11 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
             branch_length_units=branch_length_units,
             generation_time=generation_time,
         )
-        self.assertEqual(spec.num_populations, tree.num_samples())
+        assert spec.num_populations == tree.num_samples()
         for pop in spec.populations:
-            self.assertEqual(pop.initial_size, Ne)
-            self.assertEqual(pop.growth_rate, 0)
-            self.assertIsNotNone(pop.name)
+            assert pop.initial_size == Ne
+            assert pop.growth_rate == 0
+            assert pop.name is not None
 
         # Population IDs are mapped to leaves as they are encountered in a postorder
         # traversal.
@@ -89,10 +91,10 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
 
         for u in tree.leaves():
             pop = spec.populations[pop_id_map[u]]
-            self.assertEqual(pop.growth_rate, 0)
+            assert pop.growth_rate == 0
             # Note: we're assuming the default newick here in tskit that labels
             # nodes as their id + 1.
-            self.assertEqual(pop.name, f"{u + 1}")
+            assert pop.name == f"{u + 1}"
 
         # We should have demographic events for every non-unary internal node, and
         # events should be output in increasing time order.
@@ -100,18 +102,18 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
         for node in [u for u in tree.nodes(order="timeasc")]:
             children = tree.children(node)
             if len(children) > 1:
-                self.assertEqual(node, tree.mrca(children[0], children[1]))
+                assert node == tree.mrca(children[0], children[1])
                 dest = pop_id_map[node]
                 for child in children[1:]:
                     event = spec.events[j]
                     j += 1
-                    self.assertIsInstance(event, msprime.MassMigration)
+                    assert isinstance(event, msprime.MassMigration)
                     self.assertAlmostEqual(event.time, tree.time(node))
                     source = pop_id_map[child]
-                    self.assertEqual(event.source, source)
-                    self.assertEqual(event.dest, dest)
+                    assert event.source == source
+                    assert event.dest == dest
 
-        self.assertEqual(j, len(spec.events))
+        assert j == len(spec.events)
 
     def test_n2_binary(self):
         tree = msprime.simulate(2, random_seed=2).first()
@@ -267,9 +269,9 @@ class TestStarbeastRoundTrip(unittest.TestCase):
         if nexus is None:
             nexus = make_nexus(tree, pop_size_map)
         spec = msprime.parse_starbeast(nexus, generation_time, branch_length_units)
-        self.assertEqual(spec.num_populations, tree.num_samples())
+        assert spec.num_populations == tree.num_samples()
         for pop in spec.populations:
-            self.assertEqual(pop.growth_rate, 0)
+            assert pop.growth_rate == 0
 
         # Population IDs are mapped to leaves as they are encountered in a postorder
         # traversal.
@@ -284,9 +286,9 @@ class TestStarbeastRoundTrip(unittest.TestCase):
 
         for u in tree.leaves():
             pop = spec.populations[pop_id_map[u]]
-            self.assertEqual(pop.initial_size, pop_size_map[u])
-            self.assertEqual(pop.growth_rate, 0)
-            self.assertEqual(pop.name, f"spc{u}")
+            assert pop.initial_size == pop_size_map[u]
+            assert pop.growth_rate == 0
+            assert pop.name == f"spc{u}"
 
         # We should have demographic events for every non-unary internal node, and
         # events should be output in increasing time order.
@@ -298,20 +300,20 @@ class TestStarbeastRoundTrip(unittest.TestCase):
                 for child in children[1:]:
                     event = spec.events[j]
                     j += 1
-                    self.assertIsInstance(event, msprime.MassMigration)
+                    assert isinstance(event, msprime.MassMigration)
                     self.assertAlmostEqual(event.time, tree.time(node))
                     source = pop_id_map[child]
-                    self.assertEqual(event.source, source)
-                    self.assertEqual(event.dest, dest)
+                    assert event.source == source
+                    assert event.dest == dest
                 event = spec.events[j]
                 j += 1
-                self.assertIsInstance(event, msprime.PopulationParametersChange)
+                assert isinstance(event, msprime.PopulationParametersChange)
                 self.assertAlmostEqual(event.time, tree.time(node))
-                self.assertEqual(event.population, dest)
-                self.assertEqual(event.growth_rate, None)
-                self.assertEqual(event.initial_size, pop_size_map[node])
+                assert event.population == dest
+                assert event.growth_rate is None
+                assert event.initial_size == pop_size_map[node]
 
-        self.assertEqual(j, len(spec.events))
+        assert j == len(spec.events)
 
     def test_n2_binary(self):
         tree = msprime.simulate(2, random_seed=2).first()
@@ -369,15 +371,18 @@ class TestStarbeastRoundTrip(unittest.TestCase):
         )
 
 
-class TestSpeciesTreeParsingErrors(unittest.TestCase):
+class TestSpeciesTreeParsingErrors:
     """
     Tests for parsing of species trees in newick format.
     """
 
     def test_bad_params(self):
-        self.assertRaises(TypeError, msprime.parse_species_tree)
-        self.assertRaises(TypeError, msprime.parse_species_tree, tree="()")
-        self.assertRaises(TypeError, msprime.parse_species_tree, Ne=1)
+        with pytest.raises(TypeError):
+            msprime.parse_species_tree()
+        with pytest.raises(TypeError):
+            msprime.parse_species_tree(tree="()")
+        with pytest.raises(TypeError):
+            msprime.parse_species_tree(Ne=1)
 
     def test_bad_tree(self):
         bad_trees = [
@@ -398,7 +403,7 @@ class TestSpeciesTreeParsingErrors(unittest.TestCase):
             "(4:0.47,(1:0.18,2:0.18):0.29):1.31);",
         ]
         for bad_tree in bad_trees:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.parse_species_tree(tree=bad_tree, Ne=1)
 
     def test_bad_parameter(self):
@@ -407,7 +412,7 @@ class TestSpeciesTreeParsingErrors(unittest.TestCase):
         good_ne = 10000
         good_generation_time = 5
         for bad_branch_length_units in [-3, "asdf", ["myr"]]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.parse_species_tree(
                     good_tree,
                     branch_length_units=bad_branch_length_units,
@@ -415,11 +420,11 @@ class TestSpeciesTreeParsingErrors(unittest.TestCase):
                     generation_time=good_generation_time,
                 )
 
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             msprime.parse_species_tree(good_tree, None)
 
         for bad_ne in [-3, "x"]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.parse_species_tree(
                     good_tree,
                     branch_length_units=good_branch_length_units,
@@ -427,7 +432,7 @@ class TestSpeciesTreeParsingErrors(unittest.TestCase):
                     generation_time=good_generation_time,
                 )
         for bad_generation_time in [None, -3, "x"]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.parse_species_tree(
                     good_tree,
                     branch_length_units=good_branch_length_units,
@@ -435,7 +440,7 @@ class TestSpeciesTreeParsingErrors(unittest.TestCase):
                     generation_time=bad_generation_time,
                 )
         for bad_branch_length_units in ["gen"]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.parse_species_tree(
                     good_tree,
                     branch_length_units=bad_branch_length_units,
@@ -444,7 +449,7 @@ class TestSpeciesTreeParsingErrors(unittest.TestCase):
                 )
 
 
-class TestSpeciesTreeExamples(unittest.TestCase):
+class TestSpeciesTreeExamples:
     """
     Tests that we get the expected value in simple examples.
     """
@@ -460,14 +465,14 @@ class TestSpeciesTreeExamples(unittest.TestCase):
             Ne=good_ne,
             generation_time=good_generation_time,
         )
-        self.assertIsInstance(spec.populations, list)
-        self.assertEqual(len(spec.populations), 4)
+        assert isinstance(spec.populations, list)
+        assert len(spec.populations) == 4
         for pop in spec.populations:
-            self.assertIsInstance(pop, msprime.demography.Population)
-        self.assertIsInstance(spec.events, list)
-        self.assertEqual(len(spec.events), 3)
+            assert isinstance(pop, msprime.demography.Population)
+        assert isinstance(spec.events, list)
+        assert len(spec.events) == 3
         for mm in spec.events:
-            self.assertIsInstance(mm, msprime.demography.MassMigration)
+            assert isinstance(mm, msprime.demography.MassMigration)
 
     def test_4_species_run(self):
         species_tree = (
@@ -479,32 +484,32 @@ class TestSpeciesTreeExamples(unittest.TestCase):
 
         # Take one sample from each population
         ts = msprime.simulate(samples=spec.sample(1, 1, 1, 1), demography=spec)
-        self.assertEqual(ts.num_trees, 1)
-        self.assertEqual(ts.num_samples, 4)
-        self.assertEqual(ts.num_populations, 4)
+        assert ts.num_trees == 1
+        assert ts.num_samples == 4
+        assert ts.num_populations == 4
         for j, u in enumerate(ts.samples()):
-            self.assertEqual(ts.node(u).population, j)
+            assert ts.node(u).population == j
 
         # Use the population names to get the samples
         samples = spec.sample(human=4, gorilla=2)
         ts = msprime.simulate(samples=samples, demography=spec)
-        self.assertEqual(ts.num_trees, 1)
-        self.assertEqual(ts.num_samples, 6)
+        assert ts.num_trees == 1
+        assert ts.num_samples == 6
         for j, u in enumerate(ts.samples()):
             pop = 0 if j < 4 else 2
-            self.assertEqual(ts.node(u).population, pop)
+            assert ts.node(u).population == pop
 
         # Order of keywords is respected
         samples = spec.sample(gorilla=2, human=4)
         ts = msprime.simulate(samples=samples, demography=spec)
-        self.assertEqual(ts.num_trees, 1)
-        self.assertEqual(ts.num_samples, 6)
+        assert ts.num_trees == 1
+        assert ts.num_samples == 6
         for j, u in enumerate(ts.samples()):
             pop = 2 if j < 2 else 0
-            self.assertEqual(ts.node(u).population, pop)
+            assert ts.node(u).population == pop
 
 
-class TestStarbeastParsingErrors(unittest.TestCase):
+class TestStarbeastParsingErrors:
     """
     Tests for parsing of species trees in nexus format, written by
     StarBEAST.
@@ -558,14 +563,14 @@ class TestStarbeastParsingErrors(unittest.TestCase):
         bad_trees.append(good_nexus.replace(good_nwk, good_nwk + good_nwk))
         good_generation_time = 5
         for bad_tree in bad_trees:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.parse_starbeast(
                     tree=bad_tree, generation_time=good_generation_time
                 )
 
     def test_bad_annotations(self):
         good = "((1[&dmv={0.1}]:1,2[&dmv={0.2}]:1)[&dmv={0.3}])"
-        self.assertEqual(species_trees.strip_extra_annotations(good), good)
+        assert species_trees.strip_extra_annotations(good) == good
         bad_examples = [
             # No annotations
             "((1:1,2:1)",
@@ -579,15 +584,15 @@ class TestStarbeastParsingErrors(unittest.TestCase):
             "((1[&dmv={]:1,2[]:1)[]",
         ]
         for example in bad_examples:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 species_trees.strip_extra_annotations(example)
 
     def test_bad_annotations_in_tree(self):
         name_map = {f"{j}": f"{j}" for j in range(3)}
         good = "(1[&dmv={1}]:1.14,2[&dmv={1}]:1.14)[&dmv={1}]"
         spec = species_trees.process_starbeast_tree(good, 1, name_map)
-        self.assertEqual(len(spec.populations), 2)
-        self.assertEqual(len(spec.events), 2)
+        assert len(spec.populations) == 2
+        assert len(spec.events) == 2
         bad_examples = [
             # Missing one dmv
             "(1[&dmv={1}]:1.14,2[&dmv={1}]:1.14)[&={1}]",
@@ -595,15 +600,16 @@ class TestStarbeastParsingErrors(unittest.TestCase):
             "(1[&dmv={1}]:1.14,2[&dmv={1}]:1.14)",
         ]
         for example in bad_examples:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 species_trees.process_starbeast_tree(example, 1, name_map)
 
     def test_bad_translation(self):
         good = "translate 1 spc1, 2 spc2, 3 spc3"
-        self.assertEqual(
-            species_trees.parse_translate_command(good),
-            {"1": "spc1", "2": "spc2", "3": "spc3"},
-        )
+        assert species_trees.parse_translate_command(good) == {
+            "1": "spc1",
+            "2": "spc2",
+            "3": "spc3",
+        }
         bad_examples = [
             "translate 1,",
             "translate 1 spc1 more, 2 spc2",
@@ -611,7 +617,7 @@ class TestStarbeastParsingErrors(unittest.TestCase):
             "translate 1 spc1, 2 spc1",
         ]
         for example in bad_examples:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 species_trees.parse_translate_command(example)
 
     def test_bad_parameter(self):
@@ -619,21 +625,21 @@ class TestStarbeastParsingErrors(unittest.TestCase):
             good_tree = f.read()
             good_branch_length_units = "myr"
             for bad_branch_length_units in [-3, "asdf", ["myr"], "gen"]:
-                with self.assertRaises(ValueError):
+                with pytest.raises(ValueError):
                     msprime.parse_starbeast(
                         tree=f.read(),
                         branch_length_units=bad_branch_length_units,
                         generation_time=5,
                     )
             for bad_generation_time in [-3, "sdf"]:
-                with self.assertRaises(ValueError):
+                with pytest.raises(ValueError):
                     msprime.parse_starbeast(
                         tree=good_tree,
                         branch_length_units=good_branch_length_units,
                         generation_time=bad_generation_time,
                     )
             for bad_generation_time in [None, {}]:
-                with self.assertRaises(TypeError):
+                with pytest.raises(TypeError):
                     msprime.parse_starbeast(
                         tree=good_tree,
                         branch_length_units=good_branch_length_units,
@@ -641,7 +647,7 @@ class TestStarbeastParsingErrors(unittest.TestCase):
                     )
 
 
-class TestStarbeastExamples(unittest.TestCase):
+class TestStarbeastExamples:
     """
     Tests for known examples in starbeast format.
     """
@@ -656,13 +662,13 @@ class TestStarbeastExamples(unittest.TestCase):
                 branch_length_units=good_branch_length_units,
                 generation_time=good_generation_time,
             )
-            self.assertEqual(len(spec.populations), 12)
+            assert len(spec.populations) == 12
             for pop in spec.populations:
                 species_name = pop.name
-                self.assertTrue(species_name.startswith("spc"))
-                self.assertTrue(species_name[3:].isnumeric())
-            self.assertEqual(len(spec.events), 22)
+                assert species_name.startswith("spc")
+                assert species_name[3:].isnumeric()
+            assert len(spec.events) == 22
             event_types = [msprime.demography.MassMigration]
             event_types.append(msprime.demography.PopulationParametersChange)
             for mm in spec.events:
-                self.assertIn(type(mm), event_types)
+                assert type(mm) in event_types

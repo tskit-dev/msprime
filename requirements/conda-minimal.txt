@@ -1,7 +1,8 @@
 attrs
-numpy
-nose
 gsl
-tskit>=0.3.0
+numpy
+pytest
+pytest-xdist
 scipy
 stdpopsim>=0.1.2 # Make sure we have correct version of OOA model
+tskit>=0.3.0
