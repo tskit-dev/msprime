@@ -18,7 +18,6 @@
 */
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 #include <float.h>
 
 #include <gsl/gsl_randist.h>
@@ -78,7 +77,7 @@ sort_mutations(site_t *site)
             p[k] = m;
             k++;
         }
-        assert(k == num_mutations);
+        tsk_bug_assert(k == num_mutations);
         qsort(p, (size_t) num_mutations, sizeof(mutation_t *), &cmp_mutationp);
         site->mutations = p[0];
         for (k = 0; k < num_mutations; k++) {
@@ -205,7 +204,7 @@ mutation_matrix_choose_root_state(mutation_model_t *self, gsl_rng *rng, site_t *
     mutation_matrix_t params = self->params.mutation_matrix;
     double u = gsl_ran_flat(rng, 0.0, 1.0);
     size_t j = probability_list_select(u, params.num_alleles, params.root_distribution);
-    assert(j < params.num_alleles);
+    tsk_bug_assert(j < params.num_alleles);
     site->ancestral_state = params.alleles[j];
     site->ancestral_state_length = params.allele_length[j];
     return ret;
@@ -382,7 +381,7 @@ slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
         ret = TSK_ERR_IO;
         goto out;
     }
-    assert(len < (int) alloc_size);
+    tsk_bug_assert(len < (int) alloc_size);
     if (params->next_mutation_id == INT64_MAX) {
         ret = MSP_ERR_MUTATION_ID_OVERFLOW;
         goto out;
@@ -451,7 +450,7 @@ infinite_alleles_make_allele(
         goto out;
     }
     len = (tsk_size_t) num_digits;
-    assert(len < MAX_UINT_BUFF_SIZE);
+    tsk_bug_assert(len < MAX_UINT_BUFF_SIZE);
 
     buff = tsk_blkalloc_get(&params->allocator, len);
     if (buff == NULL) {
@@ -699,15 +698,15 @@ mutgen_check_state(mutgen_t *self)
         s = (site_t *) a->item;
         m = s->mutations;
         for (j = 0; j < s->mutations_length; j++) {
-            assert(m != NULL);
-            assert(m->id >= -1);
-            assert(m->node >= 0);
+            tsk_bug_assert(m != NULL);
+            tsk_bug_assert(m->id >= -1);
+            tsk_bug_assert(m->node >= 0);
             if (j == s->mutations_length - 1) {
-                assert(m->next == NULL);
+                tsk_bug_assert(m->next == NULL);
             }
             m = m->next;
         }
-        assert(m == NULL);
+        tsk_bug_assert(m == NULL);
     }
 }
 
@@ -840,19 +839,16 @@ mutgen_init_allocator(mutgen_t *self)
     /* Need to make sure we have enough space to store sites and mutations. We
      * allocate ancestral and derived states, as well as a list of mutations
      * for each site. This ensures that we can always allocate the required amount.
-     * We need to add one because the assert trips when the block size is equal
-     * to chunk size (probably wrongly).
      */
     self->block_size
-        = GSL_MAX(self->block_size, 1 + self->tables->sites.ancestral_state_length);
+        = GSL_MAX(self->block_size, self->tables->sites.ancestral_state_length);
+    self->block_size = GSL_MAX(self->block_size, self->tables->sites.metadata_length);
     self->block_size
-        = GSL_MAX(self->block_size, 1 + self->tables->sites.metadata_length);
+        = GSL_MAX(self->block_size, self->tables->mutations.derived_state_length);
     self->block_size
-        = GSL_MAX(self->block_size, 1 + self->tables->mutations.derived_state_length);
-    self->block_size
-        = GSL_MAX(self->block_size, 1 + self->tables->mutations.metadata_length);
+        = GSL_MAX(self->block_size, self->tables->mutations.metadata_length);
     self->block_size = GSL_MAX(
-        self->block_size, (1 + self->tables->mutations.num_rows) * sizeof(mutation_t));
+        self->block_size, self->tables->mutations.num_rows * sizeof(mutation_t));
     ret = tsk_blkalloc_init(&self->allocator, self->block_size);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
@@ -1008,7 +1004,7 @@ mutgen_initialise_sites(mutgen_t *self, bool check_kept_times)
         }
 
         while (j < mutations->num_rows && mutations->site[j] == site_id) {
-            assert(j < mutations->num_rows);
+            tsk_bug_assert(j < mutations->num_rows);
             time = mutations->time[j];
             if (tsk_is_unknown_time(time)) {
                 ret = MSP_ERR_UNKNOWN_TIME_NOT_SUPPORTED;
@@ -1061,7 +1057,7 @@ mutgen_populate_tables(mutgen_t *self)
                     parent_id = TSK_NULL;
                 } else {
                     parent_id = m->parent->id;
-                    assert(parent_id != TSK_NULL);
+                    tsk_bug_assert(parent_id != TSK_NULL);
                 }
                 mutation_id = tsk_mutation_table_add_row(mutations, site_id, m->node,
                     parent_id, m->time, m->derived_state, m->derived_state_length,
@@ -1070,7 +1066,7 @@ mutgen_populate_tables(mutgen_t *self)
                     ret = msp_set_tsk_error(mutation_id);
                     goto out;
                 }
-                assert(mutation_id > parent_id);
+                tsk_bug_assert(mutation_id > parent_id);
                 m->id = mutation_id;
                 num_mutations++;
             }
@@ -1120,7 +1116,7 @@ mutgen_place_mutations(mutgen_t *self, bool discrete_sites)
         edge_right = edges.right[j];
         parent = edges.parent[j];
         child = edges.child[j];
-        assert(child >= 0 && child < (tsk_id_t) nodes.num_rows);
+        tsk_bug_assert(child >= 0 && child < (tsk_id_t) nodes.num_rows);
         branch_start = GSL_MAX(start_time, nodes.time[child]);
         branch_end = GSL_MIN(end_time, nodes.time[parent]);
         branch_length = branch_end - branch_start;
@@ -1149,8 +1145,8 @@ mutgen_place_mutations(mutgen_t *self, bool discrete_sites)
                 } while (avl_node != NULL && !discrete_sites);
 
                 time = gsl_ran_flat(self->rng, branch_start, branch_end);
-                assert(site_left <= position && position < site_right);
-                assert(branch_start <= time && time < branch_end);
+                tsk_bug_assert(site_left <= position && position < site_right);
+                tsk_bug_assert(branch_start <= time && time < branch_end);
                 if (avl_node != NULL) {
                     site = (site_t *) avl_node->item;
                 } else {
@@ -1186,7 +1182,7 @@ mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_muta
         goto out;
     }
     if (site->new) {
-        assert(site->ancestral_state == NULL);
+        tsk_bug_assert(site->ancestral_state == NULL);
         ret = mutation_model_choose_root_state(self->model, self->rng, site);
         if (ret != 0) {
             goto out;
@@ -1198,7 +1194,7 @@ mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_muta
      * parent of the current one since we assume they are in order. */
     for (mut = site->mutations; mut != NULL; mut = mut->next) {
         u = mut->node;
-        assert((tsk_size_t) u < num_nodes);
+        tsk_bug_assert((tsk_size_t) u < num_nodes);
         while (u != TSK_NULL && bottom_mutation[u] == NULL) {
             u = parent[u];
         }
@@ -1207,7 +1203,7 @@ mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_muta
             palen = site->ancestral_state_length;
             pm = site->metadata;
             pmlen = site->metadata_length;
-            assert(mut->parent == NULL);
+            tsk_bug_assert(mut->parent == NULL);
         } else {
             parent_mut = bottom_mutation[u];
             mut->parent = parent_mut;
@@ -1221,7 +1217,7 @@ mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_muta
         }
         mut->keep = true;
         if (mut->new) {
-            assert(mut->derived_state == NULL);
+            tsk_bug_assert(mut->derived_state == NULL);
             ret = mutation_model_transition(
                 self->model, self->rng, pa, palen, pm, pmlen, mut);
             if (ret < 0) {
