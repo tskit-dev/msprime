@@ -339,30 +339,32 @@ test_binary_search_edge_cases(void)
 }
 
 static void
-verify_search(fast_search_lookup_t *zoom, const double *values, size_t n)
+verify_search(fast_search_t *zoom, const double *values, size_t n)
 {
-    double stop, step, x;
+    int i;
+    double x;
     size_t expect, got;
 
-    step = values[n - 1] / (n * 3.14159);
-    if (step == 0) {
-        step = values[n - 1];
-    }
-    stop = values[n - 1] + 2 * step;
-    for (x = 0; x < stop; x += step) {
+    for (i = 0; i < n; i++) {
+        x = values[i];
         expect = idx_1st_strict_upper_bound(values, n, x);
-        got = fast_search_lookup_find(zoom, x) - values;
+        got = fast_search_idx_strict_upper(zoom, x);
+        CU_ASSERT_EQUAL(expect, got);
+
+        x = nextafter(x, INFINITY);
+        expect = idx_1st_strict_upper_bound(values, n, x);
+        got = fast_search_idx_strict_upper(zoom, x);
         CU_ASSERT_EQUAL(expect, got);
     }
 }
 
 static void
-test_fast_search_lookup_identity(void)
+test_fast_search_identity(void)
 {
     double p[] = { 0.0, 1.0, 2.0, 3.0, 4.0, 5.0 };
     for (size_t n = 2; n <= 6; n++) {
-        fast_search_lookup_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        fast_search_t speedy;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
         CU_ASSERT_EQUAL(1.0, speedy.query_multiplier);
         CU_ASSERT_EQUAL(n + 1, speedy.num_lookups);
         for (size_t i = 0; i <= n; i++) {
@@ -373,54 +375,54 @@ test_fast_search_lookup_identity(void)
 }
 
 static void
-test_fast_search_lookup_2powers(void)
+test_fast_search_2powers(void)
 {
     {
         double p[] = { 0, 2 };
         size_t n = 2;
-        fast_search_lookup_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        fast_search_t speedy;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
         CU_ASSERT_EQUAL(0.5, speedy.query_multiplier);
         CU_ASSERT_EQUAL(3, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
         CU_ASSERT_EQUAL(p + n, speedy.lookups[n]);
         verify_search(&speedy, p, n);
-        fast_search_lookup_free(&speedy);
+        fast_search_free(&speedy);
     }
     {
         double p[] = { 0, 0.25 };
         size_t n = 2;
-        fast_search_lookup_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        fast_search_t speedy;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
         CU_ASSERT_EQUAL(4.0, speedy.query_multiplier);
         CU_ASSERT_EQUAL(3, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
         CU_ASSERT_EQUAL(p + n, speedy.lookups[n]);
         verify_search(&speedy, p, n);
-        fast_search_lookup_free(&speedy);
+        fast_search_free(&speedy);
     }
     {
         double p[] = { 0, 8 };
         size_t n = 2;
-        fast_search_lookup_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        fast_search_t speedy;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
         CU_ASSERT_EQUAL(0.125, speedy.query_multiplier);
         CU_ASSERT_EQUAL(3, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
         CU_ASSERT_EQUAL(p + n, speedy.lookups[n]);
         verify_search(&speedy, p, n);
-        fast_search_lookup_free(&speedy);
+        fast_search_free(&speedy);
     }
 }
 
 static void
-test_fast_search_lookup(void)
+test_fast_search(void)
 {
     {
         double p[] = { 0, 0.3, 0.3, 0.5, 1.1, 1.1 };
         size_t n = 6;
-        fast_search_lookup_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        fast_search_t speedy;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
         CU_ASSERT_EQUAL(4.0, speedy.query_multiplier);
         CU_ASSERT_EQUAL(6, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
@@ -430,65 +432,65 @@ test_fast_search_lookup(void)
         CU_ASSERT_EQUAL(p + 4, speedy.lookups[4]);
         CU_ASSERT_EQUAL(p + 6, speedy.lookups[5]);
         verify_search(&speedy, p, n);
-        fast_search_lookup_free(&speedy);
+        fast_search_free(&speedy);
     }
     {
         double p[] = { 0, 6, 13 };
         size_t n = 3;
-        fast_search_lookup_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        fast_search_t speedy;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
         CU_ASSERT_EQUAL(0.125, speedy.query_multiplier);
         CU_ASSERT_EQUAL(3, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
         CU_ASSERT_EQUAL(p + 2, speedy.lookups[1]);
         CU_ASSERT_EQUAL(p + 3, speedy.lookups[2]);
         verify_search(&speedy, p, n);
-        fast_search_lookup_free(&speedy);
+        fast_search_free(&speedy);
     }
 }
 
 static void
-test_fast_search_lookup_zeros(void)
+test_fast_search_zeros(void)
 {
     const double highest_power = exp2(DBL_MAX_EXP - 1);
     CU_ASSERT_EQUAL_FATAL(2, highest_power * DBL_MIN);
     double p[] = { 0.0, 0.0, 0.0, nextafter(0.0, 1), DBL_MIN, DBL_MIN };
     {
         size_t n = 1;
-        fast_search_lookup_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        fast_search_t speedy;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
         CU_ASSERT_EQUAL(2, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
         CU_ASSERT_EQUAL(p + n, speedy.lookups[1]);
         verify_search(&speedy, p, n);
-        fast_search_lookup_free(&speedy);
+        fast_search_free(&speedy);
     }
     {
         size_t n = 3;
-        fast_search_lookup_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        fast_search_t speedy;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
         CU_ASSERT_EQUAL(highest_power, speedy.query_multiplier);
         CU_ASSERT_EQUAL(2, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
         CU_ASSERT_EQUAL(p + n, speedy.lookups[1]);
         verify_search(&speedy, p, n);
-        fast_search_lookup_free(&speedy);
+        fast_search_free(&speedy);
     }
     {
         size_t n = 4;
-        fast_search_lookup_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        fast_search_t speedy;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
         CU_ASSERT_EQUAL(highest_power, speedy.query_multiplier);
         CU_ASSERT_EQUAL(2, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
         CU_ASSERT_EQUAL(p + n, speedy.lookups[1]);
         verify_search(&speedy, p, n);
-        fast_search_lookup_free(&speedy);
+        fast_search_free(&speedy);
     }
     {
         size_t n = 6;
-        fast_search_lookup_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_lookup_alloc(&speedy, p, n));
+        fast_search_t speedy;
+        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
         CU_ASSERT_EQUAL(highest_power, speedy.query_multiplier);
         CU_ASSERT_EQUAL(4, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
@@ -496,30 +498,30 @@ test_fast_search_lookup_zeros(void)
         CU_ASSERT_EQUAL(p + 4, speedy.lookups[2]);
         CU_ASSERT_EQUAL(p + n, speedy.lookups[3]);
         verify_search(&speedy, p, n);
-        fast_search_lookup_free(&speedy);
+        fast_search_free(&speedy);
     }
 }
 
 static void
-test_fast_search_lookup_bad_input(void)
+test_fast_search_bad_input(void)
 {
     {
         double p[] = {};
-        fast_search_lookup_t speedy;
-        CU_ASSERT(0 != fast_search_lookup_alloc(&speedy, p, 0));
-        fast_search_lookup_free(&speedy);
+        fast_search_t speedy;
+        CU_ASSERT(0 != fast_search_alloc(&speedy, p, 0));
+        fast_search_free(&speedy);
     }
     {
         double p[] = { 1, 2 };
-        fast_search_lookup_t speedy;
-        CU_ASSERT(0 != fast_search_lookup_alloc(&speedy, p, 2));
-        fast_search_lookup_free(&speedy);
+        fast_search_t speedy;
+        CU_ASSERT(0 != fast_search_alloc(&speedy, p, 2));
+        fast_search_free(&speedy);
     }
     {
         double p[] = { -1, 2 };
-        fast_search_lookup_t speedy;
-        CU_ASSERT(0 != fast_search_lookup_alloc(&speedy, p, 2));
-        fast_search_lookup_free(&speedy);
+        fast_search_t speedy;
+        CU_ASSERT(0 != fast_search_alloc(&speedy, p, 2));
+        fast_search_free(&speedy);
     }
 }
 
@@ -577,11 +579,11 @@ main(int argc, char **argv)
         { "test_binary_search", test_binary_search },
         { "test_binary_search_repeating", test_binary_search_repeating },
         { "test_binary_search_edge_cases", test_binary_search_edge_cases },
-        { "test_fast_search_lookup_identity", test_fast_search_lookup_identity },
-        { "test_fast_search_lookup_2powers", test_fast_search_lookup_2powers },
-        { "test_fast_search_lookup", test_fast_search_lookup },
-        { "test_fast_search_lookup_zeros", test_fast_search_lookup_zeros },
-        { "test_fast_search_lookup_bad_input", test_fast_search_lookup_bad_input },
+        { "test_fast_search_identity", test_fast_search_identity },
+        { "test_fast_search_2powers", test_fast_search_2powers },
+        { "test_fast_search", test_fast_search },
+        { "test_fast_search_zeros", test_fast_search_zeros },
+        { "test_fast_search_bad_input", test_fast_search_bad_input },
         { "test_interval_map", test_interval_map },
         CU_TEST_INFO_NULL,
     };

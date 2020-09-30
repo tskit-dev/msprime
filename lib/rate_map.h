@@ -27,20 +27,26 @@ typedef struct {
     double query_multiplier;
     size_t num_lookups;
     const double **lookups;
-} fast_search_lookup_t;
+} fast_search_t;
 
 typedef struct {
     size_t size;
     double *position;
     double *rate;
     double *cumulative_mass;
-    fast_search_lookup_t position_lookup;
+    fast_search_t position_lookup;
 } rate_map_t;
 
-int fast_search_lookup_alloc(
-    fast_search_lookup_t *self, const double *values, size_t n_values);
-int fast_search_lookup_free(fast_search_lookup_t *self);
-const double *fast_search_lookup_find(fast_search_lookup_t *self, double query);
+int fast_search_alloc(fast_search_t *self, const double *values, size_t n_values);
+int fast_search_free(fast_search_t *self);
+const double *fast_search_ptr_strict_upper(fast_search_t *self, double query);
+
+inline size_t
+fast_search_idx_strict_upper(fast_search_t *self, double query)
+{
+    const double *ptr = fast_search_ptr_strict_upper(self, query);
+    return (size_t)(ptr - self->lookups[0]);
+}
 
 int rate_map_alloc(rate_map_t *self, size_t size, double *position, double *value);
 int rate_map_alloc_single(rate_map_t *self, double sequence_length, double value);

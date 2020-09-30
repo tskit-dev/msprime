@@ -94,7 +94,7 @@ rate_map_alloc(rate_map_t *self, size_t size, double *position, double *rate)
        This trailing zero simplifies calcs like rate_map_position_to_mass by
        gracefully handling positions past the max position */
     self->rate[size] = 0.0;
-    ret = fast_search_lookup_alloc(&self->position_lookup, self->position, size + 1);
+    ret = fast_search_alloc(&self->position_lookup, self->position, size + 1);
 out:
     return ret;
 }
@@ -109,7 +109,7 @@ rate_map_alloc_single(rate_map_t *self, double sequence_length, double rate)
 int
 rate_map_free(rate_map_t *self)
 {
-    fast_search_lookup_free(&(self->position_lookup));
+    fast_search_free(&(self->position_lookup));
     msp_safe_free(self->position);
     msp_safe_free(self->rate);
     msp_safe_free(self->cumulative_mass);
@@ -160,7 +160,6 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
 {
     const double *position = self->position;
     const double *rate = self->rate;
-    const double *ptr;
     double base, offset;
     size_t index;
 
@@ -168,8 +167,7 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
         return 0;
     }
     assert(pos <= position[self->size]);
-    ptr = fast_search_lookup_find(&(self->position_lookup), pos);
-    index = (size_t)(ptr - position);
+    index = fast_search_idx_strict_upper(&(self->position_lookup), pos);
     assert(index == idx_1st_strict_upper_bound(position, self->size + 1, pos));
     assert(index > 0);
     index--;
@@ -213,18 +211,18 @@ rate_map_shift_by_mass(rate_map_t *self, double pos, double mass)
     return rate_map_mass_to_position(self, result_mass);
 }
 
-/* The `fast_search_lookup_t` structure and functions
+/* The `fast_search_t` structure and functions
  *
- * `fast_search_lookup_t` is a lookup table pointing to an array of `double`s
+ * `fast_search_t` is a lookup table pointing to an array of `double`s
  * (the "elements"). It does not own the array but does point to all its memory.
  *
  * It's purpose is speed up the search for a "query" value in that array of
- * elements. The `fast_search_lookup_find` function is essentially a drop-in
+ * elements. The `fast_search_idx_strict_upper` function is essentially a drop-in
  * replacement for the function `idx_1st_strict_upper_bound` (which in turn is
  * a drop-in replacement for the C++ <algorithm> library function
  * std::upper_bound).
  *
- * The key concept behind `fast_search_lookup_t` is that the bits inside a
+ * The key concept behind `fast_search_t` is that the bits inside a
  * "query" `double` contain a good deal of information about where near-by
  * values in the array of elements might be found in memory. The best
  * performance is when the array of elements have values that increase roughly
@@ -247,9 +245,9 @@ rate_map_shift_by_mass(rate_map_t *self, double pos, double mass)
  * pointers. For a perfectly linear sequence of element values, the lookup
  * pointers will be a simple element-address-by-next-element-address
  * progression of pointers. The extremely simple case of element values being
- * the non-negative integers is coded in the `test_fast_search_lookup_identity`
+ * the non-negative integers is coded in the `test_fast_search_identity`
  * unit test.  An example of alternative linear sequences with different
- * `query_multiplier` are coded in `test_fast_search_lookup_2powers`.
+ * `query_multiplier` are coded in `test_fast_search_2powers`.
  */
 
 #if FLT_RADIX != 2
@@ -278,7 +276,7 @@ valid_sorted_nonempty_array(const double *array, size_t size)
 }
 
 static bool
-fast_search_lookup_valid(fast_search_lookup_t *self)
+fast_search_valid(fast_search_t *self)
 {
     const double *start, *stop;
     size_t idx;
@@ -303,8 +301,7 @@ fast_search_lookup_valid(fast_search_lookup_t *self)
 }
 
 static int
-fast_search_lookup_init_lookups(
-    fast_search_lookup_t *self, const double *elements, size_t n_elements)
+fast_search_init_lookups(fast_search_t *self, const double *elements, size_t n_elements)
 {
     int ret = 0;
     const double *ptr, *stop;
@@ -321,7 +318,7 @@ fast_search_lookup_init_lookups(
         }
         self->lookups[idx] = ptr;
     }
-    if (!fast_search_lookup_valid(self)) {
+    if (!fast_search_valid(self)) {
         ret = MSP_ERR_ASSERTION_FAILED;
         goto out;
     }
@@ -348,8 +345,7 @@ higher_power_of_2(double x)
  *     2) `elements` must be non-empty non-decreasing and with no NaN
  */
 int
-fast_search_lookup_alloc(
-    fast_search_lookup_t *self, const double *elements, size_t n_elements)
+fast_search_alloc(fast_search_t *self, const double *elements, size_t n_elements)
 {
     int ret = 0;
     double max_element;
@@ -391,13 +387,13 @@ fast_search_lookup_alloc(
         goto out;
     }
 
-    ret = fast_search_lookup_init_lookups(self, elements, n_elements);
+    ret = fast_search_init_lookups(self, elements, n_elements);
 out:
     return ret;
 }
 
 int
-fast_search_lookup_free(fast_search_lookup_t *self)
+fast_search_free(fast_search_t *self)
 {
     msp_safe_free(self->lookups);
     return 0;
@@ -405,10 +401,10 @@ fast_search_lookup_free(fast_search_lookup_t *self)
 
 /*  PRE-CONDITIONS:
  *      1) query >= 0.0
- *      2) self is valid fast_search_lookup_t
+ *      2) self is valid fast_search_t
  */
 const double *
-fast_search_lookup_find(fast_search_lookup_t *self, double query)
+fast_search_ptr_strict_upper(fast_search_t *self, double query)
 {
     const double **lookups = self->lookups;
     double fidx; // index that can be way larger than max size_t
@@ -428,3 +424,5 @@ fast_search_lookup_find(fast_search_lookup_t *self, double query)
                   lookups[0], lookups[self->num_lookups - 1], query));
     return ret;
 }
+
+extern inline size_t fast_search_idx_strict_upper(fast_search_t *self, double query);

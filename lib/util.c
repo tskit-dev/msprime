@@ -333,8 +333,7 @@ idx_1st_upper_bound(const double *values, size_t n_values, double query)
 
     while (l < r) {
         m = (l + r) / 2UL;
-        /* TODO: uncomment assert when #1203 done and this longer slows down release
-           assert(values[l] <= values[m]); */
+        assert(values[l] <= values[m]);
         if (values[m] < query) {
             l = m + 1;
         } else {
@@ -367,8 +366,7 @@ idx_1st_strict_upper_bound(const double *elements, size_t n_elements, double que
 
     while (start < stop) {
         mid = (start + stop) / 2;
-        /* TODO: uncomment assert when #1203 done and this longer slows down release
-        assert(elements[start] <= elements[mid]); */
+        assert(elements[start] <= elements[mid]);
         if (!(elements[mid] > query)) { // match NaN logic of std::upper_bound
             start = mid + 1;
         } else {
