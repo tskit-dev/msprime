@@ -26,7 +26,7 @@ Quickstart
 - Install the :ref:`basic requirements <sec_installation_system_requirements>`.
 - Install the Python development requirements using ``pip install -r requirements/development.txt``.
 - Build the low level module by running ``make`` in the project root.
-- Run the tests to ensure everything has worked: ``python3 -m pytest -n8 tests``. These should
+- Run the tests to ensure everything has worked: ``python3 -m pytest``. These should
   all pass.
 - Install the pre-commit checks: ``pre-commit install``
 - Make your changes in a local branch. On each commit a `pre-commit hook
