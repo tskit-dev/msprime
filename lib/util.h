@@ -22,6 +22,9 @@
 #include <stdbool.h>
 #include <math.h>
 #include <assert.h>
+#include <stdio.h>
+
+#include "tskit.h"
 
 #ifdef __GNUC__
 /*

@@ -26,7 +26,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <string.h>
 
 #include <gsl/gsl_math.h>
@@ -54,7 +53,7 @@ fenwick_verify(fenwick_t *self, double eps)
 
     for (j = 1; j <= self->size; j++) {
         computed_value = fenwick_compute_tree_value(self, j);
-        assert(gsl_fcmp(computed_value, self->values[j], eps) == 0);
+        tsk_bug_assert(gsl_fcmp(computed_value, self->values[j], eps) == 0);
     }
 }
 
@@ -243,7 +242,7 @@ fenwick_increment(fenwick_t *self, size_t index, double value)
      * code where we don't have to reason about setting the segment
      * mass to the same value. */
     if (value != 0) {
-        assert(0 < index && index <= size);
+        tsk_bug_assert(0 < index && index <= size);
         fenwick_increment_total(self, value);
 
         self->values[index] += value;
@@ -267,7 +266,7 @@ fenwick_get_cumulative_sum(fenwick_t *self, size_t index)
     const double *restrict tree = self->tree;
     size_t j;
 
-    assert(0 < index && index <= self->size);
+    tsk_bug_assert(0 < index && index <= self->size);
     for (j = index; j > 0; j -= (j & -j)) {
         ret += tree[j];
     }
@@ -277,7 +276,7 @@ fenwick_get_cumulative_sum(fenwick_t *self, size_t index)
 double
 fenwick_get_value(fenwick_t *self, size_t index)
 {
-    assert(0 < index && index <= self->size);
+    tsk_bug_assert(0 < index && index <= self->size);
     return self->values[index];
 }
 

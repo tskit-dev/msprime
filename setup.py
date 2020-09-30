@@ -122,8 +122,6 @@ if IS_WINDOWS:
 _msprime_module = Extension(
     "msprime._msprime",
     sources=sources,
-    # Enable asserts by default.
-    undef_macros=["NDEBUG"],
     extra_compile_args=["-std=c99"],
     libraries=libraries,
     define_macros=defines,

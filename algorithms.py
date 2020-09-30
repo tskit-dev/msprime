@@ -670,7 +670,7 @@ class Simulator:
         for j in range(N):
             assert N == len(migration_matrix[j])
             assert migration_matrix[j][j] == 0
-        assert gene_conversion_length > 1
+        assert gene_conversion_length >= 1
 
         self.tables = tables
         self.model = model
@@ -942,36 +942,23 @@ class Simulator:
 
     def get_total_gc_left_rate(self, label):
         gc_left_total = self.get_total_gc_left(label)
-        # NOTE: this is an approximation. Should we be multiplying by the
-        # local GC rate when iterating over the segments?
-        mean_gc_rate = self.gc_map.mean_rate
-        return mean_gc_rate * self.track_length * gc_left_total
-
-    def get_individual_length(self, head):
-        tail = head
-        while tail.next is not None:
-            tail = tail.next
-        # TODO adjust for discrete/continuous genome here?
-        return tail.right - head.left - 1
+        return gc_left_total
 
     def get_total_gc_left(self, label):
         gc_left_total = 0
-        x = (self.track_length - 1) / self.track_length
-        for pop in self.P:
-            for ind in pop.iter_label(label):
-                dist = self.get_individual_length(ind)
-                gc_left_total += 1 - x ** dist
+        num_ancestors = sum(pop.get_num_ancestors() for pop in self.P)
+        mean_gc_rate = self.gc_map.mean_rate
+        gc_left_total = num_ancestors * mean_gc_rate * self.track_length
         return gc_left_total
 
     def find_cleft_individual(self, label, cleft_value):
-        gc_left_total = 0
-        x = (self.track_length - 1) / self.track_length
+        mean_gc_rate = self.gc_map.mean_rate
+        individual_index = math.floor(cleft_value / (mean_gc_rate * self.track_length))
         for pop in self.P:
-            for ind in pop.iter_label(label):
-                dist = self.get_individual_length(ind)
-                gc_left_total += 1 - x ** dist
-                if gc_left_total >= cleft_value:
-                    return ind
+            num_ancestors = pop.get_num_ancestors()
+            if individual_index < num_ancestors:
+                return pop._ancestors[label][individual_index]
+            individual_index -= num_ancestors
         raise AssertionError()
 
     def hudson_simulate(self, end_time):
@@ -1596,26 +1583,27 @@ class Simulator:
         """
         Implements a gene conversion event that started left of a first segment.
         """
-        self.num_gc_events += 1
         random_gc_left = random.uniform(0, self.get_total_gc_left(label))
         # Get segment where gene conversion starts from left
         y = self.find_cleft_individual(label, random_gc_left)
         assert y is not None
-        # Get the total length of ancestral material in this individual
-        distance = self.get_individual_length(y)
 
-        pc = (self.track_length - 1) / self.track_length
-        if self.track_length == 1:
-            lnpc = -math.inf
-        else:
-            lnpc = math.log(1.0 - 1.0 / self.track_length)
-        # generate tracklength
-        u = random.random()
-        tl = math.floor(1.0 + math.log(1.0 - u * (1.0 - pc ** distance)) / lnpc)
+        # generate track_length
+        tl = np.random.geometric(1 / self.track_length)
 
         bp = y.left + tl
-        while y.right <= bp:
+        while y is not None and y.right <= bp:
             y = y.next
+
+        # if the gene conversion spans the whole individual nothing happens
+        if y is None:
+            #    last segment
+            # ... ==========   |
+            #                  bp
+            # stays in current state
+            return None
+
+        self.num_gc_events += 1
         x = y.prev
         if y.left < bp:
             #  x          y

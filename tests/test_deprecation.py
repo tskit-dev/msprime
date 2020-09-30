@@ -19,12 +19,12 @@
 """
 Test cases for deprecating legacy functionality
 """
-import unittest
+import pytest
 
 import msprime
 
 
-class TestDeprecation(unittest.TestCase):
+class TestDeprecation:
     def test_moved_to_tskit(self):
         # Note that "Population" is removed here as it now refers
         # to msprime.demography.Population
@@ -67,5 +67,5 @@ class TestDeprecation(unittest.TestCase):
             "FORWARD",
             "REVERSE",
         ]:
-            with self.assertWarns(UserWarning):
+            with pytest.warns(UserWarning):
                 getattr(msprime, name)

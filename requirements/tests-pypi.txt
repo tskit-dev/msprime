@@ -1,12 +1,14 @@
 # Extra requirements from Pip that we need to run the tests.
-nose
+bintrees
+daiquiri
+newick
 numpy
-tskit>=0.3
+pytest
+pytest-cov
+pytest-xdist
+python_jsonschema_objects
 scipy
 # TODO we're pinning the version here because of problems on Travis.
 # versions weren't correctly being set for v1.12.1
 setuptools_scm == 1.11.1
-python_jsonschema_objects
-newick
-daiquiri
-bintrees
+tskit>=0.3
