@@ -1510,8 +1510,8 @@ class BetaCoalescent(ParametricSimulationModel):
     if ploidy = 1, and
 
     .. math::
-        G = \\frac{m^{\\alpha} (N / 2)^{\\alpha - 1}}
-            {2 p \\alpha B(2 - \\alpha, \\alpha)},
+        G = \\frac{2 p m^{\\alpha} (N / 2)^{\\alpha - 1}}
+            {\\alpha B(2 - \\alpha, \\alpha)},
 
     if ploidy = :math:`p > 1`, where :math:`m` is the mean number of juveniles per
     family given by
@@ -1550,7 +1550,9 @@ class BetaCoalescent(ParametricSimulationModel):
     as well as the number of generations between common ancestor events.
     Note however that Schweinsberg (2003) only covers the haploid case.
     For details of the diploid extension, see
-    `Blath et al. (2013) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3527250/>`_.
+    `Blath et al. (2013) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3527250/>`_,
+    and `Birkner et al. (2018) <https://projecteuclid.org/euclid.ejp/1527818427>`_
+    for a diploid version of the Schweinsberg (2003) model specifically.
     The general polyploid model is analogous to the diploid case, with
     :math:`2 p` available copies of parental chromsomes per common ancestor event,
     and hence up to :math:`2 p` simultaneous mergers.
