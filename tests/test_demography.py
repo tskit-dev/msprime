@@ -2193,7 +2193,7 @@ class TestFullArgMigration:
             e2 = np.where(edges.left == mig.left)
             e = np.intersect1d(e1[0], e2[0])
             assert len(e) == 1
-            e = np.asscalar(e)
+            e = e.item()
             assert edges[e].right == mig.right
             assert nodes[edges[e].child].population == mig.source
         for edge in edges:
@@ -2202,7 +2202,7 @@ class TestFullArgMigration:
                 m2 = np.where(migrations.left == edge.left)
                 m = np.intersect1d(m1[0], m2[0])
                 assert len(m) == 1
-                m = np.asscalar(m)
+                m = m.item()
                 assert migrations[m].right == edge.right
                 assert migrations[m].time == nodes[edge.parent].time
                 assert migrations[m].source == nodes[edge.child].population

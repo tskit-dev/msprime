@@ -262,7 +262,7 @@ class Pedigree:
 
         usecols = []
         for c in cols.values():
-            if isinstance(c, collections.Iterable):
+            if isinstance(c, collections.abc.Iterable):
                 usecols.extend(c)
             elif c is not None:
                 usecols.append(c)
@@ -311,7 +311,7 @@ class Pedigree:
 
         col_nums = []
         for v in cols.values():
-            if isinstance(v, collections.Iterable):
+            if isinstance(v, collections.abc.Iterable):
                 col_nums.extend(v)
             elif v is not None:
                 col_nums.append(v)
