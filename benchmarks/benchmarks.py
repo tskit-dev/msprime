@@ -87,6 +87,23 @@ class Hudson(LargeSimulationBenchmark):
     def peakmem_long_sequence_length(self):
         self._run_long_sequence_length()
 
+    def _run_long_sequence_length_gene_conversion(self):
+        msprime.sim_ancestry(
+            sample_size=100,
+            length=1e8,
+            Ne=10 ** 4,
+            gene_conversion_rate=1e-8,
+            # 100Kb tract length.
+            gene_conversion_track_length=100 * 1e3,
+            random_seed=43,
+        )
+
+    def time_long_sequence_length_gene_conversion(self):
+        self._run_long_sequence_length()
+
+    def peakmem_long_sequence_length_gene_conversion(self):
+        self._run_long_sequence_length()
+
     def _run_human_chr22(self):
         msprime.simulate(
             sample_size=100,
