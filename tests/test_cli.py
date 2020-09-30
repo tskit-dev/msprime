@@ -29,6 +29,7 @@ import unittest
 
 import newick
 import numpy as np
+import pytest
 import tskit
 
 import msprime
@@ -58,7 +59,7 @@ def capture_output(func, *args, **kwargs):
     return stdout_output, stderr_output
 
 
-class TestRandomSeeds(unittest.TestCase):
+class TestRandomSeeds:
     """
     Test the random seed generation for the ms compatability layer.
     """
@@ -72,39 +73,39 @@ class TestRandomSeeds(unittest.TestCase):
             for _ in range(num_random_tests):
                 input_seed = tuple([random.randint(1, max_seed) for k in range(3)])
                 python_seed = cli.get_single_seed(input_seed)
-                self.assertNotIn(input_seed, input_seeds)
-                self.assertNotIn(python_seed, python_seeds)
+                assert input_seed not in input_seeds
+                assert python_seed not in python_seeds
                 input_seeds.add(input_seed)
                 python_seeds.add(python_seed)
-                self.assertGreater(python_seed, 0)
+                assert python_seed > 0
                 # Make sure it's deterministic
                 python_seed2 = cli.get_single_seed(input_seed)
-                self.assertEqual(python_seed, python_seed2)
+                assert python_seed == python_seed2
                 # Make sure it results in a distinct first draw.
                 rng = random.Random()
                 rng.seed(python_seed)
                 u = rng.random()
-                self.assertNotIn(u, values)
+                assert u not in values
                 values.add(u)
-            self.assertEqual(len(values), num_random_tests)
-            self.assertEqual(len(python_seeds), num_random_tests)
-            self.assertEqual(len(input_seeds), num_random_tests)
+            assert len(values) == num_random_tests
+            assert len(python_seeds) == num_random_tests
+            assert len(input_seeds) == num_random_tests
 
     def test_seed_generation(self):
         num_random_tests = 100
         seeds = set()
         for _ in range(num_random_tests):
             s = tuple(cli.generate_seeds())
-            self.assertEqual(len(set(s)), 3)
-            self.assertNotIn(s, seeds)
+            assert len(set(s)) == 3
+            assert s not in seeds
             seeds.add(s)
-        self.assertEqual(len(seeds), num_random_tests)
+        assert len(seeds) == num_random_tests
 
     def test_seed_conversion_order(self):
         seeds = set()
         for p in itertools.permutations([1, 2, 3]):
             s = cli.get_single_seed(p)
-            self.assertNotIn(s, seeds)
+            assert s not in seeds
             seeds.add(s)
 
 
@@ -121,7 +122,7 @@ class TestCli(unittest.TestCase):
         os.unlink(self.temp_file)
 
 
-class TestMspmsArgumentParser(unittest.TestCase):
+class TestMspmsArgumentParser:
     """
     Tests the parser to ensure it works correctly and is ms compatible.
     """
@@ -132,119 +133,119 @@ class TestMspmsArgumentParser(unittest.TestCase):
 
     def test_msdoc_examples(self):
         args = self.parse_args(["4", "2", "-t", "5.0"])
-        self.assertEqual(args.sample_size, 4)
-        self.assertEqual(args.num_replicates, 2)
-        self.assertEqual(args.mutation_rate, 5.0)
-        self.assertEqual(args.trees, False)
+        assert args.sample_size == 4
+        assert args.num_replicates == 2
+        assert args.mutation_rate == 5.0
+        assert not args.trees
 
         args = self.parse_args(["4", "2", "-T"])
-        self.assertEqual(args.sample_size, 4)
-        self.assertEqual(args.num_replicates, 2)
-        self.assertEqual(args.mutation_rate, 0.0)
-        self.assertEqual(args.trees, True)
+        assert args.sample_size == 4
+        assert args.num_replicates == 2
+        assert args.mutation_rate == 0.0
+        assert args.trees
 
         args = self.parse_args("15 1000 -t 10.04 -r 100.0 2501".split())
-        self.assertEqual(args.sample_size, 15)
-        self.assertEqual(args.num_replicates, 1000)
-        self.assertEqual(args.mutation_rate, 10.04)
-        self.assertEqual(args.trees, False)
-        self.assertEqual(args.recombination, [100, 2501])
+        assert args.sample_size == 15
+        assert args.num_replicates == 1000
+        assert args.mutation_rate == 10.04
+        assert not args.trees
+        assert args.recombination == [100, 2501]
 
         args = self.parse_args("15 1000 -t 2.0 -eN 1.0 .1 -eN 2.0 4.0".split())
-        self.assertEqual(args.sample_size, 15)
-        self.assertEqual(args.num_replicates, 1000)
-        self.assertEqual(args.mutation_rate, 2.0)
-        self.assertEqual(args.size_change, [(0, [1.0, 0.1]), (1, [2.0, 4.0])])
+        assert args.sample_size == 15
+        assert args.num_replicates == 1000
+        assert args.mutation_rate == 2.0
+        assert args.size_change == [(0, [1.0, 0.1]), (1, [2.0, 4.0])]
 
         args = self.parse_args("15 1000 -t 6.4 -G 6.93 -eG 0.2 0.0 -eN 0.3 0.5".split())
-        self.assertEqual(args.sample_size, 15)
-        self.assertEqual(args.num_replicates, 1000)
-        self.assertEqual(args.mutation_rate, 6.4)
-        self.assertEqual(args.growth_rate, 6.93)
-        self.assertEqual(args.growth_rate_change, [(0, [0.2, 0.0])])
-        self.assertEqual(args.size_change, [(1, [0.3, 0.5])])
+        assert args.sample_size == 15
+        assert args.num_replicates == 1000
+        assert args.mutation_rate == 6.4
+        assert args.growth_rate == 6.93
+        assert args.growth_rate_change == [(0, [0.2, 0.0])]
+        assert args.size_change == [(1, [0.3, 0.5])]
 
     def test_mshot_examples(self):
         args = self.parse_args("15 1000 -t 10.04".split())
-        self.assertEqual(args.sample_size, 15)
-        self.assertEqual(args.num_replicates, 1000)
-        self.assertEqual(args.mutation_rate, 10.04)
-        self.assertEqual(args.trees, False)
-        self.assertEqual(args.hotspots, None)
+        assert args.sample_size == 15
+        assert args.num_replicates == 1000
+        assert args.mutation_rate == 10.04
+        assert not args.trees
+        assert args.hotspots is None
 
         arg_str = "15 1000 -t 10.04 -r 100.0 25001 -v 2 100 200 10 7000 8000 20"
         args = self.parse_args(arg_str.split())
-        self.assertEqual(args.sample_size, 15)
-        self.assertEqual(args.num_replicates, 1000)
-        self.assertEqual(args.mutation_rate, 10.04)
-        self.assertEqual(args.trees, False)
-        self.assertEqual(args.recombination, [100, 25001])
-        self.assertEqual(args.hotspots, [2.0, 100.0, 200.0, 10.0, 7000.0, 8000.0, 20.0])
+        assert args.sample_size == 15
+        assert args.num_replicates == 1000
+        assert args.mutation_rate == 10.04
+        assert not args.trees
+        assert args.recombination == [100, 25001]
+        assert args.hotspots == [2.0, 100.0, 200.0, 10.0, 7000.0, 8000.0, 20.0]
 
     def test_positional_arguments(self):
         args = self.parse_args(["40", "20"])
-        self.assertEqual(args.sample_size, 40)
-        self.assertEqual(args.num_replicates, 20)
+        assert args.sample_size == 40
+        assert args.num_replicates == 20
 
     def test_mutations(self):
         args = self.parse_args(["40", "20"])
-        self.assertEqual(args.mutation_rate, 0.0)
+        assert args.mutation_rate == 0.0
         args = self.parse_args(["40", "20", "-t", "10"])
-        self.assertEqual(args.mutation_rate, 10.0)
+        assert args.mutation_rate == 10.0
         args = self.parse_args(["40", "20", "--mutation-rate=10"])
-        self.assertEqual(args.mutation_rate, 10.0)
+        assert args.mutation_rate == 10.0
 
     def test_trees(self):
         args = self.parse_args(["40", "20"])
-        self.assertEqual(args.trees, False)
+        assert not args.trees
         args = self.parse_args(["40", "20", "-T"])
-        self.assertEqual(args.trees, True)
+        assert args.trees
         args = self.parse_args(["40", "20", "--trees"])
-        self.assertEqual(args.trees, True)
+        assert args.trees
 
     def test_size_changes(self):
         args = self.parse_args(["40", "20"])
-        self.assertEqual(args.size_change, [])
+        assert args.size_change == []
         args = self.parse_args("10 1 -eN 2.0 0.5".split())
-        self.assertEqual(args.size_change, [(0, [2.0, 0.5])])
+        assert args.size_change == [(0, [2.0, 0.5])]
         args = self.parse_args("10 1 -eN 1.0 0.5 -eN 2.0 5.0".split())
-        self.assertEqual(args.size_change, [(0, [1.0, 0.5]), (1, [2.0, 5.0])])
+        assert args.size_change == [(0, [1.0, 0.5]), (1, [2.0, 5.0])]
         args = self.parse_args("10 1 -eN 1.0 0.5 -eN 2.0 5.0".split())
-        self.assertEqual(args.size_change, [(0, [1.0, 0.5]), (1, [2.0, 5.0])])
+        assert args.size_change == [(0, [1.0, 0.5]), (1, [2.0, 5.0])]
         args = self.parse_args("10 1 -I 2 10 0 -en 1 2 3".split())
-        self.assertEqual(args.population_size_change, [(0, [1, 2, 3])])
+        assert args.population_size_change == [(0, [1, 2, 3])]
 
     def test_growth_rates(self):
         args = self.parse_args(["40", "20"])
-        self.assertEqual(args.growth_rate, None)
-        self.assertEqual(args.growth_rate_change, [])
+        assert args.growth_rate is None
+        assert args.growth_rate_change == []
 
         args = self.parse_args("15 1000 -G 5.25".split())
-        self.assertEqual(args.growth_rate, 5.25)
-        self.assertEqual(args.growth_rate_change, [])
+        assert args.growth_rate == 5.25
+        assert args.growth_rate_change == []
 
         args = self.parse_args("15 1000 -eG 1.0 5.25".split())
-        self.assertEqual(args.growth_rate, None)
-        self.assertEqual(args.growth_rate_change, [(0, [1.0, 5.25])])
+        assert args.growth_rate is None
+        assert args.growth_rate_change == [(0, [1.0, 5.25])]
         args = self.parse_args("15 1000 -eG 1.0 5.25 -eG 2.0 10".split())
-        self.assertEqual(args.growth_rate, None)
-        self.assertEqual(args.growth_rate_change, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
+        assert args.growth_rate is None
+        assert args.growth_rate_change == [(0, [1.0, 5.25]), (1, [2.0, 10.0])]
         args = self.parse_args("15 1000 -eG 1.0 5.25 -eG 2.0 10 -G 4".split())
-        self.assertEqual(args.growth_rate, 4.0)
-        self.assertEqual(args.growth_rate_change, [(0, [1.0, 5.25]), (1, [2.0, 10.0])])
+        assert args.growth_rate == 4.0
+        assert args.growth_rate_change == [(0, [1.0, 5.25]), (1, [2.0, 10.0])]
         args = self.parse_args("10 1 -I 2 10 0 -eg 1 2 3".split())
-        self.assertEqual(args.population_growth_rate_change, [(0, [1, 2, 3])])
+        assert args.population_growth_rate_change == [(0, [1, 2, 3])]
 
     def test_migration_rates(self):
         args = self.parse_args("15 1 -I 2 15 0 -eM 2 3 ".split())
-        self.assertEqual(args.migration_rate_change, [(0, [2, 3])])
+        assert args.migration_rate_change == [(0, [2, 3])]
         args = self.parse_args("15 1 -I 2 15 0 -eM 2 3 -eG 3 4 -eM 4 5".split())
-        self.assertEqual(args.migration_rate_change, [(0, [2, 3]), (2, [4, 5])])
+        assert args.migration_rate_change == [(0, [2, 3]), (2, [4, 5])]
 
     def test_gene_conversion(self):
         args = self.parse_args("10 1 -r 1 100 -c 5 12".split())
-        self.assertEqual(args.recombination, [1, 100])
-        self.assertEqual(args.gene_conversion, [5, 12])
+        assert args.recombination == [1, 100]
+        assert args.gene_conversion == [5, 12]
 
 
 class CustomExceptionForTesting(Exception):
@@ -256,8 +257,8 @@ class CustomExceptionForTesting(Exception):
 
 class TestHotspotsToRecombMap(TestCli):
     def verify_map(self, recomb_map, expected_positions, expected_rates):
-        self.assertEqual(recomb_map.get_positions(), expected_positions)
-        self.assertEqual(recomb_map.get_rates(), expected_rates)
+        assert recomb_map.get_positions() == expected_positions
+        assert recomb_map.get_rates() == expected_rates
 
     def test_multiple_hotspots(self):
         seq_length = 1000
@@ -320,22 +321,20 @@ class TestMspmsCreateSimulationRunnerErrors(TestCli):
 
     def assert_parser_error(self, command_line):
         split_cmd = command_line.split()
-        self.assertRaises(
-            CustomExceptionForTesting,
-            cli.create_simulation_runner,
-            self.parser,
-            split_cmd,
-        )
+        with pytest.raises(CustomExceptionForTesting):
+            cli.create_simulation_runner(
+                self.parser,
+                split_cmd,
+            )
         with open(self.temp_file, "w") as f:
             # We're assuming the first two args are always the sample size
             # and num_replicates here.
             f.write(" ".join(split_cmd[2:]))
-        self.assertRaises(
-            CustomExceptionForTesting,
-            cli.create_simulation_runner,
-            self.parser,
-            split_cmd[:2] + ["-f", self.temp_file],
-        )
+        with pytest.raises(CustomExceptionForTesting):
+            cli.create_simulation_runner(
+                self.parser,
+                split_cmd[:2] + ["-f", self.temp_file],
+            )
 
     def test_trees_or_mutations(self):
         self.assert_parser_error("10 1")
@@ -536,7 +535,7 @@ class TestMspmsCreateSimulationRunnerErrors(TestCli):
         self.assert_parser_error("10 1 -t 2.0 -eN 0.001 5.0 -es 0.01 1 0.0")
 
 
-class TestMspmsCreateSimulationRunner(unittest.TestCase):
+class TestMspmsCreateSimulationRunner:
     """
     Test that we correctly create a simulator instance based on the
     command line arguments.
@@ -552,80 +551,80 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_mutation_rates(self):
         # Mutation rates over a sequence length 1
         runner = self.create_runner("2 1 -t 1")
-        self.assertEqual(runner.get_mutation_rate(), 1)
+        assert runner.get_mutation_rate() == 1
         runner = self.create_runner("2 1 -t 2")
-        self.assertEqual(runner.get_mutation_rate(), 2)
+        assert runner.get_mutation_rate() == 2
 
         # Mutation rates over a sequence length > 1
         runner = self.create_runner("2 1 -t 2 -r 0 10")
-        self.assertEqual(runner.get_mutation_rate(), 2 / 10)
+        assert runner.get_mutation_rate() == 2 / 10
         runner = self.create_runner("2 1 -t 0.2 -r 1 2")
-        self.assertEqual(runner.get_mutation_rate(), 0.2 / 2)
+        assert runner.get_mutation_rate() == 0.2 / 2
 
     def test_recomb_map(self):
         runner = self.create_runner("15 1000 -t 10.04 -r 100.0 2501")
         uniform = msprime.RecombinationMap([0, 2501], [0.04, 0])
         actual = runner.get_recomb_map()
-        self.assertEqual(actual.get_positions(), uniform.get_positions())
-        self.assertEqual(actual.get_rates(), uniform.get_rates())
+        assert actual.get_positions() == uniform.get_positions()
+        assert actual.get_rates() == uniform.get_rates()
 
         args = "15 1000 -t 10.04 -r 100.0 25001 -v 2 100 200 10 7000 8000 20"
         runner = self.create_runner(args)
         positions = [0, 100, 200, 7000, 8000, 25001]
         rates = [0.004, 0.04, 0.004, 0.08, 0.004, 0]
         actual = runner.get_recomb_map()
-        self.assertEqual(actual.get_positions(), positions)
-        self.assertEqual(actual.get_rates(), rates)
+        assert actual.get_positions() == positions
+        assert actual.get_rates() == rates
 
         args = "15 1000 -t 10.04 -r 100.0 25001 -v 2 100 200 10 200 300 20"
         runner = self.create_runner(args)
         positions = [0, 100, 200, 300, 25001]
         rates = [0.004, 0.04, 0.08, 0.004, 0]
         actual = runner.get_recomb_map()
-        self.assertEqual(actual.get_positions(), positions)
-        self.assertEqual(actual.get_rates(), rates)
+        assert actual.get_positions() == positions
+        assert actual.get_rates() == rates
 
         args = "15 1000 -t 10.04 -r 100.0 25001 -v 1 0 25001 0"
         runner = self.create_runner(args)
         positions = [0, 25001]
         rates = [0, 0]
         actual = runner.get_recomb_map()
-        self.assertEqual(actual.get_positions(), positions)
-        self.assertEqual(actual.get_rates(), rates)
+        assert actual.get_positions() == positions
+        assert actual.get_rates() == rates
 
     def test_structure_args(self):
         sim = self.create_simulator("2 1 -T")
-        self.assertEqual(sim.sample_configuration, [2])
-        self.assertEqual(sim.demography.migration_matrix, [[0]])
+        assert sim.sample_configuration == [2]
+        assert sim.demography.migration_matrix == [[0]]
 
         # Specifying 1 population is the same as the default.
         sim = self.create_simulator("2 1 -T -I 1 2")
-        self.assertEqual(sim.sample_configuration, [2])
-        self.assertEqual(sim.demography.migration_matrix, [[0]])
+        assert sim.sample_configuration == [2]
+        assert sim.demography.migration_matrix == [[0]]
 
         sim = self.create_simulator("2 1 -T -I 2 1 1")
-        self.assertEqual(sim.sample_configuration, [1, 1])
+        assert sim.sample_configuration == [1, 1]
         np.testing.assert_array_equal(sim.demography.migration_matrix, [[0, 0], [0, 0]])
 
         # Default migration matrix is zeros
         sim = self.create_simulator("2 1 -T -I 2 2 0")
         np.testing.assert_array_equal(sim.demography.migration_matrix, [[0, 0], [0, 0]])
-        self.assertEqual(sim.sample_configuration, [2, 0])
+        assert sim.sample_configuration == [2, 0]
 
         sim = self.create_simulator("2 1 -T -I 2 1 1 0.1")
         np.testing.assert_array_equal(
             sim.demography.migration_matrix, [[0, 0.1], [0.1, 0]]
         )
-        self.assertEqual(sim.sample_configuration, [1, 1])
+        assert sim.sample_configuration == [1, 1]
 
         # Initial migration matrix is M / (num_pops - 1)
         sim = self.create_simulator("3 1 -T -I 3 1 1 1 2")
-        self.assertEqual(sim.sample_configuration, [1, 1, 1])
+        assert sim.sample_configuration == [1, 1, 1]
         np.testing.assert_array_equal(
             sim.demography.migration_matrix, [[0, 1, 1], [1, 0, 1], [1, 1, 0]]
         )
         sim = self.create_simulator("15 1 -T -I 6 5 4 3 2 1 0")
-        self.assertEqual(sim.sample_configuration, [5, 4, 3, 2, 1, 0])
+        assert sim.sample_configuration == [5, 4, 3, 2, 1, 0]
 
     def test_migration_matrix_entry(self):
         sim = self.create_simulator("3 1 -T -I 2 3 0 -m 1 2 1.1 -m 2 1 9.0")
@@ -650,18 +649,18 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
     def test_simultaneous_events(self):
         sim = self.create_simulator("2 1 -T -eN 1 2.0 -eG 1.0 3 -eN 1 4")
         events = sim.demography.events
-        self.assertEqual(len(events), 3)
+        assert len(events) == 3
         for event in events:
-            self.assertEqual(event.time, 1.0)
-        self.assertIsInstance(events[0], msprime.PopulationParametersChange)
-        self.assertEqual(events[0].initial_size, 0.5)
-        self.assertEqual(events[0].growth_rate, 0)
-        self.assertIsInstance(events[1], msprime.PopulationParametersChange)
-        self.assertEqual(events[1].growth_rate, 3)
-        self.assertEqual(events[1].initial_size, None)
-        self.assertIsInstance(events[2], msprime.PopulationParametersChange)
-        self.assertEqual(events[2].initial_size, 1)
-        self.assertEqual(events[2].growth_rate, 0)
+            assert event.time == 1.0
+        assert isinstance(events[0], msprime.PopulationParametersChange)
+        assert events[0].initial_size == 0.5
+        assert events[0].growth_rate == 0
+        assert isinstance(events[1], msprime.PopulationParametersChange)
+        assert events[1].growth_rate == 3
+        assert events[1].initial_size is None
+        assert isinstance(events[2], msprime.PopulationParametersChange)
+        assert events[2].initial_size == 1
+        assert events[2].growth_rate == 0
 
     def test_population_growth_rate(self):
         def f(args):
@@ -670,19 +669,17 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 (c.initial_size * 4, c.growth_rate) for c in sim.demography.populations
             ]
 
-        self.assertEqual(f("2 1 -T -I 3 2 0 0 -g 1 -1"), [(1, -1), (1, 0), (1, 0)])
-        self.assertEqual(
-            f("2 1 -T -I 4 2 0 0 0 -g 1 1 -g 2 2 -g 3 3"),
-            [(1, 1), (1, 2), (1, 3), (1, 0)],
-        )
+        assert f("2 1 -T -I 3 2 0 0 -g 1 -1") == [(1, -1), (1, 0), (1, 0)]
+        assert f("2 1 -T -I 4 2 0 0 0 -g 1 1 -g 2 2 -g 3 3") == [
+            (1, 1),
+            (1, 2),
+            (1, 3),
+            (1, 0),
+        ]
         # A -g should override a -G
-        self.assertEqual(
-            f("2 1 -T -I 3 2 0 0 -g 1 2 -G -1"), [(1, 2), (1, -1), (1, -1)]
-        )
+        assert f("2 1 -T -I 3 2 0 0 -g 1 2 -G -1") == [(1, 2), (1, -1), (1, -1)]
         # The last -g should be effective
-        self.assertEqual(
-            f("2 1 -T -I 3 2 0 0 -g 1 1 -g 1 -1"), [(1, -1), (1, 0), (1, 0)]
-        )
+        assert f("2 1 -T -I 3 2 0 0 -g 1 1 -g 1 -1") == [(1, -1), (1, 0), (1, 0)]
 
     def test_population_size(self):
         def f(args):
@@ -691,18 +688,16 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
                 (c.initial_size * 4, c.growth_rate) for c in sim.demography.populations
             ]
 
-        self.assertEqual(f("2 1 -T -I 3 2 0 0 -n 1 2"), [(2, 0), (1, 0), (1, 0)])
-        self.assertEqual(
-            f("2 1 -T -I 4 2 0 0 0 -n 1 1 -n 2 2 -n 3 3"),
-            [(1, 0), (2, 0), (3, 0), (1, 0)],
-        )
+        assert f("2 1 -T -I 3 2 0 0 -n 1 2") == [(2, 0), (1, 0), (1, 0)]
+        assert f("2 1 -T -I 4 2 0 0 0 -n 1 1 -n 2 2 -n 3 3") == [
+            (1, 0),
+            (2, 0),
+            (3, 0),
+            (1, 0),
+        ]
         # The last -n should be effective
-        self.assertEqual(
-            f("2 1 -T -I 3 2 0 0 -n 1 1 -n 1 0.1"), [(0.1, 0), (1, 0), (1, 0)]
-        )
-        self.assertEqual(
-            f("2 1 -T -I 3 2 0 0 -g 1 2 -n 1 0.1"), [(0.1, 2), (1, 0), (1, 0)]
-        )
+        assert f("2 1 -T -I 3 2 0 0 -n 1 1 -n 1 0.1") == [(0.1, 0), (1, 0), (1, 0)]
+        assert f("2 1 -T -I 3 2 0 0 -g 1 2 -n 1 0.1") == [(0.1, 2), (1, 0), (1, 0)]
 
     def test_population_growth_rate_change(self):
         def f(args):
@@ -710,21 +705,21 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             return sim.demography.events
 
         events = f("2 1 -T -eg 0.1 1 2")
-        self.assertEqual(len(events), 1)
-        self.assertIsInstance(events[0], msprime.PopulationParametersChange)
-        self.assertEqual(events[0].growth_rate, 2.0)
-        self.assertEqual(events[0].time, 0.1)
-        self.assertEqual(events[0].population, 0)
+        assert len(events) == 1
+        assert isinstance(events[0], msprime.PopulationParametersChange)
+        assert events[0].growth_rate == 2.0
+        assert events[0].time == 0.1
+        assert events[0].population == 0
         events = f("2 1 -T -I 2 1 1 -eg 0.1 1 2 -eg 0.2 2 3")
-        self.assertEqual(len(events), 2)
-        self.assertIsInstance(events[0], msprime.PopulationParametersChange)
-        self.assertEqual(events[0].growth_rate, 2.0)
-        self.assertEqual(events[0].time, 0.1)
-        self.assertEqual(events[0].population, 0)
-        self.assertIsInstance(events[1], msprime.PopulationParametersChange)
-        self.assertEqual(events[1].growth_rate, 3.0)
-        self.assertEqual(events[1].time, 0.2)
-        self.assertEqual(events[1].population, 1)
+        assert len(events) == 2
+        assert isinstance(events[0], msprime.PopulationParametersChange)
+        assert events[0].growth_rate == 2.0
+        assert events[0].time == 0.1
+        assert events[0].population == 0
+        assert isinstance(events[1], msprime.PopulationParametersChange)
+        assert events[1].growth_rate == 3.0
+        assert events[1].time == 0.2
+        assert events[1].population == 1
 
     def test_population_size_change(self):
         def f(args):
@@ -732,36 +727,36 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             return sim.demography.events
 
         events = f("2 1 -T -en 0.1 1 2")
-        self.assertEqual(len(events), 1)
-        self.assertIsInstance(events[0], msprime.PopulationParametersChange)
-        self.assertEqual(events[0].initial_size, 2.0 / 4)
-        self.assertEqual(events[0].growth_rate, 0)
-        self.assertEqual(events[0].time, 0.1)
-        self.assertEqual(events[0].population, 0)
+        assert len(events) == 1
+        assert isinstance(events[0], msprime.PopulationParametersChange)
+        assert events[0].initial_size == 2.0 / 4
+        assert events[0].growth_rate == 0
+        assert events[0].time == 0.1
+        assert events[0].population == 0
         events = f("2 1 -T -I 2 1 1 -en 0.1 1 2 -en 0.2 2 3")
-        self.assertEqual(len(events), 2)
-        self.assertIsInstance(events[0], msprime.PopulationParametersChange)
-        self.assertEqual(events[0].initial_size, 2.0 / 4)
-        self.assertEqual(events[0].growth_rate, 0)
-        self.assertEqual(events[0].time, 0.1)
-        self.assertEqual(events[0].population, 0)
-        self.assertIsInstance(events[1], msprime.PopulationParametersChange)
-        self.assertEqual(events[1].initial_size, 3.0 / 4)
-        self.assertEqual(events[1].growth_rate, 0)
-        self.assertEqual(events[1].time, 0.2)
-        self.assertEqual(events[1].population, 1)
+        assert len(events) == 2
+        assert isinstance(events[0], msprime.PopulationParametersChange)
+        assert events[0].initial_size == 2.0 / 4
+        assert events[0].growth_rate == 0
+        assert events[0].time == 0.1
+        assert events[0].population == 0
+        assert isinstance(events[1], msprime.PopulationParametersChange)
+        assert events[1].initial_size == 3.0 / 4
+        assert events[1].growth_rate == 0
+        assert events[1].time == 0.2
+        assert events[1].population == 1
 
     def test_migration_rate_change(self):
         def check(args, results):
             sim = self.create_simulator(args)
             events = sim.demography.events
-            self.assertEqual(len(events), len(results))
+            assert len(events) == len(results)
             for event, result in zip(events, results):
-                self.assertIsInstance(event, msprime.MigrationRateChange)
-                self.assertEqual(event.time, result[0])
-                self.assertEqual(event.rate, result[1])
-                self.assertEqual(event.source, -1)
-                self.assertEqual(event.dest, -1)
+                assert isinstance(event, msprime.MigrationRateChange)
+                assert event.time == result[0]
+                assert event.rate == result[1]
+                assert event.source == -1
+                assert event.dest == -1
 
         check("2 1 -T -I 3 2 0 0 -eM 2.2 2", [(2.2, 1)])
         check("2 1 -T -I 3 2 0 0 -eM 2.2 2 -eM 3.3 4", [(2.2, 1), (3.3, 2)])
@@ -770,12 +765,12 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         def check(args, results):
             sim = self.create_simulator(args)
             events = sim.demography.events
-            self.assertEqual(len(events), len(results))
+            assert len(events) == len(results)
             for event, result in zip(events, results):
-                self.assertIsInstance(event, msprime.MigrationRateChange)
-                self.assertEqual(event.time, result[0])
-                self.assertEqual(event.rate, result[1])
-                self.assertEqual((event.source, event.dest), result[2])
+                assert isinstance(event, msprime.MigrationRateChange)
+                assert event.time == result[0]
+                assert event.rate == result[1]
+                assert (event.source, event.dest) == result[2]
 
         check("2 1 -T -I 3 2 0 0 -em 2.2 1 2 2", [(2.2, 2, (0, 1))])
         check(
@@ -790,14 +785,14 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
             matrix = sim.demography.migration_matrix
             for row in matrix:
                 for entry in row:
-                    self.assertEqual(entry, 0.0)
+                    assert entry == 0.0
             events = sim.demography.events
-            self.assertEqual(len(events), len(results))
+            assert len(events) == len(results)
             for event, result in zip(events, results):
-                self.assertIsInstance(event, msprime.MigrationRateChange)
-                self.assertEqual(event.time, result[0])
-                self.assertEqual(event.rate, result[1])
-                self.assertEqual((event.source, event.dest), result[2])
+                assert isinstance(event, msprime.MigrationRateChange)
+                assert event.time == result[0]
+                assert event.rate == result[1]
+                assert (event.source, event.dest) == result[2]
 
         check(
             "2 1 -T -I 2 2 0 -ema 2.2 2 x 1 2 x", [(2.2, 1, (0, 1)), (2.2, 2, (1, 0))]
@@ -818,26 +813,26 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         def check(N, args, results):
             sim = self.create_simulator(args)
             events = sim.demography.events
-            self.assertEqual(len(events), len(results) * N)
+            assert len(events) == len(results) * N
             k = 0
             for result in results:
                 event = events[k]
                 new_pop = event.source
-                self.assertIsInstance(event, msprime.MassMigration)
-                self.assertEqual(event.time, result[0])
-                self.assertEqual(event.source, result[1])
-                self.assertEqual(event.dest, result[2])
+                assert isinstance(event, msprime.MassMigration)
+                assert event.time == result[0]
+                assert event.source == result[1]
+                assert event.dest == result[2]
                 # We also have to set the migration rates to 0 for the
                 # population that didn't exist before now.
                 k += 1
                 for j in range(N):
                     if j != new_pop:
                         event = events[k]
-                        self.assertIsInstance(event, msprime.MigrationRateChange)
-                        self.assertEqual(event.time, result[0])
-                        self.assertEqual(event.rate, 0.0)
-                        self.assertEqual(event.source, j)
-                        self.assertEqual(event.dest, new_pop)
+                        assert isinstance(event, msprime.MigrationRateChange)
+                        assert event.time == result[0]
+                        assert event.rate == 0.0
+                        assert event.source == j
+                        assert event.dest == new_pop
                         k += 1
 
         check(3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2", [(2.2, 0, 1)])
@@ -852,16 +847,16 @@ class TestMspmsCreateSimulationRunner(unittest.TestCase):
         def check(N, args, results):
             sim = self.create_simulator(args)
             events = sim.demography.events
-            self.assertEqual(sim.num_populations, N)
-            self.assertEqual(len(events), len(results))
+            assert sim.num_populations == N
+            assert len(events) == len(results)
             matrix = [[0 for _ in range(N)] for _ in range(N)]
             np.testing.assert_array_equal(sim.demography.migration_matrix, matrix)
             for result, event in zip(results, events):
-                self.assertIsInstance(event, msprime.MassMigration)
-                self.assertEqual(event.time, result[0])
-                self.assertEqual(event.source, result[1])
-                self.assertEqual(event.dest, result[2])
-                self.assertEqual(event.proportion, result[3])
+                assert isinstance(event, msprime.MassMigration)
+                assert event.time == result[0]
+                assert event.source == result[1]
+                assert event.dest == result[2]
+                assert event.proportion == result[3]
 
         check(2, "2 1 -T -es 2.2 1 1", [(2.2, 0, 1, 0)])
         check(3, "2 1 -T -es 2.2 1 1 -es 3.3 2 0", [(2.2, 0, 1, 0), (3.3, 1, 2, 1.0)])
@@ -901,7 +896,7 @@ class TestMspmsArgsFromFile(TestCli):
         file_result = vars(
             parser.parse_args(cmd_line_args.split() + ["-f", self.temp_file])
         )
-        self.assertEqual(cmd_line_result, file_result)
+        assert cmd_line_result == file_result
 
     def test_empty_file(self):
         for cmd_line in self.cmd_lines:
@@ -927,12 +922,11 @@ class TestMspmsArgsFromFileErrors(TestCli):
             raise CustomExceptionForTesting()
 
         parser = cli.get_mspms_parser(error_handler)
-        self.assertRaises(
-            CustomExceptionForTesting,
-            cli.create_simulation_runner,
-            parser,
-            command_line.split(),
-        )
+        with pytest.raises(CustomExceptionForTesting):
+            cli.create_simulation_runner(
+                parser,
+                command_line.split(),
+            )
 
     def test_file_arg_in_file(self):
         with open(self.temp_file, "w") as f:
@@ -952,12 +946,10 @@ class TestMspmsOutput(TestCli):
         """
         Verifies that the specified string is a valid newick tree.
         """
-        self.assertEqual(tree[-1], ";")
+        assert tree[-1] == ";"
         newick_tree = newick.loads(tree)[0]
         leaf_names = newick_tree.get_leaf_names()
-        self.assertEqual(
-            sorted(leaf_names), sorted([str(u + 1) for u in range(sample_size)])
-        )
+        assert sorted(leaf_names) == sorted([str(u + 1) for u in range(sample_size)])
 
     def verify_output(
         self,
@@ -992,20 +984,20 @@ class TestMspmsOutput(TestCli):
             f.seek(0)
             # The first line contains the command line.
             line = f.readline().rstrip()
-            self.assertEqual(line, " ".join(sys.argv))
+            assert line == " ".join(sys.argv)
             # The second line is three integers, equal to the seeds
             s = tuple(map(int, f.readline().split()))
-            self.assertEqual(len(s), 3)
+            assert len(s) == 3
             if random_seeds is not None:
-                self.assertEqual(s, random_seeds)
+                assert s == random_seeds
             # Now we've got a bunch of replicates. Each one starts with //
             num_replicates_found = 0
             line = next(f, None)
             while line is not None:
                 # The first line is blank
-                self.assertEqual(line, "\n")
+                assert line == "\n"
                 line = next(f, None)
-                self.assertEqual(line, "//\n")
+                assert line == "//\n"
                 num_replicates_found += 1
                 # if we're displaying trees, the next set of lines should
                 # be trees
@@ -1016,52 +1008,52 @@ class TestMspmsOutput(TestCli):
                     num_trees += 1
                     if num_loci == 1:
                         total_length += 1
-                        self.assertEqual(line[0], "(")
+                        assert line[0] == "("
                         tree = line.rstrip()
                     else:
-                        self.assertEqual(line[0], "[")
+                        assert line[0] == "["
                         j = line.find("]")
                         length = int(line[1:j])
-                        self.assertGreater(length, 0)
+                        assert length > 0
                         total_length += length
                         tree = line[j + 1 :].rstrip()
                     self.verify_newick_tree(tree, sample_size, precision)
                     line = next(f, None)
-                self.assertEqual(total_length, num_loci)
+                assert total_length == num_loci
                 # if we have a non-zero mutation rate, we should have more
                 # output.
                 if mutation_rate > 0:
-                    self.assertTrue(line.startswith("segsites: "))
+                    assert line.startswith("segsites: ")
                     s = int(line.split(":")[1])
-                    self.assertGreaterEqual(s, 0)
+                    assert s >= 0
                     line = next(f, None)
                     if s == 0:
-                        self.assertEqual(line, "\n")
+                        assert line == "\n"
                         line = next(f, None)
                     else:
-                        self.assertTrue(line.startswith("positions: "))
+                        assert line.startswith("positions: ")
                         positions = line.split(":")[1].split()
-                        self.assertEqual(len(positions), s)
+                        assert len(positions) == s
                         for p in positions:
                             j = p.find(".")
                             if precision == 0:
-                                self.assertEqual(j, -1)
+                                assert j == -1
                             else:
-                                self.assertEqual(precision, len(p) - j - 1)
+                                assert precision == len(p) - j - 1
                         values = list(map(float, positions))
-                        self.assertEqual(values, sorted(values))
+                        assert values == sorted(values)
                         for position in values:
-                            self.assertGreaterEqual(position, 0.0)
-                            self.assertLessEqual(position, 1.0)
+                            assert position >= 0.0
+                            assert position <= 1.0
                         line = next(f, None)
                         sequences_found = 0
                         while line is not None and line[0] in "01":
                             sequences_found += 1
                             sequence = line.rstrip()
-                            self.assertEqual(len(sequence), s)
+                            assert len(sequence) == s
                             line = next(f, None)
-                        self.assertEqual(sequences_found, sample_size)
-            self.assertEqual(num_replicates, num_replicates_found)
+                        assert sequences_found == sample_size
+            assert num_replicates == num_replicates_found
 
     def test_zero_recombination_rate(self):
         self.verify_output(
@@ -1141,10 +1133,10 @@ class TestMspmsOutput(TestCli):
     def test_correct_streams(self):
         args = "15 1 -r 0 1.0 -eG 1.0 5.25 -eG 2.0 10 -G 4 -eN 3.0 1.0 -T"
         stdout, stderr = capture_output(cli.mspms_main, args.split())
-        self.assertEqual(len(stderr), 0)
+        assert len(stderr) == 0
         # We've already tested the output pretty thoroughly above so a
         # simple test is fine here.
-        self.assertEqual(len(stdout.splitlines()), 5)
+        assert len(stdout.splitlines()) == 5
 
     def test_seed_equivalence(self):
         sample_size = 10
@@ -1169,10 +1161,10 @@ class TestMspmsOutput(TestCli):
             sr.run(f)
             f.seek(0)
             output2 = f.read()
-        self.assertEqual(output1, output2)
+        assert output1 == output2
 
 
-class TestMspArgumentParser(unittest.TestCase):
+class TestMspArgumentParser:
     """
     Tests for the argument parsers in msp.
     """
@@ -1181,14 +1173,14 @@ class TestMspArgumentParser(unittest.TestCase):
         parser = cli.get_msp_parser()
         cmd = "simulate"
         args = parser.parse_args([cmd, "10", "out.trees"])
-        self.assertEqual(args.sample_size, 10)
-        self.assertEqual(args.tree_sequence, "out.trees")
-        self.assertEqual(args.recombination_rate, 0.0)
-        self.assertEqual(args.mutation_rate, 0.0)
-        self.assertEqual(args.length, 1)
-        self.assertEqual(args.effective_population_size, 1)
-        self.assertEqual(args.random_seed, None)
-        self.assertEqual(args.compress, False)
+        assert args.sample_size == 10
+        assert args.tree_sequence == "out.trees"
+        assert args.recombination_rate == 0.0
+        assert args.mutation_rate == 0.0
+        assert args.length == 1
+        assert args.effective_population_size == 1
+        assert args.random_seed is None
+        assert not args.compress
 
     def test_simulate_short_args(self):
         parser = cli.get_msp_parser()
@@ -1211,13 +1203,13 @@ class TestMspArgumentParser(unittest.TestCase):
                 "11",
             ]
         )
-        self.assertEqual(args.sample_size, 100)
-        self.assertEqual(args.tree_sequence, "out2.trees")
-        self.assertEqual(args.recombination_rate, 5)
-        self.assertEqual(args.length, 1000)
-        self.assertEqual(args.random_seed, 1234)
-        self.assertEqual(args.compress, True)
-        self.assertEqual(args.effective_population_size, 11)
+        assert args.sample_size == 100
+        assert args.tree_sequence == "out2.trees"
+        assert args.recombination_rate == 5
+        assert args.length == 1000
+        assert args.random_seed == 1234
+        assert args.compress
+        assert args.effective_population_size == 11
 
     def test_simulate_long_args(self):
         parser = cli.get_msp_parser()
@@ -1240,13 +1232,13 @@ class TestMspArgumentParser(unittest.TestCase):
                 "--compress",
             ]
         )
-        self.assertEqual(args.sample_size, 1000)
-        self.assertEqual(args.tree_sequence, "out3.trees")
-        self.assertEqual(args.recombination_rate, 6)
-        self.assertEqual(args.length, 10000)
-        self.assertEqual(args.effective_population_size, 10 ** 5)
-        self.assertEqual(args.random_seed, 123)
-        self.assertEqual(args.compress, True)
+        assert args.sample_size == 1000
+        assert args.tree_sequence == "out3.trees"
+        assert args.recombination_rate == 6
+        assert args.length == 10000
+        assert args.effective_population_size == 10 ** 5
+        assert args.random_seed == 123
+        assert args.compress
 
 
 class TestMspSimulateOutput(unittest.TestCase):
@@ -1267,13 +1259,13 @@ class TestMspSimulateOutput(unittest.TestCase):
         stdout, stderr = capture_output(
             cli.msp_main, [cmd, str(sample_size), self._tree_sequence]
         )
-        self.assertEqual(len(stderr), 0)
-        self.assertEqual(len(stdout), 0)
+        assert len(stderr) == 0
+        assert len(stdout) == 0
 
         tree_sequence = tskit.load(self._tree_sequence)
-        self.assertEqual(tree_sequence.get_sample_size(), sample_size)
-        self.assertEqual(tree_sequence.get_sequence_length(), 1)
-        self.assertEqual(tree_sequence.get_num_mutations(), 0)
+        assert tree_sequence.get_sample_size() == sample_size
+        assert tree_sequence.get_sequence_length() == 1
+        assert tree_sequence.get_num_mutations() == 0
 
     def test_simulate_short_args(self):
         cmd = "simulate"
@@ -1282,9 +1274,9 @@ class TestMspSimulateOutput(unittest.TestCase):
             [cmd, "100", self._tree_sequence, "-L", "1e2", "-r", "5", "-u", "2"],
         )
         tree_sequence = tskit.load(self._tree_sequence)
-        self.assertEqual(tree_sequence.get_sample_size(), 100)
-        self.assertEqual(tree_sequence.get_sequence_length(), 100)
-        self.assertGreater(tree_sequence.get_num_mutations(), 0)
+        assert tree_sequence.get_sample_size() == 100
+        assert tree_sequence.get_sequence_length() == 100
+        assert tree_sequence.get_num_mutations() > 0
 
 
 class TestMspConversionOutput(unittest.TestCase):
@@ -1329,14 +1321,12 @@ class TestMspConversionOutput(unittest.TestCase):
                 "--keep",
             ],
         )
-        self.assertEqual(len(stderr), 0)
+        assert len(stderr) == 0
 
         previous_ts = tskit.load(self._tree_sequence_file)
         tree_sequence = tskit.load(out_tree_sequence_file)
 
-        self.assertGreater(
-            tree_sequence.get_num_mutations(), previous_ts.get_num_mutations()
-        )
+        assert tree_sequence.get_num_mutations() > previous_ts.get_num_mutations()
 
     def test_mutate_discrete_start_end_time(self):
         fd, out_tree_sequence_file = tempfile.mkstemp(
@@ -1364,12 +1354,12 @@ class TestMspConversionOutput(unittest.TestCase):
                 "2",
             ],
         )
-        self.assertEqual(len(stderr), 0)
+        assert len(stderr) == 0
 
         tree_sequence = tskit.load(out_tree_sequence_file)
         tables = tree_sequence.dump_tables()
 
-        self.assertLessEqual(max(tables.nodes.time[tables.mutations.node]), 2)
-        self.assertGreaterEqual(min(tables.nodes.time[tables.mutations.node]), 0)
-        self.assertLessEqual(set(tables.sites.position), set(range(10)))
-        self.assertGreater(tree_sequence.get_num_mutations(), 0)
+        assert max(tables.nodes.time[tables.mutations.node]) <= 2
+        assert min(tables.nodes.time[tables.mutations.node]) >= 0
+        assert set(tables.sites.position) <= set(range(10))
+        assert tree_sequence.get_num_mutations() > 0

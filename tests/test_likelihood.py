@@ -24,6 +24,7 @@ import math
 import unittest
 
 import numpy as np
+import pytest
 import tskit
 
 import msprime
@@ -91,7 +92,7 @@ def log_arg_likelihood(arg, recombination_rate, Ne=1):
     return ret
 
 
-class TestKnownExamples(unittest.TestCase):
+class TestKnownExamples:
     """
     Tests for likelihood evaluation with the full ARG in cases where we've
     calculated the exact values beforehand.
@@ -152,10 +153,8 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (6 + 3 * r) * 0.15
             log_arg_likelihood_exact -= (3 + 2.5 * r) * 0.25
             log_arg_likelihood_exact -= (1 + 2 * r) * 0.5
-            self.assertTrue(
-                math.isclose(
-                    log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
-                )
+            assert math.isclose(
+                log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
             )
 
         theta = np.arange(0.1, 10, 0.1)
@@ -167,11 +166,9 @@ class TestKnownExamples(unittest.TestCase):
             unnormalised_mutation_ll_exact -= 2 * math.log(4 * tree_length)
             unnormalised_mutation_ll_exact -= 2 * math.log(tree_length)
             unnormalised_mutation_ll_exact += math.log(3 / (4 * tree_length))
-            self.assertTrue(
-                math.isclose(
-                    unnormalised_mutation_ll_exact,
-                    msprime.unnormalised_log_mutation_likelihood(arg, t),
-                )
+            assert math.isclose(
+                unnormalised_mutation_ll_exact,
+                msprime.unnormalised_log_mutation_likelihood(arg, t),
             )
 
     def test_multiple_mrcas(self):
@@ -227,10 +224,8 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact += math.log(r) - (3 + 2 * r) * 0.05
             log_arg_likelihood_exact -= (6 + 2 * r) * 0.35
             log_arg_likelihood_exact -= (1 + r) * 0.5
-            self.assertTrue(
-                math.isclose(
-                    log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
-                )
+            assert math.isclose(
+                log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
             )
 
         theta = np.arange(0.1, 10, 0.1)
@@ -241,11 +236,9 @@ class TestKnownExamples(unittest.TestCase):
             )
             unnormalised_mutation_ll_exact -= math.log(tree_length)
             unnormalised_mutation_ll_exact -= 2 * math.log(2 * tree_length)
-            self.assertTrue(
-                math.isclose(
-                    unnormalised_mutation_ll_exact,
-                    msprime.unnormalised_log_mutation_likelihood(arg, t),
-                )
+            assert math.isclose(
+                unnormalised_mutation_ll_exact,
+                msprime.unnormalised_log_mutation_likelihood(arg, t),
             )
 
     def test_merger_with_overhang(self):
@@ -306,10 +299,8 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (6 + 2 * r) * 0.35
             log_arg_likelihood_exact -= (3 + r) * 0.5
             log_arg_likelihood_exact -= (1 + 0.4 * r) * 0.3
-            self.assertTrue(
-                math.isclose(
-                    log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
-                )
+            assert math.isclose(
+                log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
             )
 
         theta = np.arange(0.1, 10, 0.1)
@@ -321,11 +312,9 @@ class TestKnownExamples(unittest.TestCase):
             unnormalised_mutation_ll_exact -= math.log(2 * tree_length)
             unnormalised_mutation_ll_exact += math.log(1.3 / tree_length)
             unnormalised_mutation_ll_exact -= math.log(tree_length)
-            self.assertTrue(
-                math.isclose(
-                    unnormalised_mutation_ll_exact,
-                    msprime.unnormalised_log_mutation_likelihood(arg, t),
-                )
+            assert math.isclose(
+                unnormalised_mutation_ll_exact,
+                msprime.unnormalised_log_mutation_likelihood(arg, t),
             )
 
     def test_gap_in_ancestral_material(self):
@@ -391,10 +380,8 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (6 + 2 * r) * 0.1
             log_arg_likelihood_exact -= (3 + 2.2 * r) * 0.1
             log_arg_likelihood_exact -= (1 + 0.4 * r) * 0.1
-            self.assertTrue(
-                math.isclose(
-                    log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
-                )
+            assert math.isclose(
+                log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
             )
 
         theta = np.arange(0.1, 10, 0.1)
@@ -405,11 +392,9 @@ class TestKnownExamples(unittest.TestCase):
             )
             unnormalised_mutation_ll_exact += 3 * math.log(0.4 / tree_length)
             unnormalised_mutation_ll_exact += 2 * math.log(0.5 / tree_length)
-            self.assertTrue(
-                math.isclose(
-                    unnormalised_mutation_ll_exact,
-                    msprime.unnormalised_log_mutation_likelihood(arg, t),
-                )
+            assert math.isclose(
+                unnormalised_mutation_ll_exact,
+                msprime.unnormalised_log_mutation_likelihood(arg, t),
             )
 
     def test_recombination_in_material_gap(self):
@@ -487,10 +472,8 @@ class TestKnownExamples(unittest.TestCase):
             log_arg_likelihood_exact -= (6 + 2 * r) * 0.1
             log_arg_likelihood_exact -= (3 + 2 * r) * 0.1
             log_arg_likelihood_exact -= (1 + 1.4 * r) * 0.1
-            self.assertTrue(
-                math.isclose(
-                    log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
-                )
+            assert math.isclose(
+                log_arg_likelihood_exact, msprime.log_arg_likelihood(arg, r, 0.5)
             )
 
         theta = np.arange(0.1, 10, 0.1)
@@ -501,11 +484,9 @@ class TestKnownExamples(unittest.TestCase):
             )
             unnormalised_mutation_ll_exact += math.log(0.6 / tree_length)
             unnormalised_mutation_ll_exact += 3 * math.log(0.7 / tree_length)
-            self.assertTrue(
-                math.isclose(
-                    unnormalised_mutation_ll_exact,
-                    msprime.unnormalised_log_mutation_likelihood(arg, t),
-                )
+            assert math.isclose(
+                unnormalised_mutation_ll_exact,
+                msprime.unnormalised_log_mutation_likelihood(arg, t),
             )
 
 
@@ -535,7 +516,7 @@ class TestSimulatedExamples(unittest.TestCase):
         ts = msprime.simulate(
             5, recombination_rate=1, random_seed=12, record_full_arg=True
         )
-        self.assertGreater(ts.num_edges, 10)
+        assert ts.num_edges > 10
         self.verify(ts, recombination_rate=1, Ne=0.5)
         self.verify(ts, recombination_rate=0.5, Ne=0.5)
         self.verify(ts, recombination_rate=2, Ne=0.5)
@@ -546,9 +527,9 @@ class TestSimulatedExamples(unittest.TestCase):
         ts = msprime.simulate(
             5, recombination_rate=1, random_seed=12, record_full_arg=True
         )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             msprime.log_arg_likelihood(ts, recombination_rate=-1)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             log_arg_likelihood(ts, recombination_rate=-1)
 
     def test_zero_mut_rate(self):
@@ -557,7 +538,7 @@ class TestSimulatedExamples(unittest.TestCase):
             5, recombination_rate=1, random_seed=12, record_full_arg=True
         )
         lik = msprime.unnormalised_log_mutation_likelihood(ts, 0)
-        self.assertEqual(lik, 0)
+        assert lik == 0
 
         # With mutations
         ts = msprime.simulate(
@@ -568,7 +549,7 @@ class TestSimulatedExamples(unittest.TestCase):
             record_full_arg=True,
         )
         lik = msprime.unnormalised_log_mutation_likelihood(ts, 0)
-        self.assertEqual(lik, float("-inf"))
+        assert lik == float("-inf")
 
 
 class TestOddTopologies(unittest.TestCase):

@@ -27,6 +27,7 @@ import unittest
 import warnings
 
 import numpy as np
+import pytest
 
 import msprime
 
@@ -129,8 +130,8 @@ class TestCoordinateConversion(unittest.TestCase):
         rm = msprime.RecombinationMap(positions, rates)
         other_rm = PythonRecombinationMap(positions, rates)
 
-        self.assertEqual(
-            rm.get_total_recombination_rate(), other_rm.get_total_recombination_rate()
+        assert (
+            rm.get_total_recombination_rate() == other_rm.get_total_recombination_rate()
         )
         num_random_trials = 10
         num_systematic_trials = 10
@@ -142,7 +143,7 @@ class TestCoordinateConversion(unittest.TestCase):
             # x is a physical coordinate
             y = rm.physical_to_genetic(x)
             self.assertAlmostEqual(y, other_rm.physical_to_genetic(x), delta=1e-10)
-            self.assertTrue(0 <= y <= rm.get_total_recombination_rate())
+            assert 0 <= y <= rm.get_total_recombination_rate()
             # Check if we can round trip approximately in real coordinates.
             xp = rm.genetic_to_physical(y)
             self.assertAlmostEqual(x, xp)
@@ -161,12 +162,12 @@ class TestCoordinateConversion(unittest.TestCase):
         ]
         for rm in maps:
             total_recomb = rm.get_total_recombination_rate()
-            self.assertEqual(100, total_recomb)
+            assert 100 == total_recomb
             # Between 0 and 0.25 and 0.5 and 0.75 we should be able to map 1-1
             # in physical coordinates.
             for x in [0, 0.125, 0.25, 0.50001, 0.66, 0.74999]:
                 y = rm.physical_to_genetic(x)
-                self.assertTrue(0 <= y <= total_recomb)
+                assert 0 <= y <= total_recomb
                 z = rm.genetic_to_physical(y)
                 self.assertAlmostEqual(x, z)
 
@@ -179,9 +180,9 @@ class TestCoordinateConversion(unittest.TestCase):
         ]
         for rm in maps:
             for x in [0, 50, 51, 55, 99, 100]:
-                self.assertEqual(0, rm.physical_to_genetic(x))
-                self.assertEqual(0, rm.genetic_to_physical(0))
-                self.assertEqual(100, rm.genetic_to_physical(1))
+                assert 0 == rm.physical_to_genetic(x)
+                assert 0 == rm.genetic_to_physical(0)
+                assert 100 == rm.genetic_to_physical(1)
 
     def test_zero_rate_start(self):
         positions = [0, 50, 100]
@@ -193,13 +194,13 @@ class TestCoordinateConversion(unittest.TestCase):
         for rm in maps:
             # Anything <= 50 maps to 0
             for x in [0, 10, 49, 50]:
-                self.assertEqual(0, rm.physical_to_genetic(x))
-            self.assertEqual(0, rm.genetic_to_physical(0))
+                assert 0 == rm.physical_to_genetic(x)
+            assert 0 == rm.genetic_to_physical(0)
             # values > 50 should map to x - 50
             for x in [51, 55, 99, 100]:
                 genetic_x = x - 50
-                self.assertEqual(genetic_x, rm.physical_to_genetic(x))
-                self.assertEqual(rm.genetic_to_physical(genetic_x), x)
+                assert genetic_x == rm.physical_to_genetic(x)
+                assert rm.genetic_to_physical(genetic_x) == x
 
     def test_zero_rate_end(self):
         positions = [0, 50, 100]
@@ -211,12 +212,12 @@ class TestCoordinateConversion(unittest.TestCase):
         for rm in maps:
             # Anything < 50 maps to x
             for x in [0, 10, 49]:
-                self.assertEqual(x, rm.physical_to_genetic(x))
-                self.assertEqual(x, rm.genetic_to_physical(x))
+                assert x == rm.physical_to_genetic(x)
+                assert x == rm.genetic_to_physical(x)
             # values >= 50 should map to 50
             for x in [50, 51, 55, 99, 100]:
-                self.assertEqual(50, rm.physical_to_genetic(x))
-            self.assertEqual(50, rm.genetic_to_physical(50))
+                assert 50 == rm.physical_to_genetic(x)
+            assert 50 == rm.genetic_to_physical(50)
 
     def test_one_rate(self):
         for rate in [0.1, 1.0, 10]:
@@ -224,7 +225,7 @@ class TestCoordinateConversion(unittest.TestCase):
                 positions = [0, L]
                 rates = [rate, 0]
                 rm = msprime.RecombinationMap(positions, rates)
-                self.assertEqual(rate * L, rm.get_total_recombination_rate())
+                assert rate * L == rm.get_total_recombination_rate()
                 self.verify_coordinate_conversion(positions, rates)
 
     def test_simple_map(self):
@@ -294,7 +295,8 @@ class TestReadHapmap(unittest.TestCase):
             print("HEADER", file=f)
             print("chr1 0 5 x", file=f)
             print("s    2 1 x x x", file=f)
-        self.assertRaises(ValueError, msprime.read_hapmap, self.temp_file)
+        with pytest.raises(ValueError):
+            msprime.read_hapmap(self.temp_file)
 
     def test_read_hapmap_gzipped(self):
         try:
@@ -319,9 +321,9 @@ class TestReadHapmap(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             rm = msprime.RecombinationMap.read_hapmap(self.temp_file)
-            self.assertEqual(len(w), 1)
-        self.assertEqual(rm.get_positions(), [0, 1, 2])
-        self.assertEqual(rm.get_rates(), [1e-8, 5e-8, 0])
+            assert len(w) == 1
+        assert rm.get_positions() == [0, 1, 2]
+        assert rm.get_rates() == [1e-8, 5e-8, 0]
 
 
 class TestRecombinationMapInterface(unittest.TestCase):
@@ -333,7 +335,7 @@ class TestRecombinationMapInterface(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             f()
-            self.assertEqual(len(w), 1)
+            assert len(w) == 1
 
     def test_warn_on_num_loci_equal_seq_len(self):
         self.verify_warning(
@@ -344,26 +346,29 @@ class TestRecombinationMapInterface(unittest.TestCase):
         )
 
     def test_error_on_num_loci_not_equal_seq_len(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             msprime.RecombinationMap.uniform_map(100, 0.1, num_loci=10)
 
     def test_unsupported_methods(self):
         recomb_map = msprime.RecombinationMap([0, 10], [0.2, 0])
-        self.assertRaises(ValueError, recomb_map.get_num_loci)
-        self.assertRaises(ValueError, recomb_map.physical_to_discrete_genetic, 8)
-        self.assertRaises(ValueError, recomb_map.get_per_locus_recombination_rate)
+        with pytest.raises(ValueError):
+            recomb_map.get_num_loci()
+        with pytest.raises(ValueError):
+            recomb_map.physical_to_discrete_genetic(8)
+        with pytest.raises(ValueError):
+            recomb_map.get_per_locus_recombination_rate()
 
     def test_total_recombination_rate(self):
         recomb_map = msprime.RecombinationMap([0, 10], [0.1, 0])
-        self.assertEqual(recomb_map.get_total_recombination_rate(), 1)
+        assert recomb_map.get_total_recombination_rate() == 1
 
     def test_basic_properties(self):
         recomb_map = msprime.RecombinationMap.uniform_map(10, 1)
-        self.assertEqual(recomb_map.get_sequence_length(), 10)
-        self.assertEqual(recomb_map.get_length(), 10)
-        self.assertEqual(recomb_map.get_rates(), [1, 0])
-        self.assertEqual(recomb_map.get_positions(), [0, 10])
-        self.assertEqual(recomb_map.get_size(), 2)
+        assert recomb_map.get_sequence_length() == 10
+        assert recomb_map.get_length() == 10
+        assert recomb_map.get_rates() == [1, 0]
+        assert recomb_map.get_positions() == [0, 10]
+        assert recomb_map.get_size() == 2
 
     def test_zero_recombination_map(self):
         # test that beginning and trailing zero recombination regions in the
@@ -373,23 +378,23 @@ class TestRecombinationMapInterface(unittest.TestCase):
             rates = [0.0, 0.2] + [0.0] * (n - 2)
             recomb_map = msprime.RecombinationMap(positions, rates)
             ts = msprime.simulate(10, recombination_map=recomb_map)
-            self.assertEqual(ts.sequence_length, n - 1)
-            self.assertEqual(min(ts.tables.edges.left), 0.0)
-            self.assertEqual(max(ts.tables.edges.right), n - 1.0)
+            assert ts.sequence_length == n - 1
+            assert min(ts.tables.edges.left) == 0.0
+            assert max(ts.tables.edges.right) == n - 1.0
 
     def test_mean_recombination_rate(self):
         # Some quick sanity checks.
         recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
         mean_rr = recomb_map.mean_recombination_rate
-        self.assertEqual(mean_rr, 1.0)
+        assert mean_rr == 1.0
 
         recomb_map = msprime.RecombinationMap([0, 1, 2], [1, 0, 0])
         mean_rr = recomb_map.mean_recombination_rate
-        self.assertEqual(mean_rr, 0.5)
+        assert mean_rr == 0.5
 
         recomb_map = msprime.RecombinationMap([0, 1, 2], [0, 0, 0])
         mean_rr = recomb_map.mean_recombination_rate
-        self.assertEqual(mean_rr, 0.0)
+        assert mean_rr == 0.0
 
         # Test mean_recombination_rate is correct after reading from
         # a hapmap file. read_hapmap() ignores the cM

@@ -22,7 +22,6 @@ Test that the documentation examples do what they are supposed to.
 import contextlib
 import io
 import sys
-import unittest
 from unittest import mock
 
 import stdpopsim
@@ -41,7 +40,7 @@ def capture_stdout():
         sys.stdout = old_out
 
 
-class TestDocumentationExamples(unittest.TestCase):
+class TestDocumentationExamples:
     def test_ooa_model(self):
         correct_model = stdpopsim.get_species("HomSap").get_demographic_model(
             "OutOfAfrica_3G09"
@@ -68,22 +67,22 @@ class TestDocumentationExamples(unittest.TestCase):
         with capture_stdout() as stdout:
             examples.segregating_sites(10, 5, 10)
         output = stdout.getvalue().splitlines()
-        self.assertEqual(len(output), 3)
-        self.assertTrue(output[1].startswith("Observed"))
-        self.assertTrue(output[2].startswith("Analytical"))
+        assert len(output) == 3
+        assert output[1].startswith("Observed")
+        assert output[2].startswith("Analytical")
 
     def test_wright_fisher(self):
         ts = examples.wright_fisher(10, 5, L=2, random_seed=3)
-        self.assertEqual(ts.num_samples, 10)
-        self.assertEqual(ts.num_trees, 2)
+        assert ts.num_samples == 10
+        assert ts.num_trees == 2
 
     def test_migration(self):
         with capture_stdout() as stdout:
             examples.migration_example(10)
         output = stdout.getvalue().splitlines()
-        self.assertEqual(len(output), 2)
-        self.assertTrue(output[0].startswith("Observed"))
-        self.assertTrue(output[1].startswith("Predicted"))
+        assert len(output) == 2
+        assert output[0].startswith("Observed")
+        assert output[1].startswith("Predicted")
 
     def test_logging_info(self):
         with mock.patch("daiquiri.setup"):

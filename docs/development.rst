@@ -26,7 +26,7 @@ Quickstart
 - Install the :ref:`basic requirements <sec_installation_system_requirements>`.
 - Install the Python development requirements using ``pip install -r requirements/development.txt``.
 - Build the low level module by running ``make`` in the project root.
-- Run the tests to ensure everything has worked: ``python3 -m nose -vs``. These should
+- Run the tests to ensure everything has worked: ``python3 -m pytest -n8 tests``. These should
   all pass.
 - Install the pre-commit checks: ``pre-commit install``
 - Make your changes in a local branch. On each commit a `pre-commit hook
@@ -128,7 +128,7 @@ Tests
 +++++
 
 The tests for the high-level code are in the ``tests`` directory, and run using
-`nose <http://nose.readthedocs.io/en/latest/>`_. A lot of the simulation and basic
+`pytest <https://docs.pytest.org/en/stable/>`_. A lot of the simulation and basic
 tests are contained in the ``tests/test_highlevel.py`` file, but more recently
 smaller test files with more focussed tests are preferred (e.g., ``test_vcf.py``,
 ``test_demography.py``).

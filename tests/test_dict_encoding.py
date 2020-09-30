@@ -6,9 +6,8 @@ The code for doing this was copied from the the _tskitmodule.c file
 into the msprime C module. These tests were also copied in to ensure
 that no errors are introduced into the code over time.
 """
-import unittest
-
 import numpy as np
+import pytest
 import tskit
 
 import msprime
@@ -124,13 +123,13 @@ def get_example_tables():
     return tables
 
 
-class TestEncodingVersion(unittest.TestCase):
+class TestEncodingVersion:
     def test_version(self):
         lwt = c_module.LightweightTableCollection()
-        self.assertEqual(lwt.asdict()["encoding_version"], (1, 1))
+        assert lwt.asdict()["encoding_version"] == (1, 1)
 
 
-class TestRoundTrip(unittest.TestCase):
+class TestRoundTrip:
     """
     Tests if we can do a simple round trip on simulated data.
     """
@@ -139,7 +138,7 @@ class TestRoundTrip(unittest.TestCase):
         lwt = c_module.LightweightTableCollection()
         lwt.fromdict(tables.asdict())
         other_tables = tskit.TableCollection.fromdict(lwt.asdict())
-        self.assertEqual(tables, other_tables)
+        assert tables == other_tables
 
     def test_simple(self):
         ts = msprime.simulate(10, mutation_rate=1, random_seed=2)
@@ -207,7 +206,7 @@ class TestRoundTrip(unittest.TestCase):
         self.verify(tables)
 
 
-class TestMissingData(unittest.TestCase):
+class TestMissingData:
     """
     Tests what happens when we have missing data in the encoded dict.
     """
@@ -217,29 +216,29 @@ class TestMissingData(unittest.TestCase):
         d = tables.asdict()
         del d["sequence_length"]
         lwt = c_module.LightweightTableCollection()
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             lwt.fromdict(d)
 
     def test_missing_metadata(self):
         tables = get_example_tables()
-        self.assertNotEqual(tables.metadata, b"")
+        assert tables.metadata != b""
         d = tables.asdict()
         del d["metadata"]
         lwt = c_module.LightweightTableCollection()
         lwt.fromdict(d)
         tables = tskit.TableCollection.fromdict(lwt.asdict())
         # Empty byte field still gets interpreted by schema
-        self.assertEqual(tables.metadata, {"top-level": []})
+        assert tables.metadata == {"top-level": []}
 
     def test_missing_metadata_schema(self):
         tables = get_example_tables()
-        self.assertNotEqual(str(tables.metadata_schema), "")
+        assert str(tables.metadata_schema) != ""
         d = tables.asdict()
         del d["metadata_schema"]
         lwt = c_module.LightweightTableCollection()
         lwt.fromdict(d)
         tables = tskit.TableCollection.fromdict(lwt.asdict())
-        self.assertEqual(str(tables.metadata_schema), "")
+        assert str(tables.metadata_schema) == ""
 
     def test_missing_tables(self):
         tables = get_example_tables()
@@ -254,11 +253,11 @@ class TestMissingData(unittest.TestCase):
             d = tables.asdict()
             del d[table_name]
             lwt = c_module.LightweightTableCollection()
-            with self.assertRaises(TypeError):
+            with pytest.raises(TypeError):
                 lwt.fromdict(d)
 
 
-class TestBadTypes(unittest.TestCase):
+class TestBadTypes:
     """
     Tests for setting each column to a type that can't be converted to 1D numpy array.
     """
@@ -280,7 +279,7 @@ class TestBadTypes(unittest.TestCase):
                 lwt = c_module.LightweightTableCollection()
                 d = tables.asdict()
                 d[table_name] = copy
-                with self.assertRaises(ValueError):
+                with pytest.raises(ValueError):
                     lwt.fromdict(d)
 
     def test_2d_array(self):
@@ -297,11 +296,11 @@ class TestBadTypes(unittest.TestCase):
             # A list should be a ValueError for both the tables and sequence_length
             bad_type_dict[key] = ["12345"]
             lwt = c_module.LightweightTableCollection()
-            with self.assertRaises(TypeError):
+            with pytest.raises(TypeError):
                 lwt.fromdict(bad_type_dict)
 
 
-class TestBadLengths(unittest.TestCase):
+class TestBadLengths:
     """
     Tests for setting each column to a length incompatible with the table.
     """
@@ -324,7 +323,7 @@ class TestBadLengths(unittest.TestCase):
                 lwt = c_module.LightweightTableCollection()
                 d = tables.asdict()
                 d[table_name] = copy
-                with self.assertRaises(ValueError):
+                with pytest.raises(ValueError):
                     lwt.fromdict(d)
 
     def test_two_rows(self):
@@ -334,7 +333,7 @@ class TestBadLengths(unittest.TestCase):
         self.verify(0)
 
 
-class TestRequiredAndOptionalColumns(unittest.TestCase):
+class TestRequiredAndOptionalColumns:
     """
     Tests that specifying None for some columns will give the intended
     outcome.
@@ -350,7 +349,7 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         lwt.fromdict(d)
         other = lwt.asdict()
         for col in required_cols:
-            self.assertTrue(np.array_equal(other[table_name][col], table_dict[col]))
+            assert np.array_equal(other[table_name][col], table_dict[col])
 
         # Any one of these required columns as None gives an error.
         for col in required_cols:
@@ -359,7 +358,7 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
             copy[col] = None
             d[table_name] = copy
             lwt = c_module.LightweightTableCollection()
-            with self.assertRaises(TypeError):
+            with pytest.raises(TypeError):
                 lwt.fromdict(d)
 
         # Removing any one of these required columns gives an error.
@@ -369,7 +368,7 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
             del copy[col]
             d[table_name] = copy
             lwt = c_module.LightweightTableCollection()
-            with self.assertRaises(TypeError):
+            with pytest.raises(TypeError):
                 lwt.fromdict(d)
 
     def verify_optional_column(self, tables, table_len, table_name, col_name):
@@ -379,10 +378,8 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         lwt = c_module.LightweightTableCollection()
         lwt.fromdict(d)
         out = lwt.asdict()
-        self.assertTrue(
-            np.array_equal(
-                out[table_name][col_name], np.zeros(table_len, dtype=np.int32) - 1
-            )
+        assert np.array_equal(
+            out[table_name][col_name], np.zeros(table_len, dtype=np.int32) - 1
         )
 
     def verify_offset_pair(
@@ -398,12 +395,10 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
             lwt = c_module.LightweightTableCollection()
             lwt.fromdict(d)
             out = lwt.asdict()
-            self.assertEqual(out[table_name][col_name].shape, (0,))
-            self.assertTrue(
-                np.array_equal(
-                    out[table_name][offset_col],
-                    np.zeros(table_len + 1, dtype=np.uint32),
-                )
+            assert out[table_name][col_name].shape == (0,)
+            assert np.array_equal(
+                out[table_name][offset_col],
+                np.zeros(table_len + 1, dtype=np.uint32),
             )
             d = tables.asdict()
             table_dict = d[table_name]
@@ -412,12 +407,10 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
             lwt = c_module.LightweightTableCollection()
             lwt.fromdict(d)
             out = lwt.asdict()
-            self.assertEqual(out[table_name][col_name].shape, (0,))
-            self.assertTrue(
-                np.array_equal(
-                    out[table_name][offset_col],
-                    np.zeros(table_len + 1, dtype=np.uint32),
-                )
+            assert out[table_name][col_name].shape == (0,)
+            assert np.array_equal(
+                out[table_name][offset_col],
+                np.zeros(table_len + 1, dtype=np.uint32),
             )
 
         # Setting one or the other raises a TypeError
@@ -425,28 +418,28 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         table_dict = d[table_name]
         table_dict[col_name] = None
         lwt = c_module.LightweightTableCollection()
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             lwt.fromdict(d)
 
         d = tables.asdict()
         table_dict = d[table_name]
         del table_dict[col_name]
         lwt = c_module.LightweightTableCollection()
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             lwt.fromdict(d)
 
         d = tables.asdict()
         table_dict = d[table_name]
         table_dict[offset_col] = None
         lwt = c_module.LightweightTableCollection()
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             lwt.fromdict(d)
 
         d = tables.asdict()
         table_dict = d[table_name]
         del table_dict[offset_col]
         lwt = c_module.LightweightTableCollection()
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             lwt.fromdict(d)
 
         d = tables.asdict()
@@ -456,7 +449,7 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         bad_offset[-1] = table_dict[offset_col][-1]
         table_dict[offset_col] = bad_offset
         lwt = c_module.LightweightTableCollection()
-        with self.assertRaises(c_module.LibraryError):
+        with pytest.raises(c_module.LibraryError):
             lwt.fromdict(d)
 
     def verify_metadata_schema(self, tables, table_name):
@@ -465,9 +458,9 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         lwt = c_module.LightweightTableCollection()
         lwt.fromdict(d)
         out = lwt.asdict()
-        self.assertNotIn("metadata_schema", out[table_name])
+        assert "metadata_schema" not in out[table_name]
         tables = tskit.TableCollection.fromdict(out)
-        self.assertEqual(str(getattr(tables, table_name).metadata_schema), "")
+        assert str(getattr(tables, table_name).metadata_schema) == ""
 
     def test_individuals(self):
         tables = get_example_tables()
@@ -530,7 +523,7 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         lwt = c_module.LightweightTableCollection()
         lwt.fromdict(d)
         out = lwt.asdict()
-        self.assertTrue(all(np.isnan(val) for val in out["mutations"]["time"]))
+        assert all(np.isnan(val) for val in out["mutations"]["time"])
 
     def test_populations(self):
         tables = get_example_tables()
@@ -556,11 +549,11 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         lwt = c_module.LightweightTableCollection()
         lwt.fromdict(d)
         out = lwt.asdict()
-        self.assertNotIn("metadata", out)
+        assert "metadata" not in out
         tables = tskit.TableCollection.fromdict(out)
         # We only removed the metadata, not the schema. So empty bytefield
         # still gets interpreted
-        self.assertEqual(tables.metadata, {"top-level": []})
+        assert tables.metadata == {"top-level": []}
         # Missing is tested in TestMissingData above
 
     def test_top_level_metadata_schema(self):
@@ -571,7 +564,7 @@ class TestRequiredAndOptionalColumns(unittest.TestCase):
         lwt = c_module.LightweightTableCollection()
         lwt.fromdict(d)
         out = lwt.asdict()
-        self.assertNotIn("metadata_schema", out)
+        assert "metadata_schema" not in out
         tables = tskit.TableCollection.fromdict(out)
-        self.assertEqual(str(tables.metadata_schema), "")
+        assert str(tables.metadata_schema) == ""
         # Missing is tested in TestMissingData above

@@ -20,9 +20,9 @@
 Test cases for the simulate-from functionality.
 """
 import itertools
-import unittest
 
 import numpy as np
+import pytest
 import tskit
 
 import msprime
@@ -56,7 +56,7 @@ def get_wf_base(N, ngens, survival=0.0, num_loci=10, seed=1):
     return tables.tree_sequence()
 
 
-class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
+class TestUncoalescedTreeSequenceProperties:
     """
     Tests on the properties of tree sequences that have been stopped
     early.
@@ -69,7 +69,7 @@ class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
                 # If there's more than one root in the tree, all these should
                 # be at max_time
                 for root in tree.roots:
-                    self.assertEqual(ts.node(root).time, root_time)
+                    assert ts.node(root).time == root_time
 
     def test_bug_instance1(self):
         ts = msprime.simulate(10, recombination_rate=10, end_time=0.5, random_seed=103)
@@ -113,7 +113,7 @@ class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
         ts = msprime.simulate(
             10, Ne=100, model="dtwf", random_seed=2, end_time=100, recombination_rate=10
         )
-        self.assertGreater(ts.num_trees, 1)
+        assert ts.num_trees > 1
         self.verify(ts)
 
     def test_dtwf_no_recombination(self):
@@ -150,7 +150,7 @@ class TestUncoalescedTreeSequenceProperties(unittest.TestCase):
         self.verify(ts)
 
 
-class TestBasicFunctionality(unittest.TestCase):
+class TestBasicFunctionality:
     """
     Basic tests for the from_ts argument for msprime.simulate.
     """
@@ -161,12 +161,12 @@ class TestBasicFunctionality(unittest.TestCase):
         if start_time is None:
             start_time = np.max(from_tables.nodes.time)
         # Populations and individuals should be equal.
-        self.assertEqual(from_tables.populations, final_tables.populations)
-        self.assertEqual(from_tables.individuals, final_tables.individuals)
+        assert from_tables.populations == final_tables.populations
+        assert from_tables.individuals == final_tables.individuals
         # The mutation_rate parameter in simulate is not permitted, so we
         # should always have the same set of mutations before and after.
-        self.assertEqual(final_tables.sites, from_tables.sites)
-        self.assertEqual(final_tables.mutations, from_tables.mutations)
+        assert final_tables.sites == from_tables.sites
+        assert final_tables.mutations == from_tables.mutations
 
         # Afterwards, the other tables should be equal up to the length of the
         # input tables, apart from the provenance.
@@ -175,7 +175,7 @@ class TestBasicFunctionality(unittest.TestCase):
         final_tables.migrations.truncate(len(from_tables.migrations))
         final_tables.provenances.clear()
         from_tables.provenances.clear()
-        self.assertEqual(final_tables, from_tables)
+        assert final_tables == from_tables
 
         if final_ts.num_migrations == 0:
             # Simplify doesn't support migrations at the moment so we don't
@@ -188,7 +188,7 @@ class TestBasicFunctionality(unittest.TestCase):
 
     def verify_simulation_completed(self, ts):
         for tree in ts.trees():
-            self.assertEqual(tree.num_roots, 1)
+            assert tree.num_roots == 1
 
     def test_from_wf_nonoverlapping(self):
         m = 100
@@ -226,7 +226,7 @@ class TestBasicFunctionality(unittest.TestCase):
 
     def test_single_locus_max_time(self):
         from_ts = msprime.simulate(20, end_time=1, random_seed=5)
-        self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
+        assert max(tree.num_roots for tree in from_ts.trees()) > 1
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
             from_ts=from_ts, start_time=start_time, random_seed=2
@@ -236,7 +236,7 @@ class TestBasicFunctionality(unittest.TestCase):
 
     def test_single_locus_old_recombination(self):
         from_ts = msprime.simulate(20, end_time=1, random_seed=5)
-        self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
+        assert max(tree.num_roots for tree in from_ts.trees()) > 1
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
             from_ts=from_ts, start_time=start_time, random_seed=2, recombination_rate=2
@@ -246,8 +246,8 @@ class TestBasicFunctionality(unittest.TestCase):
 
     def test_single_locus_mutations(self):
         from_ts = msprime.simulate(20, end_time=1, random_seed=5, mutation_rate=5)
-        self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
-        self.assertGreater(from_ts.num_sites, 0)
+        assert max(tree.num_roots for tree in from_ts.trees()) > 1
+        assert from_ts.num_sites > 0
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
             from_ts=from_ts, start_time=start_time, random_seed=2
@@ -258,7 +258,7 @@ class TestBasicFunctionality(unittest.TestCase):
     def test_decapitated_mutations(self):
         ts = msprime.simulate(10, random_seed=5, mutation_rate=10)
         from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
-        self.assertGreater(from_ts.num_mutations, 0)
+        assert from_ts.num_mutations > 0
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
             from_ts=from_ts, start_time=start_time, random_seed=2
@@ -268,7 +268,7 @@ class TestBasicFunctionality(unittest.TestCase):
 
     def test_from_multi_locus_decapitated(self):
         ts = msprime.simulate(10, recombination_rate=2, random_seed=5)
-        self.assertGreater(ts.num_trees, 1)
+        assert ts.num_trees > 1
         from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
@@ -282,7 +282,7 @@ class TestBasicFunctionality(unittest.TestCase):
 
     def test_from_multi_locus_old_recombination(self):
         ts = msprime.simulate(10, recombination_rate=2, random_seed=5)
-        self.assertGreater(ts.num_trees, 1)
+        assert ts.num_trees > 1
         from_ts = tsutil.decapitate(ts, ts.num_edges // 2)
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
@@ -300,7 +300,7 @@ class TestBasicFunctionality(unittest.TestCase):
                 random_seed=5,
                 recombination_map=recombination_map,
             )
-            self.assertGreater(max(tree.num_roots for tree in from_ts.trees()), 1)
+            assert max(tree.num_roots for tree in from_ts.trees()) > 1
             start_time = from_ts.tables.nodes.time.max()
             final_ts = msprime.simulate(
                 from_ts=from_ts,
@@ -322,8 +322,8 @@ class TestBasicFunctionality(unittest.TestCase):
             ],
             migration_matrix=[[0, 1], [1, 0]],
         )
-        self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
-        self.assertGreater(from_ts.num_trees, 1)
+        assert any(tree.num_roots > 1 for tree in from_ts.trees())
+        assert from_ts.num_trees > 1
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
             from_ts=from_ts,
@@ -350,8 +350,8 @@ class TestBasicFunctionality(unittest.TestCase):
             migration_matrix=[[0, 1], [1, 0]],
         )
         from_ts = tsutil.decapitate(from_ts, from_ts.num_edges // 3)
-        self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
-        self.assertGreater(from_ts.num_trees, 1)
+        assert any(tree.num_roots > 1 for tree in from_ts.trees())
+        assert from_ts.num_trees > 1
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
             from_ts=from_ts,
@@ -382,8 +382,8 @@ class TestBasicFunctionality(unittest.TestCase):
                 migration_matrix=migration_matrix,
             )
             from_ts = tsutil.decapitate(from_ts, from_ts.num_edges // 3)
-            self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
-            self.assertGreater(from_ts.num_trees, 1)
+            assert any(tree.num_roots > 1 for tree in from_ts.trees())
+            assert from_ts.num_trees > 1
             start_time = from_ts.tables.nodes.time.max()
             final_ts = msprime.simulate(
                 from_ts=from_ts,
@@ -398,8 +398,8 @@ class TestBasicFunctionality(unittest.TestCase):
 
     def test_random_seeds_equal_outcome(self):
         from_ts = msprime.simulate(8, recombination_rate=2, random_seed=5, end_time=1)
-        self.assertGreater(from_ts.num_trees, 1)
-        self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
+        assert from_ts.num_trees > 1
+        assert any(tree.num_roots > 1 for tree in from_ts.trees())
         start_time = from_ts.tables.nodes.time.max()
         seed = 234
         recombination_rate = 1
@@ -422,11 +422,11 @@ class TestBasicFunctionality(unittest.TestCase):
             )
             other_tables = other_ts.dump_tables()
             other_tables.provenances.clear()
-            self.assertEqual(final_tables, other_tables)
+            assert final_tables == other_tables
 
     def test_individuals(self):
         from_ts = msprime.simulate(25, random_seed=5, end_time=0.5)
-        self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
+        assert any(tree.num_roots > 1 for tree in from_ts.trees())
         from_ts = tsutil.insert_random_ploidy_individuals(from_ts, seed=2)
         start_time = from_ts.tables.nodes.time.max()
         final_ts = msprime.simulate(
@@ -437,8 +437,8 @@ class TestBasicFunctionality(unittest.TestCase):
 
     def test_replicates(self):
         from_ts = msprime.simulate(15, recombination_rate=2, random_seed=5, end_time=2)
-        self.assertTrue(any(tree.num_roots > 1 for tree in from_ts.trees()))
-        self.assertGreater(from_ts.num_trees, 1)
+        assert any(tree.num_roots > 1 for tree in from_ts.trees())
+        assert from_ts.num_trees > 1
         start_time = from_ts.tables.nodes.time.max()
         replicates = msprime.simulate(
             from_ts=from_ts,
@@ -454,12 +454,12 @@ class TestBasicFunctionality(unittest.TestCase):
             tables.append(final_ts.dump_tables())
             tables[-1].provenances.clear()
         for a, b in itertools.combinations(tables, 2):
-            self.assertNotEqual(a, b)
+            assert a != b
 
     def test_mutations_not_allowed(self):
         from_ts = msprime.simulate(15, random_seed=5, end_time=2)
         start_time = from_ts.tables.nodes.time.max()
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             msprime.simulate(from_ts=from_ts, start_time=start_time, mutation_rate=10)
 
     def test_from_subclass(self):
@@ -469,9 +469,9 @@ class TestBasicFunctionality(unittest.TestCase):
             pass
 
         subclass_instance = MockTreeSequence(from_ts.ll_tree_sequence)
-        self.assertTrue(type(subclass_instance), MockTreeSequence)
-        self.assertIsInstance(subclass_instance, tskit.TreeSequence)
-        self.assertGreater(max(tree.num_roots for tree in subclass_instance.trees()), 1)
+        assert type(subclass_instance), MockTreeSequence
+        assert isinstance(subclass_instance, tskit.TreeSequence)
+        assert max(tree.num_roots for tree in subclass_instance.trees()) > 1
         start_time = subclass_instance.tables.nodes.time.max()
         final_ts = msprime.simulate(
             from_ts=subclass_instance, start_time=start_time, random_seed=2
@@ -571,7 +571,7 @@ class TestBasicFunctionality(unittest.TestCase):
 
     def test_start_time_less_than_base_nodes(self):
         base_ts = msprime.simulate(10, length=10, random_seed=34234, end_time=0.1)
-        self.assertGreater(base_ts.first().num_roots, 1)
+        assert base_ts.first().num_roots > 1
         max_time = max(node.time for node in base_ts.nodes())
         for x in [-1, 0, max_time / 2, max_time - 1e-6]:
             final_ts = msprime.simulate(from_ts=base_ts, start_time=x)
@@ -611,7 +611,7 @@ class BaseEquivalanceMixin:
         tables2 = ts2.dump_tables()
         tables1.provenances.clear()
         tables2.provenances.clear()
-        self.assertEqual(tables1, tables2)
+        assert tables1 == tables2
 
     def test_single_locus_two_samples(self):
         for seed in range(1, 10):
@@ -678,18 +678,18 @@ class BaseEquivalanceMixin:
         tables2 = ts2.dump_tables()
         tables1.provenances.clear()
         tables2.provenances.clear()
-        self.assertEqual(tables1, tables2)
+        assert tables1 == tables2
 
 
-class TestBaseEquivalanceHudson(BaseEquivalanceMixin, unittest.TestCase):
+class TestBaseEquivalanceHudson(BaseEquivalanceMixin):
     model = msprime.StandardCoalescent()
 
 
-class TestBaseEquivalanceWrightFisher(BaseEquivalanceMixin, unittest.TestCase):
+class TestBaseEquivalanceWrightFisher(BaseEquivalanceMixin):
     model = msprime.DiscreteTimeWrightFisher()
 
 
-class TestDemography(unittest.TestCase):
+class TestDemography:
     """
     Test that we correctly set up the initial conditions under different
     demographies.
@@ -720,12 +720,12 @@ class TestDemography(unittest.TestCase):
         # We should have two children at the root, and every node below
         # should be in one population.
         root_children = tree.children(tree.root)
-        self.assertEqual(len(root_children), 2)
+        assert len(root_children) == 2
         populations = {ts2.node(u).population: u for u in root_children}
-        self.assertEqual(len(populations), 2)
+        assert len(populations) == 2
         for pop in [0, 1]:
             for node in tree.nodes(populations[pop]):
-                self.assertEqual(ts2.node(node).population, pop)
+                assert ts2.node(node).population == pop
 
     def test_three_populations_no_migration_recombination(self):
         seed = 1234
@@ -759,20 +759,20 @@ class TestDemography(unittest.TestCase):
             ],
             random_seed=seed,
         )
-        self.assertGreater(ts2.num_trees, 1)
+        assert ts2.num_trees > 1
         for tree in ts2.trees():
             # We should have three children at the root, and every node below
             # should be in one population.
             root_children = tree.children(tree.root)
-            self.assertEqual(len(root_children), 3)
+            assert len(root_children) == 3
             populations = {ts2.node(u).population: u for u in root_children}
-            self.assertEqual(len(populations), 3)
+            assert len(populations) == 3
             for pop in [0, 1, 2]:
                 for node in tree.nodes(populations[pop]):
-                    self.assertEqual(ts2.node(node).population, pop)
+                    assert ts2.node(node).population == pop
 
 
-class TestErrors(unittest.TestCase):
+class TestErrors:
     """
     Basic tests for the from_ts argument for msprime.simulate.
     """
@@ -795,41 +795,41 @@ class TestErrors(unittest.TestCase):
 
     def test_samples(self):
         base_ts = self.get_example_base()
-        self.assertRaises(ValueError, msprime.simulate, 2, from_ts=base_ts)
-        self.assertRaises(ValueError, msprime.simulate, sample_size=2, from_ts=base_ts)
-        self.assertRaises(
-            ValueError,
-            msprime.simulate,
-            samples=[msprime.Sample(0, 0) for _ in range(10)],
-            from_ts=base_ts,
-        )
-        self.assertRaises(
-            ValueError,
-            msprime.simulate,
-            population_configurations=[msprime.PopulationConfiguration(sample_size=2)],
-            from_ts=base_ts,
-        )
+        with pytest.raises(ValueError):
+            msprime.simulate(2, from_ts=base_ts)
+        with pytest.raises(ValueError):
+            msprime.simulate(sample_size=2, from_ts=base_ts)
+        with pytest.raises(ValueError):
+            msprime.simulate(
+                samples=[msprime.Sample(0, 0) for _ in range(10)],
+                from_ts=base_ts,
+            )
+        with pytest.raises(ValueError):
+            msprime.simulate(
+                population_configurations=[
+                    msprime.PopulationConfiguration(sample_size=2)
+                ],
+                from_ts=base_ts,
+            )
 
     def test_bad_type(self):
         for bad_type in [{}, 1, "asd"]:
-            self.assertRaises(
-                TypeError, msprime.simulate, from_ts=bad_type, start_time=1
-            )
+            with pytest.raises(TypeError):
+                msprime.simulate(from_ts=bad_type, start_time=1)
 
     def test_start_time_bad_type(self):
         base_ts = self.get_example_base()
         for bad_type in ["4", {}]:
-            self.assertRaises(
-                TypeError, msprime.simulate, from_ts=base_ts, start_time=bad_type
-            )
+            with pytest.raises(TypeError):
+                msprime.simulate(from_ts=base_ts, start_time=bad_type)
 
     def test_sequence_length_mismatch(self):
         base_ts = self.get_example_base(length=5)
         for bad_length in [1, 4.99, 5.01, 100]:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.simulate(from_ts=base_ts, start_time=100, length=bad_length)
             recomb_map = msprime.RecombinationMap.uniform_map(bad_length, 1)
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.simulate(
                     from_ts=base_ts, start_time=100, recombination_map=recomb_map
                 )
@@ -839,7 +839,7 @@ class TestErrors(unittest.TestCase):
         tables = base_ts.dump_tables()
         nodes = tables.nodes
         nodes.set_columns(flags=nodes.flags, time=nodes.time)
-        with self.assertRaises(_msprime.InputError):
+        with pytest.raises(_msprime.InputError):
             msprime.simulate(
                 from_ts=tables.tree_sequence(), start_time=nodes.time.max()
             )
@@ -851,9 +851,7 @@ class TestErrors(unittest.TestCase):
         final_ts = msprime.simulate(
             from_ts=tables.tree_sequence(), start_time=nodes.time.max()
         )
-        self.assertEqual(
-            sum(tree.num_roots for tree in final_ts.trees()), final_ts.num_trees
-        )
+        assert sum(tree.num_roots for tree in final_ts.trees()) == final_ts.num_trees
 
     def test_single_population_id_null(self):
         base_ts = self.get_example_base()
@@ -864,7 +862,7 @@ class TestErrors(unittest.TestCase):
             population = np.zeros_like(nodes.population)
             population[j] = -1
             nodes.set_columns(flags=nodes.flags, population=population, time=nodes.time)
-            with self.assertRaises(_msprime.InputError):
+            with pytest.raises(_msprime.InputError):
                 msprime.simulate(
                     from_ts=tables.tree_sequence(), start_time=nodes.time.max()
                 )
@@ -875,7 +873,7 @@ class TestErrors(unittest.TestCase):
             start_time = max(node.time for node in base_ts.nodes())
             for k in range(1, N):
                 if k != N:
-                    with self.assertRaises(ValueError):
+                    with pytest.raises(ValueError):
                         msprime.simulate(
                             from_ts=base_ts,
                             start_time=start_time,
@@ -888,11 +886,11 @@ class TestErrors(unittest.TestCase):
         for N in range(2, 5):
             base_ts = self.get_example_base(num_populations=N)
             start_time = max(node.time for node in base_ts.nodes())
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 msprime.simulate(from_ts=base_ts, start_time=start_time)
 
 
-class TestSlimOutput(unittest.TestCase):
+class TestSlimOutput:
     """
     Verify that we can successfully simulate from SLiM output.
     """
@@ -917,14 +915,14 @@ class TestSlimOutput(unittest.TestCase):
         final_tables = final_ts.dump_tables()
         # Other tables should be equal up to the from_tables.
         final_tables.nodes.truncate(len(from_tables.nodes))
-        self.assertEqual(final_tables.nodes, from_tables.nodes)
+        assert final_tables.nodes == from_tables.nodes
         final_tables.edges.truncate(len(from_tables.edges))
-        self.assertEqual(final_tables.edges, from_tables.edges)
+        assert final_tables.edges == from_tables.edges
         # The mutation_rate parameter in simulate is not permitted, so we
         # should always have the same set of mutations before and after.
-        self.assertEqual(final_tables.sites, from_tables.sites)
-        self.assertEqual(final_tables.mutations, from_tables.mutations)
-        self.assertEqual(max(tree.num_roots for tree in final_ts.trees()), 1)
+        assert final_tables.sites == from_tables.sites
+        assert final_tables.mutations == from_tables.mutations
+        assert max(tree.num_roots for tree in final_ts.trees()) == 1
 
     def test_minimal_example_no_recombination(self):
         from_ts = tskit.load("tests/data/SLiM/minimal-example.trees")

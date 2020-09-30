@@ -52,10 +52,10 @@ jobs:
 
       - run:
           name: Run highlevel tests and upload coverage
+          # We hard-code number of cores here as we were running low on memory with more
           command: |
-            nosetests -v --with-coverage --cover-package msprime \
-              --cover-package docs.examples --cover-package algorithms \
-              --cover-branches --cover-erase --cover-xml --cover-inclusive tests
+            pytest --cov=msprime --cov=docs/examples --cov-report=xml --cov-branch \
+                        -n 8 tests
             codecov -X gcov -F python
             rm .coverage
 
