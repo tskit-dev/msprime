@@ -153,12 +153,13 @@ class DTWF(LargeSimulationBenchmark):
     def _run_long_sequence_length(self):
         msprime.simulate(
             sample_size=100,
-            Ne=1000,
+            Ne=10 ** 4,
             length=1e7,
-            recombination_rate=1e-9,
+            recombination_rate=1e-8,
             random_seed=42,
             model="dtwf",
-            end_time=10000,
+            # Tuning this to give ~30s runtime.
+            end_time=5e4,
         )
 
     def time_long_sequence_length(self):
