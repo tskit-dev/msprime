@@ -34,18 +34,6 @@ jobs:
             - "/home/circleci/.local"
 
       - run:
-          name: Lint Python (pre-commit)
-          command: |
-            pre-commit run --all-files --show-diff-on-failure
-
-      # Note: it's important that we build the docs *before* compiling the low-level
-      # module so that we're simulating the build on readthedocs as accurately as
-      # possible.
-      - run:
-          name: Make sure the docs build.
-          command: make -C docs
-
-      - run:
           name: Compile Python
           command: |
             make allchecks
