@@ -402,6 +402,35 @@ fast_search_free(fast_search_t *self)
 /*  PRE-CONDITIONS:
  *      1) query >= 0.0
  *      2) self is valid fast_search_t
+ * RETURNS:
+ *      See idx_1st_upper_bound
+ */
+const double *
+fast_search_ptr_upper(fast_search_t *self, double query)
+{
+    const double **lookups = self->lookups;
+    double fidx; // index that can be way larger than max size_t
+    size_t idx;
+    const double *ret;
+
+    assert(query >= 0.0);
+    fidx = query * self->query_multiplier;
+    if (fidx >= self->num_lookups - 1) {
+        ret = lookups[self->num_lookups - 1];
+    } else {
+        idx = (size_t) fidx;
+        ret = ptr_1st_upper_bound(lookups[idx], lookups[idx + 1], query);
+    }
+    assert(
+        ret == ptr_1st_upper_bound(lookups[0], lookups[self->num_lookups - 1], query));
+    return ret;
+}
+
+/*  PRE-CONDITIONS:
+ *      1) query >= 0.0
+ *      2) self is valid fast_search_t
+ * RETURNS:
+ *      See idx_1st_strict_upper_bound
  */
 const double *
 fast_search_ptr_strict_upper(fast_search_t *self, double query)
@@ -425,4 +454,5 @@ fast_search_ptr_strict_upper(fast_search_t *self, double query)
     return ret;
 }
 
+extern inline size_t fast_search_idx_upper(fast_search_t *self, double query);
 extern inline size_t fast_search_idx_strict_upper(fast_search_t *self, double query);

@@ -376,6 +376,9 @@ idx_1st_strict_upper_bound(const double *elements, size_t n_elements, double que
     return stop;
 }
 
+extern inline const double *ptr_1st_upper_bound(
+    const double *start, const double *stop, double query);
+
 extern inline const double *ptr_1st_strict_upper_bound(
     const double *start, const double *stop, double query);
 

@@ -343,18 +343,31 @@ verify_search(fast_search_t *zoom, const double *values, size_t n)
 {
     int i;
     double x;
-    size_t expect, got;
+    size_t expect_lo, expect_hi, expect_hi2, got;
 
     for (i = 0; i < n; i++) {
         x = values[i];
-        expect = idx_1st_strict_upper_bound(values, n, x);
+
+        expect_lo = idx_1st_upper_bound(values, n, x);
+        got = fast_search_idx_upper(zoom, x);
+        CU_ASSERT_EQUAL(expect_lo, got);
+
+        expect_hi = idx_1st_strict_upper_bound(values, n, x);
+        CU_ASSERT_NOT_EQUAL_FATAL(expect_lo, expect_hi);
         got = fast_search_idx_strict_upper(zoom, x);
-        CU_ASSERT_EQUAL(expect, got);
+        CU_ASSERT_EQUAL(expect_hi, got);
 
         x = nextafter(x, INFINITY);
-        expect = idx_1st_strict_upper_bound(values, n, x);
+
+        expect_hi2 = idx_1st_upper_bound(values, n, x);
+        CU_ASSERT_EQUAL_FATAL(expect_hi2, expect_hi);
+        got = fast_search_idx_upper(zoom, x);
+        CU_ASSERT_EQUAL(expect_hi2, got);
+
+        expect_hi2 = idx_1st_strict_upper_bound(values, n, x);
+        CU_ASSERT_FATAL(expect_hi2 >= expect_hi);
         got = fast_search_idx_strict_upper(zoom, x);
-        CU_ASSERT_EQUAL(expect, got);
+        CU_ASSERT_EQUAL(expect_hi2, got);
     }
 }
 

@@ -130,6 +130,13 @@ size_t idx_1st_strict_upper_bound(
     const double *elements, size_t n_elements, double query);
 
 inline const double *
+ptr_1st_upper_bound(const double *start, const double *stop, double query)
+{
+    assert(start <= stop);
+    return start + idx_1st_upper_bound(start, (size_t)(stop - start), query);
+}
+
+inline const double *
 ptr_1st_strict_upper_bound(const double *start, const double *stop, double query)
 {
     assert(start <= stop);
