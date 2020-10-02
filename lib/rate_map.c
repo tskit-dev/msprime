@@ -109,7 +109,7 @@ rate_map_alloc_single(rate_map_t *self, double sequence_length, double rate)
 int
 rate_map_free(rate_map_t *self)
 {
-    fast_search_free(&(self->position_lookup));
+    fast_search_free(&self->position_lookup);
     msp_safe_free(self->position);
     msp_safe_free(self->rate);
     msp_safe_free(self->cumulative_mass);
@@ -167,7 +167,7 @@ rate_map_position_to_mass(rate_map_t *self, double pos)
         return 0;
     }
     assert(pos <= position[self->size]);
-    index = fast_search_idx_strict_upper(&(self->position_lookup), pos);
+    index = fast_search_idx_strict_upper(&self->position_lookup, pos);
     assert(index == idx_1st_strict_upper_bound(position, self->size + 1, pos));
     assert(index > 0);
     index--;
@@ -216,7 +216,7 @@ rate_map_shift_by_mass(rate_map_t *self, double pos, double mass)
  * `fast_search_t` is a lookup table pointing to an array of `double`s
  * (the "elements"). It does not own the array but does point to all its memory.
  *
- * It's purpose is speed up the search for a "query" value in that array of
+ * Its purpose is speed up the search for a "query" value in that array of
  * elements. The `fast_search_idx_strict_upper` function is essentially a drop-in
  * replacement for the function `idx_1st_strict_upper_bound` (which in turn is
  * a drop-in replacement for the C++ <algorithm> library function
@@ -275,31 +275,6 @@ valid_sorted_nonempty_array(const double *array, size_t size)
     return true;
 }
 
-static bool
-fast_search_valid(fast_search_t *self)
-{
-    const double *start, *stop;
-    size_t idx;
-
-    if (!(self->query_multiplier >= 0.0)) { // NaN not valid
-        return false;
-    }
-    if (self->num_lookups < 2) {
-        return false;
-    }
-    for (idx = 1; idx < self->num_lookups; idx++) {
-        if (self->lookups[idx - 1] > self->lookups[idx]) {
-            return false;
-        }
-    }
-    start = self->lookups[0];
-    stop = self->lookups[self->num_lookups - 1];
-    if (stop <= start || start[0] != 0.0) {
-        return false;
-    }
-    return valid_sorted_nonempty_array(start, (size_t)(stop - start));
-}
-
 static int
 fast_search_init_lookups(fast_search_t *self, const double *elements, size_t n_elements)
 {
@@ -318,11 +293,6 @@ fast_search_init_lookups(fast_search_t *self, const double *elements, size_t n_e
         }
         self->lookups[idx] = ptr;
     }
-    if (!fast_search_valid(self)) {
-        ret = MSP_ERR_ASSERTION_FAILED;
-        goto out;
-    }
-out:
     return ret;
 }
 
@@ -358,11 +328,7 @@ fast_search_alloc(fast_search_t *self, const double *elements, size_t n_elements
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (n_elements >= max_input_size) {
-        ret = MSP_ERR_ASSERTION_FAILED;
-        goto out;
-    }
-    if (elements[0] != 0.0 || isnan(elements[0])) {
+    if (elements[0] != 0.0 || n_elements >= max_input_size) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
@@ -399,60 +365,39 @@ fast_search_free(fast_search_t *self)
     return 0;
 }
 
-/*  PRE-CONDITIONS:
- *      1) query >= 0.0
- *      2) self is valid fast_search_t
- * RETURNS:
- *      See idx_1st_upper_bound
- */
-const double *
-fast_search_ptr_upper(fast_search_t *self, double query)
+static inline const double *
+ptr_1st_strict_upper_bound(const double *start, const double *stop, double query)
 {
-    const double **lookups = self->lookups;
-    double fidx; // index that can be way larger than max size_t
-    size_t idx;
-    const double *ret;
-
-    assert(query >= 0.0);
-    fidx = query * self->query_multiplier;
-    if (fidx >= self->num_lookups - 1) {
-        ret = lookups[self->num_lookups - 1];
-    } else {
-        idx = (size_t) fidx;
-        ret = ptr_1st_upper_bound(lookups[idx], lookups[idx + 1], query);
-    }
-    assert(
-        ret == ptr_1st_upper_bound(lookups[0], lookups[self->num_lookups - 1], query));
-    return ret;
+    assert(start <= stop);
+    return start + idx_1st_strict_upper_bound(start, (size_t)(stop - start), query);
 }
 
-/*  PRE-CONDITIONS:
- *      1) query >= 0.0
- *      2) self is valid fast_search_t
+/* PRE-CONDITIONS:
+ *   1) query >= 0.0
  * RETURNS:
- *      See idx_1st_strict_upper_bound
+ *   See idx_1st_strict_upper_bound
+ * NOTE:
+ *   A non-strict version of this function can be achieved by reimplementing it
+ *   to call a non-strict version of `ptr_1st_strict_upper_bound`
  */
-const double *
-fast_search_ptr_strict_upper(fast_search_t *self, double query)
+size_t
+fast_search_idx_strict_upper(fast_search_t *self, double query)
 {
     const double **lookups = self->lookups;
     double fidx; // index that can be way larger than max size_t
     size_t idx;
-    const double *ret;
+    const double *ptr;
 
     assert(query >= 0.0);
     fidx = query * self->query_multiplier;
     if (fidx >= self->num_lookups - 1) {
-        ret = lookups[self->num_lookups - 1];
+        ptr = lookups[self->num_lookups - 1];
     } else {
         idx = (size_t) fidx;
-        ret = ptr_1st_strict_upper_bound(lookups[idx], lookups[idx + 1], query);
+        ptr = ptr_1st_strict_upper_bound(lookups[idx], lookups[idx + 1], query);
     }
-    assert(ret
+    assert(ptr
            == ptr_1st_strict_upper_bound(
                   lookups[0], lookups[self->num_lookups - 1], query));
-    return ret;
+    return (size_t)(ptr - lookups[0]);
 }
-
-extern inline size_t fast_search_idx_upper(fast_search_t *self, double query);
-extern inline size_t fast_search_idx_strict_upper(fast_search_t *self, double query);

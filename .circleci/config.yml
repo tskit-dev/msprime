@@ -83,6 +83,7 @@ jobs:
             gcov -pb ./libmsprime.a.p/interval_map.c.gcno ../lib/interval_map.c
             gcov -pb ./libmsprime.a.p/util.c.gcno ../lib/util.c
             gcov -pb ./libmsprime.a.p/likelihood.c.gcno ../lib/likelihood.c
+            gcov -pb ./libmsprime.a.p/rate_map.c.gcno ../lib/rate_map.c
             cd ..
             codecov -X gcov -F C
 

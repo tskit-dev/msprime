@@ -343,32 +343,51 @@ verify_search(fast_search_t *zoom, const double *values, size_t n)
 {
     int i;
     double x;
-    size_t expect_lo, expect_hi, expect_hi2, got;
+    size_t expect, got;
 
     for (i = 0; i < n; i++) {
         x = values[i];
-
-        expect_lo = idx_1st_upper_bound(values, n, x);
-        got = fast_search_idx_upper(zoom, x);
-        CU_ASSERT_EQUAL(expect_lo, got);
-
-        expect_hi = idx_1st_strict_upper_bound(values, n, x);
-        CU_ASSERT_NOT_EQUAL_FATAL(expect_lo, expect_hi);
+        expect = idx_1st_strict_upper_bound(values, n, x);
         got = fast_search_idx_strict_upper(zoom, x);
-        CU_ASSERT_EQUAL(expect_hi, got);
+        CU_ASSERT_EQUAL(expect, got);
 
         x = nextafter(x, INFINITY);
-
-        expect_hi2 = idx_1st_upper_bound(values, n, x);
-        CU_ASSERT_EQUAL_FATAL(expect_hi2, expect_hi);
-        got = fast_search_idx_upper(zoom, x);
-        CU_ASSERT_EQUAL(expect_hi2, got);
-
-        expect_hi2 = idx_1st_strict_upper_bound(values, n, x);
-        CU_ASSERT_FATAL(expect_hi2 >= expect_hi);
+        expect = idx_1st_strict_upper_bound(values, n, x);
         got = fast_search_idx_strict_upper(zoom, x);
-        CU_ASSERT_EQUAL(expect_hi2, got);
+        CU_ASSERT_EQUAL(expect, got);
     }
+}
+
+static bool
+fast_search_verify(fast_search_t *self)
+{
+    const double *start, *stop;
+    size_t idx;
+
+    if (!(self->query_multiplier >= 0.0)) { // NaN not valid
+        return false;
+    }
+    if (self->num_lookups < 2) {
+        return false;
+    }
+    for (idx = 1; idx < self->num_lookups; idx++) {
+        if (self->lookups[idx - 1] > self->lookups[idx]) {
+            return false;
+        }
+    }
+    start = self->lookups[0];
+    stop = self->lookups[self->num_lookups - 1];
+    if (stop <= start || start[0] != 0.0) {
+        return false;
+    }
+    return true;
+}
+
+static void
+fast_search_alloc_verify(fast_search_t *self, const double *elements, size_t n_elements)
+{
+    CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(self, elements, n_elements));
+    CU_ASSERT(fast_search_verify(self));
 }
 
 static void
@@ -377,7 +396,7 @@ test_fast_search_identity(void)
     double p[] = { 0.0, 1.0, 2.0, 3.0, 4.0, 5.0 };
     for (size_t n = 2; n <= 6; n++) {
         fast_search_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
+        fast_search_alloc_verify(&speedy, p, n);
         CU_ASSERT_EQUAL(1.0, speedy.query_multiplier);
         CU_ASSERT_EQUAL(n + 1, speedy.num_lookups);
         for (size_t i = 0; i <= n; i++) {
@@ -394,7 +413,7 @@ test_fast_search_2powers(void)
         double p[] = { 0, 2 };
         size_t n = 2;
         fast_search_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
+        fast_search_alloc_verify(&speedy, p, n);
         CU_ASSERT_EQUAL(0.5, speedy.query_multiplier);
         CU_ASSERT_EQUAL(3, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
@@ -406,7 +425,7 @@ test_fast_search_2powers(void)
         double p[] = { 0, 0.25 };
         size_t n = 2;
         fast_search_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
+        fast_search_alloc_verify(&speedy, p, n);
         CU_ASSERT_EQUAL(4.0, speedy.query_multiplier);
         CU_ASSERT_EQUAL(3, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
@@ -418,7 +437,7 @@ test_fast_search_2powers(void)
         double p[] = { 0, 8 };
         size_t n = 2;
         fast_search_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
+        fast_search_alloc_verify(&speedy, p, n);
         CU_ASSERT_EQUAL(0.125, speedy.query_multiplier);
         CU_ASSERT_EQUAL(3, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
@@ -435,7 +454,7 @@ test_fast_search(void)
         double p[] = { 0, 0.3, 0.3, 0.5, 1.1, 1.1 };
         size_t n = 6;
         fast_search_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
+        fast_search_alloc_verify(&speedy, p, n);
         CU_ASSERT_EQUAL(4.0, speedy.query_multiplier);
         CU_ASSERT_EQUAL(6, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
@@ -451,7 +470,7 @@ test_fast_search(void)
         double p[] = { 0, 6, 13 };
         size_t n = 3;
         fast_search_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
+        fast_search_alloc_verify(&speedy, p, n);
         CU_ASSERT_EQUAL(0.125, speedy.query_multiplier);
         CU_ASSERT_EQUAL(3, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
@@ -471,7 +490,7 @@ test_fast_search_zeros(void)
     {
         size_t n = 1;
         fast_search_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
+        fast_search_alloc_verify(&speedy, p, n);
         CU_ASSERT_EQUAL(2, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
         CU_ASSERT_EQUAL(p + n, speedy.lookups[1]);
@@ -481,7 +500,7 @@ test_fast_search_zeros(void)
     {
         size_t n = 3;
         fast_search_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
+        fast_search_alloc_verify(&speedy, p, n);
         CU_ASSERT_EQUAL(highest_power, speedy.query_multiplier);
         CU_ASSERT_EQUAL(2, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
@@ -492,7 +511,7 @@ test_fast_search_zeros(void)
     {
         size_t n = 4;
         fast_search_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
+        fast_search_alloc_verify(&speedy, p, n);
         CU_ASSERT_EQUAL(highest_power, speedy.query_multiplier);
         CU_ASSERT_EQUAL(2, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
@@ -503,7 +522,7 @@ test_fast_search_zeros(void)
     {
         size_t n = 6;
         fast_search_t speedy;
-        CU_ASSERT_EQUAL_FATAL(0, fast_search_alloc(&speedy, p, n));
+        fast_search_alloc_verify(&speedy, p, n);
         CU_ASSERT_EQUAL(highest_power, speedy.query_multiplier);
         CU_ASSERT_EQUAL(4, speedy.num_lookups);
         CU_ASSERT_EQUAL(p + 0, speedy.lookups[0]);
@@ -521,19 +540,25 @@ test_fast_search_bad_input(void)
     {
         double p[] = {};
         fast_search_t speedy;
-        CU_ASSERT(0 != fast_search_alloc(&speedy, p, 0));
+        CU_ASSERT_EQUAL(fast_search_alloc(&speedy, p, 0), MSP_ERR_BAD_PARAM_VALUE);
         fast_search_free(&speedy);
     }
     {
         double p[] = { 1, 2 };
         fast_search_t speedy;
-        CU_ASSERT(0 != fast_search_alloc(&speedy, p, 2));
+        CU_ASSERT_EQUAL(fast_search_alloc(&speedy, p, 2), MSP_ERR_BAD_PARAM_VALUE);
         fast_search_free(&speedy);
     }
     {
         double p[] = { -1, 2 };
         fast_search_t speedy;
-        CU_ASSERT(0 != fast_search_alloc(&speedy, p, 2));
+        CU_ASSERT_EQUAL(fast_search_alloc(&speedy, p, 2), MSP_ERR_BAD_PARAM_VALUE);
+        fast_search_free(&speedy);
+    }
+    {
+        double p[] = { 0, 2, 1 };
+        fast_search_t speedy;
+        CU_ASSERT_EQUAL(fast_search_alloc(&speedy, p, 3), MSP_ERR_BAD_PARAM_VALUE);
         fast_search_free(&speedy);
     }
 }

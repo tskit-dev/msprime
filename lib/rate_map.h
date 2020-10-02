@@ -39,22 +39,7 @@ typedef struct {
 
 int fast_search_alloc(fast_search_t *self, const double *values, size_t n_values);
 int fast_search_free(fast_search_t *self);
-const double *fast_search_ptr_upper(fast_search_t *self, double query);
-const double *fast_search_ptr_strict_upper(fast_search_t *self, double query);
-
-inline size_t
-fast_search_idx_upper(fast_search_t *self, double query)
-{
-    const double *ptr = fast_search_ptr_upper(self, query);
-    return (size_t)(ptr - self->lookups[0]);
-}
-
-inline size_t
-fast_search_idx_strict_upper(fast_search_t *self, double query)
-{
-    const double *ptr = fast_search_ptr_strict_upper(self, query);
-    return (size_t)(ptr - self->lookups[0]);
-}
+size_t fast_search_idx_strict_upper(fast_search_t *self, double query);
 
 int rate_map_alloc(rate_map_t *self, size_t size, double *position, double *value);
 int rate_map_alloc_single(rate_map_t *self, double sequence_length, double value);
