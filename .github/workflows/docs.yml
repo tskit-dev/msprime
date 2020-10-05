@@ -1,23 +1,73 @@
 name: Build and deploy docs
 
 on:
-  pull_request:
+  pull_request_target:
   push:
     branches: [main]
+    tags:
+      - '*'
 
 jobs:
-  build-docs:
+  build-deploy-docs:
     runs-on: ubuntu-18.04
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
+        # As we are using pull-request-target which uses the workflow from the base
+        # of the PR, we need to be specific
         with:
+            ref: ${{github.event.pull_request.head.ref}}
+            repository: ${{github.event.pull_request.head.repo.full_name}}
             submodules: true
+
       - uses: actions/setup-python@v1
+
       - name: Install GSL
-        run: sudo apt install libgsl0-dev
+        run: sudo apt-get install -y libgsl0-dev
+
       - name: Install python-deps
-        run: python -m pip install -r requirements/docs.txt
+        run: |
+          python -m pip install wheel
+          python -m pip install -r requirements/docs.txt
+
       - name: Build C module
         run: make cmodule
+
       - name: Build Docs
         run: make -C docs
+
+      - name: Checkout docs site
+        uses: actions/checkout@v2
+        with:
+          repository: tskit-dev/msprime-docs
+          token: ${{ secrets.ADMINBOT_DOCS_TOKEN }}
+          path: msprime-docs
+
+      - name: Copy our docs to the PR specific location
+        if: github.event.pull_request
+        run: |
+          cd msprime-docs
+          cp -r ../docs/_build/html ${{github.event.pull_request.number}}
+
+      - name: Copy our docs to the tag specific location
+        if: (!github.event.pull_request)
+        run: |
+          cd msprime-docs
+          cp -r docs/_build/html `echo ${GITHUB_REF} | sed -e "s/refs\/heads\///g" |  sed -e "s/refs\/tags\///g"`
+
+      - name: Commit and push the docs
+        run: |
+          cd msprime-docs
+          git config user.name Adminbot-tskit
+          git config user.email ben.jeffery.well+adminbot@gmail.com
+          git add .
+          git diff-index --quiet HEAD || git commit -m "Automated doc build for ${{github.event.pull_request.number}} ${GITHUB_REF}"
+          git push
+
+      - name: Comment on PR
+        if: github.event.pull_request
+        uses: mshick/add-pr-comment@v1
+        with:
+          message: |
+            📖 Docs for this PR can be previewed [here](https://tskit-dev.github.io/msprime-docs/${{github.event.pull_request.number}}/)
+          allow-repeats: false
+          repo-token: ${{ secrets.ADMINBOT_DOCS_TOKEN }}

@@ -7,6 +7,7 @@ pull_request_rules:
       - label=AUTOMERGE-REQUESTED
       - status-success=lint-c
       - status-success=pre-commit
+      - status-success=build-deploy-docs
       - "status-success=ci/circleci: build"
       #- status-success=codecov/patch
       #- status-success=codecov/project/c-tests
