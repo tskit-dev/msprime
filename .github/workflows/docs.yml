@@ -4,20 +4,55 @@ on:
   pull_request:
   push:
     branches: [main]
+    tags:
+      - '*'
 
 jobs:
-  build-docs:
+  build-deploy-docs:
     runs-on: ubuntu-18.04
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
         with:
             submodules: true
+
       - uses: actions/setup-python@v1
+
       - name: Install GSL
         run: sudo apt install libgsl0-dev
+
       - name: Install python-deps
         run: python -m pip install -r requirements/docs.txt
+
       - name: Build C module
         run: make cmodule
+
       - name: Build Docs
         run: make -C docs
+
+      - name: Checkout docs site
+        uses: actions/checkout@v2
+        with:
+          repository: tskit-dev/msprime-docs
+          token: ${{ secrets.ADMINBOT_DOCS_TOKEN }}
+          path: msprime-docs
+
+      - name: Copy our docs to the PR specific location
+        if: github.event.pull_request
+        run: |
+          echo cp -r docs/_build/html mprime-docs/${{github.event.issue.number}}
+          cp -r docs/_build/html mprime-docs/${{github.event.issue.number}}
+
+      - name: Copy our docs to the tag specific location
+        if: (!github.event.pull_request)
+        run: |
+          echo cp -r docs/_build/html mprime-docs/${GITHUB_REF#refs/tags/}
+          cp -r docs/_build/html mprime-docs/${GITHUB_REF#refs/tags/}
+
+      - name: Commit and push the docs
+        run: |
+          cd msprime-docs
+          git config user.name Adminbot-tskit
+          git config user.email ben.jeffery.well+adminbot@gmail.com
+          git add .
+          git commit -m "Automated doc build"
+          git push
