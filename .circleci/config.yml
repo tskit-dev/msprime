@@ -23,7 +23,7 @@ jobs:
           name: Install dependencies and set path
           command: |
             sudo apt-get update
-            sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev ninja-build valgrind clang
+            sudo apt-get install -y libgsl0-dev libcunit1-dev libconfig-dev ninja-build valgrind clang lcov
             pip install --user -r requirements/development.txt
             pip install --user meson twine
             # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
@@ -83,6 +83,7 @@ jobs:
             gcov -pb ./libmsprime.a.p/interval_map.c.gcno ../lib/interval_map.c
             gcov -pb ./libmsprime.a.p/util.c.gcno ../lib/util.c
             gcov -pb ./libmsprime.a.p/likelihood.c.gcno ../lib/likelihood.c
+            lcov --capture --directory . --output lcov-data.txt
             cd ..
             codecov -X gcov -F C
 
