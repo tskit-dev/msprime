@@ -79,10 +79,10 @@ jobs:
             gcov -pb ./libmsprime.a.p/msprime.c.gcno ../lib/msprime.c
             gcov -pb ./libmsprime.a.p/mutgen.c.gcno ../lib/mutgen.c
             gcov -pb ./libmsprime.a.p/object_heap.c.gcno ../lib/object_heap.c
-            gcov -pb ./libmsprime.a.p/recomb_map.c.gcno ../lib/recomb_map.c
             gcov -pb ./libmsprime.a.p/interval_map.c.gcno ../lib/interval_map.c
             gcov -pb ./libmsprime.a.p/util.c.gcno ../lib/util.c
             gcov -pb ./libmsprime.a.p/likelihood.c.gcno ../lib/likelihood.c
+            gcov -pb ./libmsprime.a.p/rate_map.c.gcno ../lib/rate_map.c
             cd ..
             codecov -X gcov -F C
 

@@ -312,72 +312,6 @@ __msp_safe_free(void **ptr)
     }
 }
 
-/* This function follows standard semantics of:
- *   numpy.searchsorted(..., side='left') and
- *   std::lower_bound() from the standard C++ <algorithm> library
- * PRE-CONDITION:
- *   1) `values` are sorted
- * RETURNS:
- *   First (leftmost) `index` of upper bounds of `query`
- *   **or** `n_values` if all `values` are strict lower bounds of `query`
- * POST-CONDITION:
- *   values[index-1] < query <= values[index]
- *   (ignoring comparisons with invalid [] indexing)
- */
-size_t
-idx_1st_upper_bound(const double *values, size_t n_values, double query)
-{
-    size_t l = 0;
-    size_t r = n_values;
-    size_t m;
-
-    while (l < r) {
-        m = (l + r) / 2UL;
-        /* TODO: uncomment assert when #1203 done and this longer slows down release
-           assert(values[l] <= values[m]); */
-        if (values[m] < query) {
-            l = m + 1;
-        } else {
-            r = m;
-        }
-    }
-    return l;
-}
-
-/* This function follows standard semantics of:
- *   std::upper_bound() from the standard C++ <algorithm> library
- *   and numpy.searchsorted(..., side='right') [Caveat]
- * PRE-CONDITION:
- *   1) `values` are sorted
- * RETURNS:
- *   First (leftmost) `index` of strict upper bounds of `query`
- *   **or** `n_values` if all `values` are lower bounds of `query`
- * POST-CONDITION:
- *    values[index-1] <= query < values[index]
- *    (ignoring comparisons with invalid [] indexing)
- * [Caveat]:
- *   This function matches NaN semantics of std::upper_bound, not numpy
- */
-size_t
-idx_1st_strict_upper_bound(const double *elements, size_t n_elements, double query)
-{
-    size_t start = 0;
-    size_t stop = n_elements;
-    size_t mid;
-
-    while (start < stop) {
-        mid = (start + stop) / 2;
-        /* TODO: uncomment assert when #1203 done and this longer slows down release
-        assert(elements[start] <= elements[mid]); */
-        if (!(elements[mid] > query)) { // match NaN logic of std::upper_bound
-            start = mid + 1;
-        } else {
-            stop = mid;
-        }
-    }
-    return stop;
-}
-
 bool
 doubles_almost_equal(double a, double b, double eps)
 {
@@ -386,15 +320,19 @@ doubles_almost_equal(double a, double b, double eps)
 
 /* Inputs:
  *   - `lengths` is an array of the real number lengths of `num_intervals`
- *      consecutive half-open intervals on the real number line start at zero,
- *      i.e. given lengths L_i, the intervals are:
- *          [0.0, L_0), [L_0, L_0 + L_1), [L_0 + L_1, L_0 + L_1 + L_2), ...
- *   - `x` is a real number to find in one of the intervals or after all of them
+ *      consecutive half-open intervals on the real number line starting at zero,
+ *      i.e. given lengths L_i, the half-open intervals are:
+ *
+ *           [S_0, S_1), [S_1, S_2), [S_2, S_3), ..., [S_{N-1}, S_N)
+ *
+ *      where S_0 = 0.0 and S_{i+1} = S_i + L_i and N = `num_intervals`.
+ *
+ *   - `x` is a number to find in the following extension of those intervals:
+ *
+ *     [-INFINITY, S_1), [S_1, S_2), [S_2, S_3), ..., [S_{N-1}, S_N), [S_N, INFINITY]
+ *
  * Returns:
- *   - the index (starting at zero) of the interval in which `x` was found
- *   - `num_intervals` if `x` is at or past the end of the last interval
- *     (the sum of all the lengths)
- *   - zero if `x` is negative
+ *   - the index of the interval in which `x` was found (0 to `num_interval`, inclusive)
  *   - `num_interval` if `x` is NaN
  * Pre-conditions:
  *   - `lengths` must point to `num_interval` non-negative non-NaN doubles
@@ -427,3 +365,295 @@ probability_list_select(double u, size_t num_probs, double const *probs)
 {
     return (num_probs > 0 ? positive_interval_select(u, num_probs - 1, probs) : 0);
 }
+
+/* binary search functions */
+
+/* This function follows standard semantics of:
+ *   numpy.searchsorted(..., side='left') and
+ *   std::lower_bound() from the standard C++ <algorithm> library
+ * PRE-CONDITION:
+ *   1) `values` are sorted
+ * RETURNS:
+ *   First (leftmost) `index` of upper bounds of `query`
+ *   **or** `n_values` if all `values` are strict lower bounds of `query`
+ * POST-CONDITION:
+ *   values[index-1] < query <= values[index]
+ *   (ignoring comparisons with invalid [] indexing)
+ */
+size_t
+idx_1st_upper_bound(const double *values, size_t n_values, double query)
+{
+    size_t l = 0;
+    size_t r = n_values;
+    size_t m;
+
+    while (l < r) {
+        m = (l + r) / 2UL;
+        assert(values[l] <= values[m]);
+        if (values[m] < query) {
+            l = m + 1;
+        } else {
+            r = m;
+        }
+    }
+    return l;
+}
+
+/* This function follows standard semantics of:
+ *   std::upper_bound() from the standard C++ <algorithm> library
+ *   and numpy.searchsorted(..., side='right') [Caveat]
+ * PRE-CONDITION:
+ *   1) `values` are sorted
+ * RETURNS:
+ *   First (leftmost) `index` of strict upper bounds of `query`
+ *   **or** `n_values` if all `values` are lower bounds of `query`
+ * POST-CONDITION:
+ *    values[index-1] <= query < values[index]
+ *    (ignoring comparisons with invalid [] indexing)
+ * [Caveat]:
+ *   This function matches NaN semantics of std::upper_bound, not numpy
+ */
+size_t
+idx_1st_strict_upper_bound(const double *elements, size_t n_elements, double query)
+{
+    return sub_idx_1st_strict_upper_bound(elements, 0, n_elements, query);
+}
+
+/* The `fast_search_t` structure and functions
+ *
+ * `fast_search_t` is a lookup table pointing to an array of `double`s
+ * (the "elements"). It does not own the array but does point to all its memory.
+ *
+ * Its purpose is to speed up the search for a "query" value in that array of
+ * elements. The `fast_search_idx_strict_upper` function is essentially a drop-in
+ * replacement for the function `idx_1st_strict_upper_bound` (which in turn is
+ * a drop-in replacement for the C++ <algorithm> library function
+ * std::upper_bound).
+ *
+ * The key concept behind `fast_search_t` is that the bits inside a
+ * "query" `double` contain a good deal of information about where near-by
+ * values in the array of elements might be found in memory. The best
+ * performance is when the array of elements have values that increase roughly
+ * linearly. But this is not a requirement. The only requirement is that the
+ * elements be non-decreasing.
+ *
+ * Since the element values are not perfectly linear some re-mapping is
+ * required.  This is achieved through an lookup array of element indexes.
+ * Although there need not be a linear mapping between element values and the
+ * range of query values, the lookup values (element indexes) are linear with
+ * the range of query values.
+ *
+ * The `query_multiplier` determines the linear mapping between possible query
+ * values and indexes in the lookup array of element indexes. Because the
+ * `query_multiplier` is a power of 2, a predictable range of possible "query"
+ * values will truncate to a specific lookup index.
+ *
+ * The size of the lookup array could be adjustable, but this simple
+ * implementation chooses one simple strategy for the size of the lookup array.
+ * For a perfectly linear sequence of element values, the lookup array will be
+ * a simple progression of element indexes.
+ * The extremely simple case of element values being the non-negative integers
+ * is coded in the `test_fast_search_identity` unit test.
+ * An example of alternative linear sequences with different `query_multiplier`
+ * are coded in `test_fast_search_2powers`.
+ *
+ * Consider example target array of elements:
+ *
+ * (element index, element value)
+ * [0], 0.0
+ * [1], 0.1
+ * [2], 0.8
+ * [3], 2.7
+ * [4], 6.4
+ * [5], ___ (the end, past last element of the array)
+ *
+ * The power of 2 greater or equal to the maximum element is 8.
+ * The number of memory address steps to the maximum element is 4.
+ * The power of 2 greater or equal to that number of steps is also 4.
+ * Thus the query multiplier is going to be 0.5.
+ * The lookup table is going to start with an element index to the last of the elements.
+ * The last element index in the lookup table will point to the end of the element array.
+ * The lookup table should be just the right size so that rescaling (and truncating) a
+ * query equaling the maximum element will result in an index to the last element index
+ * in the lookup table. This is `trunc(6.4 * 0.5) = 3`. Thus the lookup table
+ * will be `(1 + 1 + 3) = 5` element indexes.
+ *
+ * The lookup table of element indexes will handle the following 5 query ranges:
+ *
+ * [0.0, 2.0)
+ * [2.0, 4.0)
+ * [4.0, 6.0)
+ * [6.0, 8.0)
+ * [8.0, INFINITY)
+ *
+ * with each lookup entry pointing to the first upper bound to the minimum in those
+ * query ranges. Thus we get the following lookup table of element indexes:
+ *
+ * (lookup index, element index)
+ * [0] 0 (0.0 in elements is upper bound to query range minimum 0.0)
+ * [1] 3 (2.7 in elements is upper bound to query range minimum 2.0)
+ * [2] 4 (6.4 in elements is upper bound to query range minimum 4.0)
+ * [4] 4 (6.4 in elements is upper bound to query range minimum 6.0)
+ * [5] 5 (no upper bound in elements to query range minimum 8.0)
+ *
+ * Consider the search with a query of `3.3`. This query will be multiplied by
+ * the query multiplier of 0.5 and then truncated to get lookup index `1`. This
+ * corresponds the query range [2.0, 4.0) and all queries in that range when
+ * multiplied by the query multiplier and truncated will result in lookup index
+ * `1`. This entry in the lookup table maps to 0xECE3 which contains the value
+ * 2.7. The next entry in the lookup table corresponds to the query range [4.0, 6.0)
+ * and has 0xECE4 pointing to element value 6.4. Thus a much smaller binary
+ * search will be performed on the memory range [0xECE3, 0xECE4) which will
+ * result in finding 0xECE4 as the first strict upper bound to the query of `3.3`.
+ */
+
+#if FLT_RADIX != 2
+#error "Base 2 floating point types required"
+#endif
+
+#if SIZE_MAX < ULLONG_MAX
+#error "size_t must be at least 64 bits"
+/* unsigned long long must be at least 64 bits */
+#endif
+
+static bool
+valid_sorted_nonempty_array(const double *array, size_t size)
+{
+    size_t idx;
+
+    if ((ptrdiff_t) size < 1 || isnan(array[0])) {
+        return false;
+    }
+    for (idx = 1; idx < size; idx++) {
+        if (!(array[idx - 1] <= array[idx])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static int
+fast_search_init_lookups(fast_search_t *self, const double *elements, size_t n_elements)
+{
+    int ret = 0;
+    const double *ptr, *stop;
+    unsigned idx;
+    double min_query;
+
+    if (n_elements > UINT_MAX) {
+        ret = MSP_ERR_BAD_PARAM_VALUE; // LCOV_EXCL_LINE
+        goto out;                      // LCOV_EXCL_LINE
+    }
+    self->elements = elements;
+    self->lookups[0] = 0;
+    ptr = elements;
+    stop = elements + n_elements;
+    for (idx = 1; idx < self->num_lookups; idx++) {
+        /* `min_query` is the smallest possible query that will get rescaled to idx */
+        min_query = idx / self->query_multiplier;
+        /* move ptr to the first upper bound of min_query in elements */
+        while (ptr < stop && *ptr < min_query) {
+            ptr++;
+        }
+        /* The query range of [A, B) maps to `idx` where
+         * A = idx/query_multiplier and B = (idx + 1)/query_multiplier).
+         * Want `lookup[idx]` to point to the first upper bound of A in the elements.
+         */
+        self->lookups[idx] = (unsigned) (ptr - elements);
+    }
+out:
+    return ret;
+}
+
+/* Returns the least power of 2 greater than or equal to `x` for positive numbers,
+ * otherwise returns zero.
+ */
+static double
+higher_power_of_2(double x)
+{
+    assert(x >= 0);
+    if (x <= 0) {
+        return 0.0;
+    }
+    double floor = exp2(logb(x));
+    return (floor < x ? floor * 2.0 : floor);
+}
+
+/* PRE-CONDITIONS:
+ *     1) `elements` must point to array of doubles starting at exactly `0.0`
+ *     2) `elements` must be non-empty non-decreasing and with no NaN
+ */
+int
+fast_search_alloc(fast_search_t *self, const double *elements, size_t n_elements)
+{
+    int ret = 0;
+    double max_element;
+
+    const size_t max_input_size = 1LL << (DBL_MANT_DIG - 1); // 4096 terabytes
+
+    memset(self, 0, sizeof(*self));
+
+    if (!valid_sorted_nonempty_array(elements, n_elements)) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    if (elements[0] != 0.0 || n_elements >= max_input_size) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+    max_element = elements[n_elements - 1];
+    if (!isfinite(max_element)) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    }
+
+    /* query_multiplier will rescale queries to be a desired lookup table index
+     * (plus a fraction). To avoid rounding problems query_multiplier is a power of 2.
+     */
+    self->query_multiplier
+        = higher_power_of_2((double) n_elements - 1) / higher_power_of_2(max_element);
+    if (!isfinite(self->query_multiplier)) {
+        self->query_multiplier = exp2(DBL_MAX_EXP - 1); // largest possible power of 2
+    }
+    assert(isfinite(self->query_multiplier));
+
+    /* Many different sizes for the lookup table are reasonable. The lookup
+     * table size choice here is a simple one that will use roughly the same amount
+     * of memory as the target array of element values.
+     * The first lookup element index will point to the start of the elements array.
+     * The last lookup element index will point to the end, just past the last, element
+     * of the array. The rest of the lookup element indexes point to (max_element *
+     * query_multiplier) non-zero element values.
+     */
+    self->num_lookups = 2 + (size_t)(max_element * self->query_multiplier);
+
+    self->query_cutoff = ((double) self->num_lookups - 1) / self->query_multiplier;
+
+    self->lookups = malloc(self->num_lookups * sizeof(*(self->lookups)));
+    if (self->lookups == NULL) {
+        ret = MSP_ERR_NO_MEMORY; // LCOV_EXCL_LINE
+        goto out;                // LCOV_EXCL_LINE
+    }
+
+    ret = fast_search_init_lookups(self, elements, n_elements);
+out:
+    return ret;
+}
+
+int
+fast_search_free(fast_search_t *self)
+{
+    msp_safe_free(self->lookups);
+    return 0;
+}
+
+/*******************************
+ *  `extern inline` declarations
+ *  Due to compiler/linker limitations of C99, `inline` function declarations
+ *  must be restated with the `extern` keyword in one ".c" file
+ *  (or never declared in header files and declared with `static`)
+ */
+
+extern inline size_t sub_idx_1st_strict_upper_bound(
+    const double *base, size_t start, size_t stop, double query);
+extern inline size_t fast_search_idx_strict_upper(fast_search_t *self, double query);
