@@ -72,17 +72,11 @@ jobs:
       - run:
           name: Run gcov manually, as the one used in codecov doesn't work here.
           command: |
-            gcov -pb -o ./build/temp.linux*/msprime msprime/_msprimemodule.c
+            C_FILES=$(cd lib; echo *.c)
             cd build-gcc
-            # TODO should be able to do this with 'find', but it's tricky and opaque.
-            gcov -pb ./libmsprime.a.p/fenwick.c.gcno ../lib/fenwick.c
-            gcov -pb ./libmsprime.a.p/msprime.c.gcno ../lib/msprime.c
-            gcov -pb ./libmsprime.a.p/mutgen.c.gcno ../lib/mutgen.c
-            gcov -pb ./libmsprime.a.p/object_heap.c.gcno ../lib/object_heap.c
-            gcov -pb ./libmsprime.a.p/interval_map.c.gcno ../lib/interval_map.c
-            gcov -pb ./libmsprime.a.p/util.c.gcno ../lib/util.c
-            gcov -pb ./libmsprime.a.p/likelihood.c.gcno ../lib/likelihood.c
-            gcov -pb ./libmsprime.a.p/rate_map.c.gcno ../lib/rate_map.c
+            for F in $C_FILES; do
+                gcov -pb */$F.gcno ../lib/$F
+            done
             cd ..
             codecov -X gcov -F C
 

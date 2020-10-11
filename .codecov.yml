@@ -15,3 +15,10 @@ coverage:
       C:
         target: 85%
         flags: C
+parsers:
+  gcov:
+    branch_detection:
+      conditional: no
+      loop: yes
+      method: no
+      macro: no
