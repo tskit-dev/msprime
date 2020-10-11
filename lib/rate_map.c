@@ -63,8 +63,8 @@ rate_map_alloc(rate_map_t *self, size_t size, double *position, double *rate)
     self->position = malloc((size + 1) * sizeof(*self->position));
     self->cumulative_mass = malloc((size + 1) * sizeof(*self->cumulative_mass));
     if (self->position == NULL || self->rate == NULL || self->cumulative_mass == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
+        ret = MSP_ERR_NO_MEMORY; // LCOV_EXCL_LINE
+        goto out;                // LCOV_EXCL_LINE
     }
     self->size = size;
     sum = 0;

@@ -136,8 +136,8 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double r, double Ne, double *r_lik)
     first_parent_edge = malloc(nodes->num_rows * sizeof(tsk_id_t));
     last_parent_edge = malloc(nodes->num_rows * sizeof(tsk_id_t));
     if (first_parent_edge == NULL || last_parent_edge == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
+        ret = MSP_ERR_NO_MEMORY; // LCOV_EXCL_LINE
+        goto out;                // LCOV_EXCL_LINE
     }
     memset(first_parent_edge, TSK_NULL, sizeof(tsk_id_t) * nodes->num_rows);
     memset(last_parent_edge, TSK_NULL, sizeof(tsk_id_t) * nodes->num_rows);
