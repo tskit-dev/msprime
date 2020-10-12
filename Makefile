@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 # simple makefile for development.
 SRC=msprime/_msprimemodule.c
 
@@ -8,9 +10,10 @@ cmodule: ${SRC}
 # allchecks turns on as many checks as make sense when building
 # Python-C extensions.
 allchecks: ${SRC}
-	CFLAGS="-std=c99 -Wall -Wextra -Werror -Wno-unused-parameter "\
-	"-Wno-missing-field-initializers -Wno-cast-function-type" \
-	python3 setup.py build_ext --inplace
+	CFLAGS="-std=c99 -Wall -Wextra -Werror -Wno-unused-parameter" && \
+	CFLAGS+=" -Wno-missing-field-initializers -Wno-cast-function-type" && \
+	CFLAGS+=" --coverage" && \
+	export CFLAGS && python3 setup.py build_ext --inplace
 
 # Turn on coverage builds
 coverage: ${SRC}
