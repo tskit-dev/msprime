@@ -2,6 +2,7 @@ setuptools_scm
 sphinx-argparse
 sphinx-issues
 sphinx_rtd_theme
+jupyter-sphinx
 attrs
 tskit>=0.3
 newick

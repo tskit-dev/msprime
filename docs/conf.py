@@ -18,16 +18,13 @@ from docutils import nodes
 from sphinx import addnodes
 from sphinx.util.docfields import TypedField
 
-# It's easier not to try to build the low-level module for the
-# documentation build on readthedocs, so we mock the module. Follows
-# the recommended pattern at
-# http://docs.readthedocs.org/en/latest/faq.html
-autodoc_mock_imports = ["msprime._msprime"]
-
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath(".."))
+package_path = os.path.abspath("..")
+sys.path.insert(0, package_path)
+# Insert the package_path into the environment for jupyter-sphinx.
+os.environ["PYTHONPATH"] = ":".join((package_path, os.environ.get("PYTHONPATH", "")))
 
 
 ###################################################################
@@ -97,6 +94,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinxarg.ext",
     "sphinx_issues",
+    "jupyter_sphinx",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
