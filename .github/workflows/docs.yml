@@ -52,7 +52,7 @@ jobs:
         if: (!github.event.pull_request)
         run: |
           cd msprime-docs
-          cp -r docs/_build/html `echo ${GITHUB_REF} | sed -e "s/refs\/heads\///g" |  sed -e "s/refs\/tags\///g"`
+          cp -r ../docs/_build/html `echo ${GITHUB_REF} | sed -e "s/refs\/heads\///g" |  sed -e "s/refs\/tags\///g"`
 
       - name: Commit and push the docs
         run: |
