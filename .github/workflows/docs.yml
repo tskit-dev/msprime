@@ -20,6 +20,8 @@ jobs:
             submodules: true
 
       - uses: actions/setup-python@v1
+        with:
+          python-version: 3.8
 
       - name: Install GSL
         run: sudo apt-get install -y libgsl0-dev
