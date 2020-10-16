@@ -3140,7 +3140,7 @@ class HudsonAnalytical(Test):
                 sample_size=sample_size,
                 length=seq_length,
                 gene_conversion_rate=gc_rate[k],
-                gene_conversion_track_length=gc_length[k],
+                gene_conversion_tract_length=gc_length[k],
                 discrete_genome=True,
                 num_replicates=R,
             )

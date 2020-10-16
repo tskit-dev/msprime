@@ -290,7 +290,7 @@ def _parse_simulate(
     record_full_arg=False,
     num_labels=None,
     gene_conversion_rate=None,
-    gene_conversion_track_length=None,
+    gene_conversion_tract_length=None,
     demography=None,
     ploidy=None,
 ):
@@ -400,8 +400,8 @@ def _parse_simulate(
                 "Cannot specify gene_conversion_rate along with "
                 "a non discrete genome."
             )
-    if gene_conversion_track_length is None:
-        gene_conversion_track_length = 1
+    if gene_conversion_tract_length is None:
+        gene_conversion_tract_length = 1
     gene_conversion_map = intervals.RateMap.uniform(
         recombination_map.sequence_length, gene_conversion_rate
     )
@@ -434,7 +434,7 @@ def _parse_simulate(
         tables=tables,
         recombination_map=recombination_map,
         gene_conversion_map=gene_conversion_map,
-        gene_conversion_track_length=gene_conversion_track_length,
+        gene_conversion_tract_length=gene_conversion_tract_length,
         discrete_genome=discrete_genome,
         ploidy=ploidy,
         random_generator=random_generator,
@@ -511,7 +511,7 @@ def simulate(
     record_provenance=True,
     # FIXME add documentation for these.
     gene_conversion_rate=None,
-    gene_conversion_track_length=None,
+    gene_conversion_tract_length=None,
     demography=None,
 ):
     """
@@ -705,7 +705,7 @@ def simulate(
         record_full_arg=record_full_arg,
         num_labels=num_labels,
         gene_conversion_rate=gene_conversion_rate,
-        gene_conversion_track_length=gene_conversion_track_length,
+        gene_conversion_tract_length=gene_conversion_tract_length,
         demography=demography,
     )
 
@@ -885,7 +885,7 @@ def _parse_sim_ancestry(
     sequence_length=None,
     recombination_rate=None,
     gene_conversion_rate=None,
-    gene_conversion_track_length=None,
+    gene_conversion_tract_length=None,
     discrete_genome=None,
     population_size=None,
     demography=None,
@@ -958,21 +958,21 @@ def _parse_sim_ancestry(
     gene_conversion_map = _parse_rate_map(
         gene_conversion_rate, sequence_length, "gene conversion"
     )
-    if gene_conversion_track_length is None:
+    if gene_conversion_tract_length is None:
         if gene_conversion_rate is None:
-            # It doesn't matter what the track_length is, just set a
+            # It doesn't matter what the tract_length is, just set a
             # value to keep the low-level code happy.
-            gene_conversion_track_length = 1
+            gene_conversion_tract_length = 1
         else:
             raise ValueError(
-                "Must specify track length when simulating gene conversion"
+                "Must specify tract length when simulating gene conversion"
             )
     else:
         if gene_conversion_rate is None:
             raise ValueError(
-                "Must specify gene conversion rate along with track length"
+                "Must specify gene conversion rate along with tract length"
             )
-        gene_conversion_track_length = float(gene_conversion_track_length)
+        gene_conversion_tract_length = float(gene_conversion_tract_length)
 
     # Default to diploid
     ploidy = 2 if ploidy is None else ploidy
@@ -1041,7 +1041,7 @@ def _parse_sim_ancestry(
         random_generator=random_generator,
         recombination_map=recombination_map,
         gene_conversion_map=gene_conversion_map,
-        gene_conversion_track_length=gene_conversion_track_length,
+        gene_conversion_tract_length=gene_conversion_tract_length,
         discrete_genome=discrete_genome,
         ploidy=ploidy,
         demography=demography,
@@ -1062,7 +1062,7 @@ def sim_ancestry(
     discrete_genome=None,
     recombination_rate=None,
     gene_conversion_rate=None,
-    gene_conversion_track_length=None,
+    gene_conversion_tract_length=None,
     population_size=None,
     demography=None,
     ploidy=None,
@@ -1111,10 +1111,10 @@ def sim_ancestry(
     :param gene_conversion_rate: The rate of gene conversion along the sequence;
         can be either a single value (specifying a single rate over the entire
         sequence) or an instance of :class:`RateMap`. If provided, a value
-        for ``gene_conversion_track_length`` must also be specified.
+        for ``gene_conversion_tract_length`` must also be specified.
         See :ref:`sec_ancestry_gene_conversion` for usage examples
         for this parameter and how it interacts with other parameters.
-    :param gene_conversion_track_length: TODO
+    :param gene_conversion_tract_length: TODO
     """
     random_generator = _parse_random_seed(random_seed)
     record_provenance = True if record_provenance is None else record_provenance
@@ -1129,7 +1129,7 @@ def sim_ancestry(
         sequence_length=sequence_length,
         recombination_rate=recombination_rate,
         gene_conversion_rate=gene_conversion_rate,
-        gene_conversion_track_length=gene_conversion_track_length,
+        gene_conversion_tract_length=gene_conversion_tract_length,
         discrete_genome=discrete_genome,
         population_size=population_size,
         demography=demography,
@@ -1167,7 +1167,7 @@ class Simulator(_msprime.Simulator):
         tables,
         recombination_map,
         gene_conversion_map,
-        gene_conversion_track_length,
+        gene_conversion_tract_length,
         discrete_genome,
         ploidy,
         random_generator,
@@ -1224,7 +1224,7 @@ class Simulator(_msprime.Simulator):
             avl_node_block_size=avl_node_block_size,
             node_mapping_block_size=node_mapping_block_size,
             gene_conversion_rate=gene_conversion_rate,
-            gene_conversion_track_length=gene_conversion_track_length,
+            gene_conversion_tract_length=gene_conversion_tract_length,
             discrete_genome=discrete_genome,
             ploidy=ploidy,
         )

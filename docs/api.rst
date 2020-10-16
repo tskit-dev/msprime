@@ -59,10 +59,10 @@ For gene conversion there are two parameters. The gene conversion rate determine
 and is again per unit of sequence length and per generation in ``msprime``.
 Thus, given the per generation gene conversion rate :math:`g`, the overall rate of
 gene conversion initiation between the ends of the sequence is :math:`\rho = 4 N_e g L` in
-coalescent time units. The second parameter :math:`track\_len` is the expected track length
-of a gene conversion. At each gene conversion initiation site the track of the conversion
-extends to the right and the length of the track is geometric distributed with parameter
-:math:`1/track\_len`. Currently recombination maps for gene conversion are not supported.
+coalescent time units. The second parameter :math:`tract\_len` is the expected tract length
+of a gene conversion. At each gene conversion initiation site the tract of the conversion
+extends to the right and the length of the tract is geometric distributed with parameter
+:math:`1/tract\_len`. Currently recombination maps for gene conversion are not supported.
 However, recombination (with or without recombination maps) and a constant gene conversion
 rate along the genome can be combined in ``msprime``.
 

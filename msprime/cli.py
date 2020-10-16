@@ -205,7 +205,7 @@ class SimulationRunner:
         precision=3,
         random_seeds=None,
         scaled_gene_conversion_rate=0,
-        gene_conversion_track_length=1,
+        gene_conversion_tract_length=1,
         hotspots=None,
     ):
         self._sample_size = sample_size
@@ -247,7 +247,7 @@ class SimulationRunner:
             migration_matrix=migration_matrix,
             demographic_events=demographic_events,
             gene_conversion_rate=scaled_gene_conversion_rate,
-            gene_conversion_track_length=gene_conversion_track_length,
+            gene_conversion_tract_length=gene_conversion_tract_length,
             random_generator=self._random_generator,
             discrete_genome=True,
         )
@@ -458,7 +458,7 @@ def create_simulation_runner(parser, arg_list):
 
     # ms uses a ratio to define the GC rate, but if the recombination rate
     # is zero we define the gc rate directly.
-    gc_param, gc_track_length = args.gene_conversion
+    gc_param, gc_tract_length = args.gene_conversion
     gc_rate = 0
     if r == 0.0:
         if num_loci > 1:
@@ -685,7 +685,7 @@ def create_simulation_runner(parser, arg_list):
         scaled_recombination_rate=r,
         scaled_mutation_rate=mu,
         scaled_gene_conversion_rate=gc_rate,
-        gene_conversion_track_length=gc_track_length,
+        gene_conversion_tract_length=gc_tract_length,
         precision=args.precision,
         print_trees=args.trees,
         random_seeds=args.random_seeds,
@@ -779,7 +779,7 @@ def get_mspms_parser(error_handler=None):
         type=float,
         nargs=2,
         default=(0, 1),
-        metavar=("gc_recomb_ratio", "track_length"),
+        metavar=("gc_recomb_ratio", "tract_length"),
         help=mscompat_gene_conversion_help,
     )
     group.add_argument(

@@ -228,9 +228,9 @@ msp_strerror_internal(int err)
                   "parameters, and if they make sense help us fix the problem "
                   "by opening an issue on GitHub.";
             break;
-        case MSP_ERR_TRACKLEN_RESAMPLE_OVERFLOW:
+        case MSP_ERR_TRACTLEN_RESAMPLE_OVERFLOW:
             ret = "An unlikely numerical error occured computing gene conversion"
-                  "track lengths (resample overflow). Please check your "
+                  "tract lengths (resample overflow). Please check your "
                   "parameters, and if they make sense help us fix the problem "
                   "by opening an issue on GitHub.";
             break;

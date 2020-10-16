@@ -440,7 +440,7 @@ class TestParseSimAncestry:
         assert sim.copy_tables().sequence_length == sim.sequence_length
 
         sim = ancestry._parse_sim_ancestry(
-            10, gene_conversion_rate=rate_map, gene_conversion_track_length=1
+            10, gene_conversion_rate=rate_map, gene_conversion_tract_length=1
         )
         assert sim.sequence_length == rate_map.sequence_length
         assert sim.copy_tables().sequence_length == sim.sequence_length
@@ -458,7 +458,7 @@ class TestParseSimAncestry:
             ancestry._parse_sim_ancestry(10, recombination_rate=1)
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(
-                10, gene_conversion_rate=1, gene_conversion_track_length=1
+                10, gene_conversion_rate=1, gene_conversion_tract_length=1
             )
 
         # A rate map with a value that disagrees with sequence length
@@ -471,7 +471,7 @@ class TestParseSimAncestry:
             ancestry._parse_sim_ancestry(
                 10,
                 gene_conversion_rate=rate_map,
-                gene_conversion_track_length=1,
+                gene_conversion_tract_length=1,
                 sequence_length=1,
             )
 
@@ -482,14 +482,14 @@ class TestParseSimAncestry:
                 10,
                 recombination_rate=other_rate_map,
                 gene_conversion_rate=rate_map,
-                gene_conversion_track_length=1,
+                gene_conversion_tract_length=1,
             )
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(
                 10,
                 recombination_rate=other_rate_map,
                 gene_conversion_rate=rate_map,
-                gene_conversion_track_length=1,
+                gene_conversion_tract_length=1,
                 sequence_length=other_rate_map.sequence_length,
             )
         with pytest.raises(ValueError):
@@ -497,7 +497,7 @@ class TestParseSimAncestry:
                 10,
                 recombination_rate=other_rate_map,
                 gene_conversion_rate=rate_map,
-                gene_conversion_track_length=1,
+                gene_conversion_tract_length=1,
                 sequence_length=rate_map.sequence_length,
             )
         # Both maps disagree with sequence_length
@@ -506,7 +506,7 @@ class TestParseSimAncestry:
                 10,
                 recombination_rate=other_rate_map,
                 gene_conversion_rate=rate_map,
-                gene_conversion_track_length=1,
+                gene_conversion_tract_length=1,
                 sequence_length=56789,
             )
 
@@ -522,14 +522,14 @@ class TestParseSimAncestry:
             ancestry._parse_sim_ancestry(
                 initial_state=initial_state,
                 gene_conversion_rate=rate_map,
-                gene_conversion_track_length=1,
+                gene_conversion_tract_length=1,
             )
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(
                 initial_state=initial_state,
                 recombination_rate=other_rate_map,
                 gene_conversion_rate=rate_map,
-                gene_conversion_track_length=1,
+                gene_conversion_tract_length=1,
             )
 
     def test_sequence_length_discrete_genome(self):
@@ -557,25 +557,25 @@ class TestParseSimAncestry:
                 10,
                 sequence_length=10,
                 gene_conversion_rate=rate,
-                gene_conversion_track_length=5,
+                gene_conversion_tract_length=5,
             )
             assert sim.sequence_length == 10
             gc_map = sim.gene_conversion_map
             assert gc_map.sequence_length == 10
             assert len(gc_map) == 1
             assert gc_map.rate[0] == 1234
-            assert sim.gene_conversion_track_length == 5
+            assert sim.gene_conversion_tract_length == 5
 
     def test_gene_conversion_errors(self):
-        # No track length is an error
+        # No tract length is an error
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(
                 10, sequence_length=10, gene_conversion_rate=1234
             )
-        # Specifying a track_length and no map is also an error.
+        # Specifying a tract_length and no map is also an error.
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(
-                10, sequence_length=10, gene_conversion_track_length=5.5
+                10, sequence_length=10, gene_conversion_tract_length=5.5
             )
 
         for bad_type in [[], {}]:
@@ -584,7 +584,7 @@ class TestParseSimAncestry:
                     10,
                     sequence_length=10,
                     gene_conversion_rate=bad_type,
-                    gene_conversion_track_length=1,
+                    gene_conversion_tract_length=1,
                 )
 
             with pytest.raises(TypeError):
@@ -592,7 +592,7 @@ class TestParseSimAncestry:
                     10,
                     sequence_length=10,
                     gene_conversion_rate=1,
-                    gene_conversion_track_length=bad_type,
+                    gene_conversion_tract_length=bad_type,
                 )
 
     def test_discrete_genome(self):
@@ -1357,7 +1357,7 @@ class TestSimAncestryInterface:
         ts = msprime.sim_ancestry(
             10,
             gene_conversion_rate=1,
-            gene_conversion_track_length=2,
+            gene_conversion_tract_length=2,
             sequence_length=10,
             random_seed=14,
         )
@@ -1709,7 +1709,7 @@ class TestSimulateInterface:
         ts = msprime.simulate(
             n,
             gene_conversion_rate=1,
-            gene_conversion_track_length=1,
+            gene_conversion_tract_length=1,
             length=10,
             recombination_rate=1,
             discrete_genome=True,
@@ -1723,7 +1723,7 @@ class TestSimulateInterface:
             msprime.simulate(
                 10,
                 gene_conversion_rate=1,
-                gene_conversion_track_length=1,
+                gene_conversion_tract_length=1,
                 discrete_genome=False,
             )
 
@@ -1733,7 +1733,7 @@ class TestSimulateInterface:
             n,
             length=10,
             gene_conversion_rate=1,
-            gene_conversion_track_length=1,
+            gene_conversion_tract_length=1,
             discrete_genome=True,
         )
         assert isinstance(ts, tskit.TreeSequence)

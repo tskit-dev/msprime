@@ -102,7 +102,7 @@
 #define MSP_ERR_MUTATION_ID_OVERFLOW                                -58
 #define MSP_ERR_BREAKPOINT_MASS_NON_FINITE                          -59
 #define MSP_ERR_BREAKPOINT_RESAMPLE_OVERFLOW                        -60
-#define MSP_ERR_TRACKLEN_RESAMPLE_OVERFLOW                          -61
+#define MSP_ERR_TRACTLEN_RESAMPLE_OVERFLOW                          -61
 #define MSP_ERR_FENWICK_REBUILD_FAILED                              -62
 #define MSP_ERR_BAD_PLOIDY                                          -63
 #define MSP_ERR_DTWF_MIGRATION_MATRIX_NOT_STOCHASTIC                -64

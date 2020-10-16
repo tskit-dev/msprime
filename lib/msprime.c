@@ -293,15 +293,15 @@ msp_set_recombination_rate(msp_t *self, double rate)
 }
 
 int
-msp_set_gene_conversion_track_length(msp_t *self, double track_length)
+msp_set_gene_conversion_tract_length(msp_t *self, double tract_length)
 {
     int ret = 0;
 
-    if (track_length < 0 || track_length > self->sequence_length) {
+    if (tract_length < 0 || tract_length > self->sequence_length) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    self->gc_track_length = track_length;
+    self->gc_tract_length = tract_length;
 out:
     return ret;
 }
@@ -1552,7 +1552,7 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "start_time = %f\n", self->start_time);
     fprintf(out, "recombination map:\n");
     rate_map_print_state(&self->recomb_map, out);
-    fprintf(out, "gene_conversion_track_length = %f\n", self->gc_track_length);
+    fprintf(out, "gene_conversion_tract_length = %f\n", self->gc_tract_length);
     fprintf(out, "gene conversion map:\n");
     rate_map_print_state(&self->gc_map, out);
 
@@ -2650,15 +2650,15 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
 
     x = y->prev;
 
-    /* generate track length */
+    /* generate tract length */
     do {
-        tl = gsl_ran_exponential(self->rng, self->gc_track_length);
+        tl = gsl_ran_exponential(self->rng, self->gc_tract_length);
         if (self->discrete_genome) {
-            /* We want the track length to be at least 1 */
+            /* We want the tract length to be at least 1 */
             tl = ceil(tl);
         }
         if (num_resamplings == 10) {
-            ret = MSP_ERR_TRACKLEN_RESAMPLE_OVERFLOW;
+            ret = MSP_ERR_TRACTLEN_RESAMPLE_OVERFLOW;
             goto out;
         }
         num_resamplings++;
@@ -3902,7 +3902,7 @@ msp_get_total_gc_left(msp_t *self)
 
     size_t num_ancestors = msp_get_num_ancestors(self);
     double mean_gc_rate = rate_map_get_total_mass(&self->gc_map) / self->sequence_length;
-    total = (double) num_ancestors * mean_gc_rate * self->gc_track_length;
+    total = (double) num_ancestors * mean_gc_rate * self->gc_tract_length;
     return total;
 }
 
@@ -3915,7 +3915,7 @@ msp_find_gc_left_individual(msp_t *self, label_id_t label, double value)
     segment_t *ind;
 
     double mean_gc_rate = rate_map_get_total_mass(&self->gc_map) / self->sequence_length;
-    individual_index = (size_t) floor(value / (mean_gc_rate * self->gc_track_length));
+    individual_index = (size_t) floor(value / (mean_gc_rate * self->gc_tract_length));
     for (j = 0; j < self->num_populations; j++) {
         num_ancestors = msp_get_num_population_ancestors(self, (tsk_id_t) j);
         if (individual_index < num_ancestors) {
@@ -3973,15 +3973,15 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     y = msp_find_gc_left_individual(self, label, h);
     assert(y != NULL);
 
-    /* generate track length */
+    /* generate tract length */
     do {
-        tl = gsl_ran_exponential(self->rng, self->gc_track_length);
+        tl = gsl_ran_exponential(self->rng, self->gc_tract_length);
         if (self->discrete_genome) {
-            /* We want the track length to be at least 1 */
+            /* We want the tract length to be at least 1 */
             tl = ceil(tl);
         }
         if (num_resamplings == 10) {
-            ret = MSP_ERR_TRACKLEN_RESAMPLE_OVERFLOW;
+            ret = MSP_ERR_TRACTLEN_RESAMPLE_OVERFLOW;
             goto out;
         }
         num_resamplings++;
