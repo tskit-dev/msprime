@@ -616,7 +616,7 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_table_collection_t *tables,
     int ret = 0;
     int err;
     int int_tmp;
-    double start_time, gene_conversion_rate, gene_conversion_track_length;
+    double start_time, gene_conversion_rate, gene_conversion_tract_length;
     const char *from_ts_path;
     config_t *config = malloc(sizeof(config_t));
     config_setting_t *t;
@@ -662,15 +662,15 @@ get_configuration(gsl_rng *rng, msp_t *msp, tsk_table_collection_t *tables,
         fatal_error("gene_conversion_rate is a required parameter");
     }
     if (config_lookup_float(
-            config, "gene_conversion_track_length", &gene_conversion_track_length)
+            config, "gene_conversion_tract_length", &gene_conversion_tract_length)
         == CONFIG_FALSE) {
-        fatal_error("gene_conversion_track_length is a required parameter");
+        fatal_error("gene_conversion_tract_length is a required parameter");
     }
     ret = msp_set_gene_conversion_rate(msp, gene_conversion_rate);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }
-    ret = msp_set_gene_conversion_track_length(msp, gene_conversion_track_length);
+    ret = msp_set_gene_conversion_tract_length(msp, gene_conversion_tract_length);
     if (ret != 0) {
         fatal_msprime_error(ret, __LINE__);
     }

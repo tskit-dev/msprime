@@ -3162,7 +3162,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "demographic_events", "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time",
         "store_full_arg", "num_labels", "gene_conversion_rate",
-        "gene_conversion_track_length", "discrete_genome",
+        "gene_conversion_tract_length", "discrete_genome",
         "ploidy", NULL};
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
@@ -3182,7 +3182,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int discrete_genome = true;
     double start_time = -1;
     double gene_conversion_rate = 0;
-    double gene_conversion_track_length = 1.0;
+    double gene_conversion_tract_length = 1.0;
     int ploidy = 2;
 
     self->sim = NULL;
@@ -3200,7 +3200,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &store_migrations, &start_time,
             &store_full_arg, &num_labels,
-            &gene_conversion_rate, &gene_conversion_track_length,
+            &gene_conversion_rate, &gene_conversion_tract_length,
             &discrete_genome, &ploidy)) {
         goto out;
     }
@@ -3270,10 +3270,10 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             handle_input_error("set_gene_conversion_rate", sim_ret);
             goto out;
         }
-        sim_ret = msp_set_gene_conversion_track_length(self->sim,
-                gene_conversion_track_length);
+        sim_ret = msp_set_gene_conversion_tract_length(self->sim,
+                gene_conversion_tract_length);
         if (sim_ret != 0) {
-            handle_input_error("set_gene_conversion_track_length", sim_ret);
+            handle_input_error("set_gene_conversion_tract_length", sim_ret);
             goto out;
         }
     }
@@ -3522,13 +3522,13 @@ out:
 }
 
 static PyObject *
-Simulator_get_gene_conversion_track_length(Simulator *self, void *closure)
+Simulator_get_gene_conversion_tract_length(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("d", self->sim->gc_track_length);
+    ret = Py_BuildValue("d", self->sim->gc_tract_length);
 out:
     return ret;
 }
@@ -4351,9 +4351,9 @@ static PyGetSetDef Simulator_getsetters[] = {
     {"start_time",
             (getter) Simulator_get_start_time, NULL,
             "The start time for this simulator."},
-    {"gene_conversion_track_length",
-            (getter) Simulator_get_gene_conversion_track_length, NULL,
-            "The gene conversion track length for this simulator."},
+    {"gene_conversion_tract_length",
+            (getter) Simulator_get_gene_conversion_tract_length, NULL,
+            "The gene conversion tract length for this simulator."},
     {"record_migrations",
             (getter) Simulator_get_record_migrations, NULL,
             "True if the simulator should store migration records." },

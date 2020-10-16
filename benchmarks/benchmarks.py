@@ -94,7 +94,7 @@ class Hudson(LargeSimulationBenchmark):
             Ne=10 ** 4,
             gene_conversion_rate=1e-8,
             # 100Kb tract length.
-            gene_conversion_track_length=100 * 1e3,
+            gene_conversion_tract_length=100 * 1e3,
             random_seed=43,
         )
 

@@ -1087,7 +1087,7 @@ class TestSimulator(LowLevelTestCase):
             with pytest.raises(TypeError):
                 make_sim(gene_conversion_rate=bad_type)
             with pytest.raises(TypeError):
-                make_sim(gene_conversion_track_length=bad_type)
+                make_sim(gene_conversion_tract_length=bad_type)
         # Check for bad values.
         with pytest.raises(_msprime.InputError):
             make_sim(avl_node_block_size=0)
@@ -1101,11 +1101,11 @@ class TestSimulator(LowLevelTestCase):
             make_sim(num_labels=-1)
         with pytest.raises(_msprime.InputError):
             make_sim(gene_conversion_rate=-1)
-        # Track length is ignored if gene_conversion_rate is 0
+        # Tract length is ignored if gene_conversion_rate is 0
         with pytest.raises(_msprime.InputError):
             make_sim(
                 gene_conversion_rate=1,
-                gene_conversion_track_length=-100,
+                gene_conversion_tract_length=-100,
             )
 
         # Check for other type specific errors.

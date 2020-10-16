@@ -677,7 +677,7 @@ class Simulator:
         self.L = tables.sequence_length
         self.recomb_map = recombination_map
         self.gc_map = RateMap([0, self.L], [gene_conversion_rate, 0])
-        self.track_length = gene_conversion_length
+        self.tract_length = gene_conversion_length
         self.discrete_genome = discrete_genome
         self.migration_matrix = migration_matrix
         self.num_labels = num_labels
@@ -948,12 +948,12 @@ class Simulator:
         gc_left_total = 0
         num_ancestors = sum(pop.get_num_ancestors() for pop in self.P)
         mean_gc_rate = self.gc_map.mean_rate
-        gc_left_total = num_ancestors * mean_gc_rate * self.track_length
+        gc_left_total = num_ancestors * mean_gc_rate * self.tract_length
         return gc_left_total
 
     def find_cleft_individual(self, label, cleft_value):
         mean_gc_rate = self.gc_map.mean_rate
-        individual_index = math.floor(cleft_value / (mean_gc_rate * self.track_length))
+        individual_index = math.floor(cleft_value / (mean_gc_rate * self.tract_length))
         for pop in self.P:
             num_ancestors = pop.get_num_ancestors()
             if individual_index < num_ancestors:
@@ -1469,8 +1469,8 @@ class Simulator:
             self.gc_mass_index[label], self.gc_map
         )
         x = y.prev
-        # generate track_length
-        tl = np.random.geometric(1 / self.track_length)
+        # generate tract_length
+        tl = np.random.geometric(1 / self.tract_length)
         assert tl > 0
         right_breakpoint = left_breakpoint + tl
         if y.left >= right_breakpoint:
@@ -1588,8 +1588,8 @@ class Simulator:
         y = self.find_cleft_individual(label, random_gc_left)
         assert y is not None
 
-        # generate track_length
-        tl = np.random.geometric(1 / self.track_length)
+        # generate tract_length
+        tl = np.random.geometric(1 / self.tract_length)
 
         bp = y.left + tl
         while y is not None and y.right <= bp:
@@ -2189,7 +2189,7 @@ def run_simulate(args):
     m = args.sequence_length
     rho = args.recombination_rate
     gc_rate = args.gene_conversion_rate[0]
-    mean_track_length = args.gene_conversion_rate[1]
+    mean_tract_length = args.gene_conversion_rate[1]
     num_populations = args.num_populations
     migration_matrix = [
         [args.migration_rate * int(j != k) for j in range(num_populations)]
@@ -2294,7 +2294,7 @@ def run_simulate(args):
         sweep_trajectory=sweep_trajectory,
         time_slice=args.time_slice,
         gene_conversion_rate=gc_rate,
-        gene_conversion_length=mean_track_length,
+        gene_conversion_length=mean_tract_length,
         pedigree=pedigree,
         discrete_genome=args.discrete,
     )
