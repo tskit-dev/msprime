@@ -1976,6 +1976,32 @@ out:
 }
 
 static PyObject *
+Simulator_get_num_internal_gene_conversion_events(Simulator  *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+        (Py_ssize_t) msp_get_num_internal_gene_conversion_events(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
+Simulator_get_sum_internal_gc_tract_lengths(Simulator  *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+        (Py_ssize_t) msp_get_sum_internal_gc_tract_lengths(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
 Simulator_get_num_migration_events(Simulator  *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -2632,6 +2658,12 @@ static PyGetSetDef Simulator_getsetters[] = {
     {"num_gene_conversion_events",
             (getter) Simulator_get_num_gene_conversion_events, NULL,
             "The number of gene_conversion_events" },
+    {"num_internal_gene_conversion_events",
+            (getter) Simulator_get_num_internal_gene_conversion_events, NULL,
+            "The number of internal_gene_conversion_events" },
+    {"sum_internal_gc_tract_lengths",
+            (getter) Simulator_get_sum_internal_gc_tract_lengths, NULL,
+            "The sum of all internal_gc_tract_lengths" },
     {"num_labels",
             (getter) Simulator_get_num_labels, NULL,
             "The number of labels." },

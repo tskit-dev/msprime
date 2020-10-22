@@ -1457,6 +1457,14 @@ class Simulator:
             ret = x, alpha
         return ret
 
+    def generate_gc_tract_length(self):
+        # generate tract length
+        if self.discrete_genome:
+            tl = np.random.geometric(1 / self.tract_length)
+        else:
+            tl = np.random.exponential(self.tract_length)
+        return tl
+
     def wiuf_gene_conversion_within_event(self, label):
         """
         Implements a gene conversion event that starts within a segment
@@ -1470,7 +1478,7 @@ class Simulator:
         )
         x = y.prev
         # generate tract_length
-        tl = np.random.geometric(1 / self.tract_length)
+        tl = self.generate_gc_tract_length()
         assert tl > 0
         right_breakpoint = left_breakpoint + tl
         if y.left >= right_breakpoint:
@@ -1589,7 +1597,7 @@ class Simulator:
         assert y is not None
 
         # generate tract_length
-        tl = np.random.geometric(1 / self.tract_length)
+        tl = self.generate_gc_tract_length()
 
         bp = y.left + tl
         while y is not None and y.right <= bp:

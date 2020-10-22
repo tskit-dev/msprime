@@ -3190,6 +3190,42 @@ class HudsonAnalytical(Test):
         pyplot.savefig(self.output_dir / "prob_first_zoom.png")
         pyplot.close("all")
 
+    def test_gc_tract_length_expectation(self):
+        """
+        Runs the check for the mean length of gene conversion tracts.
+        """
+        num_replicates = 100
+        n = 10
+        gene_conversion_rate = 5
+        gc_tract_lengths = np.append(np.arange(1, 5.25, 0.25), [10, 50])
+        data_to_plot = []
+
+        for k, l in enumerate(gc_tract_lengths):
+            num_gc_events = np.zeros(num_replicates)
+            num_internal_gc_events = np.zeros(num_replicates)
+            sum_internal_gc_tract_lengths = np.zeros(num_replicates)
+
+            sim = msprime.ancestry._parse_simulate(
+                sample_size=n,
+                length=100,
+                gene_conversion_rate=gene_conversion_rate,
+                gene_conversion_tract_length=gc_tract_lengths[k],
+                discrete_genome=True,
+            )
+            for j, _ts in enumerate(sim.run_replicates(num_replicates)):
+                num_gc_events[j] = sim.num_gene_conversion_events
+                num_internal_gc_events[j] = sim.num_internal_gene_conversion_events
+                sum_internal_gc_tract_lengths[j] = sim.sum_internal_gc_tract_lengths
+                sim.reset()
+            data_to_plot.append(
+                sum_internal_gc_tract_lengths / num_internal_gc_events / l
+            )
+        pyplot.boxplot(data_to_plot, labels=gc_tract_lengths)
+        pyplot.xlabel("tl: mean tract length specified")
+        pyplot.ylabel("average internal tract length / tl")
+        pyplot.savefig(self.output_dir / "mean_gc_tract_lengths.png")
+        pyplot.close("all")
+
     def get_tbl_distribution(self, n, R, executable):
         """
         Returns an array of the R total branch length values from
