@@ -91,3 +91,6 @@ ENV/
 # Vim swp files.
 *.swp
 tmp__NOBACKUP__
+
+# Mac stuff
+.DS_Store
