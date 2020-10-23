@@ -1740,7 +1740,7 @@ class TestSimulator(LowLevelTestCase):
                     get_migration_rate_change_event(0.2, 2),
                     get_growth_rate_change_event(0.3, 2),
                     get_mass_migration_event(0.4, 0, 1, 0.5),
-                    get_simple_bottleneck_event(0.5, 0.5),
+                    get_simple_bottleneck_event(0.5, proportion=0.5),
                 ],
             },
         ]
