@@ -320,7 +320,7 @@ test_single_tree_mutgen(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables1, &tables2));
+    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables1, &tables2, 0));
     ret = mutgen_free(&mutgen);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -346,11 +346,11 @@ test_single_tree_mutgen_keep_sites(void)
     ret = tsk_table_collection_init(&copy, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     insert_single_tree(&copy, ALPHABET_NUCLEOTIDE);
-    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy));
+    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy, 0));
     ret = tsk_table_collection_init(&copy2, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     insert_single_tree(&copy2, ALPHABET_NUCLEOTIDE);
-    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy2));
+    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy2, 0));
     ret = matrix_mutation_model_factory(&mut_model, ALPHABET_NUCLEOTIDE);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -360,7 +360,7 @@ test_single_tree_mutgen_keep_sites(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy));
+    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy, 0));
     mutgen_free(&mutgen);
 
     /* and, with discrete sites */
@@ -369,7 +369,7 @@ test_single_tree_mutgen_keep_sites(void)
     ret = mutgen_generate(&mutgen,
         MSP_KEEP_SITES | MSP_DISCRETE_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy));
+    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy, 0));
     mutgen_free(&mutgen);
 
     /* Turn up the mutation rate */
@@ -392,7 +392,7 @@ test_single_tree_mutgen_keep_sites(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy2));
+    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy2, 0));
     mutgen_free(&mutgen);
 
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
@@ -747,7 +747,7 @@ test_single_tree_mutgen_do_nothing_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     insert_single_tree(&tables, ALPHABET_NUCLEOTIDE);
     insert_single_tree(&copy, ALPHABET_NUCLEOTIDE);
-    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy));
+    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy, 0));
 
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 100);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -756,7 +756,7 @@ test_single_tree_mutgen_do_nothing_mutations(void)
     ret = mutgen_generate(&mutgen,
         MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy));
+    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy, 0));
     mutgen_free(&mutgen);
 
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 100);

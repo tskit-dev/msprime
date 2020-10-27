@@ -211,8 +211,8 @@ verify_sweep_genic_selection(double sequence_length, double growth_rate)
         CU_ASSERT(tables[j].nodes.num_rows > 0);
         CU_ASSERT(tables[j].edges.num_rows > 0);
     }
-    CU_ASSERT_TRUE(tsk_node_table_equals(&tables[0].nodes, &tables[1].nodes));
-    CU_ASSERT_TRUE(tsk_edge_table_equals(&tables[0].edges, &tables[1].edges));
+    CU_ASSERT_TRUE(tsk_node_table_equals(&tables[0].nodes, &tables[1].nodes, 0));
+    CU_ASSERT_TRUE(tsk_edge_table_equals(&tables[0].edges, &tables[1].edges, 0));
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
     for (j = 0; j < 2; j++) {
