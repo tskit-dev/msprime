@@ -642,10 +642,6 @@ def simulate(
         :obj:`num_replicates` parameter has been used.
     :rtype: :class:`tskit.TreeSequence` or an iterator over
         :class:`tskit.TreeSequence` replicates.
-    :warning: If using replication, do not store the results of the
-        iterator in a list! For performance reasons, the same
-        underlying object may be used for every TreeSequence
-        returned which will most likely lead to unexpected behaviour.
     """
     rng = _parse_random_seed(random_seed)
     provenance_dict = None
@@ -1103,6 +1099,7 @@ def sim_ancestry(
         are performed using continuous genome coordinates. In this
         case multiple events at precisely the same genome location are very
         unlikely (but technically possible).
+        See :ref:`sec_ancestry_discrete_genome` for usage examples.
     :param recombination_rate: The rate of recombination along the sequence;
         can be either a single value (specifying a single rate over the entire
         sequence) or an instance of :class:`RateMap`.
@@ -1115,6 +1112,57 @@ def sim_ancestry(
         See :ref:`sec_ancestry_gene_conversion` for usage examples
         for this parameter and how it interacts with other parameters.
     :param gene_conversion_tract_length: TODO
+    :param int random_seed: The random seed. If this is not specified or `None`,
+        a high-quality random seed will be automatically generated. Valid random
+        seeds must be between 1 and :math:`2^{32} - 1`.
+        See :ref:`sec_ancestry_random_seed` for usage examples.
+    :param int num_replicates: The number of replicates of the specified
+        parameters to simulate. If this is not specified or `None`,
+        no replication is performed and a :class:`tskit.TreeSequence` object
+        returned. If :obj:`num_replicates` is provided, the specified
+        number of replicates is performed, and an iterator over the
+        resulting :class:`tskit.TreeSequence` objects returned.
+        See :ref:`sec_ancestry_replication` for examples.
+    :param bool record_full_arg: If True, record all intermediate nodes
+        arising from common ancestor and recombination events in the output
+        tree sequence. This will result in unary nodes (i.e., nodes in marginal
+        trees that have only one child). Defaults to False.
+        See :ref:`sec_ancestry_full_arg` for examples.
+    :param bool record_migrations: If True, record all migration events
+        that occur in the :ref:`tskit:sec_migration_table_definition` of
+        the output tree sequence. Defaults to False.
+        See :ref:`sec_ancestry_record_migrations` for examples.
+    :param tskit.TreeSequence initial_state: If specified, initialise the
+        simulation from the root segments of this tree sequence and return the
+        completed tree sequence. Please see
+        :ref:`sec_ancestry_initial_state` for details of the required
+        properties of this tree sequence and its interactions with other parameters.
+        (Default: None).
+    :param float start_time: If specified, set the initial time that the
+        simulation starts to this value. If not specified, the start
+        time is zero if performing a simulation of a set of samples,
+        or is the time of the oldest node if simulating from an
+        existing tree sequence (see the ``initial_state`` parameter).
+        See :ref:`sec_ancestry_start_time` for examples.
+    :param float end_time: If specified, terminate the simulation at the
+        specified time. In the returned tree sequence, all rootward paths from
+        samples with time < ``end_time`` will end in a node with one child with
+        time equal to end_time. Any sample nodes with time >= ``end_time`` will
+        also be present in the output tree sequence. If not specified or ``None``,
+        run the simulation until all samples have an MRCA at all positions in
+        the genome. See :ref:`sec_ancestry_end_time` for examples.
+    :param model: The simulation model to use.
+        This can either be a string (e.g., ``"smc_prime"``) or an instance of
+        a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
+        Please see the :ref:`sec_api_simulation_models` section for more details
+        on specifying simulations models.
+    :type model: str or simulation model instance
+    :return: The :class:`tskit.TreeSequence` object representing the results
+        of the simulation if no replication is performed, or an
+        iterator over the independent replicates simulated if the
+        :obj:`num_replicates` parameter has been used.
+    :rtype: :class:`tskit.TreeSequence` or an iterator over
+        :class:`tskit.TreeSequence` replicates.
     """
     random_generator = _parse_random_seed(random_seed)
     record_provenance = True if record_provenance is None else record_provenance
@@ -1572,7 +1620,7 @@ class BetaCoalescent(ParametricSimulationModel):
         and can be dramatically shorter than in the case of the
         standard coalescent. For :math:`\\alpha \\approx 1` that is due to
         insensitivity of :math:`G` to :math:`N` --- see
-        :ref:`sec_api_simulation_models_multiple_mergers` for an illustration.
+        :ref:`sec_ancestry_models_multiple_mergers` for an illustration.
         For :math:`\\alpha \\approx 2`, :math:`G` is almost linear in
         :math:`N`, but can nevertheless be small because
         :math:`B(2 - \\alpha, \\alpha) \\rightarrow \\infty` as

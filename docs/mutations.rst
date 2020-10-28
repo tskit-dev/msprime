@@ -16,6 +16,10 @@ of different random mutational processes on top of a single simulated topology,
 or if we have obtained the tree sequence from another program and wish to
 overlay neutral mutations on this tree sequence.
 
+***
+API
+***
+
 .. autofunction:: msprime.mutate
 
 
@@ -380,4 +384,52 @@ This was already present in the tree sequence, so its derived state is not modif
 has "erased" the type 2 mutations ``100`` and ``102``.
 If you want a different arrangment,
 you can go back and edit the derived states (and metadata) as you like.
+
+
+.. _sec_mutations_rate:
+
+****************
+Specifying rates
+****************
+
+.. todo:: Documentation on the ``rate`` parameter with examples.
+
+
+.. _sec_mutations_randomness:
+
+**********************
+Controlling randomness
+**********************
+
+.. todo:: Documentation on the ``seed` parameter with examples. Can
+    link to the randomness section in ancstry.rst. Alternatively we
+    don't bother with this section and just link to the ancestry.rst
+    one from the ``seed`` parameter to mutate.
+
+.. _sec_mutations_discrete:
+
+**********************
+Discrete or continuous
+**********************
+
+.. todo:: Examples of using the ``discrete`` argument.
+
+.. _sec_mutations_time_span:
+
+*********************
+Restricting time span
+*********************
+
+.. todo:: Docs and examples for the start_time and end_time params.
+
+
+.. _sec_mutations_existing:
+
+******************
+Existing mutations
+******************
+
+.. todo:: Docs and examples for what to do when you're adding mutations
+    to a ts that already has mutations. Like what the
+    ``kept_mutations_before_end_time`` parameter.
 
