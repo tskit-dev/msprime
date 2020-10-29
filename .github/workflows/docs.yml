@@ -11,6 +11,11 @@ jobs:
   build-deploy-docs:
     runs-on: ubuntu-18.04
     steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.6.0
+        with:
+          access_token: ${{ github.token }}
+
       - uses: actions/checkout@v2
         # As we are using pull-request-target which uses the workflow from the base
         # of the PR, we need to be specific
@@ -48,13 +53,16 @@ jobs:
         if: github.event.pull_request
         run: |
           cd msprime-docs
+          rm -rf ${{github.event.pull_request.number}}
           cp -r ../docs/_build/html ${{github.event.pull_request.number}}
 
       - name: Copy our docs to the tag specific location
         if: (!github.event.pull_request)
         run: |
           cd msprime-docs
-          cp -r ../docs/_build/html `echo ${GITHUB_REF} | sed -e "s/refs\/heads\///g" |  sed -e "s/refs\/tags\///g"`
+          export DEST=`echo ${GITHUB_REF} | sed -e "s/refs\/heads\///g" |  sed -e "s/refs\/tags\///g"`
+          rm -rf $DEST
+          cp -r ../docs/_build/html $DEST
 
       - name: Commit and push the docs
         run: |
