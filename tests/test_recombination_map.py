@@ -20,16 +20,18 @@
 Tests for the legacy recombination map functionality.
 """
 import gzip
+import io
 import os
+import platform
 import random
-import tempfile
-import unittest
 import warnings
 
 import numpy as np
 import pytest
 
 import msprime
+
+IS_WINDOWS = platform.system() == "Windows"
 
 
 class PythonRecombinationMap:
@@ -128,7 +130,7 @@ class PythonRecombinationMap:
         return ret
 
 
-class TestCoordinateConversion(unittest.TestCase):
+class TestCoordinateConversion:
     """
     Tests that we convert coordinates correctly.
     """
@@ -154,13 +156,13 @@ class TestCoordinateConversion(unittest.TestCase):
         for x in values:
             # x is a physical coordinate
             y = rm.physical_to_genetic(x)
-            self.assertAlmostEqual(y, other_rm.physical_to_genetic(x), delta=1e-10)
+            assert np.isclose(y, other_rm.physical_to_genetic(x))
             assert 0 <= y <= rm.get_total_recombination_rate()
             # Check if we can round trip approximately in real coordinates.
             xp = rm.genetic_to_physical(y)
-            self.assertAlmostEqual(x, xp)
+            assert np.isclose(x, xp)
             # The different implementations might differ by very small amounts.
-            self.assertAlmostEqual(xp, other_rm.genetic_to_physical(y))
+            assert np.isclose(xp, other_rm.genetic_to_physical(y))
 
     def test_zero_rate_two_intervals(self):
         # When we have a zero rate in some interval we no longer have a
@@ -181,7 +183,7 @@ class TestCoordinateConversion(unittest.TestCase):
                 y = rm.physical_to_genetic(x)
                 assert 0 <= y <= total_recomb
                 z = rm.genetic_to_physical(y)
-                self.assertAlmostEqual(x, z)
+                assert np.allclose(x, z)
 
     def test_all_zero_rate(self):
         positions = [0, 100]
@@ -253,9 +255,9 @@ class TestCoordinateConversion(unittest.TestCase):
 
     def test_simple_examples(self):
         rm = msprime.RecombinationMap([0, 0.9, 1], [2, 1, 0])
-        self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
+        assert np.isclose(rm.get_total_recombination_rate(), 1.9)
         rm = msprime.RecombinationMap([0, 0.5, 0.6, 1], [2, 1, 2, 0])
-        self.assertAlmostEqual(rm.get_total_recombination_rate(), 1.9)
+        assert np.isclose(rm.get_total_recombination_rate(), 1.9)
 
     def test_integer_round_trip(self):
         for L in [1, 10, 100]:
@@ -265,7 +267,7 @@ class TestCoordinateConversion(unittest.TestCase):
             ]
             for rm in maps:
                 for x in range(L + 1):
-                    self.assertAlmostEqual(x, rm.genetic_to_physical(x))
+                    assert np.isclose(x, rm.genetic_to_physical(x))
 
     def test_bad_pos(self):
         rm = msprime.RecombinationMap.uniform_map(10, 1)
@@ -275,79 +277,9 @@ class TestCoordinateConversion(unittest.TestCase):
             rm.physical_to_genetic(20)
 
 
-class TestReadHapmap(unittest.TestCase):
+class TestRecombinationMapInterface:
     """
-    Tests file reading code.
-    """
-
-    def setUp(self):
-        fd, self.temp_file = tempfile.mkstemp(suffix="msp_recomb_map")
-        os.close(fd)
-
-    def tearDown(self):
-        try:
-            os.unlink(self.temp_file)
-        except Exception:
-            pass
-
-    def test_read_hapmap_simple(self):
-        with open(self.temp_file, "w+") as f:
-            print("HEADER", file=f)
-            print("chr1 0 1", file=f)
-            print("chr1 1 5 x", file=f)
-            print("s    2 0 x x x", file=f)
-        rm = msprime.read_hapmap(self.temp_file)
-        np.testing.assert_array_equal(rm.position, [0, 1, 2])
-        np.testing.assert_array_equal(rm.rate, [1e-8, 5e-8])
-
-    def test_read_hapmap_nonzero_start(self):
-        with open(self.temp_file, "w+") as f:
-            print("HEADER", file=f)
-            print("chr1 1 5 x", file=f)
-            print("s    2 0 x x x", file=f)
-        rm = msprime.read_hapmap(self.temp_file)
-        np.testing.assert_array_equal(rm.position, [0, 1, 2])
-        np.testing.assert_array_equal(rm.rate, [0, 5e-8])
-
-    def test_read_hapmap_nonzero_end(self):
-        with open(self.temp_file, "w+") as f:
-            print("HEADER", file=f)
-            print("chr1 0 5 x", file=f)
-            print("s    2 1 x x x", file=f)
-        with pytest.raises(ValueError):
-            msprime.read_hapmap(self.temp_file)
-
-    def test_read_hapmap_gzipped(self):
-        try:
-            filename = self.temp_file + ".gz"
-            with gzip.open(filename, "w+") as f:
-                f.write(b"HEADER\n")
-                f.write(b"chr1 0 1\n")
-                f.write(b"chr1 1 5.5\n")
-                f.write(b"s    2 0\n")
-            rm = msprime.read_hapmap(filename)
-            np.testing.assert_array_equal(rm.position, [0, 1, 2])
-            np.testing.assert_array_equal(rm.rate, [1e-8, 5.5e-8])
-        finally:
-            os.unlink(filename)
-
-    def test_read_hapmap_deprecation_warning(self):
-        with open(self.temp_file, "w+") as f:
-            print("HEADER", file=f)
-            print("chr1 0 1", file=f)
-            print("chr1 1 5 x", file=f)
-            print("s    2 0 x x x", file=f)
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            rm = msprime.RecombinationMap.read_hapmap(self.temp_file)
-            assert len(w) == 1
-        assert rm.get_positions() == [0, 1, 2]
-        assert rm.get_rates() == [1e-8, 5e-8, 0]
-
-
-class TestRecombinationMapInterface(unittest.TestCase):
-    """
-    Tests for the RecombinationMap interface.
+    Tests for the RecombinationMap interface (this is now deprecated)
     """
 
     def verify_warning(self, f):
@@ -426,7 +358,84 @@ class TestRecombinationMapInterface(unittest.TestCase):
             assert min(ts.tables.edges.left) == 0.0
             assert max(ts.tables.edges.right) == n - 1.0
 
-    def test_mean_recombination_rate(self):
+    def test_read_hapmap_simple(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 0 1
+            chr1 1 5 x
+            chr1 2 0 x x x"""
+        )
+        rm = msprime.RecombinationMap.read_hapmap(hapfile)
+        np.testing.assert_array_equal(rm.position, [0, 1, 2])
+        np.testing.assert_array_equal(rm.rate, [1e-8, 5e-8])
+
+    def test_read_hapmap_nonzero_start(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 1 5 x
+            chr1 2 0 x x x"""
+        )
+        rm = msprime.RecombinationMap.read_hapmap(hapfile)
+        np.testing.assert_array_equal(rm.position, [0, 1, 2])
+        np.testing.assert_array_equal(rm.rate, [0, 5e-8])
+
+    def test_read_hapmap_nonzero_end(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 0 5 x
+            chr1 2 1 x x x"""
+        )
+        with pytest.raises(ValueError):
+            msprime.RecombinationMap.read_hapmap(hapfile)
+
+    def test_read_hapmap_gzipped(self, tmp_path):
+        hapfile = os.path.join(tmp_path, "hapmap.txt.gz")
+        with gzip.GzipFile(hapfile, "wb") as gzfile:
+            gzfile.write(b"HEADER\n")
+            gzfile.write(b"chr1 0 1\n")
+            gzfile.write(b"chr1 1 5.5\n")
+            gzfile.write(b"chr1 2 0\n")
+        rm = msprime.RecombinationMap.read_hapmap(hapfile)
+        np.testing.assert_array_equal(rm.position, [0, 1, 2])
+        np.testing.assert_array_equal(rm.rate, [1e-8, 5.5e-8])
+
+    def test_read_hapmap_deprecation_warning(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 0 1
+            chr1 1 5 x
+            chr1 2 0 x x x"""
+        )
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            rm = msprime.RecombinationMap.read_hapmap(hapfile)
+            assert len(w) == 1
+            assert "deprecated" in str(w[0].message)
+        assert rm.get_positions() == [0, 1, 2]
+        assert rm.get_rates() == [1e-8, 5e-8, 0]
+
+    def test_read_hapmap_string_warning(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 0 1
+            chr1 1 5 x
+            chr10 2 0 x x x"""
+        )
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            rm = msprime.RecombinationMap.read_hapmap(hapfile)
+            assert len(w) == 2
+            assert "deprecated" in str(w[0].message)
+            assert "chromosome names" in str(w[1].message)
+        assert rm.get_positions() == [0, 1, 2]
+        assert rm.get_rates() == [1e-8, 5e-8, 0]
+
+    def test_mean_recombination_rate(self, hapmap_strings_fixture, tmp_path):
         # Some quick sanity checks.
         recomb_map = msprime.RecombinationMap([0, 1], [1, 0])
         mean_rr = recomb_map.mean_recombination_rate
@@ -453,21 +462,26 @@ class TestRecombinationMapInterface(unittest.TestCase):
                         first_pos = pos
             return cM / 100 / (pos - first_pos)
 
-        hapmap = """chr pos        rate                    cM
-                    1   4283592    3.79115663174456        0
-                    1   4361401    0.0664276817058413      0.294986106359414
-                    1   7979763   10.9082897515584         0.535345505591925
-                    1   8007051    0.0976780648822495      0.833010916332456
-                    1   8762788    0.0899929572085616      0.906829844052373
-                    1   9477943    0.0864382908650907      0.971188757364862
-                    1   9696341    4.76495005895746        0.990066707213216
-                    1   9752154    0.0864316558730679      1.25601286485381
-                    1   9881751    0.0                     1.26721414815999"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            hapfile = os.path.join(temp_dir, "hapmap.txt")
-            with open(hapfile, "w") as f:
-                f.write(hapmap)
-            recomb_map = msprime.read_hapmap(f.name)
-            mean_rr = recomb_map.mean_rate
-            mean_rr2 = hapmap_rr(hapfile)
-        self.assertAlmostEqual(mean_rr, mean_rr2, places=15)
+        hapfile = os.path.join(tmp_path, "hapmap.txt")
+        with open(hapfile, "w") as f:
+            f.write(hapmap_strings_fixture["original"])
+        recomb_map = msprime.RecombinationMap.read_hapmap(f.name)
+        mean_rr = recomb_map.mean_recombination_rate
+        mean_rr2 = hapmap_rr(hapfile)
+        assert np.isclose(mean_rr, mean_rr2)
+
+    def test_write_hapmap(self, hapmap_strings_fixture, tmp_path):
+        for hapstring in hapmap_strings_fixture.values():
+            hapfile_in = os.path.join(tmp_path, "hapmap_in.txt")
+            hapfile_out = os.path.join(tmp_path, "hapmap_out.txt")
+            with open(hapfile_in, "wt") as file:
+                print(hapstring, file=file)
+            recomb_map = msprime.RecombinationMap.read_hapmap(hapfile_in)
+            recomb_map.write_hapmap(hapfile_out)
+            ratemap = msprime.read_hapmap(hapfile_out)
+            assert len(recomb_map) == len(ratemap)
+            assert np.allclose(recomb_map.position, ratemap.position)
+            assert np.allclose(recomb_map.rate, ratemap.rate)
+            assert np.isclose(recomb_map.mean_recombination_rate, ratemap.mean_rate)
+            assert np.isclose(recomb_map.map.start_position, ratemap.start_position)
+            assert np.isclose(recomb_map.map.end_position, ratemap.end_position)
