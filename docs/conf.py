@@ -124,6 +124,8 @@ try:
     from setuptools_scm import get_version
 
     release = get_version(root="..", relative_to=__file__)
+    # Remove trailing git hash stuff.
+    release = release.split("+")[0]
     version = release[:3]
 except pkg_resources.DistributionNotFound:
     release = "0.0.0"
@@ -178,7 +180,7 @@ todo_include_todos = True
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = "sphinx_rtd_theme"
+html_theme = "furo"
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
