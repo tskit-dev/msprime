@@ -63,6 +63,18 @@ For standard coalescent simulations, all samples are marked with the
 Models
 ******
 
+.. Start the kernel used for the models section.
+
+.. jupyter-kernel:: python3
+
+
+.. jupyter-execute::
+    :hide-code:
+
+    import msprime
+    from IPython.display import SVG
+
+
 .. todo:: quick overview of what a model *is*.
 
 
@@ -74,6 +86,10 @@ Hudson coalescent
 
 The default simulation model in ``msprime`` is the coalescent
 with recombination, based on the classical ``ms`` program.
+
+-----------
+Definitions
+-----------
 
 .. todo:: Port concrete description of the Hudson model from
     the current api.rst
@@ -105,15 +121,44 @@ configuration at a particular time in the past.
 
 .. autoclass:: msprime.StandardCoalescent
 
+--------
+Examples
+--------
+
+The standard coalescent is the default model of ancestry used
+in msprime if we don't specify any value for the ``model`` parameter.
+
+.. jupyter-execute::
+
+    ts1 = msprime.sim_ancestry(5, random_seed=2)
+    ts2 = msprime.sim_ancestry(5, model="hudson", random_seed=2)
+    # This is the same simulation so we should get the same
+    # node and edge tables.
+    assert ts1.tables.nodes == ts2.tables.nodes
+    assert ts1.tables.edges == ts2.tables.edges
+
+
 .. _sec_ancestry_models_smc:
 
 +++++++++++++++++++++++++++++
 SMC coalescent approximations
 +++++++++++++++++++++++++++++
 
+-----------
+Definitions
+-----------
+
 .. autoclass:: msprime.SmcApproxCoalescent
 
 .. autoclass:: msprime.SmcPrimeApproxCoalescent
+
+--------
+Examples
+--------
+
+.. todo:: An example of the SMC, ideally showing demonstrating an
+    property of an SMC simulation.
+
 
 .. _sec_ancestry_models_dtwf:
 
@@ -129,7 +174,20 @@ All other parameters can be set as usual. Note that for discrete-time
 Wright-Fisher simulations with population structure, each row of the migration
 matrix must sum to one or less.
 
+-----------
+Definitions
+-----------
+
+
 .. autoclass:: msprime.DiscreteTimeWrightFisher
+
+--------
+Examples
+--------
+
+.. todo:: An example of the DTWF. Show the discrete with an example of a
+    non-binary tree.
+
 
 .. _sec_ancestry_models_multiple_mergers:
 
@@ -143,10 +201,17 @@ rapid adaptation, can predict diploid genealogies with up to four
 simultaneous multiple mergers. Msprime provides the option to simulate
 from two classes of such genealogical processes.
 
+-----------
+Definitions
+-----------
+
 .. autoclass:: msprime.BetaCoalescent
 
 .. autoclass:: msprime.DiracCoalescent
 
+--------
+Examples
+--------
 
 .. todo:: Port this old tutorial material to something more appropriate
     for this section.
@@ -368,8 +433,18 @@ Selective sweeps
 
 .. todo:: Document the selective sweep models.
 
+-----------
+Definitions
+-----------
+
 .. autoclass:: msprime.SweepGenicSelection
 
+-----------
+Examples
+-----------
+
+.. todo:: examples of the selective sweeps models. We want to have
+    a single sweep reverting to Hudson, and also lots of sweeps.
 
 .. _sec_ancestry_models_multiple_models:
 
@@ -422,6 +497,9 @@ these two lineages.
 ++++++++++++++++++
 Notes for ms users
 ++++++++++++++++++
+
+.. todo:: Should this be promoted to top-level section rather than being
+    in a subsection of models?
 
 .. todo:: This is copied from the old api.rst page and needs some updating.
 
