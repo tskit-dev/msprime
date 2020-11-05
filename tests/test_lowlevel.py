@@ -918,6 +918,15 @@ class TestSimulator(LowLevelTestCase):
         sim.run(max_events=1)
         assert sim.time > 0
 
+    def test_set_bad_model(self):
+        sim = make_sim(10)
+        with pytest.raises(ValueError):
+            sim.model = None
+        with pytest.raises(ValueError):
+            sim.model = {}
+        with pytest.raises(AttributeError):
+            del sim.model
+
     def test_print_state(self):
         sim = make_sim(10)
         with tempfile.TemporaryFile("w+") as f:
@@ -1979,14 +1988,36 @@ class TestRandomGenerator:
         for bad_type in ["x", 1.0, {}]:
             with pytest.raises(TypeError):
                 _msprime.RandomGenerator(bad_type)
-        for bad_value in [-1, 0, 2 ** 32]:
+
+    def test_seed_bounds(self):
+        for bad_value in [0, 2 ** 32]:
             with pytest.raises(ValueError):
                 _msprime.RandomGenerator(bad_value)
+            gen = _msprime.RandomGenerator(1)
+            with pytest.raises(ValueError):
+                gen.seed = bad_value
+
+        for overflow in [-1, -2, 2 ** 64]:
+            with pytest.raises(OverflowError):
+                _msprime.RandomGenerator(overflow)
+            gen = _msprime.RandomGenerator(1)
+            with pytest.raises(OverflowError):
+                gen.seed = overflow
 
     def test_seed(self):
+
         for s in [1, 10, 2 ** 32 - 1]:
             rng = _msprime.RandomGenerator(s)
             assert rng.seed == s
+            rng = _msprime.RandomGenerator(1)
+            rng.seed = s
+            assert rng.seed == s
+
+        rng = _msprime.RandomGenerator(1)
+        with pytest.raises(TypeError):
+            rng.seed = None
+        with pytest.raises(AttributeError):
+            del rng.seed
 
     def test_uninitialised(self):
         uninitialised_rng = _msprime.RandomGenerator.__new__(_msprime.RandomGenerator)
@@ -2012,12 +2043,16 @@ class TestRandomGenerator:
                 rng.flat(0, bad_type)
 
     def test_flat(self):
+        rng3 = _msprime.RandomGenerator(1)
         for seed in [1, 2, 2 ** 32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
+            rng3.seed = seed
             values = [0, 1, 10, -10, 1e200, -1e200]
             for a, b in itertools.product(values, repeat=2):
-                assert rng1.flat(a, b) == rng2.flat(a, b)
+                x = rng1.flat(a, b)
+                assert x == rng2.flat(a, b)
+                assert x == rng3.flat(a, b)
 
     def test_poisson_errors(self):
         rng = _msprime.RandomGenerator(1)
@@ -2028,12 +2063,16 @@ class TestRandomGenerator:
                 rng.poisson(bad_type)
 
     def test_poisson(self):
+        rng3 = _msprime.RandomGenerator(1)
         for seed in [1, 2, 2 ** 32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
+            rng3.seed = seed
             values = [0.001, 1e-6, 0, 1, 10, -10, 100]
             for mu in values:
-                assert rng1.poisson(mu) == rng2.poisson(mu)
+                x = rng1.poisson(mu)
+                assert x == rng2.poisson(mu)
+                assert x == rng3.poisson(mu)
 
     def test_uniform_int_errors(self):
         rng = _msprime.RandomGenerator(1)
@@ -2044,12 +2083,16 @@ class TestRandomGenerator:
                 rng.uniform_int(bad_type)
 
     def test_uniform_int(self):
+        rng3 = _msprime.RandomGenerator(1)
         for seed in [1, 2, 2 ** 32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
+            rng3.seed = seed
             values = [-1, 0, 1, 2, 10, 100, 2 ** 31]
             for n in values:
-                assert rng1.uniform_int(n) == rng2.uniform_int(n)
+                x = rng1.uniform_int(n)
+                assert x == rng2.uniform_int(n)
+                assert x == rng3.uniform_int(n)
 
 
 class TestMatrixMutationModel:

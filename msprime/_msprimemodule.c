@@ -229,14 +229,13 @@ RandomGenerator_dealloc(RandomGenerator* self)
 }
 
 static int
-RandomGenerator_init(RandomGenerator *self, PyObject *args, PyObject *kwds)
+RandomGenerator_parse_seed(RandomGenerator *self, PyObject *py_seed)
 {
-    int ret = -1;
-    static char *kwlist[] = {"seed", NULL};
-    unsigned long long seed = 0;
 
-    self->rng  = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "K", kwlist, &seed)) {
+    int ret = -1;
+    unsigned long long seed = PyLong_AsUnsignedLongLong(py_seed);
+
+    if (PyErr_Occurred()) {
         goto out;
     }
     if (seed == 0 || seed >= (1ULL<<32)) {
@@ -245,9 +244,25 @@ RandomGenerator_init(RandomGenerator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     self->seed = seed;
-    self->rng = gsl_rng_alloc(gsl_rng_default);
     gsl_rng_set(self->rng, self->seed);
     ret = 0;
+out:
+    return ret;
+}
+
+static int
+RandomGenerator_init(RandomGenerator *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    static char *kwlist[] = {"seed", NULL};
+    PyObject *py_seed;
+
+    self->rng = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", kwlist, &py_seed)) {
+        goto out;
+    }
+    self->rng = gsl_rng_alloc(gsl_rng_default);
+    ret = RandomGenerator_parse_seed(self, py_seed);
 out:
     return ret;
 }
@@ -261,6 +276,27 @@ RandomGenerator_get_seed(RandomGenerator *self, void *closure)
         goto out;
     }
     ret = Py_BuildValue("k", self->seed);
+out:
+    return ret;
+}
+
+static int
+RandomGenerator_set_seed(RandomGenerator *self, PyObject *args, void *closure)
+{
+    int ret = -1;
+    PyObject *py_seed = args;
+
+    if (py_seed == NULL) {
+        PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
+        goto out;
+    }
+    if (RandomGenerator_check_state(self) != 0) {
+        goto out;
+    }
+    if (RandomGenerator_parse_seed(self, py_seed) != 0) {
+        goto out;
+    }
+    ret = 0;
 out:
     return ret;
 }
@@ -327,7 +363,8 @@ static PyMethodDef RandomGenerator_methods[] = {
 };
 
 static PyGetSetDef RandomGenerator_getsetters[] = {
-    {"seed", (getter) RandomGenerator_get_seed, NULL,
+    {"seed", (getter) RandomGenerator_get_seed,
+        (setter) RandomGenerator_set_seed,
             "The initial seed for this random generator" },
     {NULL}  /* Sentinel */
 };
@@ -1649,7 +1686,7 @@ Simulator_set_model(Simulator *self, PyObject *args, void *closure)
     PyObject *py_model = args;
 
     if (py_model == NULL) {
-        /* deleting the model attribute isn't supported */
+        PyErr_SetString(PyExc_AttributeError, "can't delete attribute");
         goto out;
     }
 
