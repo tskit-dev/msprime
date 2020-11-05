@@ -2041,8 +2041,12 @@ class TestRandomGenerator:
                 rng.flat(bad_type, 1)
             with pytest.raises(TypeError):
                 rng.flat(0, bad_type)
+            with pytest.raises(TypeError):
+                rng.flat(0, 1, bad_type)
+        with pytest.raises(ValueError):
+            rng.flat(0, 1, -1)
 
-    def test_flat(self):
+    def test_flat_single(self):
         rng3 = _msprime.RandomGenerator(1)
         for seed in [1, 2, 2 ** 32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
@@ -2051,8 +2055,23 @@ class TestRandomGenerator:
             values = [0, 1, 10, -10, 1e200, -1e200]
             for a, b in itertools.product(values, repeat=2):
                 x = rng1.flat(a, b)
+                assert x.shape == (1,)
                 assert x == rng2.flat(a, b)
                 assert x == rng3.flat(a, b)
+
+    def test_flat_array(self):
+        rng3 = _msprime.RandomGenerator(1)
+        for seed in [1, 2, 2 ** 32 - 1]:
+            rng1 = _msprime.RandomGenerator(seed)
+            rng2 = _msprime.RandomGenerator(seed)
+            rng3.seed = seed
+            for n in range(10):
+                x1 = rng1.flat(0, 1, n)
+                x2 = rng2.flat(0, 1, n)
+                x3 = rng3.flat(0, 1, n)
+                assert x1.shape == (n,)
+                assert np.array_equal(x1, x2)
+                assert np.array_equal(x1, x3)
 
     def test_poisson_errors(self):
         rng = _msprime.RandomGenerator(1)
@@ -2061,8 +2080,12 @@ class TestRandomGenerator:
         for bad_type in ["as", [], None]:
             with pytest.raises(TypeError):
                 rng.poisson(bad_type)
+            with pytest.raises(TypeError):
+                rng.poisson(1, bad_type)
+        with pytest.raises(ValueError):
+            rng.flat(0, 1, -1)
 
-    def test_poisson(self):
+    def test_poisson_single(self):
         rng3 = _msprime.RandomGenerator(1)
         for seed in [1, 2, 2 ** 32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
@@ -2071,8 +2094,23 @@ class TestRandomGenerator:
             values = [0.001, 1e-6, 0, 1, 10, -10, 100]
             for mu in values:
                 x = rng1.poisson(mu)
+                assert x.shape == (1,)
                 assert x == rng2.poisson(mu)
                 assert x == rng3.poisson(mu)
+
+    def test_poisson_array(self):
+        rng3 = _msprime.RandomGenerator(1)
+        for seed in [1, 2, 2 ** 32 - 1]:
+            rng1 = _msprime.RandomGenerator(seed)
+            rng2 = _msprime.RandomGenerator(seed)
+            rng3.seed = seed
+            for n in range(10):
+                x1 = rng1.poisson(100, n)
+                x2 = rng2.poisson(100, n)
+                x3 = rng3.poisson(100, n)
+                assert x1.shape == (n,)
+                assert np.array_equal(x1, x2)
+                assert np.array_equal(x1, x3)
 
     def test_uniform_int_errors(self):
         rng = _msprime.RandomGenerator(1)
@@ -2081,8 +2119,10 @@ class TestRandomGenerator:
         for bad_type in ["as", [], None]:
             with pytest.raises(TypeError):
                 rng.uniform_int(bad_type)
+            with pytest.raises(TypeError):
+                rng.uniform_int(1, bad_type)
 
-    def test_uniform_int(self):
+    def test_uniform_int_single(self):
         rng3 = _msprime.RandomGenerator(1)
         for seed in [1, 2, 2 ** 32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
@@ -2091,8 +2131,23 @@ class TestRandomGenerator:
             values = [-1, 0, 1, 2, 10, 100, 2 ** 31]
             for n in values:
                 x = rng1.uniform_int(n)
+                assert x.shape == (1,)
                 assert x == rng2.uniform_int(n)
                 assert x == rng3.uniform_int(n)
+
+    def test_uniform_int_array(self):
+        rng3 = _msprime.RandomGenerator(1)
+        for seed in [1, 2, 2 ** 32 - 1]:
+            rng1 = _msprime.RandomGenerator(seed)
+            rng2 = _msprime.RandomGenerator(seed)
+            rng3.seed = seed
+            for n in range(10):
+                x1 = rng1.uniform_int(100, n)
+                x2 = rng2.uniform_int(100, n)
+                x3 = rng3.uniform_int(100, n)
+                assert x1.shape == (n,)
+                assert np.array_equal(x1, x2)
+                assert np.array_equal(x1, x3)
 
 
 class TestMatrixMutationModel:

@@ -392,7 +392,10 @@ class TestParseRandomSeed:
             assert rng.seed == int(seed)
 
     def test_bad_values(self):
-        for bad_seed in [-1, 0, -10000]:
+        for bad_seed in [-1, -10000, 2 ** 64]:
+            with pytest.raises(OverflowError):
+                ancestry._parse_random_seed(bad_seed)
+        for bad_seed in [0, 2 ** 32]:
             with pytest.raises(ValueError):
                 ancestry._parse_random_seed(bad_seed)
 

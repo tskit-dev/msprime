@@ -1808,8 +1808,8 @@ class PythonMutationGenerator:
                 # Generate the mutations.
                 rate = self.rate_map.rate[index]
                 mu = rate * (site_right - site_left) * branch_length
-                for _ in range(self.rng.poisson(mu)):
-                    position = self.rng.flat(site_left, site_right)
+                for _ in range(self.rng.poisson(mu)[0]):
+                    position = self.rng.flat(site_left, site_right)[0]
                     if discrete:
                         position = np.floor(position)
                     assert edge.left <= position

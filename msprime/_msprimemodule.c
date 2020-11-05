@@ -306,15 +306,31 @@ RandomGenerator_flat(RandomGenerator *self, PyObject *args)
 {
     PyObject *ret = NULL;
     double a, b;
+    long n = 1;
+    long j;
+    npy_intp size;
+    PyObject *array = NULL;
+    double *values;
 
     if (RandomGenerator_check_state(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "dd", &a, &b)) {
+    if (!PyArg_ParseTuple(args, "dd|l", &a, &b, &n)) {
         goto out;
     }
-    ret = Py_BuildValue("d", gsl_ran_flat(self->rng, a, b));
+    size = (npy_intp) n;
+    array = PyArray_SimpleNew(1, &size, NPY_FLOAT64);
+    if (array == NULL) {
+        goto out;
+    }
+    values = (double *) PyArray_DATA((PyArrayObject *) array);
+    for (j = 0; j < n; j++) {
+        values[j] = gsl_ran_flat(self->rng, a, b);
+    }
+    ret = array;
+    array = NULL;
 out:
+    Py_XDECREF(array);
     return ret;
 }
 
@@ -322,16 +338,32 @@ static PyObject *
 RandomGenerator_poisson(RandomGenerator *self, PyObject *args)
 {
     PyObject *ret = NULL;
+    long n = 1;
+    long j;
+    npy_intp size;
+    PyObject *array = NULL;
+    uint32_t *values;
     double mu;
 
     if (RandomGenerator_check_state(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "d", &mu)) {
+    if (!PyArg_ParseTuple(args, "d|l", &mu, &n)) {
         goto out;
     }
-    ret = Py_BuildValue("I", gsl_ran_poisson(self->rng, mu));
+    size = (npy_intp) n;
+    array = PyArray_SimpleNew(1, &size, NPY_UINT32);
+    if (array == NULL) {
+        goto out;
+    }
+    values = (uint32_t *) PyArray_DATA((PyArrayObject *) array);
+    for (j = 0; j < n; j++) {
+        values[j] = (uint32_t) gsl_ran_poisson(self->rng, mu);
+    }
+    ret = array;
+    array = NULL;
 out:
+    Py_XDECREF(array);
     return ret;
 }
 
@@ -339,16 +371,32 @@ static PyObject *
 RandomGenerator_uniform_int(RandomGenerator *self, PyObject *args)
 {
     PyObject *ret = NULL;
-    unsigned long n;
+    long n = 1;
+    long j;
+    npy_intp size;
+    PyObject *array = NULL;
+    uint32_t *values;
+    unsigned long max;
 
     if (RandomGenerator_check_state(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTuple(args, "k", &n)) {
+    if (!PyArg_ParseTuple(args, "k|l", &max, &n)) {
         goto out;
     }
-    ret = Py_BuildValue("k", gsl_rng_uniform_int(self->rng, n));
+    size = (npy_intp) n;
+    array = PyArray_SimpleNew(1, &size, NPY_UINT32);
+    if (array == NULL) {
+        goto out;
+    }
+    values = (uint32_t *) PyArray_DATA((PyArrayObject *) array);
+    for (j = 0; j < n; j++) {
+        values[j] = (uint32_t) gsl_rng_uniform_int(self->rng, max);
+    }
+    ret = array;
+    array = NULL;
 out:
+    Py_XDECREF(array);
     return ret;
 }
 
