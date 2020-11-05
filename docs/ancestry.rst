@@ -957,17 +957,21 @@ processes. In particular, simulations run concurrently in subprocesses using
 seeds by default.
 
 Thus, if we run two simulations with the same parameters, we will get different
-results, as we can see from the different times of the ancestral node:
+results, as we can see from the different times of the last node:
 
-.. jupyter-execute::
+.. code-block:: python
+
+    ts = msprime.sim_ancestry(1)
+    ts.tables.nodes[-1].time
+
+    0.13313422084255794
+
+.. code-block:: python
 
     ts = msprime.sim_ancestry(1)
     ts.tables.nodes
 
-.. jupyter-execute::
-
-    ts = msprime.sim_ancestry(1)
-    ts.tables.nodes
+    3.2090602418210956
 
 The ``random_seed`` argument to :func:`sim_ancestry` allows us specify
 seeds explicitly, making the output of the simulation fully deterministic:
@@ -1012,7 +1016,7 @@ recent common ancestor in a set of simulations:
 
     num_replicates = 100
     tmrca = np.zeros(num_replicates)
-    replicates = msprime.sim_ancestry(10, num_replicates=num_replicates)
+    replicates = msprime.sim_ancestry(10, num_replicates=num_replicates, random_seed=42)
     for replicate_index, ts in enumerate(replicates):
         tree = ts.first()
         tmrca[replicate_index] = tree.time(tree.root)

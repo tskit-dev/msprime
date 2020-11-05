@@ -1,4 +1,4 @@
-name: Build and deploy docs
+name: Build Docs
 
 on:
   pull_request_target:
@@ -7,8 +7,16 @@ on:
     tags:
       - '*'
 
+env:
+  BUILD_GSL: true
+  COMMIT_EMAIL: ben.jeffery.well+adminbot@gmail.com
+  MAKE_TARGET: cmodule
+  OWNER: tskit-dev
+  REPO: msprime
+
 jobs:
   build-deploy-docs:
+    name: Docs
     runs-on: ubuntu-18.04
     steps:
       - name: Cancel Previous Runs
@@ -20,73 +28,109 @@ jobs:
         # As we are using pull-request-target which uses the workflow from the base
         # of the PR, we need to be specific
         with:
-            ref: ${{github.event.pull_request.head.ref}}
-            repository: ${{github.event.pull_request.head.repo.full_name}}
+            ref: ${{ github.event.pull_request.head.ref }}
+            repository: ${{ github.event.pull_request.head.repo.full_name }}
             submodules: true
 
       - uses: actions/setup-python@v1
         with:
           python-version: 3.8
 
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: venv
+          key: docs-venv-v2-${{ hashFiles('requirements/CI-docs/requirements.txt') }}
+
+      - name: Build virtualenv
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: python -m venv venv
+
+      - name: Install deps
+        run: venv/bin/activate && pip install -r requirements/CI-docs/requirements.txt
+
       - name: Install GSL
+        if: env.BUILD_GSL == 'true'
         run: sudo apt-get install -y libgsl0-dev
 
-      - name: Install python-deps
-        run: |
-          python -m pip install wheel
-          python -m pip install -r requirements/docs.txt
-
       - name: Build C module
-        run: make cmodule
+        if: env.MAKE_TARGET
+        run: venv/bin/activate && make $MAKE_TARGET
 
       - name: Build Docs
-        run: make -C docs
+        run: venv/bin/activate && make -C docs
+
+      - name: Wait for others to finish
+        uses: softprops/turnstyle@v1
+        with:
+          same-branch-only: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.ADMINBOT_TOKEN }}
 
       - name: Checkout docs site
-        if: github.repository_owner == 'tskit-dev'
+        if: github.repository_owner == env.OWNER
         uses: actions/checkout@v2
         with:
-          repository: tskit-dev/msprime-docs
-          token: ${{ secrets.ADMINBOT_DOCS_TOKEN }}
-          path: msprime-docs
+          repository: ${{ env.OWNER }}/${{ env.REPO }}-docs
+          token: ${{ secrets.ADMINBOT_TOKEN }}
+          path: ${{ env.REPO }}-docs
 
-      - name: Check for diff
-        if: github.repository_owner == 'tskit-dev'
+      - name: Check for diff compared to main branch
+        if: github.repository_owner == env.OWNER && github.event.pull_request
         id: diff
         #The html contains commit hashes which we don't want to count as a change
         run: |
-          diff -x .buildinfo -r msprime-docs/main docs/_build/html | grep "^[<>]" | grep -v "<title>\|VERSION:" | grep . && echo "::set-output name=change_detected::true" || echo "NO CHANGES"
+          diff -x .buildinfo -r ${{ env.REPO }}-docs/main docs/_build/html | grep "^[<>]" | grep -v "<title>\|VERSION:" | grep -Ev "\.(css|js)\?" | grep -v "Search\.setIndex" | grep . && echo "::set-output name=change_detected::true" || echo "NO CHANGES"
 
       - name: Copy our docs to the PR specific location
-        if: github.repository_owner == 'tskit-dev' && github.event.pull_request && steps.diff.outputs.change_detected
+        if: github.repository_owner == ${{ env.OWNER }} && steps.diff.outputs.change_detected
+        working-directory: ${{ env.REPO }}-docs
         run: |
-          cd msprime-docs
-          rm -rf ${{github.event.pull_request.number}}
-          cp -r ../docs/_build/html ${{github.event.pull_request.number}}
+          rm -rf ${{ github.event.pull_request.number }}
+          cp -r ../docs/_build/html PR-${{ github.event.pull_request.number }}
 
       - name: Copy our docs to the tag specific location
-        if: github.repository_owner == 'tskit-dev' && !github.event.pull_request
+        if: github.repository_owner == env.OWNER && !github.event.pull_request
+        working-directory: ${{ env.REPO }}-docs
         run: |
-          cd msprime-docs
           export DEST=`echo ${GITHUB_REF} | sed -e "s/refs\/heads\///g" |  sed -e "s/refs\/tags\///g"`
           rm -rf $DEST
           cp -r ../docs/_build/html $DEST
 
-      - name: Commit and push the docs
-        if: github.repository_owner == 'tskit-dev' && (steps.diff.outputs.change_detected || (!github.event.pull_request))
+      - name: Delete closed PRs
+        if: github.repository_owner == env.OWNER
+        shell: python
+        working-directory: ${{ env.REPO }}-docs
+        run : |
+          from github import Github
+          import os
+          import shutil
+          g = Github()
+          repo = g.get_repo("${{ env.OWNER }}/${{ env.REPO }}")
+          open_prs = [f"PR-{pr.number}" for pr in repo.get_pulls(state="open")]
+          for name in os.listdir("."):
+            if name.startswith('PR') and name not in open_prs:
+              print("Delete:", name)
+              shutil.rmtree(name)
+            else:
+              print("Keep:", name)
+
+
+      - name: Commit --amend docs
+        if: github.repository_owner == env.OWNER && (steps.diff.outputs.change_detected || (!github.event.pull_request))
+        working-directory: ${{ env.REPO }}-docs
         run: |
-          cd msprime-docs
-          git config user.name Adminbot-tskit
-          git config user.email ben.jeffery.well+adminbot@gmail.com
+          git config user.name AdminBOT
+          git config user.email $COMMIT_EMAIL
           git add .
-          git diff-index --quiet HEAD || git commit -m "Automated doc build for ${{github.event.pull_request.number}} ${GITHUB_REF}"
-          git push
+          git diff-index --quiet HEAD || git commit --amend --no-edit
+          git push -f origin main
 
       - name: Comment on PR
-        if: github.repository_owner == 'tskit-dev' && github.event.pull_request && steps.diff.outputs.change_detected
+        if: github.repository_owner == ${{ env.OWNER }} && github.event.pull_request && steps.diff.outputs.change_detected
         uses: mshick/add-pr-comment@v1
         with:
           message: |
-            📖 Docs for this PR can be previewed [here](https://tskit-dev.github.io/msprime-docs/${{github.event.pull_request.number}}/)
+            📖 Docs for this PR can be previewed [here](https://${{ env.OWNER }}.github.io/${{ env.REPO }}-docs/PR-${{ github.event.pull_request.number }}/)
           allow-repeats: false
-          repo-token: ${{ secrets.ADMINBOT_DOCS_TOKEN }}
+          repo-token: ${{ secrets.ADMINBOT_TOKEN }}
