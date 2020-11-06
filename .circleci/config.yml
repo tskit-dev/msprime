@@ -24,7 +24,7 @@ jobs:
           command: |
             sudo apt-get update
             sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev ninja-build valgrind clang
-            pip install --user -r requirements/development.txt
+            pip install --user -r requirements/CI-complete/requirements.txt
             pip install --user meson twine
             # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
             echo 'export PATH=/home/circleci/.local/bin:$PATH' >> $BASH_ENV

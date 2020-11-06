@@ -52,22 +52,18 @@ Quickstart
 Continuous integration tests
 ****************************
 
-Three different continuous integration providers are used, which run different
+Two different continuous integration providers are used, which run different
 combinations of tests on different platforms:
 
-1. A `Github action <https://help.github.com/en/actions>`_ runs `pre-commit
-   <https://pre-commit.com/>`_ to run a variety of code style and quality checks.
+1. `Github actions <https://help.github.com/en/actions>`_ run a variety of code style and
+   quality checks using `pre-commit <https://pre-commit.com/>`_ along
+   with Python tests on Linux, OSX and Windows. The docs are also built and a preview
+   generated if changes are detected.
 
-2. `Travis CI <https://travis-ci.org/>`_ runs tests on Linux and OSX using the
-   `Conda <https://conda.io/docs/>`__ infrastructure for the system level
-   requirements. All supported versions of Python are tested here.
-
-3. `CircleCI <https://circleci.com/>`_ Runs all Python tests using the apt-get
+2. `CircleCI <https://circleci.com/>`_ Runs all Python tests using the apt-get
    infrastructure for system requirements. Additionally, the low-level tests
    are run, coverage statistics calculated using `CodeCov <https://codecov.io/gh>`__,
    and the documentation built.
-
-4. `AppVeyor <https://www.appveyor.com/>`_ Runs Python tests on Windows using conda.
 
 ********
 Overview

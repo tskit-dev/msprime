@@ -1,0 +1,2 @@
+gsl
+stdpopsim==0.1.2
