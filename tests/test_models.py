@@ -302,7 +302,6 @@ class TestRejectedCommonAncestorEventCounts:
         sim = ancestry._parse_simulate(
             sample_size=10,
             recombination_rate=10,
-            random_generator=_msprime.RandomGenerator(2),
         )
         sim.run()
         assert sim.num_common_ancestor_events > threshold
@@ -313,7 +312,6 @@ class TestRejectedCommonAncestorEventCounts:
             sample_size=10,
             recombination_rate=10,
             model="hudson",
-            random_generator=_msprime.RandomGenerator(2),
         )
         sim2.run()
         assert sim2.num_common_ancestor_events == sim.num_common_ancestor_events

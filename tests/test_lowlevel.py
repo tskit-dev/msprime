@@ -1983,37 +1983,33 @@ class TestRandomGenerator:
     """
 
     def test_constructor(self):
-        with pytest.raises(TypeError):
-            _msprime.RandomGenerator()
+        rng = _msprime.RandomGenerator()
+        assert rng is not None
         for bad_type in ["x", 1.0, {}]:
             with pytest.raises(TypeError):
                 _msprime.RandomGenerator(bad_type)
 
     def test_seed_bounds(self):
         for bad_value in [0, 2 ** 32]:
-            with pytest.raises(ValueError):
-                _msprime.RandomGenerator(bad_value)
-            gen = _msprime.RandomGenerator(1)
+            gen = _msprime.RandomGenerator()
             with pytest.raises(ValueError):
                 gen.seed = bad_value
 
         for overflow in [-1, -2, 2 ** 64]:
-            with pytest.raises(OverflowError):
-                _msprime.RandomGenerator(overflow)
-            gen = _msprime.RandomGenerator(1)
+            gen = _msprime.RandomGenerator()
             with pytest.raises(OverflowError):
                 gen.seed = overflow
 
     def test_seed(self):
 
         for s in [1, 10, 2 ** 32 - 1]:
-            rng = _msprime.RandomGenerator(s)
-            assert rng.seed == s
-            rng = _msprime.RandomGenerator(1)
+            rng = _msprime.RandomGenerator()
             rng.seed = s
             assert rng.seed == s
+            rng = _msprime.RandomGenerator(s)
+            assert rng.seed == s
 
-        rng = _msprime.RandomGenerator(1)
+        rng = _msprime.RandomGenerator()
         with pytest.raises(TypeError):
             rng.seed = None
         with pytest.raises(AttributeError):
@@ -2031,7 +2027,7 @@ class TestRandomGenerator:
             uninitialised_rng.uniform_int()
 
     def test_flat_errors(self):
-        rng = _msprime.RandomGenerator(1)
+        rng = _msprime.RandomGenerator()
         with pytest.raises(TypeError):
             rng.flat()
         with pytest.raises(TypeError):
@@ -2047,7 +2043,7 @@ class TestRandomGenerator:
             rng.flat(0, 1, -1)
 
     def test_flat_single(self):
-        rng3 = _msprime.RandomGenerator(1)
+        rng3 = _msprime.RandomGenerator()
         for seed in [1, 2, 2 ** 32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
@@ -2060,7 +2056,7 @@ class TestRandomGenerator:
                 assert x == rng3.flat(a, b)
 
     def test_flat_array(self):
-        rng3 = _msprime.RandomGenerator(1)
+        rng3 = _msprime.RandomGenerator()
         for seed in [1, 2, 2 ** 32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
@@ -2086,7 +2082,7 @@ class TestRandomGenerator:
             rng.flat(0, 1, -1)
 
     def test_poisson_single(self):
-        rng3 = _msprime.RandomGenerator(1)
+        rng3 = _msprime.RandomGenerator()
         for seed in [1, 2, 2 ** 32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)

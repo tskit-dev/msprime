@@ -50,6 +50,7 @@ class TestProvenance:
         assert libs["tskit"] == {"version": tskit.__version__}
 
 
+@pytest.mark.skip("replicate index")
 class TestBuildProvenance:
     """
     Tests for the provenance dictionary building. This dictionary is used
@@ -111,6 +112,7 @@ class ValidateSchemas:
         assert prov["parameters"]["command"] == "simplify"
 
 
+@pytest.mark.skip("replicate index")
 class TestBuildObjects:
     """
     Check that we can build objects from the json schema as we'd expect.

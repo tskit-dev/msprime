@@ -90,7 +90,7 @@ class TestFullArg:
 
     def verify(self, sim, multiple_mergers=False):
         sim.run()
-        tree_sequence = next(sim.run_replicates(1))
+        tree_sequence = next(sim.run_replicates(1, random_seed=42))
         # Check if we have multiple merger somewhere.
         found = False
         for edgeset in tree_sequence.edgesets():
@@ -126,8 +126,7 @@ class TestFullArg:
         return tree_sequence
 
     def test_no_recombination(self):
-        rng = _msprime.RandomGenerator(1)
-        sim = ancestry._parse_simulate(10, random_generator=rng, record_full_arg=True)
+        sim = ancestry._parse_simulate(10, record_full_arg=True)
         ts = self.verify(sim)
         ts_simplified = ts.simplify()
         t1 = ts.tables
@@ -136,40 +135,42 @@ class TestFullArg:
         assert t1.edges == t2.edges
 
     def test_recombination_n25(self):
-        rng = _msprime.RandomGenerator(10)
         sim = ancestry._parse_simulate(
-            25, recombination_rate=1, record_full_arg=True, random_generator=rng
+            25,
+            recombination_rate=1,
+            record_full_arg=True,
         )
         self.verify(sim)
 
     def test_recombination_n5(self):
-        rng = _msprime.RandomGenerator(10)
         sim = ancestry._parse_simulate(
-            5, recombination_rate=10, record_full_arg=True, random_generator=rng
+            5,
+            recombination_rate=10,
+            record_full_arg=True,
         )
         self.verify(sim)
 
     def test_recombination_n50(self):
-        rng = _msprime.RandomGenerator(100)
         sim = ancestry._parse_simulate(
-            50, recombination_rate=2, record_full_arg=True, random_generator=rng
+            50,
+            recombination_rate=2,
+            record_full_arg=True,
         )
         self.verify(sim)
 
     def test_recombination_n100(self):
-        rng = _msprime.RandomGenerator(100)
         sim = ancestry._parse_simulate(
-            100, recombination_rate=0.2, record_full_arg=True, random_generator=rng
+            100,
+            recombination_rate=0.2,
+            record_full_arg=True,
         )
         self.verify(sim)
 
     def test_multimerger(self):
-        rng = _msprime.RandomGenerator(1234)
         sim = ancestry._parse_simulate(
             100,
             recombination_rate=0.1,
             record_full_arg=True,
-            random_generator=rng,
             demographic_events=[
                 msprime.InstantaneousBottleneck(time=0.1, population=0, strength=5)
             ],
@@ -187,18 +188,16 @@ class TestSimulator:
         Verifies a simulation for the specified parameters.
         """
         recomb_map = msprime.RecombinationMap.uniform_map(m, r)
-        rng = _msprime.RandomGenerator(1)
         sim = ancestry._parse_simulate(
-            n, recombination_map=recomb_map, random_generator=rng, discrete_genome=True
+            n, recombination_map=recomb_map, discrete_genome=True
         )
-        assert sim.random_generator == rng
         sim.run()
         assert sim.num_breakpoints == len(sim.breakpoints)
         assert sim.time > 0
         assert sim.num_avl_node_blocks > 0
         assert sim.num_segment_blocks > 0
         assert sim.num_node_mapping_blocks > 0
-        tree_sequence = next(sim.run_replicates(1))
+        tree_sequence = next(sim.run_replicates(1, random_seed=42))
         t = 0.0
         for record in tree_sequence.nodes():
             if record.time > t:
@@ -218,14 +217,14 @@ class TestSimulator:
             self.verify_simulation(n, m, r)
 
     def test_perf_parameters(self):
-        sim = ancestry._parse_simulate(10, random_seed=42)
+        sim = ancestry._parse_simulate(10)
         sim.run()
         assert sim.avl_node_block_size > 0
         assert sim.segment_block_size > 0
         assert sim.node_mapping_block_size > 0
 
     def test_event_chunk(self):
-        sim = ancestry._parse_simulate(10, random_seed=42)
+        sim = ancestry._parse_simulate(10)
         for bad_chunk in [-(2 ** 32), -1, 0]:
             with pytest.raises(ValueError):
                 sim.run(event_chunk=bad_chunk)
@@ -235,7 +234,7 @@ class TestSimulator:
         sim.run(event_chunk=2 ** 64 + 1)
 
     def test_debug_func(self):
-        sim = ancestry._parse_simulate(10, random_seed=42)
+        sim = ancestry._parse_simulate(10)
         count = 0
 
         def f(sim):
@@ -246,7 +245,8 @@ class TestSimulator:
         assert count > 0
 
     def test_info_logging(self, caplog):
-        sim = ancestry._parse_simulate(10, random_seed=42)
+        sim = ancestry._parse_simulate(10)
+        sim.random_generator.seed = 42
         with caplog.at_level(logging.INFO):
             sim.run()
         assert len(caplog.records) == 2
@@ -258,7 +258,8 @@ class TestSimulator:
         assert caplog.messages[1].startswith("Completed at time")
 
     def test_debug_logging(self, caplog):
-        sim = ancestry._parse_simulate(3, random_seed=42)
+        sim = ancestry._parse_simulate(3)
+        sim.random_generator.seed = 42
         with caplog.at_level(logging.DEBUG):
             sim.run(event_chunk=1)
         assert len(caplog.records) == 3
@@ -270,7 +271,8 @@ class TestSimulator:
         assert caplog.messages[1] == "time=0.312845 ancestors=2"
 
     def test_debug_logging_dtwf(self, caplog):
-        sim = ancestry._parse_simulate(3, Ne=10, model="dtwf", random_seed=42)
+        sim = ancestry._parse_simulate(3, Ne=10, model="dtwf")
+        sim.random_generator.seed = 42
         with caplog.at_level(logging.DEBUG):
             sim.run(event_chunk=1)
             assert len(caplog.records) == 5
@@ -373,31 +375,23 @@ class TestParseRandomSeed:
 
     def test_default(self):
         # Make sure we get different random seeds when calling sequentially.
-        rngs = [ancestry._parse_random_seed(None) for _ in range(100)]
-        assert len({rng.seed for rng in rngs}) == len(rngs)
-        assert all(isinstance(rng.seed, int) for rng in rngs)
+        seeds = [ancestry._parse_random_seed(None) for _ in range(100)]
+        assert len(set(seeds)) == len(seeds)
+        assert all(isinstance(seed, int) for seed in seeds)
 
     def test_numpy(self):
         seed = 12345
-        rng = ancestry._parse_random_seed(np.array([seed], dtype=int)[0])
-        assert rng.seed == seed
-        rng = ancestry._parse_random_seed(np.array([seed], dtype=int))
-        assert rng.seed == seed
-        assert isinstance(rng.seed, int)
+        ret_seed = ancestry._parse_random_seed(np.array([seed], dtype=int)[0])
+        assert ret_seed == seed
+        ret_seed = ancestry._parse_random_seed(np.array([seed], dtype=int))
+        assert ret_seed == seed
+        assert isinstance(ret_seed, int)
 
     def test_ints(self):
         # Anything that can be cast to an int is fine.
         for seed in [1234, 12.0, "12"]:
-            rng = ancestry._parse_random_seed(seed)
-            assert rng.seed == int(seed)
-
-    def test_bad_values(self):
-        for bad_seed in [-1, -10000, 2 ** 64]:
-            with pytest.raises(OverflowError):
-                ancestry._parse_random_seed(bad_seed)
-        for bad_seed in [0, 2 ** 32]:
-            with pytest.raises(ValueError):
-                ancestry._parse_random_seed(bad_seed)
+            ret_seed = ancestry._parse_random_seed(seed)
+            assert ret_seed == int(seed)
 
 
 class TestParseSimAncestry:
@@ -405,28 +399,6 @@ class TestParseSimAncestry:
     Tests that the front-end for the sim_ancestry function correctly
     creates simulators with the required parameter values.
     """
-
-    def test_random_generator(self):
-        # Random seed is actually a special case in that it's handled by
-        # the top-level code. But, we want to check it's handled correctly
-        # here too so that we can rely on it for testing and so on.
-        sim = ancestry._parse_sim_ancestry(10)
-        rng = sim.random_generator
-        assert isinstance(rng, _msprime.RandomGenerator)
-        assert rng.seed != 0
-
-        random_generator = _msprime.RandomGenerator(1234)
-        sim = ancestry._parse_sim_ancestry(10, random_generator=random_generator)
-        assert sim.random_generator is random_generator
-
-        sim = ancestry._parse_sim_ancestry(10, random_seed=5678)
-        assert isinstance(sim.random_generator, _msprime.RandomGenerator)
-        assert sim.random_generator.seed == 5678
-
-        with pytest.raises(ValueError):
-            ancestry._parse_sim_ancestry(
-                10, random_seed=5678, random_generator=random_generator
-            )
 
     def test_sequence_length(self):
         # a single locus simulation will have sequence_length = 1
@@ -874,30 +846,6 @@ class TestParseSimulate:
     Tests that the front-end for the simulate function correctly
     creates simulators with the required parameter values.
     """
-
-    def test_default_random_seed(self):
-        sim = ancestry._parse_simulate(10)
-        rng = sim.random_generator
-        assert isinstance(rng, _msprime.RandomGenerator)
-        assert rng.seed != 0
-
-    def test_random_generator(self):
-        seed = 12345
-        rng = _msprime.RandomGenerator(seed)
-        sim = ancestry._parse_simulate(10, random_generator=rng)
-        assert rng == sim.random_generator
-        assert rng.seed == seed
-
-    def test_random_seed(self):
-        seed = 12345
-        sim = ancestry._parse_simulate(10, random_seed=seed)
-        assert sim.random_generator.seed == seed
-
-        # It's an error to specify both seed and generator.
-        with pytest.raises(ValueError):
-            ancestry._parse_simulate(
-                10, random_seed=1234, random_generator=_msprime.RandomGenerator(1234)
-            )
 
     def test_length(self):
         for bad_length in [-1, 0, -1e-6]:
@@ -1423,19 +1371,6 @@ class TestSimAncestryInterface:
         ts = msprime.sim_ancestry(10, random_seed=2, record_provenance=False)
         assert ts.num_provenances == 0
 
-    def test_replicate_index(self):
-        n = 10
-        ts_list = list(
-            msprime.sim_ancestry(
-                10, random_seed=42, num_replicates=n, record_provenance=False
-            )
-        )
-        for j in range(n):
-            ts = msprime.sim_ancestry(
-                10, random_seed=42, replicate_index=j, record_provenance=False
-            )
-            assert ts.tables == ts_list[j].tables
-
     def test_dtwf(self):
         ts = msprime.sim_ancestry(
             10, population_size=100, model="dtwf", ploidy=2, random_seed=1234
@@ -1754,27 +1689,6 @@ class TestSimulateInterface:
             t.provenances.clear()
         for t in tables:
             assert t == tables[0]
-
-    def test_replicate_index(self):
-        tables_1 = list(msprime.simulate(10, num_replicates=5, random_seed=1))[4].tables
-        tables_2 = msprime.simulate(10, replicate_index=4, random_seed=1).tables
-        tables_1.provenances.clear()
-        tables_2.provenances.clear()
-        assert tables_1 == tables_2
-
-        with pytest.raises(
-            ValueError,
-            match="Cannot specify replicate_index without random_seed as"
-            " this has the same effect as not specifying"
-            " replicate_index i.e. a random tree sequence",
-        ):
-            msprime.simulate(5, replicate_index=5)
-        with pytest.raises(
-            ValueError,
-            match="Cannot specify replicate_index with num_replicates as"
-            " only the replicate_index specified will be returned.",
-        ):
-            msprime.simulate(5, random_seed=1, replicate_index=5, num_replicates=26)
 
 
 class TestReprRoundTrip:

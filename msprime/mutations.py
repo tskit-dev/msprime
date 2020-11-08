@@ -1043,12 +1043,12 @@ class InfiniteSites(MatrixMutationModel):
 
 def _simple_mutate(
     tables,
-    rng,
+    random_seed,
     rate,
     sequence_length,
     discrete_sites=False,
-    kept_mutations_before_end_time=False,
 ):
+    rng = _msprime.RandomGenerator(random_seed)
     rate_map = intervals.RateMap.uniform(sequence_length, rate)
     _msprime.sim_mutations(
         tables,
@@ -1056,7 +1056,6 @@ def _simple_mutate(
         rate_map.asdict(),
         model=BinaryMutationModel(),
         discrete_sites=discrete_sites,
-        kept_mutations_before_end_time=kept_mutations_before_end_time,
     )
 
 

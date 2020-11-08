@@ -860,7 +860,7 @@ class TestKeep:
 
     def test_random_metadata(self):
         ts = tsutil.add_random_metadata(
-            msprime.simulate(12, random_seed=3, mutation_rate=1)
+            msprime.simulate(12, random_seed=4, mutation_rate=1)
         )
         assert ts.num_sites > 5
         self.verify(ts, 3, random_seed=7)

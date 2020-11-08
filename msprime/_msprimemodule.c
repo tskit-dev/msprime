@@ -255,14 +255,19 @@ RandomGenerator_init(RandomGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     static char *kwlist[] = {"seed", NULL};
-    PyObject *py_seed;
+    PyObject *py_seed = NULL;
 
     self->rng = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", kwlist, &py_seed)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|O", kwlist, &py_seed)) {
         goto out;
     }
     self->rng = gsl_rng_alloc(gsl_rng_default);
-    ret = RandomGenerator_parse_seed(self, py_seed);
+    if (py_seed != NULL) {
+        if (RandomGenerator_parse_seed(self, py_seed) != 0) {
+            goto out;
+        }
+    }
+    ret = 0;
 out:
     return ret;
 }

@@ -29,7 +29,6 @@ import sys
 import tskit
 
 import msprime
-from . import _msprime
 from . import ancestry
 
 
@@ -227,8 +226,7 @@ class SimulationRunner:
         ms_seeds = random_seeds
         if random_seeds is None:
             ms_seeds = generate_seeds()
-        seed = get_single_seed(ms_seeds)
-        self._random_generator = _msprime.RandomGenerator(seed)
+        self._random_seed = get_single_seed(ms_seeds)
         self._ms_random_seeds = ms_seeds
 
         # If we have specified any population_configurations we don't want
@@ -248,7 +246,6 @@ class SimulationRunner:
             demographic_events=demographic_events,
             gene_conversion_rate=scaled_gene_conversion_rate,
             gene_conversion_tract_length=gene_conversion_tract_length,
-            random_generator=self._random_generator,
             discrete_genome=True,
         )
 
@@ -314,7 +311,10 @@ class SimulationRunner:
         # The first line of ms's output is the command line.
         print(" ".join(sys.argv), file=output)
         print(" ".join(str(s) for s in self._ms_random_seeds), file=output)
-        for ts in self._simulator.run_replicates(self._num_replicates):
+        replicates = self._simulator.run_replicates(
+            self._num_replicates, random_seed=self._random_seed
+        )
+        for ts in replicates:
             # This is a hack. We should have some sort of "mutator" argument
             # to run_replicates that passes in various args or something
             seed = 1 + self._simulator.random_generator.uniform_int(2 ** 31 - 2)
