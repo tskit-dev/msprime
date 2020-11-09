@@ -5,16 +5,22 @@ pull_request_rules:
       - "#approved-reviews-by>=1"
       - base=main
       - label=AUTOMERGE-REQUESTED
-      - status-success=lint-c
-      - status-success=pre-commit
-      - status-success=build-deploy-docs
+      - status-success=Docs
+      - status-success=Lint
+      - status-success=Python (3.6, macos-latest)
+      - status-success=Python (3.7, macos-latest)
+      - status-success=Python (3.8, macos-latest)
+      - status-success=Python (3.6, ubuntu-latest)
+      - status-success=Python (3.7, ubuntu-latest)
+      - status-success=Python (3.8, ubuntu-latest)
+      - status-success=Python (3.6, windows-latest)
+      - status-success=Python (3.7, windows-latest)
+      - status-success=Python (3.8, windows-latest)
       - "status-success=ci/circleci: build"
       #- status-success=codecov/patch
       #- status-success=codecov/project/c-tests
       #- status-success=codecov/project/python-c-tests
       #- status-success=codecov/project/python-tests
-      - status-success=continuous-integration/appveyor/pr
-      - status-success=continuous-integration/travis-ci/pr
     actions:
       merge:
         strict: smart

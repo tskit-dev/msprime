@@ -1,0 +1,10 @@
+attrs==20.3.0
+bintrees==2.1.0
+daiquiri==2.1.1
+newick==1.0.0
+numpy==1.19.4
+pytest==6.1.2
+pytest-xdist==2.1.0
+python_jsonschema_objects==0.3.13
+scipy==1.5.4
+tskit==0.3.2

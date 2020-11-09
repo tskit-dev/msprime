@@ -1,0 +1,128 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pre-commit:
+    name: Lint
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.6.0
+        with:
+          access_token: ${{ github.token }}
+      - uses: actions/checkout@v1
+      - uses: actions/setup-python@v1
+      - name: set PY
+        run: echo "::set-env name=PY::$(python -c 'import hashlib, sys;print(hashlib.sha256(sys.version.encode()+sys.executable.encode()).hexdigest())')"
+      - name: install clang-format
+        if: steps.clang_format.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get remove -y clang-6.0 libclang-common-6.0-dev libclang1-6.0 libllvm6.0
+          sudo apt-get autoremove
+          sudo apt-get install clang-format clang-format-6.0
+      - uses: pre-commit/action@v2.0.0
+
+  test:
+    name: Python
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        python: [ 3.6, 3.7, 3.8 ]
+        os:  [ macos-latest, ubuntu-latest, windows-latest ]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.6.0
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Cache conda and dependancies
+        id: cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            c:\Miniconda\envs\anaconda-client-env
+            /usr/share/miniconda/envs/anaconda-client-env
+            ~/osx-conda
+            ~/.profile
+          key: ${{ runner.os }}-${{ matrix.python}}-conda-v9-${{ hashFiles('requirements/CI-tests-conda/requirements.txt') }}-${{ hashFiles('python/requirements/CI-tests-pip/requirements.txt') }}
+
+      - name: Install Conda
+        uses: conda-incubator/setup-miniconda@v1
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          activate-environment: anaconda-client-env
+          python-version: ${{ matrix.python }}
+          channels: conda-forge
+          channel-priority: strict
+          auto-update-conda: true
+          use-only-tar-bz2: true
+
+      - name: Fix windows symlinks
+        # This is horrible, but the "git config core.symlinks true" didn't work.
+        working-directory: lib
+        if: matrix.os == 'windows-latest'
+        run: |
+          rm -r subprojects/kastore
+          rm -r subprojects/tskit
+          rm -r subprojects/git-submodules/tskit/c/subprojects
+          rm -r subprojects/git-submodules/tskit/c/tests
+          rm ../lwt_interface
+          cp -r --dereference subprojects/git-submodules/kastore/c subprojects/kastore
+          cp -r --dereference subprojects/git-submodules/tskit/c subprojects/tskit
+          cp -r --dereference subprojects/git-submodules/tskit/python/lwt_interface/* subprojects/tskit/.
+          cp -r --dereference subprojects/git-submodules/tskit/python/lwt_interface ../lwt_interface
+
+      - name: Fix windows .profile
+        if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'windows-latest'
+        run: |
+          cp ~/.bash_profile ~/.profile
+
+      - name: Install conda deps
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash -l {0} #We need a login shell to get conda
+        run: conda install --yes --file=requirements/CI-tests-conda/requirements.txt
+
+      - name: Install pip deps
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash -l {0}
+        run: pip install -r requirements/CI-tests-pip/requirements.txt
+
+      - name: Fix OSX Cache Write #OSX Won't let the cache restore due to file perms
+        if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'macos-latest'
+        run: |
+          cp -r /usr/local/miniconda/envs/anaconda-client-env ~/osx-conda
+
+      - name: Fix OSX Cache Restore
+        if: steps.cache.outputs.cache-hit == 'true' && matrix.os == 'macos-latest'
+        run: |
+          mkdir -p /usr/local/miniconda/envs
+          sudo cp -r ~/osx-conda /usr/local/miniconda/envs/anaconda-client-env
+
+      - name: Build module
+        env:
+          MSP_CONDA_PREFIX: c:\Miniconda\envs\anaconda-client-env
+        run: |
+          source ~/.profile
+          conda activate anaconda-client-env
+          python setup.py build_ext --inplace
+
+      - name: Run tests
+        run: |
+          source ~/.profile
+          conda activate anaconda-client-env
+          pytest -xv -n2
+
+
+
