@@ -1,9 +1,9 @@
 
 .. _sec_likelihood:
 
-=====================
-Computing likelihoods
-=====================
+===========
+Likelihoods
+===========
 
 .. todo:: Review the content in this page and decide if the structure is
     correct. Arguably this could be moved to the "utilities" page, but

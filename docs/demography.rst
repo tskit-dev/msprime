@@ -1,9 +1,15 @@
 .. _sec_demography:
 
-=====================
-Specifying Demography
-=====================
+==========
+Demography
+==========
 
+.. todo:: This section needs some intro material
+
+
+********
+Old text
+********
 
 .. todo:: This is the text from the old API docs. Reuse somewhere more appropriate,
     either by having a "summary" section of by moving bits of the text into the
