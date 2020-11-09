@@ -83,7 +83,7 @@ jobs:
           diff -x .buildinfo -r ${{ env.REPO }}-docs/main docs/_build/html | grep "^[<>]" | grep -v "<title>\|VERSION:" | grep -Ev "\.(css|js)\?" | grep -v "Search\.setIndex" | grep . && echo "::set-output name=change_detected::true" || echo "NO CHANGES"
 
       - name: Copy our docs to the PR specific location
-        if: github.repository_owner == ${{ env.OWNER }} && steps.diff.outputs.change_detected
+        if: github.repository_owner == ${{ env.OWNER }} && github.event.pull_request.number && steps.diff.outputs.change_detected
         working-directory: ${{ env.REPO }}-docs
         run: |
           rm -rf ${{ github.event.pull_request.number }}
@@ -127,7 +127,7 @@ jobs:
           git push -f origin main
 
       - name: Comment on PR
-        if: github.repository_owner == ${{ env.OWNER }} && github.event.pull_request && steps.diff.outputs.change_detected
+        if: github.repository_owner == ${{ env.OWNER }} && github.event.pull_request.number && steps.diff.outputs.change_detected
         uses: mshick/add-pr-comment@v1
         with:
           message: |
