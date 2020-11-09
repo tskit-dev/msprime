@@ -1,7 +1,7 @@
 attrs==20.3.0
 bintrees==2.1.0
 codecov==2.1.10
-daiquiri==2.1.1
+daiquiri==3.0.0
 newick==1.0.0
 numpy==1.19.4
 pytest==6.1.2
