@@ -160,15 +160,13 @@ class TestKnownExamples:
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 19 / 8
         for t in theta:
-            unnormalised_mutation_ll_exact = (
-                5 * math.log(tree_length * t) - tree_length * t
-            )
-            unnormalised_mutation_ll_exact -= 2 * math.log(4 * tree_length)
-            unnormalised_mutation_ll_exact -= 2 * math.log(tree_length)
-            unnormalised_mutation_ll_exact += math.log(3 / (4 * tree_length))
+            mutation_ll_exact = 5 * math.log(tree_length * t) - tree_length * t
+            mutation_ll_exact -= 2 * math.log(4 * tree_length)
+            mutation_ll_exact -= 2 * math.log(tree_length)
+            mutation_ll_exact += math.log(3 / (4 * tree_length))
             assert math.isclose(
-                unnormalised_mutation_ll_exact,
-                msprime.unnormalised_log_mutation_likelihood(arg, t),
+                mutation_ll_exact,
+                msprime.log_mutation_likelihood(arg, t),
             )
 
     def test_multiple_mrcas(self):
@@ -231,14 +229,12 @@ class TestKnownExamples:
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 1.5
         for t in theta:
-            unnormalised_mutation_ll_exact = (
-                3 * math.log(tree_length * t) - tree_length * t
-            )
-            unnormalised_mutation_ll_exact -= math.log(tree_length)
-            unnormalised_mutation_ll_exact -= 2 * math.log(2 * tree_length)
+            mutation_ll_exact = 3 * math.log(tree_length * t) - tree_length * t
+            mutation_ll_exact -= math.log(tree_length)
+            mutation_ll_exact -= 2 * math.log(2 * tree_length)
             assert math.isclose(
-                unnormalised_mutation_ll_exact,
-                msprime.unnormalised_log_mutation_likelihood(arg, t),
+                mutation_ll_exact,
+                msprime.log_mutation_likelihood(arg, t),
             )
 
     def test_merger_with_overhang(self):
@@ -306,15 +302,13 @@ class TestKnownExamples:
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 81 / 50
         for t in theta:
-            unnormalised_mutation_ll_exact = (
-                3 * math.log(tree_length * t) - tree_length * t
-            )
-            unnormalised_mutation_ll_exact -= math.log(2 * tree_length)
-            unnormalised_mutation_ll_exact += math.log(1.3 / tree_length)
-            unnormalised_mutation_ll_exact -= math.log(tree_length)
+            mutation_ll_exact = 3 * math.log(tree_length * t) - tree_length * t
+            mutation_ll_exact -= math.log(2 * tree_length)
+            mutation_ll_exact += math.log(1.3 / tree_length)
+            mutation_ll_exact -= math.log(tree_length)
             assert math.isclose(
-                unnormalised_mutation_ll_exact,
-                msprime.unnormalised_log_mutation_likelihood(arg, t),
+                mutation_ll_exact,
+                msprime.log_mutation_likelihood(arg, t),
             )
 
     def test_gap_in_ancestral_material(self):
@@ -387,14 +381,12 @@ class TestKnownExamples:
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 0.84
         for t in theta:
-            unnormalised_mutation_ll_exact = (
-                5 * math.log(tree_length * t) - tree_length * t
-            )
-            unnormalised_mutation_ll_exact += 3 * math.log(0.4 / tree_length)
-            unnormalised_mutation_ll_exact += 2 * math.log(0.5 / tree_length)
+            mutation_ll_exact = 5 * math.log(tree_length * t) - tree_length * t
+            mutation_ll_exact += 3 * math.log(0.4 / tree_length)
+            mutation_ll_exact += 2 * math.log(0.5 / tree_length)
             assert math.isclose(
-                unnormalised_mutation_ll_exact,
-                msprime.unnormalised_log_mutation_likelihood(arg, t),
+                mutation_ll_exact,
+                msprime.log_mutation_likelihood(arg, t),
             )
 
     def test_recombination_in_material_gap(self):
@@ -479,14 +471,12 @@ class TestKnownExamples:
         theta = np.arange(0.1, 10, 0.1)
         tree_length = 1.34
         for t in theta:
-            unnormalised_mutation_ll_exact = (
-                4 * math.log(tree_length * t) - tree_length * t
-            )
-            unnormalised_mutation_ll_exact += math.log(0.6 / tree_length)
-            unnormalised_mutation_ll_exact += 3 * math.log(0.7 / tree_length)
+            mutation_ll_exact = 4 * math.log(tree_length * t) - tree_length * t
+            mutation_ll_exact += math.log(0.6 / tree_length)
+            mutation_ll_exact += 3 * math.log(0.7 / tree_length)
             assert math.isclose(
-                unnormalised_mutation_ll_exact,
-                msprime.unnormalised_log_mutation_likelihood(arg, t),
+                mutation_ll_exact,
+                msprime.log_mutation_likelihood(arg, t),
             )
 
 
@@ -537,7 +527,7 @@ class TestSimulatedExamples(unittest.TestCase):
         ts = msprime.simulate(
             5, recombination_rate=1, random_seed=12, record_full_arg=True
         )
-        lik = msprime.unnormalised_log_mutation_likelihood(ts, 0)
+        lik = msprime.log_mutation_likelihood(ts, 0)
         assert lik == 0
 
         # With mutations
@@ -548,7 +538,7 @@ class TestSimulatedExamples(unittest.TestCase):
             random_seed=12,
             record_full_arg=True,
         )
-        lik = msprime.unnormalised_log_mutation_likelihood(ts, 0)
+        lik = msprime.log_mutation_likelihood(ts, 0)
         assert lik == float("-inf")
 
 

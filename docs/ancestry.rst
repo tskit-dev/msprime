@@ -1009,10 +1009,6 @@ Ancestral recombination graph
     import msprime
     from IPython.display import SVG
 
-
-.. todo:: Port this content from the old tutorial to use
-    the formats and conventions in this document.
-
 In ``msprime`` we usually want to simulate the coalescent with recombination
 and represent the output as efficiently as possible. As a result, we don't
 store individual recombination events, but rather their effects on the output
@@ -1020,85 +1016,35 @@ tree sequence. We also do not explicitly store common ancestor events that
 do not result in marginal coalescences. For some purposes, however, we want
 to get information on the full history of the simulation, not just the minimal
 representation of its outcome. The ``record_full_arg`` option to
-:func:`.simulate` provides this functionality, as illustrated in the following
-example:
+:func:`.sim_ancestry` provides this functionality, as illustrated in the
+following example:
 
-.. code-block:: python
+.. jupyter-execute::
 
-    def full_arg_example():
-        ts = msprime.simulate(
-            sample_size=5, recombination_rate=0.1,
-            record_full_arg=True, random_seed=42)
-        print(ts.tables.nodes)
-        print()
-        for tree in ts.trees():
-            print("interval:", tree.interval)
-            print(tree.draw(format="unicode"))
+    ts = msprime.sim_ancestry(
+        3, recombination_rate=0.1, sequence_length=2,
+        record_full_arg=True, random_seed=42)
+    print(ts.tables.nodes)
+    SVG(ts.draw_svg())
 
-
-Running this code we get::
-
-    id      flags   population      individual      time    metadata
-    0       1       0       -1      0.00000000000000
-    1       1       0       -1      0.00000000000000
-    2       1       0       -1      0.00000000000000
-    3       1       0       -1      0.00000000000000
-    4       1       0       -1      0.00000000000000
-    5       0       0       -1      0.31846010419674
-    6       0       0       -1      0.82270149120229
-    7       0       0       -1      1.21622732856555
-    8       131072  0       -1      1.51542116580501
-    9       131072  0       -1      1.51542116580501
-    10      262144  0       -1      2.12814260094490
-    11      0       0       -1      2.16974122606933
-
-    interval: (0.0, 0.7323522972251177)
-          11
-       ┏━━┻━┓
-       ┃    10
-       ┃    ┃
-       ┃    8
-       ┃    ┃
-       7    ┃
-     ┏━┻━┓  ┃
-     ┃   6  ┃
-     ┃  ┏┻┓ ┃
-     5  ┃ ┃ ┃
-    ┏┻┓ ┃ ┃ ┃
-    0 4 2 3 1
-
-    interval: (0.7323522972251177, 1.0)
-          11
-       ┏━━┻━┓
-       ┃    10
-       ┃    ┃
-       ┃    9
-       ┃    ┃
-       7    ┃
-     ┏━┻━┓  ┃
-     ┃   6  ┃
-     ┃  ┏┻┓ ┃
-     5  ┃ ┃ ┃
-    ┏┻┓ ┃ ┃ ┃
-    0 4 2 3 1
 
 After running the simulation we first print out the `node table
 <https://tskit.readthedocs.io/en/stable/data-model.html#node-table>`_, which
 contains information on all the nodes in the tree sequence. Note that ``flags``
 column contains several different values: all of the sample nodes (at time 0)
-have a flag value of ``1`` (:data:`tskit.NODE_IS_SAMPLE`). Other internal
+have a flag value of ``1`` (:data:`tskit.NODE_IS_SAMPLE`). Most other
 nodes have a flag value of ``0``, which is the standard for internal nodes
 in a coalescent simulations.
 
-Nodes 8 and 9 have flags equal to 131072 (:data:`.NODE_IS_RE_EVENT`), which
+Nodes 9 and 10 have flags equal to 131072 (:data:`.NODE_IS_RE_EVENT`), which
 tells us that they correspond to a recombination event in the ARG. A
 recombination event results in two extra nodes being recorded, one identifying
 the individual providing the genetic material to the left of the breakpoint and
 the other identifying the individuals providing the genetic material to the
-right. The effect of this extra node can be seen in the trees: node 8 is
-present as a 'unary' node in the left hand tree and node 9 in the right.
+right. The effect of this extra node can be seen in the trees: node 9 is
+present as a 'unary' node in the left hand tree and node 10 in the right.
 
-Node 10 has a flags value of 262144 (:data:`.NODE_IS_CA_EVENT`), which
+Node 11 has a flags value of 262144 (:data:`.NODE_IS_CA_EVENT`), which
 tells us that it is an ARG common ancestor event that *did not* result
 in marginal coalescence. This class of event also results in unary nodes
 in the trees, which we can see in the example.
@@ -1106,7 +1052,7 @@ in the trees, which we can see in the example.
 If we wish to reduce these trees down to the minimal representation, we can
 use :meth:`tskit.TreeSequence.simplify`. The resulting tree sequence will have
 all of these unary nodes removed and will be equivalent to (but not identical, due to
-stochastic effects) calling :func:`.simulate` without the ``record_full_arg``
+stochastic effects) calling :func:`.sim_ancestry` without the ``record_full_arg``
 argument.
 
 Migrations nodes are also recording in the ARG using the
