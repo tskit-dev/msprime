@@ -54,20 +54,25 @@ scenarios. The library is a reimplementation of Hudson's seminal
    The idea is we refactor all the stuff that's currently in the tutorial and
    API sections into the appropriate high-level sections.
 
+.. It would be nice to split the TOC into some sections, if we could.
+
 Contents:
 =========
 
 .. toctree::
    :maxdepth: 2
 
-   installation
-   quickref
-   demography
+   quickstart
    ancestry
    mutations
+   demography
    likelihoods
+
+   installation
+   quickref
    utilities
    cli
+
    development
    CITATION
    changelog

@@ -1,12 +1,13 @@
 .. _sec_mutations:
 
-====================
-Simulating mutations
-====================
+=========
+Mutations
+=========
 
 .. todo::
     This has been copied directly from the api.rst file. Probably
     needs some refactoring to use the newer docs arrangements.
+    Also all the labels need updating.
 
 When running coalescent simulations it's usually most convenient to use the
 ``mutation_rate`` argument to the :func:`.simulate` function to throw neutral
@@ -16,18 +17,11 @@ of different random mutational processes on top of a single simulated topology,
 or if we have obtained the tree sequence from another program and wish to
 overlay neutral mutations on this tree sequence.
 
-***
-API
-***
-
-.. autofunction:: msprime.mutate
-
-
 .. _sec_api_mutation_models:
 
-***************
-Mutation Models
-***************
+******
+Models
+******
 
 Mutation models are specified using the ``model`` parameter to
 :func:`.mutate`. This parameter can either take the form of a
@@ -432,4 +426,11 @@ Existing mutations
 .. todo:: Docs and examples for what to do when you're adding mutations
     to a ts that already has mutations. Like what the
     ``kept_mutations_before_end_time`` parameter.
+
+
+***
+API
+***
+
+.. autofunction:: msprime.mutate
 

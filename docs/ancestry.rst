@@ -1,61 +1,11 @@
 .. _sec_ancestry:
 
-===================
-Simulating ancestry
-===================
+========
+Ancestry
+========
 
-***
-API
-***
-
-.. autofunction:: msprime.sim_ancestry()
-
-
-++++++++++++++
-Deprecated API
-++++++++++++++
-
-.. todo:: This probably isn't the way to present this information but putting
-    this in here for now so it goes somewhere.
-
-.. autofunction:: msprime.simulate()
-
-.. _sec_ancestry_node_flags:
-
-++++++++++
-Node flags
-++++++++++
-
-For standard coalescent simulations, all samples are marked with the
-:data:`tskit.NODE_IS_SAMPLE` flag; internal nodes all have a flags value of 0.
-
-.. todo link these up with the examples sections below where they are used.
-
-.. data:: msprime.NODE_IS_RE_EVENT
-
-    The node is an ARG recombination event. Each recombination event is marked
-    with two nodes, one identifying the individual providing the genetic
-    material to the left of the breakpoint and the other providing the genetic
-    material the right. Only present if the ``record_full_arg`` option is
-    specified.
-
-.. data:: msprime.NODE_IS_CA_EVENT
-
-    The node is an ARG common ancestor event that did not result in
-    marginal coalescence. Only present if the ``record_full_arg`` option is
-    specified.
-
-.. data:: msprime.NODE_IS_MIG_EVENT
-
-    The node is an ARG migration event identifying the individual that migrated.
-    Can be used in combination with the ``record_migrations``.
-    Only present if the ``record_full_arg`` option is
-    specified.
-
-.. data:: msprime.NODE_IS_CEN_EVENT
-
-    The node was created by a :class:`msprime.CensusEvent`.
-
+.. todo:: This section needs some intro material and a bunch of
+    link pointers.
 
 .. _sec_ancestry_models:
 
@@ -1600,3 +1550,60 @@ but has the redundant nodes and edges removed. Note also that he node IDs have b
 reassigned so that the samples are 0 to 9 --- if you need the IDs from the original
 tree sequence, please set ``map_nodes=True`` when calling ``simplify`` to get a
 mapping between the two sets of IDs.
+
+
+***
+API
+***
+
+.. todo:: This is a tentative section title. We need some place where we put
+    the detail API documentation.
+
+.. autofunction:: msprime.sim_ancestry
+
+
+++++++++++++++
+Deprecated API
+++++++++++++++
+
+.. todo:: This probably isn't the way to present this information but putting
+    this in here for now so it goes somewhere.
+
+.. autofunction:: msprime.simulate()
+
+.. _sec_ancestry_node_flags:
+
+++++++++++
+Node flags
+++++++++++
+
+For standard coalescent simulations, all samples are marked with the
+:data:`tskit.NODE_IS_SAMPLE` flag; internal nodes all have a flags value of 0.
+
+.. todo link these up with the examples sections below where they are used.
+
+.. data:: msprime.NODE_IS_RE_EVENT
+
+    The node is an ARG recombination event. Each recombination event is marked
+    with two nodes, one identifying the individual providing the genetic
+    material to the left of the breakpoint and the other providing the genetic
+    material the right. Only present if the ``record_full_arg`` option is
+    specified.
+
+.. data:: msprime.NODE_IS_CA_EVENT
+
+    The node is an ARG common ancestor event that did not result in
+    marginal coalescence. Only present if the ``record_full_arg`` option is
+    specified.
+
+.. data:: msprime.NODE_IS_MIG_EVENT
+
+    The node is an ARG migration event identifying the individual that migrated.
+    Can be used in combination with the ``record_migrations``.
+    Only present if the ``record_full_arg`` option is
+    specified.
+
+.. data:: msprime.NODE_IS_CEN_EVENT
+
+    The node was created by a :class:`msprime.CensusEvent`.
+
