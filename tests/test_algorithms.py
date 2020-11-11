@@ -150,9 +150,9 @@ class TestAlgorithms:
         assert len(stderr) == 0
 
     def test_from_ts(self):
-        from_ts = msprime.simulate(
+        from_ts = msprime.sim_ancestry(
             10,
-            length=100,
+            sequence_length=100,
             discrete_genome=True,
             recombination_rate=2,
             random_seed=2,

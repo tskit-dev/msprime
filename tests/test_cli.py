@@ -257,15 +257,15 @@ class CustomExceptionForTesting(Exception):
 
 class TestHotspotsToRecombMap(TestCli):
     def verify_map(self, recomb_map, expected_positions, expected_rates):
-        assert recomb_map.get_positions() == expected_positions
-        assert recomb_map.get_rates() == expected_rates
+        assert np.array_equal(recomb_map.position, expected_positions)
+        assert np.array_equal(recomb_map.rate, expected_rates)
 
     def test_multiple_hotspots(self):
         seq_length = 1000
         rate = 0.1
         hotspots = [2, 100, 200, 10, 700, 900, 20]
         expected_positions = [0, 100, 200, 700, 900, 1000]
-        expected_rates = [0.1, 1.0, 0.1, 2.0, 0.1, 0.0]
+        expected_rates = [0.1, 1.0, 0.1, 2.0, 0.1]
         recomb_map = cli.hotspots_to_recomb_map(hotspots, rate, seq_length)
         self.verify_map(recomb_map, expected_positions, expected_rates)
 
@@ -274,7 +274,7 @@ class TestHotspotsToRecombMap(TestCli):
         rate = 0.1
         hotspots = [2, 100, 200, 10, 200, 900, 20]
         expected_positions = [0, 100, 200, 900, 1000]
-        expected_rates = [0.1, 1.0, 2.0, 0.1, 0.0]
+        expected_rates = [0.1, 1.0, 2.0, 0.1]
         recomb_map = cli.hotspots_to_recomb_map(hotspots, rate, seq_length)
         self.verify_map(recomb_map, expected_positions, expected_rates)
 
@@ -283,7 +283,7 @@ class TestHotspotsToRecombMap(TestCli):
         rate = 0.1
         hotspots = [1, 0, 200, 10]
         expected_positions = [0, 200, 1000]
-        expected_rates = [1.0, 0.1, 0.0]
+        expected_rates = [1.0, 0.1]
         recomb_map = cli.hotspots_to_recomb_map(hotspots, rate, seq_length)
         self.verify_map(recomb_map, expected_positions, expected_rates)
 
@@ -292,7 +292,7 @@ class TestHotspotsToRecombMap(TestCli):
         rate = 0.1
         hotspots = [1, 800, 1000, 10]
         expected_positions = [0, 800, 1000]
-        expected_rates = [0.1, 1.0, 0.0]
+        expected_rates = [0.1, 1.0]
         recomb_map = cli.hotspots_to_recomb_map(hotspots, rate, seq_length)
         self.verify_map(recomb_map, expected_positions, expected_rates)
 
@@ -301,7 +301,7 @@ class TestHotspotsToRecombMap(TestCli):
         rate = 0.1
         hotspots = [1, 0, 1000, 10]
         expected_positions = [0, 1000]
-        expected_rates = [1.0, 0.0]
+        expected_rates = [1.0]
         recomb_map = cli.hotspots_to_recomb_map(hotspots, rate, seq_length)
         self.verify_map(recomb_map, expected_positions, expected_rates)
 
@@ -563,34 +563,34 @@ class TestMspmsCreateSimulationRunner:
 
     def test_recomb_map(self):
         runner = self.create_runner("15 1000 -t 10.04 -r 100.0 2501")
-        uniform = msprime.RecombinationMap([0, 2501], [0.04, 0])
+        uniform = msprime.RateMap([0, 2501], [0.04])
         actual = runner.get_recomb_map()
-        assert actual.get_positions() == uniform.get_positions()
-        assert actual.get_rates() == uniform.get_rates()
+        assert np.array_equal(actual.position, uniform.position)
+        assert np.array_equal(actual.rate, uniform.rate)
 
         args = "15 1000 -t 10.04 -r 100.0 25001 -v 2 100 200 10 7000 8000 20"
         runner = self.create_runner(args)
         positions = [0, 100, 200, 7000, 8000, 25001]
-        rates = [0.004, 0.04, 0.004, 0.08, 0.004, 0]
+        rates = [0.004, 0.04, 0.004, 0.08, 0.004]
         actual = runner.get_recomb_map()
-        assert actual.get_positions() == positions
-        assert actual.get_rates() == rates
+        assert np.array_equal(actual.position, positions)
+        assert np.array_equal(actual.rate, rates)
 
         args = "15 1000 -t 10.04 -r 100.0 25001 -v 2 100 200 10 200 300 20"
         runner = self.create_runner(args)
         positions = [0, 100, 200, 300, 25001]
-        rates = [0.004, 0.04, 0.08, 0.004, 0]
+        rates = [0.004, 0.04, 0.08, 0.004]
         actual = runner.get_recomb_map()
-        assert actual.get_positions() == positions
-        assert actual.get_rates() == rates
+        assert np.array_equal(actual.position, positions)
+        assert np.array_equal(actual.rate, rates)
 
         args = "15 1000 -t 10.04 -r 100.0 25001 -v 1 0 25001 0"
         runner = self.create_runner(args)
         positions = [0, 25001]
-        rates = [0, 0]
+        rates = [0]
         actual = runner.get_recomb_map()
-        assert actual.get_positions() == positions
-        assert actual.get_rates() == rates
+        assert np.array_equal(actual.position, positions)
+        assert np.array_equal(actual.rate, rates)
 
     def test_structure_args(self):
         sim = self.create_simulator("2 1 -T")
@@ -966,11 +966,9 @@ class TestMspmsOutput(TestCli):
         Runs the UI for the specified parameters, and parses the output
         to ensure it's consistent.
         """
-        # TODO there is a problem here when we have a zero recombination
-        # rate, as we can't convert between physical and genetic coords
-        # in this case.
         sr = cli.SimulationRunner(
-            sample_size=sample_size,
+            samples=sample_size,
+            demography=None,
             num_loci=num_loci,
             scaled_recombination_rate=recombination_rate,
             num_replicates=num_replicates,
@@ -1143,7 +1141,7 @@ class TestMspmsOutput(TestCli):
         mutation_rate = 10
         # Run without seeds to get automatically generated seeds
         sr = cli.SimulationRunner(
-            sample_size=sample_size, scaled_mutation_rate=mutation_rate
+            samples=sample_size, scaled_mutation_rate=mutation_rate
         )
         with tempfile.TemporaryFile("w+") as f:
             sr.run(f)
@@ -1153,7 +1151,7 @@ class TestMspmsOutput(TestCli):
         seeds = list(map(int, output1.splitlines()[1].split()))
         # Run with the same seeds to get the same output.
         sr = cli.SimulationRunner(
-            sample_size=sample_size,
+            samples=sample_size,
             scaled_mutation_rate=mutation_rate,
             random_seeds=seeds,
         )

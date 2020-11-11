@@ -88,12 +88,12 @@ class TestUncoalescedTreeSequenceProperties:
         self.verify(ts)
 
     def test_discrete_loci(self):
-        ts = msprime.simulate(
+        ts = msprime.sim_ancestry(
             10,
-            recombination_map=msprime.RecombinationMap.uniform_map(10, 1),
+            sequence_length=10,
+            recombination_rate=1,
             random_seed=1,
             end_time=0.5,
-            discrete_genome=True,
         )
         self.verify(ts)
 
@@ -193,10 +193,10 @@ class TestBasicFunctionality:
     def test_from_wf_nonoverlapping(self):
         m = 100
         from_ts = get_wf_base(6, 4, num_loci=m)
-        final_ts = msprime.simulate(
-            from_ts=from_ts,
+        final_ts = msprime.sim_ancestry(
+            initial_state=from_ts,
             random_seed=2,
-            recombination_map=msprime.RecombinationMap.uniform_map(m, 1),
+            recombination_rate=1,
             discrete_genome=True,
         )
         self.verify_from_tables(from_ts, final_ts)
@@ -205,10 +205,10 @@ class TestBasicFunctionality:
     def test_from_wf_overlapping(self):
         m = 100
         from_ts = get_wf_base(6, 14, survival=0.25, num_loci=m)
-        final_ts = msprime.simulate(
-            from_ts=from_ts,
+        final_ts = msprime.sim_ancestry(
+            initial_state=from_ts,
             random_seed=2,
-            recombination_map=msprime.RecombinationMap.uniform_map(m, 1),
+            recombination_rate=1,
             discrete_genome=True,
         )
         self.verify_from_tables(from_ts, final_ts)
@@ -896,17 +896,10 @@ class TestSlimOutput:
     """
 
     def finish_simulation(self, from_ts, recombination_rate=0, seed=1):
-        population_configurations = [
-            msprime.PopulationConfiguration() for _ in range(from_ts.num_populations)
-        ]
-        return msprime.simulate(
-            from_ts=from_ts,
+        return msprime.sim_ancestry(
+            initial_state=from_ts,
             start_time=1,
-            population_configurations=population_configurations,
-            recombination_map=msprime.RecombinationMap.uniform_map(
-                from_ts.sequence_length, recombination_rate
-            ),
-            discrete_genome=True,
+            recombination_rate=recombination_rate,
             random_seed=seed,
         )
 

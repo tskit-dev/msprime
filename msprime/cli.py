@@ -175,14 +175,11 @@ def hotspots_to_recomb_map(hotspots, background_rate, seq_length):
             positions.append(stop)
             if stop != seq_length:
                 rates.append(background_rate)
-            else:
-                rates.append(0)
 
     if positions[-1] != seq_length:
         positions.append(seq_length)
-        rates.append(0)
 
-    return msprime.RecombinationMap(positions, rates)
+    return msprime.RateMap(positions, rates)
 
 
 class SimulationRunner:
@@ -192,13 +189,11 @@ class SimulationRunner:
 
     def __init__(
         self,
-        sample_size=1,
+        samples,
+        demography=None,
         num_loci=1,
         scaled_recombination_rate=0,
         num_replicates=1,
-        migration_matrix=None,
-        population_configurations=None,
-        demographic_events=None,
         scaled_mutation_rate=0,
         print_trees=False,
         precision=3,
@@ -207,14 +202,13 @@ class SimulationRunner:
         gene_conversion_tract_length=1,
         hotspots=None,
     ):
-        self._sample_size = sample_size
         self._num_loci = num_loci
         self._num_replicates = num_replicates
         self._recombination_rate = scaled_recombination_rate
         self._mutation_rate = scaled_mutation_rate
         # For strict ms-compability we want to have m non-recombining loci
         if hotspots is None:
-            self._recomb_map = msprime.RecombinationMap.uniform_map(
+            self._recomb_map = msprime.RateMap.uniform(
                 num_loci, self._recombination_rate
             )
         else:
@@ -229,24 +223,13 @@ class SimulationRunner:
         self._random_seed = get_single_seed(ms_seeds)
         self._ms_random_seeds = ms_seeds
 
-        # If we have specified any population_configurations we don't want
-        # to give the overall sample size.
-        sample_size = self._sample_size
-        if population_configurations is not None:
-            sample_size = None
-        # msprime measure's time in units of generations, given a specific
-        # Ne value whereas ms uses coalescent time. To be compatible with ms,
-        # we therefore need to use an Ne value of 1/4.
-        self._simulator = ancestry._parse_simulate(
-            Ne=0.25,
-            sample_size=sample_size,
-            recombination_map=self._recomb_map,
-            population_configurations=population_configurations,
-            migration_matrix=migration_matrix,
-            demographic_events=demographic_events,
+        self._simulator = ancestry._parse_sim_ancestry(
+            samples=samples,
+            demography=demography,
+            recombination_rate=self._recomb_map,
             gene_conversion_rate=scaled_gene_conversion_rate,
             gene_conversion_tract_length=gene_conversion_tract_length,
-            discrete_genome=True,
+            ploidy=1,
         )
 
         self._precision = precision
@@ -469,6 +452,7 @@ def create_simulation_runner(parser, arg_list):
     # Check the structure format.
     symmetric_migration_rate = 0.0
     num_populations = 1
+    num_samples = [args.sample_size]
     population_configurations = [msprime.PopulationConfiguration(args.sample_size)]
     migration_matrix = [[0.0]]
     if args.structure is not None:
@@ -477,12 +461,15 @@ def create_simulation_runner(parser, arg_list):
         if len(args.structure) < num_populations + 1:
             parser.error("Must have num_populations sample sizes")
         population_configurations = [None for j in range(num_populations)]
+        num_samples = [0 for _ in range(num_populations)]
         for j in range(num_populations):
-            population_configurations[j] = msprime.PopulationConfiguration(
-                convert_int(args.structure[j + 1], parser)
-            )
-        total = sum(conf.sample_size for conf in population_configurations)
-        if total != args.sample_size:
+            num_samples[j] = convert_int(args.structure[j + 1], parser)
+            population_configurations[j] = msprime.PopulationConfiguration(0)
+            # convert_int(args.structure[j + 1], parser)
+            # convert_int(args.structure[j + 1], parser)
+            # )
+        # total = sum(conf.sample_size for conf in population_configurations)
+        if sum(num_samples) != args.sample_size:
             parser.error("Population sample sizes must sum to sample_size")
         # We optionally have the overall migration_rate here
         if len(args.structure) == num_populations + 2:
@@ -675,12 +662,25 @@ def create_simulation_runner(parser, arg_list):
         parser.error(
             "Demographic events must be supplied in non-decreasing " "time order"
         )
-    runner = SimulationRunner(
-        sample_size=args.sample_size,
-        num_loci=num_loci,
-        migration_matrix=migration_matrix,
+
+    demography = msprime.Demography.from_old_style(
         population_configurations=population_configurations,
+        migration_matrix=migration_matrix,
         demographic_events=[event for _, event in demographic_events],
+    )
+    for population in demography.populations:
+        if population.initial_size is None:
+            population.initial_size = 0.25
+    samples = demography.sample(*num_samples)
+
+    runner = SimulationRunner(
+        samples,
+        demography,
+        # sample_size=args.sample_size,
+        num_loci=num_loci,
+        # migration_matrix=migration_matrix,
+        # population_configurations=population_configurations,
+        # demographic_events=[event for _, event in demographic_events],
         num_replicates=args.num_replicates,
         scaled_recombination_rate=r,
         scaled_mutation_rate=mu,

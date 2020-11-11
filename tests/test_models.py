@@ -494,13 +494,13 @@ class TestDtwf:
         assert ts.num_trees == 1
 
     def test_single_recombination(self):
-        recombination_map = msprime.RecombinationMap([0, 100, 101, 200], [0, 1, 0, 0])
-        ts = msprime.simulate(
+        recombination_map = msprime.RateMap([0, 100, 101, 200], [0, 1, 0])
+        ts = msprime.sim_ancestry(
             10,
-            Ne=10,
+            population_size=10,
             model="dtwf",
             random_seed=2,
-            recombination_map=recombination_map,
+            recombination_rate=recombination_map,
             discrete_genome=True,
         )
         assert ts.num_trees == 2

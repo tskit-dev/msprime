@@ -2576,6 +2576,22 @@ class HistoricalSamplingMixin:
     Tests to make sure historical sampling works correctly.
     """
 
+    def test_two_diploid_samples(self):
+        N = 100
+        sampling_time = 1.01 * N
+        ts = msprime.sim_ancestry(
+            population_size=N,
+            ploidy=2,
+            model=self.model,
+            samples=[msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
+            random_seed=3,
+        )
+        for t in ts.trees():
+            assert t.get_time(0) == 0
+            assert t.get_time(1) == 0
+            assert t.get_time(2) == sampling_time
+            assert t.get_time(3) == sampling_time
+
     def test_two_samples(self):
         N = 100
         sampling_time = 1.01 * N
@@ -2583,12 +2599,10 @@ class HistoricalSamplingMixin:
             ts = msprime.simulate(
                 Ne=N,
                 model=self.model,
-                recombination_map=msprime.RecombinationMap.uniform_map(
-                    length=1, rate=recombination_rate
-                ),
+                recombination_rate=recombination_rate,
+                length=1,
                 samples=[msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
                 random_seed=3,
-                discrete_genome=True,
             )
             for t in ts.trees():
                 assert t.get_time(0) == 0

@@ -187,9 +187,10 @@ class TestSimulator:
         """
         Verifies a simulation for the specified parameters.
         """
-        recomb_map = msprime.RecombinationMap.uniform_map(m, r)
-        sim = ancestry._parse_simulate(
-            n, recombination_map=recomb_map, discrete_genome=True
+        sim = ancestry._parse_sim_ancestry(
+            n,
+            sequence_length=m,
+            recombination_rate=r,
         )
         sim.run()
         assert sim.num_breakpoints == len(sim.breakpoints)
@@ -889,16 +890,6 @@ class TestParseSimulate:
         sim = ancestry._parse_simulate(10)
         assert sim.demography.populations[0].initial_size == 1
 
-    def test_ploidy(self):
-        for ploidy in [1, 2, 7]:
-            sim = ancestry._parse_simulate(10, ploidy=ploidy)
-            assert sim.ploidy == ploidy
-
-    def test_discrete_genome_continuous_length(self):
-        for bad_length in [0.1, 1.1, 1000.1]:
-            with pytest.raises(ValueError):
-                ancestry._parse_simulate(10, discrete_genome=True, length=bad_length)
-
     def test_population_configurations(self):
         def f(configs):
             return ancestry._parse_simulate(population_configurations=configs)
@@ -1269,7 +1260,7 @@ class TestSimAncestryInterface:
         assert np.allclose(100 * ts1.tables.nodes.time, ts2.tables.nodes.time)
 
     def test_replicates(self):
-        ts = msprime.simulate(10)
+        ts = msprime.sim_ancestry(10)
         assert isinstance(ts, tskit.TreeSequence)
         for n in [0, 1, 2, 5]:
             ts_list = list(msprime.sim_ancestry(10, num_replicates=n))
@@ -1304,7 +1295,7 @@ class TestSimAncestryInterface:
         ts2 = msprime.sim_ancestry(10, recombination_rate=rate_map, random_seed=1)
         assert tree_sequences_equal(ts1, ts2)
 
-    def test_gc_rate(self):
+    def test_gene_conversion_rate(self):
         ts = msprime.sim_ancestry(
             10,
             gene_conversion_rate=1,
@@ -1315,6 +1306,42 @@ class TestSimAncestryInterface:
         assert ts.num_trees > 1
         for tree in ts.trees():
             assert tree.num_roots == 1
+
+    def test_gene_conversion_simple_map(self):
+        n = 10
+        ts = msprime.sim_ancestry(
+            n,
+            gene_conversion_rate=1,
+            gene_conversion_tract_length=1,
+            sequence_length=10,
+            recombination_rate=1,
+            discrete_genome=True,
+        )
+        assert isinstance(ts, tskit.TreeSequence)
+        assert ts.num_samples == 2 * n
+        assert ts.num_trees > 1
+
+    def test_gene_conversion_continuous(self):
+        with pytest.raises(ValueError):
+            msprime.sim_ancestry(
+                10,
+                gene_conversion_rate=1,
+                gene_conversion_tract_length=1,
+                discrete_genome=False,
+            )
+
+    def test_gene_conversion_default_map(self):
+        n = 10
+        ts = msprime.sim_ancestry(
+            n,
+            sequence_length=10,
+            gene_conversion_rate=1,
+            gene_conversion_tract_length=1,
+            discrete_genome=True,
+        )
+        assert isinstance(ts, tskit.TreeSequence)
+        assert ts.num_samples == 2 * n
+        assert ts.num_trees > 1
 
     def test_model(self):
         ts1 = msprime.sim_ancestry(10, population_size=100, random_seed=2)
@@ -1363,6 +1390,37 @@ class TestSimAncestryInterface:
         )
         assert ts.num_trees > 1
         assert not has_discrete_genome(ts)
+
+    def test_discrete_genome_migrations(self):
+        def run_sim(discrete_genome=None):
+            demography = msprime.Demography.stepping_stone_1d(2, 0.1)
+            samples = demography.sample(5, 5)
+            return msprime.sim_ancestry(
+                samples=samples,
+                demography=demography,
+                sequence_length=5,
+                recombination_rate=1,
+                discrete_genome=discrete_genome,
+                record_migrations=True,
+                random_seed=2134,
+            )
+
+        ts_discrete = run_sim(True)
+        assert ts_discrete.num_trees > 1
+        assert ts_discrete.num_migrations > 1
+        assert has_discrete_genome(ts_discrete)
+
+        ts_continuous = run_sim(False)
+        assert ts_continuous.num_trees > 1
+        assert ts_continuous.num_migrations > 1
+        assert not has_discrete_genome(ts_continuous)
+
+    def test_numpy_random_seed(self):
+        seed = np.array([12345], dtype=np.int64)[0]
+        assert seed.dtype == np.int64
+        ts1 = msprime.sim_ancestry(10, random_seed=seed)
+        ts2 = msprime.sim_ancestry(10, random_seed=seed)
+        assert ts1.tables.nodes == ts2.tables.nodes
 
     def test_record_provenance(self):
         # The content of the provenances is tested elsewhere.
@@ -1484,90 +1542,6 @@ class TestSimulateInterface:
         with pytest.raises(TypeError):
             msprime.simulate(2, 100)
 
-    def test_discrete_genome_no_mutations(self):
-        def run_sim(discrete_genome=None):
-            return msprime.simulate(
-                10,
-                length=2,
-                recombination_rate=1,
-                discrete_genome=discrete_genome,
-                random_seed=2134,
-            )
-
-        ts_discrete = run_sim(True)
-        assert ts_discrete.num_trees > 1
-        assert has_discrete_genome(ts_discrete)
-
-        ts_continuous = run_sim(False)
-        assert ts_continuous.num_trees > 1
-        assert not has_discrete_genome(ts_continuous)
-
-        ts_default = run_sim()
-        tables_default = ts_default.dump_tables()
-        tables_continuous = ts_continuous.dump_tables()
-        tables_continuous.provenances.clear()
-        tables_default.provenances.clear()
-        assert tables_default == tables_continuous
-
-    def test_discrete_genome_mutations(self):
-        def run_sim(discrete_genome=None):
-            return msprime.simulate(
-                10,
-                length=2,
-                recombination_rate=1,
-                mutation_rate=1,
-                discrete_genome=discrete_genome,
-                random_seed=2134,
-            )
-
-        ts_discrete = run_sim(True)
-        assert ts_discrete.num_trees > 1
-        assert ts_discrete.num_sites > 1
-        assert has_discrete_genome(ts_discrete)
-
-        ts_continuous = run_sim(False)
-        assert ts_continuous.num_trees > 1
-        assert ts_discrete.num_sites > 1
-        assert not has_discrete_genome(ts_continuous)
-
-        ts_default = run_sim()
-        tables_default = ts_default.dump_tables()
-        tables_continuous = ts_continuous.dump_tables()
-        tables_continuous.provenances.clear()
-        tables_default.provenances.clear()
-        assert tables_default == tables_continuous
-
-    def test_discrete_genome_migrations(self):
-        def run_sim(discrete_genome=None):
-            demography = msprime.Demography.stepping_stone_1d(2, 0.1)
-            samples = demography.sample(5, 5)
-            return msprime.simulate(
-                samples=samples,
-                demography=demography,
-                length=5,
-                recombination_rate=1,
-                discrete_genome=discrete_genome,
-                record_migrations=True,
-                random_seed=2134,
-            )
-
-        ts_discrete = run_sim(True)
-        assert ts_discrete.num_trees > 1
-        assert ts_discrete.num_migrations > 1
-        assert has_discrete_genome(ts_discrete)
-
-        ts_continuous = run_sim(False)
-        assert ts_continuous.num_trees > 1
-        assert ts_continuous.num_migrations > 1
-        assert not has_discrete_genome(ts_continuous)
-
-    def test_numpy_random_seed(self):
-        seed = np.array([12345], dtype=np.int64)[0]
-        assert seed.dtype == np.int64
-        ts1 = msprime.simulate(10, random_seed=seed)
-        ts2 = msprime.simulate(10, random_seed=seed)
-        assert ts1.tables.nodes == ts2.tables.nodes
-
     def verify_provenance(self, provenance):
         """
         Checks that the specified provenance object has the right sort of
@@ -1641,42 +1615,6 @@ class TestSimulateInterface:
         assert ts.sample_size == n
         assert ts.num_trees > 1
         assert ts.num_mutations == 0
-
-    def test_gene_conversion_simple_map(self):
-        n = 10
-        ts = msprime.simulate(
-            n,
-            gene_conversion_rate=1,
-            gene_conversion_tract_length=1,
-            length=10,
-            recombination_rate=1,
-            discrete_genome=True,
-        )
-        assert isinstance(ts, tskit.TreeSequence)
-        assert ts.num_samples == n
-        assert ts.num_trees > 1
-
-    def test_gene_conversion_continuous(self):
-        with pytest.raises(ValueError):
-            msprime.simulate(
-                10,
-                gene_conversion_rate=1,
-                gene_conversion_tract_length=1,
-                discrete_genome=False,
-            )
-
-    def test_gene_conversion_default_map(self):
-        n = 10
-        ts = msprime.simulate(
-            n,
-            length=10,
-            gene_conversion_rate=1,
-            gene_conversion_tract_length=1,
-            discrete_genome=True,
-        )
-        assert isinstance(ts, tskit.TreeSequence)
-        assert ts.num_samples == n
-        assert ts.num_trees > 1
 
     def test_num_labels(self):
         # Running simulations with different numbers of labels in the default
