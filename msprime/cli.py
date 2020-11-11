@@ -453,7 +453,7 @@ def create_simulation_runner(parser, arg_list):
     symmetric_migration_rate = 0.0
     num_populations = 1
     num_samples = [args.sample_size]
-    population_configurations = [msprime.PopulationConfiguration(args.sample_size)]
+    population_configurations = [msprime.PopulationConfiguration(initial_size=1)]
     migration_matrix = [[0.0]]
     if args.structure is not None:
         num_populations = convert_int(args.structure[0], parser)
@@ -651,18 +651,17 @@ def create_simulation_runner(parser, arg_list):
     for _, msp_event in demographic_events:
         if isinstance(msp_event, msprime.PopulationParametersChange):
             if msp_event.initial_size is not None:
-                msp_event.initial_size /= 4
+                msp_event.initial_size /= 2
     for config in population_configurations:
         if config.initial_size is not None:
-            config.initial_size /= 4
+            config.initial_size /= 2
 
     demographic_events.sort(key=lambda x: (x[0], x[1].time))
     time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
     if demographic_events != time_sorted:
-        parser.error(
-            "Demographic events must be supplied in non-decreasing " "time order"
-        )
+        parser.error("Demographic events must be supplied in non-decreasing time order")
 
+    # TODO change this so we make a new-style demography directly
     demography = msprime.Demography.from_old_style(
         population_configurations=population_configurations,
         migration_matrix=migration_matrix,
@@ -670,17 +669,12 @@ def create_simulation_runner(parser, arg_list):
     )
     for population in demography.populations:
         if population.initial_size is None:
-            population.initial_size = 0.25
+            population.initial_size = 0.5
     samples = demography.sample(*num_samples)
-
     runner = SimulationRunner(
         samples,
         demography,
-        # sample_size=args.sample_size,
         num_loci=num_loci,
-        # migration_matrix=migration_matrix,
-        # population_configurations=population_configurations,
-        # demographic_events=[event for _, event in demographic_events],
         num_replicates=args.num_replicates,
         scaled_recombination_rate=r,
         scaled_mutation_rate=mu,

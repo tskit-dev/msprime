@@ -3757,6 +3757,49 @@ class TestDemographyObject:
         with pytest.raises(ValueError):
             model.sample(0, A=1)
 
+    def test_simple_model(self):
+        demography = msprime.Demography.simple_model(2)
+        assert demography.num_populations == 1
+        assert demography.populations[0].initial_size == 2
+        assert demography.populations[0].growth_rate == 0
+
+        demography = msprime.Demography.simple_model(2, 3)
+        assert demography.num_populations == 1
+        assert demography.populations[0].initial_size == 2
+        assert demography.populations[0].growth_rate == 3
+
+        demography = msprime.Demography.simple_model([3])
+        assert demography.num_populations == 1
+        assert demography.populations[0].initial_size == 3
+        assert demography.populations[0].growth_rate == 0
+
+        demography = msprime.Demography.simple_model([3], [4])
+        assert demography.num_populations == 1
+        assert demography.populations[0].initial_size == 3
+        assert demography.populations[0].growth_rate == 4
+
+        demography = msprime.Demography.simple_model([5, 6])
+        assert demography.num_populations == 2
+        assert demography.populations[0].initial_size == 5
+        assert demography.populations[0].growth_rate == 0
+        assert demography.populations[1].initial_size == 6
+        assert demography.populations[1].growth_rate == 0
+
+        demography = msprime.Demography.simple_model([5, 6], [7, 8])
+        assert demography.num_populations == 2
+        assert demography.populations[0].initial_size == 5
+        assert demography.populations[0].growth_rate == 7
+        assert demography.populations[1].initial_size == 6
+        assert demography.populations[1].growth_rate == 8
+
+    def test_simple_model_errors(self):
+        with pytest.raises(ValueError):
+            msprime.Demography.simple_model([[], []])
+        with pytest.raises(ValueError):
+            msprime.Demography.simple_model([1], [[], []])
+        with pytest.raises(ValueError):
+            msprime.Demography.simple_model([1], [])
+
 
 class TestDemographyFromOldStyle:
     """

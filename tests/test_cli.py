@@ -653,20 +653,20 @@ class TestMspmsCreateSimulationRunner:
         for event in events:
             assert event.time == 1.0
         assert isinstance(events[0], msprime.PopulationParametersChange)
-        assert events[0].initial_size == 0.5
+        assert events[0].initial_size == 1
         assert events[0].growth_rate == 0
         assert isinstance(events[1], msprime.PopulationParametersChange)
         assert events[1].growth_rate == 3
         assert events[1].initial_size is None
         assert isinstance(events[2], msprime.PopulationParametersChange)
-        assert events[2].initial_size == 1
+        assert events[2].initial_size == 2
         assert events[2].growth_rate == 0
 
     def test_population_growth_rate(self):
         def f(args):
             sim = self.create_simulator(args)
             return [
-                (c.initial_size * 4, c.growth_rate) for c in sim.demography.populations
+                (c.initial_size * 2, c.growth_rate) for c in sim.demography.populations
             ]
 
         assert f("2 1 -T -I 3 2 0 0 -g 1 -1") == [(1, -1), (1, 0), (1, 0)]
@@ -685,7 +685,7 @@ class TestMspmsCreateSimulationRunner:
         def f(args):
             sim = self.create_simulator(args)
             return [
-                (c.initial_size * 4, c.growth_rate) for c in sim.demography.populations
+                (c.initial_size * 2, c.growth_rate) for c in sim.demography.populations
             ]
 
         assert f("2 1 -T -I 3 2 0 0 -n 1 2") == [(2, 0), (1, 0), (1, 0)]
@@ -729,19 +729,19 @@ class TestMspmsCreateSimulationRunner:
         events = f("2 1 -T -en 0.1 1 2")
         assert len(events) == 1
         assert isinstance(events[0], msprime.PopulationParametersChange)
-        assert events[0].initial_size == 2.0 / 4
+        assert events[0].initial_size == 2.0 / 2
         assert events[0].growth_rate == 0
         assert events[0].time == 0.1
         assert events[0].population == 0
         events = f("2 1 -T -I 2 1 1 -en 0.1 1 2 -en 0.2 2 3")
         assert len(events) == 2
         assert isinstance(events[0], msprime.PopulationParametersChange)
-        assert events[0].initial_size == 2.0 / 4
+        assert events[0].initial_size == 2.0 / 2
         assert events[0].growth_rate == 0
         assert events[0].time == 0.1
         assert events[0].population == 0
         assert isinstance(events[1], msprime.PopulationParametersChange)
-        assert events[1].initial_size == 3.0 / 4
+        assert events[1].initial_size == 3.0 / 2
         assert events[1].growth_rate == 0
         assert events[1].time == 0.2
         assert events[1].population == 1

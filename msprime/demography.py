@@ -236,15 +236,36 @@ class Demography:
             demography.events = demographic_events
         return demography
 
-    @staticmethod
-    def simple_model(population_size=1):
+    # TODO give this a better name and document it.
+    # What about "isolated" as it gives an easy way of describing isolated pops?
+    def simple_model(initial_size=1, growth_rate=None):
         """
         Returns a simple single-population model.
         """
-        check_population_size(population_size)
-        pop = Population(initial_size=population_size, name="pop_0")
-        model = Demography(populations=[pop])
-        return model
+        initial_size = np.array(initial_size, ndmin=1)
+        if len(initial_size.shape) != 1:
+            raise ValueError(
+                "The initial_size argument must be scalar value or an "
+                "1D array of population size values"
+            )
+        if growth_rate is None:
+            growth_rate = np.zeros_like(initial_size)
+        else:
+            growth_rate = np.array(growth_rate, ndmin=1)
+        if initial_size.shape != growth_rate.shape:
+            raise ValueError(
+                "If growth_rate is specified it must be a 1D array of the same "
+                "length as the population_size array"
+            )
+        populations = [
+            Population(
+                initial_size=initial_size[j],
+                growth_rate=growth_rate[j],
+                name=f"pop_{j}",
+            )
+            for j in range(len(initial_size))
+        ]
+        return Demography(populations=populations)
 
     @staticmethod
     def island_model(num_populations, migration_rate, Ne=1):
