@@ -24,7 +24,7 @@ import math
 from msprime import _msprime
 
 
-def unnormalised_log_mutation_likelihood(ts, mu):
+def log_mutation_likelihood(ts, mutation_rate):
     """
     Returns the unnormalised log probability of the stored pattern of mutations
     on the stored tree sequence, assuming infinite sites mutation. In particular,
@@ -38,21 +38,22 @@ def unnormalised_log_mutation_likelihood(ts, mu):
     .. math::
         e^{-T \\mu / 2} \\frac{(T \\mu / 2)^M}{M!},
 
-    where :math:`T` is the total area of ancestral material in the tree sequence,
-    stored in units of generations. Each mutation then contributes an individual factor
-    of :math:`l / T`, where :math:`l` is the total branch length on which the mutation
+    where :math:`T` is the total area of ancestral material in the tree sequence
+    stored in units of generations, and :math:`\\mu` is the per-site, per-generation
+    mutation probability. Each mutation then contributes an individual factor of
+    :math:`l / T`, where :math:`l` is the total branch length on which the mutation
     could have arisen while appearing on all of the required lineages, again stored
     in generations.
 
     .. warning::
-        If the tree sequence contains unary nodes, then :math:`l` could span more than
-        one edge. In particular, we do not constrain mutations to take place on the edge
-        directly above the node on which they have been recorded, but rather on any edge
-        which would yield the same configuration of SNPs at the leaves of the tree
-        sequence.
+        If a tree at the site of a mutation contains unary nodes, then :math:`l` could
+        span more than one edge. In particular, we do not constrain mutations to take
+        place on the edge directly above the node on which they have been recorded,
+        but rather on any edge which would yield the same configuration of SNPs at the
+        leaves of the tree sequence.
 
     :param tskit.TreeSequence ts: The tree sequence object with mutations.
-    :param float mu: The per-site, per-generation mutation probablity.
+    :param float mutation_rate: The per-site, per-generation mutation probablity.
         Must be non-negative.
     :return: The unnormalised log probability of the observed SNPs given the tree
         sequence. If the mutation rate is set to zero and the tree sequence contains
@@ -64,13 +65,16 @@ def unnormalised_log_mutation_likelihood(ts, mu):
     for e in tables.edges:
         total_material += (e.right - e.left) * (time[e.parent] - time[e.child])
     number_of_mutations = len(tables.mutations)
-    if mu == 0:
+    if mutation_rate == 0:
         if number_of_mutations == 0:
             ret = 0
         else:
             ret = -float("inf")
     else:
-        ret = number_of_mutations * math.log(total_material * mu) - total_material * mu
+        ret = (
+            number_of_mutations * math.log(total_material * mutation_rate)
+            - total_material * mutation_rate
+        )
         for tree in ts.trees():
             for site in tree.sites():
                 mutation = site.mutations[0]
@@ -105,8 +109,13 @@ def log_arg_likelihood(ts, recombination_rate, Ne=1):
         including all recombination events and all common ancestor events,
         regardless of whether the recombinations cause a change in the ancestral
         tree or whether the common ancestor events cause coalescence of ancestral
-        material. See :ref:`sec_tutorial_record_full_arg` for details of this
+        material. See :ref:`sec_ancestry_full_arg` for details of this
         data structure, and how to generate them using ``msprime``.
+
+    .. warning::
+        This method only supports continuous genomes.
+        See :ref:`sec_ancestry_discrete_genome` for how these can be specified
+        when simulating tree sequences using ``msprime``.
 
     :param tskit.TreeSequence ts: The tree sequence object.
     :param float recombination_rate: The per-link, per-generation recombination
@@ -115,7 +124,7 @@ def log_arg_likelihood(ts, recombination_rate, Ne=1):
     :return: The log probability of the tree sequence under the Hudson ancestral
         recombination graph model. If the recombination rate is zero and the tree
         sequence contains at least one recombination event, then returns
-        `-float("inf")`.
+        `-DBL_MAX`.
     """
     # Get the tables into the format we need to interchange with the low-level code.
     lw_tables = _msprime.LightweightTableCollection()
