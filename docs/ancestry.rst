@@ -147,9 +147,16 @@ Multiple merger coalescents
 
 Some evolutionary scenarios, such as a skewed offspring distribution
 combined with a type III survivorship curve, range expansion, and
-rapid adaptation, can predict diploid genealogies with up to four
-simultaneous multiple mergers. Msprime provides the option to simulate
-from two classes of such genealogical processes.
+rapid adaptation, can predict genealogies with up to four simultaneous
+multiple mergers. Msprime provides the option to simulate from two classes
+of such genealogical processes: the Beta-coalescent and
+the Dirac-coalescent.
+
+For haploid organisms, both models result in genealogies in which
+any number of lineages can merge into a common ancestor,
+but only one merger event can take place at a given time. For :math:`p`-ploids,
+up to :math:`2p` simultaneous mergers can take place, corresponding to the
+:math:`2p` available parental chromosome copies.
 
 -----------
 Definitions
@@ -159,207 +166,121 @@ Definitions
 
 .. autoclass:: msprime.DiracCoalescent
 
+.. _sec_ancestry_models_multiple_mergers_examples:
+
 --------
 Examples
 --------
 
-.. todo:: Port this old tutorial material to something more appropriate
-    for this section.
+.. jupyter-kernel:: python3
 
-``msprime`` can simulate several multiple merger coalescent models,
-in which any number of lineages can coalesce in a number of simultaneous
-mergers. These models are often appropriate when the distribution of
-offspring numbers among individuals in the population is highly skewed.
-The two provided models are the Beta-coalescent and the Dirac-coalescent.
+
+.. jupyter-execute::
+    :hide-code:
+
+    import msprime
+    from IPython.display import SVG
+
 
 The diploid Beta-Xi-coalescent can be simulated as follows:
 
-.. code-block:: python
+.. jupyter-execute::
 
-    def beta_multiple_merger_example():
-        ts = msprime.sim_ancestry(
-            samples=5, ploidy=2, random_seed=1,
-            model=msprime.BetaCoalescent(alpha=1.001))
-        tree = ts.first()
-        print(tree.draw(format="unicode"))
+    ts = msprime.sim_ancestry(
+        samples=5, ploidy=2, random_seed=1,
+        model=msprime.BetaCoalescent(alpha=1.001))
+    SVG(ts.draw_svg())
 
-Running this code, we get::
-
-         16
-     ┏━━━━┻━━━┓
-     ┃       15
-     ┃    ┏━━━┻━━━┓
-     ┃    ┃      14
-     ┃    ┃     ┏━┻━┓
-    12    ┃     ┃  13
-    ┏┻┓   ┃     ┃ ┏━╋━┓
-    ┃ ┃  11     ┃ ┃ ┃ ┃
-    ┃ ┃ ┏━┻━┓   ┃ ┃ ┃ ┃
-    ┃ ┃ ┃  10   ┃ ┃ ┃ ┃
-    ┃ ┃ ┃ ┏━╋━┓ ┃ ┃ ┃ ┃
-    8 9 2 0 4 6 1 3 5 7
 
 The specified value of :math:`\alpha = 1.001` corresponds to a heavily skewed
 offspring distribution. Values closer to :math:`\alpha = 2` result in trees
 whose distribution is closer to that of the standard coalescent, often featuring
 no multiple mergers for small sample sizes:
 
-.. code-block:: python
+.. jupyter-execute::
 
-    def beta_few_multiple_mergers_example():
-        ts = msprime.sim_ancestry(
-            samples=5, ploidy=2, random_seed=1,
-            model=msprime.BetaCoalescent(alpha=1.8))
-        tree = ts.first()
-        print(tree.draw(format="unicode"))
+    ts = msprime.sim_ancestry(
+        samples=4, ploidy=2, random_seed=1,
+        model=msprime.BetaCoalescent(alpha=1.8))
+    SVG(ts.draw_svg())
 
-Running this code, we get::
-
-         18
-      ┏━━━┻━━━┓
-      ┃      17
-      ┃     ┏━┻━┓
-     16     ┃   ┃
-    ┏━┻━┓   ┃   ┃
-    ┃   ┃   ┃  15
-    ┃   ┃   ┃ ┏━┻━┓
-    ┃  14   ┃ ┃   ┃
-    ┃ ┏━┻┓  ┃ ┃   ┃
-    ┃ ┃ 13  ┃ ┃   ┃
-    ┃ ┃ ┏┻┓ ┃ ┃   ┃
-    ┃ ┃ ┃ ┃ ┃ ┃  12
-    ┃ ┃ ┃ ┃ ┃ ┃ ┏━┻━┓
-    ┃ ┃ ┃ ┃ ┃ ┃ ┃  11
-    ┃ ┃ ┃ ┃ ┃ ┃ ┃ ┏━┻┓
-    ┃ ┃ ┃ ┃ ┃ ┃ ┃ ┃ 10
-    ┃ ┃ ┃ ┃ ┃ ┃ ┃ ┃ ┏┻┓
-    5 2 3 7 8 0 6 9 1 4
 
 Multiple mergers still take place in a haploid simulaton, but only one merger
 can take place at a given time:
 
-.. code-block:: python
+.. jupyter-execute::
 
-    def beta_haploid_multiple_merger_example():
-        ts = msprime.sim_ancestry(
-            samples=10, ploidy=1, random_seed=1,
-            model=msprime.BetaCoalescent(alpha=1.001))
-        tree = ts.first()
-        print(tree.draw(format="unicode"))
+    ts = msprime.sim_ancestry(
+        samples=10, ploidy=1, random_seed=1,
+        model=msprime.BetaCoalescent(alpha=1.001))
+    SVG(ts.draw_svg())
 
-Running this code, we get::
-
-       14
-    ┏━┳━┻━━━┓
-    ┃ ┃    13
-    ┃ ┃ ┏━━━┻━━━┓
-    ┃ ┃ ┃      12
-    ┃ ┃ ┃ ┏━┳━━━╋━━━━┓
-    ┃ ┃ ┃ ┃ ┃   ┃   11
-    ┃ ┃ ┃ ┃ ┃   ┃   ┏┻┓
-    ┃ ┃ ┃ ┃ ┃  10   ┃ ┃
-    ┃ ┃ ┃ ┃ ┃ ┏━╋━┓ ┃ ┃
-    1 2 0 5 7 3 4 9 6 8
 
 A haploid simulation results in larger individual mergers than a polyploid simulation
 because large mergers typically get broken up into multiple simultaneous mergers
 in the polyploid model.
 
 The number of generations between merger events in the Beta-coalescent depends
-nonlinearly on both :math:`\alpha` and the effective population size :math:`N_e`
+nonlinearly on both :math:`\alpha` and the population size :math:`N`
 as detailed in :ref:`sec_ancestry_models_multiple_mergers`.
 For a fixed :math:`\alpha`, the number of generations between common ancestor events
-is proportional to :math:`N_e^{\alpha - 1}`, albeit with a complicated constant of
+is proportional to :math:`N^{\alpha - 1}`, albeit with a complicated constant of
 proportionality that depends on :math:`\alpha`. The dependence on :math:`\alpha`
-for fixed :math:`N_e` is not monotone. Thus, branch lengths and the number of
+for fixed :math:`N` is not monotone. Thus, branch lengths and the number of
 generations until a most recent common ancestor depend on both of these parameters.
 
 To illustrate, for :math:`\alpha` close to 2 the relationship between effective
 population size and number of generations is almost linear:
 
-.. code-block:: python
+.. jupyter-execute::
 
-    def beta_high_scaling_example():
-        ts = msprime.sim_ancestry(
-            samples=1, ploidy=2, random_seed=1, population_size=10,
-            model=msprime.BetaCoalescent(alpha=1.99))
-        tree = ts.first()
-        print(tree.tmrca(0,1))
-        ts = msprime.sim_ancestry(
-            samples=1, ploidy=2, random_seed=1, population_size=1000,
-            model=msprime.BetaCoalescent(alpha=1.99))
-        tree = ts.first()
-        print(tree.tmrca(0,1))
+    ts = msprime.sim_ancestry(
+        samples=1, ploidy=2, random_seed=1, population_size=10,
+        model=msprime.BetaCoalescent(alpha=1.99))
+    tree = ts.first()
+    print(tree.tmrca(0,1))
+    ts = msprime.sim_ancestry(
+        samples=1, ploidy=2, random_seed=1, population_size=1000,
+        model=msprime.BetaCoalescent(alpha=1.99))
+    tree = ts.first()
+    print(tree.tmrca(0,1))
 
-which results in::
-
-    0.14959691919068155
-    14.286394871874865
 
 For :math:`\alpha` close to 1 the effective population size has little effect:
 
-.. code-block:: python
+.. jupyter-execute::
 
-    def beta_low_scaling_example():
-        ts = msprime.sim_ancestry(
-            samples=1, ploidy=2, random_seed=1, population_size=10,
-            model=msprime.BetaCoalescent(alpha=1.1))
-        tree = ts.first()
-        print(tree.tmrca(0,1))
-        ts = msprime.sim_ancestry(
-            samples=1, ploidy=2, random_seed=1, population_size=1000,
-            model=msprime.BetaCoalescent(alpha=1.1))
-        tree = ts.first()
-        print(tree.tmrca(0,1))
+    ts = msprime.sim_ancestry(
+        samples=1, ploidy=2, random_seed=1, population_size=10,
+        model=msprime.BetaCoalescent(alpha=1.1))
+    tree = ts.first()
+    print(tree.tmrca(0,1))
+    ts = msprime.sim_ancestry(
+        samples=1, ploidy=2, random_seed=1, population_size=1000,
+        model=msprime.BetaCoalescent(alpha=1.1))
+    tree = ts.first()
+    print(tree.tmrca(0,1))
 
-which gives::
-
-    16.311807036386615
-    25.85247192870844
 
 The Dirac-coalescent is simulated similarly in both the diploid case:
 
-.. code-block:: python
+.. jupyter-execute::
 
-    def dirac_multiple_merger_example():
-        ts = msprime.sim_ancestry(
-            samples=5, ploidy=2, random_seed=1,
-            model=msprime.DiracCoalescent(psi=0.9, c=10))
-        tree = ts.first()
-        print(tree.draw(format="unicode"))
+    ts = msprime.sim_ancestry(
+        samples=5, ploidy=2, random_seed=1,
+        model=msprime.DiracCoalescent(psi=0.9, c=10))
+    SVG(ts.draw_svg())
 
-which gives::
-
-       15
-     ┏━━┻━━━┓
-     ┃     14
-     ┃  ┏━━━┻━━━┓
-     ┃  ┃      13
-     ┃  ┃    ┏━━┻━━━┓
-    12  ┃    ┃      ┃
-    ┏┻┓ ┃    ┃      ┃
-    ┃ ┃ ┃   10     11
-    ┃ ┃ ┃ ┏━┳┻┳━┓ ┏━╋━┓
-    1 2 6 0 5 7 9 3 4 8
 
 and in the haploid case:
 
-.. code-block:: python
+.. jupyter-execute::
 
-    def dirac_haploid_multiple_merger_example():
-        ts = msprime.sim_ancestry(
-            samples=10, ploidy=1, random_seed=1,
-            model=msprime.DiracCoalescent(psi=0.9, c=10))
-        tree = ts.first()
-        print(tree.draw(format="unicode"))
+    ts = msprime.sim_ancestry(
+        samples=10, ploidy=1, random_seed=1,
+        model=msprime.DiracCoalescent(psi=0.9, c=10))
+    SVG(ts.draw_svg())
 
-which gives::
-
-        11
-    ┏━━━━┻━━━━┓
-    ┃        10
-    ┃ ┏━┳━┳━┳━╋━┳━┳━┳━┓
-    1 0 2 3 4 5 6 7 8 9
 
 As with the Beta-coalescent, a haploid simulation results in larger individual
 mergers than a polyploid simulation because large mergers typically get broken
@@ -370,9 +291,21 @@ with more participating lineages. Setting either parameter to 0 would correspond
 to the standard coalescent.
 
 The Dirac-coalescent is obtained as the infinite population scaling limit of
-Moran models, and therefore branch lengths are proportional to :math:`N_e^2`
-generations, as opposed to :math:`N_e` generations under the standard coalescent.
+Moran models, and therefore branch lengths are proportional to :math:`N^2`
+generations, as opposed to :math:`N` generations under the standard coalescent.
 
+.. jupyter-execute::
+
+    ts = msprime.sim_ancestry(
+        samples=1, ploidy=2, random_seed=1, population_size=10,
+        model=msprime.DiracCoalescent(psi=0.1, c=1))
+    tree = ts.first()
+    print(tree.tmrca(0,1))
+    ts = msprime.sim_ancestry(
+        samples=1, ploidy=2, random_seed=1, population_size=100,
+        model=msprime.DiracCoalescent(psi=0.1, c=1))
+    tree = ts.first()
+    print(tree.tmrca(0,1))
 
 
 .. _sec_ancestry_models_selective_sweeps:

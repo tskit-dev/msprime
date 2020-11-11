@@ -1127,22 +1127,3 @@ Running this example we get:
 
 Dead sections
 *************
-
-.. _sec_tutorial_record_full_arg:
-
-********
-Full arg
-********
-
-.. todo:: remove this section and update links to the appropriate location.
-   The content has been moved to ancestry/examples/full arg
-
-.. _sec_tutorial_multiple_mergers:
-
-***************************
-Multiple merger coalescents
-***************************
-
-.. todo:: remove this section and update links to the appropriate location.
-   The content has been moved to ancestry/examples/multiple mergers
-

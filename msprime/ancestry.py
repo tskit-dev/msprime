@@ -1690,8 +1690,8 @@ class DiracCoalescent(ParametricSimulationModel):
         rather than Wright-Fisher models. As a consequence, the number of generations
         between coalescence events is proportional to :math:`N^2`,
         rather than :math:`N` generations as in the standard coalescent.
-        See :ref:`sec_tutorial_multiple_mergers` for an illustration of how this
-        affects simulation output in practice.
+        See :ref:`sec_ancestry_models_multiple_mergers_examples` for an illustration
+        of how this affects simulation output in practice.
 
     :param float c: Determines the rate of potential multiple merger events.
         We require :math:`c > 0`.
