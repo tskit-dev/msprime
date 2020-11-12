@@ -760,49 +760,81 @@ rate along the genome can be combined in ``msprime``.
 Multiple chromosomes
 +++++++++++++++++++++
 
-.. todo:: This documentation was copied from the old tutorial and is
-    actively wrong now. Rewrite to use the new APIs.
-
-.. warning:: This approach is somewhat hacky; hopefully we will have a more
-    elegant solution soon!
-
 Multiple chromosomes can be simulated by specifying a recombination map with
-hotspots between chromosomes. For example, to simulate two chromosomes each 1
-Morgan in length:
+single-bp segments with recombination probability 1/2 separating adjacent
+chromosomes. By simulating using ``sim_ancestry`` and ``discrete_genome=True``
+(the default setting), we set the recombination rate so that chromosomes
+separated by such "hotspots" have a 50% chance of being inherited from the
+same parent.
 
-.. code-block:: python
+The probability that a recombination breakpoint occurs at a given base pair
+that has recombination rate :math:`r` is :math:`1-e^{-r}`. Thus, we set the
+recombination rate in the base pair segments separating chromosomes to
+:math:`\log(2)`. This ensures that the recombination probility each generation
+is 1/2.
 
-    rho = 1e-8
-    positions = [0, 1e8-1, 1e8, 2e8-1]
-    rates = [rho, 0.5, rho, 0]
-    num_loci = int(positions[-1])
+For example, the following defines a recombination map for three chromosomes
+each 1 cM in length:
 
-    recombination_map = msprime.RecombinationMap(
-        positions=positions, rates=rates, num_loci=num_loci)
+.. jupyter-kernel:: python3
 
-    tree_sequence = msprime.simulate(
-        sample_size=100, Ne=1000, recombination_map=recombination_map,
-        model="dtwf")
+.. jupyter-execute::
 
-Care must be taken when simulating whole genomes this way, as the rescaling
-required to model such large fluctuations in recombination rate can result in
-the following error: ``Bad edge interval where right <= left``
+    import msprime
+    import numpy as np
 
-This can be avoided by discretizing the genome into 100bp chunks by changing
-the above to:
+    r_chrom = 1e-8
+    r_break = np.log(2)
+    positions = [0, 1e6, 1e6 + 1, 2e6, 2e6 + 1, 3e6]
+    rates = [r_chrom, r_break, r_chrom, r_break, r_chrom]
+    rate_map = msprime.RateMap(positions, rates)
 
-.. code-block:: python
+The main purpose of simulating multiple chromosomes together (instead of
+running independent simulations for each chromosome) is to capture the correct
+correlation between trees on distinct chromosomes. (Note that for many purposes,
+this may not be necessary, and simulating chromosomes independently may be
+preferred for efficiency.)
+To get the correct correlation between chromosomes, we must use the
+:ref:`discrete-time Wright-Fisher <sec_ancestry_models_dtwf>` model in the
+recent past. Because correlations between chromosomes break down very rapidly,
+we only need to simulate using ``dtwf`` for roughly 10-20 generations, after which
+we can switch to the ``hudson`` model to finish the simulation more efficiently.
 
-    rho = 1e-8
-    positions = [0, 1e8-1, 1e8, 2e8-1]
-    rates = [rho, 0.5, rho, 0]
-    num_loci = positions[-1] // 100 # Discretize into 100bp chunks
+For example, simulating 10 sampled diploid individuals using the recombination
+map defined above for three chromosomes and switching from the ``dtwf`` to
+``hudson`` model 20 generations ago, we run
 
-Also note that recombinations will still occur in the gaps between chromosomes,
-with corresponding trees in the tree sequence. This will be fixed in a future
-release.
+.. jupyter-execute::
 
+    tree_sequence = msprime.sim_ancestry(
+        10,
+        population_size=1000,
+        recombination_rate=rate_map,
+        model=["dtwf", (20, "hudson")]
+    )
 
+To isolate tree sequences for each chromosome, we can trim the full tree sequence
+for each chromosome by defining the end points of each chromosome and using
+the ``keep_intervals`` fuction. It is important to specify ``simplify=False`` so
+that node indices remain consistent across chromosomes. The function ``trim()``
+is then used to trim the tree sequences to the focal chromosome, so that position
+indices begin at 0 within each chromosome tree sequence.
+
+.. jupyter-execute::
+
+    chrom_positions = [0, 1e6, 2e6, 3e6]
+    ts_chroms = []
+    for j in range(len(chrom_positions) - 1):
+        start, end = chrom_positions[j: j + 2]
+        chrom_ts = tree_sequence.keep_intervals([[start, end]], simplify=False)
+        ts_chroms.append(chrom_ts.trim())
+
+This gives us a list of tree sequences, one for each chromosome, in the order that
+they were stitched together in the initial recombination map.
+
+.. todo:: Add a section to the Tutorial showing how to access tree sequences across
+    chromosomes and showing the correlation of trees on different chromosomes
+    using the ``dtwf`` model.
 
 **********************
 Controlling randomness
