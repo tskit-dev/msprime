@@ -10,18 +10,15 @@ Quickstart
 Installation
 *************
 
-Use either::
+If you have `conda <https://docs.conda.io/en/latest/>`_ installed::
 
     $ conda install -c conda-forge msprime
 
-or::
+otherwise::
 
     $ python3 -m pip install msprime
 
-depending on whether you are a `conda <https://docs.conda.io/en/latest/>`_ or
-`pip <https://pip.pypa.io/en/stable/>`_ user.
-
-If you don't know what conda and pip are, or these commands don't work,
+If these commands don't work, or for more installation options,
 please see the :ref:`sec_installation` page for more details.
 
 
