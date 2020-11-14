@@ -1042,20 +1042,23 @@ class InfiniteSites(MatrixMutationModel):
 
 
 def _simple_mutate(
+    *,
     tables,
-    random_seed,
-    rate,
     sequence_length,
-    discrete_sites=False,
+    rate,
+    random_generator,
 ):
-    rng = _msprime.RandomGenerator(random_seed)
+    """
+    Generate mutations directly using the low-level interfaces. Only
+    for internal use with the ms and old-style simulate() interfaces.
+    """
     rate_map = intervals.RateMap.uniform(sequence_length, rate)
     _msprime.sim_mutations(
         tables,
-        rng,
+        random_generator,
         rate_map.asdict(),
         model=BinaryMutationModel(),
-        discrete_sites=discrete_sites,
+        discrete_sites=False,
     )
 
 

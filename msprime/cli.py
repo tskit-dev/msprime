@@ -189,101 +189,73 @@ class SimulationRunner:
 
     def __init__(
         self,
-        samples,
+        num_samples,
         demography=None,
         num_loci=1,
-        scaled_recombination_rate=0,
+        recombination_rate=0,
         num_replicates=1,
-        scaled_mutation_rate=0,
+        mutation_rate=0,
         print_trees=False,
         precision=3,
         random_seeds=None,
-        scaled_gene_conversion_rate=0,
+        gene_conversion_rate=0,
         gene_conversion_tract_length=1,
         hotspots=None,
     ):
-        self._num_loci = num_loci
-        self._num_replicates = num_replicates
-        self._recombination_rate = scaled_recombination_rate
-        self._mutation_rate = scaled_mutation_rate
-        # For strict ms-compability we want to have m non-recombining loci
+        self.num_loci = num_loci
+        self.num_replicates = num_replicates
+        self.mutation_rate = mutation_rate
+        self.precision = precision
+        self.print_trees = print_trees
         if hotspots is None:
-            self._recomb_map = msprime.RateMap.uniform(
-                num_loci, self._recombination_rate
-            )
+            recomb_map = msprime.RateMap.uniform(num_loci, recombination_rate)
         else:
-            self._recomb_map = hotspots_to_recomb_map(
-                hotspots, self._recombination_rate, num_loci
-            )
+            recomb_map = hotspots_to_recomb_map(hotspots, recombination_rate, num_loci)
 
-        # sort out the random seeds
+        if demography is None:
+            # This is just used for testing so values don't really matter.
+            demography = msprime.Demography.simple_model(1)
+
         ms_seeds = random_seeds
         if random_seeds is None:
             ms_seeds = generate_seeds()
-        self._random_seed = get_single_seed(ms_seeds)
-        self._ms_random_seeds = ms_seeds
+        self.random_seed = get_single_seed(ms_seeds)
+        self.ms_random_seeds = ms_seeds
 
-        self._simulator = ancestry._parse_sim_ancestry(
-            samples=samples,
+        # We need to get direct access to the simulator here because of the
+        # "invisible" recombination breakpoints, so we can't run simulations
+        # the usual way via sim_ancestry.
+        self.simulator = ancestry._parse_sim_ancestry(
+            samples=demography.sample(*num_samples),
             demography=demography,
-            recombination_rate=self._recomb_map,
-            gene_conversion_rate=scaled_gene_conversion_rate,
+            recombination_rate=recomb_map,
+            gene_conversion_rate=gene_conversion_rate,
             gene_conversion_tract_length=gene_conversion_tract_length,
             ploidy=1,
         )
 
-        self._precision = precision
-        self._print_trees = print_trees
-
-    def get_num_replicates(self):
-        """
-        Returns the number of replicates we are to run.
-        """
-        return self._num_replicates
-
-    def get_simulator(self):
-        """
-        Returns the simulator instance for this simulation runner.
-        """
-        return self._simulator
-
-    def get_mutation_rate(self):
-        """
-        Returns the per-base, per generation mutation rate used by
-        msprime.
-        """
-        return self._mutation_rate
-
-    def get_recomb_map(self):
-        """
-        Returns the RecombinationMap used by msprime.
-        """
-        return self._recomb_map
-
-    def print_trees(self, tree_sequence, output):
+    def _print_trees(self, tree_sequence, output):
         """
         Print out the trees in ms-format from the specified tree sequence.
         When 'invisible' recombinations occur ms prints out copies of the
         same tree. Therefore, we must keep track of all breakpoints from the
         simulation and write out a tree for each one.
         """
-        breakpoints = list(self._simulator.breakpoints) + [self._num_loci]
-        if self._num_loci == 1:
+        if self.num_loci == 1:
             tree = next(tree_sequence.trees())
-            newick = tree.newick(precision=self._precision)
+            newick = tree.newick(precision=self.precision)
             print(newick, file=output)
         else:
+            breakpoints = list(self.simulator.breakpoints) + [self.num_loci]
             j = 0
             for tree in tree_sequence.trees():
-                newick = tree.newick(precision=self._precision)
+                newick = tree.newick(precision=self.precision)
                 left, right = tree.interval
                 while j < len(breakpoints) and breakpoints[j] <= right:
-                    length = breakpoints[j] - left
+                    length = int(breakpoints[j] - left)
                     left = breakpoints[j]
                     j += 1
-                    # Print these seperately to avoid the cost of creating
-                    # another string.
-                    print("[{}]".format(int(length)), end="", file=output)
+                    print(f"[{length}]", end="", file=output)
                     print(newick, file=output)
 
     def run(self, output):
@@ -293,38 +265,27 @@ class SimulationRunner:
         """
         # The first line of ms's output is the command line.
         print(" ".join(sys.argv), file=output)
-        print(" ".join(str(s) for s in self._ms_random_seeds), file=output)
-        replicates = self._simulator.run_replicates(
-            self._num_replicates, random_seed=self._random_seed
+        print(" ".join(str(s) for s in self.ms_random_seeds), file=output)
+        replicates = self.simulator.run_replicates(
+            self.num_replicates,
+            random_seed=self.random_seed,
+            mutation_rate=self.mutation_rate,
         )
         for ts in replicates:
-            # This is a hack. We should have some sort of "mutator" argument
-            # to run_replicates that passes in various args or something
-            seed = 1 + self._simulator.random_generator.uniform_int(2 ** 31 - 2)
-            ts = msprime.mutate(
-                ts,
-                self._mutation_rate,
-                model=msprime.BinaryMutationModel(),
-                random_seed=seed,
-            )
             print(file=output)
             print("//", file=output)
-            if self._print_trees:
-                self.print_trees(ts, output)
-            if self._mutation_rate > 0:
+            if self.print_trees:
+                self._print_trees(ts, output)
+            if self.mutation_rate > 0:
                 assert ts.num_sites == ts.num_mutations
                 s = ts.num_sites
                 print("segsites:", s, file=output)
                 if s != 0:
                     print("positions: ", end="", file=output)
-                    positions = [
-                        mutation.position / self._num_loci
-                        for mutation in ts.mutations()
-                    ]
-                    positions.sort()
-                    for position in positions:
+                    for site in ts.sites():
+                        x = site.position / self.num_loci
                         print(
-                            "{0:.{1}f}".format(position, self._precision),
+                            "{0:.{1}f}".format(x, self.precision),
                             end=" ",
                             file=output,
                         )
@@ -449,26 +410,21 @@ def create_simulation_runner(parser, arg_list):
     else:
         gc_rate = r * gc_param
 
+    demography = msprime.Demography.simple_model(1)
     # Check the structure format.
     symmetric_migration_rate = 0.0
     num_populations = 1
-    num_samples = [args.sample_size]
-    population_configurations = [msprime.PopulationConfiguration(initial_size=1)]
     migration_matrix = [[0.0]]
+    num_samples = [args.sample_size]
     if args.structure is not None:
         num_populations = convert_int(args.structure[0], parser)
         # We must have at least num_population sample_configurations
         if len(args.structure) < num_populations + 1:
             parser.error("Must have num_populations sample sizes")
-        population_configurations = [None for j in range(num_populations)]
-        num_samples = [0 for _ in range(num_populations)]
+        demography = msprime.Demography.simple_model([1] * num_populations)
+        num_samples = [0] * num_populations
         for j in range(num_populations):
             num_samples[j] = convert_int(args.structure[j + 1], parser)
-            population_configurations[j] = msprime.PopulationConfiguration(0)
-            # convert_int(args.structure[j + 1], parser)
-            # convert_int(args.structure[j + 1], parser)
-            # )
-        # total = sum(conf.sample_size for conf in population_configurations)
         if sum(num_samples) != args.sample_size:
             parser.error("Population sample sizes must sum to sample_size")
         # We optionally have the overall migration_rate here
@@ -512,17 +468,17 @@ def create_simulation_runner(parser, arg_list):
         migration_matrix[pop_i][pop_j] = rate
 
     # Set the initial demography
-    demographic_events = []
     if args.growth_rate is not None:
-        for config in population_configurations:
-            config.growth_rate = args.growth_rate
+        for population in demography.populations:
+            population.growth_rate = args.growth_rate
     for population_id, growth_rate in args.population_growth_rate:
         pid = convert_population_id(parser, population_id, num_populations)
-        population_configurations[pid].growth_rate = growth_rate
+        demography.populations[pid].growth_rate = growth_rate
     for population_id, size in args.population_size:
         pid = convert_population_id(parser, population_id, num_populations)
-        population_configurations[pid].initial_size = size
+        demography.populations[pid].initial_size = size
 
+    demographic_events = []
     # First we look at population split events. We do this differently
     # to ms, as msprime requires a fixed number of population. Therefore,
     # modify the number of populations to take into account populations
@@ -543,9 +499,8 @@ def create_simulation_runner(parser, arg_list):
         for row in migration_matrix:
             row.append(0)
         migration_matrix.append([0 for j in range(num_populations)])
-        # Add another PopulationConfiguration object with a sample size
-        # of zero.
-        population_configurations.append(msprime.PopulationConfiguration(0))
+        demography.populations.append(msprime.Population(initial_size=1))
+        num_samples.append(0)
 
     # Add the demographic events
     for index, (t, alpha) in args.growth_rate_change:
@@ -645,40 +600,32 @@ def create_simulation_runner(parser, arg_list):
                     )
                     demographic_events.append((index, msp_event))
 
-    # We've created all the events and PopulationConfiguration objects. Because
-    # msprime uses absolute population sizes we need to rescale these relative
-    # to Ne, since this is what ms does.
-    for _, msp_event in demographic_events:
-        if isinstance(msp_event, msprime.PopulationParametersChange):
-            if msp_event.initial_size is not None:
-                msp_event.initial_size /= 2
-    for config in population_configurations:
-        if config.initial_size is not None:
-            config.initial_size /= 2
-
     demographic_events.sort(key=lambda x: (x[0], x[1].time))
     time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
     if demographic_events != time_sorted:
         parser.error("Demographic events must be supplied in non-decreasing time order")
 
-    # TODO change this so we make a new-style demography directly
-    demography = msprime.Demography.from_old_style(
-        population_configurations=population_configurations,
-        migration_matrix=migration_matrix,
-        demographic_events=[event for _, event in demographic_events],
-    )
-    for population in demography.populations:
-        if population.initial_size is None:
-            population.initial_size = 0.5
-    samples = demography.sample(*num_samples)
+    demography.events = [event for _, event in demographic_events]
+    demography.migration_matrix = migration_matrix
+
+    # Adjust the population sizes so that the timescales agree. In principle
+    # we could correct this with a ploidy value=0.5, but what we have here
+    # seems less awful.
+    for msp_event in demography.events:
+        if isinstance(msp_event, msprime.PopulationParametersChange):
+            if msp_event.initial_size is not None:
+                msp_event.initial_size /= 2
+    for pop in demography.populations:
+        pop.initial_size /= 2
+
     runner = SimulationRunner(
-        samples,
+        num_samples,
         demography,
         num_loci=num_loci,
         num_replicates=args.num_replicates,
-        scaled_recombination_rate=r,
-        scaled_mutation_rate=mu,
-        scaled_gene_conversion_rate=gc_rate,
+        recombination_rate=r,
+        mutation_rate=mu,
+        gene_conversion_rate=gc_rate,
         gene_conversion_tract_length=gc_tract_length,
         precision=args.precision,
         print_trees=args.trees,
@@ -693,7 +640,7 @@ class IndexedAction(argparse._AppendAction):
     Argparse action class that allows us to find the overall ordering
     across several different options. We use this for the demographic
     events, as the order in which the events are applied matters for
-    ms compatability.
+    ms compatibility.
     """
 
     index = 0

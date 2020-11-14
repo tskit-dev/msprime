@@ -1319,13 +1319,13 @@ class Simulator(_msprime.Simulator):
             self.run()
 
             if mutation_rate is not None:
-                seed = 1 + self.random_generator.uniform_int(2 ** 31 - 2)
+                # This is only called from simulate() or the ms interface,
+                # so does not need any further parameters.
                 mutations._simple_mutate(
-                    self.tables,
-                    int(seed),
+                    tables=self.tables,
+                    random_generator=self.random_generator,
                     sequence_length=self.sequence_length,
                     rate=mutation_rate,
-                    discrete_sites=self.discrete_genome,
                 )
             tables = tskit.TableCollection.fromdict(self.tables.asdict())
             replicate_provenance = None

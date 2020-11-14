@@ -314,9 +314,9 @@ class MsTest(Test):
     def _run_mspms_coalescent_stats(self, args):
         logging.debug(f"mspms: {args}")
         runner = cli.get_mspms_runner(args.split())
-        sim = runner.get_simulator()
+        sim = runner.simulator
         num_populations = sim.num_populations
-        replicates = runner.get_num_replicates()
+        replicates = runner.num_replicates
         num_trees = [0 for j in range(replicates)]
         time = [0 for j in range(replicates)]
         ca_events = [0 for j in range(replicates)]
