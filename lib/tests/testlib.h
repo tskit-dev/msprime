@@ -33,6 +33,13 @@
 #include <gsl/gsl_randist.h>
 #include <CUnit/Basic.h>
 
+#ifdef __SSE2__
+/* On CPUs lacking SSE2 instructions we can't do exact floating
+ * point comparisons. See https://gcc.gnu.org/wiki/FloatingPointMath
+ */
+#define MSP_TEST_EXACT_FLOAT_COMPARISONS
+#endif
+
 #define ALPHABET_BINARY 0
 #define ALPHABET_NUCLEOTIDE 1
 

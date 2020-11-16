@@ -101,7 +101,9 @@ test_probability_list_select(void)
     }
     {
         double probs[3] = { short_half, DBL_EPSILON / 8.0, 0.5 };
+#ifdef MSP_TEST_EXACT_FLOAT_COMPARISONS
         CU_TEST(1.0 == probs[0] + probs[1] + probs[2]);
+#endif
         CU_ASSERT_EQUAL(0, probability_list_select(0.0, 3, probs))
         CU_ASSERT_EQUAL(1, probability_list_select(short_half, 3, probs))
         CU_ASSERT_EQUAL(2, probability_list_select(0.5, 3, probs))
@@ -109,7 +111,9 @@ test_probability_list_select(void)
     }
     {
         double probs[3] = { short_half, DBL_EPSILON / 16.0, 0.5 };
+#ifdef MSP_TEST_EXACT_FLOAT_COMPARISONS
         CU_TEST(1.0 == probs[0] + probs[1] + probs[2]);
+#endif
         CU_ASSERT_EQUAL(0, probability_list_select(0.0, 3, probs))
         CU_ASSERT_EQUAL(2, probability_list_select(short_half, 3, probs))
         CU_ASSERT_EQUAL(2, probability_list_select(0.5, 3, probs))

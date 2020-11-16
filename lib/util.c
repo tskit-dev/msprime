@@ -511,11 +511,6 @@ idx_1st_strict_upper_bound(const double *elements, size_t n_elements, double que
 #error "Base 2 floating point types required"
 #endif
 
-#if SIZE_MAX < ULLONG_MAX
-#error "size_t must be at least 64 bits"
-/* unsigned long long must be at least 64 bits */
-#endif
-
 static bool
 valid_sorted_nonempty_array(const double *array, size_t size)
 {
@@ -588,8 +583,7 @@ fast_search_alloc(fast_search_t *self, const double *elements, size_t n_elements
 {
     int ret = 0;
     double max_element;
-
-    const size_t max_input_size = 1LL << (DBL_MANT_DIG - 1); // 4096 terabytes
+    const uint64_t max_input_size = 1ULL << (DBL_MANT_DIG - 1); // 4096 terabytes
 
     memset(self, 0, sizeof(*self));
 
@@ -597,7 +591,7 @@ fast_search_alloc(fast_search_t *self, const double *elements, size_t n_elements
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }
-    if (elements[0] != 0.0 || n_elements >= max_input_size) {
+    if (elements[0] != 0.0 || (uint64_t) n_elements >= max_input_size) {
         ret = MSP_ERR_BAD_PARAM_VALUE;
         goto out;
     }

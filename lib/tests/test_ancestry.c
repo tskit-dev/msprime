@@ -2421,7 +2421,7 @@ test_large_bottleneck_simulation(void)
         ret = msp_run(&msp, bottlenecks[j].time + 1e-6, ULONG_MAX);
         CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
         CU_ASSERT_FALSE(msp_is_completed(&msp));
-        CU_ASSERT_EQUAL(msp.time, bottlenecks[j].time + 1e-6);
+        CU_ASSERT_DOUBLE_EQUAL(msp.time, bottlenecks[j].time + 1e-6, 1e-9);
         msp_verify(&msp, 0);
     }
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
