@@ -32,7 +32,7 @@ jobs:
             repository: ${{ github.event.pull_request.head.repo.full_name }}
             submodules: true
 
-      - uses: actions/setup-python@v1
+      - uses: actions/setup-python@v2
         with:
           python-version: 3.8
 

@@ -14,10 +14,8 @@ jobs:
         uses: styfle/cancel-workflow-action@0.6.0
         with:
           access_token: ${{ github.token }}
-      - uses: actions/checkout@v1
-      - uses: actions/setup-python@v1
-      - name: set PY
-        run: echo "::set-env name=PY::$(python -c 'import hashlib, sys;print(hashlib.sha256(sys.version.encode()+sys.executable.encode()).hexdigest())')"
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
       - name: install clang-format
         if: steps.clang_format.outputs.cache-hit != 'true'
         run: |
@@ -59,7 +57,7 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.python}}-conda-v9-${{ hashFiles('requirements/CI-tests-conda/requirements.txt') }}-${{ hashFiles('python/requirements/CI-tests-pip/requirements.txt') }}
 
       - name: Install Conda
-        uses: conda-incubator/setup-miniconda@v1
+        uses: conda-incubator/setup-miniconda@v2
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           activate-environment: anaconda-client-env
