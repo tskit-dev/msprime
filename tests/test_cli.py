@@ -975,7 +975,7 @@ class TestMspmsOutput(TestCli):
             mutation_rate=mutation_rate,
             print_trees=print_trees,
             precision=precision,
-            random_seeds=random_seeds,
+            ms_random_seeds=random_seeds,
         )
         with open(self.temp_file, "w+") as f:
             sr.run(f)
@@ -1151,7 +1151,7 @@ class TestMspmsOutput(TestCli):
         sr = cli.SimulationRunner(
             [sample_size],
             mutation_rate=mutation_rate,
-            random_seeds=seeds,
+            ms_random_seeds=seeds,
         )
         with tempfile.TemporaryFile("w+") as f:
             sr.run(f)

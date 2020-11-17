@@ -89,8 +89,9 @@ class TestFullArg:
     """
 
     def verify(self, sim, multiple_mergers=False):
+        sim.random_generator.seed = 1234
         sim.run()
-        tree_sequence = next(sim.run_replicates(1, random_seed=42))
+        tree_sequence = next(sim.run_replicates(1))
         # Check if we have multiple merger somewhere.
         found = False
         for edgeset in tree_sequence.edgesets():
@@ -191,6 +192,7 @@ class TestSimulator:
             n,
             sequence_length=m,
             recombination_rate=r,
+            random_seed=32,
         )
         sim.run()
         assert sim.num_breakpoints == len(sim.breakpoints)
@@ -198,7 +200,7 @@ class TestSimulator:
         assert sim.num_avl_node_blocks > 0
         assert sim.num_segment_blocks > 0
         assert sim.num_node_mapping_blocks > 0
-        tree_sequence = next(sim.run_replicates(1, random_seed=42))
+        tree_sequence = next(sim.run_replicates(1))
         t = 0.0
         for record in tree_sequence.nodes():
             if record.time > t:
@@ -393,6 +395,64 @@ class TestParseRandomSeed:
         for seed in [1234, 12.0, "12"]:
             ret_seed = ancestry._parse_random_seed(seed)
             assert ret_seed == int(seed)
+
+
+class TestParseReplicateIndex:
+    def test_none(self):
+        assert (
+            ancestry._parse_replicate_index(
+                replicate_index=None, random_seed=None, num_replicates=None
+            )
+            is None
+        )
+        assert (
+            ancestry._parse_replicate_index(
+                replicate_index=None, random_seed=1, num_replicates=None
+            )
+            is None
+        )
+        assert (
+            ancestry._parse_replicate_index(
+                replicate_index=None, random_seed=1, num_replicates=1
+            )
+            is None
+        )
+
+    def test_random_seed(self):
+        with pytest.raises(ValueError):
+            ancestry._parse_replicate_index(
+                replicate_index=0, random_seed=None, num_replicates=None
+            )
+        assert (
+            ancestry._parse_replicate_index(
+                replicate_index=1234, random_seed=1, num_replicates=None
+            )
+            == 1234
+        )
+
+    def test_num_replicates(self):
+        with pytest.raises(ValueError):
+            ancestry._parse_replicate_index(
+                replicate_index=0, random_seed=1, num_replicates=1
+            )
+
+    def test_values(self):
+        assert (
+            ancestry._parse_replicate_index(
+                replicate_index=0, random_seed=1, num_replicates=None
+            )
+            == 0
+        )
+        assert (
+            ancestry._parse_replicate_index(
+                replicate_index="1234", random_seed=1, num_replicates=None
+            )
+            == 1234
+        )
+        with pytest.raises(ValueError):
+            ancestry._parse_replicate_index(
+                replicate_index=-1, random_seed=1, num_replicates=None
+            )
 
 
 class TestParseSimAncestry:
@@ -1522,6 +1582,16 @@ class TestSimAncestryInterface:
         recapitated2 = msprime.sim_ancestry(initial_state=ts.tables, random_seed=234)
         assert tree_sequences_equal(recapitated1, recapitated2)
 
+    def test_replicate_index(self):
+        reps = msprime.sim_ancestry(12, random_seed=52, num_replicates=10)
+        for index, ts1 in enumerate(reps):
+            ts2 = msprime.sim_ancestry(12, random_seed=52, replicate_index=index)
+            t1 = ts1.dump_tables()
+            t2 = ts2.dump_tables()
+            t1.provenances.clear()
+            t2.provenances.clear()
+            assert t1 == t2
+
 
 class TestSimulateInterface:
     """
@@ -1627,6 +1697,16 @@ class TestSimulateInterface:
             t.provenances.clear()
         for t in tables:
             assert t == tables[0]
+
+    def test_replicate_index(self):
+        reps = msprime.simulate(10, random_seed=52, num_replicates=10)
+        for index, ts1 in enumerate(reps):
+            ts2 = msprime.simulate(10, random_seed=52, replicate_index=index)
+            t1 = ts1.dump_tables()
+            t2 = ts2.dump_tables()
+            t1.provenances.clear()
+            t2.provenances.clear()
+            assert t1 == t2
 
 
 class TestReprRoundTrip:

@@ -287,6 +287,7 @@ def _parse_simulate(
     record_full_arg=False,
     num_labels=None,
     demography=None,
+    random_seed=None,
 ):
     """
     Argument parser for the simulate frontend. Interprets all the parameters
@@ -391,6 +392,11 @@ def _parse_simulate(
     else:
         tables = from_ts.tables
 
+    # It's useful to call _parse_simulate outside the context of the main
+    # entry point - so we want to get good seeds in this case too.
+    random_seed = _parse_random_seed(random_seed)
+    random_generator = _msprime.RandomGenerator(random_seed)
+
     sim = Simulator(
         tables=tables,
         recombination_map=recombination_map,
@@ -409,6 +415,7 @@ def _parse_simulate(
         gene_conversion_tract_length=0,
         discrete_genome=False,
         ploidy=2,
+        random_generator=random_generator,
     )
     return sim
 
@@ -424,7 +431,24 @@ def _parse_random_seed(seed):
     return seed
 
 
-def _build_provenance(command, frame):
+def _parse_replicate_index(*, replicate_index, random_seed, num_replicates):
+    """
+    Parse the replicate_index value, and ensure that its value makes sense
+    in the context of the other parameters.
+    """
+    if replicate_index is None:
+        return None
+    if random_seed is None:
+        raise ValueError("Cannot specify the replicate_index without a random_seed")
+    if num_replicates is not None:
+        raise ValueError("Cannot specify the replicate_index as well as num_replicates")
+    replicate_index = int(replicate_index)
+    if replicate_index < 0:
+        raise ValueError("Cannot specify negative replicate_index.")
+    return replicate_index
+
+
+def _build_provenance(command, random_seed, frame):
     """
     Builds a provenance dictionary suitable for use as the basis
     of tree sequence provenance in replicate simulations. Uses the
@@ -439,9 +463,10 @@ def _build_provenance(command, frame):
         **{
             arg: argspec.locals[arg]
             for arg in argspec.args
-            if arg not in ["num_replicates"]
+            if arg not in ["num_replicates", "replicate_index"]
         },
     }
+    parameters["random_seed"] = random_seed
     return provenance.get_provenance_dict(parameters)
 
 
@@ -461,6 +486,7 @@ def simulate(
     model=None,
     record_migrations=False,
     random_seed=None,
+    replicate_index=None,
     mutation_generator=None,
     num_replicates=None,
     from_ts=None,
@@ -584,10 +610,16 @@ def simulate(
     :rtype: :class:`tskit.TreeSequence` or an iterator over
         :class:`tskit.TreeSequence` replicates.
     """
+    replicate_index = _parse_replicate_index(
+        random_seed=random_seed,
+        num_replicates=num_replicates,
+        replicate_index=replicate_index,
+    )
+    random_seed = _parse_random_seed(random_seed)
     provenance_dict = None
     if record_provenance:
         frame = inspect.currentframe()
-        provenance_dict = _build_provenance("simulate", frame)
+        provenance_dict = _build_provenance("simulate", random_seed, frame)
 
     if mutation_generator is not None:
         # This error was added in version 0.6.1.
@@ -639,12 +671,12 @@ def simulate(
         record_full_arg=record_full_arg,
         num_labels=num_labels,
         demography=demography,
+        random_seed=random_seed,
     )
-
     return _wrap_replicates(
         sim,
-        random_seed=random_seed,
         num_replicates=num_replicates,
+        replicate_index=replicate_index,
         provenance_dict=provenance_dict,
         mutation_rate=mutation_rate,
     )
@@ -653,8 +685,8 @@ def simulate(
 def _wrap_replicates(
     simulator,
     *,
-    random_seed,
     num_replicates,
+    replicate_index,
     provenance_dict,
     mutation_rate=None,
 ):
@@ -662,15 +694,19 @@ def _wrap_replicates(
     Wrapper for the logic used to run replicate simulations for the two
     frontends.
     """
-
+    if num_replicates is None and replicate_index is None:
+        # Default single-replicate case.
+        replicate_index = 0
+    if replicate_index is not None:
+        num_replicates = replicate_index + 1
     iterator = simulator.run_replicates(
         num_replicates,
-        random_seed=random_seed,
         mutation_rate=mutation_rate,
         provenance_dict=provenance_dict,
     )
-    if num_replicates is None:
-        return next(iterator)
+    if replicate_index is not None:
+        deque = collections.deque(iterator, maxlen=1)
+        return deque.pop()
     else:
         return iterator
 
@@ -811,8 +847,6 @@ def _parse_sim_ancestry(
     record_full_arg=None,
     num_labels=None,
     random_seed=None,
-    random_generator=None,
-    num_replicates=None,
 ):
     """
     Argument parser for the sim_ancestry frontend. Interprets all the parameters
@@ -944,6 +978,11 @@ def _parse_sim_ancestry(
                 "initial_state tables must define at least one population."
             )
 
+    # It's useful to call _parse_sim_ancestry outside the context of the main
+    # entry point - so we want to get good seeds in this case too.
+    random_seed = _parse_random_seed(random_seed)
+    random_generator = _msprime.RandomGenerator(random_seed)
+
     return Simulator(
         tables=initial_state,
         recombination_map=recombination_map,
@@ -959,6 +998,7 @@ def _parse_sim_ancestry(
         start_time=start_time,
         end_time=end_time,
         num_labels=num_labels,
+        random_generator=random_generator,
     )
 
 
@@ -982,6 +1022,7 @@ def sim_ancestry(
     num_labels=None,
     random_seed=None,
     num_replicates=None,
+    replicate_index=None,
     record_provenance=None,
 ):
     """
@@ -1075,10 +1116,16 @@ def sim_ancestry(
         :class:`tskit.TreeSequence` replicates.
     """
     record_provenance = True if record_provenance is None else record_provenance
+    replicate_index = _parse_replicate_index(
+        random_seed=random_seed,
+        num_replicates=num_replicates,
+        replicate_index=replicate_index,
+    )
+    random_seed = _parse_random_seed(random_seed)
     provenance_dict = None
     if record_provenance:
         frame = inspect.currentframe()
-        provenance_dict = _build_provenance("sim_ancestry", frame)
+        provenance_dict = _build_provenance("sim_ancestry", random_seed, frame)
     sim = _parse_sim_ancestry(
         samples=samples,
         sequence_length=sequence_length,
@@ -1096,23 +1143,14 @@ def sim_ancestry(
         record_migrations=record_migrations,
         record_full_arg=record_full_arg,
         num_labels=num_labels,
+        random_seed=random_seed,
     )
     return _wrap_replicates(
         sim,
-        random_seed=random_seed,
         num_replicates=num_replicates,
+        replicate_index=replicate_index,
         provenance_dict=provenance_dict,
     )
-
-
-def replicate_seed_generator(num_replicates, seed):
-    if num_replicates is None:
-        yield seed
-    else:
-        seed_rng = _msprime.RandomGenerator(seed)
-        for _ in range(num_replicates):
-            seed = 1 + seed_rng.uniform_int(2 ** 31 - 2)
-            yield int(seed)
 
 
 class Simulator(_msprime.Simulator):
@@ -1135,6 +1173,7 @@ class Simulator(_msprime.Simulator):
         ploidy,
         demography,
         model_change_events,
+        random_generator,
         model=None,
         store_migrations=False,
         store_full_arg=False,
@@ -1174,8 +1213,7 @@ class Simulator(_msprime.Simulator):
             tables=ll_tables,
             recombination_map=ll_recomb_map,
             start_time=start_time,
-            # The random seed is set later before we run actual simulations.
-            random_generator=_msprime.RandomGenerator(),
+            random_generator=random_generator,
             model=ll_simulation_model,
             migration_matrix=demography.migration_matrix,
             population_configuration=ll_population_configuration,
@@ -1296,28 +1334,24 @@ class Simulator(_msprime.Simulator):
         self,
         num_replicates,
         *,
-        random_seed=None,
         mutation_rate=None,
         provenance_dict=None,
     ):
         """
         Sequentially yield the specified number of simulation replicates.
         """
-        random_seed = _parse_random_seed(random_seed)
         encoded_provenance = None
         # The JSON is modified for each replicate to insert the replicate number.
         # To avoid repeatedly encoding the same JSON (which can take milliseconds)
         # we insert a replaceable string.
-        placeholder = "@@_MSPRIME_RANDOM_SEED_@@"
+        placeholder = "@@_REPLICATE_INDEX_@@"
         if provenance_dict is not None:
-            provenance_dict["parameters"]["random_seed"] = placeholder
+            provenance_dict["parameters"]["replicate_index"] = placeholder
             encoded_provenance = provenance.json_encode_provenance(
                 provenance_dict, num_replicates
             )
-        for seed in replicate_seed_generator(num_replicates, random_seed):
-            self.random_generator.seed = seed
+        for replicate_index in range(num_replicates):
             self.run()
-
             if mutation_rate is not None:
                 # This is only called from simulate() or the ms interface,
                 # so does not need any further parameters.
@@ -1331,7 +1365,7 @@ class Simulator(_msprime.Simulator):
             replicate_provenance = None
             if encoded_provenance is not None:
                 replicate_provenance = encoded_provenance.replace(
-                    f'"{placeholder}"', str(seed)
+                    f'"{placeholder}"', str(replicate_index)
                 )
                 tables.provenances.add_row(replicate_provenance)
             yield tables.tree_sequence()

@@ -197,7 +197,7 @@ class SimulationRunner:
         mutation_rate=0,
         print_trees=False,
         precision=3,
-        random_seeds=None,
+        ms_random_seeds=None,
         gene_conversion_rate=0,
         gene_conversion_tract_length=1,
         hotspots=None,
@@ -216,11 +216,12 @@ class SimulationRunner:
             # This is just used for testing so values don't really matter.
             demography = msprime.Demography.simple_model(1)
 
-        ms_seeds = random_seeds
-        if random_seeds is None:
-            ms_seeds = generate_seeds()
-        self.random_seed = get_single_seed(ms_seeds)
-        self.ms_random_seeds = ms_seeds
+        self.ms_random_seeds = ms_random_seeds
+        if ms_random_seeds is None:
+            self.ms_random_seeds = generate_seeds()
+        # The ms command line requires three integers. We combine these into
+        # a single seed.
+        random_seed = get_single_seed(self.ms_random_seeds)
 
         # We need to get direct access to the simulator here because of the
         # "invisible" recombination breakpoints, so we can't run simulations
@@ -232,6 +233,7 @@ class SimulationRunner:
             gene_conversion_rate=gene_conversion_rate,
             gene_conversion_tract_length=gene_conversion_tract_length,
             ploidy=1,
+            random_seed=random_seed,
         )
 
     def _print_trees(self, tree_sequence, output):
@@ -268,7 +270,6 @@ class SimulationRunner:
         print(" ".join(str(s) for s in self.ms_random_seeds), file=output)
         replicates = self.simulator.run_replicates(
             self.num_replicates,
-            random_seed=self.random_seed,
             mutation_rate=self.mutation_rate,
         )
         for ts in replicates:
@@ -629,7 +630,7 @@ def create_simulation_runner(parser, arg_list):
         gene_conversion_tract_length=gc_tract_length,
         precision=args.precision,
         print_trees=args.trees,
-        random_seeds=args.random_seeds,
+        ms_random_seeds=args.random_seeds,
         hotspots=args.hotspots,
     )
     return runner
