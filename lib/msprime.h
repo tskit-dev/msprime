@@ -209,6 +209,8 @@ typedef struct _msp_t {
     size_t num_re_events;
     size_t num_ca_events;
     size_t num_gc_events;
+    size_t num_internal_gc_events;
+    double sum_internal_gc_tract_lengths;
     size_t num_rejected_ca_events;
     size_t *num_migration_events;
     size_t num_trapped_re_events;
@@ -455,6 +457,8 @@ size_t msp_get_num_common_ancestor_events(msp_t *self);
 size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
 size_t msp_get_num_gene_conversion_events(msp_t *self);
+size_t msp_get_num_internal_gene_conversion_events(msp_t *self);
+double msp_get_sum_internal_gc_tract_lengths(msp_t *self);
 
 int matrix_mutation_model_factory(mutation_model_t *self, int model);
 int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,

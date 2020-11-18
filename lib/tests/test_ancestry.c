@@ -1483,7 +1483,9 @@ run_gc_simulation(double sequence_length, double gc_rate, double tract_length,
     int ret;
     uint32_t n = 10;
     long seed = 10;
-    size_t num_events, num_ca_events, num_re_events, num_gc_events;
+    size_t num_events, num_ca_events, num_re_events, num_gc_events,
+        num_internal_gc_events;
+    double sum_internal_gc_tract_lengths;
     bool single_locus = sequence_length == 1 && discrete_genome;
     tsk_table_collection_t tables;
     tsk_treeseq_t ts;
@@ -1523,6 +1525,12 @@ run_gc_simulation(double sequence_length, double gc_rate, double tract_length,
         CU_ASSERT_EQUAL(num_gc_events, 0);
     } else {
         CU_ASSERT_TRUE(num_gc_events > 0);
+    }
+    num_internal_gc_events = msp_get_num_internal_gene_conversion_events(&msp);
+    CU_ASSERT_TRUE(num_internal_gc_events >= num_gc_events);
+    sum_internal_gc_tract_lengths = msp_get_sum_internal_gc_tract_lengths(&msp);
+    if (discrete_genome) {
+        CU_ASSERT_TRUE(sum_internal_gc_tract_lengths >= num_internal_gc_events);
     }
     msp_free(&msp);
 
@@ -1564,10 +1572,10 @@ test_gc_zero_recombination(void)
 static void
 test_gc_rates(void)
 {
-    run_gc_simulation(1, 0.1, 0.5, 10.0, false);
-    run_gc_simulation(1, 10.0, 0.5, 0.1, false);
+    run_gc_simulation(10, 0.1, 1.5, 1.0, false);
+    run_gc_simulation(5, 5.0, 2.5, 0.01, false);
     run_gc_simulation(10, 1, 1, 1.0, false);
-    run_gc_simulation(30, 1.0, 6, 1.0, true);
+    run_gc_simulation(30, 1.0, 6.5, 1.0, true);
 }
 
 static void
