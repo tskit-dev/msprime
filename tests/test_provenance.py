@@ -291,6 +291,10 @@ class TestBuildObjects:
             decoded = self.decode(ts.provenance(0).record)
             assert decoded.parameters["replicate_index"] == i
 
+        for i, ts in enumerate(msprime.sim_ancestry(5, num_replicates=3)):
+            decoded = self.decode(ts.provenance(0).record)
+            assert decoded.parameters["replicate_index"] == i
+
     def test_large_provenance_warning(self, caplog):
         with caplog.at_level(logging.WARNING):
             msprime.provenance.json_encode_provenance(

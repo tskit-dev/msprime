@@ -314,9 +314,9 @@ class MsTest(Test):
     def _run_mspms_coalescent_stats(self, args):
         logging.debug(f"mspms: {args}")
         runner = cli.get_mspms_runner(args.split())
-        sim = runner.get_simulator()
+        sim = runner.simulator
         num_populations = sim.num_populations
-        replicates = runner.get_num_replicates()
+        replicates = runner.num_replicates
         num_trees = [0 for j in range(replicates)]
         time = [0 for j in range(replicates)]
         ca_events = [0 for j in range(replicates)]
@@ -725,13 +725,7 @@ class DiscoalTest(Test):
             if tokens[i] == "-r":
                 rho = float(tokens[i + 1])
         mod_list = [None]
-        # check we have what we need
-        if None in [alpha, sweep_site, sweep_mod_time]:
-            logging.warning(
-                "full parameterization of sweep model not given \
-                          running neutral simulation"
-            )
-        else:
+        if alpha is not None:
             # sweep model
             mod = msprime.SweepGenicSelection(
                 position=sweep_site,
@@ -752,7 +746,6 @@ class DiscoalTest(Test):
             sample_size,
             Ne=0.25,
             model=mod_list,
-            discrete_genome=True,
             recombination_map=recomb_map,
             mutation_rate=mu,
             num_replicates=nreps,
@@ -1367,7 +1360,7 @@ class DtwfVsCoalescent(Test):
 
             logging.debug(f"Running: {kwargs}")
             data = collections.defaultdict(list)
-            replicates = msprime.simulate(**kwargs)
+            replicates = msprime.sim_ancestry(**kwargs)
             for ts in replicates:
                 t_mrca = np.zeros(ts.num_trees)
                 t_intervals = []
@@ -1426,21 +1419,21 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
     """
 
     def test_dtwf_vs_coalescent_single_locus(self):
-        self._run(sample_size=10, Ne=1000, num_replicates=300)
+        self._run(samples=10, population_size=1000, num_replicates=300)
 
     def test_dtwf_vs_coalescent_recomb_discrete_hotspots(self):
         """
         Checks the DTWF against the standard coalescent with a
         discrete recombination map with variable rates.
         """
-        recombination_map = msprime.RecombinationMap(
-            positions=[0, 100, 500, 900, 1200, 1500, 2000],
-            rates=[0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
+        recombination_map = msprime.RateMap(
+            position=[0, 100, 500, 900, 1200, 1500, 2000],
+            rate=[0.00001, 0, 0.0002, 0.00005, 0, 0.001],
         )
         self._run(
-            sample_size=10,
-            Ne=1000,
-            recombination_map=recombination_map,
+            samples=10,
+            population_size=1000,
+            recombination_rate=recombination_map,
             num_replicates=300,
             discrete_genome=True,
         )
@@ -1450,125 +1443,106 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
         Checks the DTWF against the standard coalescent with a
         continuous recombination map with variable rates.
         """
-        recombination_map = msprime.RecombinationMap(
-            positions=[0, 0.1, 0.5, 0.9, 1.2, 1.5, 2.0],
-            rates=[0.00001, 0, 0.0002, 0.00005, 0, 0.001, 0],
+        recombination_map = msprime.RateMap(
+            position=[0, 0.1, 0.5, 0.9, 1.2, 1.5, 2.0],
+            rate=[0.00001, 0, 0.0002, 0.00005, 0, 0.001],
         )
         self._run(
-            sample_size=10,
-            Ne=1000,
-            recombination_map=recombination_map,
+            samples=10,
+            population_size=1000,
+            recombination_rate=recombination_map,
             num_replicates=300,
             discrete_genome=False,
         )
 
     def test_dtwf_vs_coalescent_single_forced_recombination(self):
-        recombination_map = msprime.RecombinationMap(
-            positions=[0, 100, 101, 201], rates=[0, 1, 0, 0]
-        )
+        recombination_map = msprime.RateMap(position=[0, 100, 101, 201], rate=[0, 1, 0])
         self._run(
-            sample_size=10,
-            Ne=10,
+            samples=10,
+            population_size=10,
             num_replicates=1,
             discrete_genome=True,
-            recombination_map=recombination_map,
+            recombination_rate=recombination_map,
         )
 
     def test_dtwf_vs_coalescent_low_recombination(self):
-        self._run(sample_size=10, Ne=1000, num_replicates=400, recombination_rate=0.01)
+        self._run(
+            samples=10,
+            population_size=1000,
+            num_replicates=400,
+            recombination_rate=0.01,
+            sequence_length=5,
+        )
 
     def test_dtwf_vs_coalescent_2_pops_massmigration(self):
-        population_configurations = [
-            msprime.PopulationConfiguration(sample_size=10, initial_size=1000),
-            msprime.PopulationConfiguration(sample_size=10, initial_size=1000),
-        ]
-        recombination_map = msprime.RecombinationMap(
-            positions=[0, int(1e6)], rates=[1e-8, 0]
-        )
-        demographic_events = [
+        demography = msprime.Demography.simple_model([1000, 1000])
+        demography.events.append(
             msprime.MassMigration(time=300, source=1, destination=0, proportion=1.0)
-        ]
+        )
         self._run(
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
+            samples=demography.sample(10, 10),
+            demography=demography,
+            sequence_length=10 ** 6,
             num_replicates=300,
-            recombination_map=recombination_map,
+            recombination_rate=1e-8,
         )
 
-    def test_dtwf_vs_coalescent_2_pop_growth(self):
-        population_configurations = [
-            msprime.PopulationConfiguration(
-                sample_size=10, initial_size=1000, growth_rate=0.01
-            )
-        ]
-        recombination_map = msprime.RecombinationMap(
-            positions=[0, int(5e7)], rates=[1e-8, 0]
-        )
+    def test_dtwf_vs_coalescent_1_pop_growth(self):
         self._run(
-            population_configurations=population_configurations,
-            recombination_map=recombination_map,
+            samples=10,
+            demography=msprime.Demography.simple_model(1000, growth_rate=0.01),
+            recombination_rate=1e-8,
+            sequence_length=5e7,
             num_replicates=300,
             discrete_genome=True,
         )
 
-    def test_dtwf_vs_coalescent_2_pop_shrink(self):
+    def test_dtwf_vs_coalescent_1_pop_shrink(self):
         initial_size = 1000
-        population_configurations = [
-            msprime.PopulationConfiguration(
-                sample_size=10, initial_size=initial_size, growth_rate=-0.01
-            )
-        ]
-        recombination_map = msprime.RecombinationMap(
-            positions=[0, int(1e7)], rates=[1e-8, 0]
-        )
-        demographic_events = [
+        demography = msprime.Demography.simple_model(initial_size, growth_rate=-0.01)
+        demography.events.append(
             msprime.PopulationParametersChange(
-                time=200, initial_size=initial_size, growth_rate=0.01, population_id=0
+                time=200, initial_size=initial_size, growth_rate=0.01, population=0
             )
-        ]
+        )
         self._run(
-            population_configurations=population_configurations,
-            recombination_map=recombination_map,
-            demographic_events=demographic_events,
+            samples=10,
+            demography=demography,
+            recombination_rate=1e-8,
+            sequence_length=5e7,
             num_replicates=300,
             discrete_genome=True,
         )
 
     def test_dtwf_vs_coalescent_multiple_bottleneck(self):
-        population_configurations = [
-            msprime.PopulationConfiguration(sample_size=5, initial_size=1000),
-            msprime.PopulationConfiguration(sample_size=5, initial_size=1000),
-        ]
-        recombination_map = msprime.RecombinationMap(
-            positions=[0, int(1e6)], rates=[1e-8, 0]
-        )
-
-        demographic_events = [
+        demography = msprime.Demography.simple_model([1000, 1000])
+        demography.events = [
             msprime.PopulationParametersChange(
-                time=100, initial_size=100, growth_rate=-0.01, population_id=0
+                time=100, initial_size=100, growth_rate=-0.01, population=0
             ),
             msprime.PopulationParametersChange(
-                time=200, initial_size=100, growth_rate=-0.01, population_id=1
+                time=200, initial_size=100, growth_rate=-0.01, population=1
             ),
             msprime.PopulationParametersChange(
-                time=300, initial_size=1000, growth_rate=0.01, population_id=0
+                time=300, initial_size=1000, growth_rate=0.01, population=0
             ),
             msprime.PopulationParametersChange(
-                time=400, initial_size=1000, growth_rate=0.01, population_id=1
+                time=400, initial_size=1000, growth_rate=0.01, population=1
             ),
             msprime.PopulationParametersChange(
-                time=500, initial_size=100, growth_rate=0, population_id=0
+                time=500, initial_size=100, growth_rate=0, population=0
             ),
             msprime.PopulationParametersChange(
-                time=600, initial_size=100, growth_rate=0, population_id=1
+                time=600, initial_size=100, growth_rate=0, population=1
             ),
             msprime.MigrationRateChange(time=700, rate=0.1, matrix_index=(0, 1)),
         ]
         self._run(
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
+            samples=demography.sample(5, 5),
+            demography=demography,
             num_replicates=400,
-            recombination_map=recombination_map,
+            recombination_rate=1e-8,
+            sequence_length=5e7,
         )
 
 
@@ -1603,8 +1577,7 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
             default_growth_rate = 0.01
             growth_rates = [default_growth_rate] * num_pops
 
-        population_configurations = []
-        demographic_events = []
+        demography = msprime.Demography.simple_model(initial_sizes, growth_rates)
 
         for i in range(num_pops):
             if initial_sizes[i] > 100:
@@ -1613,28 +1586,15 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
                 de = msprime.PopulationParametersChange(
                     t_100, growth_rate=0, population=i
                 )
-                demographic_events.append(de)
+                demography.events.append(de)
 
-                growth_rate = growth_rates[i]
             else:
                 # Enforce zero growth rate for small populations
                 logging.warning(
                     f"Warning - setting growth rate to zero for small \
                     population of size {initial_sizes[i]}",
                 )
-                growth_rate = 0
-
-            population_configurations.append(
-                msprime.PopulationConfiguration(
-                    sample_size=sample_sizes[i],
-                    initial_size=initial_sizes[i],
-                    growth_rate=growth_rate,
-                )
-            )
-
-        recombination_map = msprime.RecombinationMap(
-            positions=[0, num_loci], rates=[recombination_rate, 0]
-        )
+                demography.populations[i].growth_rate = 0
 
         if migration_matrix is None:
             default_mig_rate = 0.05
@@ -1644,12 +1604,14 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
                 row[i] = 0
                 migration_matrix.append(row)
 
+        demography.migration_matrix = migration_matrix
+
         super()._run(
-            population_configurations=population_configurations,
-            migration_matrix=migration_matrix,
+            samples=demography.sample(*sample_sizes),
+            demography=demography,
             num_replicates=num_replicates,
-            demographic_events=demographic_events,
-            recombination_map=recombination_map,
+            sequence_length=num_loci,
+            recombination_rate=recombination_rate,
             discrete_genome=True,
         )
 
@@ -1716,12 +1678,11 @@ class DtwfVsSlim(Test):
     """
 
     def run_dtwf_slim_comparison(self, slim_args, **kwargs):
-
         df = pd.DataFrame()
 
         kwargs["model"] = "dtwf"
         logging.debug(f"Running: {kwargs}")
-        replicates = msprime.simulate(**kwargs)
+        replicates = msprime.sim_ancestry(**kwargs)
         data = collections.defaultdict(list)
         for ts in replicates:
             t_mrca = np.zeros(ts.num_trees)
@@ -1730,6 +1691,7 @@ class DtwfVsSlim(Test):
             data["tmrca_mean"].append(np.mean(t_mrca))
             data["num_trees"].append(ts.num_trees)
             data["model"].append("dtwf")
+            msp_num_samples = ts.num_samples
 
         slim_script = self.output_dir / "slim_script.txt"
         outfile = self.output_dir / "slim.trees"
@@ -1741,6 +1703,7 @@ class DtwfVsSlim(Test):
             subprocess.check_output(cmd)
             ts = tskit.load(outfile)
             ts = subsample_simplify_slim_treesequence(ts, slim_args["sample_sizes"])
+            assert ts.num_samples == msp_num_samples
 
             t_mrca = np.zeros(ts.num_trees)
             for tree in ts.trees():
@@ -1790,24 +1753,19 @@ class DtwfVsSlim(Test):
         """
         assert len(sample_sizes) == len(initial_sizes)
 
+        sample_sizes = np.array(sample_sizes)
         num_pops = len(sample_sizes)
         slim_args = {}
 
         if num_replicates is None:
             num_replicates = 200
 
-        slim_args["sample_sizes"] = sample_sizes
+        # These are *diploid* samples in msprime
+        slim_args["sample_sizes"] = 2 * sample_sizes
+        demography = msprime.Demography.simple_model(initial_sizes)
 
-        population_configurations = []
         slim_args["POP_STRS"] = ""
-        for i in range(len(sample_sizes)):
-            population_configurations.append(
-                msprime.PopulationConfiguration(
-                    sample_size=sample_sizes[i],
-                    initial_size=initial_sizes[i],
-                    growth_rate=0,
-                )
-            )
+        for i in range(num_pops):
             slim_args["POP_STRS"] += "sim.addSubpop('p{i}', {N});\n".format(
                 i=i, N=initial_sizes[i]
             )
@@ -1819,6 +1777,7 @@ class DtwfVsSlim(Test):
                 row = [default_mig_rate] * num_pops
                 row[i] = 0
                 migration_matrix.append(row)
+        demography.migration_matrix = migration_matrix
 
         # SLiM rates are 'immigration' forwards in time, which matches
         # DTWF backwards-time 'emmigration'
@@ -1838,24 +1797,24 @@ class DtwfVsSlim(Test):
                 )
                 slim_args["POP_STRS"] += mig_str
 
-        num_loci = int(num_loci)
-        recombination_map = msprime.RecombinationMap(
-            positions=[0, num_loci], rates=[recombination_rate, 0]
-        )
         slim_args["RHO"] = recombination_rate
-        slim_args["NUM_LOCI"] = num_loci
+        slim_args["NUM_LOCI"] = int(num_loci)
 
         self.run_dtwf_slim_comparison(
             slim_args,
-            population_configurations=population_configurations,
-            migration_matrix=migration_matrix,
+            samples=demography.sample(*sample_sizes),
+            demography=demography,
             num_replicates=num_replicates,
-            recombination_map=recombination_map,
+            sequence_length=num_loci,
+            recombination_rate=recombination_rate,
             discrete_genome=True,
         )
 
     def test_dtwf_vs_slim_single_locus(self):
-        self._run([10], [10], 1, 0)
+        self._run([100], [10], 1, 0)
+
+    def test_dtwf_vs_slim_single_locus_2_pops(self):
+        self._run([20, 20], [5, 5], 1, 0)
 
     def test_dtwf_vs_slim_short_region(self):
         self._run([100], [10], 1e7, 1e-8, num_replicates=200)
@@ -1871,30 +1830,24 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
 
     def _run(self, num_populations=1, num_replicates=200, num_demographic_events=0):
 
+        # Make this deterministic
+        np.random.seed(42)
+        random.seed(42)
+
         N = num_populations
         num_loci = np.random.randint(1e5, 1e7)
-        rho = 1e-8
-        recombination_map = msprime.RecombinationMap(
-            positions=[0, num_loci], rates=[rho, 0]
-        )
-
-        population_configurations = []
-        for _ in range(N):
-            population_configurations.append(
-                msprime.PopulationConfiguration(
-                    sample_size=np.random.randint(2, 10), initial_size=int(1000 / N)
-                )
-            )
+        num_samples = np.random.randint(2, 10, size=num_populations)
+        demography = msprime.Demography.simple_model([1000 / N] * num_populations)
 
         migration_matrix = []
         for i in range(N):
             migration_matrix.append(
                 [random.uniform(0.05, 0.25) * (j != i) for j in range(N)]
             )
+        demography.migration_matrix = migration_matrix
 
         # Add demographic events and some migration rate changes
         t_max = 1000
-        demographic_events = []
         times = sorted(np.random.randint(300, t_max, size=num_demographic_events))
         for t in times:
             initial_size = np.random.randint(500, 1000)
@@ -1902,7 +1855,7 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
             # growth_rates in the DTWF which don't result in N going to 0.
             growth_rate = 0
             pop_id = np.random.randint(N)
-            demographic_events.append(
+            demography.events.append(
                 msprime.PopulationParametersChange(
                     time=t,
                     initial_size=initial_size,
@@ -1916,29 +1869,29 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
                 index = tuple(
                     np.random.choice(range(num_populations), size=2, replace=False)
                 )
-                demographic_events.append(
+                demography.events.append(
                     msprime.MigrationRateChange(time=t, rate=rate, matrix_index=index)
                 )
 
         # Collect all pops together to control coalescence times for DTWF
         for i in range(1, N):
-            demographic_events.append(
+            demography.events.append(
                 msprime.MassMigration(
                     time=t_max, source=i, destination=0, proportion=1.0
                 )
             )
 
-        demographic_events.append(
+        demography.events.append(
             msprime.PopulationParametersChange(
                 time=t_max, initial_size=100, growth_rate=0, population_id=0
             )
         )
         super()._run(
-            migration_matrix=migration_matrix,
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
+            samples=demography.sample(*num_samples),
+            demography=demography,
             num_replicates=num_replicates,
-            recombination_map=recombination_map,
+            sequence_length=num_loci,
+            recombination_rate=1e-8,
             discrete_genome=True,
         )
 
@@ -1964,25 +1917,16 @@ class RecombinationBreakpointTest(Test):
     def verify_breakpoint_distribution(
         self, name, sample_size, Ne, r, L, ploidy, model, growth_rate=0
     ):
-        sim = msprime.ancestry._parse_simulate(
-            Ne=Ne,
-            recombination_rate=r,
-            length=L,
-            population_configurations=[
-                msprime.PopulationConfiguration(
-                    sample_size=sample_size, initial_size=Ne, growth_rate=growth_rate
-                )
-            ],
+        ts = msprime.sim_ancestry(
+            samples=sample_size,
+            demography=msprime.Demography.simple_model(Ne, growth_rate),
             ploidy=ploidy,
+            sequence_length=L,
+            recombination_rate=r,
             model=model,
         )
-        ts = next(sim.run_replicates(1))
-        empirical = []
-        for tree in ts.trees():
-            area = tree.total_branch_length * tree.span
-            empirical.append(area)
-
-        scipy.stats.probplot(empirical, dist=scipy.stats.expon(Ne * r), plot=pyplot)
+        area = [tree.total_branch_length * tree.span for tree in ts.trees()]
+        scipy.stats.probplot(area, dist=scipy.stats.expon(Ne * r), plot=pyplot)
         path = self.output_dir / f"{name}_growth={growth_rate}_ploidy={ploidy}.png"
         logging.debug(f"Writing {path}")
         pyplot.savefig(path)
@@ -2255,8 +2199,19 @@ class KnownSFS(Test):
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
         tot_bl_sum = [0]
-        sim = msprime.ancestry._parse_simulate(sample_size, ploidy=ploidy, model=model)
-        replicates = sim.run_replicates(num_replicates)
+        # Because we have input cases which sample_size % ploidy != 0 we can't
+        # use the standard approach for specifying the samples. Sidestep this
+        # by setting the initial state directly.
+        tables = tskit.TableCollection(1)
+        tables.populations.add_row()
+        for _ in range(sample_size):
+            tables.nodes.add_row(tskit.NODE_IS_SAMPLE, time=0, population=0)
+        replicates = msprime.sim_ancestry(
+            initial_state=tables,
+            ploidy=ploidy,
+            model=model,
+            num_replicates=num_replicates,
+        )
         for ts in replicates:
             for tree in ts.trees():
                 tot_bl = 0.0
@@ -2303,7 +2258,7 @@ class DiracSFS(KnownSFS):
         and compares to the expected SFS.
         """
         logging.debug(f"running SFS for {sample_size} {psi} {c}")
-        model = (msprime.DiracCoalescent(psi=psi, c=c),)
+        model = msprime.DiracCoalescent(psi=psi, c=c)
         name = f"n={sample_size}_psi={psi}_c={c}_ploidy={ploidy}"
         self.compare_sfs(sample_size, ploidy, model, num_replicates, sfs, name)
 
@@ -2615,7 +2570,7 @@ class BetaSFS(KnownSFS):
         Runs simulations of the xi beta model and compares to the expected SFS.
         """
         logging.debug(f"running Beta SFS for {sample_size} {alpha}")
-        model = (msprime.BetaCoalescent(alpha=alpha),)
+        model = msprime.BetaCoalescent(alpha=alpha)
         name = f"n={sample_size}_alpha={alpha}_ploidy={ploidy}"
         self.compare_sfs(sample_size, ploidy, model, num_replicates, sfs, name)
 
@@ -2777,16 +2732,17 @@ class XiGrowth(Test):
     def compare_tmrca(
         self, pop_size, growth_rate, model, num_replicates, a, b, ploidy, name
     ):
-        sim = msprime.ancestry._parse_simulate(
-            population_configurations=[
-                msprime.PopulationConfiguration(
-                    sample_size=2, initial_size=pop_size, growth_rate=growth_rate
-                )
-            ],
+        demography = msprime.Demography.simple_model(
+            initial_size=pop_size, growth_rate=growth_rate
+        )
+
+        replicates = msprime.ancestry.sim_ancestry(
+            2,
+            demography=demography,
             model=model,
             ploidy=ploidy,
+            num_replicates=num_replicates,
         )
-        replicates = sim.run_replicates(num_replicates)
         T1 = np.array([ts.first().tmrca(0, 1) for ts in replicates])
         sm.graphics.qqplot(
             T1, dist=scipy.stats.gompertz, distargs=(a / b,), scale=1 / b, line="45"
@@ -2875,11 +2831,11 @@ class ContinuousVsDiscreteRecombination(Test):
             replicates = kwargs["num_replicates"]
             num_trees = [0 for i in range(replicates)]
             breakpoints = [0 for i in range(replicates)]
-            for i, ts in enumerate(msprime.simulate(**kwargs)):
+            for i, ts in enumerate(msprime.sim_ancestry(**kwargs)):
                 num_trees[i] = ts.num_trees
                 breakpoints[i] = list(ts.breakpoints())
         else:
-            ts = msprime.simulate(**kwargs)
+            ts = msprime.sim_ancestry(**kwargs)
             num_trees = [ts.num_trees]
             breakpoints = [list(ts.breakpoints)]
 
@@ -2890,18 +2846,21 @@ class ContinuousVsDiscreteRecombination(Test):
     def run_cont_discrete_comparison(self, model, recomb_map):
         sample_size = 10
         num_replicates = 400
+        N = 100
         df_discrete = self._run_msprime_coalescent_stats(
             num_replicates=num_replicates,
-            sample_size=sample_size,
+            samples=sample_size,
+            population_size=N,
             model=model,
-            recombination_map=recomb_map,
+            recombination_rate=recomb_map,
             discrete_genome=True,
         )
         df_cont = self._run_msprime_coalescent_stats(
             num_replicates=num_replicates,
-            sample_size=sample_size,
+            samples=sample_size,
             model=model,
-            recombination_map=recomb_map,
+            population_size=N,
+            recombination_rate=recomb_map,
             discrete_genome=False,
         )
         self._plot_stats(
@@ -2915,7 +2874,7 @@ class ContinuousVsDiscreteRecombination(Test):
 
 class UniformRecombination(ContinuousVsDiscreteRecombination):
     def _run(self, model):
-        recomb_map = msprime.RecombinationMap.uniform_map(2000000, 1e-5)
+        recomb_map = msprime.RateMap.uniform(2000000, 1e-6)
         self.run_cont_discrete_comparison(model, recomb_map)
 
     def test_hudson_cont_discrete_uniform(self):
@@ -2927,11 +2886,11 @@ class UniformRecombination(ContinuousVsDiscreteRecombination):
 
 class VariableRecombination(ContinuousVsDiscreteRecombination):
     def _run(self, model):
-        r = 1e-5
+        r = 1e-6
         positions = [0, 10000, 50000, 150000, 200000]
-        rates = [0.0, r, 5 * r, r / 2, 0.0]
+        rates = [0.0, r, 5 * r, r / 2]
 
-        recomb_map = msprime.RecombinationMap(positions, rates)
+        recomb_map = msprime.RateMap(positions, rates)
 
         self.run_cont_discrete_comparison(model, recomb_map)
 
@@ -3116,7 +3075,7 @@ class HudsonAnalytical(Test):
         analytical predictions.
         """
         R = 1000
-        sample_size = 2
+        sample_size = 1  # 2 diploids
         gc_length_rate_ratio = np.array([0.05, 0.5, 5.0])
         gc_length = np.array([100, 50, 20])
         gc_rate = 0.25 / (gc_length_rate_ratio * gc_length)
@@ -3136,12 +3095,11 @@ class HudsonAnalytical(Test):
             same_root_count_first = np.zeros(seq_length)
             same_root_count_mid = np.zeros(seq_length)
             same_root_count_last = np.zeros(seq_length)
-            replicates = msprime.simulate(
-                sample_size=sample_size,
-                length=seq_length,
+            replicates = msprime.sim_ancestry(
+                samples=sample_size,
+                sequence_length=seq_length,
                 gene_conversion_rate=gc_rate[k],
                 gene_conversion_tract_length=gc_length[k],
-                discrete_genome=True,
                 num_replicates=R,
             )
             for ts in replicates:
@@ -3797,19 +3755,18 @@ class SimulateFrom(Test):
 
     def test_simulate_from_multi_locus(self):
         num_replicates = 1000
-        n = 100
+        n = 50
 
         for m in [10, 50, 100, 1000]:
             logging.debug(f"running for m = {m}")
             T1 = np.zeros(num_replicates)
             num_trees1 = np.zeros(num_replicates)
             recomb_rate = 1 / m
-            reps = msprime.simulate(
+            reps = msprime.sim_ancestry(
                 n,
                 recombination_rate=recomb_rate,
-                length=m,
+                sequence_length=m,
                 num_replicates=num_replicates,
-                discrete_genome=True,
             )
             for j, ts in enumerate(reps):
                 T1[j] = np.max(ts.tables.nodes.time)
@@ -3818,20 +3775,17 @@ class SimulateFrom(Test):
             for t in [0.5, 1, 1.5, 5]:
                 T2 = np.zeros(num_replicates)
                 num_trees2 = np.zeros(num_replicates)
-                reps = msprime.simulate(
+                reps = msprime.sim_ancestry(
                     n,
                     num_replicates=num_replicates,
                     recombination_rate=recomb_rate,
-                    length=m,
+                    sequence_length=m,
                     end_time=t,
-                    discrete_genome=True,
                 )
                 for j, ts in enumerate(reps):
-                    final_ts = msprime.simulate(
-                        from_ts=ts,
+                    final_ts = msprime.sim_ancestry(
+                        initial_state=ts,
                         recombination_rate=recomb_rate,
-                        length=m,
-                        discrete_genome=True,
                         start_time=np.max(ts.tables.nodes.time),
                     )
                     final_ts = final_ts.simplify()

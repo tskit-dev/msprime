@@ -2576,6 +2576,22 @@ class HistoricalSamplingMixin:
     Tests to make sure historical sampling works correctly.
     """
 
+    def test_two_diploid_samples(self):
+        N = 100
+        sampling_time = 1.01 * N
+        ts = msprime.sim_ancestry(
+            population_size=N,
+            ploidy=2,
+            model=self.model,
+            samples=[msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
+            random_seed=3,
+        )
+        for t in ts.trees():
+            assert t.get_time(0) == 0
+            assert t.get_time(1) == 0
+            assert t.get_time(2) == sampling_time
+            assert t.get_time(3) == sampling_time
+
     def test_two_samples(self):
         N = 100
         sampling_time = 1.01 * N
@@ -2583,12 +2599,10 @@ class HistoricalSamplingMixin:
             ts = msprime.simulate(
                 Ne=N,
                 model=self.model,
-                recombination_map=msprime.RecombinationMap.uniform_map(
-                    length=1, rate=recombination_rate
-                ),
+                recombination_rate=recombination_rate,
+                length=1,
                 samples=[msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
                 random_seed=3,
-                discrete_genome=True,
             )
             for t in ts.trees():
                 assert t.get_time(0) == 0
@@ -3742,6 +3756,49 @@ class TestDemographyObject:
         model.populations[1].name = "B"
         with pytest.raises(ValueError):
             model.sample(0, A=1)
+
+    def test_simple_model(self):
+        demography = msprime.Demography.simple_model(2)
+        assert demography.num_populations == 1
+        assert demography.populations[0].initial_size == 2
+        assert demography.populations[0].growth_rate == 0
+
+        demography = msprime.Demography.simple_model(2, 3)
+        assert demography.num_populations == 1
+        assert demography.populations[0].initial_size == 2
+        assert demography.populations[0].growth_rate == 3
+
+        demography = msprime.Demography.simple_model([3])
+        assert demography.num_populations == 1
+        assert demography.populations[0].initial_size == 3
+        assert demography.populations[0].growth_rate == 0
+
+        demography = msprime.Demography.simple_model([3], [4])
+        assert demography.num_populations == 1
+        assert demography.populations[0].initial_size == 3
+        assert demography.populations[0].growth_rate == 4
+
+        demography = msprime.Demography.simple_model([5, 6])
+        assert demography.num_populations == 2
+        assert demography.populations[0].initial_size == 5
+        assert demography.populations[0].growth_rate == 0
+        assert demography.populations[1].initial_size == 6
+        assert demography.populations[1].growth_rate == 0
+
+        demography = msprime.Demography.simple_model([5, 6], [7, 8])
+        assert demography.num_populations == 2
+        assert demography.populations[0].initial_size == 5
+        assert demography.populations[0].growth_rate == 7
+        assert demography.populations[1].initial_size == 6
+        assert demography.populations[1].growth_rate == 8
+
+    def test_simple_model_errors(self):
+        with pytest.raises(ValueError):
+            msprime.Demography.simple_model([[], []])
+        with pytest.raises(ValueError):
+            msprime.Demography.simple_model([1], [[], []])
+        with pytest.raises(ValueError):
+            msprime.Demography.simple_model([1], [])
 
 
 class TestDemographyFromOldStyle:

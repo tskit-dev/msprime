@@ -302,7 +302,7 @@ class TestRejectedCommonAncestorEventCounts:
         sim = ancestry._parse_simulate(
             sample_size=10,
             recombination_rate=10,
-            random_generator=_msprime.RandomGenerator(2),
+            random_seed=32,
         )
         sim.run()
         assert sim.num_common_ancestor_events > threshold
@@ -313,7 +313,7 @@ class TestRejectedCommonAncestorEventCounts:
             sample_size=10,
             recombination_rate=10,
             model="hudson",
-            random_generator=_msprime.RandomGenerator(2),
+            random_seed=32,
         )
         sim2.run()
         assert sim2.num_common_ancestor_events == sim.num_common_ancestor_events
@@ -496,13 +496,13 @@ class TestDtwf:
         assert ts.num_trees == 1
 
     def test_single_recombination(self):
-        recombination_map = msprime.RecombinationMap([0, 100, 101, 200], [0, 1, 0, 0])
-        ts = msprime.simulate(
+        recombination_map = msprime.RateMap([0, 100, 101, 200], [0, 1, 0])
+        ts = msprime.sim_ancestry(
             10,
-            Ne=10,
+            population_size=10,
             model="dtwf",
             random_seed=2,
-            recombination_map=recombination_map,
+            recombination_rate=recombination_map,
             discrete_genome=True,
         )
         assert ts.num_trees == 2
