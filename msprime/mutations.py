@@ -21,7 +21,6 @@ Module responsible for generating mutations on a given tree sequence.
 """
 import inspect
 import sys
-import warnings
 
 import numpy as np
 import tskit
@@ -1022,15 +1021,8 @@ NUCLEOTIDES = 1
 
 class InfiniteSites(MatrixMutationModel):
     # This mutation model is defined for backwards compatability, and is a remnant
-    # of an earlier design. The class should be formally deprecated and removed at
-    # some point.
+    # of an earlier design. We keep it to
     def __init__(self, alphabet=BINARY):
-        warnings.warn(
-            "The mutation model class InfiniteSites was deprecated in 1.0."
-            " Use an appropriate alternative such as InfiniteAllelesMutationModel,"
-            " BinaryMutationModel or JC69MutationModel",
-            FutureWarning,
-        )
         self.alphabet = alphabet
         models = {BINARY: BinaryMutationModel(), NUCLEOTIDES: JC69MutationModel()}
         if alphabet not in models:
@@ -1090,11 +1082,8 @@ def mutate(
     then one is generated automatically.
 
     If the ``model`` parameter is specified, this determines the model under
-    which mutations are generated. Currently only the :class:`.InfiniteSites`
-    mutation model is supported. This parameter is useful if you wish to obtain
-    sequences with letters from the nucleotide alphabet rather than the default
-    0/1 states. By default mutations from the infinite sites model with a binary
-    alphabet are generated.
+    which mutations are generated. By default mutations from the
+    infinite sites model with a binary alphabet are generated.
 
     By default, sites and mutations in the parameter tree sequence are
     discarded. If the ``keep`` parameter is true, however, *additional*
@@ -1127,10 +1116,14 @@ def mutate(
         mutations on the input tree sequence.
     :rtype: :class:`tskit.TreeSequence`
     """
-    # TODO check the model input here so we can support the pre-1.0 code
-    # and convert into a new model.
-    # Note: for provenance this means that we will convert the arguments
-    # into the corresponding sim_mutations call. This seems fine.
+    # It's probably an error if someone tries to use a new-style model
+    # with the old mutate() function, and so we raise an error if anyone
+    # does, to help them move to the new interface.
+    if model is not None and not isinstance(model, InfiniteSites):
+        raise ValueError(
+            "This is a legacy interface which does not support general "
+            "mutation models. Please use the sim_ancestry function instead."
+        )
     return sim_mutations(
         tree_sequence,
         rate=rate,
@@ -1157,27 +1150,29 @@ def sim_mutations(
 ):
     """
     Simulates mutations on the specified ancestry and returns the resulting
-    :class:`tskit.TreeSequence`. Mutations are generated at the specified rate in
-    measured generations. Mutations are generated under the infinite sites
-    model, and so the rate of new mutations is per unit of sequence length per
-    generation.
+    :class:`tskit.TreeSequence`. Mutations are generated at the specified rate
+    per unit of sequence_length, per generation. By default, mutations are
+    generated at discrete sites along the genome and multiple mutations
+    can occur at any given site. A continuous sequence, infinite-sites model
+    can also be specified by setting the ``discrete_genome`` parameter to
+    False.
+
+    If the ``model`` parameter is specified, this determines the model under
+    which mutations are generated. The default mutation model is
+    :class:`msprime.BinaryMutationModel` a simple binary model with alleles
+    0 and 1. See :ref:`sec_api_mutation_models` for details of available models.
 
     If a random seed is specified, this is used to seed the random number
     generator. If the same seed is specified and all other parameters are equal
     then the same mutations will be generated. If no random seed is specified
     then one is generated automatically.
 
-    If the ``model`` parameter is specified, this determines the model under
-    which mutations are generated. The default mutation model is
-    :class:`msprime.BinaryMutationModel` a simple binary model with alleles
-    0 and 1. See :ref:`sec_api_mutation_models` for details of avaliable models.
-
     By default, sites and mutations in the input tree sequence are
     discarded. If the ``keep`` parameter is true, however, *additional*
     mutations are simulated. Under the infinite sites mutation model, all new
     mutations generated will occur at distinct positions from each other and
     from any existing mutations (by rejection sampling). Furthermore, if sites
-    are discrete_genome, trying to simulate mutations at time periods that are older
+    are discrete, trying to simulate mutations at time periods that are older
     than mutations kept from the original tree sequence is an error, because
     this would create an extra transition (from the new allele to the old
     one below it) that may be incorrect according to the model of mutation.
@@ -1214,8 +1209,7 @@ def sim_mutations(
     :param float end_time: The maximum time ago at which a mutation can occur
         (Default: no restriction).
     :param bool discrete_genome: Whether to generate mutations at only integer positions
-        along the genome.  Default is False, which produces infinite-sites
-        mutations at floating-point positions.
+        along the genome (Default=True).
     :param bool kept_mutations_before_end_time: Whether to allow mutations to be added
         ancestrally to existing (kept) mutations. This flag has no effect
         if either keep or discrete_genome are False.
@@ -1243,28 +1237,15 @@ def sim_mutations(
     if not isinstance(rate_map, intervals.RateMap):
         raise TypeError("rate must be a float or a RateMap")
 
-    if start_time is None:
-        start_time = -sys.float_info.max
-    else:
-        start_time = float(start_time)
-    if end_time is None:
-        end_time = sys.float_info.max
-    else:
-        end_time = float(end_time)
+    start_time = -sys.float_info.max if start_time is None else float(start_time)
+    end_time = sys.float_info.max if end_time is None else float(end_time)
     if start_time > end_time:
         raise ValueError("start_time must be <= end_time")
-    if keep is None:
-        keep = False
-    else:
-        keep = bool(keep)
-    if discrete_genome is None:
-        discrete_genome = True
-    else:
-        discrete_genome = bool(discrete_genome)
-    if kept_mutations_before_end_time is None:
-        kept_mutations_before_end_time = False
-    else:
-        kept_mutations_before_end_time = bool(kept_mutations_before_end_time)
+    discrete_genome = core._parse_flag(discrete_genome, default=True)
+    keep = core._parse_flag(keep, default=False)
+    kept_mutations_before_end_time = core._parse_flag(
+        kept_mutations_before_end_time, default=False
+    )
 
     model = mutation_model_factory(model)
 

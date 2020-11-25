@@ -816,25 +816,6 @@ def _parse_samples(samples, ploidy, tables):
         )
 
 
-def _parse_flag(value, *, default):
-    """
-    Parses a boolean flag, which can be either True, False, or None.
-    If the input value is None, return the default. Otherwise,
-    check that the input value is a bool.
-
-    Note that we do *not* cast to a bool as this would accept
-    truthy values like the empty list, etc. In this case None
-    would be converted to False, potentially conflicting with
-    the default value.
-    """
-    assert isinstance(default, bool)
-    if value is None:
-        return default
-    if not isinstance(value, bool):
-        raise TypeError("Boolean flag must be True, False, or None (the default value)")
-    return value
-
-
 def _parse_sim_ancestry(
     samples=None,
     *,
@@ -865,9 +846,9 @@ def _parse_sim_ancestry(
     # Simple defaults.
     start_time = 0 if start_time is None else float(start_time)
     end_time = sys.float_info.max if end_time is None else float(end_time)
-    discrete_genome = _parse_flag(discrete_genome, default=True)
-    record_full_arg = _parse_flag(record_full_arg, default=False)
-    record_migrations = _parse_flag(record_migrations, default=False)
+    discrete_genome = core._parse_flag(discrete_genome, default=True)
+    record_full_arg = core._parse_flag(record_full_arg, default=False)
+    record_migrations = core._parse_flag(record_migrations, default=False)
 
     if initial_state is not None:
         if isinstance(initial_state, tskit.TreeSequence):

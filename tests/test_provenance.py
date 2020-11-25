@@ -358,7 +358,6 @@ class TestBuildObjects:
             random_seed=np.array([1])[0],
             start_time=np.array([0])[0],
             end_time=np.array([100][0]),
-            keep=np.array([False][0]),
         )
         decoded = self.decode(ts.provenance(1).record)
         assert decoded.schema_version == "1.0.0"
@@ -367,7 +366,6 @@ class TestBuildObjects:
         assert decoded.parameters.rate == 2
         assert decoded.parameters.start_time == 0
         assert decoded.parameters.end_time == 100
-        assert not decoded.parameters.keep
 
 
 class TestParseProvenance:
