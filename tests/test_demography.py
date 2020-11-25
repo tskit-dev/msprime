@@ -3759,6 +3759,23 @@ class TestDemographyObject:
         with pytest.raises(ValueError):
             model.sample(0, A=1)
 
+    def test_population_name(self):
+
+        demography = msprime.Demography.simple_model(1)
+        assert demography.populations[0].name == "pop_0"
+
+        demography.populations[0].name = None
+        with pytest.raises(ValueError) as excinfo:
+            demography.validate()
+        assert "A population name must be set." in str(excinfo.value)
+
+        for bad_identifier in ["", " x", "x y"]:
+            demography.populations[0].name = bad_identifier
+            with pytest.raises(ValueError) as excinfo:
+                demography.validate()
+            msg = "A population name must be a valid Python identifier"
+            assert msg in str(excinfo.value)
+
     def test_simple_model(self):
         demography = msprime.Demography.simple_model(2)
         assert demography.num_populations == 1

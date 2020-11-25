@@ -227,6 +227,8 @@ class Demography:
         else:
             for pop_config in population_configurations:
                 demography.populations.append(Population.from_old_style(pop_config))
+        for j, population in enumerate(demography.populations):
+            population.name = f"pop_{j}"
         if migration_matrix is None:
             migration_matrix = np.zeros(
                 (demography.num_populations, demography.num_populations)
@@ -237,7 +239,6 @@ class Demography:
         return demography
 
     # TODO give this a better name and document it.
-    # What about "isolated" as it gives an easy way of describing isolated pops?
     def simple_model(initial_size=1, growth_rate=None):
         """
         Returns a simple single-population model.
@@ -326,9 +327,7 @@ class Demography:
 
         model = Demography()
         model.populations = [
-            # TODO add names/metadata here.
-            Population(initial_size=Ne)
-            for _ in range(num_populations)
+            Population(initial_size=Ne, name=f"pop_{j}") for j in range(num_populations)
         ]
         model.migration_matrix = np.zeros((num_populations, num_populations))
         if num_populations > 1:
@@ -498,6 +497,10 @@ class Population:
         # TODO more checks, and put in population ID/names
         if self.initial_size < 0:
             raise ValueError("Negative population size")
+        if self.name is None:
+            raise ValueError("A population name must be set.")
+        if not self.name.isidentifier():
+            raise ValueError("A population name must be a valid Python identifier")
 
 
 # This was lifted out of older code as-is. No point in updating it
