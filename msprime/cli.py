@@ -1018,7 +1018,7 @@ def run_simulate(args):
 
 def run_mutate(args):
     tree_sequence = tskit.load(args.tree_sequence)
-    tree_sequence = msprime.mutate(
+    tree_sequence = msprime.sim_mutations(
         tree_sequence=tree_sequence,
         rate=args.mutation_rate,
         random_seed=args.random_seed,

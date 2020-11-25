@@ -308,14 +308,14 @@ class TestBuildObjects:
             " record_provenance=False" in caplog.text
         )
 
-    def test_mutate(self):
+    def test_sim_mutations(self):
         ts = msprime.simulate(5, random_seed=1)
-        ts = msprime.mutate(
+        ts = msprime.sim_mutations(
             ts, rate=2, random_seed=1, start_time=0, end_time=100, keep=False
         )
         decoded = self.decode(ts.provenance(1).record)
         assert decoded.schema_version == "1.0.0"
-        assert decoded.parameters.command == "mutate"
+        assert decoded.parameters.command == "sim_mutations"
         assert decoded.parameters.random_seed == 1
         assert decoded.parameters.rate == 2
         assert decoded.parameters.start_time == 0
@@ -328,10 +328,10 @@ class TestBuildObjects:
 
     def test_mutate_model(self):
         ts = msprime.simulate(5, random_seed=1)
-        ts = msprime.mutate(ts, model="jc69")
+        ts = msprime.sim_mutations(ts, model="jc69")
         decoded = self.decode(ts.provenance(1).record)
         assert decoded.schema_version == "1.0.0"
-        assert decoded.parameters.command == "mutate"
+        assert decoded.parameters.command == "sim_mutations"
         assert (
             decoded.parameters.model["__class__"]
             == "msprime.mutations.JC69MutationModel"
@@ -340,10 +340,10 @@ class TestBuildObjects:
     def test_mutate_map(self):
         ts = msprime.simulate(5, random_seed=1)
         rate_map = msprime.RateMap(position=[0, 0.5, 1], rate=[0, 1])
-        ts = msprime.mutate(ts, rate=rate_map)
+        ts = msprime.sim_mutations(ts, rate=rate_map)
         decoded = self.decode(ts.provenance(1).record)
         assert decoded.schema_version == "1.0.0"
-        assert decoded.parameters.command == "mutate"
+        assert decoded.parameters.command == "sim_mutations"
         assert decoded.parameters.rate["__class__"] == "msprime.intervals.RateMap"
         assert decoded.parameters.rate["position"]["__ndarray__"] == list(
             rate_map.position
@@ -352,7 +352,7 @@ class TestBuildObjects:
 
     def test_mutate_numpy(self):
         ts = msprime.simulate(5, random_seed=1)
-        ts = msprime.mutate(
+        ts = msprime.sim_mutations(
             ts,
             rate=np.array([2])[0],
             random_seed=np.array([1])[0],
@@ -362,7 +362,7 @@ class TestBuildObjects:
         )
         decoded = self.decode(ts.provenance(1).record)
         assert decoded.schema_version == "1.0.0"
-        assert decoded.parameters.command == "mutate"
+        assert decoded.parameters.command == "sim_mutations"
         assert decoded.parameters.random_seed == 1
         assert decoded.parameters.rate == 2
         assert decoded.parameters.start_time == 0
@@ -385,10 +385,10 @@ class TestParseProvenance:
             )
 
     def test_current_ts(self):
-        ts1 = msprime.simulate(5, random_seed=1)
-        ts2 = msprime.mutate(ts1)
+        ts1 = msprime.sim_ancestry(5, random_seed=1)
+        ts2 = msprime.sim_mutations(ts1)
         command, prov = msprime.provenance.parse_provenance(ts2.provenance(1), ts1)
-        assert command == "mutate"
+        assert command == "sim_mutations"
         assert prov["tree_sequence"] == ts1
 
 
