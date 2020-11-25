@@ -3025,9 +3025,9 @@ class TestEventsBetweenGenerationsWrightFisher:
             assert node.time == int(node.time)
 
 
-class TestPopulationMetadata:
+class TestOldStylePopulationMetadata:
     """
-    Tests for the metadata behaviour on populations.
+    Tests for the metadata behaviour on PopulationConfiguration objects.
     """
 
     def test_simple_case(self):
@@ -3038,17 +3038,36 @@ class TestPopulationMetadata:
         )
         assert ts.num_populations == 1
         pop = ts.population(0)
-        assert md == json.loads(pop.metadata.decode())
+        assert md == json.loads(pop.metadata)
+
+    def test_old_style_metadata_via_sim_ancestry(self):
+        md = {"x": "y"}
+        demography = msprime.Demography.from_old_style(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=1, metadata=md)
+            ]
+        )
+        ts = msprime.sim_ancestry(2, demography=demography, random_seed=1)
+        assert ts.num_populations == 1
+        pop = ts.population(0)
+        expected = {
+            "name": "pop_0",
+            "description": None,
+            **md,
+        }
+        assert expected == pop.metadata
 
     def test_default(self):
         ts = msprime.simulate(
             population_configurations=[msprime.PopulationConfiguration(2)],
             random_seed=1,
         )
+
         assert ts.num_populations == 1
         pop = ts.population(0)
-        assert b"" == pop.metadata
+        assert pop.metadata == b""
 
+        # An explicit value of None also gives us an empty user metadata dict.
         ts = msprime.simulate(
             population_configurations=[
                 msprime.PopulationConfiguration(2, metadata=None)
@@ -3057,14 +3076,13 @@ class TestPopulationMetadata:
         )
         assert ts.num_populations == 1
         pop = ts.population(0)
-        assert b"" == pop.metadata
+        assert pop.metadata == b""
 
     def test_errors(self):
         for bad_metadata in [b"asdf", Exception]:
-            popconf = msprime.PopulationConfiguration(2, metadata=bad_metadata)
-            pop = msprime.Population.from_old_style(popconf)
+            pop_conf = msprime.PopulationConfiguration(2, metadata=bad_metadata)
             with pytest.raises(TypeError):
-                pop.temporary_hack_for_encoding_old_style_metadata()
+                msprime.simulate(population_configurations=[pop_conf])
 
     def test_multi_population(self):
         for num_pops in range(1, 10):
@@ -3078,7 +3096,68 @@ class TestPopulationMetadata:
             assert ts.num_populations == num_pops
             for j in range(num_pops):
                 pop = ts.population(j)
-                assert pop_configs[j].metadata == json.loads(pop.metadata.decode())
+                assert pop_configs[j].metadata == json.loads(pop.metadata)
+
+
+class TestPopulationMetadata:
+    """
+    Tests for the metadata behaviour on Population objects.
+    """
+
+    def test_defaults(self):
+        demography = msprime.Demography.simple_model(10)
+        ts = msprime.sim_ancestry(2, demography=demography, random_seed=2)
+        assert ts.num_populations == 1
+        metadata = ts.population(0).metadata
+        assert metadata["name"] == "pop_0"
+        assert metadata["description"] is None
+        assert len(metadata) == 2
+
+    def test_extra_metadata(self):
+        demography = msprime.Demography.simple_model(10)
+        md = {"x": "y", "z": "z", "abc": 1234}
+        demography.populations[0].extra_metadata = md
+        ts = msprime.sim_ancestry(2, demography=demography, random_seed=2)
+        assert ts.num_populations == 1
+        metadata = ts.population(0).metadata
+        assert metadata["name"] == "pop_0"
+        assert metadata["description"] is None
+        assert len(metadata) == len(md) + 2
+        for key, value in md.items():
+            assert metadata[key] == value
+
+    def test_extra_metadata_overwrite_standard(self):
+        demography = msprime.Demography.simple_model(10)
+        md = {"x": 1234, "name": "abc"}
+        demography.populations[0].extra_metadata = md
+        with pytest.raises(ValueError) as record:
+            msprime.sim_ancestry(2, demography=demography, random_seed=2)
+        assert str(record.value).startswith(
+            "Cannot set standard metadata key(s) ['name']"
+        )
+
+        md = {"x": 1234, "name": "abc", "description": "sdf"}
+        demography.populations[0].extra_metadata = md
+        with pytest.raises(ValueError) as record:
+            msprime.sim_ancestry(2, demography=demography, random_seed=2)
+        assert str(record.value).startswith(
+            "Cannot set standard metadata key(s) ['description', 'name']"
+        )
+
+    def test_island_model(self):
+        demography = msprime.Demography.island_model(10, 0)
+        for j, pop in enumerate(demography.populations):
+            pop.extra_metadata = {"x": "y", "z": "z" * j, "abc": 1234}
+            pop.description = f"Island model node {j}"
+        ts = msprime.sim_ancestry(
+            demography.sample(2), demography=demography, random_seed=2
+        )
+        assert ts.num_populations == demography.num_populations
+        for j in range(demography.num_populations):
+            metadata = ts.population(j).metadata
+            assert metadata["name"] == f"pop_{j}"
+            assert metadata["description"] == demography.populations[j].description
+            assert len(metadata) == 2 + len(pop.extra_metadata)
 
 
 class TestCensusEvent:

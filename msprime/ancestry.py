@@ -22,6 +22,7 @@ Module responsible for defining and running ancestry simulations.
 import collections.abc
 import copy
 import inspect
+import json
 import logging
 import math
 import struct
@@ -235,6 +236,7 @@ def _demography_factory(
 
 
 def _build_initial_tables(*, sequence_length, samples, ploidy, demography, pedigree):
+    # NOTE: this is only used in the simulate() codepath.
     tables = tskit.TableCollection(sequence_length)
 
     if pedigree is None:
@@ -261,9 +263,14 @@ def _build_initial_tables(*, sequence_length, samples, ploidy, demography, pedig
             for _ in range(ploidy):
                 tables.nodes.add_row(node_flags, time, population=0, individual=ind_id)
 
+    # This is for the simulate() code path so we don't add metadata schemas
+    # and insert the user metadata in directly as encoded JSON, as before.
     for population in demography.populations:
-        md = population.temporary_hack_for_encoding_old_style_metadata()
-        tables.populations.add_row(metadata=md)
+        encoded_metadata = b""
+        if population.extra_metadata is not None:
+            encoded_metadata = json.dumps(population.extra_metadata).encode()
+        tables.populations.add_row(encoded_metadata)
+
     return tables
 
 

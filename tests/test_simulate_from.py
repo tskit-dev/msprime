@@ -609,6 +609,13 @@ class BaseEquivalanceMixin:
         )
         tables1 = ts1.dump_tables()
         tables2 = ts2.dump_tables()
+        assert len(tables1.populations)
+        assert len(tables2.populations)
+        # TODO use updated tskit APIs for comparisons.
+        tables1.populations.clear()
+        tables2.populations.clear()
+        tables1.populations.metadata_schema = ""
+        tables2.populations.metadata_schema = ""
         tables1.provenances.clear()
         tables2.provenances.clear()
         assert tables1 == tables2
@@ -676,6 +683,13 @@ class BaseEquivalanceMixin:
         )
         tables1 = ts1.dump_tables()
         tables2 = ts2.dump_tables()
+        assert len(tables1.populations)
+        assert len(tables2.populations)
+        # TODO use updated tskit APIs for comparisons.
+        tables1.populations.clear()
+        tables2.populations.clear()
+        tables1.populations.metadata_schema = ""
+        tables2.populations.metadata_schema = ""
         tables1.provenances.clear()
         tables2.provenances.clear()
         assert tables1 == tables2
