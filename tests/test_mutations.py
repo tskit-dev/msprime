@@ -410,7 +410,7 @@ class TestFiniteSites(TestMutate):
         assert all(site.ancestral_state == "0" for site in ts.sites())
         assert all(mutation.derived_state in binary for mutation in ts.mutations())
 
-    def verify_mutations(self, ts, discrete, check_probs=False, model=None):
+    def verify_mutations(self, ts, discrete_genome, check_probs=False, model=None):
         # Verify that mutation.parents are correct
         # and that mutations actually involve a change of state
         # that, if (not keep), has positive probability under the model
@@ -418,7 +418,7 @@ class TestFiniteSites(TestMutate):
             assert model is not None
             alleles = model.alleles
         for site in ts.sites():
-            if not discrete:
+            if not discrete_genome:
                 assert len(site.mutations) == 1
             t = ts.at(site.position)
             parents = {}
@@ -445,13 +445,25 @@ class TestFiniteSites(TestMutate):
                 # do this last since parents should be listed before children
                 parents[mut.node] = mut
 
-    def mutate(self, ts, model, rate=1.0, keep=False, discrete=False, seed=42):
+    def mutate(self, ts, model, rate=1.0, keep=False, discrete_genome=False, seed=42):
         lib_ts = msprime.mutate(
-            ts, rate=rate, random_seed=seed, model=model, keep=keep, discrete=discrete
+            ts,
+            rate=rate,
+            random_seed=seed,
+            model=model,
+            keep=keep,
+            discrete_genome=discrete_genome,
         )
-        self.verify_mutations(lib_ts, discrete, check_probs=not keep, model=model)
+        self.verify_mutations(
+            lib_ts, discrete_genome, check_probs=not keep, model=model
+        )
         py_ts = py_mutate(
-            ts, rate=rate, random_seed=seed, model=model, keep=keep, discrete=discrete
+            ts,
+            rate=rate,
+            random_seed=seed,
+            model=model,
+            keep=keep,
+            discrete_genome=discrete_genome,
         )
         lib_tables = lib_ts.dump_tables()
         lib_tables.provenances.clear()
@@ -465,7 +477,7 @@ class TestFiniteSites(TestMutate):
         ts,
         rate=1.0,
         keep=False,
-        discrete=False,
+        discrete_genome=False,
         transition_matrix=None,
         root_distribution=None,
     ):
@@ -477,14 +489,16 @@ class TestFiniteSites(TestMutate):
         model = msprime.MatrixMutationModel(
             alleles, root_distribution, transition_matrix
         )
-        return self.mutate(ts, model, rate=rate, keep=keep, discrete=discrete)
+        return self.mutate(
+            ts, model, rate=rate, keep=keep, discrete_genome=discrete_genome
+        )
 
     def mutate_nucleotides(
         self,
         ts,
         rate=1.0,
         keep=False,
-        discrete=False,
+        discrete_genome=False,
         transition_matrix=None,
         root_distribution=None,
     ):
@@ -496,7 +510,9 @@ class TestFiniteSites(TestMutate):
         model = msprime.MatrixMutationModel(
             alleles, root_distribution, transition_matrix
         )
-        return self.mutate(ts, model, rate=rate, keep=keep, discrete=discrete)
+        return self.mutate(
+            ts, model, rate=rate, keep=keep, discrete_genome=discrete_genome
+        )
 
     def test_alleles_binary(self):
         ts = msprime.simulate(10, random_seed=1)
@@ -525,7 +541,7 @@ class TestFiniteSites(TestMutate):
     def test_bad_mutate_order(self):
         ts = msprime.simulate(10, random_seed=1, recombination_rate=1, length=10)
         mutated = msprime.mutate(
-            ts, 3, random_seed=5, start_time=0.0, end_time=0.5, discrete=True
+            ts, 3, random_seed=5, start_time=0.0, end_time=0.5, discrete_genome=True
         )
         with pytest.raises(_msprime.LibraryError):
             msprime.mutate(
@@ -534,12 +550,12 @@ class TestFiniteSites(TestMutate):
                 random_seed=6,
                 start_time=0.5,
                 end_time=1.0,
-                discrete=True,
+                discrete_genome=True,
                 keep=True,
             )
 
     def test_one_way_mutation(self):
-        for discrete in (True, False):
+        for discrete_genome in (True, False):
             ts = msprime.simulate(10, random_seed=1, recombination_rate=1.0, length=10)
             mut_matrix = [[0.0, 1.0], [0.0, 1.0]]
             mutated = self.mutate_binary(
@@ -547,10 +563,10 @@ class TestFiniteSites(TestMutate):
                 rate=1.0,
                 transition_matrix=mut_matrix,
                 root_distribution=[1.0, 0.0],
-                discrete=discrete,
+                discrete_genome=discrete_genome,
             )
             assert mutated.num_sites > 0
-            if discrete:
+            if discrete_genome:
                 assert max([len(s.mutations) for s in mutated.sites()]) > 1
             for site in mutated.sites():
                 assert site.ancestral_state == "0"
@@ -560,7 +576,7 @@ class TestFiniteSites(TestMutate):
 
     def test_flip_flop_mutation(self):
         nucleotides = "ACGT"
-        for discrete in (True, False):
+        for discrete_genome in (True, False):
             ts = msprime.simulate(10, random_seed=1, recombination_rate=1.0, length=10)
             mut_matrix = [
                 [0.0, 0.0, 0.5, 0.5],
@@ -569,10 +585,13 @@ class TestFiniteSites(TestMutate):
                 [0.5, 0.5, 0.0, 0.0],
             ]
             mutated = self.mutate_nucleotides(
-                ts, rate=5.0, transition_matrix=mut_matrix, discrete=discrete
+                ts,
+                rate=5.0,
+                transition_matrix=mut_matrix,
+                discrete_genome=discrete_genome,
             )
             assert mutated.num_sites > 0
-            if discrete:
+            if discrete_genome:
                 assert max([len(s.mutations) for s in mutated.sites()]) > 1
             for mut in ts.mutations():
                 assert mut.derived_state in nucleotides
@@ -586,7 +605,7 @@ class TestFiniteSites(TestMutate):
                     assert mut.derived_state in "AC"
 
     def test_do_nothing_mutations(self):
-        for discrete in (True, False):
+        for discrete_genome in (True, False):
             ts = msprime.simulate(10, random_seed=1, length=10)
             mut_matrix = [
                 [1.0, 0.0, 0.0, 0.0],
@@ -595,7 +614,10 @@ class TestFiniteSites(TestMutate):
                 [0.0, 0.0, 0.0, 1.0],
             ]
             mutated = self.mutate_nucleotides(
-                ts, rate=5.0, transition_matrix=mut_matrix, discrete=discrete
+                ts,
+                rate=5.0,
+                transition_matrix=mut_matrix,
+                discrete_genome=discrete_genome,
             )
             assert mutated.num_sites == 0
             t1 = ts.dump_tables()
@@ -607,7 +629,7 @@ class TestFiniteSites(TestMutate):
 
     def test_uniform_mutations(self):
         nucleotides = "ACGT"
-        for discrete in (True, False):
+        for discrete_genome in (True, False):
             ts = msprime.simulate(10, random_seed=1, recombination_rate=1.0, length=10)
             mut_matrix = [
                 [0.1, 0.3, 0.3, 0.3],
@@ -620,10 +642,10 @@ class TestFiniteSites(TestMutate):
                 rate=20.0,
                 transition_matrix=mut_matrix,
                 root_distribution=[1.0, 0.0, 0.0, 0.0],
-                discrete=discrete,
+                discrete_genome=discrete_genome,
             )
             assert mutated.num_sites > 0
-            if discrete:
+            if discrete_genome:
                 assert max([len(s.mutations) for s in mutated.sites()]) > 1
             num_nucs = {a: 0 for a in nucleotides}
             for site in mutated.sites():
@@ -637,7 +659,7 @@ class TestFiniteSites(TestMutate):
 
     def test_circular_mutations(self):
         nucleotides = "ACGT"
-        for discrete in (True, False):
+        for discrete_genome in (True, False):
             ts = msprime.simulate(10, random_seed=1, recombination_rate=1.0, length=10)
             mut_matrix = [
                 [0.0, 1.0, 0.0, 0.0],
@@ -650,10 +672,10 @@ class TestFiniteSites(TestMutate):
                 rate=2.0,
                 transition_matrix=mut_matrix,
                 root_distribution=[1.0, 0.0, 0.0, 0.0],
-                discrete=discrete,
+                discrete_genome=discrete_genome,
             )
             assert mutated.num_sites > 0
-            if discrete:
+            if discrete_genome:
                 assert max([len(s.mutations) for s in mutated.sites()]) > 1
             for site in mutated.sites():
                 assert site.ancestral_state == "A"
@@ -669,7 +691,7 @@ class TestFiniteSites(TestMutate):
 
     def test_integer_sites(self):
         ts = msprime.simulate(10, random_seed=5, length=10, recombination_rate=10.0)
-        mutated = self.mutate_binary(ts, rate=5.0, discrete=True)
+        mutated = self.mutate_binary(ts, rate=5.0, discrete_genome=True)
         assert mutated.site(0).position == 0.0
         for site in mutated.sites():
             assert site.position == np.floor(site.position)
@@ -953,15 +975,17 @@ class TestKeep:
 
     def test_keep_mutations_before_end_time(self):
         ts = msprime.simulate(12, recombination_rate=3, random_seed=3, length=10)
-        ts_mut = msprime.mutate(ts, rate=1, random_seed=1, discrete=True)
+        ts_mut = msprime.mutate(ts, rate=1, random_seed=1, discrete_genome=True)
         assert ts_mut.num_sites > 0
         with pytest.raises(_msprime.LibraryError):
-            msprime.mutate(ts_mut, rate=1, random_seed=1, keep=True, discrete=True)
+            msprime.mutate(
+                ts_mut, rate=1, random_seed=1, keep=True, discrete_genome=True
+            )
         ts_2mut = msprime.mutate(
             ts_mut,
             rate=10,
             random_seed=3,
-            discrete=True,
+            discrete_genome=True,
             kept_mutations_before_end_time=True,
         )
         assert ts_2mut.num_mutations > ts_mut.num_mutations
@@ -971,10 +995,20 @@ class TestKeep:
         # kept mutations, it shouldn't error out
         ts = msprime.simulate(12, recombination_rate=3, random_seed=3, length=10)
         ts_mut = msprime.mutate(
-            ts, rate=1, random_seed=1, discrete=True, start_time=1.0, end_time=2.0
+            ts,
+            rate=1,
+            random_seed=1,
+            discrete_genome=True,
+            start_time=1.0,
+            end_time=2.0,
         )
         ts_2mut = msprime.mutate(
-            ts_mut, rate=1, random_seed=3, discrete=True, start_time=0.0, end_time=1.0
+            ts_mut,
+            rate=1,
+            random_seed=3,
+            discrete_genome=True,
+            start_time=0.0,
+            end_time=1.0,
         )
         assert ts_2mut.num_mutations > ts_mut.num_mutations
 
@@ -1013,16 +1047,22 @@ class TestMutationStatistics(StatisticalTestMixin):
             rates = (15, 20)
         else:
             rates = (1, 10)
-        for discrete in (True, False):
+        for discrete_genome in (True, False):
             for rate in rates:
                 ts = msprime.mutate(
-                    ots, random_seed=6, rate=rate, model=model, discrete=discrete
+                    ots,
+                    random_seed=6,
+                    rate=rate,
+                    model=model,
+                    discrete_genome=discrete_genome,
                 )
-                self.verify_model_ts_general(ts, model, discrete, verify_roots, rate)
-                if (not discrete) or state_independent:
+                self.verify_model_ts_general(
+                    ts, model, discrete_genome, verify_roots, rate
+                )
+                if (not discrete_genome) or state_independent:
                     self.verify_mutation_times_ts(ts)
 
-    def verify_model_ts(self, ts, model, discrete, verify_roots):
+    def verify_model_ts(self, ts, model, discrete_genome, verify_roots):
         alleles = model.alleles
         num_alleles = len(alleles)
         roots = np.zeros((num_alleles,))
@@ -1046,7 +1086,9 @@ class TestMutationStatistics(StatisticalTestMixin):
             p /= sum(p)
             self.chisquare(row, sum(row) * p)
 
-    def verify_model_ts_general(self, ts, model, discrete, verify_roots, mutation_rate):
+    def verify_model_ts_general(
+        self, ts, model, discrete_genome, verify_roots, mutation_rate
+    ):
         alleles = model.alleles
         num_alleles = len(alleles)
         roots = np.zeros((num_alleles,))
@@ -1077,7 +1119,7 @@ class TestMutationStatistics(StatisticalTestMixin):
                 model.transition_matrix
             )
             for t in ts.trees():
-                if discrete:
+                if discrete_genome:
                     t_span = np.ceil(t.interval[1] - np.ceil(t.interval[0]))
                     expected_ancestral_states += (
                         model.root_distribution
@@ -1107,20 +1149,24 @@ class TestMutationStatistics(StatisticalTestMixin):
         assert len(set(np.diag(model.transition_matrix))) == 1
         np.random.seed(23)
         ots = msprime.simulate(10, random_seed=5, recombination_rate=0.05, length=20)
-        for discrete in (False, True):
+        for discrete_genome in (False, True):
             for rate in (1, 10):
                 ts = msprime.mutate(
-                    ots, random_seed=6, rate=rate, model=model, discrete=discrete
+                    ots,
+                    random_seed=6,
+                    rate=rate,
+                    model=model,
+                    discrete_genome=discrete_genome,
                 )
-                self.verify_mutation_rates_ts(ts, model, rate, discrete)
+                self.verify_mutation_rates_ts(ts, model, rate, discrete_genome)
 
-    def verify_mutation_rates_ts(self, ts, model, rate, discrete):
+    def verify_mutation_rates_ts(self, ts, model, rate, discrete_genome):
         mut_rate = rate * (1 - model.transition_matrix[0, 0])
         lower_pvals = np.zeros(ts.num_trees)
         upper_pvals = np.zeros(ts.num_trees)
         diffs = np.zeros(ts.num_trees)
         for j, t in enumerate(ts.trees()):
-            if discrete:
+            if discrete_genome:
                 span = np.ceil(t.interval[1]) - np.ceil(t.interval[0])
             else:
                 span = t.span
@@ -1267,7 +1313,7 @@ class TestSLiMMutationModel:
 
         model = msprime.SLiMMutationModel(type=mutation_type, next_id=mutation_id)
         mts1 = msprime.mutate(
-            ts, rate=rate, random_seed=random_seed, model=model, discrete=True
+            ts, rate=rate, random_seed=random_seed, model=model, discrete_genome=True
         )
         assert mts1.num_mutations == model.next_id
 
@@ -1275,7 +1321,7 @@ class TestSLiMMutationModel:
             mutation_type=mutation_type, next_id=mutation_id
         )
         mts2 = py_mutate(
-            ts, rate=rate, random_seed=random_seed, model=model, discrete=True
+            ts, rate=rate, random_seed=random_seed, model=model, discrete_genome=True
         )
 
         t1 = mts1.dump_tables()
@@ -1365,11 +1411,11 @@ class TestInfiniteAllelesMutationModel:
 
         model = msprime.InfiniteAllelesMutationModel(start_allele=start_allele)
         mts1 = msprime.mutate(
-            ts, rate=rate, random_seed=random_seed, model=model, discrete=True
+            ts, rate=rate, random_seed=random_seed, model=model, discrete_genome=True
         )
         model = PythonInfiniteAllelesMutationModel(start_allele=start_allele)
         mts2 = py_mutate(
-            ts, rate=rate, random_seed=random_seed, model=model, discrete=True
+            ts, rate=rate, random_seed=random_seed, model=model, discrete_genome=True
         )
 
         t1 = mts1.dump_tables()
@@ -1420,7 +1466,9 @@ class TestInfiniteAllelesMutationModel:
         ts = msprime.simulate(4, length=2, random_seed=5)
         start_allele = 2 ** 64 - 1
         model = msprime.InfiniteAllelesMutationModel(start_allele=start_allele)
-        mts = msprime.mutate(ts, rate=1, random_seed=32, model=model, discrete=True)
+        mts = msprime.mutate(
+            ts, rate=1, random_seed=32, model=model, discrete_genome=True
+        )
         assert mts.num_sites > 0
         assert mts.num_mutations > 0
         allele = start_allele
@@ -1439,7 +1487,9 @@ class TestInfiniteAllelesMutationModel:
     def test_non_discrete_sites(self):
         ts = msprime.simulate(4, length=2, random_seed=5)
         model = msprime.InfiniteAllelesMutationModel()
-        mts = msprime.mutate(ts, rate=1, random_seed=32, model=model, discrete=False)
+        mts = msprime.mutate(
+            ts, rate=1, random_seed=32, model=model, discrete_genome=False
+        )
         assert mts.num_sites > 0
         assert mts.num_mutations == mts.num_sites
         self.validate(mts)
@@ -1461,7 +1511,7 @@ class TestInfiniteAllelesMutationModel:
             start_time=2,
             random_seed=1,
             keep=True,
-            discrete=True,
+            discrete_genome=True,
             kept_mutations_before_end_time=True,
         )
         self.validate_unique_alleles(ts)
@@ -1477,16 +1527,18 @@ class TestPythonMutationGenerator:
         rates = [0, 0.01, 0.2]
         discretes = [True, False]
         keeps = [True, False]
-        for rate, keep, discrete in itertools.product(rates, keeps, discretes):
+        for rate, keep, discrete_genome in itertools.product(rates, keeps, discretes):
             ts1 = msprime.mutate(
                 ts,
                 rate=rate,
                 keep=keep,
-                discrete=discrete,
+                discrete_genome=discrete_genome,
                 kept_mutations_before_end_time=True,
                 **kwargs,
             )
-            ts2 = py_mutate(ts, rate=rate, keep=keep, discrete=discrete, **kwargs)
+            ts2 = py_mutate(
+                ts, rate=rate, keep=keep, discrete_genome=discrete_genome, **kwargs
+            )
             tables1 = ts1.dump_tables()
             tables2 = ts2.dump_tables()
             tables1.provenances.clear()
@@ -1527,7 +1579,7 @@ def py_mutate(
     random_seed=None,
     model=None,
     keep=False,
-    discrete=False,
+    discrete_genome=False,
     sequential_only=True,
 ):
     """
@@ -1552,7 +1604,7 @@ def py_mutate(
         tables,
         random_seed,
         keep=keep,
-        discrete=discrete,
+        discrete_genome=discrete_genome,
         sequential_only=sequential_only,
     )
 
@@ -1784,7 +1836,7 @@ class PythonMutationGenerator:
                 assert sid == site_id
                 site_id += 1
 
-    def place_mutations(self, tables, discrete=False):
+    def place_mutations(self, tables, discrete_genome=False):
         # Insert a sentinel into the map for convenience.
         map_position = np.hstack([self.rate_map.position, [tables.sequence_length]])
         node_times = tables.nodes.time
@@ -1799,8 +1851,8 @@ class PythonMutationGenerator:
             right = 0
             while right != edge.right:
                 right = min(edge.right, map_position[index + 1])
-                site_left = np.ceil(left) if discrete else left
-                site_right = np.ceil(right) if discrete else right
+                site_left = np.ceil(left) if discrete_genome else left
+                site_right = np.ceil(right) if discrete_genome else right
                 assert site_left <= site_right
                 assert map_position[index] <= left
                 assert right <= map_position[index + 1]
@@ -1810,7 +1862,7 @@ class PythonMutationGenerator:
                 mu = rate * (site_right - site_left) * branch_length
                 for _ in range(self.rng.poisson(mu)[0]):
                     position = self.rng.flat(site_left, site_right)[0]
-                    if discrete:
+                    if discrete_genome:
                         position = np.floor(position)
                     assert edge.left <= position
                     assert position < edge.right
@@ -1885,24 +1937,26 @@ class PythonMutationGenerator:
                 mutation_id_offset += num_mutations
                 j += 1
 
-    def generate(self, tables, seed, keep=False, discrete=False, sequential_only=True):
+    def generate(
+        self, tables, seed, keep=False, discrete_genome=False, sequential_only=True
+    ):
         self.rng = _msprime.RandomGenerator(seed)
         if keep:
             self.initialise_sites(tables)
         tables.sites.clear()
         tables.mutations.clear()
-        self.place_mutations(tables, discrete=discrete)
+        self.place_mutations(tables, discrete_genome=discrete_genome)
         self.apply_mutations(tables, sequential_only=sequential_only)
         self.populate_tables(tables)
-        self.record_provenance(tables, seed, keep, discrete)
+        self.record_provenance(tables, seed, keep, discrete_genome)
         return tables.tree_sequence()
 
-    def record_provenance(self, tables, seed, keep, discrete):
+    def record_provenance(self, tables, seed, keep, discrete_genome):
         parameters = {
             "command": "mutate",
             "random_seed": seed,
             "keep": keep,
-            "discrete": discrete,
+            "discrete_genome": discrete_genome,
             "rate_map": None,  # not working??
             "model": None,  # TODO
         }

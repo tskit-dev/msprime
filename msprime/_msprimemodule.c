@@ -2810,11 +2810,11 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
     PyArrayObject *rate_array = NULL;
     size_t size;
     mutation_model_t *model = NULL;
-    int discrete_sites = false;
+    int discrete_genome = false;
     int kept_mutations_before_end_time = false;
     static char *kwlist[] = {
         "tables", "random_generator", "rate_map", "model",
-        "discrete_sites", "keep", "kept_mutations_before_end_time",
+        "discrete_genome", "keep", "kept_mutations_before_end_time",
         "start_time", "end_time", NULL};
     mutgen_t mutgen;
     int err;
@@ -2824,7 +2824,7 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
             &LightweightTableCollectionType, &tables,
             &RandomGeneratorType, &random_generator,
             &PyDict_Type, &rate_map,
-            &py_model, &discrete_sites, &keep, &kept_mutations_before_end_time,
+            &py_model, &discrete_genome, &keep, &kept_mutations_before_end_time,
             &start_time, &end_time)) {
         goto out;
     }
@@ -2860,7 +2860,7 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
         handle_library_error(err);
         goto out;
     }
-    if (discrete_sites) {
+    if (discrete_genome) {
         flags |= MSP_DISCRETE_SITES;
     }
     if (keep) {

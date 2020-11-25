@@ -4307,7 +4307,7 @@ class SeqGenTest(MutationTest):
                 ts,
                 rate=mutation_rate,
                 model=model_dict[model]["model_id"],
-                discrete=True,
+                discrete_genome=True,
             )
             num_sites = ts_mutated.num_sites
             t = ts_mutated.first()
@@ -4503,7 +4503,7 @@ class PyvolveTest(MutationTest):
                 ts,
                 rate=mutation_rate,
                 model=model_dict[model]["model_id"],
-                discrete=True,
+                discrete_genome=True,
             )
 
             num_sites = ts_mutated.num_sites

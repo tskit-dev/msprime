@@ -1058,7 +1058,7 @@ def _simple_mutate(
         random_generator,
         rate_map.asdict(),
         model=BinaryMutationModel(),
-        discrete_sites=False,
+        discrete_genome=False,
     )
 
 
@@ -1070,7 +1070,7 @@ def mutate(
     keep=False,
     start_time=None,
     end_time=None,
-    discrete=False,
+    discrete_genome=False,
     kept_mutations_before_end_time=False,
 ):
     """
@@ -1095,7 +1095,7 @@ def mutate(
     mutations are simulated. Under the infinite sites mutation model, all new
     mutations generated will occur at distinct positions from each other and
     from any existing mutations (by rejection sampling). Furthermore, if sites
-    are discrete, trying to simulate mutations at time periods that are older
+    are discrete_genome, trying to simulate mutations at time periods that are older
     than mutations kept from the original tree sequence is an error, because
     this would create an extra transition (from the new allele to the old
     one below it) that may be incorrect according to the model of mutation.
@@ -1131,12 +1131,12 @@ def mutate(
         occur. (Default: no restriction.)
     :param float end_time: The maximum time ago at which a mutation can occur
         (Default: no restriction).
-    :param bool discrete: Whether to generate mutations at only integer positions
+    :param bool discrete_genome: Whether to generate mutations at only integer positions
         along the genome.  Default is False, which produces infinite-sites
         mutations at floating-point positions.
     :param bool kept_mutations_before_end_time: Whether to allow mutations to be added
         ancestrally to existing (kept) mutations. This flag has no effect
-        if either keep or discrete are False.
+        if either keep or discrete_genome are False.
     :return: The :class:`tskit.TreeSequence` object resulting from overlaying
         mutations on the input tree sequence.
     :rtype: :class:`tskit.TreeSequence`
@@ -1172,7 +1172,7 @@ def mutate(
     if start_time > end_time:
         raise ValueError("start_time must be <= end_time")
     keep = bool(keep)
-    discrete = bool(discrete)
+    discrete_genome = bool(discrete_genome)
     kept_mutations_before_end_time = bool(kept_mutations_before_end_time)
 
     model = mutation_model_factory(model)
@@ -1195,7 +1195,7 @@ def mutate(
         random_generator=rng,
         rate_map=rate_map.asdict(),
         model=model,
-        discrete_sites=discrete,
+        discrete_genome=discrete_genome,
         keep=keep,
         kept_mutations_before_end_time=kept_mutations_before_end_time,
         start_time=start_time,

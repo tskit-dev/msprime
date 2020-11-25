@@ -1025,7 +1025,7 @@ def run_mutate(args):
         keep=args.keep,
         start_time=args.start_time,
         end_time=args.end_time,
-        discrete=args.discrete,
+        discrete_genome=args.discrete_genome,
     )
     tree_sequence.dump(args.output_tree_sequence)
 
@@ -1063,7 +1063,7 @@ def add_mutate_subcommand(subparsers):
         help="Keep mutations in input tree sequence",
     )
     parser.add_argument(
-        "--discrete",
+        "--discrete-genome",
         action="store_true",
         default=False,
         help="Generate mutations at only integer positions along the genome. ",
