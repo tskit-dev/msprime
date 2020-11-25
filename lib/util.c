@@ -263,7 +263,8 @@ msp_strerror_internal(int err)
             ret = "Only isolated sample nodes are supported as ancient samples";
             break;
         case MSP_ERR_UNKNOWN_TIME_NOT_SUPPORTED:
-            ret = "Kept mutations must have known mutation times.";
+            ret = "Kept mutations must have known mutation times (which can be added "
+                  "using compute_mutation_times).";
             break;
         case MSP_ERR_DTWF_DIPLOID_ONLY:
             ret = "The DTWF model only supports ploidy = 2";
