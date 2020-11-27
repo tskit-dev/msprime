@@ -25,6 +25,7 @@ import os
 import random
 import signal
 import sys
+import warnings
 
 import tskit
 
@@ -984,6 +985,12 @@ def mspms_main(arg_list=None):
 
 
 def run_simulate(args):
+
+    if args.compress:
+        warnings.warn(
+            "The --compress option is no longer supported and does nothing. "
+            "Please use the tszip utility to compress the output instead."
+        )
     tree_sequence = msprime.simulate(
         sample_size=int(args.sample_size),
         Ne=args.effective_population_size,
@@ -992,7 +999,7 @@ def run_simulate(args):
         mutation_rate=args.mutation_rate,
         random_seed=args.random_seed,
     )
-    tree_sequence.dump(args.tree_sequence, zlib_compression=args.compress)
+    tree_sequence.dump(args.tree_sequence)
 
 
 def run_mutate(args):
@@ -1090,7 +1097,10 @@ def add_simulate_subcommand(subparsers) -> None:
     )
     add_random_seed_argument(parser)
     parser.add_argument(
-        "--compress", "-z", action="store_true", help="Enable zlib compression"
+        "--compress",
+        "-z",
+        action="store_true",
+        help="Deprecated option with no effect; please use the tszip utility instead.",
     )
     parser.set_defaults(runner=run_simulate)
 
