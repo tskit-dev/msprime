@@ -478,7 +478,7 @@ test_single_tree_mutgen_discrete_sites(void)
     }
     ret = tsk_table_collection_check_integrity(&tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    tsk_table_collection_clear(&tables);
+    tsk_table_collection_clear(&tables, 0);
 
     /* now, keep: the single tree also has a mutation at position 0.1 */
     insert_single_tree(&tables, ALPHABET_NUCLEOTIDE);

@@ -147,7 +147,7 @@ setup(
     },
     include_package_data=True,
     # NOTE: make sure this is the 'attrs' package, not 'attr'!
-    install_requires=[numpy_ver, "attrs>=19.1.0", "newick", "tskit>=0.3"],
+    install_requires=[numpy_ver, "attrs>=19.1.0", "newick", "tskit>=0.3.3"],
     ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms"],
     license="GNU GPLv3+",

@@ -1265,14 +1265,23 @@ class TestMspSimulateOutput(unittest.TestCase):
 
     def test_simulate_short_args(self):
         cmd = "simulate"
-        stdout, stdearr = capture_output(
+        stdout, stderr = capture_output(
             cli.msp_main,
             [cmd, "100", self._tree_sequence, "-L", "1e2", "-r", "5", "-u", "2"],
         )
         tree_sequence = tskit.load(self._tree_sequence)
+        assert len(stderr) == 0
+        assert len(stdout) == 0
         assert tree_sequence.get_sample_size() == 100
         assert tree_sequence.get_sequence_length() == 100
         assert tree_sequence.get_num_mutations() > 0
+
+    def test_compress_warns(self):
+        cmd = "simulate"
+        with pytest.warns(UserWarning):
+            capture_output(cli.msp_main, [cmd, "10", self._tree_sequence, "--compress"])
+        tree_sequence = tskit.load(self._tree_sequence)
+        assert tree_sequence.get_sample_size() == 10
 
 
 class TestMspConversionOutput(unittest.TestCase):

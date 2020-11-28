@@ -2769,7 +2769,7 @@ test_simulate_from_incompatible(void)
     msp_free(&msp);
     tsk_edge_table_clear(&from_tables.edges);
 
-    tsk_table_collection_clear(&from_tables);
+    tsk_table_collection_clear(&from_tables, 0);
     from_tables.sequence_length = 0.0;
     ret = msp_alloc(&msp, &from_tables, rng);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SEQUENCE_LENGTH);
