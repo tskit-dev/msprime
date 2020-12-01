@@ -617,8 +617,9 @@ def create_simulation_runner(parser, arg_list):
         if isinstance(msp_event, msprime.PopulationParametersChange):
             if msp_event.initial_size is not None:
                 msp_event.initial_size /= 2
-    for pop in demography.populations:
+    for j, pop in enumerate(demography.populations):
         pop.initial_size /= 2
+        pop.name = f"pop_{j}"
 
     runner = SimulationRunner(
         num_samples,

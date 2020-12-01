@@ -22,7 +22,6 @@ Module responsible for defining and debugging demographic models.
 import collections
 import inspect
 import io
-import json
 import logging
 import math
 import sys
@@ -30,6 +29,7 @@ import warnings
 
 import attr
 import numpy as np
+import tskit
 
 from . import ancestry
 
@@ -122,9 +122,41 @@ class Demography:
         Insert population definitions for this demography into the specified
         set of tables.
         """
+        metadata_schema = tskit.MetadataSchema(
+            {
+                "codec": "json",
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": ["string", "null"]},
+                },
+                # The name and description fields are always filled out by
+                # msprime, so we tell downstream tools this by making them
+                # "required" by the schema.
+                "required": ["name", "description"],
+                "additionalProperties": True,
+            }
+        )
         assert len(tables.populations) == 0
+        tables.populations.metadata_schema = metadata_schema
         for population in self.populations:
-            tables.populations.add_row(metadata=population.temporary_hack_for_metadata)
+            metadata = {
+                "name": population.name,
+                "description": population.description,
+            }
+            if population.extra_metadata is not None:
+                intersection = set(population.extra_metadata.keys()) & set(
+                    metadata.keys()
+                )
+                if len(intersection) > 0:
+                    printed_list = list(sorted(intersection))
+                    raise ValueError(
+                        f"Cannot set standard metadata key(s) {printed_list} "
+                        "using extra_metadata. Please set using the corresponding "
+                        "property of the Population class."
+                    )
+                metadata.update(population.extra_metadata)
+            tables.populations.add_row(metadata=metadata)
 
     def sample(self, *args, **kwargs):
         """
@@ -227,6 +259,8 @@ class Demography:
         else:
             for pop_config in population_configurations:
                 demography.populations.append(Population.from_old_style(pop_config))
+        for j, population in enumerate(demography.populations):
+            population.name = f"pop_{j}"
         if migration_matrix is None:
             migration_matrix = np.zeros(
                 (demography.num_populations, demography.num_populations)
@@ -237,7 +271,6 @@ class Demography:
         return demography
 
     # TODO give this a better name and document it.
-    # What about "isolated" as it gives an easy way of describing isolated pops?
     def simple_model(initial_size=1, growth_rate=None):
         """
         Returns a simple single-population model.
@@ -326,9 +359,7 @@ class Demography:
 
         model = Demography()
         model.populations = [
-            # TODO add names/metadata here.
-            Population(initial_size=Ne)
-            for _ in range(num_populations)
+            Population(initial_size=Ne, name=f"pop_{j}") for j in range(num_populations)
         ]
         model.migration_matrix = np.zeros((num_populations, num_populations))
         if num_populations > 1:
@@ -466,18 +497,7 @@ class Population:
     growth_rate = attr.ib(default=0.0)
     name = attr.ib(default=None)
     description = attr.ib(default=None)
-
-    # TODO add extra metadata when we bring in tskit 0.3. We should always
-    # have the name and description, and other metadata items can optionally
-    # be declared and added. For now, let's keep the metadata style introduced
-    # in 0.7.4 working.
-    temporary_hack_for_metadata = attr.ib(default=None)
-
-    def temporary_hack_for_encoding_old_style_metadata(self):
-        encoded_metadata = b""
-        if self.temporary_hack_for_metadata is not None:
-            encoded_metadata = json.dumps(self.temporary_hack_for_metadata).encode()
-        return encoded_metadata
+    extra_metadata = attr.ib(factory=dict)
 
     def asdict(self):
         return attr.asdict(self)
@@ -491,13 +511,17 @@ class Population:
         return Population(
             initial_size=pop_config.initial_size,
             growth_rate=pop_config.growth_rate,
-            temporary_hack_for_metadata=pop_config.metadata,
+            extra_metadata=pop_config.metadata,
         )
 
     def validate(self):
-        # TODO more checks, and put in population ID/names
+        # TODO more checks
         if self.initial_size < 0:
             raise ValueError("Negative population size")
+        if self.name is None:
+            raise ValueError("A population name must be set.")
+        if not self.name.isidentifier():
+            raise ValueError("A population name must be a valid Python identifier")
 
 
 # This was lifted out of older code as-is. No point in updating it
