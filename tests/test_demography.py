@@ -1449,6 +1449,7 @@ class TestDemographyTrajectories(unittest.TestCase):
         )
         return ddb
 
+    @pytest.mark.slow
     def test_random_example(self):
         ddb = self.get_random_example()
         num_samples = list(range(ddb.num_populations))
@@ -3401,6 +3402,7 @@ class TestLineageProbabilities:
                     assert np.allclose(P[j, :, :], f(t))
             self.verify_simulation(dd)
 
+    @pytest.mark.slow
     def test_lineage_probabilities_tree(self):
         dem_events = [
             msprime.MassMigration(time=50, source=3, destination=2),

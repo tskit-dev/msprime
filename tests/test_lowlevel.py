@@ -740,11 +740,13 @@ class TestSimulationState(LowLevelTestCase):
             self.verify_completed_simulation(sim)
             sim.reset()
 
+    @pytest.mark.slow
     def test_random_sims(self):
         num_random_sims = 10
         for j in range(num_random_sims):
             self.verify_random_parameters(j)
 
+    @pytest.mark.slow
     def test_small_sims(self):
         self.verify_simulation(3, 1, 0.0)
         self.verify_simulation(3, 100, 0.0)
