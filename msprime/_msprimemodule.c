@@ -1594,6 +1594,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error("node_mapping_block_size", sim_ret);
         goto out;
     }
+    msp_set_discrete_genome(self->sim, discrete_genome);
     if (gene_conversion_rate != 0) {
         sim_ret = msp_set_gene_conversion_rate(self->sim, gene_conversion_rate);
         if (sim_ret != 0) {
@@ -1612,7 +1613,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    msp_set_discrete_genome(self->sim, discrete_genome);
+
 
     sim_ret = msp_set_ploidy(self->sim, ploidy);
     if (sim_ret != 0) {

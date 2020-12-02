@@ -722,23 +722,6 @@ recombination model and number of loci.
 Gene conversion
 +++++++++++++++
 
-.. todo:: This is old text taken from api.rst. Reuse as appropriate.
-    Note that some of this is specific to the Hudson model and so
-    should perhaps be moved in there.
-
-For gene conversion there are two parameters. The gene
-conversion rate determines the initiation
-and is again per unit of sequence length and per generation in ``msprime``.
-Thus, given the per generation gene conversion rate :math:`g`, the overall rate of
-gene conversion initiation between the ends of the sequence is :math:`\rho = 4 N_e g L` in
-coalescent time units. The second parameter :math:`tract\_len` is the expected tract length
-of a gene conversion. At each gene conversion initiation site the tract of the conversion
-extends to the right and the length of the tract is geometric distributed with parameter
-:math:`1/tract\_len`. Currently recombination maps for gene conversion are not supported.
-However, recombination (with or without recombination maps) and a constant gene conversion
-rate along the genome can be combined in ``msprime``.
-
-
 .. jupyter-kernel:: python3
 
 
@@ -748,10 +731,85 @@ rate along the genome can be combined in ``msprime``.
     import msprime
     from IPython.display import SVG
 
-.. todo:: Examples of small simulations using GC on its own
-    and mixed with recombination. Ideally we'd start with an
-    example with one GC event where we could explain what happened.
-    This might be tricky to finesse.
+Gene conversion events are defined by two parameters: the rate at which gene
+conversion events are initiated and the distribution of tract lengths.
+In the default case of discrete genome coordinates, tract lengths are drawn
+from a geometric distribution with mean gene_conversion_tract_length (which
+must be at least 1). Note that if we specify a tract length of 1, then all
+gene conversion tracts will have length exactly 1.
+In the following example one gene conversion event of length 1 has occured.
+
+
+.. jupyter-execute::
+
+    ts = msprime.sim_ancestry(
+        3, gene_conversion_rate=0.02, gene_conversion_tract_length=1,
+        sequence_length=10, random_seed=3)
+    ts.sequence_length
+    SVG(ts.draw_svg())
+
+.. jupyter-execute::
+    :hide-code:
+
+    assert 1 < ts.num_trees < 5
+    
+Continous genomes can also be used. In this case the parameters define
+the rate at which gene conversion events are initiated per unit of sequence
+length and the mean of the exponentially distributed gene conversion tract
+lengths. The following example shows the same simulation as above but for a
+continuous genome of length 1 and scaled gene conversion parameters.
+    
+.. jupyter-execute::
+
+    ts = msprime.sim_ancestry(
+        3, gene_conversion_rate=0.2, gene_conversion_tract_length=0.1,
+        sequence_length=1, random_seed=3, discrete_genome=False)
+    ts.sequence_length
+    SVG(ts.draw_svg())
+
+.. jupyter-execute::
+    :hide-code:
+
+    assert 1 < ts.num_trees < 5
+
+Recombination and gene conversion at constant rates can be simulated alongside.
+In the following example recombinations at site 60 and 97 have occured in addition
+to a gene conversion event covering the tract from site 76 to site 80.
+
+.. jupyter-execute::
+
+    ts = msprime.sim_ancestry(
+        3, sequence_length = 100, recombination_rate=0.003,
+        gene_conversion_rate=0.002, gene_conversion_tract_length=5,
+        random_seed=6)
+    ts.sequence_length
+    SVG(ts.draw_svg())
+
+.. jupyter-execute::
+    :hide-code:
+
+    assert 1 < ts.num_trees < 6
+    
+Variable recombination rates and constant gene conversion rates can be combined.
+In the next example we define a recombination map with a high recombination rate between
+site 10 and site 11 and a constant gene conversion rate with a mean tract length of 3.
+
+.. jupyter-execute::
+
+    rate_map = msprime.RateMap(
+        position=[0, 10, 11, 20],
+        rate=[0.01, 0.5, 0.01])
+    ts = msprime.sim_ancestry(
+        3, recombination_rate=rate_map,
+        gene_conversion_rate=0.01, gene_conversion_tract_length=3,
+        random_seed=8)
+    ts.sequence_length
+    SVG(ts.draw_svg())
+
+.. jupyter-execute::
+    :hide-code:
+
+    assert 1 < ts.num_trees < 5
 
 
 .. _sec_ancestry_multiple_chromosomes:
