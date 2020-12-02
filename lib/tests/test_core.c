@@ -121,6 +121,15 @@ test_probability_list_select(void)
     }
 }
 
+static void
+test_tskit_version(void)
+{
+    /* Make sure we don't have any accidental changes to the tskit submodule. */
+    CU_ASSERT_EQUAL(TSK_VERSION_MAJOR, 0);
+    CU_ASSERT_EQUAL(TSK_VERSION_MINOR, 99);
+    CU_ASSERT_EQUAL(TSK_VERSION_PATCH, 8);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -128,6 +137,7 @@ main(int argc, char **argv)
         { "test_strerror", test_strerror },
         { "test_strerror_tskit", test_strerror_tskit },
         { "test_probability_list_select", test_probability_list_select },
+        { "test_tskit_version", test_tskit_version },
         CU_TEST_INFO_NULL,
     };
 
