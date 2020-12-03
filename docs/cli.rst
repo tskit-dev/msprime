@@ -170,12 +170,12 @@ added. We  currently support:
 
 - Basic functionality (sample size, replicates, tree and haplotype output);
 - Recombination (via the ``-r`` option);
+- Gene-conversion (via the ``-c`` option);
 - Spatial structure with arbitrary migration matrices;
 - Support for :command:`ms` demographic events. (The implementation of the
   ``-es`` option is limited, and has restrictions on how it may be
   combined with other options.)
 
-Gene-conversion is not currently supported, but is planned for a future release.
 
 ++++++++++++++++
 Argument details

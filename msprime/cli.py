@@ -55,7 +55,20 @@ mscompat_recombination_help = (
     "between the ends of the region being simulated; num_loci is the number "
     "of sites between which recombination can occur"
 )
-mscompat_gene_conversion_help = "TODO"
+mscompat_gene_conversion_help = (
+    "Gene conversion at rate gamma where gamma depends on the defined "
+    "recombination rate rho=4*N0*r. If rho > 0, gc_recomb_ratio defines the ratio "
+    "g/r, where r is the probability per generation of crossing-over and g the "
+    "corresponding gene conversion probability. Gene conversions are initiated at "
+    "rate gamma=rho*gc_recomb_ratio = 4*N0*r*gc_recomb_ratio. If rho = 0 the gene "
+    "conversion rate is given by gamma=gc_recomb_ratio=4*N0*c where c is the rate "
+    "of gene conversion initiation between the ends of the simulated region of "
+    "length num_loci. If the recombination rate is not specified, standard "
+    "parameters are used, i.e. rho = 0 and num_loci = 1. The length of the gene "
+    "conversion tracts is geometrically distributed with mean tract_length. "
+    "The mean tract_length needs to be larger than or equal to 1 for discrete "
+    "genomes and larger than 0 for continuous genomes."
+)
 mshotcompat_hotspot_help = (
     "Recombination hotspots defined according to the msHOT format. This is "
     "defined as a sequence: n (start stop scale)+ where n is the number of "
