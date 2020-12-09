@@ -358,7 +358,14 @@ def parse_newick(tree, branch_length_multiplier):
     # Set node times (distances from present).
     for node in root.walk():
         node.time = (max_depth - node.depth) * branch_length_multiplier
-
+        # We don't allow non ultrametric trees for now because it's unclear
+        # how we should deal with taking samples in this case. The code
+        # all works perfectly well other than this, though.
+        if node.is_leaf:
+            if abs(node.time) > 1e-8:  # Arbitrary cutoff
+                raise ValueError(
+                    f"All leaf populations must be at time 0: time={node.time}"
+                )
     return root
 
 
