@@ -9,6 +9,8 @@ following. If you think there is anything missing,
 please open an `issue <http://github.com/tskit-dev/msprime/issues>`_ or
 `pull request <http://github.com/tskit-dev/msprime/pulls>`_ on GitHub!
 
+.. _sec-development-quickstart:
+
 **********
 Quickstart
 **********
@@ -571,12 +573,48 @@ You can use ``docker`` to locally build an image, but it requires root access:
 Documentation
 *************
 
-Documentation is written using `Sphinx <http://www.sphinx-doc.org/en/stable/>`_
-and contained in the ``docs`` directory. It is written in the
-`reStructuredText <http://docutils.sourceforge.net/rst.html>`_ format and
-is deployed automatically to `readthedocs <https://readthedocs.org/>`_. To
-build the documentation locally run ``make`` in the ``docs`` directory.
-This should build the HTML documentation in ``docs/_build/html/``.
+To get started writing documentation for msprime, first follow the :ref:`Quickstart <sec-development-quickstart>`. Once you have created and checked out a "topic branch", you are ready to start editing the documentation.
+
+The msprime documentation consists of three main sections - :ref:`Ancestry <sec_ancestry>`, :ref:`Mutations <sec_mutations>`, and :ref:`Demography <sec_demography>`. Each of these sections should include an introductory paragraph so users understand what that general section is used for. Within each of the main sections, there are subsections for all of the features. Each of the feature subsections should include a quick overview of what it is, definitions, and example usage. The end of each main section should also include the detailed API documentation.
+
+.. code-block::
+
+    - Main section 1
+        Introductory paragraph
+        - subsection 1
+            - quick overview
+            - definitions
+            - example usage
+        - subsection 2
+        - API documentation
+    - Main section 2
+
+
+Documentation is written using `Sphinx <https://www.sphinx-doc.org/en/master/>`_ and contained in the ``docs`` directory. It is written in the `reStructuredText <https://docutils.sourceforge.io/rst.html>`_ format and is automatically deployed to the `documentation website <https://tskit-dev.github.io/msprime-docs>`_.
+
+Code blocks in the documenation are written and executed using `jupyter-sphinx <https://jupyter-sphinx.readthedocs.io/en/latest/>`_. Each section should start a new kernel:
+
+.. code-block::
+
+    .. jupyter-kernel:: python3
+
+
+To create a jupyter-sphinx block, simply use the syntax:
+
+.. code-block::
+
+    .. jupyter-execute::
+
+        print('Python code!')
+
+
+The API documentation is automatically generated using `docstrings <https://www.python.org/dev/peps/pep-0257/>`_. Therefore, edits to the Python API documentation must be made within the source code.
+
+.. todo:: Describe what the API documentation should include. (e.g. Each function should include a small description of what it does, the input parameters, and returned parameters.)
+
+To build the documentation locally, go to the ``docs`` directory and run ``make``. This will build the HTML documentation in  ``docs/_build/html/``. You can now view the local build of the HTML in your local browser (if you do not know how to do this, try double clicking the HTML file). Building the documentation will also run any new jupyter-sphinx code, so it may take a while.
+
+As you work on your topic branch you can `add commits <https://git-scm.com/docs/git-commit>`_ to it. Once you’re ready to share this, you can then open a `pull request <http://github.com/tskit-dev/msprime/pulls>`_. In the PR an AdminBot will automatically create a preview of your documentation that can be viewed by clicking the provided link on GitHub. Your PR will be reviewed by some of the maintainers, who may ask you to make changes.
 
 
 ***************
