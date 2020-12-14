@@ -61,6 +61,11 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
     msprime/tskit.
     """
 
+    def verify_non_ultrametric(self, tree):
+        newick = tree.newick()
+        with pytest.raises(ValueError):
+            msprime.parse_species_tree(newick, Ne=1)
+
     def verify(
         self, tree, newick=None, Ne=1, branch_length_units="gen", generation_time=None
     ):
@@ -121,7 +126,7 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
 
     def test_n2_binary_non_ultrametric(self):
         ts = msprime.simulate(samples=[(0, 0), (0, 1)], random_seed=2)
-        self.verify(ts.first(), Ne=5)
+        self.verify_non_ultrametric(ts.first())
 
     def test_n5_binary(self):
         ts = msprime.simulate(5, random_seed=2)
@@ -130,7 +135,7 @@ class TestSpeciesTreeRoundTrip(unittest.TestCase):
 
     def test_n5_binary_non_ultrametric(self):
         ts = msprime.simulate(samples=[(0, j) for j in range(5)], random_seed=2)
-        self.verify(ts.first(), Ne=10)
+        self.verify_non_ultrametric(ts.first())
 
     def test_n7_binary(self):
         ts = msprime.simulate(7, random_seed=2)
@@ -258,6 +263,11 @@ class TestStarbeastRoundTrip(unittest.TestCase):
     msprime/tskit.
     """
 
+    def verify_non_ultrametric(self, tree, pop_size_map):
+        nexus = make_nexus(tree, pop_size_map)
+        with pytest.raises(ValueError):
+            msprime.parse_starbeast(nexus, 10)
+
     def verify(
         self,
         tree,
@@ -322,7 +332,7 @@ class TestStarbeastRoundTrip(unittest.TestCase):
     def test_n2_binary_non_ultrametric(self):
         ts = msprime.simulate(samples=[(0, 0), (0, 1)], random_seed=2)
         tree = ts.first()
-        self.verify(tree, {u: 2.123 for u in tree.nodes()})
+        self.verify_non_ultrametric(tree, {u: 2.123 for u in tree.nodes()})
 
     def test_n5_binary(self):
         ts = msprime.simulate(5, random_seed=2)
@@ -332,7 +342,7 @@ class TestStarbeastRoundTrip(unittest.TestCase):
     def test_n5_binary_non_ultrametric(self):
         ts = msprime.simulate(samples=[(0, j) for j in range(5)], random_seed=2)
         tree = ts.first()
-        self.verify(tree, {u: 1 / (1 + u) for u in tree.nodes()})
+        self.verify_non_ultrametric(tree, {u: 1 / (1 + u) for u in tree.nodes()})
 
     def test_n7_binary(self):
         ts = msprime.simulate(7, random_seed=2)
@@ -383,6 +393,10 @@ class TestSpeciesTreeParsingErrors:
             msprime.parse_species_tree(tree="()")
         with pytest.raises(TypeError):
             msprime.parse_species_tree(Ne=1)
+
+    def test_unequal_branch_lengths(self):
+        with pytest.raises(ValueError):
+            msprime.parse_species_tree(tree="(popA:100.0,popB:10.0)", Ne=1000)
 
     def test_bad_tree(self):
         bad_trees = [
