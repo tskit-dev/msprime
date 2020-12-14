@@ -1018,14 +1018,14 @@ def run_simulate(args):
 
 def run_mutate(args):
     tree_sequence = tskit.load(args.tree_sequence)
-    tree_sequence = msprime.mutate(
+    tree_sequence = msprime.sim_mutations(
         tree_sequence=tree_sequence,
         rate=args.mutation_rate,
         random_seed=args.random_seed,
         keep=args.keep,
         start_time=args.start_time,
         end_time=args.end_time,
-        discrete=args.discrete,
+        discrete_genome=args.discrete_genome,
     )
     tree_sequence.dump(args.output_tree_sequence)
 
@@ -1063,7 +1063,7 @@ def add_mutate_subcommand(subparsers):
         help="Keep mutations in input tree sequence",
     )
     parser.add_argument(
-        "--discrete",
+        "--discrete-genome",
         action="store_true",
         default=False,
         help="Generate mutations at only integer positions along the genome. ",

@@ -82,3 +82,22 @@ def isinteger(value):
         return int_val == float_val
     except (ValueError, TypeError):
         return False
+
+
+def _parse_flag(value, *, default):
+    """
+    Parses a boolean flag, which can be either True, False, or None.
+    If the input value is None, return the default. Otherwise,
+    check that the input value is a bool.
+
+    Note that we do *not* cast to a bool as this would accept
+    truthy values like the empty list, etc. In this case None
+    would be converted to False, potentially conflicting with
+    the default value.
+    """
+    assert isinstance(default, bool)
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise TypeError("Boolean flag must be True, False, or None (the default value)")
+    return value

@@ -2411,7 +2411,7 @@ class TestSimMutations:
                     random_generator=rng,
                     rate_map=rate_map,
                     model=model,
-                    discrete_sites=bad_type,
+                    discrete_genome=bad_type,
                 )
         assert (
             _msprime.sim_mutations(
@@ -2435,7 +2435,7 @@ class TestSimMutations:
         generate()
         for bad_type in [[], None, "asdf"]:
             with pytest.raises(TypeError):
-                generate(discrete_sites=bad_type)
+                generate(discrete_genome=bad_type)
             with pytest.raises(TypeError):
                 generate(keep=bad_type)
             with pytest.raises(TypeError):

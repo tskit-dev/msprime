@@ -2047,7 +2047,7 @@ class RecombinationMutationTest(Test):
             )
             ts = next(sim.run_replicates(1))
             empirical_rho.append(sim.num_breakpoints)
-            ts = msprime.mutate(ts, rate=m)
+            ts = msprime.sim_mutations(ts, rate=m)
             empirical_theta.append(ts.get_num_sites())
         empirical_rho.sort()
         empirical_theta.sort()
@@ -4303,11 +4303,11 @@ class SeqGenTest(MutationTest):
 
         for _ in range(num_replicates):
             ts = msprime.simulate(num_samples, Ne=Ne, length=length)
-            ts_mutated = msprime.mutate(
+            ts_mutated = msprime.sim_mutations(
                 ts,
                 rate=mutation_rate,
                 model=model_dict[model]["model_id"],
-                discrete=True,
+                discrete_genome=True,
             )
             num_sites = ts_mutated.num_sites
             t = ts_mutated.first()
@@ -4499,11 +4499,11 @@ class PyvolveTest(MutationTest):
 
         for _ in range(num_replicates):
             ts = msprime.simulate(num_samples, Ne=1e4, length=length)
-            ts_mutated = msprime.mutate(
+            ts_mutated = msprime.sim_mutations(
                 ts,
                 rate=mutation_rate,
                 model=model_dict[model]["model_id"],
-                discrete=True,
+                discrete_genome=True,
             )
 
             num_sites = ts_mutated.num_sites
