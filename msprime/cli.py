@@ -228,7 +228,7 @@ class SimulationRunner:
 
         if demography is None:
             # This is just used for testing so values don't really matter.
-            demography = msprime.Demography.simple_model(1)
+            demography = msprime.Demography.isolated_model([1])
 
         self.ms_random_seeds = ms_random_seeds
         if ms_random_seeds is None:
@@ -425,7 +425,7 @@ def create_simulation_runner(parser, arg_list):
     else:
         gc_rate = r * gc_param
 
-    demography = msprime.Demography.simple_model(1)
+    demography = msprime.Demography.isolated_model([1])
     # Check the structure format.
     symmetric_migration_rate = 0.0
     num_populations = 1
@@ -436,7 +436,7 @@ def create_simulation_runner(parser, arg_list):
         # We must have at least num_population sample_configurations
         if len(args.structure) < num_populations + 1:
             parser.error("Must have num_populations sample sizes")
-        demography = msprime.Demography.simple_model([1] * num_populations)
+        demography = msprime.Demography.isolated_model([1] * num_populations)
         num_samples = [0] * num_populations
         for j in range(num_populations):
             num_samples[j] = convert_int(args.structure[j + 1], parser)

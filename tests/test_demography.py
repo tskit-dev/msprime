@@ -3105,7 +3105,7 @@ class TestPopulationMetadata:
     """
 
     def test_defaults(self):
-        demography = msprime.Demography.simple_model(10)
+        demography = msprime.Demography.isolated_model([10])
         ts = msprime.sim_ancestry(2, demography=demography, random_seed=2)
         assert ts.num_populations == 1
         metadata = ts.population(0).metadata
@@ -3114,7 +3114,7 @@ class TestPopulationMetadata:
         assert len(metadata) == 2
 
     def test_extra_metadata(self):
-        demography = msprime.Demography.simple_model(10)
+        demography = msprime.Demography.isolated_model([10])
         md = {"x": "y", "z": "z", "abc": 1234}
         demography.populations[0].extra_metadata = md
         ts = msprime.sim_ancestry(2, demography=demography, random_seed=2)
@@ -3127,7 +3127,7 @@ class TestPopulationMetadata:
             assert metadata[key] == value
 
     def test_extra_metadata_overwrite_standard(self):
-        demography = msprime.Demography.simple_model(10)
+        demography = msprime.Demography.isolated_model([10])
         md = {"x": 1234, "name": "abc"}
         demography.populations[0].extra_metadata = md
         with pytest.raises(ValueError) as record:
@@ -3145,7 +3145,7 @@ class TestPopulationMetadata:
         )
 
     def test_island_model(self):
-        demography = msprime.Demography.island_model(10, 0)
+        demography = msprime.Demography.island_model([1] * 10, migration_rate=0)
         for j, pop in enumerate(demography.populations):
             pop.extra_metadata = {"x": "y", "z": "z" * j, "abc": 1234}
             pop.description = f"Island model node {j}"
@@ -3597,19 +3597,15 @@ class TestPreCannedModels:
 
 class TestIslandModel(TestPreCannedModels):
     def test_errors(self):
-        for bad_N in [-1, 0, 0.1]:
+        for bad_N in [-1, -1e6]:
             with pytest.raises(ValueError):
-                msprime.Demography.island_model(bad_N, 0.1)
+                msprime.Demography.island_model([bad_N], 0.1)
         for bad_m in [-1, -1e5]:
             with pytest.raises(ValueError):
-                msprime.Demography.island_model(1, bad_m)
-
-        for bad_Ne in [-1, 0]:
-            with pytest.raises(ValueError):
-                msprime.Demography.island_model(1, 1, Ne=bad_Ne)
+                msprime.Demography.island_model([1], bad_m)
 
     def test_one_pop(self):
-        model = msprime.Demography.island_model(1, 1)
+        model = msprime.Demography.island_model([1], migration_rate=1)
         assert len(model.populations) == 1
         assert len(model.migration_matrix) == 1
         ts = msprime.simulate(samples=model.sample(2), demography=model, random_seed=1)
@@ -3617,7 +3613,7 @@ class TestIslandModel(TestPreCannedModels):
 
     def test_migration(self):
         for N in [1, 2, 5]:
-            model = msprime.Demography.island_model(N, 0.1)
+            model = msprime.Demography.island_model([1] * N, 0.1)
             assert len(model.populations) == N
             assert model.migration_matrix.shape == (N, N)
             self.assertZeroDiagonal(model.migration_matrix)
@@ -3628,33 +3624,49 @@ class TestIslandModel(TestPreCannedModels):
             assert ts.num_populations == N
             assert ts.num_samples == 2 * N
 
-    def test_Ne(self):
-        # By default, Ne is 1
-        model = msprime.Demography.island_model(2, 0.1)
-        assert model.populations[0].initial_size == 1
-        assert model.populations[1].initial_size == 1
+    def test_initial_size(self):
         for Ne in [0.1, 1, 10]:
-            model = msprime.Demography.island_model(2, 0.1, Ne=Ne)
+            model = msprime.Demography.island_model([Ne, Ne], 0.1)
             assert model.populations[0].initial_size == Ne
             assert model.populations[1].initial_size == Ne
+
+    def test_migration_zero(self):
+        initial_size = [1, 2, 3, 4]
+        growth_rate = [0.1, 0.2, 0.3, 0.4]
+        model1 = msprime.Demography.island_model(
+            initial_size, growth_rate=growth_rate, migration_rate=0
+        )
+        model2 = msprime.Demography.isolated_model(
+            initial_size, growth_rate=growth_rate
+        )
+        assert model1 == model2
 
 
 class TestSteppingStoneModel(TestPreCannedModels):
     def test_errors(self):
-        for bad_N in [-1, 0, 0.1]:
+        for bad_N in [-1, -1000, np.nan]:
             with pytest.raises(ValueError):
-                msprime.Demography.stepping_stone_1d(bad_N, 0.1)
+                msprime.Demography.stepping_stone_model([bad_N], 0.1)
         for bad_m in [-1, -1e5]:
             with pytest.raises(ValueError):
-                msprime.Demography.stepping_stone_1d(1, bad_m)
+                msprime.Demography.stepping_stone_model([1], bad_m)
 
-        for bad_Ne in [-1, 0]:
-            with pytest.raises(ValueError):
-                msprime.Demography.stepping_stone_1d(1, 1, Ne=bad_Ne)
+    def test_migration_zero(self):
+        initial_size = [1, 2, 3, 4]
+        growth_rate = [0.1, 0.2, 0.3, 0.4]
+        model1 = msprime.Demography.stepping_stone_model(
+            initial_size, growth_rate=growth_rate, migration_rate=0
+        )
+        model2 = msprime.Demography.isolated_model(
+            initial_size, growth_rate=growth_rate
+        )
+        assert model1 == model2
 
     def test_one_pop(self):
-        for circular in [True, False]:
-            model = msprime.Demography.stepping_stone_1d(1, 1, circular=circular)
+        for boundaries in [True, False]:
+            model = msprime.Demography.stepping_stone_model(
+                [1], 1, boundaries=boundaries
+            )
             assert len(model.populations) == 1
             assert len(model.migration_matrix) == 1
             ts = msprime.simulate(
@@ -3665,9 +3677,11 @@ class TestSteppingStoneModel(TestPreCannedModels):
     def test_migration_circular(self):
         m = 0.3
         for N in [2, 3, 5]:
-            model = msprime.Demography.stepping_stone_1d(N, m)
+            model = msprime.Demography.stepping_stone_model([1] * N, m)
             # Circular is the default
-            assert model == msprime.Demography.stepping_stone_1d(N, m, circular=True)
+            assert model == msprime.Demography.stepping_stone_model(
+                [1] * N, m, boundaries=False
+            )
             assert len(model.populations) == N
             assert model.migration_matrix.shape == (N, N)
             self.assertZeroDiagonal(model.migration_matrix)
@@ -3686,7 +3700,7 @@ class TestSteppingStoneModel(TestPreCannedModels):
 
     def test_migration_line_two_pops(self):
         m = 1
-        model = msprime.Demography.stepping_stone_1d(2, m, circular=False)
+        model = msprime.Demography.stepping_stone_model([1, 1], m, boundaries=True)
         assert len(model.populations) == 2
         assert model.migration_matrix.shape == (2, 2)
         assert np.all(model.migration_matrix == 0)
@@ -3694,7 +3708,7 @@ class TestSteppingStoneModel(TestPreCannedModels):
     def test_migration_line(self):
         m = 0.3
         for N in [3, 4, 5]:
-            model = msprime.Demography.stepping_stone_1d(N, m, circular=False)
+            model = msprime.Demography.stepping_stone_model([1] * N, m, boundaries=True)
             assert len(model.populations) == N
             assert model.migration_matrix.shape == (N, N)
             self.assertZeroDiagonal(model.migration_matrix)
@@ -3716,12 +3730,11 @@ class TestSteppingStoneModel(TestPreCannedModels):
             assert ts.num_samples == 2 * N
 
     def test_Ne(self):
-        # By default, Ne is 1
-        model = msprime.Demography.stepping_stone_1d(2, 0.1)
+        model = msprime.Demography.stepping_stone_model([1, 1], 0.1)
         assert model.populations[0].initial_size == 1
         assert model.populations[1].initial_size == 1
         for Ne in [0.1, 1, 10]:
-            model = msprime.Demography.stepping_stone_1d(2, 0.1, Ne=Ne)
+            model = msprime.Demography.stepping_stone_model([Ne, Ne], 0.1)
             assert model.populations[0].initial_size == Ne
             assert model.populations[1].initial_size == Ne
 
@@ -3732,15 +3745,15 @@ class TestDemographyObject:
     """
 
     def test_equality(self):
-        m1 = msprime.Demography.island_model(2, 1 / 3)
-        m2 = msprime.Demography.island_model(2, 1 / 3)
+        m1 = msprime.Demography.island_model([1, 1], 1 / 3)
+        m2 = msprime.Demography.island_model([1, 1], 1 / 3)
         assert m1 == m2
         assert m2 == m1
         assert m1 == m1
         assert not (m1 != m2)
         assert not (m1 != m1)
 
-        m3 = msprime.Demography.island_model(2, 1 / 3 + 0.001)
+        m3 = msprime.Demography.island_model([1, 1], 1 / 3 + 0.001)
         assert m1 != m3
         assert m1 != m3
 
@@ -3748,7 +3761,7 @@ class TestDemographyObject:
         assert m1 != []
 
     def test_debug(self):
-        model = msprime.Demography.island_model(2, 1 / 3)
+        model = msprime.Demography.island_model([1, 1], 1 / 3)
         dbg1 = model.debug()
         assert dbg1.demography == model
         dbg2 = msprime.DemographyDebugger(demography=model)
@@ -3756,7 +3769,7 @@ class TestDemographyObject:
         assert str(dbg1) == str(dbg2)
 
     def test_positional_sampling_errors(self):
-        model = msprime.Demography.island_model(2, 1)
+        model = msprime.Demography.island_model([2], migration_rate=1)
         with pytest.raises(ValueError):
             # Sampling from no populations is an error (this is almost
             # certainly a mistake by the user).
@@ -3770,7 +3783,7 @@ class TestDemographyObject:
             model.sample(0, 0, 1)
 
     def test_positional_samples_two_populations(self):
-        model = msprime.Demography.island_model(2, 1)
+        model = msprime.Demography.island_model([1, 1], migration_rate=1)
         assert model.sample(1) == [msprime.Sample(0, 0)]
         assert model.sample(0, 1) == [msprime.Sample(1, 0)]
         assert model.sample(1, 1) == [msprime.Sample(0, 0), msprime.Sample(1, 0)]
@@ -3782,7 +3795,7 @@ class TestDemographyObject:
 
     def test_positional_samples_n_populations(self):
         for n in [1, 2, 3, 5]:
-            model = msprime.Demography.island_model(n, 1)
+            model = msprime.Demography.island_model([1] * n, migration_rate=1)
             samples = model.sample(10)
             assert samples == [msprime.Sample(0, 0)] * 10
             samples = model.sample(*np.ones(n, dtype=int))
@@ -3795,7 +3808,7 @@ class TestDemographyObject:
             )
 
     def test_keyword_sampling_errors(self):
-        model = msprime.Demography.island_model(2, 1)
+        model = msprime.Demography.island_model([1] * 2, migration_rate=1)
         model.populations[0].name = "A"
         model.populations[1].name = "B"
         with pytest.raises(ValueError):
@@ -3813,7 +3826,7 @@ class TestDemographyObject:
             model.sample(**{"AC": 1})
 
     def test_keyword_samples_two_populations(self):
-        model = msprime.Demography.island_model(2, 1)
+        model = msprime.Demography.island_model([1] * 2, migration_rate=1)
         model.populations[0].name = "A"
         model.populations[1].name = "B"
         assert model.sample(A=1) == [msprime.Sample(0, 0)]
@@ -3832,7 +3845,7 @@ class TestDemographyObject:
         ]
 
     def test_mixed_positional_and_keyword(self):
-        model = msprime.Demography.island_model(2, 1)
+        model = msprime.Demography.island_model([1] * 2, migration_rate=1)
         model.populations[0].name = "A"
         model.populations[1].name = "B"
         with pytest.raises(ValueError):
@@ -3840,7 +3853,7 @@ class TestDemographyObject:
 
     def test_population_name(self):
 
-        demography = msprime.Demography.simple_model(1)
+        demography = msprime.Demography.isolated_model([1])
         assert demography.populations[0].name == "pop_0"
 
         demography.populations[0].name = None
@@ -3855,48 +3868,46 @@ class TestDemographyObject:
             msg = "A population name must be a valid Python identifier"
             assert msg in str(excinfo.value)
 
-    def test_simple_model(self):
-        demography = msprime.Demography.simple_model(2)
+    def test_isolated_model(self):
+        demography = msprime.Demography.isolated_model([2])
         assert demography.num_populations == 1
         assert demography.populations[0].initial_size == 2
         assert demography.populations[0].growth_rate == 0
 
-        demography = msprime.Demography.simple_model(2, 3)
+        demography = msprime.Demography.isolated_model([2], growth_rate=[3])
         assert demography.num_populations == 1
         assert demography.populations[0].initial_size == 2
         assert demography.populations[0].growth_rate == 3
 
-        demography = msprime.Demography.simple_model([3])
-        assert demography.num_populations == 1
-        assert demography.populations[0].initial_size == 3
-        assert demography.populations[0].growth_rate == 0
-
-        demography = msprime.Demography.simple_model([3], [4])
-        assert demography.num_populations == 1
-        assert demography.populations[0].initial_size == 3
-        assert demography.populations[0].growth_rate == 4
-
-        demography = msprime.Demography.simple_model([5, 6])
+        demography = msprime.Demography.isolated_model([5, 6])
         assert demography.num_populations == 2
         assert demography.populations[0].initial_size == 5
         assert demography.populations[0].growth_rate == 0
         assert demography.populations[1].initial_size == 6
         assert demography.populations[1].growth_rate == 0
 
-        demography = msprime.Demography.simple_model([5, 6], [7, 8])
+        demography = msprime.Demography.isolated_model([5, 6], growth_rate=[7, 8])
         assert demography.num_populations == 2
         assert demography.populations[0].initial_size == 5
         assert demography.populations[0].growth_rate == 7
         assert demography.populations[1].initial_size == 6
         assert demography.populations[1].growth_rate == 8
 
-    def test_simple_model_errors(self):
+    def test_isolated_model_errors(self):
         with pytest.raises(ValueError):
-            msprime.Demography.simple_model([[], []])
+            msprime.Demography.isolated_model([2, None])
         with pytest.raises(ValueError):
-            msprime.Demography.simple_model([1], [[], []])
+            msprime.Demography.isolated_model([2], growth_rate=[np.nan])
         with pytest.raises(ValueError):
-            msprime.Demography.simple_model([1], [])
+            msprime.Demography.isolated_model(2)
+        with pytest.raises(ValueError):
+            msprime.Demography.isolated_model([2], growth_rate=3)
+        with pytest.raises(ValueError):
+            msprime.Demography.isolated_model([[], []])
+        with pytest.raises(ValueError):
+            msprime.Demography.isolated_model([1], growth_rate=[[], []])
+        with pytest.raises(ValueError):
+            msprime.Demography.isolated_model([1], growth_rate=[])
 
 
 class TestDemographyFromOldStyle:

@@ -934,8 +934,8 @@ def _parse_sim_ancestry(
                 )
         num_populations = 1 if initial_state is None else len(initial_state.populations)
         population_size = 1 if population_size is None else float(population_size)
-        demography = demog.Demography.island_model(
-            num_populations, migration_rate=0, Ne=population_size
+        demography = demog.Demography.isolated_model(
+            [population_size] * num_populations
         )
     elif isinstance(demography, demog.Demography):
         if population_size is not None:

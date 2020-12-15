@@ -103,7 +103,7 @@ to describe more complex demographic histories.
 .. jupyter-execute::
 
     # Create a 1D stepping stone model of demograpy
-    demography = msprime.Demography.stepping_stone_1d(10, migration_rate=0.1)
+    demography = msprime.Demography.stepping_stone_model([100] * 10, migration_rate=0.1)
     # Take one diploid sample each from the first two demes
     samples = demography.sample(1, 1)
     # Simulate an ancestral history for this demography and sample.
