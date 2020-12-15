@@ -1198,7 +1198,7 @@ class Simulator(_msprime.Simulator):
 
         # FIXME support arbitrary gene conversion maps.
         # https://github.com/tskit-dev/msprime/issues/1212
-        assert len(gene_conversion_map) == 1
+        assert len(gene_conversion_map.rate) == 1
         gene_conversion_rate = gene_conversion_map.rate[0]
 
         start_time = -1 if start_time is None else start_time

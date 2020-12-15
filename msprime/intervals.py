@@ -97,9 +97,6 @@ class RateMap:
 
         # Make all of the internal arrays read-only, so they can't get out of sync
 
-    def __len__(self):  # TODO - remove this, as the length of a ratemap is not obvious
-        return len(self.rate)
-
     @property
     def position(self):
         """
@@ -181,10 +178,6 @@ class RateMap:
         # Since we insist that the rate up to start_position and past end_position is 0
         # we can just return the cumulative total.
         return self.cumulative_mass[-1]
-
-    @property
-    def size(self):  # TODO - should we remove this, for the same reason as for __len__
-        return self.rate.shape[0]
 
     @property
     def mean_rate(self):
@@ -437,7 +430,7 @@ class RecombinationMap:
         raise ValueError("num_loci is no longer supported")
 
     def get_size(self):
-        return self.map.size + 1
+        return len(self.map.position)
 
     def get_positions(self):
         return list(self.map.position)

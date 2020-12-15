@@ -598,7 +598,7 @@ class TestParseSimAncestry:
             assert sim.sequence_length == 10
             gc_map = sim.gene_conversion_map
             assert gc_map.sequence_length == 10
-            assert len(gc_map) == 1
+            assert len(gc_map.rate) == 1
             assert gc_map.rate[0] == 1234
             assert sim.gene_conversion_tract_length == 5
 
