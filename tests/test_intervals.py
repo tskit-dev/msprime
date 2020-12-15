@@ -26,6 +26,14 @@ import msprime
 
 
 class TestRateMap:
+    """
+    Test the underlying RateMap class.
+
+    At the moment, much of the RateMap class is tested in test_recombination_map.py,
+    as msprime.RecombinationMap contains a RateMap within it. We should probably move
+    some of that testing into this class.
+    """
+
     def test_bad_input(self):
         bad_inputs = [
             ([], []),
@@ -39,6 +47,102 @@ class TestRateMap:
         for pos, rate in bad_inputs:
             with pytest.raises(ValueError):
                 msprime.RateMap(pos, rate)
+
+    def test_bad_length(self):
+        positions = np.array([0, 1, 2])
+        rates = np.array([0, 1, 2])
+        with pytest.raises(ValueError, match="one less entry"):
+            msprime.RateMap(positions, rates)
+
+    def test_bad_first_pos(self):
+        positions = np.array([1, 2, 3])
+        rates = np.array([1, 1])
+        with pytest.raises(ValueError, match="First position"):
+            msprime.RateMap(positions, rates)
+
+    def test_bad_rate(self):
+        positions = np.array([0, 1, 2])
+        rates = np.array([1, -1])
+        with pytest.raises(ValueError, match="negative.*1"):
+            msprime.RateMap(positions, rates)
+
+    def test_start_position(self):
+        positions = np.array([0, 1, 2])
+        rates = np.array([0, 1])
+        rate_map = msprime.RateMap(positions, rates, start_position=0.5)
+        assert np.isclose(rate_map.mean_rate, 1 / (1 + 0.5))
+
+    def test_bad_start_position(self):
+        positions = np.array([0, 1, 2])
+        rates = np.array([1, 1])
+        with pytest.raises(ValueError, match="start_position"):
+            msprime.RateMap(positions, rates, start_position=0.5)
+
+    def test_end_position(self):
+        positions = np.array([0, 1, 2])
+        rates = np.array([1, 0])
+        rate_map = msprime.RateMap(positions, rates, end_position=1.5)
+        assert np.isclose(rate_map.mean_rate, 1 / (1 + 0.5))
+
+    def test_bad_end_position(self):
+        positions = np.array([0, 1, 2])
+        rates = np.array([1, 1])
+        with pytest.raises(ValueError, match="end_position"):
+            msprime.RateMap(positions, rates, end_position=0.5)
+
+    def test_read_only(self):
+        positions = np.array([0, 0.25, 0.5, 0.75, 1])
+        rates = np.array([0.125, 0.25, 0.5, 0.75])  # 1 shorter than positions
+        rate_map = msprime.RateMap(positions, rates)
+        assert np.all(rates == rate_map.rate)
+        assert np.all(positions == rate_map.position)
+        with pytest.raises(AttributeError):
+            rate_map.rate = 2 * rate_map.rate
+        with pytest.raises(AttributeError):
+            rate_map.position = 2 * rate_map.position
+        with pytest.raises(AttributeError):
+            rate_map.cumulative_mass = 2 * rate_map.cumulative_mass
+        with pytest.raises(ValueError):
+            rate_map.rate[0] = 1
+        with pytest.raises(ValueError):
+            rate_map.position[0] = 1
+        with pytest.raises(ValueError):
+            rate_map.cumulative_mass[0] = 1
+        with pytest.raises(NotImplementedError, match="slice"):
+            rate_map.start_position = 1
+        with pytest.raises(NotImplementedError, match="slice"):
+            rate_map.end_position = 1
+
+
+class TestGetIntermediates:
+    def test_get_rate(self):
+        positions = np.array([0, 1, 2])
+        rates = np.array([1, 4])
+        rate_map = msprime.RateMap(positions, rates)
+        assert np.all(rate_map.get_rate([0.5, 1.5]) == rates)
+
+    def test_get_bad_rate(self):
+        positions = np.array([0, 1, 2])
+        rates = np.array([1, 4])
+        rate_map = msprime.RateMap(positions, rates)
+        with pytest.raises(ValueError, match="No rate exists"):
+            rate_map.get_rate([1, -0.1])
+
+    def test_get_cumulative_mass(self):
+        positions = np.array([0, 1, 2])
+        rates = np.array([1, 4])
+        rate_map = msprime.RateMap(positions, rates)
+        assert np.allclose(rate_map.get_cumulative_mass([0.5, 1.5]), np.array([0.5, 3]))
+        assert rate_map.get_cumulative_mass([2]) == rate_map.total_mass
+
+    def test_get_bad_cumulative_mass(self):
+        positions = np.array([0, 1, 2])
+        rates = np.array([1, 4])
+        rate_map = msprime.RateMap(positions, rates)
+        with pytest.raises(ValueError, match="physical positions"):
+            rate_map.get_cumulative_mass([1, -0.1])
+        with pytest.raises(ValueError, match="physical positions"):
+            rate_map.get_cumulative_mass([1, 2.1])
 
 
 class TestSlice:

@@ -33,35 +33,134 @@ class RateMap:
     """
     A class mapping a numeric value to a set of adjacent intervals along the
     genome.
+
+    :param list position: A list of :math:`n+1` positions, starting at 0, and ending
+        in the sequence length over which the RateMap will apply.
+    :param list rate: A list of :math:`n` positive rates that apply between each
+        position.
+    :param float start_position: When returning a mean_rate over the genome, ignore the
+        part of the map from zero up to ``start_position``, as long as the rate is 0 in
+        that region. If ``None`` (default), the ``start_position`` is 0.
+    :param float end_position: When returning a mean_rate over the genome, ignore the
+        part of the map from ``end_position`` onwards, as long as the rate is 0 in that
+        region. If ``None`` (default), the ``end_position`` is the end of the map.
     """
 
-    def __init__(self, position, rate, map_start=0):
-        # We take copies to make sure there are no unintended consequences
-        # later when a user modifies the arrays in this map.
-        self.position = np.array(position, dtype=float, copy=True)
-        self.rate = np.array(rate, dtype=float, copy=True)
-        self.map_start = map_start
-        size = len(self.rate)
-        if size < 1:
+    def __init__(
+        self,
+        position,
+        rate,
+        *,
+        start_position=None,
+        end_position=None,
+    ):
+        # Making the arrays read-only guarantees rate and cumulative mass stay in sync
+        self._position = np.array(position, dtype=float)
+        self._position.flags.writeable = False
+        size = len(self._position)
+        if size < 2:
             raise ValueError("Must have at least two positions")
-        if self.position.shape[0] != size + 1:
-            raise ValueError(
-                "Rate array must have one less entry than the position array."
-            )
-        if self.position[0] != 0:
+        if self._position[0] != 0:
             raise ValueError("First position must be zero")
-        if np.any(self.position[:1] >= self.position[1:]):
-            raise ValueError("Position values must be in increasing order")
-        if np.any(self.rate < 0):
-            raise ValueError("Rates must be non-negative")
+        if np.any(np.diff(self._position) <= 0):
+            bad_pos = np.where(np.diff(self._position) <= 0)[0] + 1
+            raise ValueError(
+                f"Position values not strictly increasing at indexes {bad_pos}"
+            )
 
-        self.cumulative = np.insert(np.cumsum(np.diff(self.position) * self.rate), 0, 0)
+        self._rate = np.array(rate, dtype=float)
+        self._rate.flags.writeable = False
+        if len(self._rate) != size - 1:
+            raise ValueError(
+                "Rate array must have one less entry than the position array"
+            )
+        if np.any(self._rate < 0):
+            bad_rates = np.where(self._rate < 0)[0]
+            raise ValueError(f"Rate values negative at indexes {bad_rates}")
 
-    def __len__(self):
+        self._cumulative_mass = np.insert(
+            np.cumsum(np.diff(self._position) * self._rate), 0, 0
+        )
+        self._cumulative_mass.flags.writeable = False
+
+        if start_position is None:
+            start_position = 0
+        elif self.get_cumulative_mass(start_position) > 0:
+            raise ValueError("Rates before the start_position must all be zero")
+        self._start_position = start_position
+
+        if end_position is None:
+            end_position = self.sequence_length
+        elif self.get_cumulative_mass(end_position) < self.total_mass:
+            raise ValueError("Rates after the end_position must all be zero")
+        self._end_position = end_position
+
+        # Make all of the internal arrays read-only, so they can't get out of sync
+
+    def __len__(self):  # TODO - remove this, as the length of a ratemap is not obvious
         return len(self.rate)
+
+    @property
+    def position(self):
+        """
+        The positions between which a constant rate applies. There will be
+        one more position than the number of rates, with the first position being 0
+        and the last being the :attr:`sequence_length`.
+        """
+        return self._position
+
+    @property
+    def rate(self):
+        """
+        The array of constant rates that apply between each :attr:`position`.
+        """
+        return self._rate
+
+    @property
+    def cumulative_mass(self):
+        """
+        The integral of the rates along the genome, one value for each
+        :attr:`position`. The first value will be 0 and the last will be the
+        :attr:`total_mass`.
+        """
+        return self._cumulative_mass
+
+    @property
+    def start_position(self):
+        """
+        The physical start of the map. This position can be greater than 0 for maps
+        which have no recorded rate at the start of a chromosome (often the telomeric
+        region). It primarily affects the :attr:`mean_rate` returned for this rate map.
+        """
+        return self._start_position
+
+    @start_position.setter
+    def start_position(self, val):
+        raise NotImplementedError(
+            "Cannot change a RateMap start_position: use ratemap.slice(... trim=False)"
+        )
+
+    @property
+    def end_position(self):
+        """
+        The physical end of the map. This position can be less than the
+        :attr:`sequence_length` for maps which have no recorded rate at the end of a
+        chromosome (often the telomeric region). It primarily affects the
+        :attr:`mean_rate` returned for this rate map.
+        """
+        return self._end_position
+
+    @end_position.setter
+    def end_position(self, val):
+        raise NotImplementedError(
+            "Cannot change a RateMap end_position: use ratemap.slice(... trim=False)"
+        )
 
     @staticmethod
     def uniform(sequence_length, rate):
+        """
+        Create a uniform rate map
+        """
         return RateMap([0, sequence_length], [rate])
 
     def asdict(self):
@@ -69,47 +168,96 @@ class RateMap:
 
     @property
     def sequence_length(self):
+        """
+        The sequence length covered by this map
+        """
         return self.position[-1]
 
     @property
     def total_mass(self):
-        return self.cumulative[-1]
+        """
+        The cumulative total over the entire map
+        """
+        # Since we insist that the rate up to start_position and past end_position is 0
+        # we can just return the cumulative total.
+        return self.cumulative_mass[-1]
 
     @property
-    def size(self):
+    def size(self):  # TODO - should we remove this, for the same reason as for __len__
         return self.rate.shape[0]
 
     @property
     def mean_rate(self):
         """
-        Return the weighted mean across all windows of the entire map.
+        The mean rate over this map, from :attr:`start_position` to
+        :attr:`end_position`, weighted by the span covered by each rate.
         """
-        window_sizes = self.position[1:] - self.position[:-1]
-        weights = window_sizes / self.sequence_length
-        if self.map_start != 0:
-            weights[0] = 0
-        return np.average(self.rate, weights=weights)
+        span = self.end_position - self.start_position
+        return self.total_mass / span
 
-    def slice(self, start=None, end=None, trim=False):  # noqa: A003
+    def get_rate(self, x):
         """
-        Returns a subset of this rate map between the specified end
-        points. If start is None, it defaults to 0. If end is None, it defaults
-        to the end of the map. If trim is True, remove the flanking
-        zero rate regions such that the sequence length of the
-        new rate map is end - start.
+        Return the rate at a list of user-specified positions along the map, i.e.
+        interpolated between the fixed :attr:`position` values. Any positions
+        beyond the end  of the map will return the final rate value.
+
+        :param numpy.ndarray x: The positions for which to return values.
+
+        :return: An array of rates, the same length as ``x``.
+        :rtype: numpy.ndarray(dtype=np.float64)
+        """
+        loc = np.searchsorted(self.position, x, side="right") - 1
+        loc = np.minimum(loc, len(self.rate) - 1)  # Return final rate if off the end
+        if np.any(loc < 0):
+            raise ValueError("No rate exists for positions below the minimum map pos")
+        return self.rate[loc]
+
+    def get_cumulative_mass(self, x):
+        """
+        Return the cumulative rate at a list of user-specified positions along the map,
+        i.e. interpolated between the fixed :attr:`position` values.
+
+        :param numpy.ndarray x: The positions for which to return values.
+
+        :return: An array of cumulative rates, the same length as ``x``
+        :rtype: numpy.ndarray(dtype=np.float64)
+        """
+        if np.any(np.array(x) < 0) or np.any(np.array(x) > self.sequence_length):
+            raise ValueError(
+                f"Cannot have physical positions < 0 or > {self.sequence_length}"
+            )
+        return np.interp(x, self.position, self.cumulative_mass)
+
+    def slice(self, start=None, end=None, *, trim=False):  # noqa:A003
+        """
+        Returns a subset of this rate map between the specified end points.
+
+        :param float start: The start of the region to keep. If ``None``, it defaults to
+            0.
+        :param float end: The end of the region to keep. If end is ``None``, it defaults
+            to the end of the map.
+        :param bool trim: If True, remove the flanking regions such that the
+            sequence length of the new rate map is ``end`` - ``start``. If ``False``
+            (default), do not change the coordinate system, but instead replace each
+            flanking region with 0, and set the ``start_position`` and ``end_position``
+            of the returned map to ``start`` and ``end``, inserting these positions if
+            they do not exist.
+
+        :return: A new RateMap instance
+        :rtype: RateMap
         """
         if start is None:
             i = 0
             start = 0
         if end is None:
-            end = self.position[-1]
+            end = self.sequence_length
             j = len(self.position)
 
         if (
             start < 0
             or end < 0
-            or start > self.position[-1]
-            or end > self.position[-1]
+            or start > self.sequence_length
+            or end > self.sequence_length
             or start > end
         ):
             raise IndexError(f"Invalid subset: start={start}, end={end}")
@@ -127,28 +275,25 @@ class RateMap:
         rate = self.rate[i : j - 1].copy()
         position[0] = start
         position[-1] = end
-        map_start = 0
 
         if trim:
-            position -= start
-        else:
-            # Prepend or extend zero-rate region at start of map.
-            if position[0] != 0:
-                map_start = position[0]  # TODO: is this what we want here?
-                if rate[0] == 0:
-                    position[0] = 0
-                else:
-                    position = np.insert(position, 0, 0)
-                    rate = np.insert(rate, 0, 0)
-            # Append or extend zero-rate region at end of map.
-            if position[-1] != self.position[-1]:
-                if rate[-1] == 0:
-                    position[-1] = self.position[-1]
-                else:
-                    position = np.append(position, self.position[-1])
-                    rate = np.append(rate, 0)
+            # Return trimmed map with changed coords
+            return self.__class__(position - start, rate)
 
-        return self.__class__(position, rate, map_start=map_start)
+        # Need to check regions before & after sliced region are filled out:
+        if start != 0:
+            if rate[0] == 0:
+                position[0] = 0  # Extend
+            else:
+                rate = np.insert(rate, 0, 0)  # Prepend
+                position = np.insert(position, 0, 0)
+        if end != self.position[-1]:
+            if rate[-1] == 0:
+                position[-1] = self.sequence_length  # Extend
+            else:
+                rate = np.append(rate, 0)  # Append
+                position = np.append(position, self.position[-1])
+        return self.__class__(position, rate, start_position=start, end_position=end)
 
     def __getitem__(self, key):
         """
@@ -248,7 +393,7 @@ class RecombinationMap:
         )
         rate_map = read_hapmap(filename)
         rate = np.append(rate_map.rate, 0)
-        return cls(rate_map.position, rate, map_start=rate_map.map_start)
+        return cls(rate_map.position, rate, map_start=rate_map.start_position)
 
     @property
     def mean_recombination_rate(self):
@@ -263,22 +408,22 @@ class RecombinationMap:
         Returns the effective recombination rate for this genetic map.
         This is the weighted mean of the rates across all intervals.
         """
-        return self.map.cumulative[-1]
+        return self.map.cumulative_mass[-1]
 
     def physical_to_genetic(self, x):
-        return np.interp(x, self.map.position, self.map.cumulative)
+        return self.map.get_cumulative_mass(x)
 
     def genetic_to_physical(self, genetic_x):
-        if self.map.cumulative[-1] == 0:
+        if self.map.cumulative_mass[-1] == 0:
             # If we have a zero recombination rate throughout then everything
             # except L maps to 0.
             return self.get_sequence_length() if genetic_x > 0 else 0
         if genetic_x == 0:
             return self.map.position[0]
-        index = np.searchsorted(self.map.cumulative, genetic_x) - 1
+        index = np.searchsorted(self.map.cumulative_mass, genetic_x) - 1
         y = (
             self.map.position[index]
-            + (genetic_x - self.map.cumulative[index]) / self.map.rate[index]
+            + (genetic_x - self.map.cumulative_mass[index]) / self.map.rate[index]
         )
         return y
 
@@ -357,4 +502,4 @@ def read_hapmap(filename):
         rate = np.insert(rate, 0, 0)
     if rate[-1] != 0:
         raise ValueError("The last rate provided in the recombination map must be zero")
-    return RateMap(position, rate[:-1], map_start=map_start)
+    return RateMap(position, rate[:-1], start_position=map_start)
