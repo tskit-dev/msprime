@@ -270,26 +270,45 @@ class Demography:
             demography.events = demographic_events
         return demography
 
-    # TODO give this a better name and document it.
-    def simple_model(initial_size=1, growth_rate=None):
+    @staticmethod
+    def isolated_model(initial_size, *, growth_rate=None):
         """
-        Returns a simple single-population model.
+        Returns a :class:`.Demography` object representing a collection of
+        isolated populations with specified initial population sizes and
+        growth rates. Please see :ref:`sec_demography` for more details on
+        population sizes and growth rates.
+
+        :param array_like initial_size: the ``initial_size`` value for each
+            of the :class:`.Population` in the returned model. The length
+            of the array corresponds to the number of populations.
+            model.
+        :param array_like growth_rate: The exponential growth rate for each
+            population. Must be either None (the default, resulting a zero
+            growth rate) or an array with the same length as ``initial_size``.
+        :return: A Demography object representing this model, suitable as
+            input to :func:`.simulate`.
+        :rtype: .Demography
         """
-        initial_size = np.array(initial_size, ndmin=1)
+        initial_size = np.array(initial_size, dtype=np.float64)
         if len(initial_size.shape) != 1:
             raise ValueError(
-                "The initial_size argument must be scalar value or an "
-                "1D array of population size values"
+                "The initial_size argument must a 1D array of population size values"
             )
         if growth_rate is None:
             growth_rate = np.zeros_like(initial_size)
         else:
-            growth_rate = np.array(growth_rate, ndmin=1)
+            growth_rate = np.array(growth_rate, dtype=np.float64)
         if initial_size.shape != growth_rate.shape:
             raise ValueError(
                 "If growth_rate is specified it must be a 1D array of the same "
                 "length as the population_size array"
             )
+        if np.any(initial_size < 0):
+            raise ValueError("population size values must be nonnegative.")
+        if not np.all(np.isfinite(initial_size)):
+            raise ValueError("population size values must be finite.")
+        if not np.all(np.isfinite(growth_rate)):
+            raise ValueError("growth_rate values must be finite.")
         populations = [
             Population(
                 initial_size=initial_size[j],
@@ -301,73 +320,79 @@ class Demography:
         return Demography(populations=populations)
 
     @staticmethod
-    def island_model(num_populations, migration_rate, Ne=1):
+    def island_model(initial_size, migration_rate, *, growth_rate=None):
         """
-        Returns a :class:`.Demography` object with the specified number of
-        populations with symmetric migration between all pairs of populations
-        at the specified rate.
+        Returns a :class:`.Demography` object representing a collection of
+        populations with specified initial population sizes and growth
+        rates, with symmetric migration between each pair of populations at the
+        specified rate. Please see :ref:`sec_demography` for more details on
+        population sizes and growth rates.
 
-        :param int num_populations: The number of populations in this Island
+        :param array_like initial_size: the ``initial_size`` value for each
+            of the :class:`.Population` in the returned model. The length
+            of the array corresponds to the number of populations.
             model.
         :param float migration_rate: The migration rate between each pair of
             populations.
-        :param float Ne: The initial size of each population. Defaults to 1.
+        :param array_like growth_rate: The exponential growth rate for each
+            population. Must be either None (the default, resulting a zero
+            growth rate) or an array with the same length as ``initial_size``.
         :return: A Demography object representing this model, suitable as
             input to :func:`.simulate`.
         :rtype: .Demography
         """
-        check_num_populations(num_populations)
+        model = Demography.isolated_model(initial_size, growth_rate=growth_rate)
         check_migration_rate(migration_rate)
-        check_population_size(Ne)
-
-        model = Demography()
-        model.populations = [
-            # TODO add names/metadata here.
-            Population(initial_size=Ne, name=f"pop_{j}")
-            for j in range(num_populations)
-        ]
-        model.migration_matrix = np.full(
-            (num_populations, num_populations), migration_rate
-        )
+        model.migration_matrix[:] = migration_rate
         np.fill_diagonal(model.migration_matrix, 0)
         return model
 
-    # FIXME change Ne to population_size.
     @staticmethod
-    def stepping_stone_1d(num_populations, migration_rate, Ne=1, circular=True):
+    def stepping_stone_model(
+        initial_size, migration_rate, *, growth_rate=None, boundaries=False
+    ):
         """
-        Returns a :class:`.Demography` object describing a 1 dimensional
-        stepping stone model where adjacent populations exchange migrants at
-        the specified rate.
+        Returns a :class:`.Demography` object representing a collection of
+        populations with specified initial population sizes and growth
+        rates, in which adjacent demes exchange migrants at the
+        specified rate. Please see :ref:`sec_demography` for more details on
+        population sizes and growth rates.
 
-        :param int num_populations: The number of populations in this Island
-            model.
-        :param float migration_rate: The migration rate between each pair of
-            populations.
-        :param float Ne: The initial size of each of the populations. Defaults
-             to 1.
-        :param bool circular: If True (the default) the stepping stone model is
-            circular, so that migration occurs between the first and last
-            populations. If False, no migration occurs.
+        .. note:: The current implementation on supports a one-dimensional stepping
+            stone model, but higher dimensions could also be supported. Please
+            open an issue on GitHub if this feature would be useful to you.
+
+        :param array_like initial_size: the ``initial_size`` value for each
+            of the :class:`.Population` in the returned model. The length
+            of the array corresponds to the number of populations.
+        :param float migration_rate: The migration rate between adjacent pairs
+            of populations.
+        :param array_like growth_rate: The exponential growth rate for each
+            population. Must be either None (the default, resulting a zero
+            growth rate) or an array with the same length as ``initial_size``.
+        :param bool boundaries: If True the stepping stone model has boundary
+            conditions imposed so that demes at either end of the chain do
+            not exchange migrats. If False (the default), the set of
+            populations is "circular" and migration takes place between the
+            terminal demes.
         :return: A Demography object representing this model, suitable as
             input to :func:`.simulate`.
         :rtype: .Demography
         """
-        check_num_populations(num_populations)
+        initial_size = np.array(initial_size, dtype=np.float64)
+        if len(initial_size.shape) > 1:
+            raise ValueError(
+                "Only 1D stepping stone models currently supported. Please open "
+                "an issue on GitHub if you would like 2D (or more) models"
+            )
+        model = Demography.isolated_model(initial_size, growth_rate=growth_rate)
         check_migration_rate(migration_rate)
-        check_population_size(Ne)
-
-        model = Demography()
-        model.populations = [
-            Population(initial_size=Ne, name=f"pop_{j}") for j in range(num_populations)
-        ]
-        model.migration_matrix = np.zeros((num_populations, num_populations))
-        if num_populations > 1:
-            index1 = np.arange(num_populations, dtype=int)
-            index2 = np.mod(index1 + 1, num_populations)
+        if model.num_populations > 1:
+            index1 = np.arange(model.num_populations, dtype=int)
+            index2 = np.mod(index1 + 1, model.num_populations)
             model.migration_matrix[index1, index2] = migration_rate
             model.migration_matrix[index2, index1] = migration_rate
-            if not circular:
+            if boundaries:
                 model.migration_matrix[0, -1] = 0
                 model.migration_matrix[-1, 0] = 0
         return model

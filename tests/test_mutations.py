@@ -332,7 +332,7 @@ class TestSimMutations(MutateMixin):
         assert t1.mutations == t2.mutations
 
     def test_populations(self):
-        demography = msprime.Demography.island_model(2, migration_rate=1)
+        demography = msprime.Demography.island_model([1, 1], migration_rate=1)
         ts = msprime.sim_ancestry(
             demography.sample(10, 10),
             demography=demography,

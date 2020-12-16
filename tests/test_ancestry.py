@@ -316,7 +316,7 @@ class TestDemographyFactory:
             f(demographic_events=[])
 
     def test_input_demography_copied(self):
-        d1 = msprime.Demography.island_model(2, 1, Ne=100)
+        d1 = msprime.Demography.island_model([100] * 2, 1)
         d2 = ancestry._demography_factory(
             Ne=None,
             demography=d1,
@@ -331,7 +331,7 @@ class TestDemographyFactory:
         assert d1.migration_matrix is not d2.migration_matrix
 
     def test_Ne_does_not_override_demography(self):
-        d1 = msprime.Demography.island_model(2, 1, Ne=100)
+        d1 = msprime.Demography.island_model([100] * 2, 1)
         assert d1.populations[0].initial_size == 100
         assert d1.populations[1].initial_size == 100
         d2 = ancestry._demography_factory(
@@ -345,9 +345,9 @@ class TestDemographyFactory:
         assert d2.populations[1].initial_size == 100
 
     def test_Ne_overwrites_size_none(self):
-        d1 = msprime.Demography.island_model(2, 1, Ne=None)
-        assert d1.populations[0].initial_size is None
-        assert d1.populations[1].initial_size is None
+        d1 = msprime.Demography.island_model([1, 1], 1)
+        d1.populations[0].initial_size = None
+        d1.populations[1].initial_size = None
         d2 = ancestry._demography_factory(
             Ne=1234,
             demography=d1,
@@ -722,8 +722,6 @@ class TestParseSimAncestry:
             assert sim.demography.populations[0].initial_size == float(pop_size)
             assert sim.demography.populations[0].growth_rate == 0
         with pytest.raises(ValueError):
-            ancestry._parse_sim_ancestry(10, population_size=0)
-        with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(10, population_size=-1)
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(10, population_size="bad value")
@@ -731,12 +729,12 @@ class TestParseSimAncestry:
             ancestry._parse_sim_ancestry(10, population_size=[])
 
         # Cannot specify a population_size and demography args.
-        demography = msprime.Demography.stepping_stone_1d(1, 0)
+        demography = msprime.Demography.stepping_stone_model([1], 0)
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(10, demography=demography, population_size=1)
 
     def test_demography(self):
-        demography = msprime.Demography.stepping_stone_1d(5, 0.1)
+        demography = msprime.Demography.stepping_stone_model([1] * 5, 0.1)
         samples = demography.sample(5)
         sim = ancestry._parse_sim_ancestry(samples, demography=demography)
         assert sim.demography is demography
@@ -799,11 +797,11 @@ class TestParseSimAncestry:
 
     def test_numeric_samples_only_simple_demography(self):
         # A simple 1-population model is fine.
-        demography = msprime.Demography.simple_model()
+        demography = msprime.Demography.isolated_model([1])
         sim = ancestry._parse_sim_ancestry(10, demography=demography)
         assert len(sim.copy_tables().individuals) == 10
 
-        demography = msprime.Demography.stepping_stone_1d(2, 0)
+        demography = msprime.Demography.stepping_stone_model([1, 1], 0)
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(10, demography=demography)
 
@@ -827,11 +825,11 @@ class TestParseSimAncestry:
             assert len(individual.location) == 0
 
     def test_sample_demography(self):
-        demography = msprime.Demography.simple_model()
+        demography = msprime.Demography.isolated_model([1])
         self.verify_samples(demography.sample(10), demography, ploidy=1)
         self.verify_samples(demography.sample(10), demography, ploidy=2)
 
-        demography = msprime.Demography.stepping_stone_1d(5, 0)
+        demography = msprime.Demography.stepping_stone_model([1] * 5, 0)
         samples = demography.sample(1, 2, 3, 4, 5)
         self.verify_samples(samples, demography, ploidy=1)
         self.verify_samples(samples, demography, ploidy=2)
@@ -841,13 +839,13 @@ class TestParseSimAncestry:
         self.verify_samples(samples, demography, ploidy=2)
 
     def test_sample_time(self):
-        demography = msprime.Demography.stepping_stone_1d(2, 0)
+        demography = msprime.Demography.stepping_stone_model([1, 1], 0)
         samples = [msprime.Sample(time=j, population=j % 2) for j in range(10)]
         self.verify_samples(samples, demography, ploidy=1)
         self.verify_samples(samples, demography, ploidy=2)
 
     def test_bad_samples(self):
-        demography = msprime.Demography.stepping_stone_1d(2, 0)
+        demography = msprime.Demography.stepping_stone_model([1, 1], 0)
         for bad_pop in [-1, 2]:
             samples = [msprime.Sample(time=0, population=bad_pop)] * 2
             with pytest.raises(ValueError):
@@ -1290,7 +1288,7 @@ class TestSimAncestryInterface:
 
     def test_ploidy_demography(self):
         n = 2
-        demography = msprime.Demography.island_model(2, 0.1)
+        demography = msprime.Demography.island_model([100] * 2, 0.1)
         for k in [1, 2, 3, 4]:
             samples = demography.sample(n, n)
             ts = msprime.sim_ancestry(samples=samples, ploidy=k, demography=demography)
@@ -1453,7 +1451,7 @@ class TestSimAncestryInterface:
 
     def test_discrete_genome_migrations(self):
         def run_sim(discrete_genome=None):
-            demography = msprime.Demography.stepping_stone_1d(2, 0.1)
+            demography = msprime.Demography.stepping_stone_model([1, 1], 0.1)
             samples = demography.sample(5, 5)
             return msprime.sim_ancestry(
                 samples=samples,
@@ -1529,7 +1527,7 @@ class TestSimAncestryInterface:
         assert ts.first().num_roots > 1
 
     def test_record_migrations(self):
-        demography = msprime.Demography.stepping_stone_1d(2, 0.1)
+        demography = msprime.Demography.stepping_stone_model([1, 1], 0.1)
         samples = demography.sample(2, 2)
         ts = msprime.sim_ancestry(samples, demography=demography, random_seed=42)
         assert ts.first().num_roots == 1

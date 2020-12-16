@@ -968,7 +968,7 @@ class TestMspmsOutput(TestCli):
         """
         sr = cli.SimulationRunner(
             num_samples=[sample_size],
-            demography=msprime.Demography.simple_model(1),
+            demography=msprime.Demography.isolated_model([1]),
             num_loci=num_loci,
             recombination_rate=recombination_rate,
             num_replicates=num_replicates,
