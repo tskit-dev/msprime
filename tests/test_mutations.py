@@ -1088,15 +1088,13 @@ class TestKeep:
 
 class StatisticalTestMixin:
 
-    p_threshold = 0.01
+    p_threshold = 0.001
 
     def chisquare(self, observed, expected, p_th=p_threshold):
         obs = observed.reshape(np.product(observed.shape))
         exp = expected.reshape(np.product(observed.shape))
+        assert np.all(obs[exp == 0] == 0)
         not_zeros = exp > 0
-        assert list(obs[np.logical_not(not_zeros)]) == list(
-            np.zeros((len(obs) - sum(not_zeros),))
-        )
         if sum(not_zeros) > 1:
             chisq = stats.chisquare(obs[not_zeros], exp[not_zeros])
             assert chisq.pvalue > p_th
@@ -1114,58 +1112,27 @@ class StatisticalTestMixin:
 
 class TestMutationStatistics(StatisticalTestMixin):
     def verify_model(self, model, verify_roots=True, state_independent=False):
-        # NOTE: this test is pretty brittle and some will fail if
-        # discrete_genome is True or if we change the random seed.
+        L = 100000
         ots = msprime.sim_ancestry(
-            5,
-            random_seed=5,
-            recombination_rate=0.05,
-            sequence_length=20,
-            discrete_genome=False,
+            8,
+            random_seed=7,
+            recombination_rate=1 / L,
+            sequence_length=L,
+            discrete_genome=True,
         )
         # "large enough sample"-condition for the chisquare test
-        if len(model.alleles) > 4:
-            rates = (15, 20)
-        else:
-            rates = (1, 10)
         for discrete_genome in (True, False):
-            for rate in rates:
-                ts = msprime.sim_mutations(
-                    ots,
-                    random_seed=6,
-                    rate=rate,
-                    model=model,
-                    discrete_genome=discrete_genome,
-                )
-                self.verify_model_ts_general(
-                    ts, model, discrete_genome, verify_roots, rate
-                )
-                if (not discrete_genome) or state_independent:
-                    self.verify_mutation_times_ts(ts)
-
-    def verify_model_ts(self, ts, model, discrete_genome, verify_roots):
-        alleles = model.alleles
-        num_alleles = len(alleles)
-        roots = np.zeros((num_alleles,))
-        transitions = np.zeros((num_alleles, num_alleles))
-        for site in ts.sites():
-            aa = site.ancestral_state
-            roots[alleles.index(aa)] += 1
-        for mut in ts.mutations():
-            if mut.parent == tskit.NULL:
-                pa = ts.site(mut.site).ancestral_state
-            else:
-                pa = ts.mutation(mut.parent).derived_state
-            da = mut.derived_state
-            transitions[alleles.index(pa), alleles.index(da)] += 1
-        num_muts = np.sum(roots)
-        if verify_roots:
-            exp_roots = num_muts * model.root_distribution
-            self.chisquare(roots, exp_roots)
-        for j, (row, p) in enumerate(zip(transitions, model.transition_matrix)):
-            p[j] = 0
-            p /= sum(p)
-            self.chisquare(row, sum(row) * p)
+            rate = len(model.alleles) * 100 / L
+            ts = msprime.sim_mutations(
+                ots,
+                random_seed=6,
+                rate=rate,
+                model=model,
+                discrete_genome=discrete_genome,
+            )
+            self.verify_model_ts_general(ts, model, discrete_genome, verify_roots, rate)
+            if (not discrete_genome) or state_independent:
+                self.verify_mutation_times_ts(ts)
 
     def verify_model_ts_general(
         self, ts, model, discrete_genome, verify_roots, mutation_rate
@@ -1182,7 +1149,7 @@ class TestMutationStatistics(StatisticalTestMixin):
                 pa = ts.mutation(mut.parent).derived_state
             da = mut.derived_state
             observed_transitions[alleles.index(pa), alleles.index(da)] += 1
-        pth = 0.05 / num_alleles
+        pth = 0.005 / (num_alleles * (num_alleles + 1))
         for j, (row, p) in enumerate(
             zip(observed_transitions, model.transition_matrix)
         ):
@@ -1222,7 +1189,7 @@ class TestMutationStatistics(StatisticalTestMixin):
                         * change_probs
                     )
 
-            self.chisquare(roots, expected_ancestral_states)
+            self.chisquare(roots, expected_ancestral_states, pth)
 
     def verify_mutation_rates(self, model):
         # this test only works if the probability of dropping a mutation
