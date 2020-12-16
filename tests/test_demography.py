@@ -3909,6 +3909,24 @@ class TestDemographyObject:
         with pytest.raises(ValueError):
             msprime.Demography.isolated_model([1], growth_rate=[])
 
+    def test_from_species_tree(self):
+        # basic checks here - indepth testing in the test_species_tree_parsing.py file.
+        demography = msprime.Demography.from_species_tree(
+            "(popA:10.0,popB:10.0)", Ne=1000
+        )
+        assert isinstance(demography, msprime.Demography)
+        assert demography.populations[0].name == "popA"
+        assert demography.populations[0].initial_size == 1000
+        assert demography.populations[1].name == "popB"
+        assert demography.populations[0].initial_size == 1000
+
+    def test_from_starbeast(self):
+        with open("tests/data/species_trees/91genes_species_rev.tre") as f:
+            nexus = f.read()
+        demography = msprime.Demography.from_starbeast(nexus, 1)
+        assert isinstance(demography, msprime.Demography)
+        assert demography.populations[0].name == "spc12"
+
 
 class TestDemographyFromOldStyle:
     """
