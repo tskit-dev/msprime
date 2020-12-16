@@ -105,34 +105,40 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
 
     # Define populations and demographic events according to the
     # specified population size and the divergence times in the species tree.
-    # Per divergence event (node in the tree), a mass migration with a proportion
-    # of 1 of the population is used. The destination is the left-most leaf for
-    # each node. Because we are using the n leaf populations, we map each node back
-    # to the leaf population that it corresponds to.
+    # Each divergence event (node in the tree) corresponds to an ancestral
+    # population, and mass migration events with proportion 1 move all lineages
+    # from the child populations into this new populationl
     populations = []
     events = []
-    leaf_map = {}
-    for node in root.walk("postorder"):
+    population_id_map = {}
+
+    def add_population(node):
+        population_id = len(populations)
+        population_id_map[node] = population_id
+        name = f"pop_{population_id}"
+        if node.name is not None:
+            stripped = node.name.strip()
+            if len(stripped) > 0:
+                name = stripped
+        populations.append(demog.Population(initial_size=Ne, name=name))
+        return population_id
+
+    # Add in the leaf populations first so that they get IDs 0..n - 1
+    for node in root.walk():
         if len(node.descendants) == 0:
-            # Per extant species (= leaf node) in the tree, add a population with
-            # size Ne. Species names are stored as metadata with the "species_name"
-            # tag.
-            populations.append(
-                demog.Population(initial_size=Ne, name=node.name.strip())
-            )
-            leaf_map[node] = len(populations) - 1
-        else:
-            # Per internal node, add one (if the node is bifurcating) or multiple
-            # (if the node is multi-furcating) MassMigrations. The parent species
-            # maps implicitly to the left-most child species, so we don't generate
-            # any MassMigrations for that.
-            leaf_map[node] = leaf_map[node.descendants[0]]
-            # For each child species after the left-most one, we create
-            # a MassMigration into the left-most species.
-            for child in node.descendants[1:]:
+            add_population(node)
+
+    # Now add in the internal node populations and the mass migration events
+    # joining them.
+    for node in root.walk("postorder"):
+        if len(node.descendants) > 0:
+            population_id = add_population(node)
+            for child in node.descendants:
                 events.append(
                     demog.MassMigration(
-                        source=leaf_map[child], dest=leaf_map[node], time=node.time
+                        source=population_id_map[child],
+                        dest=population_id,
+                        time=node.time,
                     )
                 )
     return demog.Demography(populations=populations, events=events)
@@ -149,11 +155,26 @@ def process_starbeast_tree(
     root = parse_newick(tree_string, generations_per_branch_length_unit)
     populations = []
     events = []
-    # The destination is the left-most leaf for each node. Because we are
-    # using the n leaf populations, we map each node back to the leaf
-    # population that it corresponds to.
-    leaf_map = {}
-    for node in root.walk("postorder"):
+    population_size_map = {}
+    population_id_map = {}
+
+    # The process here follows the same basic logic as parse_species_tree above
+    # but with some extra elaborations to account for changing population sizes
+    # and details of the extended newick annotations.
+
+    def add_population(node):
+        population_id = len(populations)
+        population_id_map[node] = population_id
+        name = f"pop_{population_id}"
+        newick_id = node.name.strip().split("[")[0]
+        if len(newick_id) > 0:
+            name = species_name_map[newick_id]
+        populations.append(
+            demog.Population(initial_size=population_size_map[node], name=name)
+        )
+        return population_id
+
+    for node in root.walk():
         if node.name is None:
             raise ValueError("Annotation missing for one or more nodes.")
         find_pattern = "\\&dmv=\\{([\\d\\.]+?)\\}"
@@ -161,36 +182,22 @@ def process_starbeast_tree(
         if dmv_patterns is None:
             raise ValueError("No dmv annotation for node")
         pop_size = float(dmv_patterns.group(1)) * generations_per_branch_length_unit
-
+        population_size_map[node] = pop_size
         if len(node.descendants) == 0:
-            # Per extant species (= leaf node) in the tree, add a population with
-            # size pop_size. Species names are stored as metadata with the "species_name"
-            # tag.
-            newick_id = node.name.strip().split("[")[0]
-            species_name = species_name_map[newick_id]
-            populations.append(
-                demog.Population(initial_size=pop_size, name=species_name)
-            )
-            leaf_map[node] = len(populations) - 1
-        else:
-            # Per internal node, add one (if the node is bifurcating) or multiple
-            # (if the node is multi-furcating) MassMigrations. The parent species
-            # maps implicitly to the left-most child species, so we don't generate
-            # any MassMigrations for that.
-            leaf_map[node] = leaf_map[node.descendants[0]]
-            # For each child species after the left-most one, we create
-            # a MassMigration into the left-most species.
-            for child in node.descendants[1:]:
+            add_population(node)
+
+    for node in root.walk("postorder"):
+        if len(node.descendants) > 0:
+            population_id = add_population(node)
+
+            for child in node.descendants:
                 events.append(
                     demog.MassMigration(
-                        source=leaf_map[child], dest=leaf_map[node], time=node.time
+                        source=population_id_map[child],
+                        dest=population_id,
+                        time=node.time,
                     )
                 )
-            events.append(
-                demog.PopulationParametersChange(
-                    node.time, initial_size=pop_size, population_id=leaf_map[node]
-                )
-            )
     return demog.Demography(populations=populations, events=events)
 
 

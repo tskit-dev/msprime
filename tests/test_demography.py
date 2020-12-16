@@ -3915,10 +3915,21 @@ class TestDemographyObject:
             "(popA:10.0,popB:10.0)", Ne=1000
         )
         assert isinstance(demography, msprime.Demography)
+        assert len(demography.populations) == 3
         assert demography.populations[0].name == "popA"
         assert demography.populations[0].initial_size == 1000
         assert demography.populations[1].name == "popB"
         assert demography.populations[0].initial_size == 1000
+        assert demography.populations[2].name == "pop_2"
+        assert demography.populations[2].initial_size == 1000
+        assert np.all(demography.migration_matrix == 0)
+        assert len(demography.events) == 2
+        assert demography.events[0].time == 10
+        assert demography.events[0].source == 0
+        assert demography.events[0].dest == 2
+        assert demography.events[1].time == 10
+        assert demography.events[1].source == 1
+        assert demography.events[1].dest == 2
 
     def test_from_starbeast(self):
         with open("tests/data/species_trees/91genes_species_rev.tre") as f:

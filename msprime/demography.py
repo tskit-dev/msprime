@@ -246,6 +246,10 @@ class Demography:
         else:
             return super().__eq__(other)
 
+    # TODO change the Ne parameter to initial_size. This is then either a single
+    # value or a mapping from population name to size. We'll need to test this
+    # out on named internal nodes.
+    # Also update the documentation to accurately describe what's going on.
     @staticmethod
     def from_species_tree(tree, Ne, branch_length_units="gen", generation_time=None):
         """
