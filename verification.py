@@ -4087,6 +4087,275 @@ class SimulateFrom(Test):
             pyplot.close("all")
 
 
+class MutationStatsTest(Test):
+    def plot_relative_error(self, x_values, observed, expected, name):
+        x = np.array([np.full(o.shape, xv) for xv, o in zip(x_values, observed)])
+        observed = np.array(observed)
+        expected = np.array(expected)
+        outfile = self._build_filename(None, name)
+        if not np.all(observed[expected == 0] == 0):
+            raise ValueError("Impossible mutations occurred!")
+        nonzero = expected > 0
+        rel_err = (observed[nonzero] - expected[nonzero]) / expected[nonzero]
+        unique_x = np.unique(x)
+        x_index = np.searchsorted(unique_x, x[nonzero])
+        mean_rel_err = np.bincount(x_index, weights=np.abs(rel_err))
+        mean_rel_err /= np.bincount(x_index)
+        n_expected = np.repeat(-1, len(unique_x))
+        for j, exp in enumerate(expected):
+            n_expected[j] = 1 / np.mean(1 / exp[exp > 0])
+
+        fig, (ax1, ax2) = pyplot.subplots(1, 2, figsize=(12, 6))
+        ax1.scatter(x[nonzero], rel_err)
+        ax1.plot([0, max(unique_x)], [0, 0], linestyle=":")
+        ax1.set_xlabel("sample size")
+        ax1.set_ylabel("relative error")
+        ax2.plot(unique_x, mean_rel_err, label="mean relative error")
+        ax2.plot(
+            unique_x,
+            1 / np.sqrt(1 + n_expected),
+            linestyle=":",
+            label="rough expected behaviour",
+        )
+        ax2.plot([0, max(unique_x)], [0, 0], linestyle=":")
+        ax2.set_ylim(0, max(0.001, max(mean_rel_err)))
+        ax2.set_xlabel("sample size")
+        ax2.set_ylabel("mean relative error")
+        ax2.legend()
+        pyplot.savefig(outfile, dpi=72)
+        pyplot.close(fig)
+
+    def plot_uniform(self, x, name):
+        outfile = self._build_filename(None, name)
+        x = np.array(sorted(x))
+        fig, ax = pyplot.subplots(1, 1, figsize=(8, 8))
+        ax.scatter(np.linspace(0, 1, len(x)), x)
+        ax.plot([-0.1, 1.1], [-0.1, 1.1], "r-", linewidth=2)
+        ax.set_xlabel("expected relative mutation spacings")
+        ax.set_ylabel("observed relative mutation spacings")
+        pyplot.savefig(outfile, dpi=72)
+        pyplot.close(fig)
+
+    def verify_model(self, model, name, verify_rates=False, state_independent=False):
+        L = 100000
+        ots = msprime.sim_ancestry(
+            8,
+            random_seed=7,
+            recombination_rate=3 / L,
+            sequence_length=L,
+            discrete_genome=True,
+        )
+        for discrete_genome in (True, False):
+            verify_times = (not discrete_genome) or state_independent
+            x = []
+            observed = []
+            expected = []
+            observed_roots = []
+            expected_roots = []
+            observed_rates = []
+            expected_rates = []
+            observed_times = []
+            for nmuts in (100, 500, 1000, 1500, 2500, 3500, 5000, 7500, 10000, 20000):
+                rate = nmuts / L
+                ts = msprime.sim_mutations(
+                    ots,
+                    random_seed=6,
+                    rate=rate,
+                    model=model,
+                    discrete_genome=discrete_genome,
+                )
+                x.append(nmuts)
+                # transitions
+                obs, exp = self.verify_transitions(ts, model, discrete_genome, rate)
+                observed.append(obs)
+                expected.append(exp)
+                # root distributions
+                obs_roots, exp_roots = self.verify_roots(
+                    ts, model, discrete_genome, rate
+                )
+                observed_roots.append(obs_roots)
+                expected_roots.append(exp_roots)
+                # mutation rates
+                obs_rates, exp_rates = self.verify_mutation_rates(
+                    ts, model, rate, discrete_genome
+                )
+                observed_rates.append(obs_rates)
+                expected_rates.append(exp_rates)
+                if verify_times:
+                    obs_times = self.verify_mutation_times(ts)
+                    observed_times.extend(obs_times)
+            if discrete_genome:
+                pname = f"{name}_discrete"
+            else:
+                pname = f"{name}_continuous"
+            if name != "binary":
+                self.plot_relative_error(
+                    x, observed=observed, expected=expected, name=pname + "_transitions"
+                )
+            self.plot_relative_error(
+                x,
+                observed=observed_roots,
+                expected=expected_roots,
+                name=pname + "_roots",
+            )
+            # check mutation times
+            if verify_times:
+                self.plot_uniform(observed_times, name=pname + "_times")
+            if verify_rates:
+                # this test only works if the probability of dropping a mutation
+                # doesn't depend on the previous state
+                assert len(set(np.diag(model.transition_matrix))) == 1
+                outfile = self._build_filename(None, pname, "_rates")
+                observed_rates = np.array(observed_rates)
+                expected_rates = np.array(expected_rates)
+                sm.graphics.qqplot(observed_rates)
+                sm.qqplot_2samples(observed_rates, expected_rates, line="45")
+                pyplot.savefig(outfile, dpi=72)
+                pyplot.close("all")
+
+    def verify_transitions(self, ts, model, discrete_genome, mutation_rate):
+        alleles = model.alleles
+        num_alleles = len(alleles)
+
+        observed = np.zeros((num_alleles, num_alleles))
+        expected = np.zeros((num_alleles, num_alleles))
+        for mut in ts.mutations():
+            if mut.parent == tskit.NULL:
+                pa = ts.site(mut.site).ancestral_state
+            else:
+                pa = ts.mutation(mut.parent).derived_state
+            da = mut.derived_state
+            observed[alleles.index(pa), alleles.index(da)] += 1
+        for j, (row, p) in enumerate(zip(observed, model.transition_matrix)):
+            p[j] = 0
+            p /= sum(p)
+            expected[j, :] = sum(row) * p
+        return observed, expected
+
+    def verify_roots(self, ts, model, discrete_genome, mutation_rate):
+        alleles = model.alleles
+        num_alleles = len(alleles)
+        observed = np.zeros((num_alleles,))
+
+        for site in ts.sites():
+            aa = site.ancestral_state
+            observed[alleles.index(aa)] += 1
+
+        expected = np.zeros(num_alleles)
+        change_probs = model.transition_matrix.sum(axis=1) - np.diag(
+            model.transition_matrix
+        )
+        for t in ts.trees():
+            if discrete_genome:
+                t_span = np.ceil(t.interval[1] - np.ceil(t.interval[0]))
+                expected += (
+                    model.root_distribution
+                    * t_span
+                    * (
+                        1
+                        - np.exp(-mutation_rate * t.total_branch_length * change_probs)
+                    )
+                )
+            else:
+                t_span = t.span
+                expected += (
+                    model.root_distribution
+                    * mutation_rate
+                    * t.total_branch_length
+                    * t_span
+                    * change_probs
+                )
+
+        return observed, expected
+
+    def verify_mutation_rates(self, ts, model, rate, discrete_genome):
+        mut_rate = rate * (1 - model.transition_matrix[0, 0])
+        observed = np.zeros(ts.num_trees)
+        expected = np.zeros(ts.num_trees)
+        for j, t in enumerate(ts.trees()):
+            if discrete_genome:
+                span = np.ceil(t.interval[1]) - np.ceil(t.interval[0])
+            else:
+                span = t.span
+            mean = mut_rate * span * t.total_branch_length
+            observed[j] = t.num_mutations
+            # if we draw an indepenent Poisson with the same mean
+            # it should be greater than observed half the time it is different
+            expected[j] = scipy.stats.poisson.rvs(mean, 1)
+        return observed, expected
+
+    def verify_mutation_times(self, ts):
+        start_time = np.full(ts.num_mutations, -1, dtype=np.float32)
+        end_time = np.full(ts.num_mutations, -1, dtype=np.float32)
+        mut_time = np.full(ts.num_mutations, -1, dtype=np.float32)
+        for t in ts.trees():
+            for mut in t.mutations():
+                mut_time[mut.id] = mut.time
+                end_time[mut.id] = t.time(t.parent(mut.node))
+                start_time[mut.id] = t.time(mut.node)
+                if mut.parent != tskit.NULL:
+                    end_time[mut.id] = min(
+                        end_time[mut.id], ts.mutation(mut.parent).time
+                    )
+                    start_time[mut.parent] = max(start_time[mut.parent], mut.time)
+        return (mut_time - start_time) / (end_time - start_time)
+
+    def test_binary_model_stats(self):
+        model = msprime.BinaryMutationModel()
+        self.verify_model(
+            model, name="binary", state_independent=True, verify_rates=True
+        )
+
+    def test_jukes_cantor_stats(self):
+        model = msprime.JC69MutationModel()
+        self.verify_model(
+            model, name="jukes_cantor", state_independent=True, verify_rates=True
+        )
+
+    def test_HKY_stats(self):
+        equilibrium_frequencies = [0.3, 0.2, 0.3, 0.2]
+        kappa = 0.75
+        model = msprime.HKYMutationModel(
+            kappa=kappa, equilibrium_frequencies=equilibrium_frequencies
+        )
+        self.verify_model(model, name="HKY")
+
+    def test_F84_stats(self):
+        equilibrium_frequencies = [0.4, 0.1, 0.1, 0.4]
+        kappa = 0.75
+        model = msprime.F84MutationModel(
+            kappa=kappa, equilibrium_frequencies=equilibrium_frequencies
+        )
+        self.verify_model(model, name="F84")
+
+    def test_GTR_stats(self):
+        relative_rates = [0.2, 0.1, 0.7, 0.5, 0.3, 0.4]
+        equilibrium_frequencies = [0.3, 0.4, 0.2, 0.1]
+        model = msprime.GTRMutationModel(
+            relative_rates=relative_rates,
+            equilibrium_frequencies=equilibrium_frequencies,
+        )
+        self.verify_model(model, name="GTR")
+
+    def test_PAM_stats(self):
+        model = msprime.PAMMutationModel()
+        self.verify_model(model, name="PAM")
+
+    def test_BLOSUM62_stats(self):
+        model = msprime.BLOSUM62MutationModel()
+        self.verify_model(model, name="BLOSUM62")
+
+    def test_arbitrary_model_stats(self):
+        model = msprime.MatrixMutationModel(
+            alleles=["abc", "", "x"],
+            root_distribution=[0.8, 0.0, 0.2],
+            transition_matrix=[[0.2, 0.4, 0.4], [0.1, 0.2, 0.7], [0.5, 0.3, 0.2]],
+        )
+        self.verify_model(
+            model, name="arbitrary", state_independent=True, verify_rates=True
+        )
+
+
 class MutationTest(Test):
     def _transition_matrix_chi_sq(self, transitions, transition_matrix):
         tm_chisq = []
