@@ -19,6 +19,7 @@
 """
 Module responsible for parsing species trees.
 """
+import collections
 import re
 
 import newick
@@ -55,7 +56,44 @@ def parse_starbeast(tree, generation_time, branch_length_units="myr"):
     )
 
 
-def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None):
+def parse_number_or_mapping(value, message):
+    """
+    Interpret the specified value as either a single floating point value,
+    or a mapping and returns a mapping.
+    """
+    try:
+        x = float(value)
+        value = collections.defaultdict(lambda: x)
+    except TypeError:
+        if not isinstance(value, collections.abc.Mapping):
+            raise TypeError(message)
+    return value
+
+
+def parse_initial_size(initial_size):
+    error_message = (
+        "initial_size argument must be a single number or a mapping from "
+        "species names to their population sizes."
+    )
+    return parse_number_or_mapping(initial_size, error_message)
+
+
+def parse_growth_rate(growth_rate):
+    error_message = (
+        "growth_rate argument must be a single number or a mapping from "
+        "species names to their exponential growth rates."
+    )
+    return parse_number_or_mapping(growth_rate, error_message)
+
+
+def parse_species_tree(
+    tree,
+    initial_size,
+    *,
+    branch_length_units="gen",
+    generation_time=None,
+    growth_rate=None,
+):
     """
     Parse a newick encoded species tree into a Demography object. See the
     documentation of :class:`.Demography.from_species_tree` (the public interface)
@@ -70,12 +108,10 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
         err += 'and "gen" (generations).'
         raise ValueError(err)
 
-    try:
-        Ne = float(Ne)
-    except ValueError:
-        raise ValueError("Population size Ne must be numeric.")
-    if Ne <= 0:
-        raise ValueError("Population size Ne must be > 0.")
+    initial_size = parse_initial_size(initial_size)
+    if growth_rate is None:
+        growth_rate = 0
+    growth_rate = parse_growth_rate(growth_rate)
 
     # Make sure that the generation time is either None or positive.
     if generation_time is not None:
@@ -120,7 +156,13 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
             stripped = node.name.strip()
             if len(stripped) > 0:
                 name = stripped
-        populations.append(demog.Population(initial_size=Ne, name=name))
+        populations.append(
+            demog.Population(
+                initial_size=initial_size[name],
+                growth_rate=growth_rate[name],
+                name=name,
+            )
+        )
         return population_id
 
     # Add in the leaf populations first so that they get IDs 0..n - 1
@@ -141,7 +183,9 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
                         time=node.time,
                     )
                 )
-    return demog.Demography(populations=populations, events=events)
+    demography = demog.Demography(populations=populations, events=events)
+    demography.validate()
+    return demography
 
 
 def process_starbeast_tree(
@@ -198,7 +242,9 @@ def process_starbeast_tree(
                         time=node.time,
                     )
                 )
-    return demog.Demography(populations=populations, events=events)
+    demography = demog.Demography(populations=populations, events=events)
+    demography.validate()
+    return demography
 
 
 def is_number(s):

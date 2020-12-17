@@ -246,43 +246,74 @@ class Demography:
         else:
             return super().__eq__(other)
 
-    # TODO change the Ne parameter to initial_size. This is then either a single
-    # value or a mapping from population name to size. We'll need to test this
-    # out on named internal nodes.
-    # Also update the documentation to accurately describe what's going on.
     @staticmethod
-    def from_species_tree(tree, Ne, branch_length_units="gen", generation_time=None):
+    def from_species_tree(
+        tree,
+        initial_size,
+        *,
+        branch_length_units="gen",
+        generation_time=None,
+        growth_rate=None,
+    ):
         """
         Parse a species tree in `Newick
         <https://en.wikipedia.org/wiki/Newick_format>`_ format and return the
         corresponding :class:`Demography` object. The tree is assumed to be
         rooted and ultrametric and branch lengths must be included and
         correspond to time, either in units of millions of years, years, or
-        generations. Leaves must be named.
+        generations.
 
-        .. todo:: Update this documentation.
+        The returned :class:`.Demography` object contains a
+        :class:`.Population` for each node in the species tree. The
+        population's ``name`` attribute will be either the corresponding node
+        label from the newick tree, if it exists, or otherwise the name takes
+        the form "pop_{j}", where j is the position of the given population in
+        the list. Leaf populations are first in the list, and added in
+        left-to-right order. Populations corresponding to the internal nodes
+        are then added in a postorder traversal of the species tree. For each
+        internal node, :class:`.MassMigration` events are added so that
+        lineages move from its child populations at the appropriate time.
 
-        After reading the input tree, this function defines a
-        :class:`.PopulationConfiguration` instance for each terminal node in the tree,
-        corresponding to extant species. These population configurations store the
-        species' name and population size. The specified Ne is used as the size of all
-        populations. Additionally, one or more :class:`.MassMigration` instances are
-        defined for each internal node, with the time of the mass migration set
-        according to the age of the node in the species tree. :math:`n - 1` mass
-        migration events are defined for internal nodes with `n` descendants, meaning
-        that a single event is defined for bifurcating nodes. For each internal node,
-        the left-most of the descendant populations is arbitrarily selected as the
-        destination in all mass migrations defined for that node.
-
-        :warning: This function does not modify migration matrices. When the population
-            configurations and mass migration events returned by this function are used
-            to simulate with the :func:`.simulate` function, it should be ensured that
+        :warning: If continuous migration is added to the returned Demography
+            by updating the migration matrix, it is important to
+            note that the MassMigration events used to move lineages do *not*
+            alter migration rates, and it should be ensured that
             migration rates to source populations of mass migration events are zero
             after the mass migration (viewed backwards in time).
 
+        :todo: Implement the PopulationSplit event and document its use here.
+            We'll still need to put in a warning, so users know that the migration
+            matrix will be updated at every node.
+
+        The initial sizes and growth rates for the populations in the model are
+        set via the ``initial_size`` and ``growth_rate`` arguments. These can be
+        specified in two ways: if a single number is provided, this is used
+        for all populations. The argument may also be a mapping from population
+        names to their respective values. For example:
+
+        .. code-block:: python
+
+            tree = "(A:10.0,B:10.0)C"
+            initial_size = {"A": 1000, "B": 2000, "C": 100}
+            demography = msprime.Demography.from_species_tree(tree, initial_size)
+
+        Note that it is possible to have default population sizes for unnamed
+        ancestral populations using a `collections.defaultdict`, e.g.,
+
+        .. code-block:: python
+
+            tree = "(A:10.0,B:10.0)"
+            initial_size = collections.defaultdict(lambda: 100)
+            initial_size.update({"A": 1000, "B": 2000})
+            demography = msprime.Demography.from_species_tree(tree, initial_size)
+
         :param str tree: The tree string in Newick format, with named leaves and branch
             lengths.
-        :param float Ne: The effective population size.
+        :param initial_size: Each population's initial_size. May be a single number
+            or a mapping from population names to their sizes.
+        :param growth_rate: Each population's growth_rate. May be a single number
+            or a mapping from population names to their exponential growth rates.
+            Defaults to zero.
         :param str branch_length_units: The units of time in which the species tree's
             branch lengths are measured. Allowed branch length units are millions of
             years, years, and generations; these should be specified with the strings
@@ -291,25 +322,13 @@ class Demography:
         :param float generation_time: The number of years per generation. If and only
             if the branch lengths are not in units of generations, the generation time
             must be specified. This defaults to `None`.
-        :type generation_time: float or None
-        :return: A tuple of two lists of which the first contains
-            :class:`.PopulationConfiguration` instances and the second contains
-            :class:`.MassMigration` instances. The population configurations specify
-            the size of each population and the species name corresponding to each
-            population. Species names are stored as metadata in each
-            :class:`.PopulationConfiguration` instance, with the metadata tag
-            "species_name". Sampling configurations and growth rates are not specified
-            in the population configurations. The list of population configurations is
-            ordered according to the order of the corresponding extant species in a
-            `post-order tree traversal
-            <https://en.wikipedia.org/wiki/Tree_traversal#Post-order_(LRN)>`_. The list
-            of mass migration events is ordered by the time of the events, from young
-            to old events.
+        :return: A Demography object representing the specified species tree.
         :rtype: .Demography
         """
         return species_trees.parse_species_tree(
             tree,
-            Ne=Ne,
+            initial_size=initial_size,
+            growth_rate=growth_rate,
             branch_length_units=branch_length_units,
             generation_time=generation_time,
         )
@@ -334,46 +353,26 @@ class Demography:
         trees written by TreeAnnotator based on StarBEAST posterior tree
         distributions.
 
-        .. todo:: update the details of this documentation.
+        The returned :class:`.Demography` object contains a :class:`.Population` for
+        each node in the species tree. The population's ``name`` attribute will
+        be either the corresponding node label from the newick tree, if it exists,
+        or otherwise the name takes the form "pop_{j}", where j is the position
+        of the given population in the list. Leaf populations are first in the
+        list, and added in left-to-right order. Populations corresponding to the
+        internal nodes are then added in a postorder traversal of the species
+        tree. For each internal node, :class:`.MassMigration` events are added
+        so that lineages move from its child populations at the appropriate time.
 
-        After reading the input tree, this function defines a
-        :class:`.PopulationConfiguration` instance for each terminal node in
-        the tree, corresponding to extant species. These population
-        configurations store the species' name and population size, both
-        according to information from the input tree. Additionally, a
-        :class:`.MassMigration` instance is defined for each internal node,
-        with the time of the mass migration set according to the age of the
-        node in the species tree. For each internal node, the left one of the
-        two descendant populations is arbitrarily selected as the destination
-        in the mass migration defined for that node. A
-        :class:`.PopulationParametersChange` instance is also added for each
-        internal node to adjust the population size of the destination
-        population according to the information given in the tree for the
-        population size of the species that is ancestral to the node. Like the
-        mass migration event defined for the same node, the time of the
-        population parameter change is also set according to the age of the
-        node.
-
-        A tuple of two lists of which the first contains
-        :class:`.PopulationConfiguration` instances and the second contains
-        :class:`.MassMigration` and :class:`.PopulationParametersChange` instances.
-        The population configurations specify the size of each population according
-        to the information from the input species tree and the species name
-        corresponding to each population. Species names are stored as metadata in
-        each :class:`.PopulationConfiguration` instance, with the metadata tag
-        "species_name". Sampling configurations and growth rates are not specified
-        in the population configurations. The list of population configurations is
-        ordered according to the order of the corresponding extant species in a
-        `post-order tree traversal
-        <https://en.wikipedia.org/wiki/Tree_traversal#Post-order_(LRN)>`_.
-        The list of mass migration events and population parameter changes is
-        ordered by the time of the events, from young to old events.
-
-        :warning: This function does not modify migration matrices. When the population
-            configurations and mass migration events returned by this function are used
-            to simulate with the :func:`.simulate` function, it should be ensured that
+        :warning: If continuous migration is added to the returned Demography
+            by updating the migration matrix, it is important to
+            note that the MassMigration events used to move lineages do *not*
+            alter migration rates, and it should be ensured that
             migration rates to source populations of mass migration events are zero
             after the mass migration (viewed backwards in time).
+
+        :todo: Implement the PopulationSplit event and document its use here.
+            We'll still need to put in a warning, so users know that the migration
+            matrix will be updated at every node.
 
         :param str tree: The tree string in Nexus format, with named leaves, branch
             lengths, and branch annotation. Typically, this string is the entire content

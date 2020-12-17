@@ -3861,7 +3861,7 @@ class TestDemographyObject:
             demography.validate()
         assert "A population name must be set." in str(excinfo.value)
 
-        for bad_identifier in ["", " x", "x y"]:
+        for bad_identifier in ["", "x ", "x y"]:
             demography.populations[0].name = bad_identifier
             with pytest.raises(ValueError) as excinfo:
                 demography.validate()
@@ -3912,7 +3912,7 @@ class TestDemographyObject:
     def test_from_species_tree(self):
         # basic checks here - indepth testing in the test_species_tree_parsing.py file.
         demography = msprime.Demography.from_species_tree(
-            "(popA:10.0,popB:10.0)", Ne=1000
+            "(popA:10.0,popB:10.0)", initial_size=1000
         )
         assert isinstance(demography, msprime.Demography)
         assert len(demography.populations) == 3
