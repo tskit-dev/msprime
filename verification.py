@@ -4136,6 +4136,26 @@ class MutationStatsTest(Test):
         pyplot.savefig(outfile, dpi=72)
         pyplot.close(fig)
 
+    def plot_y_equals_x(self, x, y, name):
+        x = np.array(x).flatten()
+        y = np.array(y).flatten()
+        xx = np.linspace(1, 1.1 * max(x), 51)
+        outfile = self._build_filename(None, name)
+        fig, ax = pyplot.subplots(1, 1, figsize=(8, 8))
+        ax.scatter(x, y)
+        ax.plot(
+            [0, 1.1 * np.max(x)], [0, 1.1 * np.max(x)], "r-", linewidth=2, label="y = x"
+        )
+        ax.plot(
+            xx, xx + 4 * np.sqrt(xx), "r:", linewidth=2, label="rough expected bounds"
+        )
+        ax.plot(xx, xx - 4 * np.sqrt(xx), "r:", linewidth=2)
+        ax.legend()
+        ax.set_xlabel("expected")
+        ax.set_ylabel("observed")
+        pyplot.savefig(outfile, dpi=72)
+        pyplot.close(fig)
+
     def verify_model(self, model, name, verify_rates=False, state_independent=False):
         L = 100000
         ots = msprime.sim_ancestry(
@@ -4205,13 +4225,9 @@ class MutationStatsTest(Test):
                 # this test only works if the probability of dropping a mutation
                 # doesn't depend on the previous state
                 assert len(set(np.diag(model.transition_matrix))) == 1
-                outfile = self._build_filename(None, pname, "_rates")
-                observed_rates = np.array(observed_rates)
-                expected_rates = np.array(expected_rates)
-                sm.graphics.qqplot(observed_rates)
-                sm.qqplot_2samples(observed_rates, expected_rates, line="45")
-                pyplot.savefig(outfile, dpi=72)
-                pyplot.close("all")
+                self.plot_y_equals_x(
+                    observed_rates, expected_rates, name=pname + "_rates"
+                )
 
     def verify_transitions(self, ts, model, discrete_genome, mutation_rate):
         alleles = model.alleles
