@@ -32,6 +32,7 @@ import numpy as np
 import tskit
 
 from . import ancestry
+from . import species_trees
 
 
 logger = logging.getLogger(__name__)
@@ -246,8 +247,156 @@ class Demography:
             return super().__eq__(other)
 
     @staticmethod
+    def from_species_tree(
+        tree,
+        initial_size,
+        *,
+        branch_length_units="gen",
+        generation_time=None,
+        growth_rate=None,
+    ):
+        """
+        Parse a species tree in `Newick
+        <https://en.wikipedia.org/wiki/Newick_format>`_ format and return the
+        corresponding :class:`Demography` object. The tree is assumed to be
+        rooted and ultrametric and branch lengths must be included and
+        correspond to time, either in units of millions of years, years, or
+        generations.
+
+        The returned :class:`.Demography` object contains a
+        :class:`.Population` for each node in the species tree. The
+        population's ``name`` attribute will be either the corresponding node
+        label from the newick tree, if it exists, or otherwise the name takes
+        the form "pop_{j}", where j is the position of the given population in
+        the list. Leaf populations are first in the list, and added in
+        left-to-right order. Populations corresponding to the internal nodes
+        are then added in a postorder traversal of the species tree. For each
+        internal node, :class:`.MassMigration` events are added so that
+        lineages move from its child populations at the appropriate time.
+
+        :warning: If continuous migration is added to the returned Demography
+            by updating the migration matrix, it is important to
+            note that the MassMigration events used to move lineages do *not*
+            alter migration rates, and it should be ensured that
+            migration rates to source populations of mass migration events are zero
+            after the mass migration (viewed backwards in time).
+
+        :todo: Implement the PopulationSplit event and document its use here.
+            We'll still need to put in a warning, so users know that the migration
+            matrix will be updated at every node.
+
+        The initial sizes and growth rates for the populations in the model are
+        set via the ``initial_size`` and ``growth_rate`` arguments. These can be
+        specified in two ways: if a single number is provided, this is used
+        for all populations. The argument may also be a mapping from population
+        names to their respective values. For example:
+
+        .. code-block:: python
+
+            tree = "(A:10.0,B:10.0)C"
+            initial_size = {"A": 1000, "B": 2000, "C": 100}
+            demography = msprime.Demography.from_species_tree(tree, initial_size)
+
+        Note that it is possible to have default population sizes for unnamed
+        ancestral populations using a `collections.defaultdict`, e.g.,
+
+        .. code-block:: python
+
+            tree = "(A:10.0,B:10.0)"
+            initial_size = collections.defaultdict(lambda: 100)
+            initial_size.update({"A": 1000, "B": 2000})
+            demography = msprime.Demography.from_species_tree(tree, initial_size)
+
+        :param str tree: The tree string in Newick format, with named leaves and branch
+            lengths.
+        :param initial_size: Each population's initial_size. May be a single number
+            or a mapping from population names to their sizes.
+        :param growth_rate: Each population's growth_rate. May be a single number
+            or a mapping from population names to their exponential growth rates.
+            Defaults to zero.
+        :param str branch_length_units: The units of time in which the species tree's
+            branch lengths are measured. Allowed branch length units are millions of
+            years, years, and generations; these should be specified with the strings
+            ``"myr"``, ``"yr"``, or ``"gen"``, respectively. This defaults to
+            ``"gen"``.
+        :param float generation_time: The number of years per generation. If and only
+            if the branch lengths are not in units of generations, the generation time
+            must be specified. This defaults to `None`.
+        :return: A Demography object representing the specified species tree.
+        :rtype: .Demography
+        """
+        return species_trees.parse_species_tree(
+            tree,
+            initial_size=initial_size,
+            growth_rate=growth_rate,
+            branch_length_units=branch_length_units,
+            generation_time=generation_time,
+        )
+
+    @staticmethod
+    def from_starbeast(tree, generation_time, branch_length_units="myr"):
+        """
+        Parse a species tree produced by the program `TreeAnnotator
+        <https://www.beast2.org/treeannotator>`_
+        based on a posterior tree distribution generated with `StarBEAST
+        <https://academic.oup.com/mbe/article/34/8/2101/3738283>`_  and return
+        the corresponding Demography object.
+
+        Species trees produced by TreeAnnotator are written in `Nexus
+        <https://en.wikipedia.org/wiki/Nexus_file>`_ format and are rooted,
+        bifurcating, and ultrametric. Branch lengths usually are in units of
+        millions of years, but the use of other units is permitted by StarBEAST
+        (and thus TreeAnnotator). This function allows branch length units of
+        millions of years or years. Leaves must be named and the tree must
+        include information on population sizes of leaf and ancestral species
+        in the form of annotation with the "dmv" tag, which is the case for
+        trees written by TreeAnnotator based on StarBEAST posterior tree
+        distributions.
+
+        The returned :class:`.Demography` object contains a :class:`.Population` for
+        each node in the species tree. The population's ``name`` attribute will
+        be either the corresponding node label from the newick tree, if it exists,
+        or otherwise the name takes the form "pop_{j}", where j is the position
+        of the given population in the list. Leaf populations are first in the
+        list, and added in left-to-right order. Populations corresponding to the
+        internal nodes are then added in a postorder traversal of the species
+        tree. For each internal node, :class:`.MassMigration` events are added
+        so that lineages move from its child populations at the appropriate time.
+
+        :warning: If continuous migration is added to the returned Demography
+            by updating the migration matrix, it is important to
+            note that the MassMigration events used to move lineages do *not*
+            alter migration rates, and it should be ensured that
+            migration rates to source populations of mass migration events are zero
+            after the mass migration (viewed backwards in time).
+
+        :todo: Implement the PopulationSplit event and document its use here.
+            We'll still need to put in a warning, so users know that the migration
+            matrix will be updated at every node.
+
+        :param str tree: The tree string in Nexus format, with named leaves, branch
+            lengths, and branch annotation. Typically, this string is the entire content
+            of a file written by TreeAnnotator.
+        :param float generation_time: The number of years per generation.
+        :param str branch_length_units: The units of time in which the species tree's
+            branch lengths are measured. Allowed branch length units are millions of
+            years, and years; these should be specified with the strings ``"myr"`` or
+            ``"yr"``, respectively. This defaults to ``"myr"``.
+        :return: A :class:`.Demography` instance that describing the information in the
+            specified species tree.
+        :rtype: .Demography
+        """
+        return species_trees.parse_starbeast(
+            tree=tree,
+            generation_time=generation_time,
+            branch_length_units=branch_length_units,
+        )
+
+    @staticmethod
     def from_old_style(
-        population_configurations=None, migration_matrix=None, demographic_events=None
+        population_configurations=None,
+        migration_matrix=None,
+        demographic_events=None,
     ):
         """
         Creates a Demography object from the pre 1.0 style input parameters,

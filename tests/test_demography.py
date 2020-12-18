@@ -3861,7 +3861,7 @@ class TestDemographyObject:
             demography.validate()
         assert "A population name must be set." in str(excinfo.value)
 
-        for bad_identifier in ["", " x", "x y"]:
+        for bad_identifier in ["", "x ", "x y"]:
             demography.populations[0].name = bad_identifier
             with pytest.raises(ValueError) as excinfo:
                 demography.validate()
@@ -3908,6 +3908,35 @@ class TestDemographyObject:
             msprime.Demography.isolated_model([1], growth_rate=[[], []])
         with pytest.raises(ValueError):
             msprime.Demography.isolated_model([1], growth_rate=[])
+
+    def test_from_species_tree(self):
+        # basic checks here - indepth testing in the test_species_tree_parsing.py file.
+        demography = msprime.Demography.from_species_tree(
+            "(popA:10.0,popB:10.0)", initial_size=1000
+        )
+        assert isinstance(demography, msprime.Demography)
+        assert len(demography.populations) == 3
+        assert demography.populations[0].name == "popA"
+        assert demography.populations[0].initial_size == 1000
+        assert demography.populations[1].name == "popB"
+        assert demography.populations[0].initial_size == 1000
+        assert demography.populations[2].name == "pop_2"
+        assert demography.populations[2].initial_size == 1000
+        assert np.all(demography.migration_matrix == 0)
+        assert len(demography.events) == 2
+        assert demography.events[0].time == 10
+        assert demography.events[0].source == 0
+        assert demography.events[0].dest == 2
+        assert demography.events[1].time == 10
+        assert demography.events[1].source == 1
+        assert demography.events[1].dest == 2
+
+    def test_from_starbeast(self):
+        with open("tests/data/species_trees/91genes_species_rev.tre") as f:
+            nexus = f.read()
+        demography = msprime.Demography.from_starbeast(nexus, 1)
+        assert isinstance(demography, msprime.Demography)
+        assert demography.populations[0].name == "spc12"
 
 
 class TestDemographyFromOldStyle:

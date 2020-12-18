@@ -47,12 +47,6 @@ API Documentation
 .. autoclass:: msprime.Demography
     :members:
 
-
-.. todo:: These functions should be static methods of Demography.
-
-.. autofunction:: msprime.parse_species_tree()
-.. autofunction:: msprime.parse_starbeast()
-
 ***********
 Populations
 ***********
@@ -146,14 +140,13 @@ diverged from each other. Viewed backwards in time, divergence events are equiva
 to mass migration events in which all lineages from one population move to another
 population. The history of a set of populations can thus be modelled according to
 a given species tree. To faciliate the specification of the model,
-:func:`.parse_species_tree` parses a species tree and returns the mass migration
-events corresponding to all species divergence events in the tree, together with
-population configurations that specify population sizes and names.
+:meth:`.Demography.from_species_tree` parses a species tree and returns
+the corresponding Demography object.
 
 When species trees are estimated with a program like `StarBEAST
 <https://academic.oup.com/mbe/article/34/8/2101/3738283>`_ they can further
 contain estimates on the population sizes of extant and ancestral species.
-:func:`.parse_starbeast` parses species trees estimated with StarBEAST and uses
+:meth:`.Demography.from_starbeast` parses species trees estimated with StarBEAST and uses
 these estimates to define the population configurations.
 
 Note that when the species tree has branch lengths not in units of generations but

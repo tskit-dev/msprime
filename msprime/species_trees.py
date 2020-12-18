@@ -19,6 +19,7 @@
 """
 Module responsible for parsing species trees.
 """
+import collections
 import re
 
 import newick
@@ -28,64 +29,9 @@ from . import demography as demog
 
 def parse_starbeast(tree, generation_time, branch_length_units="myr"):
     """
-    This function parses a species tree produced by the program `TreeAnnotator
-    <https://www.beast2.org/treeannotator>`_
-    based on a posterior tree distribution generated with `StarBEAST
-    <https://academic.oup.com/mbe/article/34/8/2101/3738283>`_  and defines a
-    simulation model according to the species tree. Species trees produced by
-    TreeAnnotator are written in `Nexus
-    <https://en.wikipedia.org/wiki/Nexus_file>`_ format and are rooted,
-    bifurcating, and ultrametric. Branch lengths usually are in units of millions
-    of years, but the use of other units is permitted by StarBEAST (and thus
-    TreeAnnotator). This function allows branch length units of millions of years
-    or years. Leaves must be named and the tree must include information on
-    population sizes of leaf and ancestral species in the form of annotation with
-    the "dmv" tag, which is the case for trees written by TreeAnnotator based on
-    StarBEAST posterior tree distributions.
-
-    After reading the input tree, this function defines a
-    :class:`.PopulationConfiguration` instance for each terminal node in the tree,
-    corresponding to extant species. These population configurations store the
-    species' name and population size, both according to information from the input
-    tree. Additionally, a :class:`.MassMigration` instance is defined for each
-    internal node, with the time of the mass migration set according to the age of
-    the node in the species tree. For each internal node, the left one of the two
-    descendant populations is arbitrarily selected as the destination in the mass
-    migration defined for that node. A :class:`.PopulationParametersChange`
-    instance is also added for each internal node to adjust the population
-    size of the destination population according to the information given in the
-    tree for the population size of the species that is ancestral to the node. Like
-    the mass migration event defined for the same node, the time of the population
-    parameter change is also set according to the age of the node.
-
-    :param str tree: The tree string in Nexus format, with named leaves, branch
-        lengths, and branch annotation. Typically, this string is the entire content
-        of a file written by TreeAnnotator.
-    :param float generation_time: The number of years per generation.
-    :param str branch_length_units: The units of time in which the species tree's
-        branch lengths are measured. Allowed branch length units are millions of
-        years, and years; these should be specified with the strings ``"myr"`` or
-        ``"yr"``, respectively. This defaults to ``"myr"``.
-    :return: A tuple of two lists of which the first contains
-        :class:`.PopulationConfiguration` instances and the second contains
-        :class:`.MassMigration` and :class:`.PopulationParametersChange` instances.
-        The population configurations specify the size of each population according
-        to the information from the input species tree and the species name
-        corresponding to each population. Species names are stored as metadata in
-        each :class:`.PopulationConfiguration` instance, with the metadata tag
-        "species_name". Sampling configurations and growth rates are not specified
-        in the population configurations. The list of population configurations is
-        ordered according to the order of the corresponding extant species in a
-        `post-order tree traversal
-        <https://en.wikipedia.org/wiki/Tree_traversal#Post-order_(LRN)>`_.
-        The list of mass migration events and population parameter changes is
-        ordered by the time of the events, from young to old events.
-    :rtype: (list, list)
-    :warning: This function does not modify migration matrices. When the population
-        configurations and mass migration events returned by this function are used
-        to simulate with the :func:`.simulate` function, it should be ensured that
-        migration rates to source populations of mass migration events are zero
-        after the mass migration (viewed backwards in time).
+    Parse a nexusencoded species tree into a Demography object. See the
+    documentation of :class:`.Demography.from_starbeast` (the public interface)
+    for details.
     """
 
     # Make sure that branch length units are either "myr" or "yr".
@@ -110,60 +56,49 @@ def parse_starbeast(tree, generation_time, branch_length_units="myr"):
     )
 
 
-def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None):
+def parse_number_or_mapping(value, message):
     """
-    This function parses a species tree in
-    `Newick <https://en.wikipedia.org/wiki/Newick_format>`_ format and defines a
-    simulation model according to the species tree. The tree is assumed to be
-    rooted and ultrametric and branch lengths must be included and correspond to
-    time, either in units of millions of years, years, or generations. Leaves must
-    be named.
-
-    After reading the input tree, this function defines a
-    :class:`.PopulationConfiguration` instance for each terminal node in the tree,
-    corresponding to extant species. These population configurations store the
-    species' name and population size. The specified Ne is used as the size of all
-    populations. Additionally, one or more :class:`.MassMigration` instances are
-    defined for each internal node, with the time of the mass migration set
-    according to the age of the node in the species tree. :math:`n - 1` mass
-    migration events are defined for internal nodes with `n` descendants, meaning
-    that a single event is defined for bifurcating nodes. For each internal node,
-    the left-most of the descendant populations is arbitrarily selected as the
-    destination in all mass migrations defined for that node.
-
-    :param str tree: The tree string in Newick format, with named leaves and branch
-        lengths.
-    :param float Ne: The effective population size.
-    :param str branch_length_units: The units of time in which the species tree's
-        branch lengths are measured. Allowed branch length units are millions of
-        years, years, and generations; these should be specified with the strings
-        ``"myr"``, ``"yr"``, or ``"gen"``, respectively. This defaults to
-        ``"gen"``.
-    :param float generation_time: The number of years per generation. If and only
-        if the branch lengths are not in units of generations, the generation time
-        must be specified. This defaults to `None`.
-    :type generation_time: float or None
-    :return: A tuple of two lists of which the first contains
-        :class:`.PopulationConfiguration` instances and the second contains
-        :class:`.MassMigration` instances. The population configurations specify
-        the size of each population and the species name corresponding to each
-        population. Species names are stored as metadata in each
-        :class:`.PopulationConfiguration` instance, with the metadata tag
-        "species_name". Sampling configurations and growth rates are not specified
-        in the population configurations. The list of population configurations is
-        ordered according to the order of the corresponding extant species in a
-        `post-order tree traversal
-        <https://en.wikipedia.org/wiki/Tree_traversal#Post-order_(LRN)>`_. The list
-        of mass migration events is ordered by the time of the events, from young
-        to old events.
-    :rtype: (list, list)
-    :warning: This function does not modify migration matrices. When the population
-        configurations and mass migration events returned by this function are used
-        to simulate with the :func:`.simulate` function, it should be ensured that
-        migration rates to source populations of mass migration events are zero
-        after the mass migration (viewed backwards in time).
+    Interpret the specified value as either a single floating point value,
+    or a mapping and returns a mapping.
     """
+    try:
+        x = float(value)
+        value = collections.defaultdict(lambda: x)
+    except TypeError:
+        if not isinstance(value, collections.abc.Mapping):
+            raise TypeError(message)
+    return value
 
+
+def parse_initial_size(initial_size):
+    error_message = (
+        "initial_size argument must be a single number or a mapping from "
+        "species names to their population sizes."
+    )
+    return parse_number_or_mapping(initial_size, error_message)
+
+
+def parse_growth_rate(growth_rate):
+    error_message = (
+        "growth_rate argument must be a single number or a mapping from "
+        "species names to their exponential growth rates."
+    )
+    return parse_number_or_mapping(growth_rate, error_message)
+
+
+def parse_species_tree(
+    tree,
+    initial_size,
+    *,
+    branch_length_units="gen",
+    generation_time=None,
+    growth_rate=None,
+):
+    """
+    Parse a newick encoded species tree into a Demography object. See the
+    documentation of :class:`.Demography.from_species_tree` (the public interface)
+    for details.
+    """
     # Make sure that branch length units are either "myr", "yr", or "gen".
     allowed_branch_lenth_units = ["myr", "yr", "gen"]
     if branch_length_units not in allowed_branch_lenth_units:
@@ -173,12 +108,10 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
         err += 'and "gen" (generations).'
         raise ValueError(err)
 
-    try:
-        Ne = float(Ne)
-    except ValueError:
-        raise ValueError("Population size Ne must be numeric.")
-    if Ne <= 0:
-        raise ValueError("Population size Ne must be > 0.")
+    initial_size = parse_initial_size(initial_size)
+    if growth_rate is None:
+        growth_rate = 0
+    growth_rate = parse_growth_rate(growth_rate)
 
     # Make sure that the generation time is either None or positive.
     if generation_time is not None:
@@ -208,37 +141,51 @@ def parse_species_tree(tree, Ne, branch_length_units="gen", generation_time=None
 
     # Define populations and demographic events according to the
     # specified population size and the divergence times in the species tree.
-    # Per divergence event (node in the tree), a mass migration with a proportion
-    # of 1 of the population is used. The destination is the left-most leaf for
-    # each node. Because we are using the n leaf populations, we map each node back
-    # to the leaf population that it corresponds to.
+    # Each divergence event (node in the tree) corresponds to an ancestral
+    # population, and mass migration events with proportion 1 move all lineages
+    # from the child populations into this new populationl
     populations = []
     events = []
-    leaf_map = {}
-    for node in root.walk("postorder"):
-        if len(node.descendants) == 0:
-            # Per extant species (= leaf node) in the tree, add a population with
-            # size Ne. Species names are stored as metadata with the "species_name"
-            # tag.
-            populations.append(
-                demog.Population(initial_size=Ne, name=node.name.strip())
+    population_id_map = {}
+
+    def add_population(node):
+        population_id = len(populations)
+        population_id_map[node] = population_id
+        name = f"pop_{population_id}"
+        if node.name is not None:
+            stripped = node.name.strip()
+            if len(stripped) > 0:
+                name = stripped
+        populations.append(
+            demog.Population(
+                initial_size=initial_size[name],
+                growth_rate=growth_rate[name],
+                name=name,
             )
-            leaf_map[node] = len(populations) - 1
-        else:
-            # Per internal node, add one (if the node is bifurcating) or multiple
-            # (if the node is multi-furcating) MassMigrations. The parent species
-            # maps implicitly to the left-most child species, so we don't generate
-            # any MassMigrations for that.
-            leaf_map[node] = leaf_map[node.descendants[0]]
-            # For each child species after the left-most one, we create
-            # a MassMigration into the left-most species.
-            for child in node.descendants[1:]:
+        )
+        return population_id
+
+    # Add in the leaf populations first so that they get IDs 0..n - 1
+    for node in root.walk():
+        if len(node.descendants) == 0:
+            add_population(node)
+
+    # Now add in the internal node populations and the mass migration events
+    # joining them.
+    for node in root.walk("postorder"):
+        if len(node.descendants) > 0:
+            population_id = add_population(node)
+            for child in node.descendants:
                 events.append(
                     demog.MassMigration(
-                        source=leaf_map[child], dest=leaf_map[node], time=node.time
+                        source=population_id_map[child],
+                        dest=population_id,
+                        time=node.time,
                     )
                 )
-    return demog.Demography(populations=populations, events=events)
+    demography = demog.Demography(populations=populations, events=events)
+    demography.validate()
+    return demography
 
 
 def process_starbeast_tree(
@@ -252,11 +199,26 @@ def process_starbeast_tree(
     root = parse_newick(tree_string, generations_per_branch_length_unit)
     populations = []
     events = []
-    # The destination is the left-most leaf for each node. Because we are
-    # using the n leaf populations, we map each node back to the leaf
-    # population that it corresponds to.
-    leaf_map = {}
-    for node in root.walk("postorder"):
+    population_size_map = {}
+    population_id_map = {}
+
+    # The process here follows the same basic logic as parse_species_tree above
+    # but with some extra elaborations to account for changing population sizes
+    # and details of the extended newick annotations.
+
+    def add_population(node):
+        population_id = len(populations)
+        population_id_map[node] = population_id
+        name = f"pop_{population_id}"
+        newick_id = node.name.strip().split("[")[0]
+        if len(newick_id) > 0:
+            name = species_name_map[newick_id]
+        populations.append(
+            demog.Population(initial_size=population_size_map[node], name=name)
+        )
+        return population_id
+
+    for node in root.walk():
         if node.name is None:
             raise ValueError("Annotation missing for one or more nodes.")
         find_pattern = "\\&dmv=\\{([\\d\\.]+?)\\}"
@@ -264,37 +226,25 @@ def process_starbeast_tree(
         if dmv_patterns is None:
             raise ValueError("No dmv annotation for node")
         pop_size = float(dmv_patterns.group(1)) * generations_per_branch_length_unit
-
+        population_size_map[node] = pop_size
         if len(node.descendants) == 0:
-            # Per extant species (= leaf node) in the tree, add a population with
-            # size pop_size. Species names are stored as metadata with the "species_name"
-            # tag.
-            newick_id = node.name.strip().split("[")[0]
-            species_name = species_name_map[newick_id]
-            populations.append(
-                demog.Population(initial_size=pop_size, name=species_name)
-            )
-            leaf_map[node] = len(populations) - 1
-        else:
-            # Per internal node, add one (if the node is bifurcating) or multiple
-            # (if the node is multi-furcating) MassMigrations. The parent species
-            # maps implicitly to the left-most child species, so we don't generate
-            # any MassMigrations for that.
-            leaf_map[node] = leaf_map[node.descendants[0]]
-            # For each child species after the left-most one, we create
-            # a MassMigration into the left-most species.
-            for child in node.descendants[1:]:
+            add_population(node)
+
+    for node in root.walk("postorder"):
+        if len(node.descendants) > 0:
+            population_id = add_population(node)
+
+            for child in node.descendants:
                 events.append(
                     demog.MassMigration(
-                        source=leaf_map[child], dest=leaf_map[node], time=node.time
+                        source=population_id_map[child],
+                        dest=population_id,
+                        time=node.time,
                     )
                 )
-            events.append(
-                demog.PopulationParametersChange(
-                    node.time, initial_size=pop_size, population_id=leaf_map[node]
-                )
-            )
-    return demog.Demography(populations=populations, events=events)
+    demography = demog.Demography(populations=populations, events=events)
+    demography.validate()
+    return demography
 
 
 def is_number(s):
