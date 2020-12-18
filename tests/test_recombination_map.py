@@ -19,7 +19,6 @@
 """
 Tests for the legacy recombination map functionality.
 """
-import gzip
 import io
 import os
 import random
@@ -27,7 +26,6 @@ import tempfile
 import unittest
 import warnings
 
-import numpy as np
 import pytest
 
 import msprime
@@ -261,50 +259,6 @@ class TestReadHapmap:
     """
     Tests file reading code.
     """
-
-    def test_read_hapmap_simple(self, tmp_path):
-        hapfile = io.StringIO(
-            """\
-            HEADER
-            chr1 0 1
-            chr1 1 5 x
-            chr1 2 0 x x x"""
-        )
-        rm = msprime.read_hapmap(hapfile)
-        np.testing.assert_array_equal(rm.position, [0, 1, 2])
-        np.testing.assert_array_equal(rm.rate, [1e-8, 5e-8])
-
-    def test_read_hapmap_nonzero_rate_start(self):
-        hapfile = io.StringIO(
-            """\
-            HEADER
-            chr1 1 5 x
-            chr1 2 0 x x x"""
-        )
-        rm = msprime.read_hapmap(hapfile)
-        np.testing.assert_array_equal(rm.position, [0, 1, 2])
-        np.testing.assert_array_equal(rm.rate, [0, 5e-8])
-
-    def test_read_hapmap_nonzero_end(self):
-        hapfile = io.StringIO(
-            """\
-            HEADER
-            chr1 0 5 x
-            chr1 2 1 x x x"""
-        )
-        with pytest.raises(ValueError):
-            msprime.read_hapmap(hapfile)
-
-    def test_read_hapmap_gzipped(self, tmp_path):
-        hapfile = os.path.join(tmp_path, "hapmap.txt.gz")
-        with gzip.GzipFile(hapfile, "wb") as gzfile:
-            gzfile.write(b"HEADER\n")
-            gzfile.write(b"chr1 0 1\n")
-            gzfile.write(b"chr1 1 5.5\n")
-            gzfile.write(b"chr1 2 0\n")
-        rm = msprime.read_hapmap(hapfile)
-        np.testing.assert_array_equal(rm.position, [0, 1, 2])
-        np.testing.assert_array_equal(rm.rate, [1e-8, 5.5e-8])
 
     def test_read_hapmap_deprecation_warning(self):
         hapfile = io.StringIO(

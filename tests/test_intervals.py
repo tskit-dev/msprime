@@ -19,6 +19,10 @@
 """
 Test cases for the intervals module.
 """
+import gzip
+import io
+import os
+
 import numpy as np
 import pytest
 
@@ -29,7 +33,7 @@ class TestRateMap:
     """
     Test the underlying RateMap class.
 
-    At the moment, much of the RateMap class is tested in test_recombination_map.py,
+    NB: some of the RateMap class is tested in test_recombination_map.py,
     as msprime.RecombinationMap contains a RateMap within it. We should probably move
     some of that testing into this class.
     """
@@ -358,3 +362,194 @@ class TestSlice:
             recomb_map[-101:]
         with pytest.raises(IndexError):
             recomb_map[:-101]
+
+
+class TestReadHapmap:
+    def test_read_hapmap_simple(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 1 x 0
+            chr1 2 x 0.000001 x
+            chr1 3 x 0.000006 x x"""
+        )
+        rm = msprime.read_hapmap(hapfile)
+        np.testing.assert_array_equal(rm.position, [0, 1, 2, 3])
+        assert np.allclose(rm.rate, [0, 1e-8, 5e-8])
+        assert rm.start_position == 1
+
+    def test_read_hapmap_from_filename(self, tmp_path):
+        with open(tmp_path / "hapfile.txt", "wt") as hapfile:
+            hapfile.write(
+                """\
+                HEADER
+                chr1 1 x 0
+                chr1 2 x 0.000001 x
+                chr1 3 x 0.000006 x x"""
+            )
+        rm = msprime.read_hapmap(tmp_path / "hapfile.txt")
+        np.testing.assert_array_equal(rm.position, [0, 1, 2, 3])
+        assert np.allclose(rm.rate, [0, 1e-8, 5e-8])
+        assert rm.start_position == 1
+
+    @pytest.mark.filterwarnings("ignore:loadtxt")
+    def test_read_hapmap_empty(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER"""
+        )
+        with pytest.raises(ValueError, match="Empty"):
+            msprime.read_hapmap(hapfile)
+
+    def test_read_hapmap_col_pos(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            0 0
+            0.000001 1 x
+            0.000006 2 x x"""
+        )
+        rm = msprime.read_hapmap(hapfile, position_col=1, map_col=0)
+        np.testing.assert_array_equal(rm.position, [0, 1, 2])
+        assert np.allclose(rm.rate, [1e-8, 5e-8])
+
+    def test_read_hapmap_map_and_rate(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 0 0 0
+            chr1 1 1 0.000001 x
+            chr1 2 2 0.000006 x x"""
+        )
+        with pytest.raises(ValueError, match="both rate_col and map_col"):
+            msprime.read_hapmap(hapfile, rate_col=2, map_col=3)
+
+    def test_read_hapmap_duplicate_pos(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            0 0
+            0.000001 1 x
+            0.000006 2 x x"""
+        )
+        with pytest.raises(ValueError, match="same columns"):
+            msprime.read_hapmap(hapfile, map_col=1)
+
+    def test_read_hapmap_nonzero_rate_start(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 1 5 x
+            chr1 2 0 x x x"""
+        )
+        rm = msprime.read_hapmap(hapfile, rate_col=2)
+        np.testing.assert_array_equal(rm.position, [0, 1, 2])
+        np.testing.assert_array_equal(rm.rate, [0, 5e-8])
+
+    def test_read_hapmap_nonzero_rate_end(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 0 5 x
+            chr1 2 1 x x x"""
+        )
+        with pytest.raises(ValueError, match="last entry.*must be zero"):
+            msprime.read_hapmap(hapfile, rate_col=2)
+
+    def test_read_hapmap_gzipped(self, tmp_path):
+        hapfile = os.path.join(tmp_path, "hapmap.txt.gz")
+        with gzip.GzipFile(hapfile, "wb") as gzfile:
+            gzfile.write(b"HEADER\n")
+            gzfile.write(b"chr1 0 1\n")
+            gzfile.write(b"chr1 1 5.5\n")
+            gzfile.write(b"chr1 2 0\n")
+        rm = msprime.read_hapmap(hapfile, rate_col=2)
+        np.testing.assert_array_equal(rm.position, [0, 1, 2])
+        np.testing.assert_array_equal(rm.rate, [1e-8, 5.5e-8])
+
+    def test_read_hapmap_nonzero_map_start(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 1 x 0.000001
+            chr1 2 x 0.000001 x
+            chr1 3 x 0.000006 x x x"""
+        )
+        rm = msprime.read_hapmap(hapfile)
+        np.testing.assert_array_equal(rm.position, [0, 1, 2, 3])
+        assert np.allclose(rm.rate, [1e-8, 0, 5e-8])
+
+    def test_read_hapmap_bad_nonzero_map_start(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 0 x 0.0000005
+            chr1 1 x 0.000001 x
+            chr1 2 x 0.000006 x x x"""
+        )
+        with pytest.raises(ValueError, match="start.*must be zero"):
+            msprime.read_hapmap(hapfile)
+
+    def test_sequence_length(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 0 x 0
+            chr1 1 x 0.000001 x
+            chr1 2 x 0.000006 x x x"""
+        )
+        # test identical seq len
+        rm = msprime.read_hapmap(hapfile, sequence_length=2)
+        np.testing.assert_array_equal(rm.position, [0, 1, 2])
+        assert np.allclose(rm.rate, [1e-8, 5e-8])
+        assert rm.end_position == 2
+
+        hapfile.seek(0)
+        rm = msprime.read_hapmap(hapfile, sequence_length=10)
+        np.testing.assert_array_equal(rm.position, [0, 1, 2, 10])
+        assert np.allclose(rm.rate, [1e-8, 5e-8, 0])
+        assert rm.end_position == 2
+
+    def test_bad_sequence_length(self):
+        hapfile = io.StringIO(
+            """\
+            HEADER
+            chr1 0 x 0
+            chr1 1 x 0.000001 x
+            chr1 2 x 0.000006 x x x"""
+        )
+        with pytest.raises(ValueError, match="sequence_length"):
+            msprime.read_hapmap(hapfile, sequence_length=1.999)
+
+    def test_no_header(self):
+        data = """\
+            chr1 0 x 0
+            chr1 1 x 0.000001 x
+            chr1 2 x 0.000006 x x x"""
+        hapfile_noheader = io.StringIO(data)
+        hapfile_header = io.StringIO("chr pos rate cM\n" + data)
+        with pytest.raises(ValueError):
+            msprime.read_hapmap(hapfile_header, has_header=False)
+        rm1 = msprime.read_hapmap(hapfile_header)
+        rm2 = msprime.read_hapmap(hapfile_noheader, has_header=False)
+        assert np.array_equal(rm1.rate, rm2.rate)
+        assert np.array_equal(rm1.position, rm2.position)
+
+    def test_hapmap_fragment(self):
+        hapfile = io.StringIO(
+            """\
+            chr pos        rate                    cM
+            1   4283592    3.79115663174456        0
+            1   4361401    0.0664276817058413      0.294986106359414
+            1   7979763   10.9082897515584         0.535345505591925
+            1   8007051    0.0976780648822495      0.833010916332456
+            1   8762788    0.0899929572085616      0.906829844052373
+            1   9477943    0.0864382908650907      0.971188757364862
+            1   9696341    4.76495005895746        0.990066707213216
+            1   9752154    0.0864316558730679      1.25601286485381
+            1   9881751    0.0                     1.26721414815999"""
+        )
+        rm1 = msprime.read_hapmap(hapfile)
+        hapfile.seek(0)
+        rm2 = msprime.read_hapmap(hapfile, rate_col=2)
+        assert np.allclose(rm1.rate, rm2.rate)
