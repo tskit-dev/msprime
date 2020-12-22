@@ -1177,6 +1177,9 @@ def continue_simulation(
     :param int sample_size: Sample size for :meth:`msprime.simulate`,
         in units of haploid samples,
     :param dict kwargs: Any other arguments to :meth:`msprime.simulate`.
+    :return: The :class:`tskit.TreeSequence` object resulting from the
+        union of the input tree equence and the continued simulatoin
+    :rtype: :class:`tskit.TreeSequence`
     """
     old_nodes = ts.samples()
     if sample_size is None:
@@ -1185,8 +1188,9 @@ def continue_simulation(
     new_ts = simulate(sample_size=sample_size, end_time=time, **kwargs)
 
     new_nodes = np.where(new_ts.tables.nodes.time == time)[0]
-    assert len(new_nodes) <= len(old_nodes)
 
+    if len(new_nodes) > len(old_nodes):
+        new_nodes = np.random.choice(new_nodes, len(old_nodes), replace=False)
     node_map = np.repeat(tskit.NULL, new_ts.num_nodes)
     node_map[new_nodes] = np.random.choice(old_nodes, len(new_nodes), replace=False)
 
@@ -1211,6 +1215,8 @@ def _adjust_tables_time(ts, time):
     :param ts: tree sequence used as basis for new tables
     :param time int: The time to adjust tables by,
         in units of generations
+    :return: The :class:`tskit.TableCollection` object with modified time
+    :rtype: :class:`tskit.TableCollection`
     """
     tables = ts.tables
     tables.nodes.set_columns(
