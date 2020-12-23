@@ -1190,7 +1190,25 @@ def continue_simulation(
     new_nodes = np.where(new_ts.tables.nodes.time == time)[0]
 
     if len(new_nodes) > len(old_nodes):
-        new_nodes = np.random.choice(new_nodes, len(old_nodes), replace=False)
+        raise RuntimeError(
+            f"""More lineages present in new simulation samples than in the old. \
+            Decrease sample_size to try again. Setting sample_size={len(old_nodes)} \
+            or leaving it to default will ensure compliance."""
+        )
+
+    if len(new_nodes) == 0:
+        oldest_node_time = max(
+            [
+                new_ts.node(new_ts.first().roots[i]).time
+                for i in range(0, len(new_ts.first().roots), 1)
+            ]
+        )
+        raise RuntimeError(
+            f"""No surviving lineages in new simulation at merge time. \
+            Depth of new simulation is {oldest_node_time} - alter parameters \
+            to extend simulation or reduce the simulation time."""
+        )
+
     node_map = np.repeat(tskit.NULL, new_ts.num_nodes)
     node_map[new_nodes] = np.random.choice(old_nodes, len(new_nodes), replace=False)
 

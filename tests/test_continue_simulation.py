@@ -17,56 +17,116 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Test cases for the continue_simulation and _adjust_tables_time methods.
+Test cases for continue_simulation.
 """
-# import itertools
-# import numpy as np
-# import pytest
-# import tskit
-import msprime
+from nose.tools import raises
 
-# import tests.tsutil as tsutil
-# import tests.wright_fisher as wf
-# from msprime import _msprime
+import msprime
 
 
 class TestContinueSimulation:
-    def verify(self, ts):
-        if ts.num_populations == 1:
-            # recomb_rate = 1.0 / ts.sequence_length
-            times = [1, 1.0, 100, 100.0, 100.5, 1000, 1000.0, 1000.5]
-            for time in times:
-                print(len(ts.samples()))
-                cts = msprime.continue_simulation(
-                    ts,
-                    time,
-                    Ne=20000,
-                    mutation_rate=1e-8,
-                    recombination_rate=1e-8,
-                    sample_size=10000,
-                )
-                assert ts.num_mutations == cts.num_mutations
-                assert ts.num_sites == cts.num_sites
-                assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
-                # need to get oldest root for each, indexes change
-                max_old = max(
-                    [
-                        ts.node(ts.first().roots[i]).time
-                        for i in range(0, len(ts.first().roots), 1)
-                    ]
-                )
-                max_new = max(
-                    [
-                        cts.node(cts.first().roots[i]).time
-                        for i in range(0, len(cts.first().roots), 1)
-                    ]
-                )
-                # fr = cts.node(cts.first().roots[0])
-                # r = ts.node(ts.first().roots[0])
-                print(max_old, max_new)
-                assert round(max_new - time, 10) == round(max_old, 10)
+    def get_oldest_time(self, ts):
+        return max(
+            [
+                ts.node(ts.first().roots[i]).time
+                for i in range(0, len(ts.first().roots), 1)
+            ]
+        )
 
-    def test_bug_instance1(self):
+    def test_basic_function(self):
+        ts = msprime.simulate(1000, random_seed=37)
+        time = 1
+        cts = msprime.continue_simulation(ts, time, random_seed=37)
+        assert ts.num_mutations == cts.num_mutations
+        assert ts.num_sites == cts.num_sites
+        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
+        assert round(self.get_oldest_time(cts) - time, 10) == round(
+            self.get_oldest_time(ts), 10
+        )
+
+    def test_with_recombination(self):
+        ts = msprime.simulate(1000, recombination_rate=1e-8, random_seed=72)
+        time = 1
+        cts = msprime.continue_simulation(
+            ts, time, recombination_rate=1e-8, random_seed=72
+        )
+        assert ts.num_mutations == cts.num_mutations
+        assert ts.num_sites == cts.num_sites
+        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
+        assert round(self.get_oldest_time(cts) - time, 10) == round(
+            self.get_oldest_time(ts), 10
+        )
+
+    def test_large_simulation(self):
+        ts = msprime.simulate(10000, Ne=5000, recombination_rate=1e-8, random_seed=72)
+        time = 1
+        cts = msprime.continue_simulation(
+            ts,
+            time,
+            sample_size=10000,
+            Ne=5000,
+            recombination_rate=1e-8,
+            random_seed=72,
+        )
+        assert ts.num_mutations == cts.num_mutations
+        assert ts.num_sites == cts.num_sites
+        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
+        assert round(self.get_oldest_time(cts) - time, 10) == round(
+            self.get_oldest_time(ts), 10
+        )
+
+    def test_large_simulation_large_time(self):
+        ts = msprime.simulate(10000, Ne=5000, recombination_rate=1e-8, random_seed=72)
+        time = 1000
+        cts = msprime.continue_simulation(
+            ts, time, Ne=5000, recombination_rate=1e-8, random_seed=72
+        )
+        assert ts.num_mutations == cts.num_mutations
+        assert ts.num_sites == cts.num_sites
+        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
+        assert round(self.get_oldest_time(cts) - time, 10) == round(
+            self.get_oldest_time(ts), 10
+        )
+
+    def test_large_simulation_large_time_different_sample_sizes(self):
+        ts = msprime.simulate(10000, Ne=5000, recombination_rate=1e-8, random_seed=72)
+        time = 1000
+        cts = msprime.continue_simulation(
+            ts, time, Ne=5000, sample_size=2000, recombination_rate=1e-8, random_seed=72
+        )
+        assert ts.num_mutations == cts.num_mutations
+        assert ts.num_sites == cts.num_sites
+        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
+        assert round(self.get_oldest_time(cts) - time, 10) == round(
+            self.get_oldest_time(ts), 10
+        )
+
+    def test_large_simulation_large_time_with_mutation(self):
+        ts = msprime.simulate(
+            10000, Ne=5000, mutation_rate=1e-8, recombination_rate=1e-8, random_seed=72
+        )
+        time = 1000
+        cts = msprime.continue_simulation(
+            ts, time, Ne=5000, recombination_rate=1e-8, random_seed=72
+        )
+        assert ts.num_mutations == cts.num_mutations
+        assert ts.num_sites == cts.num_sites
+        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
+        assert round(self.get_oldest_time(cts) - time, 10) == round(
+            self.get_oldest_time(ts), 10
+        )
+
+    @raises(RuntimeError)
+    def test_no_samples(self):
+        ts = msprime.simulate(10, random_seed=15)
+        msprime.continue_simulation(ts, 10000, sample_size=10000, random_seed=15)
+
+    @raises(RuntimeError)
+    def test_too_many_samples(self):
+        ts = msprime.simulate(sample_size=2, random_seed=23)
+        msprime.continue_simulation(ts, 1, sample_size=100000, random_seed=23)
+
+    """def test_bug_instance1(self):
         ts = msprime.simulate(10, recombination_rate=10, end_time=0.5, random_seed=103)
         print("test_bug_instance1")
         self.verify(ts)
@@ -142,4 +202,4 @@ class TestContinueSimulation:
             ],
         )
         print("test_mixed_models_no_recombination")
-        self.verify(ts)
+        self.verify(ts)"""
