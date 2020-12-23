@@ -19,7 +19,7 @@
 """
 Test cases for continue_simulation.
 """
-from nose.tools import raises
+import pytest
 
 import msprime
 
@@ -116,15 +116,15 @@ class TestContinueSimulation:
             self.get_oldest_time(ts), 10
         )
 
-    @raises(RuntimeError)
     def test_no_samples(self):
         ts = msprime.simulate(10, random_seed=15)
-        msprime.continue_simulation(ts, 10000, sample_size=10000, random_seed=15)
+        with pytest.raises(RuntimeError):
+            msprime.continue_simulation(ts, 10000, sample_size=10000, random_seed=15)
 
-    @raises(RuntimeError)
     def test_too_many_samples(self):
         ts = msprime.simulate(sample_size=2, random_seed=23)
-        msprime.continue_simulation(ts, 1, sample_size=100000, random_seed=23)
+        with pytest.raises(RuntimeError):
+            msprime.continue_simulation(ts, 1, sample_size=100000, random_seed=23)
 
     """def test_bug_instance1(self):
         ts = msprime.simulate(10, recombination_rate=10, end_time=0.5, random_seed=103)
