@@ -1150,6 +1150,7 @@ def continue_simulation(
     ts,
     time,
     sample_size=None,
+    continue_nodes=None,
     **kwargs,
 ):
     """
@@ -1177,22 +1178,27 @@ def continue_simulation(
     :param int sample_size: Sample size for :meth:`msprime.simulate`,
         in units of haploid samples,
     :param dict kwargs: Any other arguments to :meth:`msprime.simulate`.
+    :type nodes: :class`numpy.ndarray`
+    :param continue_nodes: node IDs in ts to match up to the lineages in the continued
+        simulation, defaults to the samples
     :return: The :class:`tskit.TreeSequence` object resulting from the
         union of the input tree equence and the continued simulatoin
     :rtype: :class:`tskit.TreeSequence`
     """
-    old_nodes = ts.samples()
+    if continue_nodes is None:
+        continue_nodes = ts.samples()
     if sample_size is None:
-        sample_size = len(old_nodes)
+        sample_size = len(continue_nodes)
 
     new_ts = simulate(sample_size=sample_size, end_time=time, **kwargs)
 
     new_nodes = np.where(new_ts.tables.nodes.time == time)[0]
 
-    if len(new_nodes) > len(old_nodes):
+    if len(new_nodes) > len(continue_nodes):
         raise RuntimeError(
-            f"""More lineages present in new simulation samples than in the old. \
-            Decrease sample_size to try again. Setting sample_size={len(old_nodes)} \
+            f"""More lineages present in new simulation samples than in the old.. \
+            Decrease sample_size to try again. \
+            Setting sample_size={len(continue_nodes)} \
             or leaving it to default will ensure compliance."""
         )
 
@@ -1210,7 +1216,9 @@ def continue_simulation(
         )
 
     node_map = np.repeat(tskit.NULL, new_ts.num_nodes)
-    node_map[new_nodes] = np.random.choice(old_nodes, len(new_nodes), replace=False)
+    node_map[new_nodes] = np.random.choice(
+        continue_nodes, len(new_nodes), replace=False
+    )
 
     tables = _adjust_tables_time(ts, time)
     tables.union(

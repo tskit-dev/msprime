@@ -116,6 +116,27 @@ class TestContinueSimulation:
             self.get_oldest_time(ts), 10
         )
 
+    def test_continue_nodes(self):
+        ts = msprime.simulate(
+            10000, Ne=5000, mutation_rate=1e-8, recombination_rate=1e-8, random_seed=72
+        )
+        continue_nodes = ts.samples()[1::2]
+        time = 1000
+        cts = msprime.continue_simulation(
+            ts,
+            time,
+            continue_nodes=continue_nodes,
+            Ne=5000,
+            recombination_rate=1e-8,
+            random_seed=72,
+        )
+        assert ts.num_mutations == cts.num_mutations
+        assert ts.num_sites == cts.num_sites
+        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
+        assert round(self.get_oldest_time(cts) - time, 10) == round(
+            self.get_oldest_time(ts), 10
+        )
+
     def test_no_samples(self):
         ts = msprime.simulate(10, random_seed=15)
         with pytest.raises(RuntimeError):
