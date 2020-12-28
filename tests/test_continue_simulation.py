@@ -25,124 +25,149 @@ import msprime
 
 
 class TestContinueSimulation:
-    def get_oldest_time(self, ts):
-        return max(
-            [
-                ts.node(ts.first().roots[i]).time
-                for i in range(0, len(ts.first().roots), 1)
-            ]
-        )
+    def verify(self, ts, new_ts, time, continue_nodes=None):
+        assert round(new_ts.max_root_time - time, 10) == round(ts.max_root_time, 10)
+        assert ts.num_mutations == new_ts.num_mutations
+        assert ts.num_sites == new_ts.num_sites
+        assert list(ts.tables.sites.position) == list(new_ts.tables.sites.position)
+        if continue_nodes is None:
+            continue_nodes = ts.samples()
+        section = list(set(continue_nodes).intersection(new_ts.samples()))
+        assert len(section) == 0
+        for tree in new_ts.trees():
+            assert new_ts.node(tree.root).time > time
+        # check that subsetting to all nodes present before time gets back orig. tables
+        # sub_ts = new_ts.subset(np.where(new_ts.tables.nodes.time > time)[0])
+        # assert sub_ts.tables.equals(ts.tables)
 
     def test_basic_function(self):
-        ts = msprime.simulate(1000, random_seed=37)
+        ts = msprime.sim_ancestry(samples=1000, sequence_length=1.0, random_seed=37)
         time = 1
-        cts = msprime.continue_simulation(ts, time, random_seed=37)
-        assert ts.num_mutations == cts.num_mutations
-        assert ts.num_sites == cts.num_sites
-        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
-        assert round(self.get_oldest_time(cts) - time, 10) == round(
-            self.get_oldest_time(ts), 10
-        )
+        cts = msprime.continue_simulation(ts, time, sequence_length=1.0, random_seed=37)
+        self.verify(ts, cts, time)
 
     def test_with_recombination(self):
-        ts = msprime.simulate(1000, recombination_rate=1e-8, random_seed=72)
+        ts = msprime.sim_ancestry(
+            samples=1000, recombination_rate=1e-8, sequence_length=1.0, random_seed=72
+        )
         time = 1
         cts = msprime.continue_simulation(
-            ts, time, recombination_rate=1e-8, random_seed=72
+            ts, time, recombination_rate=1e-8, sequence_length=1.0, random_seed=72
         )
-        assert ts.num_mutations == cts.num_mutations
-        assert ts.num_sites == cts.num_sites
-        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
-        assert round(self.get_oldest_time(cts) - time, 10) == round(
-            self.get_oldest_time(ts), 10
-        )
+        self.verify(ts, cts, time)
 
     def test_large_simulation(self):
-        ts = msprime.simulate(10000, Ne=5000, recombination_rate=1e-8, random_seed=72)
+        ts = msprime.sim_ancestry(
+            samples=10000,
+            population_size=5000,
+            recombination_rate=1e-8,
+            sequence_length=1e4,
+            random_seed=72,
+        )
         time = 1
         cts = msprime.continue_simulation(
             ts,
             time,
             sample_size=10000,
-            Ne=5000,
+            population_size=5000,
             recombination_rate=1e-8,
+            sequence_length=1e4,
             random_seed=72,
         )
-        assert ts.num_mutations == cts.num_mutations
-        assert ts.num_sites == cts.num_sites
-        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
-        assert round(self.get_oldest_time(cts) - time, 10) == round(
-            self.get_oldest_time(ts), 10
-        )
+        self.verify(ts, cts, time)
 
     def test_large_simulation_large_time(self):
-        ts = msprime.simulate(10000, Ne=5000, recombination_rate=1e-8, random_seed=72)
+        ts = msprime.sim_ancestry(
+            samples=10000,
+            population_size=5000,
+            recombination_rate=1e-8,
+            sequence_length=1e4,
+            random_seed=72,
+        )
         time = 1000
         cts = msprime.continue_simulation(
-            ts, time, Ne=5000, recombination_rate=1e-8, random_seed=72
+            ts,
+            time,
+            population_size=5000,
+            recombination_rate=1e-8,
+            sequence_length=1e4,
+            random_seed=72,
         )
-        assert ts.num_mutations == cts.num_mutations
-        assert ts.num_sites == cts.num_sites
-        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
-        assert round(self.get_oldest_time(cts) - time, 10) == round(
-            self.get_oldest_time(ts), 10
-        )
+        self.verify(ts, cts, time)
 
     def test_large_simulation_large_time_different_sample_sizes(self):
-        ts = msprime.simulate(10000, Ne=5000, recombination_rate=1e-8, random_seed=72)
+        ts = msprime.sim_ancestry(
+            samples=10000,
+            population_size=5000,
+            recombination_rate=1e-8,
+            sequence_length=1e4,
+            random_seed=72,
+        )
         time = 1000
         cts = msprime.continue_simulation(
-            ts, time, Ne=5000, sample_size=2000, recombination_rate=1e-8, random_seed=72
+            ts,
+            time,
+            population_size=5000,
+            sample_size=2000,
+            recombination_rate=1e-8,
+            sequence_length=1e4,
+            random_seed=72,
         )
-        assert ts.num_mutations == cts.num_mutations
-        assert ts.num_sites == cts.num_sites
-        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
-        assert round(self.get_oldest_time(cts) - time, 10) == round(
-            self.get_oldest_time(ts), 10
-        )
+        self.verify(ts, cts, time)
 
     def test_large_simulation_large_time_with_mutation(self):
-        ts = msprime.simulate(
-            10000, Ne=5000, mutation_rate=1e-8, recombination_rate=1e-8, random_seed=72
+        ts = msprime.sim_ancestry(
+            samples=10000,
+            population_size=5000,
+            recombination_rate=1e-8,
+            sequence_length=1e4,
+            random_seed=72,
         )
+        ts = msprime.sim_mutations(ts, rate=1e-8)
         time = 1000
         cts = msprime.continue_simulation(
-            ts, time, Ne=5000, recombination_rate=1e-8, random_seed=72
+            ts,
+            time,
+            population_size=5000,
+            recombination_rate=1e-8,
+            sequence_length=1e4,
+            random_seed=72,
         )
-        assert ts.num_mutations == cts.num_mutations
-        assert ts.num_sites == cts.num_sites
-        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
-        assert round(self.get_oldest_time(cts) - time, 10) == round(
-            self.get_oldest_time(ts), 10
-        )
+        self.verify(ts, cts, time)
 
     def test_continue_nodes(self):
-        ts = msprime.simulate(
-            10000, Ne=5000, mutation_rate=1e-8, recombination_rate=1e-8, random_seed=72
+        ts = msprime.sim_ancestry(
+            samples=10000,
+            population_size=5000,
+            recombination_rate=1e-8,
+            sequence_length=1e4,
+            random_seed=72,
         )
-        continue_nodes = ts.samples()[1::2]
+        ts = msprime.sim_mutations(ts, rate=1e-8)
+        continue_nodes = ts.samples()[0::2]
         time = 1000
         cts = msprime.continue_simulation(
             ts,
             time,
             continue_nodes=continue_nodes,
-            Ne=5000,
+            population_size=5000,
             recombination_rate=1e-8,
+            sequence_length=1e4,
             random_seed=72,
         )
-        assert ts.num_mutations == cts.num_mutations
-        assert ts.num_sites == cts.num_sites
-        assert list(ts.tables.sites.position) == list(cts.tables.sites.position)
-        assert round(self.get_oldest_time(cts) - time, 10) == round(
-            self.get_oldest_time(ts), 10
-        )
+        self.verify(ts, cts, time, continue_nodes=continue_nodes)
 
-    def test_no_samples(self):
-        ts = msprime.simulate(10, random_seed=15)
-        with pytest.raises(RuntimeError):
-            msprime.continue_simulation(ts, 10000, sample_size=10000, random_seed=15)
+    def test_no_uncoalesced_samples(self):
+        ts = msprime.sim_ancestry(samples=10, sequence_length=1.0, random_seed=15)
+        time = 10000
+        cts = msprime.continue_simulation(
+            ts, time, sample_size=10000, sequence_length=1.0, random_seed=15
+        )
+        self.verify(ts, cts, time)
 
     def test_too_many_samples(self):
-        ts = msprime.simulate(sample_size=2, random_seed=23)
+        ts = msprime.sim_ancestry(samples=2, sequence_length=1.0, random_seed=23)
         with pytest.raises(RuntimeError):
-            msprime.continue_simulation(ts, 1, sample_size=100000, random_seed=23)
+            msprime.continue_simulation(
+                ts, 1, sample_size=100000, sequence_length=1.0, random_seed=23
+            )

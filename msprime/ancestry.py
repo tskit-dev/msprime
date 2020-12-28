@@ -1155,34 +1155,33 @@ def continue_simulation(
 ):
     """
     Returns a full tree sequence, by continuing the simulation using msprime
-    after an earlier simulation has been performed. The msprime simulation and slim
-    simulation are joined using :meth:`tskit.tables.TableCollection.union()`.
-
-    This method executes code from the pyslim tutorial  'Following up with more
-    coalescent simulation'
+    after an earlier simulation has been performed. The simulations are joined using
+    :meth:`tskit.tables.TableCollection.union()`. Note that this will not put mutations
+    on the new ancestry and should be followed up with a call to
+    :meth:`msprime.sim_mutations(..., end_time=time)`
 
     ``sample_size`` defaults to the number of samples present in the input tree sequence.
 
     In general, all parameters  excepting ``samples`` are whatever the defaults
-    of ``msprime.simulate`` are; this includes recombination rate, so that if neither
+    of ``msprime.sim_ancestry`` are; this includes recombination rate, so that if neither
     ``recombination_rate`` or a ``recombination_map`` are provided, there will be
     *no* recombination.
 
-    Note that ``Ne`` defaults to ``1.0``; you may want to set it explicitly
+    Note that ``population_size`` defaults to ``1.0``; you may want to set it explicitly
     using kwargs.
 
     :type ts: :class`tskit.TreeSequence`
     :param ts: tree sequence used to continue siumlation, moving forward in time
     :param float time: The desired period of time to continue simulation in msprime,
         in units of generations
-    :param int sample_size: Sample size for :meth:`msprime.simulate`,
+    :param int sample_size: Sample size for :meth:`msprime.sim_ancestry`,
         in units of haploid samples,
-    :param dict kwargs: Any other arguments to :meth:`msprime.simulate`.
+    :param dict kwargs: Any other arguments to :meth:`msprime.sim_ancestry`.
     :type nodes: :class`numpy.ndarray`
     :param continue_nodes: node IDs in ts to match up to the lineages in the continued
         simulation, defaults to the samples
     :return: The :class:`tskit.TreeSequence` object resulting from the
-        union of the input tree equence and the continued simulatoin
+        union of the input tree equence and the continued simulation
     :rtype: :class:`tskit.TreeSequence`
     """
     if continue_nodes is None:
@@ -1190,29 +1189,26 @@ def continue_simulation(
     if sample_size is None:
         sample_size = len(continue_nodes)
 
-    new_ts = simulate(sample_size=sample_size, end_time=time, **kwargs)
+    new_ts = sim_ancestry(samples=sample_size, end_time=time, **kwargs)
 
     new_nodes = np.where(new_ts.tables.nodes.time == time)[0]
+    if len(new_nodes) == 0:
+        new_tables = new_ts.tables
+        for t in new_ts.trees():
+            if t.num_roots == 1:
+                n = new_tables.nodes.add_row(time=time)
+                new_tables.edges.add_row(
+                    parent=n, child=t.root, left=t.interval.left, right=t.interval.right
+                )
+                new_nodes = np.append(new_nodes, n)
+        new_ts = new_tables.tree_sequence()
 
     if len(new_nodes) > len(continue_nodes):
         raise RuntimeError(
-            f"""More lineages present in new simulation samples than in the old.. \
-            Decrease sample_size to try again. \
-            Setting sample_size={len(continue_nodes)} \
-            or leaving it to default will ensure compliance."""
-        )
-
-    if len(new_nodes) == 0:
-        oldest_node_time = max(
-            [
-                new_ts.node(new_ts.first().roots[i]).time
-                for i in range(0, len(new_ts.first().roots), 1)
-            ]
-        )
-        raise RuntimeError(
-            f"""No surviving lineages in new simulation at merge time. \
-            Depth of new simulation is {oldest_node_time} - alter parameters \
-            to extend simulation or reduce the simulation time."""
+            f"""More lineages present at the longest-ago end of the 'continued' \
+            portion of the simulation than there are nodes in 'continue_nodes'. \
+            Setting sample_size={len(continue_nodes)} or leaving it to default \
+            will ensure compliance."""
         )
 
     node_map = np.repeat(tskit.NULL, new_ts.num_nodes)
@@ -1220,52 +1216,39 @@ def continue_simulation(
         continue_nodes, len(new_nodes), replace=False
     )
 
-    tables = _adjust_tables_time(ts, time)
+    # NOTE this table operation should eventually be moved to tskit
+    tables = ts.tables
+    tables.nodes.set_columns(
+        flags=np.array(
+            [
+                ~np.uint32(tskit.NODE_IS_SAMPLE) if i in continue_nodes else f
+                for i, f in enumerate(tables.nodes.flags)
+            ]
+        ),
+        time=tables.nodes.time + time,
+        population=tables.nodes.population,
+        individual=tables.nodes.individual,
+        metadata=tables.nodes.metadata,
+        metadata_offset=tables.nodes.metadata_offset,
+        metadata_schema=json.dumps(tables.nodes.metadata_schema.schema),
+    )
+    tables.mutations.set_columns(
+        site=tables.mutations.site,
+        node=tables.mutations.node,
+        time=tables.mutations.time + time,
+        derived_state=tables.mutations.derived_state,
+        derived_state_offset=tables.mutations.derived_state_offset,
+        parent=tables.mutations.parent,
+        metadata=tables.mutations.metadata,
+        metadata_offset=tables.mutations.metadata_offset,
+        metadata_schema=json.dumps(tables.mutations.metadata_schema.schema),
+    )
+
     tables.union(
         new_ts.tables, node_map, add_populations=False, check_shared_equality=False
     )
 
     return tables.tree_sequence()
-
-
-def _adjust_tables_time(ts, time):
-    """
-    Returns a new :class`tskit.tables.TableCollection` by copying all values
-    from a tree sequence's tables and modifying the time in the nodes and
-    mutations tables.
-
-    This method executes code from the pyslim tutorial  'Following up with more
-    coalescent simulation'
-
-    :type ts: :class`tskit.TreeSequence`
-    :param ts: tree sequence used as basis for new tables
-    :param time int: The time to adjust tables by,
-        in units of generations
-    :return: The :class:`tskit.TableCollection` object with modified time
-    :rtype: :class:`tskit.TableCollection`
-    """
-    tables = ts.tables
-    tables.nodes.set_columns(
-        flags=ts.tables.nodes.flags & ~np.uint32(tskit.NODE_IS_SAMPLE),
-        time=ts.tables.nodes.time + time,
-        population=ts.tables.nodes.population,
-        individual=ts.tables.nodes.individual,
-        metadata=ts.tables.nodes.metadata,
-        metadata_offset=ts.tables.nodes.metadata_offset,
-        metadata_schema=json.dumps(ts.tables.nodes.metadata_schema.schema),
-    )
-    tables.mutations.set_columns(
-        site=ts.tables.mutations.site,
-        node=ts.tables.mutations.node,
-        time=ts.tables.mutations.time + time,
-        derived_state=ts.tables.mutations.derived_state,
-        derived_state_offset=ts.tables.mutations.derived_state_offset,
-        parent=ts.tables.mutations.parent,
-        metadata=ts.tables.mutations.metadata,
-        metadata_offset=ts.tables.mutations.metadata_offset,
-        metadata_schema=json.dumps(ts.tables.mutations.metadata_schema.schema),
-    )
-    return tables
 
 
 class Simulator(_msprime.Simulator):
