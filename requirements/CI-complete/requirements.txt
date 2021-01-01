@@ -1,5 +1,5 @@
 attrs==20.3.0
-bintrees==2.1.0
+bintrees==2.2.0
 codecov==2.1.10
 daiquiri==3.0.0
 newick==1.0.0
