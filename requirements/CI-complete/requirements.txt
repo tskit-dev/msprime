@@ -10,4 +10,4 @@ pytest-xdist==2.1.0
 python_jsonschema_objects==0.3.13
 scipy==1.5.4
 stdpopsim==0.1.2
-tskit==0.3.3
+tskit==0.3.4
