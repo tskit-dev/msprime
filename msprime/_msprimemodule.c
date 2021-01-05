@@ -705,14 +705,15 @@ SLiMMutationModel_init(SLiMMutationModel *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"type", "next_id", "block_size", NULL};
+    static char *kwlist[] = {"type", "next_id", "slim_generation", "block_size", NULL};
     long type;
     long long next_id = 0;
+    long slim_generation = 1;
     Py_ssize_t block_size = 0;
 
     self->mutation_model = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "l|Ln", kwlist,
-            &type, &next_id, &block_size)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "l|Lln", kwlist,
+            &type, &next_id, &slim_generation, &block_size)) {
         goto out;
     }
 
@@ -725,7 +726,7 @@ SLiMMutationModel_init(SLiMMutationModel *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     err = slim_mutation_model_alloc(self->mutation_model,
-        (int32_t) type, (int64_t) next_id, (size_t) block_size);
+        (int32_t) type, (int64_t) next_id, (int32_t) slim_generation, (size_t) block_size);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -765,11 +766,28 @@ out:
     return ret;
 }
 
+static PyObject *
+SLiMMutationModel_get_slim_generation(SLiMMutationModel *self, void *closure)
+{
+    slim_mutator_t *params;
+    PyObject *ret = NULL;
+
+    if (SLiMMutationModel_check_state(self) != 0) {
+        goto out;
+    }
+    params = &self->mutation_model->params.slim_mutator;
+    ret = Py_BuildValue("l", params->slim_generation);
+out:
+    return ret;
+}
+
 static PyGetSetDef SLiMMutationModel_getsetters[] = {
     {"type", (getter) SLiMMutationModel_get_type, NULL,
         "Return the mutation type"},
     {"next_id", (getter) SLiMMutationModel_get_next_id, NULL,
         "Return the next mutation id"},
+    {"slim_generation", (getter) SLiMMutationModel_get_slim_generation, NULL,
+        "Return the SLiM generation"},
     {NULL}  /* Sentinel */
 };
 

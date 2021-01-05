@@ -1134,7 +1134,7 @@ class TestSLiMMutationModel:
             ret.append(SlimMetadata(*unpacked))
         return ret
 
-    def validate_slim_mutations(self, ts, mutation_type=0):
+    def validate_slim_mutations(self, ts, mutation_type=0, slim_generation=1):
         # slim alleles should be lists of integers
         # and ancestral states the empty string
         for site in ts.sites():
@@ -1143,25 +1143,38 @@ class TestSLiMMutationModel:
             for mutation in site.mutations:
                 a = list(map(int, mutation.derived_state.split(",")))
                 alleles[mutation.id] = a
+                metadata = self.parse_slim_metadata(mutation.metadata)
+                assert len(metadata) == len(a)
                 if mutation.parent == tskit.NULL:
                     assert len(a) == 1
                 else:
                     parent_allele = alleles[mutation.parent]
                     assert a[:-1] == parent_allele
-
-                # parse the metadata.
-                metadata = self.parse_slim_metadata(mutation.metadata)
-                assert len(metadata) == len(a)
+                    parent_metadata = self.parse_slim_metadata(
+                        ts.mutation(mutation.parent).metadata
+                    )
+                    assert metadata[:-1] == parent_metadata
                 for md in metadata:
                     assert md.mutation_type_id == mutation_type
                     assert md.selection_coeff == 0
                     assert md.subpop_index == tskit.NULL
-                    assert md.origin_generation == 0
                     assert md.nucleotide == -1
+                # time should only match on the last one
+                assert md.origin_generation == slim_generation - int(mutation.time)
 
-    def run_mutate(self, ts, rate=1, random_seed=42, mutation_type=0, mutation_id=0):
+    def run_mutate(
+        self,
+        ts,
+        rate=1,
+        random_seed=42,
+        mutation_type=0,
+        mutation_id=0,
+        slim_generation=1,
+    ):
 
-        model = msprime.SLiMMutationModel(type=mutation_type, next_id=mutation_id)
+        model = msprime.SLiMMutationModel(
+            type=mutation_type, next_id=mutation_id, slim_generation=slim_generation
+        )
         mts1 = msprime.sim_mutations(
             ts, rate=rate, random_seed=random_seed, model=model, discrete_genome=True
         )
@@ -1198,6 +1211,15 @@ class TestSLiMMutationModel:
             )
             assert mts.num_mutations > 10
             self.validate_slim_mutations(mts, mutation_type=mutation_type)
+
+    def test_slim_generation(self):
+        ts = msprime.simulate(4, length=2, random_seed=5)
+        for slim_generation in [-100, 0, 1, 256]:
+            mts = self.run_mutate(
+                ts, rate=5.0, random_seed=23, slim_generation=slim_generation
+            )
+            assert mts.num_mutations > 10
+            self.validate_slim_mutations(mts, slim_generation=slim_generation)
 
     def test_binary_n_4_low_rate(self):
         ts = msprime.sim_ancestry(4, sequence_length=10, random_seed=5)
@@ -1877,7 +1899,9 @@ class TestMutationModelFactory:
 
 class TestModelClasses:
     def test_slim(self):
-        m = msprime.SLiMMutationModel(type=1, next_id=2)
+        m = msprime.SLiMMutationModel(type=1, next_id=2, slim_generation=9)
+        assert m.next_id == 2
+        assert m.slim_generation == 9
         assert (
             str(m) == "Mutation model for SLiM mutations of type m1\n" "  next ID: 2\n"
         )

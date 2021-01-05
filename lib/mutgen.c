@@ -281,10 +281,20 @@ mutation_matrix_free(mutation_model_t *self)
  * typedef struct __attribute__((__packed__))  but this is not available
  * in Windows compilers, so we're just copying the info in directly */
 
+/* Note on setting origin_generation: in SLiM it is always true that
+ * (slim generation) - (model_type == "WF" and stage == "early")
+ *           = (tskit time) + (slim time)
+ * where 'stage' is the stage the tree sequence was written out during.
+ * Here, the user can adjust slim_generation, which stands in for
+ * everything on the left. Now, slim_time has to be an integer, so
+ * we modify this to
+ *   slim_generation = floor(tskit time) + slim_time
+ * */
+
 #define SLIM_MUTATION_METADATA_SIZE 17 // = 4 + 4 + 4 + 4 + 1
 
 static void
-copy_slim_mutation_metadata(slim_mutator_t *params, char *dest)
+copy_slim_mutation_metadata(slim_mutator_t *params, char *dest, double time)
 {
     size_t n;
     int32_t *mutation_type_id;
@@ -303,9 +313,8 @@ copy_slim_mutation_metadata(slim_mutator_t *params, char *dest)
     subpop_index = (int32_t *) (dest + n);
     *subpop_index = TSK_NULL;
     n += sizeof(int32_t);
-    // TODO: remove this when switch to mutation time
     origin_generation = (int32_t *) (dest + n);
-    *origin_generation = 0.0;
+    *origin_generation = params->slim_generation - (int32_t) time;
     n += sizeof(int32_t);
     nucleotide = (int8_t *) (dest + n);
     *nucleotide = -1;
@@ -317,6 +326,8 @@ slim_mutator_print_state(mutation_model_t *self, FILE *out)
     slim_mutator_t params = self->params.slim_mutator;
     fprintf(out, "SLiM mutation model :: mutation type ID = %d\n",
         (int) params.mutation_type_id);
+    fprintf(out, "                        slim generation = %d\n",
+        (int) params.slim_generation);
     fprintf(out, "                       next mutation ID = %d\n",
         (int) params.next_mutation_id);
 }
@@ -398,7 +409,7 @@ slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
         goto out;
     }
     memcpy(buff, parent_metadata, parent_metadata_length);
-    copy_slim_mutation_metadata(params, buff + parent_metadata_length);
+    copy_slim_mutation_metadata(params, buff + parent_metadata_length, mutation->time);
 
     mutation->metadata = buff;
     mutation->metadata_length
@@ -554,7 +565,7 @@ out:
 
 int MSP_WARN_UNUSED
 slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
-    int64_t next_mutation_id, size_t block_size)
+    int64_t next_mutation_id, int32_t slim_generation, size_t block_size)
 {
     int ret = 0;
     slim_mutator_t *params = &self->params.slim_mutator;
@@ -581,6 +592,7 @@ slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
     }
     params->mutation_type_id = mutation_type_id;
     params->next_mutation_id = next_mutation_id;
+    params->slim_generation = slim_generation;
 
     ret = slim_mutator_check_validity(params);
     if (ret != 0) {
