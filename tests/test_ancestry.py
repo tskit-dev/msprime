@@ -22,8 +22,8 @@ Test cases for basic ancestry simulation operations.
 import datetime
 import json
 import logging
+import math
 import random
-import sys
 import warnings
 
 import numpy as np
@@ -660,9 +660,9 @@ class TestParseSimAncestry:
             ancestry._parse_sim_ancestry(10, start_time=[])
 
     def test_end_time(self):
-        # default is DBL_MAX
+        # default is inf
         sim = ancestry._parse_sim_ancestry(10)
-        assert sim.end_time == sys.float_info.max
+        assert sim.end_time == math.inf
         for end_time in [1234, 1234.34, "1", "1.234"]:
             sim = ancestry._parse_sim_ancestry(10, end_time=end_time)
             assert sim.end_time == float(end_time)

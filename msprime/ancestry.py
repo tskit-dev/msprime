@@ -845,7 +845,7 @@ def _parse_sim_ancestry(
 
     # Simple defaults.
     start_time = 0 if start_time is None else float(start_time)
-    end_time = sys.float_info.max if end_time is None else float(end_time)
+    end_time = math.inf if end_time is None else float(end_time)
     discrete_genome = core._parse_flag(discrete_genome, default=True)
     record_full_arg = core._parse_flag(record_full_arg, default=False)
     record_migrations = core._parse_flag(record_migrations, default=False)
