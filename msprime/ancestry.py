@@ -725,18 +725,37 @@ def _parse_rate_map(rate_param, sequence_length, name):
 
 
 def _parse_samples_map(samples, demography):
-    name_id_map = {
-        demography.populations[j].name: j for j in range(demography.num_populations)
-    }
+    """
+    Parse a mapping sample specification for sim_ancesty.
+    """
     sample_map = {}
     if isinstance(samples, collections.abc.Mapping):
         # TODO check types here
-        for key, value in samples.items():
-            if core.isinteger(key):
-                pop_id = key
+        for key, num_samples in samples.items():
+            if isinstance(key, str):
+                pop_id = demography.name_to_id(key)
+            elif core.isinteger(key):
+                pop_id = int(key)
             else:
-                pop_id = name_id_map[key]
-            sample_map[pop_id] = value
+                raise TypeError(
+                    "Population references either be integer IDs or string names"
+                )
+            if not core.isinteger(num_samples):
+                raise TypeError(
+                    "The number of samples to draw from a population must be an "
+                    "integer"
+                )
+            num_samples = int(num_samples)
+            if num_samples < 0:
+                raise ValueError("Number of samples cannot be negative")
+            if pop_id in sample_map:
+                raise ValueError(
+                    f"Error adding samples for population ID {pop_id}: "
+                    "cannot specify a population by both ID and name"
+                )
+            sample_map[pop_id] = num_samples
+    if sum(sample_map.values()) == 0:
+        raise ValueError("Number of samples must be > 0")
     return sample_map
 
 
@@ -757,10 +776,14 @@ def _parse_samples_list(samples, demography):
 def _insert_samples_from_map(samples_map, demography, ploidy, tables):
 
     for pop_id, n in samples_map.items():
-        time = demography.populations[pop_id].sampling_time
+        population = demography.populations[pop_id]
+        time = population.sampling_time
         if n < 0:
             raise ValueError("Cannot have a negative number of samples")
-        logger.info(f"Sampling {n} individuals in population {pop_id} at time {time}")
+        logger.info(
+            f"Sampling {n} individuals in population {pop_id} "
+            f"(name='{population.name}') at time {time}"
+        )
         node_individual = len(tables.individuals) + np.repeat(
             np.arange(n, dtype=np.int32), ploidy
         )

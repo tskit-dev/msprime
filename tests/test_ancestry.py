@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2020 University of Oxford
+# Copyright (C) 2015-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -721,90 +721,63 @@ class TestParseSimAncestry:
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(10, demography=demography)
 
-    # TODO adapt these tests for the new sampling form.
-    # def test_positional_sampling_errors(self):
-    #     model = msprime.Demography.island_model([2], migration_rate=1)
-    #     with pytest.raises(ValueError):
-    #         # Sampling from no populations is an error (this is almost
-    #         # certainly a mistake by the user).
-    #         model.sample()
-    #     for bad_sample in [(1, -1), (-1,), (0, -10)]:
-    #         with pytest.raises(ValueError):
-    #             model.sample(*bad_sample)
-    #     with pytest.raises(TypeError):
-    #         model.sample(6.6)
-    #     with pytest.raises(ValueError):
-    #         model.sample(0, 0, 1)
+    def test_population_name_sampling_errors(self):
+        model = msprime.Demography.island_model([1] * 2, migration_rate=1)
+        model.populations[0].name = "A"
+        model.populations[1].name = "B"
+        with pytest.raises(ValueError):
+            ancestry._parse_sim_ancestry({}, demography=model)
 
-    # def test_positional_samples_two_populations(self):
-    #     model = msprime.Demography.island_model([1, 1], migration_rate=1)
-    #     assert model.sample(1) == [msprime.Sample(0, 0)]
-    #     assert model.sample(0, 1) == [msprime.Sample(1, 0)]
-    #     assert model.sample(1, 1) == [msprime.Sample(0, 0), msprime.Sample(1, 0)]
-    #     assert model.sample(2, 0) == [msprime.Sample(0, 0), msprime.Sample(0, 0)]
-    #     # Drawing 0 samples is OK
-    #     assert model.sample(0) == []
-    #     assert model.sample(0, 0) == []
-    #     assert model.sample(3, 1) == [
-    #       msprime.Sample(0, 0)] * 3 + [msprime.Sample(1, 0)]
+        for bad_sample in [{"A": 1, "B": -1}, {"A": -1}, {"A": 0, "B": -10}]:
+            with pytest.raises(ValueError):
+                ancestry._parse_sim_ancestry(bad_sample, demography=model)
+        for bad_type in [6.6, "a"]:
+            with pytest.raises(TypeError):
+                ancestry._parse_sim_ancestry({"A": bad_type}, demography=model)
+        for bad_name in ["C", "AC", "", "X" * 100]:
+            with pytest.raises(KeyError):
+                ancestry._parse_sim_ancestry({bad_name: 1}, demography=model)
+        # Referring to the same population by name and ID is an error.
+        with pytest.raises(ValueError):
+            ancestry._parse_sim_ancestry({0: 1, "A": 1}, demography=model)
 
-    # def test_positional_samples_n_populations(self):
-    #     for n in [1, 2, 3, 5]:
-    #         model = msprime.Demography.island_model([1] * n, migration_rate=1)
-    #         samples = model.sample(10)
-    #         assert samples == [msprime.Sample(0, 0)] * 10
-    #         samples = model.sample(*np.ones(n, dtype=int))
-    #         assert samples == [msprime.Sample(j, 0) for j in range(n)]
-    #         samples = model.sample(*np.zeros(n, dtype=int))
-    #         assert samples == []
-    #         samples = model.sample(*range(n))
-    #         assert samples == list(
-    #             itertools.chain(*[[msprime.Sample(j, 0)] * j for j in range(n)])
-    #         )
+    def test_population_name_samples_two_populations(self):
+        model = msprime.Demography.island_model([1] * 2, migration_rate=1)
+        model.populations[0].name = "A"
+        model.populations[1].name = "B"
+        sim = ancestry._parse_sim_ancestry({"A": 1}, demography=model)
+        tables = sim.copy_tables()
+        assert len(tables.nodes) == 2
+        assert np.all(tables.nodes.population == 0)
 
-    # def test_keyword_sampling_errors(self):
-    #     model = msprime.Demography.island_model([1] * 2, migration_rate=1)
-    #     model.populations[0].name = "A"
-    #     model.populations[1].name = "B"
-    #     with pytest.raises(ValueError):
-    #         # Sampling from no populations is an error (this is almost
-    #         # certainly a mistake by the user).
-    #         model.sample(**{})
-    #     for bad_sample in [{"A": 1, "B": -1}, {"A": -1}, {"A": 0, "B": -10}]:
-    #         with pytest.raises(ValueError):
-    #             model.sample(**bad_sample)
-    #     with pytest.raises(TypeError):
-    #         model.sample(A=6.6)
-    #     with pytest.raises(ValueError):
-    #         model.sample(C=1)
-    #     with pytest.raises(ValueError):
-    #         model.sample(**{"AC": 1})
+        sim = ancestry._parse_sim_ancestry({"B": 1}, demography=model)
+        tables = sim.copy_tables()
+        assert len(tables.nodes) == 2
+        assert np.all(tables.nodes.population == 1)
 
-    # def test_keyword_samples_two_populations(self):
-    #     model = msprime.Demography.island_model([1] * 2, migration_rate=1)
-    #     model.populations[0].name = "A"
-    #     model.populations[1].name = "B"
-    #     assert model.sample(A=1) == [msprime.Sample(0, 0)]
-    #     assert model.sample(B=1) == [msprime.Sample(1, 0)]
-    #     assert model.sample(A=1, B=1) == [msprime.Sample(0, 0), msprime.Sample(1, 0)]
-    #     # Samples are returned **in the order specified**. This is guaranteed
-    #     # since Python 3.6
-    #     assert model.sample(B=1, A=1) == [msprime.Sample(1, 0), msprime.Sample(0, 0)]
-    #     assert model.sample(A=2, B=0) == [msprime.Sample(0, 0), msprime.Sample(0, 0)]
-    #     # Drawing 0 samples is OK
-    #     assert model.sample(A=0) == []
-    #     assert model.sample(B=0) == []
-    #     assert model.sample(A=0, B=0) == []
-    #     assert model.sample(A=3, B=1) == [msprime.Sample(0, 0)] * 3 + [
-    #         msprime.Sample(1, 0)
-    #     ]
+        sim = ancestry._parse_sim_ancestry({"A": 1, "B": 1}, demography=model)
+        tables = sim.copy_tables()
+        assert len(tables.nodes) == 4
+        assert np.all(tables.nodes.population[:2] == 0)
+        assert np.all(tables.nodes.population[2:] == 1)
 
-    # def test_mixed_positional_and_keyword(self):
-    #     model = msprime.Demography.island_model([1] * 2, migration_rate=1)
-    #     model.populations[0].name = "A"
-    #     model.populations[1].name = "B"
-    #     with pytest.raises(ValueError):
-    #         model.sample(0, A=1)
+        sim = ancestry._parse_sim_ancestry({"B": 1, "A": 1}, demography=model)
+        tables = sim.copy_tables()
+        assert len(tables.nodes) == 4
+        assert np.all(tables.nodes.population[:2] == 1)
+        assert np.all(tables.nodes.population[2:] == 0)
+
+        sim = ancestry._parse_sim_ancestry({0: 1, "B": 1}, demography=model)
+        tables = sim.copy_tables()
+        assert len(tables.nodes) == 4
+        assert np.all(tables.nodes.population[:2] == 0)
+        assert np.all(tables.nodes.population[2:] == 1)
+
+        sim = ancestry._parse_sim_ancestry({1: 1, 0: 1}, demography=model)
+        tables = sim.copy_tables()
+        assert len(tables.nodes) == 4
+        assert np.all(tables.nodes.population[:2] == 1)
+        assert np.all(tables.nodes.population[2:] == 0)
 
     def verify_samples(self, samples, demography, ploidy):
         sim = ancestry._parse_sim_ancestry(

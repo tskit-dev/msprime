@@ -81,6 +81,26 @@ class Demography:
 
         # Sort demographic events by time.
         self.events.sort(key=lambda de: de.time)
+        self.__name_id_map = None
+
+    def name_to_id(self, name):
+        """
+        Returns the integer ID (i.e., its position in the list of populations)
+        of the population with the specified name. If the name does not exist,
+        raise a KeyError.
+
+        Note: this function will raise an error if called before the ``validate``
+        method is called.
+
+        :param str name: The name of the population we wish to look up.
+        :return: The integer ID of the population.
+        :rtype: int
+        """
+        if self.__name_id_map is None:
+            raise ValueError("Cannot call name_to_id before calling validate()")
+        if name not in self.__name_id_map:
+            raise KeyError(f"Population with name '{name}' not found in demography")
+        return self.__name_id_map[name]
 
     @property
     def num_populations(self):
@@ -109,8 +129,13 @@ class Demography:
                     "Demographic events must be a list of DemographicEvent "
                     "instances sorted in non-decreasing order of time."
                 )
-        for population in self.populations:
+
+        self.__name_id_map = {}
+        for j, population in enumerate(self.populations):
             population.validate()
+            if population.name in self.__name_id_map:
+                raise ValueError(f"Duplicate population name: '{population.name}'")
+            self.__name_id_map[population.name] = j
 
     def insert_populations(self, tables):
         """

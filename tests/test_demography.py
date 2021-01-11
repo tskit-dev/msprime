@@ -3785,6 +3785,19 @@ class TestDemographyObject:
             msg = "A population name must be a valid Python identifier"
             assert msg in str(excinfo.value)
 
+    def test_population_name_map(self):
+        demography = msprime.Demography.isolated_model([1, 1])
+        assert demography.populations[0].name == "pop_0"
+        assert demography.populations[1].name == "pop_1"
+        # Looking up the name map before validate is
+        with pytest.raises(ValueError):
+            demography.name_to_id("pop_0")
+        demography.validate()
+        with pytest.raises(KeyError):
+            demography.name_to_id("x")
+        assert demography.name_to_id("pop_0") == 0
+        assert demography.name_to_id("pop_1") == 1
+
     def test_isolated_model(self):
         demography = msprime.Demography.isolated_model([2])
         assert demography.num_populations == 1
