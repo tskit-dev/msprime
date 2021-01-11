@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2020 University of Oxford
+# Copyright (C) 2015-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -36,12 +36,6 @@ from . import species_trees
 
 
 logger = logging.getLogger(__name__)
-
-
-# TODO can we change this to be an attrs object instead?
-# Yes, we just need to make sure that we support tuples as input also
-# to preserve backwards compatability.
-Sample = collections.namedtuple("Sample", ["population", "time"])
 
 
 def check_num_populations(num_populations):
@@ -159,82 +153,11 @@ class Demography:
                 metadata.update(population.extra_metadata)
             tables.populations.add_row(metadata=metadata)
 
-    def sample(self, *args, **kwargs):
-        """
-
-        Returns a list of :class:`.Sample` objects, with the number of samples
-        from each population determined by either the positional or keyword
-        arguments. The keyword and positional forms cannot be mixed.
-
-        Positional arguments are intepreted as the number of samples to draw
-        from the corresponding population index. For example,
-        ``demography.sample.(2, 5, 7)`` returns a list of 14 samples, two of
-        which are from the model's first population, five from the  second
-        population, and seven from the third. The number of positional
-        arguments must be less than or equal to the number of populations. If
-        the number of arguments is less than the number of populations, then
-        remaining samples sizes are treated as zero. For example, in a two
-        population model, ``demography.sample(5)`` is equivalent to
-        ``demography.sample(5, 0)``.
-
-        Samples can also be generated based on the population's name
-        using keyword arguments. For example, if we have a demographic
-        model with three populations named "X", "Y", and "Z" we can
-        use ``demography.sample(X=1, Y=2, Z=3)`` will return six samples:
-        one for the population named "X", two for "Y" and three for "Z".
-
-        The list of :class:`.Sample` objects returned is always grouped
-        by population. In the positional case, population IDs in
-        nondecreasing numerical order. When the keyword form is used,
-        samples are returned in the order in which they were specified.
-        Thus, the list returned by ``demography.sample(A=1, B=2)``
-        will have one sample for population "A", followed by two samples
-        for population "B". This is true regardless of the numerical
-        population IDs for these populations.
-
-        :return: A list of :class:`.Sample` instances.
-        :rtype: list(.Sample)
-        """
-        if len(args) == 0 and len(kwargs) == 0:
-            raise ValueError("Must specify at least one population to sample from")
-        # Don't allow mixed kwd and positional for now, as it's easier to
-        # document.
-        if len(args) > 0 and len(kwargs) > 0:
-            raise ValueError("Cannot mix keyword and positional arguments")
-        if len(args) > self.num_populations:
-            raise ValueError(
-                f"Cannot specify more than {self.num_populations} populations "
-                "to sample from"
-            )
-
-        def check_num_samples(n):
-            if n < 0:
-                raise ValueError("Cannot have negative numbers of samples")
-
-        samples = []
-        for pop_index, n in enumerate(args):
-            # TODO we're assuming that samples are all at time 0 for now.
-            check_num_samples(n)
-            sample = Sample(pop_index, time=0)
-            samples.extend([sample] * n)
-        name_index_map = {
-            self.populations[j].name: j for j in range(self.num_populations)
-        }
-        for pop_name, n in kwargs.items():
-            check_num_samples(n)
-            if pop_name not in name_index_map:
-                # TODO should this be a KeyError/LookupError?
-                raise ValueError("No population with name {pop_name} in this model")
-            pop_index = name_index_map[pop_name]
-            sample = Sample(pop_index, time=0)
-            samples.extend([sample] * n)
-        return samples
-
     def asdict(self):
         return attr.asdict(self)
 
     def debug(self):
-        return DemographyDebugger(self)
+        return DemographyDebugger(demography=self)
 
     def __eq__(self, other):
         if isinstance(other, Demography):
@@ -397,6 +320,7 @@ class Demography:
         population_configurations=None,
         migration_matrix=None,
         demographic_events=None,
+        Ne=1,
     ):
         """
         Creates a Demography object from the pre 1.0 style input parameters,
@@ -404,10 +328,10 @@ class Demography:
         """
         demography = Demography()
         if population_configurations is None:
-            demography.populations = [Population()]
+            demography.populations = [Population(initial_size=Ne)]
         else:
             for pop_config in population_configurations:
-                demography.populations.append(Population.from_old_style(pop_config))
+                demography.populations.append(Population.from_old_style(pop_config, Ne))
         for j, population in enumerate(demography.populations):
             population.name = f"pop_{j}"
         if migration_matrix is None:
@@ -672,18 +596,23 @@ class Population:
     name = attr.ib(default=None)
     description = attr.ib(default=None)
     extra_metadata = attr.ib(factory=dict)
+    sampling_time = attr.ib(default=0)
 
     def asdict(self):
         return attr.asdict(self)
 
     @staticmethod
-    def from_old_style(pop_config):
+    def from_old_style(pop_config, Ne=1):
         """
         Returns a Population object derived from the specified old-style
-        PopulationConfiguration.
+        PopulationConfiguration. The Ne value is used as the ``initial_size``
+        if this is not provided in the PopulationConfiguration.
         """
+        initial_size = (
+            Ne if pop_config.initial_size is None else pop_config.initial_size
+        )
         return Population(
-            initial_size=pop_config.initial_size,
+            initial_size=initial_size,
             growth_rate=pop_config.growth_rate,
             extra_metadata=pop_config.metadata,
         )
@@ -1063,19 +992,23 @@ class DemographyDebugger:
 
     def __init__(
         self,
-        demography=None,
         # Deprecated pre-1.0 parameters.
         Ne=1,
         population_configurations=None,
         migration_matrix=None,
         demographic_events=None,
         model=None,
+        *,
+        demography=None,
     ):
         self.precision = 3
         if demography is None:
             # Support the pre-1.0 syntax
             demography = Demography.from_old_style(
-                population_configurations, migration_matrix, demographic_events
+                population_configurations,
+                migration_matrix,
+                demographic_events,
+                Ne=Ne,
             )
         self.demography = demography
         self.num_populations = demography.num_populations
@@ -1084,17 +1017,18 @@ class DemographyDebugger:
 
     def _make_epochs(self):
         self.epochs = []
-        # Create some samples to keep the simulator factory happy
-        # FIXME samples shouldn't be needed here any more.
+        # We don't actually use the samples, this is just to get the simulator
+        # correctly initialised.
+        samples = {}
         for j, pop in enumerate(self.demography.populations):
-            if pop.initial_size is None or pop.initial_size > 0:
-                samples = 2 * [Sample(population=j, time=0)]
-                break
-        else:
+            if pop.initial_size > 0 and pop.sampling_time == 0:
+                samples[j] = 1
+        if len(samples) == 0:
             raise ValueError("No population with non-zero initial size.")
-        simulator = ancestry._parse_simulate(
-            samples=samples, demography=self.demography
+        simulator = ancestry._parse_sim_ancestry(
+            demography=self.demography, samples=samples
         )
+
         start_time = 0
         end_time = 0
         abs_tol = 1e-9

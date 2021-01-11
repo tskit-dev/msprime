@@ -600,7 +600,7 @@ class TestSpeciesTreeExamples:
 
         # Take one sample from each population
         ts = msprime.sim_ancestry(
-            samples=spec.sample(1, 1, 1, 1), demography=spec, ploidy=1
+            samples={j: 1 for j in range(4)}, demography=spec, ploidy=1
         )
 
         assert ts.num_trees == 1
@@ -619,21 +619,20 @@ class TestSpeciesTreeExamples:
         assert pops[6].metadata["name"] == "pop_6"
 
         # Use the population names to get the samples
-        samples = spec.sample(human=4, gorilla=2)
-        ts = msprime.simulate(samples=samples, demography=spec)
+        samples = dict(human=4, gorilla=2)
+        ts = msprime.sim_ancestry(samples=samples, demography=spec)
         assert ts.num_trees == 1
-        assert ts.num_samples == 6
+        assert ts.num_samples == 12
         for j, u in enumerate(ts.samples()):
-            pop = 0 if j < 4 else 2
+            pop = 0 if j < 8 else 2
             assert ts.node(u).population == pop
 
         # Order of keywords is respected
-        samples = spec.sample(gorilla=2, human=4)
-        ts = msprime.simulate(samples=samples, demography=spec)
+        ts = msprime.sim_ancestry(samples={"gorilla": 2, "human": 4}, demography=spec)
         assert ts.num_trees == 1
-        assert ts.num_samples == 6
+        assert ts.num_samples == 12
         for j, u in enumerate(ts.samples()):
-            pop = 2 if j < 2 else 0
+            pop = 2 if j < 4 else 0
             assert ts.node(u).population == pop
 
 

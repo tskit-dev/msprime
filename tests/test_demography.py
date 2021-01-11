@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2016-2020 University of Oxford
+# Copyright (C) 2016-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -2581,10 +2581,10 @@ class HistoricalSamplingMixin:
         N = 100
         sampling_time = 1.01 * N
         ts = msprime.sim_ancestry(
-            population_size=N,
+            demography=msprime.Demography.island_model([N, N], migration_rate=1),
+            samples=[msprime.Sample(0, 0), msprime.Sample(1, time=sampling_time)],
             ploidy=2,
             model=self.model,
-            samples=[msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
             random_seed=3,
         )
         for t in ts.trees():
@@ -3149,9 +3149,7 @@ class TestPopulationMetadata:
         for j, pop in enumerate(demography.populations):
             pop.extra_metadata = {"x": "y", "z": "z" * j, "abc": 1234}
             pop.description = f"Island model node {j}"
-        ts = msprime.sim_ancestry(
-            demography.sample(2), demography=demography, random_seed=2
-        )
+        ts = msprime.sim_ancestry({0: 2}, demography=demography, random_seed=2)
         assert ts.num_populations == demography.num_populations
         for j in range(demography.num_populations):
             metadata = ts.population(j).metadata
@@ -3435,13 +3433,17 @@ class TestLineageProbabilities:
         return dd, f
 
     def verify_simulation(self, dd):
-        samples = [
-            msprime.Sample(pop, time)
-            for pop in range(dd.num_populations)
-            for time in dd.epoch_times
-        ]
-        reps = msprime.simulate(
-            samples=samples,
+        # Current sampling API doesn't allow for mixed time samples
+        # within a population, so we build the initial_state manually.
+        tables = tskit.TableCollection(1)
+        for pop_id in range(dd.num_populations):
+            tables.populations.add_row()
+            for time in dd.epoch_times:
+                tables.nodes.add_row(
+                    flags=tskit.NODE_IS_SAMPLE, time=time, population=pop_id
+                )
+        reps = msprime.sim_ancestry(
+            initial_state=tables,
             demography=dd.demography,
             end_time=max(dd.epoch_times + 1),
             num_replicates=100,
@@ -3608,7 +3610,7 @@ class TestIslandModel(TestPreCannedModels):
         model = msprime.Demography.island_model([1], migration_rate=1)
         assert len(model.populations) == 1
         assert len(model.migration_matrix) == 1
-        ts = msprime.simulate(samples=model.sample(2), demography=model, random_seed=1)
+        ts = msprime.sim_ancestry(samples={0: 2}, demography=model, random_seed=1)
         assert ts.num_populations == 1
 
     def test_migration(self):
@@ -3618,8 +3620,8 @@ class TestIslandModel(TestPreCannedModels):
             assert model.migration_matrix.shape == (N, N)
             self.assertZeroDiagonal(model.migration_matrix)
             assert np.all(model.migration_matrix[~np.eye(N, dtype=bool)] == 0.1)
-            ts = msprime.simulate(
-                samples=model.sample(*([2] * N)), demography=model, random_seed=1
+            ts = msprime.sim_ancestry(
+                samples={j: 1 for j in range(N)}, demography=model, random_seed=1
             )
             assert ts.num_populations == N
             assert ts.num_samples == 2 * N
@@ -3669,9 +3671,7 @@ class TestSteppingStoneModel(TestPreCannedModels):
             )
             assert len(model.populations) == 1
             assert len(model.migration_matrix) == 1
-            ts = msprime.simulate(
-                samples=model.sample(2), demography=model, random_seed=1
-            )
+            ts = msprime.sim_ancestry(samples={0: 2}, demography=model, random_seed=1)
             assert ts.num_populations == 1
 
     def test_migration_circular(self):
@@ -3692,11 +3692,11 @@ class TestSteppingStoneModel(TestPreCannedModels):
                         assert model.migration_matrix[j, k] == m
                     else:
                         assert model.migration_matrix[j, k] == 0
-            ts = msprime.simulate(
-                samples=model.sample(*([2] * N)), demography=model, random_seed=1
+            ts = msprime.sim_ancestry(
+                samples={j: 2 for j in range(N)}, demography=model, random_seed=1
             )
             assert ts.num_populations == N
-            assert ts.num_samples == 2 * N
+            assert ts.num_samples == 4 * N
 
     def test_migration_line_two_pops(self):
         m = 1
@@ -3723,11 +3723,11 @@ class TestSteppingStoneModel(TestPreCannedModels):
                         assert model.migration_matrix[j, k] == m
                     else:
                         assert model.migration_matrix[j, k] == 0
-            ts = msprime.simulate(
-                samples=model.sample(*([2] * N)), demography=model, random_seed=1
+            ts = msprime.sim_ancestry(
+                samples={j: 2 for j in range(N)}, demography=model, random_seed=1
             )
             assert ts.num_populations == N
-            assert ts.num_samples == 2 * N
+            assert ts.num_samples == 4 * N
 
     def test_Ne(self):
         model = msprime.Demography.stepping_stone_model([1, 1], 0.1)
@@ -3767,89 +3767,6 @@ class TestDemographyObject:
         dbg2 = msprime.DemographyDebugger(demography=model)
         assert dbg1.demography == dbg2.demography
         assert str(dbg1) == str(dbg2)
-
-    def test_positional_sampling_errors(self):
-        model = msprime.Demography.island_model([2], migration_rate=1)
-        with pytest.raises(ValueError):
-            # Sampling from no populations is an error (this is almost
-            # certainly a mistake by the user).
-            model.sample()
-        for bad_sample in [(1, -1), (-1,), (0, -10)]:
-            with pytest.raises(ValueError):
-                model.sample(*bad_sample)
-        with pytest.raises(TypeError):
-            model.sample(6.6)
-        with pytest.raises(ValueError):
-            model.sample(0, 0, 1)
-
-    def test_positional_samples_two_populations(self):
-        model = msprime.Demography.island_model([1, 1], migration_rate=1)
-        assert model.sample(1) == [msprime.Sample(0, 0)]
-        assert model.sample(0, 1) == [msprime.Sample(1, 0)]
-        assert model.sample(1, 1) == [msprime.Sample(0, 0), msprime.Sample(1, 0)]
-        assert model.sample(2, 0) == [msprime.Sample(0, 0), msprime.Sample(0, 0)]
-        # Drawing 0 samples is OK
-        assert model.sample(0) == []
-        assert model.sample(0, 0) == []
-        assert model.sample(3, 1) == [msprime.Sample(0, 0)] * 3 + [msprime.Sample(1, 0)]
-
-    def test_positional_samples_n_populations(self):
-        for n in [1, 2, 3, 5]:
-            model = msprime.Demography.island_model([1] * n, migration_rate=1)
-            samples = model.sample(10)
-            assert samples == [msprime.Sample(0, 0)] * 10
-            samples = model.sample(*np.ones(n, dtype=int))
-            assert samples == [msprime.Sample(j, 0) for j in range(n)]
-            samples = model.sample(*np.zeros(n, dtype=int))
-            assert samples == []
-            samples = model.sample(*range(n))
-            assert samples == list(
-                itertools.chain(*[[msprime.Sample(j, 0)] * j for j in range(n)])
-            )
-
-    def test_keyword_sampling_errors(self):
-        model = msprime.Demography.island_model([1] * 2, migration_rate=1)
-        model.populations[0].name = "A"
-        model.populations[1].name = "B"
-        with pytest.raises(ValueError):
-            # Sampling from no populations is an error (this is almost
-            # certainly a mistake by the user).
-            model.sample(**{})
-        for bad_sample in [{"A": 1, "B": -1}, {"A": -1}, {"A": 0, "B": -10}]:
-            with pytest.raises(ValueError):
-                model.sample(**bad_sample)
-        with pytest.raises(TypeError):
-            model.sample(A=6.6)
-        with pytest.raises(ValueError):
-            model.sample(C=1)
-        with pytest.raises(ValueError):
-            model.sample(**{"AC": 1})
-
-    def test_keyword_samples_two_populations(self):
-        model = msprime.Demography.island_model([1] * 2, migration_rate=1)
-        model.populations[0].name = "A"
-        model.populations[1].name = "B"
-        assert model.sample(A=1) == [msprime.Sample(0, 0)]
-        assert model.sample(B=1) == [msprime.Sample(1, 0)]
-        assert model.sample(A=1, B=1) == [msprime.Sample(0, 0), msprime.Sample(1, 0)]
-        # Samples are returned **in the order specified**. This is guaranteed
-        # since Python 3.6
-        assert model.sample(B=1, A=1) == [msprime.Sample(1, 0), msprime.Sample(0, 0)]
-        assert model.sample(A=2, B=0) == [msprime.Sample(0, 0), msprime.Sample(0, 0)]
-        # Drawing 0 samples is OK
-        assert model.sample(A=0) == []
-        assert model.sample(B=0) == []
-        assert model.sample(A=0, B=0) == []
-        assert model.sample(A=3, B=1) == [msprime.Sample(0, 0)] * 3 + [
-            msprime.Sample(1, 0)
-        ]
-
-    def test_mixed_positional_and_keyword(self):
-        model = msprime.Demography.island_model([1] * 2, migration_rate=1)
-        model.populations[0].name = "A"
-        model.populations[1].name = "B"
-        with pytest.raises(ValueError):
-            model.sample(0, A=1)
 
     def test_population_name(self):
 
@@ -3995,7 +3912,13 @@ class TestPopulationFromOldStyle:
     def test_defaults(self):
         pop_config = msprime.PopulationConfiguration()
         pop = msprime.Population.from_old_style(pop_config)
-        assert pop_config.initial_size == pop.initial_size
+        assert pop.initial_size == 1
+        assert pop_config.growth_rate == pop.growth_rate
+
+    def test_Ne(self):
+        pop_config = msprime.PopulationConfiguration()
+        pop = msprime.Population.from_old_style(pop_config, Ne=1234)
+        assert pop.initial_size == 1234
         assert pop_config.growth_rate == pop.growth_rate
 
     def test_values(self):

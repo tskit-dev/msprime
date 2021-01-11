@@ -39,6 +39,9 @@
   ``simulate`` and ``mutate``. These sub-commands are provided by the ``tskit``
   CLI or the ``TreeSequence`` API in ``tskit``.
 
+- The ``msprime.Sample`` object is no longer an namedtuple, and therefore
+  references like ``population, time = sample`` will not work.
+
 **Deprecations**:
 
 - Deprecate module attributes that were moved to tskit.

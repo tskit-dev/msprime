@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2020 University of Oxford
+# Copyright (C) 2015-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -25,6 +25,7 @@ import inspect
 import json
 import logging
 import math
+import numbers
 import struct
 import sys
 
@@ -177,7 +178,7 @@ def _samples_factory(sample_size, samples, population_configurations):
                 "Cannot specify sample size and population_configurations "
                 "simultaneously."
             )
-        s = demog.Sample(population=0, time=0.0)
+        s = Sample(population=0, time=0.0)
         the_samples = [s for _ in range(sample_size)]
     # If we have population configurations we may have embedded sample_size
     # values telling us how many samples to take from each population.
@@ -187,7 +188,7 @@ def _samples_factory(sample_size, samples, population_configurations):
             the_samples = []
             for j, conf in enumerate(population_configurations):
                 if conf.sample_size is not None:
-                    the_samples += [demog.Sample(j, 0) for _ in range(conf.sample_size)]
+                    the_samples += [Sample(j, 0) for _ in range(conf.sample_size)]
         else:
             for conf in population_configurations:
                 if conf.sample_size is not None:
@@ -197,40 +198,25 @@ def _samples_factory(sample_size, samples, population_configurations):
                     )
             the_samples = samples
     elif samples is not None:
-        the_samples = samples
+        # Peek at the first value. If it's a Sample object, assume the rest are also.
+        # Otherwise, interpret as a list of (population_id, time) tuples.
+        # TODO put in some error checking here for better messages.
+        if isinstance(samples[0], Sample):
+            the_samples = samples
+        else:
+            the_samples = [Sample(pop_id, time) for pop_id, time in samples]
     return the_samples
 
 
 def _demography_factory(
-    Ne, demography, population_configurations, migration_matrix, demographic_events
+    Ne, population_configurations, migration_matrix, demographic_events
 ):
-    if demography is not None:
-        if population_configurations is not None:
-            raise ValueError(
-                "The demography and population_configurations options "
-                "cannot be used together"
-            )
-        if migration_matrix is not None:
-            raise ValueError(
-                "The demography and migration_matrix options cannot be used together"
-            )
-        if demographic_events is not None:
-            raise ValueError(
-                "The demography and demographic_events options cannot be used together"
-            )
-        # Take a copy so that we don't modify the input parameters when
-        # resolving defaults
-        demography = copy.deepcopy(demography)
-    else:
-        demography = demog.Demography.from_old_style(
-            population_configurations, migration_matrix, demographic_events
-        )
-
-    # For any populations in which the initial size is None set it to Ne
-    for pop in demography.populations:
-        if pop.initial_size is None:
-            pop.initial_size = Ne
-
+    demography = demog.Demography.from_old_style(
+        population_configurations,
+        migration_matrix,
+        demographic_events,
+        Ne=Ne,
+    )
     demography.validate()
     return demography
 
@@ -240,15 +226,17 @@ def _build_initial_tables(*, sequence_length, samples, ploidy, demography, pedig
     tables = tskit.TableCollection(sequence_length)
 
     if pedigree is None:
-        for index, (population, time) in enumerate(samples):
+        for index, sample in enumerate(samples):
             tables.nodes.add_row(
-                flags=tskit.NODE_IS_SAMPLE, time=time, population=population
+                flags=tskit.NODE_IS_SAMPLE,
+                time=sample.time,
+                population=sample.population,
             )
-            if population < 0:
+            if sample.population < 0:
                 raise ValueError(f"Negative population ID in sample at index {index}")
-            if population >= demography.num_populations:
+            if sample.population >= demography.num_populations:
                 raise ValueError(
-                    f"Invalid population reference '{population}' in sample "
+                    f"Invalid population reference '{sample.population}' in sample "
                     f"at index {index}"
                 )
     else:
@@ -293,7 +281,6 @@ def _parse_simulate(
     end_time=None,
     record_full_arg=False,
     num_labels=None,
-    demography=None,
     random_seed=None,
 ):
     """
@@ -332,7 +319,7 @@ def _parse_simulate(
             model_change_events = old_style_model_change_events
 
     demography = _demography_factory(
-        Ne, demography, population_configurations, migration_matrix, demographic_events
+        Ne, population_configurations, migration_matrix, demographic_events
     )
 
     # The logic for checking from_ts and recombination map is bound together
@@ -502,7 +489,6 @@ def simulate(
     record_full_arg=False,
     num_labels=None,
     record_provenance=True,
-    demography=None,
 ):
     """
     Simulates the coalescent with recombination under the specified model
@@ -677,7 +663,6 @@ def simulate(
         end_time=end_time,
         record_full_arg=record_full_arg,
         num_labels=num_labels,
-        demography=demography,
         random_seed=random_seed,
     )
     return _wrap_replicates(
@@ -739,81 +724,105 @@ def _parse_rate_map(rate_param, sequence_length, name):
     return rate_map
 
 
-def _insert_integer_samples(n, ploidy, tables):
-    """
-    Insert n individuals with the specified ploidy into the tables.
-    """
-    # Doing this with numpy is slighty obscure, but it's *much* faster
-    # than simple loops. For 10^7 samples with ploidy=2 we go from
-    # several minutes to a few seconds.
-    ind_flags = np.zeros(n, dtype=np.uint32)
-    tables.individuals.set_columns(flags=ind_flags)
-    node_individual = np.repeat(np.arange(n, dtype=np.int32), ploidy)
-    N = n * ploidy
-    tables.nodes.set_columns(
-        flags=np.full(N, tskit.NODE_IS_SAMPLE, dtype=np.uint32),
-        time=np.zeros(N),
-        population=np.zeros(N, dtype=np.int32),
-        individual=node_individual,
-    )
+def _parse_samples_map(samples, demography):
+    name_id_map = {
+        demography.populations[j].name: j for j in range(demography.num_populations)
+    }
+    sample_map = {}
+    if isinstance(samples, collections.abc.Mapping):
+        # TODO check types here
+        for key, value in samples.items():
+            if core.isinteger(key):
+                pop_id = key
+            else:
+                pop_id = name_id_map[key]
+            sample_map[pop_id] = value
+    return sample_map
 
 
-def _parse_samples(samples, ploidy, tables):
-    """
-    Parse the specified "samples" value and insert them into the specified
-    tables. How the samples argument is interpreted depends on the state
-    of the tables.
-    """
-    if isinstance(samples, collections.abc.Iterable):
-        # We check if the samples can be interpreted as a list first because
-        # we may want to extend the semantics here later to include specifying
-        # a set of individuals from a pedigree defined in the initial state.
-        # The most natural way to do this would be a numpy array of individual
-        # IDs. By checking the iterable condition first, we make sure that we're
-        # not interpreting input numpy arrays of length 1 as a numeric argument.
-        # Interpret as a list of Sample objects.
+def _parse_samples_list(samples, demography):
+    for sample in samples:
+        if not isinstance(sample, Sample):
+            raise TypeError("msprime.Sample object required")
+        if not core.isinteger(sample.population):
+            raise TypeError("Sample population references must be integers")
+        population = int(sample.population)
+        if population < 0:
+            raise ValueError("Negative population ID")
+        if sample.population >= demography.num_populations:
+            raise ValueError("Sample population ID out of bounds")
+    return samples
 
-        # TODO this should probably be recast to using numpy input types for
-        # efficiency here. We could regard the input array as a numpy struct
-        # array, which would be a lot more efficient.
-        # See https://github.com/tskit-dev/msprime/issues/1211
-        for sample in samples:
-            if not isinstance(sample, demog.Sample):
-                raise TypeError("msprime.Sample object required")
-            if not core.isinteger(sample.population):
-                raise TypeError("Sample population references must be integers")
-            population = int(sample.population)
-            if population < 0:
-                raise ValueError("Negative population ID")
-            if sample.population >= len(tables.populations):
-                raise ValueError("Sample population ID out of bounds")
-            ind_id = tables.individuals.add_row(flags=0)
-            for _ in range(ploidy):
-                tables.nodes.add_row(
-                    flags=tskit.NODE_IS_SAMPLE,
-                    time=sample.time,
-                    population=population,
-                    individual=ind_id,
-                )
 
-    elif core.isinteger(samples):
-        n = int(samples)
+def _insert_samples_from_map(samples_map, demography, ploidy, tables):
+
+    for pop_id, n in samples_map.items():
+        time = demography.populations[pop_id].sampling_time
         if n < 0:
             raise ValueError("Cannot have a negative number of samples")
+        logger.info(f"Sampling {n} individuals in population {pop_id} at time {time}")
+        node_individual = len(tables.individuals) + np.repeat(
+            np.arange(n, dtype=np.int32), ploidy
+        )
+        ind_flags = np.zeros(n, dtype=np.uint32)
+        tables.individuals.append_columns(flags=ind_flags)
+        N = n * ploidy
+        tables.nodes.append_columns(
+            flags=np.full(N, tskit.NODE_IS_SAMPLE, dtype=np.uint32),
+            time=np.full(N, time),
+            population=np.full(N, pop_id, dtype=np.int32),
+            individual=node_individual,
+        )
+
+
+def _insert_samples_from_list(samples_list, demography, ploidy, tables):
+
+    for sample in samples_list:
+        ind_id = tables.individuals.add_row(flags=0)
+        for _ in range(ploidy):
+            tables.nodes.add_row(
+                flags=tskit.NODE_IS_SAMPLE,
+                time=sample.time,
+                population=sample.population,
+                individual=ind_id,
+            )
+
+
+def _parse_samples(samples, demography, ploidy, tables):
+    """
+    Parse the specified "samples" value for sim_ancesty and insert them into the
+    specified tables.
+    """
+    samples_list = None
+    samples_map = None
+    if isinstance(samples, collections.abc.Sequence):
+        samples_list = _parse_samples_list(samples, demography)
+    elif isinstance(samples, collections.abc.Mapping):
+        samples_map = _parse_samples_map(samples, demography)
+    elif isinstance(samples, numbers.Number):
+        if not core.isinteger(samples):
+            raise ValueError("The number of samples must be an integer")
+        n = int(samples)
         if len(tables.populations) != 1:
             raise ValueError(
                 "Numeric samples can only be used in single population models. "
                 "Please use Demography.sample() to generate a list of samples "
                 "for your model, which can be used instead."
             )
-        _insert_integer_samples(n, ploidy, tables)
+        samples_map = {0: n}
     else:
-        raise TypeError(
-            "The samples argument must be either an integer (for single population "
-            "models) or a list of msprime.Sample objects. The Demography.sample() "
-            "function is useful for generating samples for complex demographic "
-            "models."
-        )
+        # TODO better error message, like this one
+        # raise TypeError(
+        #     "The samples argument must be either an integer (for single population "
+        #     "models) or a mapping from populations to sample numbers/time values"
+        # )
+        raise TypeError("bad samples type")
+    if samples_map is not None:
+        assert samples_list is None
+        _insert_samples_from_map(samples_map, demography, ploidy, tables)
+    else:
+        assert samples_list is not None
+        _insert_samples_from_list(samples_list, demography, ploidy, tables)
 
 
 def _parse_sim_ancestry(
@@ -951,7 +960,7 @@ def _parse_sim_ancestry(
             )
         initial_state = tskit.TableCollection(sequence_length)
         demography.insert_populations(initial_state)
-        _parse_samples(samples, ploidy, initial_state)
+        _parse_samples(samples, demography, ploidy, initial_state)
     else:
         if samples is not None:
             raise ValueError("Cannot specify both samples and initial_state")
@@ -1363,6 +1372,20 @@ class Simulator(_msprime.Simulator):
                 tables.provenances.add_row(replicate_provenance)
             yield tables.tree_sequence()
             self.reset()
+
+
+# Note: this breaks backward compatability with msprime version 0.x by
+# not being an instance of namedtuple, and therefore not supported
+# references list ``population, time = sample``. However, this form
+# is probably rarely used in practise, so it seems worthwhile.
+@attr.s
+class Sample:
+    # TODO Document and add more attributes.
+    population = attr.ib()
+    time = attr.ib(default=None)
+
+    def asdict(self):
+        return attr.asdict(self)
 
 
 # TODO update the documentation here to state that using this class is

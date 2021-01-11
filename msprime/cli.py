@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2020 University of Oxford
+# Copyright (C) 2015-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -241,7 +241,7 @@ class SimulationRunner:
         # "invisible" recombination breakpoints, so we can't run simulations
         # the usual way via sim_ancestry.
         self.simulator = ancestry._parse_sim_ancestry(
-            samples=demography.sample(*num_samples),
+            samples=dict(enumerate(num_samples)),
             demography=demography,
             recombination_rate=recomb_map,
             gene_conversion_rate=gene_conversion_rate,
