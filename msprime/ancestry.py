@@ -25,7 +25,6 @@ import inspect
 import json
 import logging
 import math
-import numbers
 import struct
 import sys
 
@@ -165,6 +164,10 @@ def _check_population_configurations(population_configurations):
             raise TypeError(err)
 
 
+# This class is only used in the 0.x interface.
+Sample = collections.namedtuple("Sample", ["population", "time"])
+
+
 def _samples_factory(sample_size, samples, population_configurations):
     """
     Returns a list of Sample objects, given the specified inputs.
@@ -198,13 +201,7 @@ def _samples_factory(sample_size, samples, population_configurations):
                     )
             the_samples = samples
     elif samples is not None:
-        # Peek at the first value. If it's a Sample object, assume the rest are also.
-        # Otherwise, interpret as a list of (population_id, time) tuples.
-        # TODO put in some error checking here for better messages.
-        if isinstance(samples[0], Sample):
-            the_samples = samples
-        else:
-            the_samples = [Sample(pop_id, time) for pop_id, time in samples]
+        the_samples = samples
     return the_samples
 
 
@@ -226,20 +223,22 @@ def _build_initial_tables(*, sequence_length, samples, ploidy, demography, pedig
     tables = tskit.TableCollection(sequence_length)
 
     if pedigree is None:
-        for index, sample in enumerate(samples):
+        for index, (population, time) in enumerate(samples):
             tables.nodes.add_row(
                 flags=tskit.NODE_IS_SAMPLE,
-                time=sample.time,
-                population=sample.population,
+                time=time,
+                population=population,
             )
-            if sample.population < 0:
+            if population < 0:
                 raise ValueError(f"Negative population ID in sample at index {index}")
-            if sample.population >= demography.num_populations:
+            if population >= demography.num_populations:
                 raise ValueError(
-                    f"Invalid population reference '{sample.population}' in sample "
+                    f"Invalid population reference '{population}' in sample "
                     f"at index {index}"
                 )
     else:
+        # TODO This should be removed - pedigree code path should only be callable
+        # from sim_ancestry
         for parents, time, is_sample in zip(
             pedigree.parents, pedigree.time, pedigree.is_sample
         ):
@@ -297,8 +296,6 @@ def _parse_simulate(
         and from_ts is None
     )
     if samples_specified:
-        # TODO remove the population_configurations message here if we're
-        # deprecating it?
         raise ValueError(
             "Either sample_size, samples, population_configurations or from_ts must "
             "be specified"
@@ -724,65 +721,31 @@ def _parse_rate_map(rate_param, sequence_length, name):
     return rate_map
 
 
-def _parse_samples_map(samples, demography):
+def _get_population(demography, key):
+    if isinstance(key, str):
+        pop_id = demography.name_to_id(key)
+    elif core.isinteger(key):
+        pop_id = int(key)
+        if pop_id < 0 or pop_id >= demography.num_populations:
+            raise ValueError(f"Population ID '{key}' out of bounds")
+    else:
+        raise TypeError("Population references either be integer IDs or string names")
+    return pop_id
+
+
+def _insert_sample_sets(sample_sets, demography, default_ploidy, tables):
     """
-    Parse a mapping sample specification for sim_ancesty.
+    Insert the samples described in the specified {population_id: num_samples}
+    map into the specified set of tables.
     """
-    sample_map = {}
-    if isinstance(samples, collections.abc.Mapping):
-        # TODO check types here
-        for key, num_samples in samples.items():
-            if isinstance(key, str):
-                pop_id = demography.name_to_id(key)
-            elif core.isinteger(key):
-                pop_id = int(key)
-            else:
-                raise TypeError(
-                    "Population references either be integer IDs or string names"
-                )
-            if not core.isinteger(num_samples):
-                raise TypeError(
-                    "The number of samples to draw from a population must be an "
-                    "integer"
-                )
-            num_samples = int(num_samples)
-            if num_samples < 0:
-                raise ValueError("Number of samples cannot be negative")
-            if pop_id in sample_map:
-                raise ValueError(
-                    f"Error adding samples for population ID {pop_id}: "
-                    "cannot specify a population by both ID and name"
-                )
-            sample_map[pop_id] = num_samples
-    if sum(sample_map.values()) == 0:
-        raise ValueError("Number of samples must be > 0")
-    return sample_map
-
-
-def _parse_samples_list(samples, demography):
-    for sample in samples:
-        if not isinstance(sample, Sample):
-            raise TypeError("msprime.Sample object required")
-        if not core.isinteger(sample.population):
-            raise TypeError("Sample population references must be integers")
-        population = int(sample.population)
-        if population < 0:
-            raise ValueError("Negative population ID")
-        if sample.population >= demography.num_populations:
-            raise ValueError("Sample population ID out of bounds")
-    return samples
-
-
-def _insert_samples_from_map(samples_map, demography, ploidy, tables):
-
-    for pop_id, n in samples_map.items():
-        population = demography.populations[pop_id]
-        time = population.sampling_time
-        if n < 0:
-            raise ValueError("Cannot have a negative number of samples")
+    for sample_set in sample_sets:
+        n = sample_set.num_samples
+        population = demography.populations[sample_set.population]
+        time = population.sampling_time if sample_set.time is None else sample_set.time
+        ploidy = default_ploidy if sample_set.ploidy is None else sample_set.ploidy
         logger.info(
-            f"Sampling {n} individuals in population {pop_id} "
-            f"(name='{population.name}') at time {time}"
+            f"Sampling {n} individuals with ploidy {ploidy} in population "
+            f"{sample_set.population} (name='{population.name}') at time {time}"
         )
         node_individual = len(tables.individuals) + np.repeat(
             np.arange(n, dtype=np.int32), ploidy
@@ -793,59 +756,69 @@ def _insert_samples_from_map(samples_map, demography, ploidy, tables):
         tables.nodes.append_columns(
             flags=np.full(N, tskit.NODE_IS_SAMPLE, dtype=np.uint32),
             time=np.full(N, time),
-            population=np.full(N, pop_id, dtype=np.int32),
+            population=np.full(N, sample_set.population, dtype=np.int32),
             individual=node_individual,
         )
 
 
-def _insert_samples_from_list(samples_list, demography, ploidy, tables):
-
-    for sample in samples_list:
-        ind_id = tables.individuals.add_row(flags=0)
-        for _ in range(ploidy):
-            tables.nodes.add_row(
-                flags=tskit.NODE_IS_SAMPLE,
-                time=sample.time,
-                population=sample.population,
-                individual=ind_id,
+def _parse_sample_sets(sample_sets, demography):
+    # Don't modify the inputs.
+    sample_sets = copy.deepcopy(sample_sets)
+    for sample_set in sample_sets:
+        if not isinstance(sample_set, SampleSet):
+            raise TypeError("msprime.SampleSet object required")
+        if not core.isinteger(sample_set.num_samples):
+            raise TypeError(
+                "The number of samples to draw from a population must be an integer"
             )
+        sample_set.num_samples = int(sample_set.num_samples)
+        if sample_set.num_samples < 0:
+            raise ValueError("Number of samples cannot be negative")
+        if sample_set.population is None:
+            if demography.num_populations == 1:
+                sample_set.population = 0
+            else:
+                raise ValueError(
+                    "Must specify a SampleSet population in multipopulation models"
+                )
+        else:
+            sample_set.population = _get_population(demography, sample_set.population)
+
+    if sum(sample_set.num_samples for sample_set in sample_sets) == 0:
+        raise ValueError("Zero samples specified")
+    return sample_sets
 
 
 def _parse_samples(samples, demography, ploidy, tables):
     """
-    Parse the specified "samples" value for sim_ancesty and insert them into the
+    Parse the specified "samples" value for sim_ancestry and insert them into the
     specified tables.
     """
-    samples_list = None
-    samples_map = None
     if isinstance(samples, collections.abc.Sequence):
-        samples_list = _parse_samples_list(samples, demography)
+        sample_sets = samples
     elif isinstance(samples, collections.abc.Mapping):
-        samples_map = _parse_samples_map(samples, demography)
-    elif isinstance(samples, numbers.Number):
-        if not core.isinteger(samples):
-            raise ValueError("The number of samples must be an integer")
-        n = int(samples)
+        sample_sets = [
+            SampleSet(num_samples, population)
+            for population, num_samples in samples.items()
+        ]
+    elif core.isinteger(samples):
         if len(tables.populations) != 1:
             raise ValueError(
                 "Numeric samples can only be used in single population models. "
                 "Please use Demography.sample() to generate a list of samples "
                 "for your model, which can be used instead."
             )
-        samples_map = {0: n}
+        sample_sets = [SampleSet(samples)]
     else:
-        # TODO better error message, like this one
-        # raise TypeError(
-        #     "The samples argument must be either an integer (for single population "
-        #     "models) or a mapping from populations to sample numbers/time values"
-        # )
-        raise TypeError("bad samples type")
-    if samples_map is not None:
-        assert samples_list is None
-        _insert_samples_from_map(samples_map, demography, ploidy, tables)
-    else:
-        assert samples_list is not None
-        _insert_samples_from_list(samples_list, demography, ploidy, tables)
+        raise TypeError(
+            f"The value '{samples}' cannot be interpreted as sample specification. "
+            "Samples must either be a single integer, a dict that maps populations "
+            "to the number of samples for that population, or a list of SampleSet "
+            "objects. Please see the online documentation for more details on "
+            "the different forms."
+        )
+    sample_sets = _parse_sample_sets(sample_sets, demography)
+    _insert_sample_sets(sample_sets, demography, ploidy, tables)
 
 
 def _parse_sim_ancestry(
@@ -1397,15 +1370,16 @@ class Simulator(_msprime.Simulator):
             self.reset()
 
 
-# Note: this breaks backward compatability with msprime version 0.x by
-# not being an instance of namedtuple, and therefore not supported
-# references list ``population, time = sample``. However, this form
-# is probably rarely used in practise, so it seems worthwhile.
 @attr.s
-class Sample:
-    # TODO Document and add more attributes.
-    population = attr.ib()
+class SampleSet:
+    """
+    TODO document
+    """
+
+    num_samples = attr.ib()
+    population = attr.ib(default=None)
     time = attr.ib(default=None)
+    ploidy = attr.ib(default=None)
 
     def asdict(self):
         return attr.asdict(self)

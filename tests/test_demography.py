@@ -2582,7 +2582,10 @@ class HistoricalSamplingMixin:
         sampling_time = 1.01 * N
         ts = msprime.sim_ancestry(
             demography=msprime.Demography.island_model([N, N], migration_rate=1),
-            samples=[msprime.Sample(0, 0), msprime.Sample(1, time=sampling_time)],
+            samples=[
+                msprime.SampleSet(1, population=0),
+                msprime.SampleSet(1, population=1, time=sampling_time),
+            ],
             ploidy=2,
             model=self.model,
             random_seed=3,
@@ -3433,17 +3436,14 @@ class TestLineageProbabilities:
         return dd, f
 
     def verify_simulation(self, dd):
-        # Current sampling API doesn't allow for mixed time samples
-        # within a population, so we build the initial_state manually.
-        tables = tskit.TableCollection(1)
+        samples = []
         for pop_id in range(dd.num_populations):
-            tables.populations.add_row()
             for time in dd.epoch_times:
-                tables.nodes.add_row(
-                    flags=tskit.NODE_IS_SAMPLE, time=time, population=pop_id
+                samples.append(
+                    msprime.SampleSet(1, population=pop_id, ploidy=1, time=time)
                 )
         reps = msprime.sim_ancestry(
-            initial_state=tables,
+            samples=samples,
             demography=dd.demography,
             end_time=max(dd.epoch_times + 1),
             num_replicates=100,
@@ -3784,6 +3784,12 @@ class TestDemographyObject:
                 demography.validate()
             msg = "A population name must be a valid Python identifier"
             assert msg in str(excinfo.value)
+
+    def test_duplicate_population_name(self):
+        demography = msprime.Demography.isolated_model([1, 1])
+        demography.populations[1].name = "pop_0"
+        with pytest.raises(ValueError, match="Duplicate population name"):
+            demography.validate()
 
     def test_population_name_map(self):
         demography = msprime.Demography.isolated_model([1, 1])

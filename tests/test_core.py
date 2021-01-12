@@ -86,13 +86,10 @@ class TestIsInteger:
             -1,
             0,
             10 ** 6,
-            "1",
-            "100_000",
+            100_000,
             0x123,
             1.0,
             numpy_int_array[0],
-            numpy_int_array,
-            numpy_float_array,
             numpy_float_array[0],
         ]
         for good_value in good_values:
@@ -104,9 +101,12 @@ class TestIsInteger:
             [],
             None,
             {},
+            np.array([10], dtype=int),
             numpy_float_array,
             numpy_float_array[0],
             1.1,
+            "1",
+            "100_000",
             "1.1",
             1e-3,
         ]

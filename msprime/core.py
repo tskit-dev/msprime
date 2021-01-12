@@ -19,6 +19,7 @@
 """
 Core functions and classes used throughout msprime.
 """
+import numbers
 import os
 import random
 
@@ -76,12 +77,9 @@ def isinteger(value):
     Returns True if the specified value can be converted losslessly to an
     integer.
     """
-    try:
-        int_val = int(value)
-        float_val = float(value)
-        return int_val == float_val
-    except (ValueError, TypeError):
-        return False
+    if isinstance(value, numbers.Number):
+        return int(value) == float(value)
+    return False
 
 
 def _parse_flag(value, *, default):

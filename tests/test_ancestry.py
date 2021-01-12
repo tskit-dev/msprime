@@ -614,7 +614,7 @@ class TestParseSimAncestry:
         # default is 2
         sim = ancestry._parse_sim_ancestry(10)
         assert sim.ploidy == 2
-        for ploidy in [1, 2, "1", "33"]:
+        for ploidy in [1, 2, np.array([33])[0]]:
             sim = ancestry._parse_sim_ancestry(10, ploidy=ploidy)
             assert sim.ploidy == int(ploidy)
 
@@ -622,7 +622,7 @@ class TestParseSimAncestry:
             with pytest.raises(ValueError):
                 ancestry._parse_sim_ancestry(10, ploidy=bad_ploidy)
 
-        for bad_ploidy in ["0.1", 0.1, np.array([0.1])[0]]:
+        for bad_ploidy in ["1", "0.1", 0.1, np.array([0.1])[0]]:
             with pytest.raises(TypeError):
                 ancestry._parse_sim_ancestry(10, ploidy=bad_ploidy)
 
@@ -680,6 +680,46 @@ class TestParseSimAncestry:
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(10, model="dtwf", ploidy=2)
 
+    def test_initial_state_errors(self):
+        tables = tskit.TableCollection(1)
+        tables.populations.add_row()
+        # sequence_length doesn't match.
+        with pytest.raises(ValueError):
+            ancestry._parse_sim_ancestry(initial_state=tables, sequence_length=100)
+        # Must have at least one population
+        tables = tskit.TableCollection(1)
+        with pytest.raises(ValueError):
+            ancestry._parse_sim_ancestry(initial_state=tables)
+        for bad_type in [[], "sdf", {}]:
+            with pytest.raises(TypeError):
+                ancestry._parse_sim_ancestry(initial_state=bad_type)
+
+    def test_initial_state(self):
+        ts = msprime.sim_ancestry(10, end_time=0.01, random_seed=2)
+        # Same if we use either the tables or tree sequence object.
+        sim = ancestry._parse_sim_ancestry(initial_state=ts)
+        assert sim.copy_tables() == ts.tables
+        sim = ancestry._parse_sim_ancestry(initial_state=ts.tables)
+        assert sim.copy_tables() == ts.tables
+
+    def test_num_labels(self):
+        for num_labels in [1, 2, 10]:
+            sim = ancestry._parse_sim_ancestry(10, num_labels=num_labels)
+            assert sim.num_labels == num_labels
+
+    def test_samples_and_initial_state(self):
+        # If we specify neither samples or initial_state we get an error
+        with pytest.raises(ValueError):
+            ancestry._parse_sim_ancestry(samples=None)
+
+        # Specifying both is also an error.
+        tables = tskit.TableCollection(1)
+        tables.populations.add_row()
+        with pytest.raises(ValueError):
+            ancestry._parse_sim_ancestry(2, initial_state=tables)
+
+
+class TestSimAncestrySamples:
     def test_negative_samples(self):
         for ploidy in [1, 2, 5]:
             with pytest.raises(ValueError):
@@ -702,6 +742,36 @@ class TestParseSimAncestry:
                     assert node.time == 0
                     assert node.flags == tskit.NODE_IS_SAMPLE
                     assert node.population == 0
+
+    def test_sample_sets_override_ploidy(self):
+        samples = [
+            msprime.SampleSet(1, ploidy=2),
+            msprime.SampleSet(1),  # No ploidy, should use default
+            msprime.SampleSet(1, ploidy=1),
+        ]
+        sim = ancestry._parse_sim_ancestry(samples, ploidy=3)
+        tables = sim.copy_tables()
+        assert len(tables.individuals) == 3
+        assert len(tables.nodes) == 6
+        assert np.all(tables.nodes.individual[0:2] == 0)
+        assert np.all(tables.nodes.individual[2:5] == 1)
+        assert tables.nodes.individual[5] == 2
+
+    def test_sample_sets_override_time(self):
+        demography = msprime.Demography.isolated_model([1])
+        demography.populations[0].sampling_time = 10
+        samples = [
+            msprime.SampleSet(1, ploidy=2, time=2),
+            msprime.SampleSet(1, ploidy=3),  # No time, should use default
+            msprime.SampleSet(1, ploidy=1, time=0),
+        ]
+        sim = ancestry._parse_sim_ancestry(samples, demography=demography)
+        tables = sim.copy_tables()
+        assert len(tables.individuals) == 3
+        assert len(tables.nodes) == 6
+        assert np.all(tables.nodes.time[0:2] == 2)
+        assert np.all(tables.nodes.time[2:5] == 10)
+        assert tables.nodes.time[5] == 0
 
     def test_numeric_samples_types(self):
         # Make sure the various different ways we can specify a numeric
@@ -737,9 +807,6 @@ class TestParseSimAncestry:
         for bad_name in ["C", "AC", "", "X" * 100]:
             with pytest.raises(KeyError):
                 ancestry._parse_sim_ancestry({bad_name: 1}, demography=model)
-        # Referring to the same population by name and ID is an error.
-        with pytest.raises(ValueError):
-            ancestry._parse_sim_ancestry({0: 1, "A": 1}, demography=model)
 
     def test_population_name_samples_two_populations(self):
         model = msprime.Demography.island_model([1] * 2, migration_rate=1)
@@ -779,7 +846,14 @@ class TestParseSimAncestry:
         assert np.all(tables.nodes.population[:2] == 1)
         assert np.all(tables.nodes.population[2:] == 0)
 
-    def verify_samples(self, samples, demography, ploidy):
+        # Referring to the same population by name and ID means we do the
+        # sampling twice.
+        sim = ancestry._parse_sim_ancestry({0: 1, "A": 1}, demography=model)
+        tables = sim.copy_tables()
+        assert len(tables.nodes) == 4
+        assert np.all(tables.nodes.population[:4] == 0)
+
+    def verify_samples_map(self, samples, demography, ploidy):
         sim = ancestry._parse_sim_ancestry(
             samples=samples, demography=demography, ploidy=ploidy
         )
@@ -807,81 +881,59 @@ class TestParseSimAncestry:
 
     def test_sample_demography(self):
         demography = msprime.Demography.isolated_model([1])
-        self.verify_samples({0: 10}, demography, ploidy=1)
-        self.verify_samples({0: 10}, demography, ploidy=2)
+        self.verify_samples_map({0: 10}, demography, ploidy=1)
+        self.verify_samples_map({0: 10}, demography, ploidy=2)
 
         demography = msprime.Demography.stepping_stone_model([1] * 5, 0)
         samples = {j: j for j in range(5)}
-        self.verify_samples(samples, demography, ploidy=1)
-        self.verify_samples(samples, demography, ploidy=2)
+        self.verify_samples_map(samples, demography, ploidy=1)
+        self.verify_samples_map(samples, demography, ploidy=2)
 
         samples = {4: 15}
-        self.verify_samples(samples, demography, ploidy=1)
-        self.verify_samples(samples, demography, ploidy=2)
+        self.verify_samples_map(samples, demography, ploidy=1)
+        self.verify_samples_map(samples, demography, ploidy=2)
 
-    def test_sample_time(self):
+    def test_sample_time_with_map(self):
         demography = msprime.Demography.stepping_stone_model([1, 1], 0)
         demography.populations[0].sampling_time = 1
         demography.populations[1].sampling_time = 2
-        # samples = [msprime.Sample(time=j, population=j % 2) for j in range(10)]
         samples = {0: 5, 1: 5}
-        self.verify_samples(samples, demography, ploidy=1)
-        self.verify_samples(samples, demography, ploidy=2)
+        self.verify_samples_map(samples, demography, ploidy=1)
+        self.verify_samples_map(samples, demography, ploidy=2)
 
-    def test_bad_samples(self):
+    def test_bad_list_samples_population(self):
         demography = msprime.Demography.stepping_stone_model([1, 1], 0)
         for bad_pop in [-1, 2]:
-            samples = [msprime.Sample(time=0, population=bad_pop)] * 2
+            samples = [msprime.SampleSet(2, time=0, population=bad_pop)]
             with pytest.raises(ValueError):
                 ancestry._parse_sim_ancestry(samples=samples, demography=demography)
-        for bad_pop in ["sdf", 1.1]:
-            samples = [msprime.Sample(time=0, population=bad_pop)] * 2
+        for bad_pop in [1.1, ValueError]:
+            samples = [msprime.SampleSet(2, time=0, population=bad_pop)]
             with pytest.raises(TypeError):
                 ancestry._parse_sim_ancestry(samples=samples, demography=demography)
 
-    def test_bad_sample_types(self):
-        bad_sample_types = ["samples", "10", [0], np.array([0, 1]), ValueError]
+    def test_list_samples_no_population(self):
+        # No population value is fine when we have one population
+        samples = [msprime.SampleSet(2)]
+        ts = ancestry.sim_ancestry(samples)
+        assert ts.num_populations == 1
+
+        # But not if we have 2 or more pops.
+        demography = msprime.Demography.stepping_stone_model([1, 1], 0)
+        with pytest.raises(ValueError, match="SampleSet population"):
+            ancestry._parse_sim_ancestry(samples=samples, demography=demography)
+
+    def test_sample_list_types(self):
+        bad_sample_types = [ValueError, msprime.Sample(0, 0), "asdrf"]
         for bad_sample_type in bad_sample_types:
-            with pytest.raises(TypeError):
+            with pytest.raises(TypeError, match="SampleSet object"):
+                ancestry._parse_sim_ancestry([msprime.SampleSet(1), bad_sample_type])
+
+    def test_bad_top_level_sample_types(self):
+        bad_sample_types = [ValueError]
+        for bad_sample_type in bad_sample_types:
+            with pytest.raises(TypeError, match="different forms"):
                 ancestry._parse_sim_ancestry(bad_sample_type)
-
-    def test_samples_and_initial_state(self):
-        # If we specify neither samples of initial_state we get an error
-        with pytest.raises(ValueError):
-            ancestry._parse_sim_ancestry(samples=None)
-
-        # Specifying both is also an error.
-        tables = tskit.TableCollection(1)
-        tables.populations.add_row()
-        with pytest.raises(ValueError):
-            ancestry._parse_sim_ancestry(2, initial_state=tables)
-
-    def test_initial_state_errors(self):
-        tables = tskit.TableCollection(1)
-        tables.populations.add_row()
-        # sequence_length doesn't match.
-        with pytest.raises(ValueError):
-            ancestry._parse_sim_ancestry(initial_state=tables, sequence_length=100)
-        # Must have at least one population
-        tables = tskit.TableCollection(1)
-        with pytest.raises(ValueError):
-            ancestry._parse_sim_ancestry(initial_state=tables)
-        for bad_type in [[], "sdf", {}]:
-            with pytest.raises(TypeError):
-                ancestry._parse_sim_ancestry(initial_state=bad_type)
-
-    def test_initial_state(self):
-        ts = msprime.sim_ancestry(10, end_time=0.01, random_seed=2)
-        # Same if we use either the tables or tree sequence object.
-        sim = ancestry._parse_sim_ancestry(initial_state=ts)
-        assert sim.copy_tables() == ts.tables
-        sim = ancestry._parse_sim_ancestry(initial_state=ts.tables)
-        assert sim.copy_tables() == ts.tables
-
-    def test_num_labels(self):
-        for num_labels in [1, 2, 10]:
-            sim = ancestry._parse_sim_ancestry(10, num_labels=num_labels)
-            assert sim.num_labels == num_labels
 
 
 class TestParseSimulate:
@@ -1155,6 +1207,12 @@ class TestParseSimulate:
             assert node.population == sample.population
             assert node.time == sample.time
             assert node.flags == tskit.NODE_IS_SAMPLE
+
+    def test_sample_is_tuple(self):
+        s = msprime.Sample(population=1, time=2)
+        assert s.population == 1
+        assert s.time == 2
+        assert s == (1, 2)
 
     def test_new_old_style_model_changes_equal(self):
         models = [

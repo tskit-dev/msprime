@@ -439,6 +439,26 @@ Specifying samples
     import msprime
     from IPython.display import SVG
 
+The ``samples`` argument to :func:`sim_ancestry` defines the number
+of sample individuals we simulate the history of. There are three different
+ways forms; the ``samples`` argument can be:
+
+- an **integer**, interpreted as the number of samples to draw from this
+  population;
+- a **dictionary** mapping population references (either integer IDs or
+  names) to the number of samples for that population;
+- a list of :class:`.SampleSet` objects, which provide more flexibility
+  in how groups of similar samples are drawn from populations.
+
+.. warning:: It is important to note that the number of samples
+    refers to the number of *individuals* not the number of *nodes*.
+    See the :ref:`sec_ancestry_samples_ploidy` section for details.
+
+The :ref:`sec_ancestry_samples_advanced_sampling` section shows how
+to fully control how sample individuals and nodes are defined; however,
+this level of control should not be needed for the vast majority of
+applications.
+
 .. _sec_ancestry_samples_ploidy:
 
 ++++++
@@ -467,9 +487,50 @@ six sample *nodes*.
     ts = msprime.sim_ancestry(3, ploidy=1, random_seed=42)
     SVG(ts.first().draw_svg())
 
-+++++++++++++++
-Ancient genomes
-+++++++++++++++
+.. _sec_ancestry_samples_demography:
+
+++++++++++
+Demography
+++++++++++
+
+.. todo:: Some text here that refers to the demography section.
+
+
+The next example illustrates one usage of the dictionary form of the ``samples``
+argument. We first create a :class:`Demography` object representing
+a 10 deme linear stepping stone model. Then, we run the simulation
+with 1 diploid sample each drawn from the first and last demes in this
+linear habitat.
+
+.. jupyter-execute::
+
+    N = 10
+    demography = msprime.Demography.stepping_stone_model(
+        [100] * N, migration_rate=0.1, boundaries=True)
+    ts = msprime.sim_ancestry({0: 1, N - 1: 1}, demography=demography)
+    ts
+
+The keys in the dictionary can also be the string names of the
+population, which is useful when we are simulating from empirically
+estimated models. For example, here create a :class:`Demography` object
+based on a species tree, and then draw samples using the species names.
+
+.. jupyter-execute::
+
+    demography = msprime.Demography.from_species_tree(
+        "(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
+        branch_length_units="myr",
+        initial_size=10**4,
+        generation_time=20)
+    ts = msprime.sim_ancestry({"gorilla": 2, "human": 4}, demography=demography)
+    ts
+
+
+.. _sec_ancestry_samples_sampling_time:
+
++++++++++++++
+Sampling time
++++++++++++++
 
 .. todo:: Translate this text taken from the old tutorial
 
@@ -525,11 +586,16 @@ Because nodes ``0`` and ``1`` were sampled at time 0, their times in the tree
 are both 0. Nodes ``2`` and ``3`` were sampled at time 1.0, and so their times are recorded
 as 1.0 in the tree.
 
-++++++++++++++++++++
-Population structure
-++++++++++++++++++++
 
-.. todo examples of drawing samples from a demography.
+.. _sec_ancestry_samples_advanced_sampling:
+
++++++++++++++++++
+Advanced sampling
++++++++++++++++++
+
+.. todo:: This section should describe how to define samples directly in
+    terms of the ``initial_state`` tables and give an example of how to
+    use it.
 
 
 *****************
@@ -752,13 +818,13 @@ In the following example one gene conversion event of length 1 has occured.
     :hide-code:
 
     assert 1 < ts.num_trees < 5
-    
+
 Continous genomes can also be used. In this case the parameters define
 the rate at which gene conversion events are initiated per unit of sequence
 length and the mean of the exponentially distributed gene conversion tract
 lengths. The following example shows the same simulation as above but for a
 continuous genome of length 1 and scaled gene conversion parameters.
-    
+
 .. jupyter-execute::
 
     ts = msprime.sim_ancestry(
@@ -789,7 +855,7 @@ to a gene conversion event covering the tract from site 76 to site 80.
     :hide-code:
 
     assert 1 < ts.num_trees < 6
-    
+
 Variable recombination rates and constant gene conversion rates can be combined.
 In the next example we define a recombination map with a high recombination rate between
 site 10 and site 11 and a constant gene conversion rate with a mean tract length of 3.
@@ -1501,6 +1567,7 @@ API
 
 .. autofunction:: msprime.sim_ancestry
 
+.. autoclass:: msprime.SampleSet
 
 ++++++++++++++
 Deprecated API
