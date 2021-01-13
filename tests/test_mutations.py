@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018-2020 University of Oxford
+# Copyright (C) 2018-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -333,7 +333,7 @@ class TestSimMutations(MutateMixin):
     def test_populations(self):
         demography = msprime.Demography.island_model([1, 1], migration_rate=1)
         ts = msprime.sim_ancestry(
-            demography.sample(10, 10),
+            {0: 10, 1: 10},
             demography=demography,
             record_migrations=True,
             random_seed=1,

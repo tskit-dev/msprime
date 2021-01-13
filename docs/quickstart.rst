@@ -97,15 +97,12 @@ of a fixed size exists for all time. For most simulations this
 is an unrealistic assumption, and so msprime provides a way
 to describe more complex demographic histories.
 
-.. todo:: The demography.sample example here isn't a very good one
-    and the .sample function needs to updated.
-
 .. jupyter-execute::
 
     # Create a 1D stepping stone model of demograpy
     demography = msprime.Demography.stepping_stone_model([100] * 10, migration_rate=0.1)
-    # Take one diploid sample each from the first two demes
-    samples = demography.sample(1, 1)
+    # Take one diploid sample each from the first and last demes
+    samples = {0: 1, 9: 1}
     # Simulate an ancestral history for this demography and sample.
     ts = msprime.sim_ancestry(samples=samples, demography=demography)
     ts.tables.nodes

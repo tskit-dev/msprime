@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2020 University of Oxford
+# Copyright (C) 2015-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -19,6 +19,7 @@
 """
 Core functions and classes used throughout msprime.
 """
+import numbers
 import os
 import random
 
@@ -71,17 +72,26 @@ def get_random_seed():
     return _seed_rng_map[pid].randint(1, 2 ** 32 - 1)
 
 
+def set_seed_rng_seed(seed):
+    """
+    Convenience method to let us make unseeded simulations deterministic
+    when generating documentation examples.
+
+    DO NOT USE THIS FUNCTION!!!
+    """
+    global _seed_rng_map
+    pid = os.getpid()
+    _seed_rng_map[pid] = random.Random(seed)
+
+
 def isinteger(value):
     """
     Returns True if the specified value can be converted losslessly to an
     integer.
     """
-    try:
-        int_val = int(value)
-        float_val = float(value)
-        return int_val == float_val
-    except (ValueError, TypeError):
-        return False
+    if isinstance(value, numbers.Number):
+        return int(value) == float(value)
+    return False
 
 
 def _parse_flag(value, *, default):
