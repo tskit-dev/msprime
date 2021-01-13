@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2020 University of Oxford
+# Copyright (C) 2015-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -70,6 +70,18 @@ def get_random_seed():
         # be unique, even across different processes.
         _seed_rng_map[pid] = random.Random()
     return _seed_rng_map[pid].randint(1, 2 ** 32 - 1)
+
+
+def set_seed_rng_seed(seed):
+    """
+    Convenience method to let us make unseeded simulations deterministic
+    when generating documentation examples.
+
+    DO NOT USE THIS FUNCTION!!!
+    """
+    global _seed_rng_map
+    pid = os.getpid()
+    _seed_rng_map[pid] = random.Random(seed)
 
 
 def isinteger(value):

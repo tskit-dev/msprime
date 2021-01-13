@@ -54,23 +54,28 @@ class TestDefaultRandomSeeds:
     def test_unique_multiple_processes_no_init(self):
         n = 100
         core.clear_seed_rng()
-        # Would use with block here, but not supported in Py < 3.3.
-        pool = multiprocessing.Pool(5)
-        seeds = pool.map(get_seed, range(n))
-        assert len(set(seeds)) == n
-        pool.terminate()
-        pool.join()
+        with multiprocessing.Pool(5) as pool:
+            seeds = pool.map(get_seed, range(n))
+            assert len(set(seeds)) == n
 
     def test_unique_multiple_processes_init(self):
         n = 100
         core.get_random_seed()
         assert core.get_seed_rng() is not None
-        # Would use with block here, but not supported in Py < 3.3.
-        pool = multiprocessing.Pool(5)
-        seeds = pool.map(get_seed, range(n))
-        assert len(set(seeds)) == n
-        pool.terminate()
-        pool.join()
+        with multiprocessing.Pool(5) as pool:
+            seeds = pool.map(get_seed, range(n))
+            assert len(set(seeds)) == n
+
+    def test_set_seed_rng_seed(self):
+        n = 10
+        core.set_seed_rng_seed(42)
+        seeds1 = [core.get_random_seed() for _ in range(n)]
+        core.set_seed_rng_seed(42)
+        seeds2 = [core.get_random_seed() for _ in range(n)]
+        assert seeds1 == seeds2
+        core.set_seed_rng_seed(1234)
+        seeds3 = [core.get_random_seed() for _ in range(n)]
+        assert seeds1 != seeds3
 
 
 class TestIsInteger:

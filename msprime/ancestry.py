@@ -1020,16 +1020,20 @@ def sim_ancestry(
 ):
     """
     Simulates an ancestral process described by a given model, demography and
-    set of samples and return the output as a
-    :class:`tskit.TreeSequence` (or a sequence of replicate tree sequences).
+    samples, and return a :class:`tskit.TreeSequence` (or a sequence of
+    replicate tree sequences).
 
     :param samples: The sampled individuals as either an integer, specifying
-        the number of individuals to sample at time zero in a single-population
-        model; or a list of :class:`.Sample` objects explicitly specifying the
-        time and population of every sample individual. Each sampled individual
-        corresponds to :math:`k` sample *nodes* when ``ploidy`` = :math:`k`.
+        the number of individuals to sample in a single-population model;
+        or a list of :class:`.SampleSet` objects defining the properties of
+        groups of similar samples; or as a mapping in which the keys
+        are population identifiers (either an integer ID or string name)
+        and the values are the number of samples to take from the corresponding
+        population at its default sampling time. It is important to note that
+        samples correspond to *individuals* here, and each sampled individual
+        is usually associated with :math:`k` sample *nodes* (or genomes) when
+        ``ploidy`` = :math:`k`. See :ref:`sec_ancestry_samples` for further details.
         Either ``samples`` or ``initial_state`` must be specified.
-        See :ref:`sec_ancestry_samples_ploidy` for usage examples.
     :param int ploidy: The number of monoploid genomes per sample individual
         (Default=2). See :ref:`sec_ancestry_samples_ploidy` for usage examples.
     :param float sequence_length: The length of the genome sequence to simulate.

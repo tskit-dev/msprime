@@ -22,6 +22,7 @@ Models
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 
@@ -179,6 +180,7 @@ Examples
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 
@@ -426,6 +428,8 @@ Population size
     how this relates to ploidy. Should link to the demography page and
     model sections for more details.
 
+.. _sec_ancestry_samples:
+
 ******************
 Specifying samples
 ******************
@@ -437,25 +441,84 @@ Specifying samples
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 The ``samples`` argument to :func:`sim_ancestry` defines the number
 of sample individuals we simulate the history of. There are three different
-ways forms; the ``samples`` argument can be:
+forms; the ``samples`` argument can be:
 
-- an **integer**, interpreted as the number of samples to draw from this
-  population;
+- an **integer**, interpreted as the number of samples to draw in a single
+  population model;
 - a **dictionary** mapping population references (either integer IDs or
   names) to the number of samples for that population;
 - a list of :class:`.SampleSet` objects, which provide more flexibility
   in how groups of similar samples are drawn from populations.
 
 .. warning:: It is important to note that the number of samples
-    refers to the number of *individuals* not the number of *nodes*.
-    See the :ref:`sec_ancestry_samples_ploidy` section for details.
+    refers to the number of *individuals* not the number of *nodes*
+    (monoploid genomes). See the :ref:`sec_ancestry_samples_ploidy`
+    section for details.
 
-The :ref:`sec_ancestry_samples_advanced_sampling` section shows how
-to fully control how sample individuals and nodes are defined; however,
+Sample individuals and nodes are allocated sequentially in the order that
+they are specified. For example:
+
+.. jupyter-execute::
+
+    demography = msprime.Demography.island_model([10, 10], migration_rate=1)
+    ts = msprime.sim_ancestry(
+        samples=[
+            msprime.SampleSet(1, population=1),
+            msprime.SampleSet(2, population=0)],
+        demography=demography,
+        end_time=0)
+    print(ts.tables.individuals)
+    print(ts.tables.nodes)
+
+(Because we're only interested in the sampled nodes and individuals we
+stopped the simulation from actually doing anything by setting
+``end_time=0``.) Here we define three sample individuals,
+and we therefore have three rows in the individual table.
+Because these are diploid individuals, the node table contains
+six sample nodes. If we look at the ``individual`` column in the
+node table we can see that the first two nodes correspond to individual
+``0``, the next two nodes individual ``1``, etc. The sample configuration
+stated that the first sample should come from population ``1`` and
+the other two from population ``0``, and we can see this reflected
+in the ``population`` column of the node table. (Somewhat confusingly,
+population values are associated with nodes rather than individuals;
+this is mostly for historical reasons.)
+
+The :class:`.SampleSet` class has a number of attributes which default
+to ``None``. If these are set they will **override** the values
+which might be specified elsewhere. For example, we can specify
+mixed ploidy samples via the ``ploidy`` attribute of :class:`.SampleSet`:
+
+.. jupyter-execute::
+
+    ts = msprime.sim_ancestry(
+        samples=[
+            msprime.SampleSet(1, ploidy=3),
+            msprime.SampleSet(2)],
+        ploidy=1,
+        end_time=0)
+    print(ts.tables.individuals)
+    print(ts.tables.nodes)
+
+(Again, we stop the simulation immediately because we're only interested
+in the initial samples.) Here we have three sampled individuals again
+but in this they are mixed ploidy: the first individual is triploid
+and the other two are haploid.
+
+.. warning:: It is vital to note that setting the ``ploidy`` value
+    of :class:`.SampleSet` objects only affects sampling and does
+    not affect the actual simulation. In this case, the simulation
+    will be run on the haploid time scale. Some models may not
+    support mixing of ploidy at all.
+
+If you wish to set up the node and individual IDs in some other way,
+the :ref:`sec_ancestry_samples_advanced_sampling` section shows how
+to fully control how sample individuals and nodes are defined. However,
 this level of control should not be needed for the vast majority of
 applications.
 
@@ -465,13 +528,17 @@ applications.
 Ploidy
 ++++++
 
+.. todo:: This section is pretty much superseded by the previous discussion
+    and we don't actually discuss the important point about timescales
+    anywhere. We need to have a top-level section about this somewhere.
+
 The samples argument for :func:`sim_ancestry` is flexible, and allows us
 to provide samples in a number of different forms. In single-population
 models we can use the numeric form, which gives us :math:`n` samples:
 
 .. jupyter-execute::
 
-    ts = msprime.sim_ancestry(3, random_seed=42)
+    ts = msprime.sim_ancestry(3)
     SVG(ts.first().draw_svg())
 
 
@@ -484,7 +551,7 @@ six sample *nodes*.
 
 .. jupyter-execute::
 
-    ts = msprime.sim_ancestry(3, ploidy=1, random_seed=42)
+    ts = msprime.sim_ancestry(3, ploidy=1)
     SVG(ts.first().draw_svg())
 
 .. _sec_ancestry_samples_demography:
@@ -506,7 +573,9 @@ linear habitat.
 
     N = 10
     demography = msprime.Demography.stepping_stone_model(
-        [100] * N, migration_rate=0.1, boundaries=True)
+        [100] * N,
+        migration_rate=0.1,
+        boundaries=True)
     ts = msprime.sim_ancestry({0: 1, N - 1: 1}, demography=demography)
     ts
 
@@ -532,60 +601,31 @@ based on a species tree, and then draw samples using the species names.
 Sampling time
 +++++++++++++
 
-.. todo:: Translate this text taken from the old tutorial
-
-Simulating coalescent histories in which some of the samples are not
-from the present time is straightforward in ``msprime``.
-By using the ``samples`` argument to :meth:`msprime.simulate`
-we can specify the location and time at which all samples are made.
-
-.. code-block:: python
-
-    def historical_samples_example():
-        samples = [
-            msprime.Sample(population=0, time=0),
-            msprime.Sample(0, 0),  # Or, we can use positional arguments.
-            msprime.Sample(0, 1.0),
-            msprime.Sample(0, 1.0)
-        ]
-        tree_seq = msprime.simulate(samples=samples)
-        tree = tree_seq.first()
-        for u in tree.nodes():
-            print(u, tree.parent(u), tree.time(u), sep="\t")
-        print(tree.draw(format="unicode"))
-
-In this example we create four samples, two taken at the present time
-and two taken 1.0 generations in the past, as might represent one modern
-and one ancient diploid individual. There are a number of
-different ways in which we can describe the samples using the
-``msprime.Sample`` object (samples can be provided as plain tuples also
-if more convenient). Running this example, we get:
-
-.. code-block:: python
-
-    historical_samples_example()
-    # 6    -1    2.8240255501413247
-    # 4    6    0.0864109319103291
-    # 0    4    0.0
-    # 1    4    0.0
-    # 5    6    1.9249243960710336
-    # 2    5    1.0
-    # 3    5    1.0
-    #    6
-    #  ┏━┻━┓
-    #  ┃   5
-    #  ┃  ┏┻┓
-    #  ┃  2 3
-    #  ┃
-    #  4
-    # ┏┻┓
-    # 0 1
+By default the samples that we draw from a :class:`Population` are the
+population's ``sampling_time``. This is usually zero, representing the
+present, but in some demographic models representing (for example)
+with populations representing archaic individuals the default sampling
+time might be older. We can manually control the time at which samples
+are drawn using list of :class:`SampleSet` objects form for the
+samples argument.
 
 
-Because nodes ``0`` and ``1`` were sampled at time 0, their times in the tree
-are both 0. Nodes ``2`` and ``3`` were sampled at time 1.0, and so their times are recorded
-as 1.0 in the tree.
+.. jupyter-execute::
 
+    samples = [
+        msprime.SampleSet(1),
+        msprime.SampleSet(1, time=1.0)
+    ]
+    ts = msprime.sim_ancestry(samples)
+    print(ts.tables.nodes)
+    SVG(ts.draw_svg())
+
+In this example we create two diploid sample individuals, one at the present time
+and one taken 5 generations in the past, representing one modern
+and one ancient diploid individual. Running this example, we get:
+
+Because nodes ``0`` and ``1`` were sampled at time 0, their times in the
+node table are both 0; likewise, nodes ``2`` and ``3`` are at time 1.0.
 
 .. _sec_ancestry_samples_advanced_sampling:
 
@@ -631,6 +671,7 @@ Genome length
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 There are a number of different ways to specify the length of the
@@ -690,6 +731,7 @@ Discrete or continuous?
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 
@@ -762,6 +804,7 @@ recombination model and number of loci.
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 
@@ -795,6 +838,7 @@ Gene conversion
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 Gene conversion events are defined by two parameters: the rate at which gene
@@ -977,6 +1021,7 @@ Random seeds
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 
@@ -1039,6 +1084,7 @@ Running replicate simulations
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 
@@ -1096,6 +1142,7 @@ Ancestral recombination graph
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 In ``msprime`` we usually want to simulate the coalescent with recombination
@@ -1163,6 +1210,7 @@ Migration events
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 
@@ -1239,6 +1287,7 @@ Stopping simulations early
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 
@@ -1258,6 +1307,7 @@ Setting the start time
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 
@@ -1277,6 +1327,7 @@ Specifying the initial state
     :hide-code:
 
     import msprime
+    msprime.core.set_seed_rng_seed(42)
     from IPython.display import SVG
 
 
