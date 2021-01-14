@@ -281,14 +281,6 @@ We can see
 that these trees share a great deal of their structure, but that there are
 also important differences between the trees.
 
-.. warning:: Do not store the values returned from the
-    :meth:`~tskit.TreeSequence.trees` iterator in a list and operate
-    on them afterwards! For efficiency reasons ``tskit`` uses the same
-    instance of :class:`tskit.Tree` for each tree in the sequence
-    and updates the internal state for each new tree. Therefore, if you store
-    the trees returned from the iterator in a list, they will all refer
-    to the same tree.
-
 Non-uniform recombination
 -------------------------
 

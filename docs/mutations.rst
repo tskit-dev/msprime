@@ -4,6 +4,11 @@
 Mutations
 =========
 
+.. warning:: This documentation is under heavy construction. Please note
+    any outstanding TODOs before opening issues.
+
+.. include:: quickref-mutations.rst
+
 .. todo::
     This has been copied directly from the api.rst file. Probably
     needs some refactoring to use the newer docs arrangements.
@@ -431,6 +436,10 @@ Existing mutations
 ***
 API
 ***
+
+.. todo:: Need to distinguish here the deprecated and new functions
+
+.. autofunction:: msprime.sim_mutations
 
 .. autofunction:: msprime.mutate
 

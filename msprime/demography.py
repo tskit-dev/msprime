@@ -182,6 +182,12 @@ class Demography:
         return attr.asdict(self)
 
     def debug(self):
+        """
+        Returns a :class:`.DemographyDebugger` instance for this demography.
+
+        :return: A DemographyDebugger object for this demography.
+        :rtype: .DemographyDebugger
+        """
         return DemographyDebugger(demography=self)
 
     def __eq__(self, other):
