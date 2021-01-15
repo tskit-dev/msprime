@@ -16,8 +16,6 @@ Rate maps
 .. autoclass:: msprime.RateMap
     :members:
 
-.. autofunction:: msprime.read_hapmap
-
 --------------
 Deprecated API
 --------------
