@@ -1,6 +1,8 @@
-***************************
-[UPCOMING.X.X] - XXXX-XX-XX
-***************************
+********************
+1.0.0a2 - 2021-XX-XX
+********************
+
+** This changelog is incomplete and needs to be reviewed and updated **
 
 **New features**:
 
@@ -22,10 +24,6 @@
   This can help debug long-running simulations. (:user:`jeromekelleher`,
   :pr:`1080`).
 
-- Add a ``discrete_coordinates`` argument to `simulate`, which ensures that
-  all recombination breakpoints and mutational sites are at integer positions
-  (:user:`jeromekelleher`, :issue:`880`, :pr:`1115`).
-
 **Breaking changes**:
 
 - The class form for specifying models (e.g., ``msprime.StandardCoalescent()``)
@@ -43,6 +41,12 @@
 
 - Deprecate module attributes that were moved to tskit.
   (:user:`benjeffery`, :issue:`991`, :pr:`1158`)
+
+********************
+1.0.0a1 - 2021-01-15
+********************
+
+Alpha release of 1.0 for early testing and evaluation.
 
 ********************
 [0.7.4] - 2019-12-05
