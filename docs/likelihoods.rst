@@ -5,6 +5,8 @@
 Likelihoods
 ===========
 
+.. include:: quickref-likelihoods.rst
+
 .. jupyter-kernel:: python3
 
 

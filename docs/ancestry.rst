@@ -4,6 +4,11 @@
 Ancestry
 ========
 
+.. warning:: This documentation is under heavy construction. Please note
+    any outstanding TODOs before opening issues.
+
+.. include:: quickref-ancestry.rst
+
 .. todo:: This section needs some intro material and a bunch of
     link pointers.
 

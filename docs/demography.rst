@@ -4,8 +4,12 @@
 Demography
 ==========
 
+.. warning:: This documentation is under heavy construction. Please note
+    any outstanding TODOs before opening issues.
+
 .. todo:: This section needs some intro material
 
+.. include:: quickref-demography.rst
 
 ********
 Old text

@@ -5,6 +5,8 @@
 Utilities
 =========
 
+.. include:: quickref-utilities.rst
+
 *********
 Rate maps
 *********
