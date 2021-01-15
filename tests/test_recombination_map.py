@@ -373,7 +373,7 @@ class TestRecombinationMapInterface(unittest.TestCase):
             hapfile = os.path.join(temp_dir, "hapmap.txt")
             with open(hapfile, "w") as f:
                 f.write(hapmap)
-            recomb_map = msprime.read_hapmap(f.name)
+            recomb_map = msprime.RateMap.read_hapmap(f.name)
             mean_rr = recomb_map.mean_rate
             mean_rr2 = hapmap_rr(hapfile)
         self.assertAlmostEqual(mean_rr, mean_rr2, places=15)
