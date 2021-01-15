@@ -302,6 +302,156 @@ class RateMap:
             end += self.sequence_length
         return self.slice(start=start, end=end, trim=True)
 
+    @staticmethod
+    def read_hapmap(
+        fileobj,
+        sequence_length=None,
+        *,
+        has_header=True,
+        position_col=None,
+        rate_col=None,
+        map_col=None,
+    ):
+        # Black barfs with an INTERNAL_ERROR trying to reformat this docstring,
+        # so we explicitly disable reformatting here.
+        # fmt: off
+        """
+        Parses the specified file in HapMap format and returns a RateMap.
+        HapMap files must white-space-delimited, and by default are assumed to
+        contain a single header line (which is ignored). Each subsequent line
+        then contains a physical position (in base pairs) and either a genetic
+        map position (in centiMorgans) or a recombination rate (in centiMorgans
+        per megabase); the rate between the current physical position
+        (inclusive) and the physical position on the next line (exclusive) is
+        taken as constant. By default, the second column of the file is taken
+        as the physical position and the fourth column is taken as the genetic
+        position, as seen in the following sample of the format::
+
+            Chromosome	Position(bp)  Rate(cM/Mb)  Map(cM)
+            chr10       48232         0.1614       0.002664
+            chr10       48486         0.1589       0.002705
+            chr10       50009         0.159        0.002947
+            chr10       52147         0.1574       0.003287
+            ...
+            chr10	133762002     3.358        181.129345
+            chr10	133766368     0.000        181.144008
+
+        .. note::
+            The rows are all assumed to come from the same contig, and the
+            first column is currently ignored. Therefore if you have a single
+            file containing several contigs or chromosomes, you must must split
+            it up into multiple files, and pass each one separately to this
+            function.
+
+        :param str fileobj: Filename or file to read. This is passed directly
+            to :func:`numpy.loadtxt`, so if the filename extension is .gz or .bz2,
+            the file is decompressed first
+        :param float sequence_length: The total length of the map. If ``None``,
+            then assume it is the last physical position listed in the file.
+            Otherwise it must be greater then or equal to the last physical
+            position in the file, and the region between the last physical position
+            and the sequence_length is padded with a rate of zero.
+        :param bool has_header: If True (default), assume the file has a header row
+            and ignore the first line of the file.
+        :param int position_col: The zero-based index of the column in the file
+            specifying the physical position in base pairs. If ``None`` (default)
+            assume an index of 1 (i.e. the second column).
+        :param int rate_col: The zero-based index of the column in the file
+            specifying the rate in cM/Mb. If ``None`` (default) do not use the rate
+            column, but calculate rates using the genetic map positions, as
+            specified in ``map_col``. If the rate column is used, the
+            :attr:`RateMap.start_position` of the returned map is set to the first
+            physical position in the file, and the last value in the rate column
+            must be zero.
+        :param int map_col: The zero-based index of the column in the file
+            specifying the genetic map position in centiMorgans. If ``None``
+            (default), assume an index of 3 (i.e. the fourth column). If the first
+            genetic position is 0, set the :attr:`RateMap.start_position` of the
+            returned map to the first physical position in the file. Otherwise, act
+            as if an additional row, specifying physical position 0 and genetic
+            position 0, exists at the start of the file.
+        :return: A RateMap object.
+        :rtype: RateMap
+        """
+        # fmt: on
+        column_defs = {}  # column definitions passed to np.loadtxt
+        if rate_col is None and map_col is None:
+            # Default to map_col
+            map_col = 3
+        elif rate_col is not None and map_col is not None:
+            raise ValueError("Cannot specify both rate_col and map_col")
+        if map_col is not None:
+            column_defs[map_col] = ("map", float)
+        else:
+            column_defs[rate_col] = ("rate", float)
+        position_col = 1 if position_col is None else position_col
+        if position_col in column_defs:
+            raise ValueError(
+                "Cannot specify the same columns for position_col and "
+                "rate_col or map_col"
+            )
+        column_defs[position_col] = ("pos", int)
+
+        column_names = [c[0] for c in column_defs.values()]
+        column_data = np.loadtxt(
+            fileobj,
+            skiprows=1 if has_header else 0,
+            dtype=list(column_defs.values()),
+            usecols=list(column_defs.keys()),
+            unpack=True,
+        )
+        data = dict(zip(column_names, column_data))
+
+        if "map" not in data:
+            assert "rate" in data
+            if data["rate"][-1] != 0:
+                raise ValueError("The last entry in the 'rate' column must be zero")
+            pos_Mb = data["pos"] / 1e6
+            map_pos = np.cumsum(data["rate"][:-1] * np.diff(pos_Mb))
+            data["map"] = np.insert(map_pos, 0, 0) / 100
+        else:
+            data["map"] /= 100  # Convert centiMorgans to Morgans
+        if len(data["map"]) == 0:
+            raise ValueError("Empty hapmap file")
+
+        # TO DO: read in chrom name from col 0 and poss set as .name
+        # attribute on the RateMap
+
+        physical_positions = data["pos"]
+        genetic_positions = data["map"]
+        start = physical_positions[0]
+        end = physical_positions[-1]
+
+        if genetic_positions[0] > 0 and start == 0:
+            raise ValueError(
+                "The map distance at the start of the chromosome must be zero"
+            )
+        if start > 0:
+            physical_positions = np.insert(physical_positions, 0, 0)
+            if genetic_positions[0] > 0:
+                # Exception for a map that starts > 0cM: include the start rate
+                # in the mean
+                start = 0
+            genetic_positions = np.insert(genetic_positions, 0, 0)
+
+        if sequence_length is not None:
+            if sequence_length < end:
+                raise ValueError(
+                    "The sequence_length cannot be less that the last physical position "
+                    f" ({physical_positions[-1]})"
+                )
+            if sequence_length > end:
+                physical_positions = np.append(physical_positions, sequence_length)
+                genetic_positions = np.append(genetic_positions, genetic_positions[-1])
+
+        assert genetic_positions[0] == 0
+        return RateMap(
+            physical_positions,
+            rate=np.diff(genetic_positions) / np.diff(physical_positions),
+            start_position=start,
+            end_position=end,
+        )
+
 
 # The RecombinationMap class is deprecated since 1.0. We maintain the
 # functionality where it is possible to do so.
@@ -381,10 +531,10 @@ class RecombinationMap:
         """
         warnings.warn(
             "RecombinationMap.read_hapmap() is deprecated. "
-            "Use msprime.read_hapmap() instead.",
+            "Use RateMap.read_hapmap() instead.",
             FutureWarning,
         )
-        rate_map = read_hapmap(filename, position_col=1, rate_col=2)
+        rate_map = RateMap.read_hapmap(filename, position_col=1, rate_col=2)
         rate = np.append(rate_map.rate, 0)
         return cls(rate_map.position, rate, map_start=rate_map.start_position)
 
@@ -447,147 +597,3 @@ class RecombinationMap:
 
     def asdict(self):
         return self.map.asdict()
-
-
-def read_hapmap(
-    fileobj,
-    sequence_length=None,
-    *,
-    has_header=True,
-    position_col=None,
-    rate_col=None,
-    map_col=None,
-):
-    # Black barfs with an INTERNAL_ERROR trying to reformat this docstring,
-    # so we explicitly disable reformatting here.
-    # fmt: off
-    """
-    Parses the specified file in HapMap format. These files must be
-    white-space-delimited, and by default are assumed to contain a single header line
-    (which is ignored). Each subsequent line then contains a physical position (in base
-    pairs) and either a genetic map position (in centiMorgans) or a recombination rate
-    (in centiMorgans per megabase); the rate between the current physical position
-    (inclusive) and the physical position on the next line (exclusive) is taken as
-    constant. By default, the second column of the file is taken as the physical
-    position and the fourth column is taken as the genetic position, as seen in the
-    following sample of the format::
-
-        Chromosome	Position(bp)  Rate(cM/Mb)  Map(cM)
-        chr10       48232         0.1614       0.002664
-        chr10       48486         0.1589       0.002705
-        chr10       50009         0.159        0.002947
-        chr10       52147         0.1574       0.003287
-        ...
-        chr10	    133762002     3.358        181.129345
-        chr10	    133766368     0.000        181.144008
-
-    .. note::
-        The rows are all assumed to come from the same contig, and the first column is
-        currently ignored. Therefore if you have a single file containing several contigs
-        or chromosomes, you must must split it up into multiple files, and pass each one
-        separately to this function.
-
-    :param str fileobj: Filename or file to read. This is passed directly to
-        :func:`numpy.loadtxt`, so if the filename extension is .gz or .bz2, the file is
-        decompressed first
-    :param float sequence_length: The total length of the map. If ``None``, then assume
-        it is the last physical position listed in the file. Otherwise it must be greater
-        then or equal to the last physical position in the file, and the region between
-        the last physical position and the sequence_length is padded with a rate of zero.
-    :param bool has_header: If True (default), assume the file has a header row and
-        ignore the first line of the file.
-    :param int position_col: The zero-based index of the column in the file specifying
-        the physical position in base pairs. If ``None`` (default) assume an index of 1
-        (i.e. the second column).
-    :param int rate_col: The zero-based index of the column in the file specifying
-        the rate in cM/Mb. If ``None`` (default) do not use the rate column, but
-        calculate rates using the genetic map positions, as specified in ``map_col``.
-        If the rate column is used, the :attr:`RateMap.start_position` of the returned
-        map is set to the first physical position in the file, and the last value in the
-        rate column must be zero.
-    :param int map_col: The zero-based index of the column in the file specifying
-        the genetic map position in centiMorgans. If ``None`` (default), assume an index
-        of 3 (i.e. the fourth column). If the first genetic position is 0, set the
-        :attr:`RateMap.start_position` of the returned map to the first physical
-        position in the file. Otherwise, act as if an additional row, specifying
-        physical position 0 and genetic position 0, exists at the start of the file.
-    :return: A RateMap object.
-    :rtype: RateMap
-    """
-    # fmt: on
-    column = {}  # column definitions passed to np.loadtxt
-    if rate_col is None and map_col is None:
-        # Default to map_col
-        map_col = 3
-    elif rate_col is not None and map_col is not None:
-        raise ValueError("Cannot specify both rate_col and map_col")
-    if map_col is not None:
-        column[map_col] = ("map", float)
-    else:
-        column[rate_col] = ("rate", float)
-    position_col = 1 if position_col is None else position_col
-    if position_col in column:
-        raise ValueError(
-            "Cannot specify the same columns for position_col and rate_col or map_col"
-        )
-    column[position_col] = ("pos", int)
-
-    colnames = [c[0] for c in column.values()]
-    data = dict(
-        zip(
-            colnames,
-            np.loadtxt(
-                fileobj,
-                skiprows=1 if has_header else 0,
-                dtype=list(column.values()),
-                usecols=list(column.keys()),
-                unpack=True,
-            ),
-        )
-    )
-
-    if "map" not in data:
-        assert "rate" in data
-        if data["rate"][-1] != 0:
-            raise ValueError("The last entry in the 'rate' column must be zero")
-        pos_Mb = data["pos"] / 1e6
-        map_pos = np.cumsum(data["rate"][:-1] * np.diff(pos_Mb))
-        data["map"] = np.insert(map_pos, 0, 0) / 100
-    else:
-        data["map"] /= 100  # Convert centiMorgans to Morgans
-    if len(data["map"]) == 0:
-        raise ValueError("Empty hapmap file")
-
-    # TO DO: read in chrom name from col 0 and poss set as .name attribute on the RateMap
-
-    physical_positions = data["pos"]
-    genetic_positions = data["map"]
-    start = physical_positions[0]
-    end = physical_positions[-1]
-
-    if genetic_positions[0] > 0 and start == 0:
-        raise ValueError("The map distance at the start of the chromosome must be zero")
-    if start > 0:
-        physical_positions = np.insert(physical_positions, 0, 0)
-        if genetic_positions[0] > 0:
-            # Exception for a map that starts > 0cM: include the start rate in the mean
-            start = 0
-        genetic_positions = np.insert(genetic_positions, 0, 0)
-
-    if sequence_length is not None:
-        if sequence_length < end:
-            raise ValueError(
-                "The sequence_length cannot be less that the last physical position "
-                f" ({physical_positions[-1]})"
-            )
-        if sequence_length > end:
-            physical_positions = np.append(physical_positions, sequence_length)
-            genetic_positions = np.append(genetic_positions, genetic_positions[-1])
-
-    assert genetic_positions[0] == 0
-    return RateMap(
-        physical_positions,
-        rate=np.diff(genetic_positions) / np.diff(physical_positions),
-        start_position=start,
-        end_position=end,
-    )

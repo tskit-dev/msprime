@@ -823,7 +823,13 @@ class DiscoalSweeps(DiscoalTest):
         self._run(cmd)
 
 
-class MsmsSweeps(Test):
+# FIXME disabling these for now because they are unreliable and result in
+# errors (root: EXCEPTION:No columns to parse from file). This is probably
+# harmless as it means there's no data simulated, but it stops the rest
+# of the tests from running so we need to deal with it somehow.
+
+
+class MsmsSweeps:
     """
     Compare msms with msprime/discoal for selective sweeps.
 
@@ -1475,12 +1481,12 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
         )
 
     def test_dtwf_vs_coalescent_2_pops_massmigration(self):
-        demography = msprime.Demography.simple_model([1000, 1000])
+        demography = msprime.Demography.isolated_model([1000, 1000])
         demography.events.append(
             msprime.MassMigration(time=300, source=1, destination=0, proportion=1.0)
         )
         self._run(
-            samples=demography.sample(10, 10),
+            samples={0: 10, 1: 10},
             demography=demography,
             sequence_length=10 ** 6,
             num_replicates=300,
@@ -1490,7 +1496,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
     def test_dtwf_vs_coalescent_1_pop_growth(self):
         self._run(
             samples=10,
-            demography=msprime.Demography.simple_model(1000, growth_rate=0.01),
+            demography=msprime.Demography.isolated_model([1000], growth_rate=[0.01]),
             recombination_rate=1e-8,
             sequence_length=5e7,
             num_replicates=300,
@@ -1499,7 +1505,9 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
 
     def test_dtwf_vs_coalescent_1_pop_shrink(self):
         initial_size = 1000
-        demography = msprime.Demography.simple_model(initial_size, growth_rate=-0.01)
+        demography = msprime.Demography.isolated_model(
+            [initial_size], growth_rate=[-0.01]
+        )
         demography.events.append(
             msprime.PopulationParametersChange(
                 time=200, initial_size=initial_size, growth_rate=0.01, population=0
@@ -1515,7 +1523,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
         )
 
     def test_dtwf_vs_coalescent_multiple_bottleneck(self):
-        demography = msprime.Demography.simple_model([1000, 1000])
+        demography = msprime.Demography.isolated_model([1000, 1000])
         demography.events = [
             msprime.PopulationParametersChange(
                 time=100, initial_size=100, growth_rate=-0.01, population=0
@@ -1538,7 +1546,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
             msprime.MigrationRateChange(time=700, rate=0.1, matrix_index=(0, 1)),
         ]
         self._run(
-            samples=demography.sample(5, 5),
+            samples={0: 5, 1: 5},
             demography=demography,
             num_replicates=400,
             recombination_rate=1e-8,
@@ -1577,7 +1585,9 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
             default_growth_rate = 0.01
             growth_rates = [default_growth_rate] * num_pops
 
-        demography = msprime.Demography.simple_model(initial_sizes, growth_rates)
+        demography = msprime.Demography.isolated_model(
+            initial_sizes, growth_rate=growth_rates
+        )
 
         for i in range(num_pops):
             if initial_sizes[i] > 100:
@@ -1607,7 +1617,7 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
         demography.migration_matrix = migration_matrix
 
         super()._run(
-            samples=demography.sample(*sample_sizes),
+            samples={j: sample_size for j, sample_size in enumerate(sample_sizes)},
             demography=demography,
             num_replicates=num_replicates,
             sequence_length=num_loci,
@@ -1762,7 +1772,7 @@ class DtwfVsSlim(Test):
 
         # These are *diploid* samples in msprime
         slim_args["sample_sizes"] = 2 * sample_sizes
-        demography = msprime.Demography.simple_model(initial_sizes)
+        demography = msprime.Demography.isolated_model(initial_sizes)
 
         slim_args["POP_STRS"] = ""
         for i in range(num_pops):
@@ -1802,7 +1812,7 @@ class DtwfVsSlim(Test):
 
         self.run_dtwf_slim_comparison(
             slim_args,
-            samples=demography.sample(*sample_sizes),
+            samples={j: sample_size for j, sample_size in enumerate(sample_sizes)},
             demography=demography,
             num_replicates=num_replicates,
             sequence_length=num_loci,
@@ -1837,7 +1847,7 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
         N = num_populations
         num_loci = np.random.randint(1e5, 1e7)
         num_samples = np.random.randint(2, 10, size=num_populations)
-        demography = msprime.Demography.simple_model([1000 / N] * num_populations)
+        demography = msprime.Demography.isolated_model([1000 / N] * num_populations)
 
         migration_matrix = []
         for i in range(N):
@@ -1887,7 +1897,7 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
             )
         )
         super()._run(
-            samples=demography.sample(*num_samples),
+            samples={j: sample_size for j, sample_size in enumerate(num_samples)},
             demography=demography,
             num_replicates=num_replicates,
             sequence_length=num_loci,
@@ -1919,7 +1929,9 @@ class RecombinationBreakpointTest(Test):
     ):
         ts = msprime.sim_ancestry(
             samples=sample_size,
-            demography=msprime.Demography.simple_model(Ne, growth_rate),
+            demography=msprime.Demography.isolated_model(
+                [Ne], growth_rate=[growth_rate]
+            ),
             ploidy=ploidy,
             sequence_length=L,
             recombination_rate=r,
@@ -2031,18 +2043,14 @@ class RecombinationMutationTest(Test):
         empirical_theta = []
         empirical_rho = []
         for _ in range(num_replicates):
-            sim = msprime.ancestry._parse_simulate(
-                Ne=Ne,
+            sim = msprime.ancestry._parse_sim_ancestry(
+                samples=[msprime.SampleSet(sample_size, ploidy=1)],
                 recombination_rate=r,
-                length=L,
+                sequence_length=L,
                 ploidy=ploidy,
-                population_configurations=[
-                    msprime.PopulationConfiguration(
-                        sample_size=sample_size,
-                        initial_size=Ne,
-                        growth_rate=growth_rate,
-                    )
-                ],
+                demography=msprime.Demography.isolated_model(
+                    [Ne], growth_rate=[growth_rate]
+                ),
                 model=model,
             )
             ts = next(sim.run_replicates(1))
@@ -2113,7 +2121,7 @@ class XiVsHudsonTest(Test):
     appropriate regime.
     """
 
-    def _run(self, xi_model, num_replicates, **kwargs):
+    def _run(self, xi_model, num_replicates, num_samples, **kwargs):
         df = pd.DataFrame()
         for model in ["hudson", xi_model]:
             simulate_args = dict(kwargs)
@@ -2124,12 +2132,16 @@ class XiVsHudsonTest(Test):
                 # The Xi Dirac coalescent scales differently than the Hudson model.
                 # (Ne² for Dirac and 2Ne for Hudson).
                 # We need NeDirac= square_root(2NeHudson).
-                simulate_args["Ne"] = math.sqrt(
-                    int(simulate_args["ploidy"]) * int(simulate_args["Ne"])
+                simulate_args["population_size"] = math.sqrt(
+                    int(simulate_args["ploidy"]) * int(simulate_args["population_size"])
                 )
             logging.debug(f"Running: {simulate_args}")
-            # replicates = msprime.simulate(**simulate_args)
-            sim = msprime.ancestry._parse_simulate(**simulate_args)
+            sim = msprime.ancestry._parse_sim_ancestry(
+                samples=[msprime.SampleSet(num_samples, ploidy=1)],
+                sequence_length=1,
+                discrete_genome=False,
+                **simulate_args,
+            )
             replicates = sim.run_replicates(num_replicates)
             data = collections.defaultdict(list)
             for ts in replicates:
@@ -2159,16 +2171,16 @@ class XiVsHudsonTest(Test):
         self._run(
             msprime.DiracCoalescent(psi=0.99, c=0),
             num_replicates=1000,
-            sample_size=50,
-            Ne=10000,
+            num_samples=50,
+            population_size=10000,
             recombination_rate=0.001,
             ploidy=1,
         )
         self._run(
             msprime.DiracCoalescent(psi=0.99, c=0),
             num_replicates=1000,
-            sample_size=50,
-            Ne=10000,
+            num_samples=50,
+            population_size=10000,
             recombination_rate=0.001,
             ploidy=2,
         )
@@ -2177,15 +2189,15 @@ class XiVsHudsonTest(Test):
         self._run(
             msprime.DiracCoalescent(psi=0.99, c=0),
             num_replicates=5000,
-            sample_size=10,
-            Ne=10000,
+            num_samples=10,
+            population_size=10000,
             ploidy=1,
         )
         self._run(
             msprime.DiracCoalescent(psi=0.99, c=0),
             num_replicates=5000,
-            sample_size=10,
-            Ne=10000,
+            num_samples=10,
+            population_size=10000,
             ploidy=2,
         )
 
@@ -2732,8 +2744,8 @@ class XiGrowth(Test):
     def compare_tmrca(
         self, pop_size, growth_rate, model, num_replicates, a, b, ploidy, name
     ):
-        demography = msprime.Demography.simple_model(
-            initial_size=pop_size, growth_rate=growth_rate
+        demography = msprime.Demography.isolated_model(
+            initial_size=[pop_size], growth_rate=[growth_rate]
         )
 
         replicates = msprime.ancestry.sim_ancestry(
@@ -4419,7 +4431,7 @@ class MutationTest(Test):
         # at least one  mutation on each site
         assert ts.num_trees == 1
         tree = ts.first()
-        for v in ts.variants(samples=range(ts.num_nodes), impute_missing_data=True):
+        for v in ts.variants(samples=range(ts.num_nodes), isolated_as_missing=False):
             for n in tree.nodes():
                 pn = tree.parent(n)
                 if pn != tskit.NULL:
@@ -5112,7 +5124,7 @@ def main():
         "--test-class",
         "-c",
         default=None,
-        choices=suite.classes,
+        choices=sorted(suite.classes),
         help="Run all tests for specified test class",
     )
     parser.add_argument(

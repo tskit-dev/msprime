@@ -145,8 +145,9 @@ Ancestry
 The new :func:`.sim_ancestry` function replaces the 0.x :func:`.simulate`
 function and is very similar. There are some important differences though:
 
-* Samples are now **individuals** rather **nodes** (i.e. monoploid
-  genomes). Because the default :ref:`ploidy <sec_ancestry_samples_ploidy>`
+* The `samples` argument now refers to the **number of individuals**
+  rather than **the number of nodes** (i.e. monoploid genomes).
+  Because the default :ref:`ploidy <sec_ancestry_samples_ploidy>`
   is 2 (see the next point) the upshot is that ``sim_ancestry(2)`` will
   result in a tree sequence with *four* sample nodes, not two. (It is
   possible to override this behaviour using the list of :class:`.SampleSet`
@@ -215,10 +216,9 @@ Mutations
 
 * The :func:`.sim_mutations` function works on a **discrete** genome by default.
 
-* There are now also many new mutation models which support;
+* There are now also many new mutation models supported by :func:.sim_mutations;
   see :ref:`sec_mutations` for details. These are *not* supported in the deprecated
   :func:`.mutate` function.
-
 
 +++++++++
 Utilities

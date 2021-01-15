@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2019 University of Oxford
+# Copyright (C) 2015-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -139,8 +139,8 @@ setup(
     description="A fast and accurate coalescent simulator.",
     long_description=long_description,
     packages=["msprime"],
-    author="Jerome Kelleher",
-    author_email="jerome.kelleher@well.ox.ac.uk",
+    author="Tskit Developers",
+    author_email="admin@tskit.dev",
     url="https://pypi.org/project/msprime/",
     entry_points={
         "console_scripts": ["mspms=msprime.cli:mspms_main", "msp=msprime.cli:msp_main"]
@@ -149,7 +149,7 @@ setup(
     # NOTE: make sure this is the 'attrs' package, not 'attr'!
     install_requires=[numpy_ver, "attrs>=19.1.0", "newick", "tskit>=0.3.3"],
     ext_modules=[_msprime_module],
-    keywords=["Coalescent simulation", "ms"],
+    keywords=["Coalescent simulation", "ms", "tree sequence"],
     license="GNU GPLv3+",
     platforms=["POSIX", "Windows", "MacOS X"],
     python_requires=">=3.6",
@@ -159,6 +159,8 @@ setup(
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3 :: Only",
         "Development Status :: 4 - Beta",
         "Environment :: Other Environment",
