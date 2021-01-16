@@ -5,6 +5,7 @@ coverage
 daiquiri
 flake8
 mock
+mypy
 numpy
 pre-commit
 pytest

@@ -30,6 +30,7 @@ import logging
 import math
 import struct
 import sys
+from typing import ClassVar
 from typing import Union
 
 import numpy as np
@@ -42,7 +43,7 @@ from . import mutations
 from . import provenance
 from msprime import _msprime
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 def _model_factory(model):
@@ -1421,7 +1422,7 @@ class SimulationModelChange:
     """
 
     time: Union[float, None] = None
-    model: Union[str, SimulationModel] = None
+    model: Union[str, SimulationModel, None] = None
 
     def asdict(self):
         return dataclasses.asdict(self)
@@ -1437,7 +1438,7 @@ class SimulationModel:
     Abstract superclass of all simulation models.
     """
 
-    name = None
+    name: ClassVar[str]
 
     def get_ll_representation(self):
         return {"name": self.name}

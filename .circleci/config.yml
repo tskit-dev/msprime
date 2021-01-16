@@ -48,6 +48,12 @@ jobs:
             rm .coverage
 
       - run:
+          name: Type hinting checks
+          # This is a pretty minimal check, we should have much more granular checking
+          # with missing imports. This gets us started, though.
+          command: mypy msprime/*.py --ignore-missing-imports
+
+      - run:
           name: Compile C with gcc
           command: |
             CFLAGS=--coverage meson lib/ build-gcc && cd build-gcc && ninja
