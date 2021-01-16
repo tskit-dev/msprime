@@ -51,7 +51,7 @@ def _model_factory(model):
     Returns a simulation model corresponding to the specified model.
     - If model is None, the default simulation model is returned.
     - If model is a string, return the corresponding model instance.
-    - If model is an instance of SimulationModel, return a copy of it.
+    - If model is an instance of AncestryModel, return a copy of it.
     - Otherwise raise a type error.
     """
     model_map = {
@@ -72,9 +72,9 @@ def _model_factory(model):
                 )
             )
         model_instance = model_map[lower_model]
-    elif not isinstance(model, SimulationModel):
+    elif not isinstance(model, AncestryModel):
         raise TypeError(
-            "Simulation model must be a string or an instance of SimulationModel"
+            "Simulation model must be a string or an instance of AncestryModel"
         )
     else:
         model_instance = model
@@ -84,13 +84,13 @@ def _model_factory(model):
 def _parse_model_change_events(events):
     """
     Parses the specified list of events provided in model_arg[1:] into
-    SimulationModelChange events. There are two different forms supported,
+    AncestryModelChange events. There are two different forms supported,
     and model descriptions are anything supported by model_factory.
     """
     err = (
         "Simulation model change events must be either a two-tuple "
         "(time, model), describing the time of the model change and "
-        "the new model or be an instance of SimulationModelChange."
+        "the new model or be an instance of AncestryModelChange."
     )
     model_change_events = []
     for event in events:
@@ -106,8 +106,8 @@ def _parse_model_change_events(events):
                         "Model change times must be either a floating point "
                         "value or None"
                     )
-            event = SimulationModelChange(t, _model_factory(event[1]))
-        elif isinstance(event, SimulationModelChange):
+            event = AncestryModelChange(t, _model_factory(event[1]))
+        elif isinstance(event, AncestryModelChange):
             # We don't want to modify our inputs, so take a deep copy.
             event = copy.copy(event)
             event.model = _model_factory(event.model)
@@ -127,7 +127,7 @@ def _parse_model_arg(model_arg):
         "interpreted as a simulation model or (b) a list in which "
         "the first element is a model description and the remaining "
         "elements are model change events. These can either be described "
-        "by a (time, model) tuple or SimulationModelChange instances."
+        "by a (time, model) tuple or AncestryModelChange instances."
     )
     if isinstance(model_arg, (list, tuple)):
         if len(model_arg) < 1:
@@ -143,14 +143,14 @@ def _parse_model_arg(model_arg):
 def _filter_events(demographic_events):
     """
     Returns a tuple (demographic_events, model_change_events) which separates
-    out the SimulationModelChange events from the list. This is to support the
+    out the AncestryModelChange events from the list. This is to support the
     pre-1.0 syntax for model changes, where they were included in the
     demographic_events parameter.
     """
     filtered_events = []
     model_change_events = []
     for event in demographic_events:
-        if isinstance(event, SimulationModelChange):
+        if isinstance(event, AncestryModelChange):
             model_change_events.append(event)
         else:
             filtered_events.append(event)
@@ -314,7 +314,7 @@ def _parse_simulate(
         if len(old_style_model_change_events) > 0:
             if len(model_change_events) > 0:
                 raise ValueError(
-                    "Cannot specify SimulationModelChange events using both new-style "
+                    "Cannot specify AncestryModelChange events using both new-style "
                     "and pre 1.0 syntax"
                 )
             model_change_events = old_style_model_change_events
@@ -1396,46 +1396,45 @@ class SampleSet:
 # TODO update the documentation here to state that using this class is
 # deprecated, and users should use the model=[...] notation instead.
 @dataclasses.dataclass
-class SimulationModelChange:
+class AncestryModelChange:
     """
-    An event representing a change of underlying :ref:`simulation model
-    <sec_api_simulation_models>`.
+    An event representing a change of underlying :ref:`ancestry model
+    <sec_ancestry_models>`.
 
-    :param float time: The time at which the simulation model changes
+    :param float time: The time at which the ancestry model changes
         to the new model, in generations. After this time, all internal
         tree nodes, edges and migrations are the result of the new model.
         If time is set to None (the default), the model change will occur
         immediately after the previous model has completed. If time is a
-        callable, the time at which the simulation model changes is the result
+        callable, the time at which the model changes is the result
         of calling this function with the time that the previous model
         started with as a parameter.
     :param model: The new simulation model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
-        a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher(100)``.
-        Please see the :ref:`sec_api_simulation_models` section for more details
-        on specifying simulations models. If the argument is a string, the
-        reference population size is set from the top level ``Ne`` parameter
-        to :func:`.simulate`. If this is None (the default) the model is
-        changed to the standard coalescent with a reference_size of
-        Ne (if model was not specified).
-    :type model: str or simulation model instance
+        an ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
+        Please see the :ref:`sec_ancestry_models` section for more details
+        on specifying these models. If this is None (the default) the model is
+        changed to the standard coalescent.
+    :type model: str or ancestry model instance
     """
 
     time: Union[float, None] = None
-    model: Union[str, SimulationModel, None] = None
+    model: Union[str, AncestryModel, None] = None
 
     def asdict(self):
         return dataclasses.asdict(self)
 
 
-# TODO rename to AncestryModel
-# but, check whether this was used in 0.x, and whether we need to
-# keep a version of the class around for compatibility. Also see
-# the SimulationModelChange class.
-@dataclasses.dataclass
-class SimulationModel:
+class SimulationModelChange(AncestryModelChange):
     """
-    Abstract superclass of all simulation models.
+    Deprecated 0.x way to describe an :class:`AncestryModelChange`.
+    """
+
+
+@dataclasses.dataclass
+class AncestryModel:
+    """
+    Abstract superclass of all ancestry models.
     """
 
     name: ClassVar[str]
@@ -1447,7 +1446,7 @@ class SimulationModel:
         return dataclasses.asdict(self)
 
 
-class StandardCoalescent(SimulationModel):
+class StandardCoalescent(AncestryModel):
     """
     The classical coalescent with recombination model (i.e., Hudson's algorithm).
     The string ``"hudson"`` can be used to refer to this model.
@@ -1458,7 +1457,7 @@ class StandardCoalescent(SimulationModel):
     name = "hudson"
 
 
-class SmcApproxCoalescent(SimulationModel):
+class SmcApproxCoalescent(AncestryModel):
     """
     The original SMC model defined by McVean and Cardin. This
     model is implemented using a naive rejection sampling approach
@@ -1471,7 +1470,7 @@ class SmcApproxCoalescent(SimulationModel):
     name = "smc"
 
 
-class SmcPrimeApproxCoalescent(SimulationModel):
+class SmcPrimeApproxCoalescent(AncestryModel):
     """
     The SMC' model defined by Marjoram and Wall as an improvement on the
     original SMC. model is implemented using a naive rejection sampling
@@ -1484,7 +1483,7 @@ class SmcPrimeApproxCoalescent(SimulationModel):
     name = "smc_prime"
 
 
-class DiscreteTimeWrightFisher(SimulationModel):
+class DiscreteTimeWrightFisher(AncestryModel):
     """
     A discrete backwards-time Wright-Fisher model, with diploid back-and-forth
     recombination. The string ``"dtwf"`` can be used to refer to this model.
@@ -1514,7 +1513,7 @@ class DiscreteTimeWrightFisher(SimulationModel):
     name = "dtwf"
 
 
-class WrightFisherPedigree(SimulationModel):
+class WrightFisherPedigree(AncestryModel):
     # TODO Complete documentation.
     # TODO Since the pedigree is a necessary parameter for this simulation
     # model and it cannot be used with any other model we should make it a
@@ -1528,9 +1527,9 @@ class WrightFisherPedigree(SimulationModel):
     name = "wf_ped"
 
 
-class ParametricSimulationModel(SimulationModel):
+class ParametricAncestryModel(AncestryModel):
     """
-    The superclass of simulation models that require extra parameters.
+    The superclass of ancestry models that require extra parameters.
     """
 
     def get_ll_representation(self):
@@ -1540,7 +1539,7 @@ class ParametricSimulationModel(SimulationModel):
 
 
 @dataclasses.dataclass
-class BetaCoalescent(ParametricSimulationModel):
+class BetaCoalescent(ParametricAncestryModel):
     """
     A Lambda-coalescent with multiple mergers in the haploid cases, or a
     Xi-coalescent with simultaneous multiple mergers in the polyploid case.
@@ -1647,7 +1646,7 @@ class BetaCoalescent(ParametricSimulationModel):
 
 
 @dataclasses.dataclass
-class DiracCoalescent(ParametricSimulationModel):
+class DiracCoalescent(ParametricAncestryModel):
     """
     A Lambda-coalescent with multiple mergers in the haploid cases, or a
     Xi-coalescent with simultaneous multiple mergers in the polyploid case.
@@ -1689,7 +1688,7 @@ class DiracCoalescent(ParametricSimulationModel):
 
 
 @dataclasses.dataclass
-class SweepGenicSelection(ParametricSimulationModel):
+class SweepGenicSelection(ParametricAncestryModel):
     # TODO document and finalise the API
     name = "sweep_genic_selection"
 

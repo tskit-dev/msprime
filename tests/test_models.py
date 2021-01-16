@@ -202,7 +202,7 @@ class TestParseModel:
         assert events == []
 
     def test_one_event(self):
-        expected_event = msprime.SimulationModelChange(
+        expected_event = msprime.AncestryModelChange(
             time=1.33, model=msprime.StandardCoalescent()
         )
         model, events = ancestry._parse_model_arg(["dtwf", (1.33, "hudson")])
@@ -228,13 +228,13 @@ class TestParseModel:
         model, events = ancestry._parse_model_arg(["dtwf", (None, None)])
         assert model == msprime.DiscreteTimeWrightFisher()
         assert events == [
-            msprime.SimulationModelChange(time=None, model=msprime.StandardCoalescent())
+            msprime.AncestryModelChange(time=None, model=msprime.StandardCoalescent())
         ]
 
     def test_two_events(self):
         expected_events = [
-            msprime.SimulationModelChange(time=1, model=msprime.StandardCoalescent()),
-            msprime.SimulationModelChange(time=2, model=msprime.SmcApproxCoalescent()),
+            msprime.AncestryModelChange(time=1, model=msprime.StandardCoalescent()),
+            msprime.AncestryModelChange(time=2, model=msprime.SmcApproxCoalescent()),
         ]
         model, events = ancestry._parse_model_arg(["dtwf", (1, "hudson"), (2, "smc")])
         assert model == msprime.DiscreteTimeWrightFisher()
@@ -739,12 +739,12 @@ class TestMixedModels:
         assert coalescent_times.shape[0] > 0
         assert np.all(coalescent_times != np.floor(coalescent_times))
 
-    def test_many_models(self):
+    def test_many_models_simulate(self):
         Ne = 10000
         ts = msprime.simulate(
             Ne=Ne,
             sample_size=10,
-            recombination_rate=0.1,
+            # Use the old-style SimulationModelChange
             model=[
                 "hudson",
                 msprime.SimulationModelChange(10, msprime.StandardCoalescent()),
@@ -753,6 +753,24 @@ class TestMixedModels:
                 msprime.SimulationModelChange(40, msprime.DiscreteTimeWrightFisher()),
                 msprime.SimulationModelChange(50, msprime.BetaCoalescent(alpha=1.1)),
                 msprime.SimulationModelChange(60, msprime.StandardCoalescent()),
+            ],
+            random_seed=10,
+        )
+        for tree in ts.trees():
+            assert tree.num_roots == 1
+
+    def test_many_models_sim_ancestry(self):
+        ts = msprime.sim_ancestry(
+            samples=10,
+            population_size=10_000,
+            model=[
+                "hudson",
+                msprime.AncestryModelChange(10, msprime.StandardCoalescent()),
+                msprime.AncestryModelChange(20, msprime.SmcApproxCoalescent()),
+                msprime.AncestryModelChange(30, msprime.SmcPrimeApproxCoalescent()),
+                msprime.AncestryModelChange(40, msprime.DiscreteTimeWrightFisher()),
+                msprime.AncestryModelChange(50, msprime.BetaCoalescent(alpha=1.1)),
+                msprime.AncestryModelChange(60, msprime.StandardCoalescent()),
             ],
             random_seed=10,
         )

@@ -1625,6 +1625,8 @@ API
 
 .. autoclass:: msprime.SampleSet
 
+.. autoclass:: msprime.AncestryModelChange
+
 ++++++++++++++
 Deprecated API
 ++++++++++++++
@@ -1633,6 +1635,8 @@ Deprecated API
     this in here for now so it goes somewhere.
 
 .. autofunction:: msprime.simulate()
+
+.. autoclass:: msprime.SimulationModelChange
 
 .. _sec_ancestry_node_flags:
 
