@@ -19,16 +19,19 @@
 """
 Module responsible for defining and running ancestry simulations.
 """
+from __future__ import annotations
+
 import collections.abc
 import copy
+import dataclasses
 import inspect
 import json
 import logging
 import math
 import struct
 import sys
+from typing import Union
 
-import attr
 import numpy as np
 import tskit
 
@@ -1374,24 +1377,24 @@ class Simulator(_msprime.Simulator):
             self.reset()
 
 
-@attr.s
+@dataclasses.dataclass
 class SampleSet:
     """
     TODO document
     """
 
-    num_samples = attr.ib()
-    population = attr.ib(default=None)
-    time = attr.ib(default=None)
-    ploidy = attr.ib(default=None)
+    num_samples: int
+    population: Union[int, None] = None
+    time: Union[float, None] = None
+    ploidy: Union[int, None] = None
 
     def asdict(self):
-        return attr.asdict(self)
+        return dataclasses.asdict(self)
 
 
 # TODO update the documentation here to state that using this class is
 # deprecated, and users should use the model=[...] notation instead.
-@attr.s
+@dataclasses.dataclass
 class SimulationModelChange:
     """
     An event representing a change of underlying :ref:`simulation model
@@ -1417,14 +1420,18 @@ class SimulationModelChange:
     :type model: str or simulation model instance
     """
 
-    time = attr.ib(default=None)
-    model = attr.ib(default=None)
+    time: Union[float, None] = None
+    model: Union[str, SimulationModel] = None
 
     def asdict(self):
-        return attr.asdict(self)
+        return dataclasses.asdict(self)
 
 
-@attr.s
+# TODO rename to AncestryModel
+# but, check whether this was used in 0.x, and whether we need to
+# keep a version of the class around for compatibility. Also see
+# the SimulationModelChange class.
+@dataclasses.dataclass
 class SimulationModel:
     """
     Abstract superclass of all simulation models.
@@ -1436,7 +1443,7 @@ class SimulationModel:
         return {"name": self.name}
 
     def asdict(self):
-        return attr.asdict(self)
+        return dataclasses.asdict(self)
 
 
 class StandardCoalescent(SimulationModel):
@@ -1531,7 +1538,7 @@ class ParametricSimulationModel(SimulationModel):
         return d
 
 
-@attr.s
+@dataclasses.dataclass
 class BetaCoalescent(ParametricSimulationModel):
     """
     A Lambda-coalescent with multiple mergers in the haploid cases, or a
@@ -1634,11 +1641,11 @@ class BetaCoalescent(ParametricSimulationModel):
 
     name = "beta"
 
-    alpha = attr.ib(default=None)
-    truncation_point = attr.ib(default=sys.float_info.max)
+    alpha: Union[float, None] = None
+    truncation_point: float = sys.float_info.max
 
 
-@attr.s
+@dataclasses.dataclass
 class DiracCoalescent(ParametricSimulationModel):
     """
     A Lambda-coalescent with multiple mergers in the haploid cases, or a
@@ -1676,16 +1683,17 @@ class DiracCoalescent(ParametricSimulationModel):
 
     name = "dirac"
 
-    psi = attr.ib(default=None)
-    c = attr.ib(default=None)
+    psi: Union[float, None] = None
+    c: Union[float, None] = None
 
 
-@attr.s
+@dataclasses.dataclass
 class SweepGenicSelection(ParametricSimulationModel):
     # TODO document and finalise the API
     name = "sweep_genic_selection"
-    position = attr.ib(default=None)
-    start_frequency = attr.ib(default=None)
-    end_frequency = attr.ib(default=None)
-    alpha = attr.ib(default=None)
-    dt = attr.ib(default=None)
+
+    position: Union[float, None] = None
+    start_frequency: Union[float, None] = None
+    end_frequency: Union[float, None] = None
+    alpha: Union[float, None] = None
+    dt: Union[float, None] = None

@@ -20,14 +20,15 @@
 Module responsible for defining and debugging demographic models.
 """
 import collections
+import dataclasses
 import inspect
 import io
 import logging
 import math
 import sys
 import warnings
+from typing import Union
 
-import attr
 import numpy as np
 import tskit
 
@@ -62,7 +63,7 @@ def check_population_size(Ne):
         raise ValueError("Population size must be positive")
 
 
-@attr.s(eq=False)
+@dataclasses.dataclass
 class Demography:
     """
     A description of a demographic model for an msprime simulation.
@@ -70,11 +71,11 @@ class Demography:
     TODO document properly.
     """
 
-    populations = attr.ib(factory=list)
-    migration_matrix = attr.ib(default=None)
-    events = attr.ib(factory=list)
+    populations: list = dataclasses.field(default_factory=list)
+    migration_matrix: list = None
+    events: list = dataclasses.field(default_factory=list)
 
-    def __attrs_post_init__(self):
+    def __post_init__(self):
         if self.migration_matrix is None:
             N = self.num_populations
             self.migration_matrix = np.zeros((N, N))
@@ -179,7 +180,7 @@ class Demography:
             tables.populations.add_row(metadata=metadata)
 
     def asdict(self):
-        return attr.asdict(self)
+        return dataclasses.asdict(self)
 
     def debug(self):
         """
@@ -599,7 +600,7 @@ class Demography:
 # structure and how you sample from it.
 
 
-@attr.s
+@dataclasses.dataclass
 class Population:
     """
     Define a single population in a simulation.
@@ -622,15 +623,15 @@ class Population:
     :vartype description: str
     """
 
-    initial_size = attr.ib(default=None)
-    growth_rate = attr.ib(default=0.0)
-    name = attr.ib(default=None)
-    description = attr.ib(default=None)
-    extra_metadata = attr.ib(factory=dict)
-    sampling_time = attr.ib(default=0)
+    initial_size: float = None
+    growth_rate: float = 0.0
+    name: str = None
+    description: str = None
+    extra_metadata: dict = dataclasses.field(default_factory=dict)
+    sampling_time: float = 0
 
     def asdict(self):
-        return attr.asdict(self)
+        return dataclasses.asdict(self)
 
     @staticmethod
     def from_old_style(pop_config, Ne=1):
@@ -659,7 +660,7 @@ class Population:
 
 
 # This was lifted out of older code as-is. No point in updating it
-# to use attrs, since all we want to do is maintain compatability
+# to use dataclasses, since all we want to do is maintain compatability
 # with older code.
 class PopulationConfiguration:
     """
@@ -704,13 +705,13 @@ class PopulationConfiguration:
         )
 
 
-@attr.s
+@dataclasses.dataclass
 class DemographicEvent:
     """
     Superclass of demographic events that occur during simulations.
     """
 
-    time = attr.ib()
+    time: float
 
     def asdict(self):
         return {
@@ -720,7 +721,7 @@ class DemographicEvent:
         }
 
 
-@attr.s
+@dataclasses.dataclass
 class PopulationParametersChange(DemographicEvent):
     """
     Changes the demographic parameters of a population at a given time.
@@ -742,15 +743,15 @@ class PopulationParametersChange(DemographicEvent):
         simultaneously.
     """
 
-    initial_size = attr.ib(default=None)
-    growth_rate = attr.ib(default=None)
+    initial_size: Union[float, None] = None
+    growth_rate: Union[float, None] = None
     # TODO change the default to -1 to match MigrationRateChange.
-    population = attr.ib(default=None)
+    population: Union[int, None] = None
     # Deprecated.
     # TODO add a formal deprecation notice
-    population_id = attr.ib(default=None, repr=False)
+    population_id: Union[int, None] = dataclasses.field(default=None, repr=False)
 
-    def __attrs_post_init__(self):
+    def __post_init__(self):
 
         if self.population_id is not None and self.population is not None:
             raise ValueError(
@@ -788,7 +789,7 @@ class PopulationParametersChange(DemographicEvent):
         return s[:-1]
 
 
-@attr.s
+@dataclasses.dataclass
 class MigrationRateChange(DemographicEvent):
     """
     Changes the rate of migration from one deme to another to a new value at a
@@ -810,14 +811,14 @@ class MigrationRateChange(DemographicEvent):
     :param int source: The source population ID.
     """
 
-    rate = attr.ib()
-    source = attr.ib(default=-1)
-    dest = attr.ib(default=-1)
+    rate: float
+    source: int = -1
+    dest: int = -1
     # Deprecated.
     # TODO add a formal deprecation notice
-    matrix_index = attr.ib(default=None, repr=False)
+    matrix_index: tuple = dataclasses.field(default=None, repr=False)
 
-    def __attrs_post_init__(self):
+    def __post_init__(self):
         # If the deprecated form is used, it overwrites the values of source
         # and dest
         if self.matrix_index is not None:
@@ -844,7 +845,7 @@ class MigrationRateChange(DemographicEvent):
         return ret
 
 
-@attr.s
+@dataclasses.dataclass
 class MassMigration(DemographicEvent):
     """
     A mass migration event in which some fraction of the population in one deme
@@ -866,15 +867,15 @@ class MassMigration(DemographicEvent):
         the source population migrates to the destination population.
     """
 
-    source = attr.ib()
+    source: int
     # dest only has a default because of the deprecated destination attr.
-    dest = attr.ib(default=None)
-    proportion = attr.ib(default=1.0)
+    dest: Union[None, int] = None
+    proportion: float = 1.0
     # Deprecated.
     # TODO add a formal deprecation notice
-    destination = attr.ib(default=None, repr=False)
+    destination: int = dataclasses.field(default=None, repr=False)
 
-    def __attrs_post_init__(self):
+    def __post_init__(self):
         if self.dest is not None and self.destination is not None:
             raise ValueError("dest and destination are aliases; cannot supply both")
         if self.destination is not None:
@@ -904,10 +905,10 @@ class MassMigration(DemographicEvent):
 
 
 # This is an unsupported/undocumented demographic event.
-@attr.s
+@dataclasses.dataclass
 class SimpleBottleneck(DemographicEvent):
-    population = attr.ib()
-    proportion = attr.ib(default=1.0)
+    population: int
+    proportion: float = 1.0
 
     def get_ll_representation(self, num_populations=None):
         # We need to keep the num_populations argument until stdpopsim 0.1 is out
@@ -927,10 +928,10 @@ class SimpleBottleneck(DemographicEvent):
 
 
 # TODO document
-@attr.s
+@dataclasses.dataclass
 class InstantaneousBottleneck(DemographicEvent):
-    population = attr.ib(default=None)
-    strength = attr.ib(default=1.0)
+    population: int
+    strength: float = 1.0
 
     def get_ll_representation(self, num_populations=None):
         # We need to keep the num_populations argument until stdpopsim 0.1 is out
@@ -949,7 +950,7 @@ class InstantaneousBottleneck(DemographicEvent):
         )
 
 
-@attr.s
+@dataclasses.dataclass
 class CensusEvent(DemographicEvent):
     """
     An event that adds a node to each branch of every tree at a given time
@@ -975,30 +976,30 @@ class CensusEvent(DemographicEvent):
         return "Census event"
 
 
-@attr.s
+@dataclasses.dataclass
 class PopulationParameters:
     """
     Simple class to represent the state of a population in terms of its
     demographic parameters.
     """
 
-    start_size = attr.ib(default=None)
-    end_size = attr.ib(default=None)
-    growth_rate = attr.ib(default=None)
+    start_size: float
+    end_size: float
+    growth_rate: float
 
 
-@attr.s
+@dataclasses.dataclass
 class Epoch:
     """
     Represents a single epoch in the simulation within which the state
     of the demographic parameters are constant.
     """
 
-    start_time = attr.ib(default=None)
-    end_time = attr.ib(default=None)
-    populations = attr.ib(default=None)
-    migration_matrix = attr.ib(default=None)
-    demographic_events = attr.ib(default=None)
+    start_time: float
+    end_time: float
+    populations: list
+    migration_matrix: list  # TODO numpy array
+    demographic_events: list
 
 
 def _matrix_exponential(A):

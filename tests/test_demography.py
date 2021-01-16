@@ -308,7 +308,7 @@ class TestDemographicEventsHaveExtraLLParameter:
             msprime.MigrationRateChange(1.0, 1.0),
             msprime.MassMigration(1.0, 0),
             msprime.SimpleBottleneck(1.0, 0),
-            msprime.InstantaneousBottleneck(1.0),
+            msprime.InstantaneousBottleneck(1.0, 0),
             msprime.CensusEvent(1.0),
         ]
         for event in events:
