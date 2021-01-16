@@ -9,7 +9,7 @@ on:
       - '*'
   release:
     types: [published]
-  
+
 jobs:
   OSX:
     runs-on: macos-latest
@@ -87,7 +87,7 @@ jobs:
     runs-on: macos-latest
     strategy:
       matrix:
-        python: [3.6, 3.7, 3.8]
+        python: [3.7, 3.8, 3.9]
     steps:
       - name: Download wheels
         uses: actions/download-artifact@v2

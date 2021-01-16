@@ -147,7 +147,7 @@ setup(
     },
     include_package_data=True,
     # NOTE: make sure this is the 'attrs' package, not 'attr'!
-    install_requires=[numpy_ver, "attrs>=19.1.0", "newick", "tskit>=0.3.3"],
+    install_requires=[numpy_ver, "newick", "tskit>=0.3.3"],
     ext_modules=[_msprime_module],
     keywords=["Coalescent simulation", "ms", "tree sequence"],
     license="GNU GPLv3+",
@@ -157,7 +157,6 @@ setup(
         "Programming Language :: C",
         "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
