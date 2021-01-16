@@ -1,5 +1,4 @@
 asv
-attrs
 bintrees
 codecov
 coverage
