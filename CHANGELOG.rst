@@ -1,5 +1,5 @@
 ********************
-1.0.0a2 - 2021-XX-XX
+1.0.0a3 - 2021-XX-XX
 ********************
 
 ** This changelog is incomplete and needs to be reviewed and updated **
@@ -41,6 +41,12 @@
 
 - Deprecate module attributes that were moved to tskit.
   (:user:`benjeffery`, :issue:`991`, :pr:`1158`)
+
+********************
+1.0.0a2 - 2021-01-18
+********************
+
+Second alpha release of 1.0 for early testing and evaluation.
 
 ********************
 1.0.0a1 - 2021-01-15
