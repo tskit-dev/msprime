@@ -10,6 +10,9 @@ Quickstart
 Installation
 *************
 
+.. todo:: This section is probably unnecessary now, can just link to the
+    installation page.
+
 If you have `conda <https://docs.conda.io/en/latest/>`_ installed::
 
     $ conda install -c conda-forge msprime
