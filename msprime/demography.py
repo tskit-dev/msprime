@@ -19,6 +19,8 @@
 """
 Module responsible for defining and debugging demographic models.
 """
+from __future__ import annotations
+
 import collections
 import dataclasses
 import inspect
@@ -27,6 +29,7 @@ import logging
 import math
 import sys
 import warnings
+from typing import List
 from typing import Union
 
 import numpy as np
@@ -71,9 +74,9 @@ class Demography:
     TODO document properly.
     """
 
-    populations: list = dataclasses.field(default_factory=list)
-    migration_matrix: list = None
-    events: list = dataclasses.field(default_factory=list)
+    populations: List[Population] = dataclasses.field(default_factory=list)
+    events: List = dataclasses.field(default_factory=list)
+    migration_matrix: Union[np.ndarray, None] = None
 
     def __post_init__(self):
         if self.migration_matrix is None:
@@ -605,10 +608,7 @@ class Population:
     """
     Define a single population in a simulation.
 
-    :ivar initial_size: The absolute size of the population at time
-        zero. If not specified, or None, when the :class:`.Demography`
-        object is passed to the ``demography`` argument to :func:`.simulate`
-        the default effective population size ``Ne`` will be used.
+    :ivar initial_size: The absolute size of the population at time zero.
     :vartype initial_size: float
     :var growth_rate: The exponential growth rate of the
         population per generation (forwards in time).
@@ -623,10 +623,10 @@ class Population:
     :vartype description: str
     """
 
-    initial_size: float = None
+    initial_size: float
     growth_rate: float = 0.0
-    name: str = None
-    description: str = None
+    name: Union[str, None] = None
+    description: Union[str, None] = None
     extra_metadata: dict = dataclasses.field(default_factory=dict)
     sampling_time: float = 0
 
@@ -816,7 +816,7 @@ class MigrationRateChange(DemographicEvent):
     dest: int = -1
     # Deprecated.
     # TODO add a formal deprecation notice
-    matrix_index: tuple = dataclasses.field(default=None, repr=False)
+    matrix_index: Union[tuple, None] = dataclasses.field(default=None, repr=False)
 
     def __post_init__(self):
         # If the deprecated form is used, it overwrites the values of source
@@ -873,7 +873,7 @@ class MassMigration(DemographicEvent):
     proportion: float = 1.0
     # Deprecated.
     # TODO add a formal deprecation notice
-    destination: int = dataclasses.field(default=None, repr=False)
+    destination: Union[int, None] = dataclasses.field(default=None, repr=False)
 
     def __post_init__(self):
         if self.dest is not None and self.destination is not None:

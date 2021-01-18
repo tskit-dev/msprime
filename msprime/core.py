@@ -19,9 +19,14 @@
 """
 Core functions and classes used throughout msprime.
 """
+from __future__ import annotations
+
 import numbers
 import os
 import random
+from typing import Any
+from typing import Dict
+from typing import Union
 
 from msprime import _msprime
 
@@ -49,10 +54,10 @@ _msprime.unset_gsl_error_handler()
 # PID, child processes will share the same random generator as the
 # parent.
 
-_seed_rng_map = {}
+_seed_rng_map: Dict[int, random.Random] = {}
 
 
-def get_seed_rng():
+def get_seed_rng() -> Union[random.Random, None]:
     return _seed_rng_map.get(os.getpid(), None)
 
 
@@ -60,7 +65,7 @@ def clear_seed_rng():
     _seed_rng_map.pop(os.getpid(), None)
 
 
-def get_random_seed():
+def get_random_seed() -> int:
     global _seed_rng_map
     pid = os.getpid()
     if pid not in _seed_rng_map:
@@ -72,7 +77,7 @@ def get_random_seed():
     return _seed_rng_map[pid].randint(1, 2 ** 32 - 1)
 
 
-def set_seed_rng_seed(seed):
+def set_seed_rng_seed(seed: int):
     """
     Convenience method to let us make unseeded simulations deterministic
     when generating documentation examples.
@@ -84,17 +89,18 @@ def set_seed_rng_seed(seed):
     _seed_rng_map[pid] = random.Random(seed)
 
 
-def isinteger(value):
+def isinteger(value: Any) -> bool:
     """
     Returns True if the specified value can be converted losslessly to an
     integer.
     """
     if isinstance(value, numbers.Number):
-        return int(value) == float(value)
+        # Mypy doesn't realise we've done an isinstance here.
+        return int(value) == float(value)  # type: ignore
     return False
 
 
-def _parse_flag(value, *, default):
+def _parse_flag(value: Any, *, default: bool) -> bool:
     """
     Parses a boolean flag, which can be either True, False, or None.
     If the input value is None, return the default. Otherwise,

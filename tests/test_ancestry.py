@@ -1762,9 +1762,8 @@ class TestReprRoundTrip:
 
     def test_population(self):
         examples = [
-            msprime.Population(),
             msprime.Population(initial_size=2),
-            msprime.Population(growth_rate=5),
+            msprime.Population(2, growth_rate=5),
             msprime.Population(initial_size=234, growth_rate=10),
         ]
         self.assert_repr_round_trip(examples)
