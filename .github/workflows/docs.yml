@@ -60,77 +60,10 @@ jobs:
       - name: Build Docs
         run: venv/bin/activate && make -C docs
 
-#      - name: Wait for others to finish
-#        uses: softprops/turnstyle@v1
-#        with:
-#          same-branch-only: false
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.ADMINBOT_TOKEN }}
-#
-#      - name: Checkout docs site
-#        if: github.repository_owner == env.OWNER
-#        uses: actions/checkout@v2
-#        with:
-#          repository: ${{ env.OWNER }}/${{ env.REPO }}-docs
-#          token: ${{ secrets.ADMINBOT_TOKEN }}
-#          path: ${{ env.REPO }}-docs
-#
-#      - name: Check for diff compared to main branch
-#        if: github.repository_owner == env.OWNER && github.event.pull_request
-#        id: diff
-#        #The html contains commit hashes which we don't want to count as a change
-#        run: |
-#          diff -x .buildinfo -r ${{ env.REPO }}-docs/main docs/_build/html | grep "^[<>]" | grep -v "<title>\|VERSION:" | grep -Ev "\.(css|js)\?" | grep -v "Search\.setIndex" | grep . && echo "::set-output name=change_detected::true" || echo "NO CHANGES"
-#
-#      - name: Copy our docs to the PR specific location
-#        if: github.repository_owner == env.OWNER && github.event.pull_request && steps.diff.outputs.change_detected
-#        working-directory: ${{ env.REPO }}-docs
-#        run: |
-#          rm -rf ${{ github.event.pull_request.number }}
-#          cp -r ../docs/_build/html PR-${{ github.event.pull_request.number }}
-#
-#      - name: Copy our docs to the tag specific location
-#        if: github.repository_owner == env.OWNER && !github.event.pull_request
-#        working-directory: ${{ env.REPO }}-docs
-#        run: |
-#          export DEST=`echo ${GITHUB_REF} | sed -e "s/refs\/heads\///g" |  sed -e "s/refs\/tags\///g"`
-#          rm -rf $DEST
-#          cp -r ../docs/_build/html $DEST
-#
-#      - name: Delete closed PRs
-#        if: github.repository_owner == env.OWNER
-#        shell: python
-#        working-directory: ${{ env.REPO }}-docs
-#        run : |
-#          from github import Github
-#          import os
-#          import shutil
-#          g = Github()
-#          repo = g.get_repo("${{ env.OWNER }}/${{ env.REPO }}")
-#          open_prs = [f"PR-{pr.number}" for pr in repo.get_pulls(state="open")]
-#          for name in os.listdir("."):
-#            if name.startswith('PR') and name not in open_prs:
-#              print("Delete:", name)
-#              shutil.rmtree(name)
-#            else:
-#              print("Keep:", name)
-#
-#
-#      - name: Commit --amend docs
-#        if: github.repository_owner == env.OWNER && (steps.diff.outputs.change_detected || (!github.event.pull_request))
-#        working-directory: ${{ env.REPO }}-docs
-#        run: |
-#          git config user.name AdminBOT
-#          git config user.email $COMMIT_EMAIL
-#          git add .
-#          git diff-index --quiet HEAD || git commit --amend --no-edit
-#          git push -f origin main
-#
-#      - name: Comment on PR
-#        if: github.repository_owner == env.OWNER && github.event.pull_request && steps.diff.outputs.change_detected
-#        uses: mshick/add-pr-comment@v1
-#        with:
-#          message: |
-#            📖 Docs for this PR can be previewed [here](https://${{ env.OWNER }}.github.io/${{ env.REPO }}-docs/PR-${{ github.event.pull_request.number }}/)
-#          allow-repeats: false
-#          repo-token: ${{ secrets.ADMINBOT_TOKEN }}
+      - name: Trigger docs site rebuild
+        if: github.ref == 'refs/heads/main'
+        run: |
+          curl -X POST https://api.github.com/repos/tskit-dev/tskit-site/dispatches \
+                    -H 'Accept: application/vnd.github.everest-preview+json' \
+                    -u AdminBot-tskit:${{ secrets.ADMINBOT_TOKEN }} \
+                    --data '{"event_type":"build-docs"}'
