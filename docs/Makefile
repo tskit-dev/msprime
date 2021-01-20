@@ -1,7 +1,8 @@
 
 all:
 	# Need to set PYTHONPATH so that we pick up the local msprime
-	PYTHONPATH=${PWD}/.. jupyter-book build ./
+	# TODO add -W and -n options to make build stricter.
+	PYTHONPATH=${PWD}/.. jupyter-book build --keep-going ./
 
 clean:
 	rm -fR _build

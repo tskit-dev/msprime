@@ -55,7 +55,7 @@ any outstanding TODOs before opening issues.
 
 ```
 
-(sec-ancestry-models-hudson)=
+(sec_ancestry_models_hudson)=
 
 ### Hudson coalescent
 
@@ -114,7 +114,7 @@ in msprime if we don't specify any value for the `model` parameter.
 
 ```
 
-(sec-ancestry-models-smc)=
+(sec_ancestry_models_smc)=
 
 ### SMC coalescent approximations
 
@@ -136,7 +136,7 @@ in msprime if we don't specify any value for the `model` parameter.
 
 ```
 
-(sec-ancestry-models-dtwf)=
+(sec_ancestry_models_dtwf)=
 
 ### Discrete Time Wright-Fisher
 
@@ -355,7 +355,7 @@ generations, as opposed to {math}`N` generations under the standard coalescent.
     a single sweep reverting to Hudson, and also lots of sweeps.
 ```
 
-(sec-ancestry-models-multiple-models)=
+(sec_ancestry_models_multiple_models)=
 
 ### Multiple models
 
@@ -447,7 +447,7 @@ set independently and does not depend on the recombination rate. However,
 
 :::
 
-(sec-ancestry-population-size)=
+(sec_ancestry_population_size)=
 
 ## Population size
 
@@ -457,7 +457,7 @@ set independently and does not depend on the recombination rate. However,
     model sections for more details.
 ```
 
-(sec-ancestry-samples)=
+(sec_ancestry_samples)=
 
 ## Specifying samples
 
@@ -468,7 +468,7 @@ set independently and does not depend on the recombination rate. However,
     msprime.core.set_seed_rng_seed(42)
 ```
 
-The `samples` argument to {func}`sim_ancestry` defines the number
+The `samples` argument to {func}`.sim_ancestry` defines the number
 of sample individuals we simulate the history of. There are three different
 forms; the `samples` argument can be:
 
@@ -556,7 +556,7 @@ to fully control how sample individuals and nodes are defined. However,
 this level of control should not be needed for the vast majority of
 applications.
 
-(sec-ancestry-samples-ploidy)=
+(sec_ancestry_samples_ploidy)=
 
 ### Ploidy
 
@@ -566,7 +566,7 @@ applications.
     anywhere. We need to have a top-level section about this somewhere.
 ```
 
-The samples argument for {func}`sim_ancestry` is flexible, and allows us
+The samples argument for {func}`.sim_ancestry` is flexible, and allows us
 to provide samples in a number of different forms. In single-population
 models we can use the numeric form, which gives us {math}`n` samples:
 
@@ -590,7 +590,7 @@ six sample *nodes*.
     SVG(ts.first().draw_svg())
 ```
 
-(sec-ancestry-samples-demography)=
+(sec_ancestry_samples_demography)=
 
 ### Demography
 
@@ -600,7 +600,7 @@ six sample *nodes*.
 ```
 
 The next example illustrates one usage of the dictionary form of the `samples`
-argument. We first create a {class}`Demography` object representing
+argument. We first create a {class}`.Demography` object representing
 a 10 deme linear stepping stone model. Then, we run the simulation
 with 1 diploid sample each drawn from the first and last demes in this
 linear habitat.
@@ -618,7 +618,7 @@ linear habitat.
 
 The keys in the dictionary can also be the string names of the
 population, which is useful when we are simulating from empirically
-estimated models. For example, here create a {class}`Demography` object
+estimated models. For example, here create a {class}`.Demography` object
 based on a species tree, and then draw samples using the species names.
 
 ```{code-cell}
@@ -633,16 +633,16 @@ based on a species tree, and then draw samples using the species names.
 
 ```
 
-(sec-ancestry-samples-sampling-time)=
+(sec_ancestry_samples_sampling_time)=
 
 ### Sampling time
 
-By default the samples that we draw from a {class}`Population` are the
+By default the samples that we draw from a {class}`.Population` are the
 population's `sampling_time`. This is usually zero, representing the
 present, but in some demographic models representing (for example)
 with populations representing archaic individuals the default sampling
 time might be older. We can manually control the time at which samples
-are drawn using list of {class}`SampleSet` objects form for the
+are drawn using list of {class}`.SampleSet` objects form for the
 samples argument.
 
 ```{code-cell}
@@ -663,7 +663,7 @@ and one ancient diploid individual. Running this example, we get:
 Because nodes `0` and `1` were sampled at time 0, their times in the
 node table are both 0; likewise, nodes `2` and `3` are at time 1.0.
 
-(sec-ancestry-samples-advanced-sampling)=
+(sec_ancestry_samples_advanced_sampling)=
 
 ### Advanced sampling
 
@@ -693,7 +693,7 @@ over the entire sequence in coalescent time units is {math}`\theta = 4 N_e \mu
 L`. It is important to remember these scaling factors when comparing with
 analytical results!
 
-(sec-ancestry-genome-length)=
+(sec_ancestry_genome_length)=
 
 ### Genome length
 
@@ -732,7 +732,7 @@ must define a `sequence_length`:
 
 In this example we have a uniform recombination rate between all
 positions along the genome. We can also simulate variable
-recombination rates along the genome using a {class}`RateMap`.
+recombination rates along the genome using a {class}`.RateMap`.
 
 ```{code-cell}
 
@@ -746,9 +746,9 @@ recombination rates along the genome using a {class}`RateMap`.
 Here we specify varying recombination rates for a genome of length 20,
 and there's a hotspot from position 10 to 12. In this case we don't
 need to specify the `sequence_length` in the call to `sim_ancestry`
-because it's already defined by the {class}`RateMap`.
+because it's already defined by the {class}`.RateMap`.
 
-(sec-ancestry-discrete-genome)=
+(sec_ancestry_discrete_genome)=
 
 ### Discrete or continuous?
 
@@ -803,7 +803,7 @@ positions. Simulating a continuous genome sequence can be useful for
 theoretical work, but we recommend using discrete coordinates for most
 purposes.
 
-(sec-ancestry-recombination)=
+(sec_ancestry_recombination)=
 
 ### Recombination
 
@@ -851,7 +851,7 @@ recombination model and number of loci.
     assert 1 < ts.num_trees < 5
 ```
 
-(sec-ancestry-gene-conversion)=
+(sec_ancestry_gene_conversion)=
 
 ### Gene conversion
 
@@ -950,7 +950,7 @@ site 10 and site 11 and a constant gene conversion rate with a mean tract length
 
 ```
 
-(sec-ancestry-multiple-chromosomes)=
+(sec_ancestry_multiple_chromosomes)=
 
 ### Multiple chromosomes
 
@@ -1035,7 +1035,7 @@ they were stitched together in the initial recombination map.
 
 ## Controlling randomness
 
-(sec-ancestry-random-seed)=
+(sec_ancestry_random_seed)=
 
 ### Random seeds
 
@@ -1080,7 +1080,7 @@ ts.tables.nodes
 
 ```
 
-The `random_seed` argument to {func}`sim_ancestry` allows us specify
+The `random_seed` argument to {func}`.sim_ancestry` allows us specify
 seeds explicitly, making the output of the simulation fully deterministic:
 
 ```{code-cell}
@@ -1096,7 +1096,7 @@ seeds explicitly, making the output of the simulation fully deterministic:
 
 ```
 
-(sec-ancestry-replication)=
+(sec_ancestry_replication)=
 
 ### Running replicate simulations
 
@@ -1150,7 +1150,7 @@ to represent the simulated genealogical history of the samples. Sometimes
 we are interested in more detailed information; this section gives details
 of options that allow us to do this.
 
-(sec-ancestry-full-arg)=
+(sec_ancestry_full_arg)=
 
 ### Ancestral recombination graph
 
@@ -1211,7 +1211,7 @@ Migrations nodes are also recording in the ARG using the
 {data}`.NODE_IS_MIG_EVENT` flag. See the {ref}`sec_ancestry_node_flags`
 section for more details.
 
-(sec-ancestry-record-migrations)=
+(sec_ancestry_record_migrations)=
 
 ### Migration events
 
@@ -1227,7 +1227,7 @@ section for more details.
 
 ```
 
-(sec-ancestry-census-events)=
+(sec_ancestry_census_events)=
 
 ### Census events
 
@@ -1283,7 +1283,7 @@ not ancestral to these census nodes.
 
 ## Manipulating simulation time
 
-(sec-ancestry-end-time)=
+(sec_ancestry_end_time)=
 
 ### Stopping simulations early
 
@@ -1299,7 +1299,7 @@ not ancestral to these census nodes.
 
 ```
 
-(sec-ancestry-start-time)=
+(sec_ancestry_start_time)=
 
 ### Setting the start time
 
@@ -1314,7 +1314,7 @@ not ancestral to these census nodes.
 
 ```
 
-(sec-ancestry-initial-state)=
+(sec_ancestry_initial_state)=
 
 ## Specifying the initial state
 
@@ -1426,7 +1426,7 @@ example.)
 .. autoclass:: msprime.SimulationModelChange
 ```
 
-(sec-ancestry-node-flags)=
+(sec_ancestry_node_flags)=
 
 ### Node flags
 
