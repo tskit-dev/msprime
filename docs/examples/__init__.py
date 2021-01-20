@@ -7,4 +7,3 @@ from .logging_info import *  # NOQA
 from .migration import *  # NOQA
 from .out_of_africa import *  # NOQA
 from .segregating_sites import *  # NOQA
-from .wright_fisher import *  # NOQA

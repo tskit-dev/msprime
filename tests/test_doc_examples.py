@@ -71,11 +71,6 @@ class TestDocumentationExamples:
         assert output[1].startswith("Observed")
         assert output[2].startswith("Analytical")
 
-    def test_wright_fisher(self):
-        ts = examples.wright_fisher(10, 5, L=2, random_seed=3)
-        assert ts.num_samples == 10
-        assert ts.num_trees == 2
-
     def test_migration(self):
         with capture_stdout() as stdout:
             examples.migration_example(10)
