@@ -1,0 +1,19 @@
+# Table of content
+# Learn more at https://jupyterbook.org/customize/toc.html
+#
+- file: intro
+- file: quickstart
+- file: ancestry
+- file: likelihoods
+
+# Stuff we haven't converted to md yet.
+- file: demography
+- file: changelog
+- file: cli
+- file: development
+- file: quickref
+- file: utilities
+- file: CITATION
+- file: what_is
+- file: tutorial
+
