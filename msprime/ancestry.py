@@ -502,10 +502,8 @@ def simulate(
         specified or None, this defaults to the sum of the subpopulation sample
         sizes. Either ``sample_size``, ``population_configurations`` or
         ``samples`` must be specified.
-    :param float Ne: The effective (diploid) population size for the reference
-        population. This defaults to 1 if not specified.
-        Please see the :ref:`sec_api_simulation_models` section for more details
-        on specifying simulations models.
+    :param float Ne: The effective (diploid) population size. This defaults to
+        1 if not specified.
     :param float length: The length of the simulated region in bases.
         This parameter cannot be used along with ``recombination_map``.
         Defaults to 1 if not specified.
@@ -569,7 +567,7 @@ def simulate(
     :param tskit.TreeSequence from_ts: If specified, initialise the simulation
         from the root segments of this tree sequence and return the
         completed tree sequence. Please see :ref:`here
-        <sec_api_simulate_from>` for details on the required properties
+        <sec_ancestry_initial_state>` for details on the required properties
         of this tree sequence and its interactions with other parameters.
         (Default: None).
     :param float start_time: If specified, set the initial time that the
@@ -590,9 +588,9 @@ def simulate(
         trees that have only one child). Defaults to False.
     :param model: The simulation model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
-        a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher(100)``.
-        Please see the :ref:`sec_api_simulation_models` section for more details
-        on specifying simulations models.
+        a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
+        Please see the :ref:`sec_ancestry_models` section for more details
+        on specifying ancestry models.
     :type model: str or simulation model instance
     :param bool record_provenance: If True, record all configuration and parameters
         required to recreate the tree sequence. These can be accessed
@@ -1108,10 +1106,10 @@ def sim_ancestry(
         also be present in the output tree sequence. If not specified or ``None``,
         run the simulation until all samples have an MRCA at all positions in
         the genome. See :ref:`sec_ancestry_end_time` for examples.
-    :param model: The simulation model to use.
+    :param model: The ancestry model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
         a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
-        Please see the :ref:`sec_api_simulation_models` section for more details
+        Please see the :ref:`sec_ancestry_models` section for more details
         on specifying simulations models.
     :type model: str or simulation model instance
     :return: The :class:`tskit.TreeSequence` object representing the results
@@ -1689,7 +1687,10 @@ class DiracCoalescent(ParametricAncestryModel):
 
 @dataclasses.dataclass
 class SweepGenicSelection(ParametricAncestryModel):
-    # TODO document and finalise the API
+    """
+    .. todo:: Document me
+    """
+
     name = "sweep_genic_selection"
 
     position: Union[float, None] = None

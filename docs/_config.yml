@@ -1,0 +1,38 @@
+# Book settings
+# Learn more at https://jupyterbook.org/customize/config.html
+
+title: Msprime documentation
+author: Tskit Developers
+# logo: logo.png
+
+execute:
+  execute_notebooks: cache
+
+# Information about where the book exists on the web
+repository:
+  url: https://github.com/tskit-dev/msprime
+  branch: main
+
+# Add GitHub buttons to your book
+# See https://jupyterbook.org/customize/config.html#add-a-link-to-your-repository
+html:
+  use_issues_button: true
+  use_repository_button: true
+
+only_build_toc_files: true
+
+parse:
+    myst_extended_syntax: true
+
+sphinx:
+    extra_extensions:
+    - sphinx.ext.autodoc
+    - sphinx.ext.todo
+    - sphinx.ext.intersphinx
+    - sphinx_issues
+    - sphinxarg.ext
+    config:
+      issues_github_path: tskit-dev/msprime
+      todo_include_todos: true
+      intersphinx_mapping:
+        tskit: ["https://tskit.readthedocs.io/en/stable", null]
