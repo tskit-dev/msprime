@@ -10,11 +10,13 @@
 - file: installation
 - file: development
 - file: utilities
+- file: cli
 
 # Stuff we haven't converted to md yet.
 - file: changelog
-- file: cli
 - file: quickref
 - file: CITATION
-- file: tutorial
 
+# This is going to be deleted once we get the remaining content
+# ported somewhere else.
+- file: tutorial
