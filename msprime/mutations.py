@@ -1173,7 +1173,7 @@ def sim_mutations(
     If the ``model`` parameter is specified, this determines the model under
     which mutations are generated. The default mutation model is
     :class:`msprime.BinaryMutationModel` a simple binary model with alleles
-    0 and 1. See :ref:`sec_api_mutation_models` for details of available models.
+    0 and 1. See :ref:`sec_mutations_models` for details of available models.
 
     If a random seed is specified, this is used to seed the random number
     generator. If the same seed is specified and all other parameters are equal
@@ -1214,8 +1214,8 @@ def sim_mutations(
         e.g, ``msprime.F84MutationModel(kappa=0.5)``.
         If not specified or None, the :class:`.BinaryMutationModel`
         mutation model is used. Please see the
-        :ref:`sec_api_simulation_models` section for more details
-        on specifying simulations models.
+        :ref:`sec_mutations_models` section for more details
+        on specifying mutation models.
     :param bool keep: Whether to keep existing mutations (default: False).
     :param float start_time: The minimum time ago at which a mutation can
         occur. (Default: no restriction.)

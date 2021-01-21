@@ -796,7 +796,7 @@ class MigrationRateChange(DemographicEvent):
     specific time. Migration rates are specified in terms of the rate at which
     lineages move from population ``source`` to ``dest`` during the progress of
     the simulation. Note that ``source`` and ``dest`` are from the perspective
-    of the coalescent process; please see the :ref:`sec_api_simulation_model`
+    of the coalescent process; please see the :ref:`sec_ancestry_models`
     section for more details on the interpretation of this migration model.
 
     By default, ``source=-1`` and ``dest=-1``, which results in all
@@ -853,7 +853,7 @@ class MassMigration(DemographicEvent):
     progress of the simulation. Each lineage currently present in the source
     population moves to the destination population with probability equal to
     ``proportion``. Note that ``source`` and ``dest`` are from the perspective
-    of the coalescent process; please see the :ref:`sec_api_simulation_model`
+    of the coalescent process; please see the :ref:`sec_ancestry_models`
     section for more details on the interpretation of this migration model.
 
     This event class generalises the population split (``-ej``) and

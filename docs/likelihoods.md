@@ -12,7 +12,7 @@ kernelspec:
 ---
 
 
-(sec-likelihood)=
+(sec_likelihood)=
 
 # Likelihoods
 
@@ -36,7 +36,7 @@ the {func}`.simulate` function.
 
 The following sections illustrate the evaluation of these log likelihoods.
 
-(sec-likelihood-topology)=
+(sec_likelihood_topology)=
 
 ## Topology
 
