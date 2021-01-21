@@ -41,7 +41,7 @@ of different random mutational processes on top of a single simulated topology,
 or if we have obtained the tree sequence from another program and wish to
 overlay neutral mutations on this tree sequence.
 
-(sec_api_mutation_models)=
+(sec_mutations_models)=
 
 ## Models
 
