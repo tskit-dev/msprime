@@ -8,14 +8,13 @@
 - file: likelihoods
 - file: demography
 - file: installation
+- file: development
+- file: utilities
 
 # Stuff we haven't converted to md yet.
 - file: changelog
 - file: cli
-- file: development
 - file: quickref
-- file: utilities
 - file: CITATION
-- file: what_is
 - file: tutorial
 
