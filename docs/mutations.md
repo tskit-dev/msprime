@@ -11,7 +11,7 @@ kernelspec:
   name: python3
 ---
 
-(sec-mutations)=
+(sec_mutations)=
 
 # Mutations
 
@@ -41,7 +41,7 @@ of different random mutational processes on top of a single simulated topology,
 or if we have obtained the tree sequence from another program and wish to
 overlay neutral mutations on this tree sequence.
 
-(sec-api-mutation-models)=
+(sec_api_mutation_models)=
 
 ## Models
 
@@ -62,7 +62,7 @@ Here are the available models; they are documented in more detail below.
 - {class}`.InfiniteAllelesMutationModel`: a generic infinite-alleles model
 - {class}`.SLiMMutationModel`: infinite-alleles model generating SLiM mutations
 
-(sec-api-matrix-mutations-models)=
+(sec_api_matrix_mutations_models)=
 
 ### Matrix Mutation Models
 
@@ -104,7 +104,7 @@ in these models see {ref}`sec_api_matrix_mutation_models_details`.
 
 ```
 
-(sec-api-matrix-mutation-models-details)=
+(sec_api_matrix_mutation_models_details)=
 
 ### Mutation Matrix Models Details
 
@@ -174,7 +174,7 @@ for v in mts.variants():
 
 ```
 
-(sec-api-matrix-mutation-theory)=
+(sec_api_matrix_mutation_theory)=
 
 ### Parameterization of Matrix Mutation Models
 
@@ -284,7 +284,7 @@ Pt = scipy.linalg.expm(t * rate * Q)[i,j]
 If the top of a branch of length {math}`t` has allele {math}`i`,
 the bottom of the branch has allele {math}`j` with probability `Pt[i,j]`.
 
-(sec-api-mutation-infinite-alleles)=
+(sec_api_mutation_infinite_alleles)=
 
 ### Infinite Alleles Mutation Models
 
@@ -332,7 +332,7 @@ to set the starting allele appropriately, and to make sure the results make sens
 
 :::
 
-(sec-api-mutation-slim-mutations)=
+(sec_api_mutation_slim_mutations)=
 
 ### SLiM mutations
 
@@ -433,7 +433,7 @@ has "erased" the type 2 mutations `100` and `102`.
 If you want a different arrangment,
 you can go back and edit the derived states (and metadata) as you like.
 
-(sec-mutations-rate)=
+(sec_mutations_rate)=
 
 ## Specifying rates
 
@@ -442,7 +442,7 @@ you can go back and edit the derived states (and metadata) as you like.
 
 ```
 
-(sec-mutations-randomness)=
+(sec_mutations_randomness)=
 
 ## Controlling randomness
 
@@ -453,7 +453,7 @@ you can go back and edit the derived states (and metadata) as you like.
     one from the ``seed`` parameter to mutate.
 ```
 
-(sec-mutations-discrete)=
+(sec_mutations_discrete)=
 
 ## Discrete or continuous
 
@@ -461,7 +461,7 @@ you can go back and edit the derived states (and metadata) as you like.
 .. todo:: Examples of using the ``discrete`` argument.
 ```
 
-(sec-mutations-time-span)=
+(sec_mutations_time_span)=
 
 ## Restricting time span
 
@@ -470,7 +470,7 @@ you can go back and edit the derived states (and metadata) as you like.
 
 ```
 
-(sec-mutations-existing)=
+(sec_mutations_existing)=
 
 ## Existing mutations
 
