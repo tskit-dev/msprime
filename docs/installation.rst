@@ -4,7 +4,7 @@
 Installation
 ############
 
-There are three options for installing ``msprime``: 
+There are three options for installing ``msprime``:
 
 1. :ref:`sec_installation_conda`: the recommended options for most users
 
@@ -248,10 +248,10 @@ To uninstall ``msprime``, simply run::
     $ python3 -m pip uninstall msprime
 
 
-.. _sec_linux_container:
+.. _sec_installation_container:
 
 =============
-Via Container 
+Via Container
 =============
 
 An `open container <https://opencontainers.org/>`_ image (aka docker image) is built on
