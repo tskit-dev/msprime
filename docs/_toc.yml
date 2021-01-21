@@ -6,10 +6,10 @@
 - file: ancestry
 - file: mutations
 - file: likelihoods
+- file: demography
+- file: installation
 
 # Stuff we haven't converted to md yet.
-- file: installation
-- file: demography
 - file: changelog
 - file: cli
 - file: development
