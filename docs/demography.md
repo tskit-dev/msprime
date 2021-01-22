@@ -50,14 +50,6 @@ therefore given by {math}`s e^{-\alpha t}`. Demographic events that occur in
 the history of the simulated population alter some aspect of this population
 configuration at a particular time in the past.
 
-## API Documentation
-
-### Deprecated API
-
-```{eval-rst}
-.. todo:: Some introduction here to the deprecated 0.X API.
-
-```
 
 ```{eval-rst}
 .. todo:: refactor this text here which is drawn from the old api.rst

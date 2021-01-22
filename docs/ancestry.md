@@ -17,422 +17,64 @@ kernelspec:
 
     import msprime
     from IPython.display import SVG
+    # Doing this to make the notebook outputs deterministic. 
+    # DO NOT DO THIS IN YOUR CODE
+    msprime.core.set_seed_rng_seed(42)
 ```
 
 (sec_ancestry)=
 
 # Ancestry
 
-:::{warning}
+Msprime simulates the ancestry of sampled genomes under a number of 
+different backwards-in-time population genetic 
+{ref}`models <sec_ancestry_models>`. The simulated ancestry is 
+represented as a [succinct tree sequence](https://tskit.dev) using 
+the [tskit](https://tskit.dev/tskit) library, which provides an
+extensive suite of operations for analysing genealogical trees
+and DNA sequence data.
 
-This documentation is under heavy construction. Please note
-any outstanding TODOs before opening issues.
-
+:::{note}
+Add a link here to the top-level tutorial for analysing trees using 
+tskit 
 :::
+
+Here we run a simple simulation and show a summary of the resulting
+tree sequence:
+
+```{code-cell}
+ts = msprime.sim_ancestry(2)
+ts
+```
+
+The {func}`.sim_ancestry` function has many parameters to specify
+the details of the simulations. The {func}`API documentation <.sim_ancestry>`
+contains a precise description of the parameter; the sections 
+in this page provide some explanation and examples of how to use these 
+parameters.
+
+:::{note}
+It's important to note that {func}`.sim_ancestry` only simulates
+the ancestral trees for samples: if we want actual sequence data 
+then we need to additionally simulate mutations on these trees.
+See the {ref}`sec_mutations` section for more information on how to do
+this.
+:::
+
+---
+
+## Quick reference
+
+% Probably want to convert this to markdown at some point.
 
 ```{eval-rst}
 .. include:: quickref-ancestry.rst
 ```
 
-```{eval-rst}
-.. todo:: This section needs some intro material and a bunch of
-    link pointers.
-```
-
-(sec_ancestry_models)=
-
-## Models
-
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
-```{eval-rst}
-.. todo:: quick overview of what a model *is*.
-
-```
-
-(sec_ancestry_models_hudson)=
-
-### Hudson coalescent
-
-The default simulation model in `msprime` is the coalescent
-with recombination, based on the classical `ms` program.
-
-#### Definitions
-
-```{eval-rst}
-.. todo:: Port concrete description of the Hudson model from
-    the current api.rst
-```
-
-Population structure is modelled by specifying a fixed number of subpopulations
-{math}`d`, and a {math}`d \times d` matrix {math}`M` of per-generation
-migration rates. The {math}`(j,k)^{th}` entry of {math}`M` is the expected number
-of migrants moving from population {math}`k` to population {math}`j` per
-generation, divided by the size of population {math}`j`. In terms of the
-coalescent process, {math}`M_{j,k}` gives the rate at which an ancestral
-lineage moves from population {math}`j` to population {math}`k`, as one follows
-it back through time. In continuous-time models, when {math}`M_{j,k}` is close
-to zero, this rate is approximately equivalent to the fraction of population {math}`j`
-that is replaced each generation by migrants from population {math}`k`. In
-discrete-time models, the equivalence is exact and each row of {math}`M` has
-the constraint {math}`\sum_{k \neq j} M_{j,k} \leq 1`. This differs from the
-migration matrix one usually uses in population demography: if {math}`m_{k,j}`
-is the proportion of individuals (in the usual sense; not lineages) in
-population {math}`k` that move to population {math}`j` per generation, then
-translating this proportion of population {math}`k` to a proportion of
-population {math}`j`, we have {math}`M_{j,k} = m_{k,j} \times N_k / N_j`.
-
-Each subpopulation has an initial absolute population size {math}`s`
-and a per generation exponential growth rate {math}`\alpha`. The size of a
-given population at time {math}`t` in the past (measured in generations) is
-therefore given by {math}`s e^{-\alpha t}`. Demographic events that occur in
-the history of the simulated population alter some aspect of this population
-configuration at a particular time in the past.
-
-#### Examples
-
-The standard coalescent is the default model of ancestry used
-in msprime if we don't specify any value for the `model` parameter.
-
-```{code-cell}
-
-    ts1 = msprime.sim_ancestry(5, random_seed=2)
-    ts2 = msprime.sim_ancestry(5, model="hudson", random_seed=2)
-    # This is the same simulation so we should get the same
-    # node and edge tables.
-    assert ts1.tables.nodes == ts2.tables.nodes
-    assert ts1.tables.edges == ts2.tables.edges
-
-```
-
-(sec_ancestry_models_smc)=
-
-### SMC coalescent approximations
-
-#### Definitions
-
-#### Examples
-
-```{eval-rst}
-.. todo:: An example of the SMC, ideally showing demonstrating an
-    property of an SMC simulation.
-
-```
-
-(sec_ancestry_models_dtwf)=
-
-### Discrete Time Wright-Fisher
-
-Msprime provides the option to perform discrete-time Wright-Fisher simulations
-for scenarios when the coalescent model is not appropriate, including large
-sample sizes, multiple chromosomes, or recent migration.
-
-All other parameters can be set as usual. Note that for discrete-time
-Wright-Fisher simulations with population structure, each row of the migration
-matrix must sum to one or less.
-
-#### Definitions
-
-#### Examples
-
-```{eval-rst}
-.. todo:: An example of the DTWF. Show the discrete with an example of a
-    non-binary tree.
-
-```
-
-(sec_ancestry_models_multiple_mergers)=
-
-### Multiple merger coalescents
-
-Some evolutionary scenarios, such as a skewed offspring distribution
-combined with a type III survivorship curve, range expansion, and
-rapid adaptation, can predict genealogies with up to four simultaneous
-multiple mergers. Msprime provides the option to simulate from two classes
-of such genealogical processes: the Beta-coalescent and
-the Dirac-coalescent.
-
-For haploid organisms, both models result in genealogies in which
-any number of lineages can merge into a common ancestor,
-but only one merger event can take place at a given time. For {math}`p`-ploids,
-up to {math}`2p` simultaneous mergers can take place, corresponding to the
-{math}`2p` available parental chromosome copies.
-
-#### Definitions
-
-(sec_ancestry_models_multiple_mergers_examples)=
-
-#### Examples
-
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
-The diploid Beta-Xi-coalescent can be simulated as follows:
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        samples=5, ploidy=2, random_seed=1,
-        model=msprime.BetaCoalescent(alpha=1.001))
-    SVG(ts.draw_svg())
-
-```
-
-The specified value of {math}`\alpha = 1.001` corresponds to a heavily skewed
-offspring distribution. Values closer to {math}`\alpha = 2` result in trees
-whose distribution is closer to that of the standard coalescent, often featuring
-no multiple mergers for small sample sizes:
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        samples=4, ploidy=2, random_seed=1,
-        model=msprime.BetaCoalescent(alpha=1.8))
-    SVG(ts.draw_svg())
-
-```
-
-Multiple mergers still take place in a haploid simulaton, but only one merger
-can take place at a given time:
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        samples=10, ploidy=1, random_seed=1,
-        model=msprime.BetaCoalescent(alpha=1.001))
-    SVG(ts.draw_svg())
-
-```
-
-A haploid simulation results in larger individual mergers than a polyploid simulation
-because large mergers typically get broken up into multiple simultaneous mergers
-in the polyploid model.
-
-The number of generations between merger events in the Beta-coalescent depends
-nonlinearly on both {math}`\alpha` and the population size {math}`N`
-as detailed in {ref}`sec_ancestry_models_multiple_mergers`.
-For a fixed {math}`\alpha`, the number of generations between common ancestor events
-is proportional to {math}`N^{\alpha - 1}`, albeit with a complicated constant of
-proportionality that depends on {math}`\alpha`. The dependence on {math}`\alpha`
-for fixed {math}`N` is not monotone. Thus, branch lengths and the number of
-generations until a most recent common ancestor depend on both of these parameters.
-
-To illustrate, for {math}`\alpha` close to 2 the relationship between effective
-population size and number of generations is almost linear:
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        samples=1, ploidy=2, random_seed=1, population_size=10,
-        model=msprime.BetaCoalescent(alpha=1.99))
-    tree = ts.first()
-    print(tree.tmrca(0,1))
-    ts = msprime.sim_ancestry(
-        samples=1, ploidy=2, random_seed=1, population_size=1000,
-        model=msprime.BetaCoalescent(alpha=1.99))
-    tree = ts.first()
-    print(tree.tmrca(0,1))
-
-```
-
-For {math}`\alpha` close to 1 the effective population size has little effect:
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        samples=1, ploidy=2, random_seed=1, population_size=10,
-        model=msprime.BetaCoalescent(alpha=1.1))
-    tree = ts.first()
-    print(tree.tmrca(0,1))
-    ts = msprime.sim_ancestry(
-        samples=1, ploidy=2, random_seed=1, population_size=1000,
-        model=msprime.BetaCoalescent(alpha=1.1))
-    tree = ts.first()
-    print(tree.tmrca(0,1))
-
-```
-
-The Dirac-coalescent is simulated similarly in both the diploid case:
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        samples=5, ploidy=2, random_seed=1,
-        model=msprime.DiracCoalescent(psi=0.9, c=10))
-    SVG(ts.draw_svg())
-
-```
-
-and in the haploid case:
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        samples=10, ploidy=1, random_seed=1,
-        model=msprime.DiracCoalescent(psi=0.9, c=10))
-    SVG(ts.draw_svg())
-
-```
-
-As with the Beta-coalescent, a haploid simulation results in larger individual
-mergers than a polyploid simulation because large mergers typically get broken
-up into multiple simultaneous mergers in the polyploid model. Larger values
-of the parameter {math}`c > 0` result in more frequent multiple mergers,
-while larger values of {math}`0 < \psi \leq 1` result in multiple mergers
-with more participating lineages. Setting either parameter to 0 would correspond
-to the standard coalescent.
-
-The Dirac-coalescent is obtained as the infinite population scaling limit of
-Moran models, and therefore branch lengths are proportional to {math}`N^2`
-generations, as opposed to {math}`N` generations under the standard coalescent.
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        samples=1, ploidy=2, random_seed=1, population_size=10,
-        model=msprime.DiracCoalescent(psi=0.1, c=1))
-    tree = ts.first()
-    print(tree.tmrca(0,1))
-    ts = msprime.sim_ancestry(
-        samples=1, ploidy=2, random_seed=1, population_size=100,
-        model=msprime.DiracCoalescent(psi=0.1, c=1))
-    tree = ts.first()
-    print(tree.tmrca(0,1))
-
-```
-
-(sec_ancestry_models_selective_sweeps)=
-
-### Selective sweeps
-
-```{eval-rst}
-.. todo:: Document the selective sweep models.
-```
-
-#### Definitions
-
-#### Examples
-
-```{eval-rst}
-.. todo:: examples of the selective sweeps models. We want to have
-    a single sweep reverting to Hudson, and also lots of sweeps.
-```
-
-(sec_ancestry_models_multiple_models)=
-
-### Multiple models
-
-```{eval-rst}
-.. todo:: This is copied from the old tutorial and is out of date now.
-    Update the to use the new model=[(time, model)]`` syntax.
-    It's also too focused on the DTWF model.
-```
-
-In some situations Wright-Fisher simulations are desireable but less
-computationally efficient than coalescent simulations, for example simulating a
-small sample in a recently admixed population. In these cases, a hybrid model
-offers an excellent tradeoff between simulation accuracy and performance.
-
-This is done through a {class}`.SimulationModelChange` event, which is a special type of
-demographic event.
-
-For example, here we switch from the discrete-time Wright-Fisher model to the
-standard Hudson coalescent 500 generations in the past:
-
-```{code-cell} python
-
-ts = msprime.simulate(
-    sample_size=6, Ne=1000, model="dtwf", random_seed=2,
-    demographic_events=[
-        msprime.SimulationModelChange(time=500, model="hudson")])
-print(ts.tables.nodes)
-# id      flags   population      individual      time    metadata
-# 0       1       0       -1      0.00000000000000
-# 1       1       0       -1      0.00000000000000
-# 2       1       0       -1      0.00000000000000
-# 3       1       0       -1      0.00000000000000
-# 4       1       0       -1      0.00000000000000
-# 5       1       0       -1      0.00000000000000
-# 6       0       0       -1      78.00000000000000
-# 7       0       0       -1      227.00000000000000
-# 8       0       0       -1      261.00000000000000
-# 9       0       0       -1      272.00000000000000
-#10      0       0       -1      1629.06982528980075
-
-```
-
-Because of the integer node times, we can see here that most of the coalescent
-happened during the Wright-Fisher phase of the simulation, and as-of 500
-generations in the past, there were only two lineages left. The continuous
-time standard coalescent model was then used to simulate the ancient past of
-these two lineages.
-
-### Notes for ms users
-
-```{eval-rst}
-.. todo:: Should this be promoted to top-level section rather than being
-    in a subsection of models?
-```
-
-```{eval-rst}
-.. todo:: This is copied from the old api.rst page and needs some updating.
-```
-
-The simulation model in `msprime` closely follows the classical `ms`
-program. Unlike `ms`, however, time is measured in generations rather than
-in units of {math}`4 N_e` generations, i.e., "coalescent units".
-This means that when simulating a population with diploid effective size {math}`N_e`,
-the mean time to coalescence between two samples
-in an `msprime` simulation will be around {math}`2 N_e`,
-while in an `ms` simulation, the mean time will be around {math}`0.5`.
-Internally, `msprime` uses the same algorithm as `ms`,
-and so the `Ne` parameter to the {func}`.simulate` function
-still acts as a time scaling, and can be set to `0.5` to match many theoretical results,
-or to `0.25` to match `ms`. Population sizes for each
-subpopulation and for past demographic events are also defined as absolute values, **not**
-scaled by `Ne`. All migration rates and growth rates are also per generation.
-
-:::{warning}
-
-This parameterisation of recombination, mutation and
-migration rates is different to {program}`ms`, which states these
-rates over the entire region and in coalescent time units. The
-motivation for this is to allow the user change the size of the simulated
-region without having to rescale the recombination, gene conversion, and mutation rates,
-and to also allow users directly state times and rates in units of
-generations. However, the `mspms` command line application is
-fully {program}`ms` compatible.
-If recombination and gene conversion are combined the gene conversion
-rate in {program}`ms` is determined by the ratio {math}`f`, which corresponds to
-setting {math}`g = f r`. In `msprime` the gene conversion rate {math}`g` is
-set independently and does not depend on the recombination rate. However,
-`mspms` mimics the {program}`ms` behaviour.
-
-:::
-
-(sec_ancestry_population_size)=
-
-## Population size
-
-```{eval-rst}
-.. todo:: Some nodes on population size and the common gotchas, especially
-    how this relates to ploidy. Should link to the demography page and
-    model sections for more details.
-```
+---
 
 (sec_ancestry_samples)=
-
 ## Specifying samples
-
 
 ```{code-cell}
 :tags: [remove-cell]
@@ -451,124 +93,26 @@ forms; the `samples` argument can be:
 - a list of {class}`.SampleSet` objects, which provide more flexibility
   in how groups of similar samples are drawn from populations.
 
-:::{warning}
 
+In the simplest case provide a single integer which defines the number
+of samples:
+
+```{code-cell}
+ts = msprime.sim_ancestry(2)
+ts
+```
+
+:::{warning}
 It is important to note that the number of samples
 refers to the number of *individuals* not the number of *nodes*
-(monoploid genomes). See the {ref}`sec_ancestry_samples_ploidy`
+(monoploid genomes). See the {ref}`sec_ancestry_ploidy`
 section for details.
-
 :::
 
-Sample individuals and nodes are allocated sequentially in the order that
-they are specified. For example:
-
-```{code-cell}
-
-    demography = msprime.Demography.island_model([10, 10], migration_rate=1)
-    ts = msprime.sim_ancestry(
-        samples=[
-            msprime.SampleSet(1, population=1),
-            msprime.SampleSet(2, population=0)],
-        demography=demography,
-        end_time=0)
-    print(ts.tables.individuals)
-    print(ts.tables.nodes)
-```
-
-(Because we're only interested in the sampled nodes and individuals we
-stopped the simulation from actually doing anything by setting
-`end_time=0`.) Here we define three sample individuals,
-and we therefore have three rows in the individual table.
-Because these are diploid individuals, the node table contains
-six sample nodes. If we look at the `individual` column in the
-node table we can see that the first two nodes correspond to individual
-`0`, the next two nodes individual `1`, etc. The sample configuration
-stated that the first sample should come from population `1` and
-the other two from population `0`, and we can see this reflected
-in the `population` column of the node table. (Somewhat confusingly,
-population values are associated with nodes rather than individuals;
-this is mostly for historical reasons.)
-
-The {class}`.SampleSet` class has a number of attributes which default
-to `None`. If these are set they will **override** the values
-which might be specified elsewhere. For example, we can specify
-mixed ploidy samples via the `ploidy` attribute of {class}`.SampleSet`:
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        samples=[
-            msprime.SampleSet(1, ploidy=3),
-            msprime.SampleSet(2)],
-        ploidy=1,
-        end_time=0)
-    print(ts.tables.individuals)
-    print(ts.tables.nodes)
-```
-
-(Again, we stop the simulation immediately because we're only interested
-in the initial samples.) Here we have three sampled individuals again
-but in this they are mixed ploidy: the first individual is triploid
-and the other two are haploid.
-
-:::{warning}
-
-It is vital to note that setting the `ploidy` value
-of {class}`.SampleSet` objects only affects sampling and does
-not affect the actual simulation. In this case, the simulation
-will be run on the haploid time scale. Some models may not
-support mixing of ploidy at all.
-
-:::
-
-If you wish to set up the node and individual IDs in some other way,
-the {ref}`sec_ancestry_samples_advanced_sampling` section shows how
-to fully control how sample individuals and nodes are defined. However,
-this level of control should not be needed for the vast majority of
-applications.
-
-(sec_ancestry_samples_ploidy)=
-
-### Ploidy
-
-```{eval-rst}
-.. todo:: This section is pretty much superseded by the previous discussion
-    and we don't actually discuss the important point about timescales
-    anywhere. We need to have a top-level section about this somewhere.
-```
-
-The samples argument for {func}`.sim_ancestry` is flexible, and allows us
-to provide samples in a number of different forms. In single-population
-models we can use the numeric form, which gives us {math}`n` samples:
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(3)
-    SVG(ts.first().draw_svg())
-
-```
-
-It's important to note that the number of samples refers to the number
-of {math}`k`-ploid *individuals*, not the number of sample nodes
-in the trees. The `ploidy` argument determines the number of sample
-nodes per individual, and is `2` by default; hence, when we asked
-for 3 sample individuals in the example above, we got a tree with
-six sample *nodes*.
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(3, ploidy=1)
-    SVG(ts.first().draw_svg())
-```
-
-(sec_ancestry_samples_demography)=
-
-### Demography
+### Populations
 
 ```{eval-rst}
 .. todo:: Some text here that refers to the demography section.
-
 ```
 
 The next example illustrates one usage of the dictionary form of the `samples`
@@ -578,14 +122,13 @@ with 1 diploid sample each drawn from the first and last demes in this
 linear habitat.
 
 ```{code-cell}
-
-    N = 10
-    demography = msprime.Demography.stepping_stone_model(
-        [100] * N,
-        migration_rate=0.1,
-        boundaries=True)
-    ts = msprime.sim_ancestry({0: 1, N - 1: 1}, demography=demography)
-    ts
+N = 10
+demography = msprime.Demography.stepping_stone_model(
+    [100] * N,
+    migration_rate=0.1,
+    boundaries=True)
+ts = msprime.sim_ancestry({0: 1, N - 1: 1}, demography=demography)
+ts
 ```
 
 The keys in the dictionary can also be the string names of the
@@ -594,15 +137,13 @@ estimated models. For example, here create a {class}`.Demography` object
 based on a species tree, and then draw samples using the species names.
 
 ```{code-cell}
-
-    demography = msprime.Demography.from_species_tree(
-        "(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
-        branch_length_units="myr",
-        initial_size=10**4,
-        generation_time=20)
-    ts = msprime.sim_ancestry({"gorilla": 2, "human": 4}, demography=demography)
-    ts
-
+demography = msprime.Demography.from_species_tree(
+    "(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
+    branch_length_units="myr",
+    initial_size=10**4,
+    generation_time=20)
+ts = msprime.sim_ancestry({"gorilla": 2, "human": 4}, demography=demography)
+ts
 ```
 
 (sec_ancestry_samples_sampling_time)=
@@ -635,6 +176,74 @@ and one ancient diploid individual. Running this example, we get:
 Because nodes `0` and `1` were sampled at time 0, their times in the
 node table are both 0; likewise, nodes `2` and `3` are at time 1.0.
 
+### Sample details
+
+Sample individuals and nodes are allocated sequentially in the order that
+they are specified. For example:
+
+```{code-cell}
+demography = msprime.Demography.island_model([10, 10], migration_rate=1)
+ts = msprime.sim_ancestry(
+    samples=[
+        msprime.SampleSet(1, population=1),
+        msprime.SampleSet(2, population=0)],
+    demography=demography,
+    end_time=0)
+print(ts.tables.individuals)
+print(ts.tables.nodes)
+```
+
+(Because we're only interested in the sampled nodes and individuals we
+stopped the simulation from actually doing anything by setting
+`end_time=0`.) Here we define three sample individuals,
+and we therefore have three rows in the individual table.
+Because these are diploid individuals, the node table contains
+six sample nodes. If we look at the `individual` column in the
+node table we can see that the first two nodes correspond to individual
+`0`, the next two nodes individual `1`, etc. The sample configuration
+stated that the first sample should come from population `1` and
+the other two from population `0`, and we can see this reflected
+in the `population` column of the node table. (Somewhat confusingly,
+population values are associated with nodes rather than individuals;
+this is mostly for historical reasons.)
+
+The {class}`.SampleSet` class has a number of attributes which default
+to `None`. If these are set they will **override** the values
+which might be specified elsewhere. For example, we can specify
+mixed ploidy samples via the `ploidy` attribute of {class}`.SampleSet`:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    samples=[
+        msprime.SampleSet(1, ploidy=3),
+        msprime.SampleSet(2)],
+    ploidy=1,
+    end_time=0)
+print(ts.tables.individuals)
+print(ts.tables.nodes)
+```
+
+(Again, we stop the simulation immediately because we're only interested
+in the initial samples.) Here we have three sampled individuals again
+but in this they are mixed ploidy: the first individual is triploid
+and the other two are haploid.
+
+:::{warning}
+
+It is vital to note that setting the `ploidy` value
+of {class}`.SampleSet` objects only affects sampling and does
+not affect the actual simulation. In this case, the simulation
+will be run on the haploid time scale. Some models may not
+support mixing of ploidy at all.
+
+:::
+
+If you wish to set up the node and individual IDs in some other way,
+the {ref}`sec_ancestry_samples_advanced_sampling` section shows how
+to fully control how sample individuals and nodes are defined. However,
+this level of control should not be needed for the vast majority of
+applications.
+
 (sec_ancestry_samples_advanced_sampling)=
 
 ### Advanced sampling
@@ -644,6 +253,52 @@ node table are both 0; likewise, nodes `2` and `3` are at time 1.0.
     terms of the ``initial_state`` tables and give an example of how to
     use it.
 
+```
+
+
+---
+
+(sec_ancestry_ploidy)=
+## Ploidy
+
+```{eval-rst}
+.. todo:: This section is pretty much superseded by the previous discussion
+    and we don't actually discuss the important point about timescales
+    anywhere. We need to have a top-level section about this somewhere.
+```
+
+The samples argument for {func}`.sim_ancestry` is flexible, and allows us
+to provide samples in a number of different forms. In single-population
+models we can use the numeric form, which gives us {math}`n` samples:
+
+```{code-cell}
+
+    ts = msprime.sim_ancestry(3)
+    SVG(ts.first().draw_svg())
+
+```
+
+It's important to note that the number of samples refers to the number
+of {math}`k`-ploid *individuals*, not the number of sample nodes
+in the trees. The `ploidy` argument determines the number of sample
+nodes per individual, and is `2` by default; hence, when we asked
+for 3 sample individuals in the example above, we got a tree with
+six sample *nodes*.
+
+```{code-cell}
+
+    ts = msprime.sim_ancestry(3, ploidy=1)
+    SVG(ts.first().draw_svg())
+```
+
+(sec_ancestry_population_size)=
+
+## Population size
+
+```{eval-rst}
+.. todo:: Some nodes on population size and the common gotchas, especially
+    how this relates to ploidy. Should link to the demography page and
+    model sections for more details.
 ```
 
 ## Genome properties
@@ -1364,3 +1019,331 @@ a path to one of the founder population nodes.
 example.)
 -->
 
+(sec_ancestry_models)=
+
+## Models
+
+
+
+
+```{code-cell}
+:tags: [remove-cell]
+
+    msprime.core.set_seed_rng_seed(42)
+```
+
+```{eval-rst}
+.. todo:: quick overview of what a model *is* and also an example of 
+  how to use it.
+
+```
+
+(sec_ancestry_models_hudson)=
+
+### Hudson coalescent
+
+The default simulation model in `msprime` is the coalescent
+with recombination, based on the classical `ms` program. 
+Please see the {class}`API documentation<.StandardCoalescent>`
+for a formal description of the model.
+
+The standard coalescent is the default model of ancestry used
+in msprime if we don't specify any value for the `model` parameter.
+
+```{code-cell}
+    ts1 = msprime.sim_ancestry(5, random_seed=2)
+    ts2 = msprime.sim_ancestry(5, model="hudson", random_seed=2)
+    # This is the same simulation so we should get the same
+    # node and edge tables.
+    assert ts1.tables.nodes == ts2.tables.nodes
+    assert ts1.tables.edges == ts2.tables.edges
+
+```
+
+(sec_ancestry_models_smc)=
+
+### SMC approximations
+
+
+```{eval-rst}
+.. todo:: Write this section, including a simple example ideally showing 
+    a property of an SMC simulation
+
+```
+
+(sec_ancestry_models_dtwf)=
+
+### Discrete Time Wright-Fisher
+
+Msprime provides the option to perform discrete-time Wright-Fisher simulations
+for scenarios when the coalescent model is not appropriate, including large
+sample sizes, multiple chromosomes, or recent migration.
+Please see the {class}`API documentation<.DiscreteTimeWrightFisher>`
+for a formal description of the model.
+
+All other parameters can be set as usual. Note that for discrete-time
+Wright-Fisher simulations with population structure, each row of the migration
+matrix must sum to one or less.
+
+```{eval-rst}
+.. todo:: An example of the DTWF. Show the discrete with an example of a
+    non-binary tree.
+```
+
+(sec_ancestry_models_multiple_mergers)=
+
+### Multiple merger coalescents
+
+Some evolutionary scenarios, such as a skewed offspring distribution
+combined with a type III survivorship curve, range expansion, and
+rapid adaptation, can predict genealogies with up to four simultaneous
+multiple mergers. Msprime provides the option to simulate from two classes
+of such genealogical processes: the {class}`.BetaCoalescent` and
+the {class}`.DiracCoalescent`. Please see the API documentation for formal
+details of the models.
+
+For haploid organisms, both models result in genealogies in which
+any number of lineages can merge into a common ancestor,
+but only one merger event can take place at a given time. For {math}`p`-ploids,
+up to {math}`2p` simultaneous mergers can take place, corresponding to the
+{math}`2p` available parental chromosome copies.
+
+```{code-cell}
+:tags: [remove-cell]
+
+msprime.core.set_seed_rng_seed(42)
+```
+
+The diploid Beta-Xi-coalescent can be simulated as follows:
+
+```{code-cell}
+
+ts = msprime.sim_ancestry(
+    samples=5, ploidy=2, random_seed=1,
+    model=msprime.BetaCoalescent(alpha=1.001))
+SVG(ts.draw_svg())
+
+```
+
+The specified value of {math}`\alpha = 1.001` corresponds to a heavily skewed
+offspring distribution. Values closer to {math}`\alpha = 2` result in trees
+whose distribution is closer to that of the standard coalescent, often featuring
+no multiple mergers for small sample sizes:
+
+```{code-cell}
+
+ts = msprime.sim_ancestry(
+    samples=4, ploidy=2, random_seed=1,
+    model=msprime.BetaCoalescent(alpha=1.8))
+SVG(ts.draw_svg())
+
+```
+
+Multiple mergers still take place in a haploid simulaton, but only one merger
+can take place at a given time:
+
+```{code-cell}
+
+ts = msprime.sim_ancestry(
+    samples=10, ploidy=1, random_seed=1,
+    model=msprime.BetaCoalescent(alpha=1.001))
+SVG(ts.draw_svg())
+
+```
+
+A haploid simulation results in larger individual mergers than a polyploid simulation
+because large mergers typically get broken up into multiple simultaneous mergers
+in the polyploid model.
+
+The number of generations between merger events in the Beta-coalescent depends
+nonlinearly on both {math}`\alpha` and the population size {math}`N`
+as detailed above.
+For a fixed {math}`\alpha`, the number of generations between common ancestor events
+is proportional to {math}`N^{\alpha - 1}`, albeit with a complicated constant of
+proportionality that depends on {math}`\alpha`. The dependence on {math}`\alpha`
+for fixed {math}`N` is not monotone. Thus, branch lengths and the number of
+generations until a most recent common ancestor depend on both of these parameters.
+
+To illustrate, for {math}`\alpha` close to 2 the relationship between effective
+population size and number of generations is almost linear:
+
+```{code-cell}
+
+ts = msprime.sim_ancestry(
+    samples=1, ploidy=2, random_seed=1, population_size=10,
+    model=msprime.BetaCoalescent(alpha=1.99))
+tree = ts.first()
+print(tree.tmrca(0,1))
+ts = msprime.sim_ancestry(
+    samples=1, ploidy=2, random_seed=1, population_size=1000,
+    model=msprime.BetaCoalescent(alpha=1.99))
+tree = ts.first()
+print(tree.tmrca(0,1))
+
+```
+
+For {math}`\alpha` close to 1 the effective population size has little effect:
+
+```{code-cell}
+
+ts = msprime.sim_ancestry(
+    samples=1, ploidy=2, random_seed=1, population_size=10,
+    model=msprime.BetaCoalescent(alpha=1.1))
+tree = ts.first()
+print(tree.tmrca(0,1))
+ts = msprime.sim_ancestry(
+    samples=1, ploidy=2, random_seed=1, population_size=1000,
+    model=msprime.BetaCoalescent(alpha=1.1))
+tree = ts.first()
+print(tree.tmrca(0,1))
+
+```
+
+The Dirac-coalescent is simulated similarly in both the diploid case:
+
+```{code-cell}
+
+ts = msprime.sim_ancestry(
+    samples=5, ploidy=2, random_seed=1,
+    model=msprime.DiracCoalescent(psi=0.9, c=10))
+SVG(ts.draw_svg())
+
+```
+
+and in the haploid case:
+
+```{code-cell}
+
+ts = msprime.sim_ancestry(
+    samples=10, ploidy=1, random_seed=1,
+    model=msprime.DiracCoalescent(psi=0.9, c=10))
+SVG(ts.draw_svg())
+
+```
+
+As with the Beta-coalescent, a haploid simulation results in larger individual
+mergers than a polyploid simulation because large mergers typically get broken
+up into multiple simultaneous mergers in the polyploid model. Larger values
+of the parameter {math}`c > 0` result in more frequent multiple mergers,
+while larger values of {math}`0 < \psi \leq 1` result in multiple mergers
+with more participating lineages. Setting either parameter to 0 would correspond
+to the standard coalescent.
+
+The Dirac-coalescent is obtained as the infinite population scaling limit of
+Moran models, and therefore branch lengths are proportional to {math}`N^2`
+generations, as opposed to {math}`N` generations under the standard coalescent.
+
+```{code-cell}
+
+ts = msprime.sim_ancestry(
+    samples=1, ploidy=2, random_seed=1, population_size=10,
+    model=msprime.DiracCoalescent(psi=0.1, c=1))
+tree = ts.first()
+print(tree.tmrca(0,1))
+ts = msprime.sim_ancestry(
+    samples=1, ploidy=2, random_seed=1, population_size=100,
+    model=msprime.DiracCoalescent(psi=0.1, c=1))
+tree = ts.first()
+print(tree.tmrca(0,1))
+
+```
+
+(sec_ancestry_models_selective_sweeps)=
+
+### Selective sweeps
+
+```{eval-rst}
+.. todo:: Document the selective sweep models.
+```
+
+```{eval-rst}
+.. todo:: examples of the selective sweeps models. We want to have
+    a single sweep reverting to Hudson, and also lots of sweeps.
+```
+
+(sec_ancestry_models_multiple_models)=
+
+### Multiple models
+
+```{eval-rst}
+.. todo:: This is copied from the old tutorial and is out of date now.
+    Update the to use the new model=[(time, model)]`` syntax.
+    It's also too focused on the DTWF model.
+```
+
+In some situations Wright-Fisher simulations are desireable but less
+computationally efficient than coalescent simulations, for example simulating a
+small sample in a recently admixed population. In these cases, a hybrid model
+offers an excellent tradeoff between simulation accuracy and performance.
+
+This is done through a {class}`.SimulationModelChange` event, which is a special type of
+demographic event.
+
+For example, here we switch from the discrete-time Wright-Fisher model to the
+standard Hudson coalescent 500 generations in the past:
+
+```{code-cell} python
+
+ts = msprime.simulate(
+    sample_size=6, Ne=1000, model="dtwf", random_seed=2,
+    demographic_events=[
+        msprime.SimulationModelChange(time=500, model="hudson")])
+print(ts.tables.nodes)
+# id      flags   population      individual      time    metadata
+# 0       1       0       -1      0.00000000000000
+# 1       1       0       -1      0.00000000000000
+# 2       1       0       -1      0.00000000000000
+# 3       1       0       -1      0.00000000000000
+# 4       1       0       -1      0.00000000000000
+# 5       1       0       -1      0.00000000000000
+# 6       0       0       -1      78.00000000000000
+# 7       0       0       -1      227.00000000000000
+# 8       0       0       -1      261.00000000000000
+# 9       0       0       -1      272.00000000000000
+#10      0       0       -1      1629.06982528980075
+
+```
+
+Because of the integer node times, we can see here that most of the coalescent
+happened during the Wright-Fisher phase of the simulation, and as-of 500
+generations in the past, there were only two lineages left. The continuous
+time standard coalescent model was then used to simulate the ancient past of
+these two lineages.
+
+## Notes for ms users
+
+```{eval-rst}
+.. todo:: This is copied from the old api.rst page and needs some updating.
+```
+
+The simulation model in `msprime` closely follows the classical `ms`
+program. Unlike `ms`, however, time is measured in generations rather than
+in units of {math}`4 N_e` generations, i.e., "coalescent units".
+This means that when simulating a population with diploid effective size {math}`N_e`,
+the mean time to coalescence between two samples
+in an `msprime` simulation will be around {math}`2 N_e`,
+while in an `ms` simulation, the mean time will be around {math}`0.5`.
+Internally, `msprime` uses the same algorithm as `ms`,
+and so the `Ne` parameter to the {func}`.simulate` function
+still acts as a time scaling, and can be set to `0.5` to match many theoretical results,
+or to `0.25` to match `ms`. Population sizes for each
+subpopulation and for past demographic events are also defined as absolute values, **not**
+scaled by `Ne`. All migration rates and growth rates are also per generation.
+
+:::{warning}
+
+This parameterisation of recombination, mutation and
+migration rates is different to {program}`ms`, which states these
+rates over the entire region and in coalescent time units. The
+motivation for this is to allow the user change the size of the simulated
+region without having to rescale the recombination, gene conversion, and mutation rates,
+and to also allow users directly state times and rates in units of
+generations. However, the `mspms` command line application is
+fully {program}`ms` compatible.
+If recombination and gene conversion are combined the gene conversion
+rate in {program}`ms` is determined by the ratio {math}`f`, which corresponds to
+setting {math}`g = f r`. In `msprime` the gene conversion rate {math}`g` is
+set independently and does not depend on the recombination rate. However,
+`mspms` mimics the {program}`ms` behaviour.
+
+:::

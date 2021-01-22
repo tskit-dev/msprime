@@ -1,3 +1,6 @@
 (sec-utilities)=
 # Utilities
 
+```{tableofcontents}
+```
+
