@@ -1,22 +1,37 @@
-# Table of content
-# Learn more at https://jupyterbook.org/customize/toc.html
-#
 - file: intro
-- file: quickstart
-- file: ancestry
-- file: mutations
-- file: likelihoods
-- file: demography
-- file: installation
-- file: development
-- file: utilities
-- file: cli
+- part: Getting started
+  chapters:
+    - file: quickstart
+    - file: installation
 
-# Stuff we haven't converted to md yet.
-- file: changelog
-- file: quickref
-- file: CITATION
+- part: Using msprime
+  chapters:
+    - file: simulations
+      sections:
+      - file: ancestry
+      - file: demography
+      - file: mutations
+    - file: utilities
+      sections:
+      - file: likelihoods
+      - file: cli
+      - file: logging
+    - file: api
 
-# This is going to be deleted once we get the remaining content
-# ported somewhere else.
-- file: tutorial
+- part: Version 0.x
+  chapters:
+  - file: v0/overview
+  - file: v0/upgrading
+  - file: v0/api
+
+- part: Miscellaneous
+  chapters:
+  - file: development
+
+  # Stuff we haven't converted to md yet.
+  - file: changelog
+  - file: CITATION
+
+  # This is going to be deleted once we get the remaining content
+  # ported somewhere else.
+  - file: tutorial

@@ -94,10 +94,6 @@ therefore given by {math}`s e^{-\alpha t}`. Demographic events that occur in
 the history of the simulated population alter some aspect of this population
 configuration at a particular time in the past.
 
-```{eval-rst}
-.. autoclass:: msprime.StandardCoalescent
-```
-
 #### Examples
 
 The standard coalescent is the default model of ancestry used
@@ -120,14 +116,6 @@ in msprime if we don't specify any value for the `model` parameter.
 
 #### Definitions
 
-```{eval-rst}
-.. autoclass:: msprime.SmcApproxCoalescent
-```
-
-```{eval-rst}
-.. autoclass:: msprime.SmcPrimeApproxCoalescent
-```
-
 #### Examples
 
 ```{eval-rst}
@@ -149,10 +137,6 @@ Wright-Fisher simulations with population structure, each row of the migration
 matrix must sum to one or less.
 
 #### Definitions
-
-```{eval-rst}
-.. autoclass:: msprime.DiscreteTimeWrightFisher
-```
 
 #### Examples
 
@@ -180,14 +164,6 @@ up to {math}`2p` simultaneous mergers can take place, corresponding to the
 {math}`2p` available parental chromosome copies.
 
 #### Definitions
-
-```{eval-rst}
-.. autoclass:: msprime.BetaCoalescent
-```
-
-```{eval-rst}
-.. autoclass:: msprime.DiracCoalescent
-```
 
 (sec_ancestry_models_multiple_mergers_examples)=
 
@@ -343,10 +319,6 @@ generations, as opposed to {math}`N` generations under the standard coalescent.
 ```
 
 #### Definitions
-
-```{eval-rst}
-.. autoclass:: msprime.SweepGenicSelection
-```
 
 #### Examples
 
@@ -1208,7 +1180,7 @@ stochastic effects) calling {func}`.sim_ancestry` without the `record_full_arg`
 argument.
 
 Migrations nodes are also recording in the ARG using the
-{data}`.NODE_IS_MIG_EVENT` flag. See the {ref}`sec_ancestry_node_flags`
+{data}`.NODE_IS_MIG_EVENT` flag. See the {ref}`sec_api_node_flags`
 section for more details.
 
 (sec_ancestry_record_migrations)=
@@ -1391,83 +1363,4 @@ a path to one of the founder population nodes.
 <!---
 example.)
 -->
-
-## API
-
-```{eval-rst}
-.. todo:: This is a tentative section title. We need some place where we put
-    the detail API documentation.
-```
-
-```{eval-rst}
-.. autofunction:: msprime.sim_ancestry
-```
-
-```{eval-rst}
-.. autoclass:: msprime.SampleSet
-```
-
-```{eval-rst}
-.. autoclass:: msprime.AncestryModelChange
-```
-
-### Deprecated API
-
-```{eval-rst}
-.. todo:: This probably isn't the way to present this information but putting
-    this in here for now so it goes somewhere.
-```
-
-```{eval-rst}
-.. autofunction:: msprime.simulate()
-```
-
-```{eval-rst}
-.. autoclass:: msprime.SimulationModelChange
-```
-
-(sec_ancestry_node_flags)=
-
-### Node flags
-
-For standard coalescent simulations, all samples are marked with the
-{data}`tskit.NODE_IS_SAMPLE` flag; internal nodes all have a flags value of 0.
-
-<!---
-todo link these up with the examples sections below where they are used.
--->
-
-```{data} msprime.NODE_IS_RE_EVENT
-
-The node is an ARG recombination event. Each recombination event is marked
-with two nodes, one identifying the individual providing the genetic
-material to the left of the breakpoint and the other providing the genetic
-material the right. Only present if the ``record_full_arg`` option is
-specified.
-
-```
-
-```{data} msprime.NODE_IS_CA_EVENT
-
-The node is an ARG common ancestor event that did not result in
-marginal coalescence. Only present if the ``record_full_arg`` option is
-specified.
-
-```
-
-```{data} msprime.NODE_IS_MIG_EVENT
-
-The node is an ARG migration event identifying the individual that migrated.
-Can be used in combination with the ``record_migrations``.
-Only present if the ``record_full_arg`` option is
-specified.
-
-```
-
-```{data} msprime.NODE_IS_CEN_EVENT
-
-The node was created by a :class:`msprime.CensusEvent`.
-
-```
-
 

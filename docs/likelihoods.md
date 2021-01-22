@@ -14,7 +14,7 @@ kernelspec:
 
 (sec_likelihood)=
 
-# Likelihoods
+# Computing likelihoods
 
 ```{eval-rst}
 .. include:: quickref-likelihoods.rst
@@ -40,10 +40,6 @@ The following sections illustrate the evaluation of these log likelihoods.
 
 ## Topology
 
-```{eval-rst}
-.. autofunction:: msprime.log_arg_likelihood
-```
-
 The following example simulates a tree sequence with 5 diploid samples
 and evaluates the likelihood of the realisation for various parameter
 combinations.
@@ -59,10 +55,6 @@ combinations.
 ```
 
 ## Mutations
-
-```{eval-rst}
-.. autofunction:: msprime.log_mutation_likelihood
-```
 
 The following example adds random mutations to the tree sequence
 generated in {ref}`sec_likelihood_topology` and evaluates the
