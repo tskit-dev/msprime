@@ -52,18 +52,6 @@ configuration at a particular time in the past.
 
 ## API Documentation
 
-```{eval-rst}
-.. autoclass:: msprime.Demography
-    :members:
-```
-
-## Populations
-
-```{eval-rst}
-.. autoclass:: msprime.Population
-    :members:
-```
-
 ### Deprecated API
 
 ```{eval-rst}
@@ -113,10 +101,6 @@ documentation for :func:`.simulate` and the `Simulation model`_ section for
 more details on the migration rates.
 -->
 
-```{eval-rst}
-.. autoclass:: msprime.PopulationConfiguration
-```
-
 (sec_demography_migration)=
 
 ## Migration rates
@@ -132,31 +116,6 @@ instance of one of the following demographic events
 that are currently supported. Note that all times are measured in
 generations, all sizes are absolute (i.e., *not* relative to {math}`N_e`),
 and all rates are per-generation.
-
-
-```{eval-rst}
-.. autoclass:: msprime.PopulationParametersChange
-```
-
-```{eval-rst}
-.. autoclass:: msprime.MigrationRateChange
-```
-
-```{eval-rst}
-.. autoclass:: msprime.MassMigration
-```
-
-```{eval-rst}
-.. autoclass:: msprime.CensusEvent
-```
-
-## Debugging demographic models
-
-```{eval-rst}
-.. autoclass:: msprime.DemographyDebugger
-    :members:
-
-```
 
 ## Species trees
 

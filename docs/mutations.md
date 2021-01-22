@@ -74,36 +74,6 @@ create the specific model. For your own custom model these parameters can be set
 {class}`msprime.MatrixMutationModel`. For more detail about how mutations are simulated
 in these models see {ref}`sec_api_matrix_mutation_models_details`.
 
-```{eval-rst}
-.. autoclass:: msprime.BinaryMutationModel()
-```
-
-```{eval-rst}
-.. autoclass:: msprime.JC69MutationModel()
-```
-
-```{eval-rst}
-.. autoclass:: msprime.HKYMutationModel()
-```
-
-```{eval-rst}
-.. autoclass:: msprime.F84MutationModel()
-```
-
-```{eval-rst}
-.. autoclass:: msprime.GTRMutationModel()
-```
-
-```{eval-rst}
-.. autoclass:: msprime.BLOSUM62MutationModel()
-```
-
-```{eval-rst}
-.. autoclass:: msprime.PAMMutationModel()
-
-
-```
-
 (sec_api_matrix_mutation_models_details)=
 
 ### Mutation Matrix Models Details
@@ -122,10 +92,6 @@ must give *probabilities*, i.e., they must be nonnegative numbers summing to 1.
 For the precise interpretation of these parameters
 (especially when the transition matrix has nonzero entries on the diagonal)
 see {ref}`sec_api_matrix_mutation_theory`.
-
-```{eval-rst}
-.. autoclass:: msprime.MatrixMutationModel()
-```
 
 You can define your own, but you probably don't need to:
 there are several mutation matrix models already implemented in msprime,
@@ -298,10 +264,6 @@ and if `n` alleles are assigned in total (across ancestral and derived states),
 these will be the next `n-1` integers.
 Many theoretical results are derived based on this mutation model (e.g., Ewens' sampling formula).
 
-```{eval-rst}
-.. autoclass:: msprime.InfiniteAllelesMutationModel()
-```
-
 For instance, here we'll simulate with the infinite alleles model on a single tree,
 and print the resulting tree, labeling each mutation with its derived state:
 
@@ -340,10 +302,6 @@ A special class of infinite alleles model is provided for use with [SLiM](<https
 to agree with the underlying mutation model in SLiM.
 As with the InfiniteAlleles model, it assigns each new mutation a unique integer,
 by keeping track of the `next_id` and incrementing it each time a new mutation appears.
-
-```{eval-rst}
-.. autoclass:: msprime.SLiMMutationModel()
-```
 
 This differs from the {class}`.InfiniteAllelesMutationmodel` because mutations
 in SLiM can "stack": new mutations can add to the existing state, rather than
@@ -490,9 +448,4 @@ you can go back and edit the derived states (and metadata) as you like.
 ```{eval-rst}
 .. autofunction:: msprime.sim_mutations
 ```
-
-```{eval-rst}
-.. autofunction:: msprime.mutate
-```
-
 
