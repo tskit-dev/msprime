@@ -13,9 +13,10 @@ There are three options for installing `msprime`:
 
 ## Via Conda
 
-Pre-built binary packages for `msprime` are available through
-[conda](<https://conda.io/docs/>), and built using [conda-forge](<https://conda-forge.org/>).
-Packages for Python 3.6, 3.7 and 3.8 are available for Linux, OSX and Windows.
+Convenient [conda](<https://conda.io/docs/>) packages are available for Python
+3.7+ on Linux, OSX and Windows.
+These pre-built binary packages are built using
+[conda-forge](<https://conda-forge.org/>).
 
 ### Quick Start
 
@@ -42,18 +43,15 @@ commands slightly).
 ```{code-block} none
 
 $ conda create --name msprime-env
-Solving environment: done
+...
 
-## Package Plan ##
-
-  environment location: /Users/jk/miniconda3/envs/msprime-env
-
+  environment location: /home/jean/miniconda3/envs/msprime-env
 
 Proceed ([y]/n)? y
 
-Preparing transaction: done
-Verifying transaction: done
-Executing transaction: done
+Preparing transaction: ...working... done
+Verifying transaction: ...working... done
+Executing transaction: ...working... done
 #
 # To activate this environment, use
 #
@@ -63,66 +61,43 @@ Executing transaction: done
 #
 #     $ conda deactivate
 
-$ source activate msprime-env
+$ conda activate msprime-env
 (msprime-env) $ conda install -c conda-forge msprime
-Solving environment: done
-
-## Package Plan ##
-
-  environment location: /Users/jk/miniconda3/envs/msprime-env
+...
 
   added / updated specs:
     - msprime
 
-
 The following NEW packages will be INSTALLED:
-
-    ca-certificates: 2018.1.18-0           conda-forge
-    certifi:         2018.1.18-py36_0      conda-forge
-    gsl:             1.16-0                conda-forge
-    hdf5:            1.10.1-2              conda-forge
-    intel-openmp:    2018.0.0-h8158457_8
-    libgfortran:     3.0.1-h93005f0_2
-    mkl:             2018.0.1-hfbd8650_4
-    msprime:         0.5.0b2-py36_3        conda-forge
-    ncurses:         5.9-10                conda-forge
-    numpy:           1.14.1-py36h8a80b8c_1
-    openssl:         1.0.2n-0              conda-forge
-    pip:             9.0.1-py36_1          conda-forge
-    pyparsing:       2.2.0-py36_0          conda-forge
-    python:          3.6.4-0               conda-forge
-    readline:        7.0-0                 conda-forge
-    setuptools:      38.5.1-py36_0         conda-forge
-    six:             1.11.0-py36_1         conda-forge
-    sqlite:          3.20.1-2              conda-forge
-    svgwrite:        1.1.12-py_0           conda-forge
-    tk:              8.6.7-0               conda-forge
-    wheel:           0.30.0-py36_2         conda-forge
-    xz:              5.2.3-0               conda-forge
-    zlib:            1.2.11-0              conda-forge
+...
 
 Proceed ([y]/n)? y
 
-Preparing transaction: done
-Verifying transaction: done
-Executing transaction: done
+Downloading and Extracting Packages
+
+Preparing transaction: ...working... done
+Verifying transaction: ...working... done
+Executing transaction: ...working... done
+
 (msprime-env) $ python
-Python 3.6.4 | packaged by conda-forge | (default, Dec 23 2017, 16:54:01)
-[GCC 4.2.1 Compatible Apple LLVM 6.1.0 (clang-602.0.53)] on darwin
+Python 3.8.5
+[GCC 7.3.0] :: Anaconda, Inc. on linux
 Type "help", "copyright", "credits" or "license" for more information.
 >>> import msprime
->>> tree = msprime.simulate(5).first()
->>> print(tree.draw(format="unicode"))
-  8
-┏━┻━━┓
-┃    7
-┃  ┏━┻━┓
-┃  ┃   6
-┃  ┃  ┏┻┓
-┃  5  ┃ ┃
-┃ ┏┻┓ ┃ ┃
-1 0 4 2 3
-
+>>> ts = msprime.sim_ancestry(3)
+>>> print(ts.draw_text())
+3.18┊      10     ┊  
+    ┊    ┏━━┻━━┓  ┊  
+2.08┊    9     ┃  ┊  
+    ┊  ┏━┻━┓   ┃  ┊  
+0.80┊  ┃   ┃   8  ┊  
+    ┊  ┃   ┃  ┏┻┓ ┊  
+0.42┊  ┃   7  ┃ ┃ ┊  
+    ┊  ┃  ┏┻┓ ┃ ┃ ┊  
+0.34┊  6  ┃ ┃ ┃ ┃ ┊  
+    ┊ ┏┻┓ ┃ ┃ ┃ ┃ ┊  
+0.00┊ 0 4 1 3 2 5 ┊  
+  0.00          1.00 
 ```
 
 Please see the [conda documentation](<https://conda.io/docs/index.html>) for
@@ -133,8 +108,7 @@ more details on managing packages and environments.
 ## Via Pip
 
 Installing using `pip` is more flexible than `conda` as it
-can support more versions of Python, and the locations of the
-various dependencies can be specified.
+can support more versions of Python and dependencies can be customized.
 
 :::{warning}
 
@@ -151,14 +125,7 @@ To install msprime via pip, first
 
 ### check system requirements
 
-Msprime has a number of requirements which may or may not already be
-installed on your system:
-
-* Python 3.6+ and pip
-* [GNU Scientific Library](<http://www.gnu.org/software/gsl/>) (GSL)
-* other requirements depending on the specific platform
-
-To make sure you have Python 3.6+ and pip installed, run
+Msprime requires Python 3.7+ and pip. Run
 
 ```{code-block} bash
 
@@ -166,46 +133,13 @@ $ python3 -m pip --version
 
 ```
 
-to make sure you see Python 3.6 or greater.
+to make sure you see Python 3.7 or greater.
 If you do not, do installation {ref}`via conda <sec_installation_conda>`.
 
-To install GSL, follow instructions per your platform.
-
-```{eval-rst}
-.. glossary:: 
-
-    Debian/Ubuntu
-        ::
-
-            $ apt-get install python-dev libgsl0-dev
-
-    Redhat/Fedora
-        ::
-
-            $ yum install gsl-devel
-
-    FreeBSD
-        ::
-
-            $ pkg install gsl
-
-    OS X
-        We recommend using :ref:`sec_installation_conda` to install ``msprime`` on OS X.
-        However, it is also possible to install using `Homebrew <http://brew.sh/>`_:
-        ::
-
-            $ brew update
-            $ brew install gsl
-
-    Windows
-        Use :ref:`sec_installation_conda`, do not install via ``pip`` on Windows.
-
-```
-
-There may be additional requirements depending on the specific platform. The
-next instructions running pip might not succeed. Depending your platform, you
-might be able to determine missing requirements. If not, install {ref}`via
-conda <sec_installation_conda>`.
+On most platforms, pip will install `msprime` pre-built binaries
+without any additional requirements.
+Follow {ref}`sec_pip_install_source` to install from sources instead pre-built
+binaries.
 
 (sec_run_pip)=
 
@@ -240,6 +174,54 @@ To uninstall `msprime`, simply run:
 
 ```
 $ python3 -m pip uninstall msprime
+```
+
+(sec_pip_install_source)=
+
+### pip install from source
+
+Install from source if {ref}`sec_run_pip`  fails or you do
+not want to use pre-built binaries.
+
+There may be additional requirements depending on the specific platform.
+In particular, installation of [GNU Scientific
+Library](<http://www.gnu.org/software/gsl/>) (GSL) is sometimes needed:
+
+```{eval-rst}
+.. glossary:: 
+
+    Debian/Ubuntu
+        ::
+
+            $ apt-get install python-dev libgsl0-dev
+
+    Redhat/Fedora
+        ::
+
+            $ yum install gsl-devel
+
+    FreeBSD
+        ::
+
+            $ pkg install gsl
+
+    OS X
+        We recommend using :ref:`sec_installation_conda` to install ``msprime`` on OS X.
+        However, it is also possible to install using `Homebrew <http://brew.sh/>`_:
+        ::
+
+            $ brew update
+            $ brew install gsl
+
+    Windows
+        Use :ref:`sec_installation_conda`, do not install via ``pip`` on Windows.
+
+```
+
+With GSL installed, install from source by doing:
+
+```
+python3 -m pip install msprime --no-binary msprime
 ```
 
 (sec_installation_container)=
