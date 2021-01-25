@@ -3060,6 +3060,38 @@ class TestOldStylePopulationMetadata:
         }
         assert expected == pop.metadata
 
+    def test_old_style_metadata_description_is_merged(self):
+        md = {"description": "y"}
+        demography = msprime.Demography.from_old_style(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=1, metadata=md)
+            ]
+        )
+        ts = msprime.sim_ancestry(2, demography=demography, random_seed=1)
+        assert ts.num_populations == 1
+        pop = ts.population(0)
+        expected = {
+            "name": "pop_0",
+            "description": "y",
+        }
+        assert expected == pop.metadata
+
+    def test_old_style_metadata_name_is_merged(self):
+        md = {"name": "y"}
+        demography = msprime.Demography.from_old_style(
+            population_configurations=[
+                msprime.PopulationConfiguration(initial_size=1, metadata=md)
+            ]
+        )
+        ts = msprime.sim_ancestry(2, demography=demography, random_seed=1)
+        assert ts.num_populations == 1
+        pop = ts.population(0)
+        expected = {
+            "name": "y",
+            "description": None,
+        }
+        assert expected == pop.metadata
+
     def test_default(self):
         ts = msprime.simulate(
             population_configurations=[msprime.PopulationConfiguration(2)],

@@ -368,7 +368,8 @@ class Demography:
             for pop_config in population_configurations:
                 demography.populations.append(Population.from_old_style(pop_config, Ne))
         for j, population in enumerate(demography.populations):
-            population.name = f"pop_{j}"
+            if population.name is None:
+                population.name = f"pop_{j}"
         if migration_matrix is None:
             migration_matrix = np.zeros(
                 (demography.num_populations, demography.num_populations)
@@ -643,11 +644,19 @@ class Population:
         initial_size = (
             Ne if pop_config.initial_size is None else pop_config.initial_size
         )
-        return Population(
+        population = Population(
             initial_size=initial_size,
             growth_rate=pop_config.growth_rate,
-            extra_metadata=pop_config.metadata,
         )
+        metadata = pop_config.metadata
+        if metadata is not None and isinstance(metadata, collections.abc.Mapping):
+            metadata = metadata.copy()
+            if "name" in metadata:
+                population.name = metadata.pop("name")
+            if "description" in metadata:
+                population.description = metadata.pop("description")
+        population.extra_metadata = metadata
+        return population
 
     def validate(self):
         # TODO more checks
