@@ -941,9 +941,9 @@ mutgen_add_mutation(
     }
     memset(mutation, 0, sizeof(*mutation));
     mutation->node = node;
-    mutation->time = time;
     mutation->parent = NULL;
     mutation->new = true;
+    mutation->time = time;
     insert_mutation(site, mutation);
     *new_mutation = mutation;
 out:
@@ -1048,7 +1048,7 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_populate_tables(mutgen_t *self)
+mutgen_populate_tables(mutgen_t *self, bool discard_times)
 {
     int ret = 0;
     tsk_site_table_t *sites = &self->tables->sites;
@@ -1058,6 +1058,7 @@ mutgen_populate_tables(mutgen_t *self)
     site_t *site;
     mutation_t *m;
     size_t num_mutations;
+    double time;
 
     site_id = 0;
     for (a = self->sites.head; a != NULL; a = a->next) {
@@ -1071,8 +1072,9 @@ mutgen_populate_tables(mutgen_t *self)
                     parent_id = m->parent->id;
                     tsk_bug_assert(parent_id != TSK_NULL);
                 }
+                time = discard_times ? TSK_UNKNOWN_TIME : m->time;
                 mutation_id = tsk_mutation_table_add_row(mutations, site_id, m->node,
-                    parent_id, m->time, m->derived_state, m->derived_state_length,
+                    parent_id, time, m->derived_state, m->derived_state_length,
                     m->metadata, m->metadata_length);
                 if (mutation_id < 0) {
                     ret = msp_set_tsk_error(mutation_id);
@@ -1338,6 +1340,7 @@ mutgen_generate(mutgen_t *self, int flags)
     int ret = 0;
     bool discrete_sites = flags & MSP_DISCRETE_SITES;
     bool kept_mutations_before_end_time = flags & MSP_KEPT_MUTATIONS_BEFORE_END_TIME;
+    bool discard_times = flags & MSP_DISCARD_MUTATION_TIMES;
 
     avl_clear_tree(&self->sites);
 
@@ -1374,7 +1377,7 @@ mutgen_generate(mutgen_t *self, int flags)
     if (ret != 0) {
         goto out;
     }
-    ret = mutgen_populate_tables(self);
+    ret = mutgen_populate_tables(self, discard_times);
     if (ret != 0) {
         goto out;
     }

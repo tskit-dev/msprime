@@ -53,6 +53,7 @@ class TestDefaults:
         assert mts.site(0).ancestral_state in "ACGT"
         for mutation in mts.mutations():
             assert mutation.derived_state in "ACGT"
+            assert not tskit.is_unknown_time(mutation.time)
 
     def test_mutate(self):
         ts = msprime.sim_ancestry(10, random_seed=1)
@@ -65,6 +66,19 @@ class TestDefaults:
             assert site.ancestral_state == "0"
         for mutation in mts.mutations():
             assert mutation.derived_state == "1"
+            assert tskit.is_unknown_time(mutation.time)
+
+    def test_simulate_mutations(self):
+        mts = msprime.simulate(10, mutation_rate=1, random_seed=1)
+        # Continuous genome, 0/1 alleles
+        assert mts.num_sites > 1
+        assert mts.sequence_length == 1
+        assert mts.num_mutations == mts.num_sites
+        for site in mts.sites():
+            assert site.ancestral_state == "0"
+        for mutation in mts.mutations():
+            assert mutation.derived_state == "1"
+            assert tskit.is_unknown_time(mutation.time)
 
 
 class TestMutateProvenance:
@@ -598,7 +612,9 @@ class TestFiniteSites(MutateMixin):
 
     def test_zero_mutation_rate(self):
         for keep in (True, False):
-            ts = msprime.simulate(10, random_seed=1, mutation_rate=2.0)
+            ts = msprime.sim_mutations(
+                msprime.sim_ancestry(10, random_seed=1), rate=2.0, discrete_genome=False
+            )
             mutated = self.mutate_binary(ts, 0, keep=keep)
             t1 = ts.dump_tables()
             t2 = mutated.dump_tables()
@@ -941,7 +957,12 @@ class TestKeep:
         assert found == original.num_sites
 
     def test_simple_binary(self):
-        ts = msprime.simulate(10, mutation_rate=1, random_seed=2)
+        ts = msprime.sim_mutations(
+            msprime.sim_ancestry(10, random_seed=2),
+            rate=1,
+            random_seed=3,
+            discrete_genome=False,
+        )
         assert ts.num_sites > 0
         self.verify(ts, 1, random_seed=2)
 
@@ -965,7 +986,12 @@ class TestKeep:
 
     def test_random_metadata(self):
         ts = tsutil.add_random_metadata(
-            msprime.simulate(12, random_seed=4, mutation_rate=1)
+            msprime.sim_mutations(
+                msprime.simulate(12, random_seed=4),
+                rate=1,
+                discrete_genome=False,
+                random_seed=234,
+            )
         )
         assert ts.num_sites > 5
         self.verify(ts, 3, random_seed=7)
@@ -1461,7 +1487,10 @@ class TestPythonMutationGenerator:
         self.verify(ts, random_seed=234)
 
     def test_single_tree_mutations(self):
-        ts = msprime.simulate(10, length=100, mutation_rate=0.1, random_seed=1234)
+        ts = msprime.sim_ancestry(10, sequence_length=100, random_seed=1234)
+        ts = msprime.sim_mutations(
+            ts, rate=0.1, random_seed=1234, discrete_genome=False
+        )
         assert ts.num_sites > 0
         self.verify(ts, random_seed=34)
 
@@ -1473,9 +1502,10 @@ class TestPythonMutationGenerator:
         self.verify(ts, random_seed=789)
 
     def test_many_trees_mutations(self):
-        ts = msprime.simulate(
-            10, length=100, mutation_rate=0.1, recombination_rate=2, random_seed=123
+        ts = msprime.sim_ancestry(
+            10, sequence_length=100, recombination_rate=2, random_seed=123
         )
+        ts = msprime.sim_mutations(ts, rate=0.1, discrete_genome=False, random_seed=234)
         assert ts.num_trees > 1
         assert ts.num_sites > 1
         self.verify(ts, random_seed=789)

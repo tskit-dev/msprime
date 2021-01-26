@@ -2830,20 +2830,21 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
     mutation_model_t *model = NULL;
     int discrete_genome = false;
     int kept_mutations_before_end_time = false;
+    int discard_times = false; /* for backwards compatibility */
     static char *kwlist[] = {
         "tables", "random_generator", "rate_map", "model",
         "discrete_genome", "keep", "kept_mutations_before_end_time",
-        "start_time", "end_time", NULL};
+        "start_time", "end_time", "discard_times", NULL};
     mutgen_t mutgen;
     int err;
 
     memset(&mutgen, 0, sizeof(mutgen));
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O|iiidd", kwlist,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O|iiiddi", kwlist,
             &LightweightTableCollectionType, &tables,
             &RandomGeneratorType, &random_generator,
             &PyDict_Type, &rate_map,
             &py_model, &discrete_genome, &keep, &kept_mutations_before_end_time,
-            &start_time, &end_time)) {
+            &start_time, &end_time, &discard_times)) {
         goto out;
     }
     if (LightweightTableCollection_check_state(tables) != 0
@@ -2886,6 +2887,9 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
     }
     if (kept_mutations_before_end_time) {
         flags |= MSP_KEPT_MUTATIONS_BEFORE_END_TIME;
+    }
+    if (discard_times) {
+        flags |= MSP_DISCARD_MUTATION_TIMES;
     }
     err = mutgen_generate(&mutgen, flags);
     if (err != 0) {

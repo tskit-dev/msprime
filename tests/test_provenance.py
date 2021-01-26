@@ -309,7 +309,7 @@ class TestBuildObjects:
         )
 
     def test_sim_mutations(self):
-        ts = msprime.simulate(5, random_seed=1)
+        ts = msprime.sim_ancestry(5, random_seed=1)
         ts = msprime.sim_mutations(
             ts, rate=2, random_seed=1, start_time=0, end_time=100, keep=False
         )
@@ -323,18 +323,18 @@ class TestBuildObjects:
         assert not decoded.parameters.keep
         assert (
             decoded.parameters.model["__class__"]
-            == "msprime.mutations.BinaryMutationModel"
+            == "msprime.mutations.JC69MutationModel"
         )
 
     def test_mutate_model(self):
         ts = msprime.simulate(5, random_seed=1)
-        ts = msprime.sim_mutations(ts, model="jc69")
+        ts = msprime.sim_mutations(ts, model="pam")
         decoded = self.decode(ts.provenance(1).record)
         assert decoded.schema_version == "1.0.0"
         assert decoded.parameters.command == "sim_mutations"
         assert (
             decoded.parameters.model["__class__"]
-            == "msprime.mutations.JC69MutationModel"
+            == "msprime.mutations.PAMMutationModel"
         )
 
     def test_mutate_map(self):
@@ -476,18 +476,18 @@ class TestSimulateRoundTrip(TestRoundTrip):
         self.verify(ts)
 
 
-class TestMutateRoundTrip(TestRoundTrip):
+class TestSimMutationsRoundTrip(TestRoundTrip):
     def test_mutate_round_trip(self):
-        ts = msprime.simulate(5, random_seed=1)
-        ts = msprime.mutate(
+        ts = msprime.sim_ancestry(5, random_seed=1)
+        ts = msprime.sim_mutations(
             ts, rate=2, random_seed=1, start_time=0, end_time=100, keep=False
         )
         self.verify(ts)
 
     def test_mutate_rate_map(self):
-        ts = msprime.simulate(5, random_seed=1)
+        ts = msprime.sim_ancestry(5, random_seed=1)
         rate_map = msprime.RateMap(position=[0, 0.5, 1], rate=[0, 1])
-        ts = msprime.mutate(ts, rate=rate_map)
+        ts = msprime.sim_mutations(ts, rate=rate_map)
         self.verify(ts)
 
 

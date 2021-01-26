@@ -1291,9 +1291,10 @@ class TestMspConversionOutput(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._tree_sequence = msprime.simulate(
-            10, length=10, recombination_rate=10, mutation_rate=10, random_seed=1
+        ts = msprime.sim_ancestry(
+            10, sequence_length=10, recombination_rate=10, random_seed=1
         )
+        cls._tree_sequence = msprime.sim_mutations(ts, rate=10, random_seed=1)
         fd, cls._tree_sequence_file = tempfile.mkstemp(
             prefix="msp_cli", suffix=".trees"
         )

@@ -1064,6 +1064,7 @@ def _simple_mutate(
         rate_map.asdict(),
         model=BinaryMutationModel(),
         discrete_genome=False,
+        discard_times=True,
     )
 
 
@@ -1140,7 +1141,7 @@ def mutate(
     # The legacy function simulates 0/1 alleles by default.
     if model is None:
         model = BinaryMutationModel()
-    return sim_mutations(
+    return _sim_mutations(
         tree_sequence,
         rate=rate,
         random_seed=random_seed,
@@ -1149,6 +1150,7 @@ def mutate(
         start_time=start_time,
         end_time=end_time,
         discrete_genome=False,
+        discard_times=True,
     )
 
 
@@ -1233,6 +1235,31 @@ def sim_mutations(
         mutations on the input tree sequence.
     :rtype: :class:`tskit.TreeSequence`
     """
+    return _sim_mutations(
+        tree_sequence=tree_sequence,
+        rate=rate,
+        random_seed=random_seed,
+        model=model,
+        keep=keep,
+        start_time=start_time,
+        end_time=end_time,
+        discrete_genome=discrete_genome,
+        kept_mutations_before_end_time=kept_mutations_before_end_time,
+    )
+
+
+def _sim_mutations(
+    tree_sequence,
+    rate=None,
+    random_seed=None,
+    model=None,
+    keep=None,
+    start_time=None,
+    end_time=None,
+    discrete_genome=None,
+    kept_mutations_before_end_time=None,
+    discard_times=False,
+):
     try:
         tables = tree_sequence.tables
     except AttributeError:
@@ -1270,6 +1297,7 @@ def sim_mutations(
         "command": "sim_mutations",
         **{arg: argspec.locals[arg] for arg in argspec.args},
     }
+    del parameters["discard_times"]  # Not part of the API
     parameters["random_seed"] = seed
     encoded_provenance = provenance.json_encode_provenance(
         provenance.get_provenance_dict(parameters)
@@ -1288,8 +1316,10 @@ def sim_mutations(
         kept_mutations_before_end_time=kept_mutations_before_end_time,
         start_time=start_time,
         end_time=end_time,
+        discard_times=discard_times,
     )
 
     tables = tskit.TableCollection.fromdict(lwt.asdict())
     tables.provenances.add_row(encoded_provenance)
+
     return tables.tree_sequence()

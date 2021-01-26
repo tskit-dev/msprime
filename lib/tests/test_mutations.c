@@ -690,6 +690,53 @@ test_single_tree_mutgen_interval(void)
 }
 
 static void
+test_single_tree_mutgen_time(void)
+{
+    int ret = 0;
+    mutgen_t mutgen;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables;
+    mutation_model_t mut_model;
+    tsk_size_t j;
+
+    CU_ASSERT_FATAL(rng != NULL);
+
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    insert_single_tree(&tables, ALPHABET_NUCLEOTIDE);
+    ret = matrix_mutation_model_factory(&mut_model, ALPHABET_NUCLEOTIDE);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 100);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_set_rate(&mutgen, 10);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables.mutations.num_rows > 0);
+    mutgen_print_state(&mutgen, _devnull);
+
+    for (j = 0; j < tables.mutations.num_rows; j++) {
+        CU_ASSERT_FALSE(tsk_is_unknown_time(tables.mutations.time[j]));
+        CU_ASSERT_TRUE(tables.mutations.time[j] > 0);
+    }
+
+    ret = mutgen_generate(&mutgen, MSP_DISCARD_MUTATION_TIMES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(tables.mutations.num_rows > 0);
+    mutgen_print_state(&mutgen, _devnull);
+
+    for (j = 0; j < tables.mutations.num_rows; j++) {
+        CU_ASSERT_TRUE(tsk_is_unknown_time(tables.mutations.time[j]));
+    }
+
+    mutgen_free(&mutgen);
+    mutation_model_free(&mut_model);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
 test_single_tree_mutgen_empty_site(void)
 {
     int ret = 0;
@@ -1290,6 +1337,7 @@ main(int argc, char **argv)
         { "test_single_tree_mutgen_keep_sites_many_mutations",
             test_single_tree_mutgen_keep_sites_many_mutations },
         { "test_single_tree_mutgen_interval", test_single_tree_mutgen_interval },
+        { "test_single_tree_mutgen_time", test_single_tree_mutgen_time },
         { "test_single_tree_mutgen_empty_site", test_single_tree_mutgen_empty_site },
         { "test_single_tree_mutgen_do_nothing_mutations",
             test_single_tree_mutgen_do_nothing_mutations },
