@@ -36,4 +36,5 @@ sphinx:
       todo_include_todos: true
       intersphinx_mapping:
         tskit: ["https://tskit.readthedocs.io/en/stable", null]
+        tutorials: ["https://tskit.dev/tutorials/", null]
         stdpopsim: ["https://stdpopsim.readthedocs.io/en/stable", null]

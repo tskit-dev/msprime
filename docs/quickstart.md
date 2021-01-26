@@ -11,52 +11,26 @@ kernelspec:
   name: python3
 ---
 
-(sec-quickstart)=
+(sec_quickstart)=
 
 # Quickstart
 
-```{eval-rst}
-.. todo:: This is a rough draft and needs more work.
-```
+This page gives some simple examples of how to use the major features
+of {program}`msprime`, with links to more detailed documentation
+and tutorial content.
 
-## Installation
+See the {ref}`sec_installation` page for instructions on installing 
+{program}`msprime` (short version: ``pip install msprime`` or 
+``conda install -c conda-forge msprime`` will work for most users).
 
-```{eval-rst}
-.. todo:: This section is probably unnecessary now, can just link to the
-    installation page.
-```
-
-If you have [conda](<https://docs.conda.io/en/latest/>) installed:
-
-```
-$ conda install -c conda-forge msprime
-```
-
-otherwise:
-
-```
-$ python3 -m pip install msprime
-```
-
-If these commands don't work, or for more installation options,
-please see the {ref}`sec_installation` page for more details.
+(sec_quickstart_ancestry)=
 
 ## Ancestry
 
-Msprime can simulate ancestral histories for a set of sample
-genomes under a variety of evolutionary models. The default model
-is the [coalescent](<https://en.wikipedia.org/wiki/Coalescent_theory>),
-which assumes a single randomly mating population of a fixed size.
-In the simplest case of no
-[recombination](<https://en.wikipedia.org/wiki/Genetic_recombination>)
-the result of an ancestry simulation is a genealogical [tree](<https://en.wikipedia.org/wiki/Phylogenetic_tree>) relating the simulated
-samples to each other and their genetic ancestors. Msprime
-can efficiently simulate {ref}`recombination <sec_ancestry_recombination>`
-and other processes which result in *multiple* trees along the
-genome. The output of an ancestry simulation is a therefore
-tree *sequence* which we use the {ref}`tskit <tskit:sec_introduction>`
-library to represent. Tskit has a rich set of
-features for analysing these genealogical histories.
+Msprime simulates ancestral histories for a set of sample genomes 
+using backwards-in-time population genetic models.
+Here we run a simple simulation of a short recombining sequence under
+human-like parameters:
 
 ```{code-cell}
 
@@ -64,20 +38,59 @@ features for analysing these genealogical histories.
     from IPython.display import SVG
 
     # Simulate an ancestral history for 3 diploid samples under the coalescent
-    ts = msprime.sim_ancestry(3)
+    # with recombination on a 5kb region with human-like parameters.
+    ts = msprime.sim_ancestry(
+        samples=3, 
+        recombination_rate=1e-8, 
+        sequence_length=5_000,
+        population_size=10_000, 
+        random_seed=123456)
     # Visualise the simulated ancestral history.
     SVG(ts.draw_svg())
-
 ```
 
-```{eval-rst}
-.. todo:: 
-    We want a list of quick pointers here to relevant sections of the
-    documentation and tutorials.
+In this example we simulate the ancestral history of three diploid 
+individuals (see {ref}`sec_ancestry_samples` and {ref}`sec_ancestry_ploidy`)
+for a 5kb sequence with a 
+[recombination](<https://en.wikipedia.org/wiki/Genetic_recombination>)
+rate of {math}`10^{-8}` 
+(see {ref}`sec_ancestry_genome_properties`)
+from a population with a constant size of 10,000 (see 
+the {ref}`sec_quickstart_demography` section below)
+under the default 
+[coalescent](<https://en.wikipedia.org/wiki/Coalescent_theory>)
+ancestry model (see the {ref}`sec_ancestry_models` for details on 
+other available models).
+To ensure that 
+the output of this example is predictable, we set a random seed 
+(see {ref}`sec_ancestry_random_seed`).
 
-```
+When recombination is present, the ancestry of a sample of DNA sequences
+cannot be represented by a single genealogical tree relating the 
+samples to their genetic ancestors; there is instead
+a *sequence* of highly correlated trees along the genome.
+The result of our simulation is therefore a [tree sequence](https://tskit.dev)
+object from the {ref}`tskit <tskit:sec_introduction>` library,
+which provides a rich suite of operations for 
+analysing these genealogical histories: see the 
+{ref}`tutorials:sec_tskit_getting_started` tutorial for help. 
+In this example we show a visualisation
+of the four different trees along the 5kb region 
+(see the {ref}`tutorials:sec_tskit_viz` tutorial for more 
+examples).  Because we have specified three diploid sample 
+*individuals*, each of these trees has 6 "sample" nodes 
+(the "leaves" or "tips"), because each diploid individual
+has two monoploid genomes (see {ref}`sec_ancestry_samples`).
+
+See the {ref}`sec_ancestry` section for more details on 
+ancestry simulations.
 
 ## Mutations
+
+```{eval-rst}
+.. todo:: This section needs to be written once we have nucleotide output
+    from sim_mutations.
+```
 
 The {func}`.sim_ancestry` function generates a simulated ancestral
 history for some samples. This is often all we need for many purposes.
@@ -85,16 +98,10 @@ If we want [genome sequence](<https://en.wikipedia.org/wiki/Genome>)
 we must also simulate some
 [mutations](<https://en.wikipedia.org/wiki/Mutation>) on these trees.
 
-<!---
-fixme This should use sim_mutations
--->
-
 ```{code-cell}
-
-    # Simulate an ancestral history for 3 diploid samples under the coalescent
-    ts = msprime.sim_ancestry(3)
-    mutated_ts = msprime.mutate(ts, rate=0.1)
-    SVG(mutated_ts.draw_svg())
+mutated_ts = msprime.sim_mutations(ts, rate=1e-8, random_seed=54321)
+SVG(mutated_ts.draw_svg())
+mutated_ts.tables.sites
 ```
 
 ```{eval-rst}
@@ -107,6 +114,8 @@ fixme This should use sim_mutations
 .. todo:: List of pointers to the relevant sections of the documentation.
 
 ```
+
+(sec_quickstart_demography)=
 
 ## Demography
 
