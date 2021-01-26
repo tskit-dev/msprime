@@ -19,12 +19,16 @@
 """
 Test cases for mutation generation.
 """
+from __future__ import annotations
+
+import dataclasses
 import functools
 import itertools
 import json
 import struct
+from typing import Any
+from typing import List
 
-import attr
 import numpy as np
 import pytest
 import scipy.stats as stats
@@ -34,6 +38,33 @@ import msprime
 import tests.wright_fisher as wf
 from msprime import _msprime
 from tests import tsutil
+
+
+class TestDefaults:
+    def test_sim_mutations(self):
+        ts = msprime.sim_ancestry(10, random_seed=1)
+        mts = msprime.sim_mutations(ts, rate=1, random_seed=1)
+        # Finite sites, JC69 by default.
+        assert mts.sequence_length == 1
+        assert mts.num_sites == 1
+        # High rate, so should have > 1 mutation at this site.
+        assert mts.num_mutations > 1
+        assert mts.site(0).position == 0
+        assert mts.site(0).ancestral_state in "ACGT"
+        for mutation in mts.mutations():
+            assert mutation.derived_state in "ACGT"
+
+    def test_mutate(self):
+        ts = msprime.sim_ancestry(10, random_seed=1)
+        mts = msprime.mutate(ts, rate=1, random_seed=1)
+        # Continuous genome, 0/1 alleles
+        assert mts.num_sites > 1
+        assert mts.sequence_length == 1
+        assert mts.num_mutations == mts.num_sites
+        for site in mts.sites():
+            assert site.ancestral_state == "0"
+        for mutation in mts.mutations():
+            assert mutation.derived_state == "1"
 
 
 class TestMutateProvenance:
@@ -1109,13 +1140,13 @@ class StatisticalTestMixin:
         assert min(pp, pm) > self.p_threshold
 
 
-@attr.s
+@dataclasses.dataclass
 class SlimMetadata:
-    mutation_type_id = attr.ib()
-    selection_coeff = attr.ib()
-    subpop_index = attr.ib()
-    origin_generation = attr.ib()
-    nucleotide = attr.ib()
+    mutation_type_id: int
+    selection_coeff: float
+    subpop_index: int
+    origin_generation: int
+    nucleotide: int
 
 
 class TestSLiMMutationModel:
@@ -1470,7 +1501,7 @@ def py_sim_mutations(
     if rate is None:
         rate = 0
     if model is None:
-        model = msprime.BinaryMutationModel()
+        model = msprime.JC69MutationModel()
     if isinstance(model, PythonMutationModel):
         py_model = model
     else:
@@ -1491,13 +1522,13 @@ def py_sim_mutations(
     )
 
 
-@attr.s
+@dataclasses.dataclass
 class Site:
-    position = attr.ib()
-    ancestral_state = attr.ib()
-    metadata = attr.ib()
-    mutations = attr.ib()
-    new = attr.ib()
+    position: float
+    ancestral_state: str
+    metadata: bytes
+    mutations: List[Mutation]
+    new: bool
 
     def __str__(self):
         s = f"Position: {self.position}\t{self.ancestral_state}"
@@ -1528,16 +1559,16 @@ class Site:
         self.mutations.append(mutation)
 
 
-@attr.s
+@dataclasses.dataclass
 class Mutation:
-    node = attr.ib()
-    derived_state = attr.ib()
-    parent = attr.ib()
-    metadata = attr.ib()
-    time = attr.ib()
-    new = attr.ib()
-    keep = attr.ib()
-    id = attr.ib()  # noqa: A003
+    node: int
+    derived_state: str
+    parent: int
+    metadata: bytes
+    time: float
+    new: bool
+    keep: bool
+    id: int  # noqa: A003
 
     def __str__(self):
         if self.parent is None:
@@ -1560,10 +1591,10 @@ class PythonMutationModel:
         pass
 
 
-@attr.s
+@dataclasses.dataclass
 class PythonSLiMMutationModel(PythonMutationModel):
-    mutation_type = attr.ib(default=0)
-    next_id = attr.ib(default=0)
+    mutation_type: int = 0
+    next_id: int = 0
 
     def root_allele(self, rng):
         return ""
@@ -1577,13 +1608,13 @@ class PythonSLiMMutationModel(PythonMutationModel):
         return out
 
 
-@attr.s
+@dataclasses.dataclass
 class PythonInfiniteAllelesMutationModel(PythonMutationModel):
-    start_allele = attr.ib(default=0)
-    next_allele = attr.ib(default=0)
+    start_allele: int = 0
+    next_allele: int = 0
 
-    def __init__(self):
-        self.next_allele = self.start_allele
+    def __init__(self, start_allele):
+        self.next_allele = start_allele
 
     def make_allele(self):
         ret = str(self.next_allele)
@@ -1597,13 +1628,14 @@ class PythonInfiniteAllelesMutationModel(PythonMutationModel):
         return self.make_allele()
 
 
-@attr.s
+@dataclasses.dataclass
 class PythonMutationMatrixModel(PythonMutationModel):
     # for compatability with the C code we provide alleles as bytes,
     # but we want them as strings here for simplicity.
-    alleles = attr.ib()
-    root_distribution = attr.ib()
-    transition_matrix = attr.ib()
+    alleles: List[bytes]
+    # Taking a short-cut here with the annotations
+    root_distribution: Any
+    transition_matrix: Any
 
     def choose_allele(self, rng, distribution):
         u = rng.flat(0, 1)
