@@ -323,18 +323,18 @@ class TestBuildObjects:
         assert not decoded.parameters.keep
         assert (
             decoded.parameters.model["__class__"]
-            == "msprime.mutations.BinaryMutationModel"
+            == "msprime.mutations.JC69MutationModel"
         )
 
     def test_mutate_model(self):
         ts = msprime.simulate(5, random_seed=1)
-        ts = msprime.sim_mutations(ts, model="jc69")
+        ts = msprime.sim_mutations(ts, model="pam")
         decoded = self.decode(ts.provenance(1).record)
         assert decoded.schema_version == "1.0.0"
         assert decoded.parameters.command == "sim_mutations"
         assert (
             decoded.parameters.model["__class__"]
-            == "msprime.mutations.JC69MutationModel"
+            == "msprime.mutations.PAMMutationModel"
         )
 
     def test_mutate_map(self):
