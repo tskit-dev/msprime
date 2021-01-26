@@ -32,12 +32,8 @@ different backwards-in-time population genetic
 represented as a [succinct tree sequence](https://tskit.dev) using 
 the [tskit](https://tskit.dev/tskit) library, which provides an
 extensive suite of operations for analysing genealogical trees
-and DNA sequence data.
-
-:::{note}
-Add a link here to the top-level tutorial for analysing trees using 
-tskit 
-:::
+and DNA sequence data. See the {ref}`tutorials:sec_tskit_getting_started`
+tutorial for more information on how to process data using tskit.
 
 Here we run a simple simulation and show a summary of the resulting
 tree sequence:
@@ -300,6 +296,8 @@ six sample *nodes*.
     how this relates to ploidy. Should link to the demography page and
     model sections for more details.
 ```
+
+(sec_ancestry_genome_properties)=
 
 ## Genome properties
 
@@ -659,6 +657,8 @@ they were stitched together in the initial recombination map.
     chromosomes and showing the correlation of trees on different chromosomes
     using the ``dtwf`` model.
 ```
+
+(sec_ancestry_controlling_randomness)=
 
 ## Controlling randomness
 
