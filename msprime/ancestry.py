@@ -340,6 +340,7 @@ def _parse_simulate(
                 "equal to the number of populations in from_ts"
             )
 
+    discrete_genome = False
     if recombination_map is None:
         # Default to 1 if no from_ts; otherwise default to the sequence length
         # of from_ts
@@ -355,6 +356,9 @@ def _parse_simulate(
         recombination_map = intervals.RateMap.uniform(the_length, the_rate)
     else:
         if isinstance(recombination_map, intervals.RecombinationMap):
+            if recombination_map._is_discrete:
+                logger.info("Emulating v0.x discrete sites simulation")
+                discrete_genome = True
             # Convert from the legacy RecombinationMap class
             recombination_map = recombination_map.map
         elif not isinstance(recombination_map, intervals.RateMap):
@@ -364,6 +368,7 @@ def _parse_simulate(
                 "Cannot specify length/recombination_rate along with "
                 "a recombination map"
             )
+
     if from_ts is not None:
         if recombination_map.sequence_length != from_ts.sequence_length:
             raise ValueError(
@@ -408,7 +413,7 @@ def _parse_simulate(
             recombination_map.sequence_length, 0
         ),
         gene_conversion_tract_length=0,
-        discrete_genome=False,
+        discrete_genome=discrete_genome,
         ploidy=2,
         random_generator=random_generator,
     )

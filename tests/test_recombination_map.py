@@ -281,20 +281,6 @@ class TestRecombinationMapInterface(unittest.TestCase):
     Tests for the RecombinationMap interface.
     """
 
-    def verify_warning(self, f):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            f()
-            assert len(w) == 1
-
-    def test_warn_on_num_loci_equal_seq_len(self):
-        self.verify_warning(
-            lambda: msprime.RecombinationMap([0, 100], [0.1, 0], num_loci=100)
-        )
-        self.verify_warning(
-            lambda: msprime.RecombinationMap.uniform_map(100, 0.1, num_loci=100)
-        )
-
     def test_error_on_num_loci_not_equal_seq_len(self):
         with pytest.raises(ValueError):
             msprime.RecombinationMap.uniform_map(100, 0.1, num_loci=10)
