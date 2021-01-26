@@ -1944,3 +1944,25 @@ class TestModelClasses:
             str(m) == "Infinite alleles mutation model, beginning with"
             " allele 1\n    next allele: 1\n"
         )
+
+
+class TestDeprecatedApis:
+    def test_simulate_mutate_keep(self):
+        ts = msprime.simulate(10, mutation_rate=1, random_seed=2)
+        assert ts.num_sites > 0
+        mts = msprime.mutate(ts, rate=1, random_seed=3, keep=True)
+        assert set(mts.tables.sites.position) > set(ts.tables.sites.position)
+
+    def test_simulate_sim_mutations(self):
+        ts = msprime.simulate(10, mutation_rate=1, random_seed=2)
+        assert ts.num_sites > 0
+        mts = msprime.sim_mutations(
+            ts, rate=1, random_seed=3, keep=True, discrete_genome=False
+        )
+        assert set(mts.tables.sites.position) > set(ts.tables.sites.position)
+
+    def test_sim_ancestry_mutate(self):
+        ts = msprime.sim_ancestry(10, random_seed=2)
+        assert ts.num_sites == 0
+        mts = msprime.mutate(ts, rate=1, random_seed=3)
+        assert mts.num_sites > 0
