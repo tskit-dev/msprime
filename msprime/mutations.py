@@ -78,7 +78,7 @@ def mutation_model_factory(model):
     }
 
     if model is None:
-        model_instance = BinaryMutationModel()
+        model_instance = JC69MutationModel()
     elif isinstance(model, str):
         lower_model = model.lower()
         if lower_model not in model_map:
@@ -1034,7 +1034,7 @@ NUCLEOTIDES = 1
 
 class InfiniteSites(MatrixMutationModel):
     # This mutation model is defined for backwards compatability, and is a remnant
-    # of an earlier design. We keep it to
+    # of an earlier design.
     def __init__(self, alphabet=BINARY):
         self.alphabet = alphabet
         models = {BINARY: BinaryMutationModel(), NUCLEOTIDES: JC69MutationModel()}
@@ -1137,6 +1137,9 @@ def mutate(
             "This is a legacy interface which does not support general "
             "mutation models. Please use the sim_ancestry function instead."
         )
+    # The legacy function simulates 0/1 alleles by default.
+    if model is None:
+        model = BinaryMutationModel()
     return sim_mutations(
         tree_sequence,
         rate=rate,

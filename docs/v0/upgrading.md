@@ -86,6 +86,12 @@ function and is very similar. There are some important differences though:
 * There are now also many new mutation models supported by :func:.sim_mutations;
   see {ref}`sec_mutations` for details. These are *not* supported in the deprecated
   {func}`.mutate` function.
+* The simulated mutations now have a simulated ``time`` value, which specifies the 
+  precise time that the mutation occurred. Note that this value is also provided in the
+  returned tables for the deprecated ``simulate()`` and ``mutate()`` functions,
+  which may lead to some compatibility issues. (We considered removing the simulated
+  mutation times for these 0.x functions for strict compatibility, but this would
+  have broken any code using the ``keep`` option in mutate.)
 
 ## Utilities
 
