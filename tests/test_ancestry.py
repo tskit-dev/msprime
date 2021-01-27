@@ -1749,6 +1749,47 @@ class TestSimulateInterface:
             assert t1 == t2
 
 
+class TestDiscreteGenomeSimulate:
+    """
+    Test that the num_loci==sequence_length trick for doing a discrete genome
+    simulation in simulate() still works.
+    """
+
+    def test_simple_example(self):
+        rmap = msprime.RecombinationMap.uniform_map(100, 0.1, num_loci=100)
+        ts = msprime.simulate(10, recombination_map=rmap, random_seed=1)
+        assert has_discrete_genome(ts)
+        assert ts.sequence_length == 100
+        assert ts.num_trees > 1
+
+    def test_single_locus(self):
+        rmap = msprime.RecombinationMap.uniform_map(1, 100, num_loci=1)
+        ts = msprime.simulate(10, recombination_map=rmap, random_seed=1)
+        assert has_discrete_genome(ts)
+        assert ts.sequence_length == 1
+        assert ts.num_trees == 1
+
+    @pytest.mark.parametrize("m", [2, 5, 7])
+    def test_small_examples(self, m):
+        rmap = msprime.RecombinationMap.uniform_map(m, 100, num_loci=m)
+        ts = msprime.simulate(10, recombination_map=rmap, random_seed=1)
+        assert has_discrete_genome(ts)
+        assert ts.sequence_length == m
+        assert ts.num_trees == m
+
+    def test_simulate_from_example(self):
+        # Example from the docs on a WF simulation
+        N = 10
+        num_loci = 2
+        recomb_map = msprime.RecombinationMap.uniform_map(
+            num_loci, 1 / num_loci, num_loci
+        )
+        ts = msprime.simulate(5, Ne=N / 2, recombination_map=recomb_map, random_seed=5)
+        assert has_discrete_genome(ts)
+        assert ts.sequence_length == num_loci
+        assert ts.num_trees > 1
+
+
 class TestReprRoundTrip:
     """
     Tests that we can eval the repr of objects to round trip them.

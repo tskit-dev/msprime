@@ -324,7 +324,7 @@ class TestRejectedCommonAncestorEventCounts:
         for model in ["smc", "smc_prime"]:
             threshold = 20
             sim = ancestry._parse_simulate(
-                sample_size=10, recombination_rate=5, model=model
+                sample_size=10, recombination_rate=5, model=model, random_seed=432
             )
             sim.run()
             assert sim.num_rejected_common_ancestor_events > 0

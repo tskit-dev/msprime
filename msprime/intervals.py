@@ -489,16 +489,20 @@ class RecombinationMap:
     """
 
     def __init__(self, positions, rates, num_loci=None, map_start=0):
-        if num_loci is not None:
-            if num_loci == positions[-1]:
-                warnings.warn("num_loci is no longer supported and should not be used.")
-            else:
-                raise ValueError(
-                    "num_loci does not match sequence length. "
-                    "To set a discrete number of recombination sites, "
-                    "scale positions to span the desired number of loci "
-                    "and set discrete=True"
-                )
+        # Used as an internal flag for the 0.x simulate() function. This allows
+        # us to emulate the discrete-sites behaviour of 0.x code.
+        self._is_discrete = num_loci == positions[-1]
+        if num_loci is not None and num_loci != positions[-1]:
+            raise ValueError(
+                "The RecombinationMap interface is deprecated and only "
+                "partially supported. If you wish to simulate a number of "
+                "discrete loci, you must set num_loci == the sequence length. "
+                "If you wish to simulate recombination process on as fine "
+                "a map as possible, please omit the num_loci parameter (or set "
+                "to None). Otherwise, num_loci is no longer supported and "
+                "the behaviour of msprime 0.x cannot be emulated. Please "
+                "consider upgrading your code to the version 1.x APIs."
+            )
         self.map = RateMap(positions, rates[:-1])
         self.map_start = map_start
 
