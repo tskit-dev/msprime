@@ -88,25 +88,45 @@ ancestry simulations.
 ## Mutations
 
 ```{eval-rst}
-.. todo:: This section needs to be written once we have nucleotide output
-    from sim_mutations.
+.. todo:: This is a WIP
 ```
 
 The {func}`.sim_ancestry` function generates a simulated ancestral
-history for some samples. This is often all we need for many purposes.
+history for some samples. 
 If we want [genome sequence](<https://en.wikipedia.org/wiki/Genome>)
 we must also simulate some
 [mutations](<https://en.wikipedia.org/wiki/Mutation>) on these trees.
+However, it's important to note that it's not always necessary to 
+simulate mutations in order to use the simulations; often, it's 
+better *not to*; see the 
+% TODO enable this once the tutorials build is fixed
+% {ref}`tutorials:sec_tskit_no_mutations` 
+tutorial for more information.
 
 ```{code-cell}
 mutated_ts = msprime.sim_mutations(ts, rate=1e-8, random_seed=54321)
-SVG(mutated_ts.draw_svg())
 mutated_ts.tables.sites
 ```
 
+```{code-cell}
+mutated_ts.tables.mutations
+```
+
+```{code-cell}
+SVG(mutated_ts.draw_svg())
+```
+
+```{code-cell}
+for variant in mutated_ts.variants():
+    print(variant)
+```
+
 ```{eval-rst}
-.. todo:: Some example chunks where we show how to do something simple
-    with the sequences and maybe how to export to VCF.
+.. todo:: Not sure how much detail we want to get into here. The salient points
+    we want to get across are that mutations are not automatically part of the 
+    simulation, that we only output sites with mutations and we have efficient
+    ways to work with the results. A lot of this should be pointing to the 
+    "getting started with tskit" tutorial.
 
 ```
 
