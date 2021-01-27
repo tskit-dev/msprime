@@ -11,9 +11,20 @@ kernelspec:
   name: python3
 ---
 
+```{code-cell}
+:tags: [remove-cell]
+
+    import msprime
+    from IPython.display import SVG
+    # Doing this to make the notebook outputs deterministic. 
+    # DO NOT DO THIS IN YOUR CODE
+    msprime.core.set_seed_rng_seed(42)
+```
+
 (sec_mutations)=
 
 # Mutations
+
 
 :::{warning}
 
@@ -41,6 +52,55 @@ of different random mutational processes on top of a single simulated topology,
 or if we have obtained the tree sequence from another program and wish to
 overlay neutral mutations on this tree sequence.
 
+
+(sec_mutations_rate)=
+
+## Specifying rates
+
+```{eval-rst}
+.. todo:: Documentation on the ``rate`` parameter with examples.
+
+```
+
+(sec_mutations_randomness)=
+
+## Controlling randomness
+
+```{eval-rst}
+.. todo:: Documentation on the ``seed` parameter with examples. Can
+    link to the randomness section in ancstry.rst. Alternatively we
+    don't bother with this section and just link to the ancestry.rst
+    one from the ``seed`` parameter to mutate.
+```
+
+(sec_mutations_discrete)=
+
+## Discrete or continuous
+
+```{eval-rst}
+.. todo:: Examples of using the ``discrete`` argument.
+```
+
+(sec_mutations_time_span)=
+
+## Restricting time span
+
+```{eval-rst}
+.. todo:: Docs and examples for the start_time and end_time params.
+
+```
+
+(sec_mutations_existing)=
+
+## Existing mutations
+
+```{eval-rst}
+.. todo:: Docs and examples for what to do when you're adding mutations
+    to a ts that already has mutations. Like what the
+    ``kept_mutations_before_end_time`` parameter.
+
+```
+
 (sec_mutations_models)=
 
 ## Models
@@ -62,19 +122,19 @@ Here are the available models; they are documented in more detail below.
 - {class}`.InfiniteAllelesMutationModel`: a generic infinite-alleles model
 - {class}`.SLiMMutationModel`: infinite-alleles model generating SLiM mutations
 
-(sec_api_matrix_mutations_models)=
+(sec_mutations_matrix_mutations_models)=
 
 ### Matrix Mutation Models
 
-These classes are defined by an alphabet of possible alleles ({}`alleles`); an array of
+These classes are defined by an alphabet of possible alleles (`alleles`); an array of
 probabilities that determines how likely each allele is to be the root, ancestral allele
-({}`root_distribution`); and a transition matrix specifying the probability for each allele
+(`root_distribution`); and a transition matrix specifying the probability for each allele
 to mutate to every other allele. Each class has specific values of these parameters to
 create the specific model. For your own custom model these parameters can be set using
 {class}`msprime.MatrixMutationModel`. For more detail about how mutations are simulated
-in these models see {ref}`sec_api_matrix_mutation_models_details`.
+in these models see {ref}`sec_mutations_matrix_mutation_models_details`.
 
-(sec_api_matrix_mutation_models_details)=
+(sec_mutations_matrix_mutation_models_details)=
 
 ### Mutation Matrix Models Details
 
@@ -91,7 +151,7 @@ The `root distribution` and every row in the `transition_matrix`
 must give *probabilities*, i.e., they must be nonnegative numbers summing to 1.
 For the precise interpretation of these parameters
 (especially when the transition matrix has nonzero entries on the diagonal)
-see {ref}`sec_api_matrix_mutation_theory`.
+see {ref}`sec_mutations_matrix_mutation_theory`.
 
 You can define your own, but you probably don't need to:
 there are several mutation matrix models already implemented in msprime,
@@ -140,7 +200,7 @@ for v in mts.variants():
 
 ```
 
-(sec_api_matrix_mutation_theory)=
+(sec_mutations_matrix_mutation_theory)=
 
 ### Parameterization of Matrix Mutation Models
 
@@ -250,7 +310,7 @@ Pt = scipy.linalg.expm(t * rate * Q)[i,j]
 If the top of a branch of length {math}`t` has allele {math}`i`,
 the bottom of the branch has allele {math}`j` with probability `Pt[i,j]`.
 
-(sec_api_mutation_infinite_alleles)=
+(sec_mutations_mutation_infinite_alleles)=
 
 ### Infinite Alleles Mutation Models
 
@@ -294,7 +354,7 @@ to set the starting allele appropriately, and to make sure the results make sens
 
 :::
 
-(sec_api_mutation_slim_mutations)=
+(sec_mutations_mutation_slim_mutations)=
 
 ### SLiM mutations
 
@@ -309,7 +369,7 @@ replacing the previous state. So, derived states are comma-separated lists of
 mutation IDs, and the ancestral state is always the empty string. For instance,
 if a new mutation with ID 5 occurs at a site, and then later another mutation
 appears with ID 64, the sequence of alleles moving along this line of descent
-would be {}`""`, then {}`"5"`, and finally {}`"5,64"`. Furthermore, the mutation
+would be `""`, then `"5"`, and finally `"5,64"`. Furthermore, the mutation
 model adds SLiM metadata to each mutation, which records, among other things,
 the SLiM mutation type of each mutation, and the selection coefficient (which
 is always 0.0, since adding mutations in this way only makes sense if they are
@@ -390,62 +450,4 @@ This was already present in the tree sequence, so its derived state is not modif
 has "erased" the type 2 mutations `100` and `102`.
 If you want a different arrangment,
 you can go back and edit the derived states (and metadata) as you like.
-
-(sec_mutations_rate)=
-
-## Specifying rates
-
-```{eval-rst}
-.. todo:: Documentation on the ``rate`` parameter with examples.
-
-```
-
-(sec_mutations_randomness)=
-
-## Controlling randomness
-
-```{eval-rst}
-.. todo:: Documentation on the ``seed` parameter with examples. Can
-    link to the randomness section in ancstry.rst. Alternatively we
-    don't bother with this section and just link to the ancestry.rst
-    one from the ``seed`` parameter to mutate.
-```
-
-(sec_mutations_discrete)=
-
-## Discrete or continuous
-
-```{eval-rst}
-.. todo:: Examples of using the ``discrete`` argument.
-```
-
-(sec_mutations_time_span)=
-
-## Restricting time span
-
-```{eval-rst}
-.. todo:: Docs and examples for the start_time and end_time params.
-
-```
-
-(sec_mutations_existing)=
-
-## Existing mutations
-
-```{eval-rst}
-.. todo:: Docs and examples for what to do when you're adding mutations
-    to a ts that already has mutations. Like what the
-    ``kept_mutations_before_end_time`` parameter.
-
-```
-
-## API
-
-```{eval-rst}
-.. todo:: Need to distinguish here the deprecated and new functions
-```
-
-```{eval-rst}
-.. autofunction:: msprime.sim_mutations
-```
 

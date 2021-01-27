@@ -206,3 +206,8 @@ The node was created by a :class:`msprime.CensusEvent`.
 .. autofunction:: msprime.log_mutation_likelihood
 ```
 
+## Mutations
+
+```{eval-rst}
+.. autofunction:: msprime.sim_mutations
+```
