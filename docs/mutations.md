@@ -33,11 +33,54 @@ any outstanding TODOs before opening issues.
 
 :::
 
-```{eval-rst}
-.. include:: quickref-mutations.rst
-```
+---
+
+## Quick reference
 
 ```{eval-rst}
+.. todo:: 
+  These summaries need work. We can say more then "amino acids" e.g. for PAM
+```
+
+{func}`.sim_mutations`
+: Simulate mutations on ancestral topology  
+
+**Models**
+
+{class}`.BinaryMutationModel`             
+: 0/1 flip-flopping alleles                 
+
+{class}`.JC69MutationModel`               
+: Jukes & Cantor '69, nucleotides           
+
+{class}`.HKYMutationModel`                
+: Hasegawa, Kishino & Yano '85, nucleotides 
+
+{class}`.F84MutationModel`                
+: Felsenstein '84, nucleotides              
+
+{class}`.GTRMutationModel`                
+: general time-reversible, nucleotides      
+
+{class}`.BLOSUM62MutationModel` 
+: amino acids                               
+
+{class}`.PAMMutationModel`              
+: amino acids                               
+
+{class}`.MatrixMutationModel`             
+: general finite-state mutations            
+
+{class}`.InfiniteAllelesMutationModel`    
+: a generic infinite-alleles model          
+
+{class}`.SLiMMutationModel`               
+: SLiM compatible mutations                 
+
+---
+
+```{eval-rst}
+
 .. todo:: 
     This has been copied directly from the api.rst file. Probably
     needs some refactoring to use the newer docs arrangements.

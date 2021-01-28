@@ -58,6 +58,21 @@ installed.
 .. todo:: Add guide for how to install GSL on some common platforms.
 ```
 
+## Overview
+
+There are three main parts of `msprime`, in increasing order of complexity:
+
+1. High-level Python. The Python-API and command line interface tools are all defined
+   in the `msprime` directory.
+2. C library. The underlying high-performance C code is written as a standalone library.
+   All of the code for this library is in the `lib` directory.
+3. Low-level Python-C interface. The interface between the Python and C code is the
+   `msprime/_msprimemodule.c` file, which defines the `msprime._msprime` module.
+
+Each of these aspects has its own coding conventions and development tools, which are
+documented in the following sections.
+
+
 ## Continuous integration tests
 
 Two different continuous integration providers are used, which run different
@@ -72,19 +87,211 @@ combinations of tests on different platforms:
    are run, coverage statistics calculated using [CodeCov](<https://codecov.io/gh>),
    and the documentation built.
 
-## Overview
 
-There are three main parts of `msprime`, in increasing order of complexity:
+(sec_development_documentation)=
+## Documentation
 
-1. High-level Python. The Python-API and command line interface tools are all defined
-   in the `msprime` directory.
-2. C library. The underlying high-performance C code is written as a standalone library.
-   All of the code for this library is in the `lib` directory.
-3. Low-level Python-C interface. The interface between the Python and C code is the
-   `msprime/_msprimemodule.c` file, which defines the `msprime._msprime` module.
+The msprime manual exists to provide users with a comprehensive and authoritative
+source of information on msprime's interfaces. From a high-level, the documentation 
+is split into two main sections:
 
-Each of these aspects has its own coding conventions and development tools, which are
-documented in the following sections.
+1. The API Reference documentation provides a concise and precise description of
+   a particular function or class. See the {ref}`sec_development_documentation_api`
+   section for details.
+2. Thematically structured sections which discuss the functionality and 
+   explain features via minimal examples. See the 
+    {ref}`sec_development_documentation_examples` section for details.
+
+Further documentation where features are combined to perform specific 
+tasks is provided in the [tskit tutorials](https://tskit.dev/tutorials) site.
+
+To get started writing documentation for msprime, first follow the
+{ref}`Quickstart <sec_development_quickstart>`. Once you have created and
+checked out a "topic branch", you are ready to start editing the documentation.
+
+:::{note}
+Please make sure you have built the low-level {ref}`C module <sec_development_c_module>`
+by running ``make`` in the project root directory before going any further. 
+A lot of inscrutable errors are caused by a mismatch between the low-level C module
+installed in your system (or an older development version you previously compiled)
+and the local development version of msprime. 
+:::
+
+(sec_development_documentation_building)=
+### Building
+
+To build the documentation locally, go to the `docs` directory and run `make`.
+This will build the HTML documentation in  `docs/_build/html/`. You can now
+view the local build of the HTML in your local browser (if you do not know how
+to do this, try double clicking the HTML file).
+
+:::{note}
+If you are having some problems with getting the documentation to build
+try running ``make clean`` which will delete all of the HTML and cached
+Jupyter notebook content.
+:::
+
+### JupyterBook
+
+Documentation for msprime is built using [Jupyter Book](https://jupyterbook.org),
+which allows us to mix API documentation generated automatically using 
+[Sphinx](https://www.sphinx-doc.org) with code examples evaluated in a 
+local [Jupyter](https://jupyter.org) kernel. This is a very powerful 
+system that allows us generate beautiful and useful documentation, 
+but it is quite new and has some quirks and gotchas. 
+In particular, because of the mixture of API documentation and notebook 
+content we need to write documentation using **two different markup 
+languages**.
+
+#### reStructuredText
+
+All of the documentation for previous versions of msprime was written
+using the [reStructuredText](<https://docutils.sourceforge.io/rst.html>) format
+(rST) which is the default for Python documentation. Because of this, all of 
+the API docstrings (see the {ref}`sec_development_documentation_api` section)
+are written using rST. Converting these docstrings to Markdown
+would be a lot of work (and support from upstream tools for Markdown 
+dosctrings is patchy), and so we need to use rST for this 
+purpose for the forseeable future.
+
+Some of the directives we use are only available in rST, and so these 
+must be enclosed in ``eval-rst`` blocks like so:
+
+````md
+```{eval-rst}
+.. autoclass:: msprime.StandardCoalescent
+```
+````
+
+#### Markdown
+
+Everything **besides** API docstrings is written using 
+[MyST Markdown](https://jupyterbook.org/content/myst.html). This is a 
+superset of [common Markdown](https://commonmark.org) which 
+enables executable Jupyter content to be included in the documentation.
+In particular, JupyterBook and MyST are built on top of 
+[Sphinx](https://www.sphinx-doc.org) which allows us to do lots 
+of cross-referencing.
+
+Some useful links:
+
+- The [MyST cheat sheet](https://jupyterbook.org/reference/cheatsheet.html)
+  is a great resource.
+- The "Write Book Content" part of the [Jupyter Book](https://jupyterbook.org/)
+  documentation has lots of helpful examples and links.
+- The [MyST Syntax Guide](https://myst-parser.readthedocs.io/en/latest/using/syntax.html)
+  is a good reference for the full syntax
+- Sphinx 
+  [directives](https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html). 
+  Some of these will work with Jupyter Book, some won't. There's currently no 
+  comprehensive list of those that do. However, we tend to only use a small subset 
+  of the available directives, and you can usually get by following existing 
+  local examples.
+- The [types of source files](https://jupyterbook.org/file-types/index.html)
+  section in the Jupyter Book documentation is useful reference for mixing 
+  and matching Markdown and rST like we're doing.
+
+(sec_development_documentation_api)=
+### API Reference 
+
+API reference documentation is provided by 
+[docstrings](https://www.python.org/dev/peps/pep-0257/) in the source
+code. These docstrings are written using 
+[reStructuredText](<https://docutils.sourceforge.io/rst.html>) 
+and [Sphinx](https://www.sphinx-doc.org).
+
+Docstrings should be **concise** and **precise**. Examples should not 
+be provided directly in the docstrings, but each significant 
+parameter (e.g.) in a function should have links to the corresponding
+{ref}`examples <sec_development_documentation_examples>` section.
+
+```{eval-rst}
+.. todo:: Provide an example of a well-documented docstring with 
+    links to an examples section. We should use one of the simpler
+    functions as an example of this.
+```
+
+(sec_development_documentation_examples)=
+### Examples
+
+The API reference documentation is gives precise formal information about 
+how to use a particular function of class. The rest of the manual should 
+provide the discussion and examples needed to contextualise this information
+and help users to orient themselves. The examples section for a given 
+feature (e.g., function parameter) should:
+
+- Provide some background into what this feature is for, so that an
+  unsure reader can quickly orien themselves (external links to explain
+  concepts is good for this).
+- Give examples using inline Jupyter code to illustrate the various 
+  different ways that this feature can be used. These examples should 
+  be as small as possible, so that the overall document runs quickly.
+
+Juptyer notebook code is incluced by using blocks like this:
+
+````md
+```{code-cell}
+print("This is python code!)
+a = list(range(10)
+a
+```
+````
+
+These cells behave exactly like they would in a Jupyter notebook (the 
+whole document is actually treated and executed like one notebook)
+
+:::{warning}
+For a document to be evaluated as a notebook you **must** have 
+exactly the right [YAML Frontmatter](
+https://jupyterbook.org/reference/cheatsheet.html#executable-code)
+at the top of the file.
+:::
+
+(sec_development_documentation_cross_referencing)=
+### Cross referencing
+
+Cross referencing is done by using the ``{ref}`` inline role 
+(see Jupyter Book [documentation](https://jupyterbook.org/content/citations.html)
+for more details) to link
+to labelled sections within the manual or to API documentation.
+
+Sections within the manual should be labelled hierachically, for example
+this section is labelled like this: 
+
+````md
+(sec_development_documentation_cross_referencing)=
+### Cross referencing
+````
+
+Elsewhere in the Markdown documentation we can then refer to this 
+section like:
+
+````md
+See the {ref}`sec_development_documentation_cross_referencing` section for details.
+````
+
+Cross references like this will automatically use the section name 
+as the link text, which we can override if we like:
+
+````md
+See {ref}`another section<sec_development_documentation_cross_referencing>` for more information.
+````
+
+To refer to a given section from an rST docstring, we'd do something like
+````rst
+See the :ref:`sec_development_documentation_cross_referencing` section for more details.
+````
+
+When we want to refer to the API documentation for a function or class, we 
+use the appropriate inline text role to do so. For example,
+
+````md
+The {func}`.sim_ancestry` function lets us simulate ancestral histories.
+````
+
+It's a good idea to always use this form when referring to functions 
+or classes so that the reader always has direct access to the API 
+documentation for a given function when they might it.
 
 ## High-level Python
 
@@ -469,6 +676,8 @@ ensure that no memory is leaked. The entire test suite should be run
 through valgrind periodically also to detect any leaks or illegal
 memory accesses that have been overlooked.
 
+
+(sec_development_c_module)=
 ## Python C Interface
 
 The Python C interface is written using the
@@ -567,61 +776,6 @@ $ sudo docker build -t tskit/msprime .
 $ podman build -t tskit/msprime .
 
 ```
-
-## Documentation
-
-```{eval-rst}
-.. todo:: review this documentation; it's out of date.
-```
-
-To get started writing documentation for msprime, first follow the {ref}`Quickstart <sec_development_quickstart>`. Once you have created and checked out a "topic branch", you are ready to start editing the documentation.
-
-The msprime documentation consists of three main sections - {ref}`Ancestry <sec_ancestry>`, {ref}`Mutations <sec_mutations>`, and {ref}`Demography <sec_demography>`. Each of these sections should include an introductory paragraph so users understand what that general section is used for. Within each of the main sections, there are subsections for all of the features. Each of the feature subsections should include a quick overview of what it is, definitions, and example usage. The end of each main section should also include the detailed API documentation.
-
-```{code-block}
-
-- Main section 1
-    Introductory paragraph
-    - subsection 1
-        - quick overview
-        - definitions
-        - example usage
-    - subsection 2
-    - API documentation
-- Main section 2
-
-```
-
-Documentation is written using [Sphinx](<https://www.sphinx-doc.org/en/master/>) and contained in the `docs` directory. It is written in the [reStructuredText](<https://docutils.sourceforge.io/rst.html>) format and is automatically deployed to the [documentation website](<https://tskit-dev.github.io/msprime-docs>).
-
-Code blocks in the documenation are written and executed using [jupyter-sphinx](<https://jupyter-sphinx.readthedocs.io/en/latest/>). Each section should start a new kernel:
-
-```{code-block}
-
-.. jupyter-kernel:: python3
-
-```
-
-To create a jupyter-sphinx block, simply use the syntax:
-
-```{code-block}
-
-.. jupyter-execute::
-
-    print('Python code!')
-
-```
-
-The API documentation is automatically generated using [docstrings](<https://www.python.org/dev/peps/pep-0257/>). Therefore, edits to the Python API documentation must be made within the source code.
-
-```{eval-rst}
-.. todo:: Describe what the API documentation should include. (e.g. Each function should include a small description of what it does, the input parameters, and returned parameters.)
-```
-
-To build the documentation locally, go to the `docs` directory and run `make`. This will build the HTML documentation in  `docs/_build/html/`. You can now view the local build of the HTML in your local browser (if you do not know how to do this, try double clicking the HTML file). Building the documentation will also run any new jupyter-sphinx code, so it may take a while.
-
-As you work on your topic branch you can [add commits](<https://git-scm.com/docs/git-commit>) to it. Once you’re ready to share this, you can then open a [pull request](<http://github.com/tskit-dev/msprime/pulls>). In the PR an AdminBot will automatically create a preview of your documentation that can be viewed by clicking the provided link on GitHub. Your PR will be reviewed by some of the maintainers, who may ask you to make changes.
-
 ## Troubleshooting
 
 - If `make` is giving you strange errors, or if tests are failing for

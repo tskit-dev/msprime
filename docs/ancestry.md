@@ -61,11 +61,31 @@ this.
 
 ## Quick reference
 
-% Probably want to convert this to markdown at some point.
+{func}`.sim_ancestry`
+: Simulate ancestral tree sequence topology
 
-```{eval-rst}
-.. include:: quickref-ancestry.rst
-```
+**Models**
+
+{class}`.StandardCoalescent`
+: Coalescent with recombination ("hudson")
+
+{class}`.SmcApproxCoalescent`             
+: Sequentially Markov Coalescent ("smc")    
+
+{class}`.SmcPrimeApproxCoalescent`        
+: SMC'("smc_prime")                         
+
+{class}`.DiscreteTimeWrightFisher`        
+: Generation-by-generation Wright-Fisher    
+
+{class}`.BetaCoalescent`
+: Beta coalescent multiple-merger           
+
+{class}`.DiracCoalescent`                 
+: Dirac coalescent multiple-merger          
+
+{class}`.SweepGenicSelection`             
+: Selective sweep at a linked locus         
 
 ---
 

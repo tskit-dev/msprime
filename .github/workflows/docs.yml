@@ -58,7 +58,7 @@ jobs:
         run: venv/bin/activate && make $MAKE_TARGET
 
       - name: Build Docs
-        run: venv/bin/activate && cd docs && make
+        run: venv/bin/activate && cd docs && make dist
 
       - name: Trigger docs site rebuild
         if: github.ref == 'refs/heads/main'
