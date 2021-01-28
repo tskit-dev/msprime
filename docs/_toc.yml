@@ -18,15 +18,10 @@
       - file: logging
     - file: api
 
-- part: Version 0.x
-  chapters:
-  - file: v0/overview
-  - file: v0/upgrading
-  - file: v0/api
-
 - part: Miscellaneous
   chapters:
   - file: development
+  - file: legacy
 
   # Stuff we haven't converted to md yet.
   - file: changelog

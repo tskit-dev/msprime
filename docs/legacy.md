@@ -1,4 +1,24 @@
-# Upgrading code 
+
+# Legacy (version 0.x) APIs
+
+
+```{eval-rst}
+.. todo:: This page is under construction, and needs work to ensure 
+    that the target audiences are able to find the content they need.
+```
+
+
+```{eval-rst}
+.. todo:: An overview of why we added the new APIs, what they are
+  and some reassurance that old code will continue to work.
+```
+
+
+With a few exceptions, you **should not need to change your code** and 
+it should remain working indefinitely.
+
+
+## Upgrading code 
 
 This section is to help 0.x users of the get up to speed quickly, summarising the new
 APIs and their main differences to what you are used to.
@@ -101,3 +121,26 @@ function and is very similar. There are some important differences though:
   more modern numpy-based API.
 
 
+## API Reference
+
+
+```{eval-rst}
+.. autoclass:: msprime.PopulationConfiguration
+```
+
+```{eval-rst}
+.. autoclass:: msprime.RecombinationMap
+    :members:
+```
+
+```{eval-rst}
+.. autofunction:: msprime.simulate()
+```
+
+```{eval-rst}
+.. autoclass:: msprime.SimulationModelChange
+```
+
+```{eval-rst}
+.. autofunction:: msprime.mutate
+```
