@@ -16,14 +16,12 @@ kernelspec:
 
 # Computing likelihoods
 
-```{eval-rst}
-.. include:: quickref-likelihoods.rst
-```
+{func}`.log_arg_likelihood`                
+: Likelihood of an ARG topology            
 
-```{code-cell}
+{func}`.log_mutation_likelihood`           
+: Likelihood of a set of mutations         
 
-    import msprime
-```
 
 `msprime` provides the capability to evaluate two sampling probabilities:
 that of a stored tree sequence for a given diploid effective population size
@@ -45,6 +43,8 @@ and evaluates the likelihood of the realisation for various parameter
 combinations.
 
 ```{code-cell}
+    import msprime
+
     ts = msprime.sim_ancestry(
         5, recombination_rate=1, record_full_arg=True,
         sequence_length=1, discrete_genome=False, random_seed=42)

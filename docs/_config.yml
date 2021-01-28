@@ -29,6 +29,7 @@ parse:
 sphinx:
     extra_extensions:
     - sphinx.ext.autodoc
+    - sphinx.ext.autosummary
     - sphinx.ext.todo
     - sphinx.ext.intersphinx
     - sphinx_issues

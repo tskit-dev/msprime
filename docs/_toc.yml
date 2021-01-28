@@ -14,6 +14,7 @@
     - file: utilities
       sections:
       - file: likelihoods
+      - file: rate_maps
       - file: cli
       - file: logging
     - file: api

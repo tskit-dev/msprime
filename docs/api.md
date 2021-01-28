@@ -1,15 +1,71 @@
 # API Reference
 
+
+## Summary 
+
+### Simulation functions
+ 
 ```{eval-rst}
-.. include:: quickref.rst
+.. currentmodule:: msprime
+
+.. autosummary::
+
+  sim_ancestry
+  sim_mutations
+  
+```
+
+### Ancestry Models
+
+
+```{eval-rst}
+.. autosummary::
+
+  StandardCoalescent
+  SmcApproxCoalescent
+  SmcPrimeApproxCoalescent
+  DiscreteTimeWrightFisher
+  BetaCoalescent
+  DiracCoalescent
+  SweepGenicSelection
+```
+
+### Mutation Models
+
+```{eval-rst}
+.. autosummary::
+
+  BinaryMutationModel
+  JC69MutationModel
+  HKYMutationModel
+  F84MutationModel
+  GTRMutationModel
+  BLOSUM62MutationModel
+  PAMMutationModel
+  MatrixMutationModel
+  InfiniteAllelesMutationModel
+  SLiMMutationModel
+```
+
+### Demography
+
+```{eval-rst}
+.. autosummary::
+
+  Demography
+  DemographyDebugger
+  Population
+  MassMigration 
+  PopulationParametersChange
+  MigrationRateChange
+```
+
+
+```{eval-rst}
+.. todo:: Section for utililies like RateMap
 ```
 
 ## Ancestry
-
-```{eval-rst}
-.. todo:: This is a tentative section title. We need some place where we put
-    the detail API documentation.
-```
 
 ```{eval-rst}
 .. autofunction:: msprime.sim_ancestry
@@ -146,9 +202,6 @@ The node was created by a :class:`msprime.CensusEvent`.
 
 ## Utilities
 
-```{eval-rst}
-.. include:: quickref-utilities.rst
-```
 
 ### Rate maps
 
