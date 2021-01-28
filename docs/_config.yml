@@ -4,6 +4,7 @@
 title: Msprime manual
 author: Tskit Developers
 copyright: "2021"
+only_build_toc_files: true
 # logo: logo.png
 
 execute:
@@ -18,15 +19,14 @@ html:
   use_issues_button: true
   use_repository_button: true
   use_edit_page_button: true
-
-only_build_toc_files: true
+  # Do not edit this - the version placeholder is replaced by the
+  # current version during a distribution build in the Makefile
+  extra_navbar: Manual for msprime __MSPRIME_VERSION__
 
 parse:
     myst_extended_syntax: true
 
 sphinx:
-    local_extensions:
-      set_version: "_ext/"
     extra_extensions:
     - sphinx.ext.autodoc
     - sphinx.ext.todo
