@@ -137,7 +137,7 @@ Documentation for msprime is built using [Jupyter Book](https://jupyterbook.org)
 which allows us to mix API documentation generated automatically using 
 [Sphinx](https://www.sphinx-doc.org) with code examples evaluated in a 
 local [Jupyter](https://jupyter.org) kernel. This is a very powerful 
-system that allows us generate beautiful and useful documentation, 
+system that allows us to generate beautiful and useful documentation, 
 but it is quite new and has some quirks and gotchas. 
 In particular, because of the mixture of API documentation and notebook 
 content we need to write documentation using **two different markup 
