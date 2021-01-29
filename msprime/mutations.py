@@ -1201,11 +1201,17 @@ def sim_mutations(
     keep=True)` might insert an X->Z mutation above the existing mutation, thus
     implying the impossible chain X->Y->Z.)  For this reason, if this method
     attempts to add a new mutation ancestral to any existing mutation, an error
-    will occur, unless ``add_ancestral=True``. The ``add_ancestral`` parameter
-    has no effect if ``keep=False``. In summary, to add more mutations to a
-    tree sequence with existing mutations, you need to either ensure that no
-    new mutations are ancestral to existing ones (e.g., using the ``end_time``
-    parameter), or set ``add_ancestral=True``.
+    will occur, unless ``add_ancestral=True``. Furthermore, even if
+    ``add_ancestral`` is True, this will throw an error if there are any
+    mutations that result in a silent transition (e.g., placing a mutation to A
+    above an existing mutation to A), since silent transitions are not allowed
+    in tskit. The ``add_ancestral`` parameter has no effect if ``keep=False``.
+
+    In summary, to add more mutations to a tree sequence with existing
+    mutations, you need to either ensure that no new mutations are ancestral to
+    existing ones (e.g., using the ``end_time`` parameter), or set
+    ``add_ancestral=True`` and be prepared for ocassional errors when silent
+    mutations arise.
 
     :param tskit.TreeSequence tree_sequence: The tree sequence onto which we
         wish to throw mutations.

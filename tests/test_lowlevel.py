@@ -2562,8 +2562,9 @@ class TestSimMutations:
         tables = tskit.TableCollection(1)
         tables.nodes.add_row(0)
         tables.sites.add_row(0, "a")
-        for _ in range(8192):
+        for _ in range(4096):
             tables.mutations.add_row(0, node=0, time=0, derived_state="b")
+            tables.mutations.add_row(0, node=0, time=0, derived_state="c")
         tables.build_index()
         tables.compute_mutation_parents()
         self.verify_block_size(tables)

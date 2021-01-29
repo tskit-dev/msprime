@@ -55,9 +55,9 @@ class TestDefaults:
             assert mutation.derived_state in "ACGT"
 
     def test_sim_mutations_existing(self):
-        ts = msprime.sim_ancestry(10, random_seed=1)
-        mts = msprime.sim_mutations(ts, rate=1, random_seed=1)
-        assert mts.num_sites == 1
+        ts = msprime.sim_ancestry(10, sequence_length=10, random_seed=1)
+        mts = msprime.sim_mutations(ts, rate=0.1, random_seed=1)
+        assert mts.num_sites > 1
         assert mts.num_mutations > 1
         # By default trying to put mutations on top of existing ones
         # raises an error.
@@ -65,10 +65,15 @@ class TestDefaults:
             msprime.sim_mutations(mts, rate=1, random_seed=1)
         # But it's OK if we set add_ancestral to True.
         extra_mts = msprime.sim_mutations(
-            mts, rate=1, random_seed=1, add_ancestral=True
+            mts, rate=0.1, random_seed=2, add_ancestral=True
         )
-        assert extra_mts.num_sites == 1
+        assert extra_mts.num_sites > 1
         assert extra_mts.num_mutations > mts.num_mutations
+
+        # If we turn up the mutation rate too high we get some
+        # bad ancestral mutations with silent state transitions.
+        with pytest.raises(_msprime.LibraryError, match="silent transition"):
+            msprime.sim_mutations(mts, rate=10, random_seed=2, add_ancestral=True)
 
     def test_mutate(self):
         ts = msprime.sim_ancestry(10, random_seed=1)
@@ -1107,7 +1112,7 @@ class TestKeep:
         ts = msprime.sim_ancestry(
             12, recombination_rate=3, random_seed=3, sequence_length=10
         )
-        ts_mut = msprime.sim_mutations(ts, rate=1, random_seed=1, discrete_genome=True)
+        ts_mut = msprime.sim_mutations(ts, rate=0.1, random_seed=1)
         assert ts_mut.num_sites > 0
         with pytest.raises(_msprime.LibraryError):
             msprime.sim_mutations(
@@ -1115,7 +1120,7 @@ class TestKeep:
             )
         ts_2mut = msprime.sim_mutations(
             ts_mut,
-            rate=10,
+            rate=0.1,
             random_seed=3,
             discrete_genome=True,
             add_ancestral=True,
@@ -1151,13 +1156,8 @@ class TestKeep:
         ts_mut1 = msprime.sim_mutations(ts, rate=1, random_seed=1)
         assert ts_mut1.num_sites == 1
         assert ts_mut1.num_mutations > 1
-        ts_mut2 = msprime.sim_mutations(
-            ts_mut1, rate=1, random_seed=1, add_ancestral=True
-        )
-        assert ts_mut1.num_sites == 1
-        assert ts_mut2.num_mutations > ts_mut1.num_mutations
-        # Check that decoding variants succeeds
-        assert len(list(ts_mut2.variants())) == ts_mut2.num_sites
+        with pytest.raises(_msprime.LibraryError, match="silent transition"):
+            msprime.sim_mutations(ts_mut1, rate=1, random_seed=1, add_ancestral=True)
 
     def test_keep_ancestral_mutate(self):
         ts = msprime.sim_ancestry(5, random_seed=3)

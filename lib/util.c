@@ -200,6 +200,12 @@ msp_strerror_internal(int err)
                   "existing mutations: finite site mutations must be generated on "
                   "older time periods first.";
             break;
+        case MSP_ERR_BAD_ANCESTRAL_MUTATION:
+            ret = "The ancestral mutations added resulted in a silent transition "
+                  "(e.g. A -> A) which is not permitted by tskit. Please open an "
+                  "issue at https://github.com/tskit-dev/msprime/issues if you "
+                  "encounter this problem.";
+            break;
         case MSP_ERR_INSUFFICIENT_ALLELES:
             ret = "Must have at least two alleles.";
             break;
