@@ -21,7 +21,8 @@ html:
   use_edit_page_button: true
   # Do not edit this - the version placeholder is replaced by the
   # current version during a distribution build in the Makefile
-  extra_navbar: Manual for msprime __MSPRIME_VERSION__
+  extra_navbar: msprime __MSPRIME_VERSION__
+  extra_footer: msprime __MSPRIME_VERSION__
 
 parse:
     myst_extended_syntax: true
