@@ -68,6 +68,10 @@
 ## Ancestry
 
 ```{eval-rst}
+.. autoclass:: msprime.AncestryModel
+```
+
+```{eval-rst}
 .. autofunction:: msprime.sim_ancestry
 ```
 

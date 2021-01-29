@@ -39,6 +39,7 @@ sphinx:
       issues_github_path: tskit-dev/msprime
       todo_include_todos: true
       intersphinx_mapping:
+        python: ["https://docs.python.org/3/", null]
         tskit: ["https://tskit.readthedocs.io/en/stable", null]
         tutorials: ["https://tskit.dev/tutorials/", null]
         stdpopsim: ["https://stdpopsim.readthedocs.io/en/stable", null]

@@ -687,7 +687,7 @@ random numbers. The particular trajectory produced by a pseudorandom number
 generator is controlled by the "seed" it is provided.
 
 By default, msprime generates random seeds using a private instance of
-{class}`random.Random`, which should guarantee unique seeds are produced
+{class}`python:random.Random`, which should guarantee unique seeds are produced
 even if (e.g.) many simulations are started at the same time in different
 processes. In particular, simulations run concurrently in subprocesses using
 {mod}`concurrent.futures` or {mod}`multiprocessing` will be assigned unique
