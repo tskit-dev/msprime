@@ -54,6 +54,22 @@ class TestDefaults:
         for mutation in mts.mutations():
             assert mutation.derived_state in "ACGT"
 
+    def test_sim_mutations_existing(self):
+        ts = msprime.sim_ancestry(10, random_seed=1)
+        mts = msprime.sim_mutations(ts, rate=1, random_seed=1)
+        assert mts.num_sites == 1
+        assert mts.num_mutations > 1
+        # By default trying to put mutations on top of existing ones
+        # raises an error.
+        with pytest.raises(_msprime.LibraryError):
+            msprime.sim_mutations(mts, rate=1, random_seed=1)
+        # But it's OK if we set add_ancestral to True.
+        extra_mts = msprime.sim_mutations(
+            mts, rate=1, random_seed=1, add_ancestral=True
+        )
+        assert extra_mts.num_sites == 1
+        assert extra_mts.num_mutations > mts.num_mutations
+
     def test_mutate(self):
         ts = msprime.sim_ancestry(10, random_seed=1)
         mts = msprime.mutate(ts, rate=1, random_seed=1)
@@ -65,6 +81,17 @@ class TestDefaults:
             assert site.ancestral_state == "0"
         for mutation in mts.mutations():
             assert mutation.derived_state == "1"
+
+    def test_mutate_existing(self):
+        ts = msprime.sim_ancestry(10, random_seed=1)
+        mts = msprime.mutate(ts, rate=1, random_seed=1)
+        # Continuous genome, 0/1 alleles
+        assert mts.num_sites > 1
+        extra_mts = msprime.mutate(ts, rate=0, random_seed=1)
+        # Keep is false by default
+        assert extra_mts.num_sites == 0
+        extra_mts = msprime.mutate(ts, rate=1, random_seed=1)
+        assert extra_mts.equals(mts, ignore_provenance=True)
 
 
 class TestMutateProvenance:
@@ -383,7 +410,7 @@ class TestSimMutations(MutateMixin):
         ts = msprime.simulate(10, mutation_rate=5, random_seed=2)
         assert ts.num_sites > 0
         assert ts.num_mutations > 0
-        mutated = msprime.sim_mutations(ts, 0)
+        mutated = msprime.sim_mutations(ts, 0, keep=False)
         t1 = ts.dump_tables()
         assert len(t1.sites) == ts.num_sites
         t2 = mutated.dump_tables()
@@ -472,7 +499,7 @@ class TestSimMutations(MutateMixin):
         with pytest.raises(TypeError):
             msprime.sim_mutations(ts, rate=10, keep=[])
         with pytest.raises(TypeError):
-            msprime.sim_mutations(ts, rate=10, kept_mutations_before_end_time=[])
+            msprime.sim_mutations(ts, rate=10, add_ancestral=[])
 
 
 class TestFiniteSites(MutateMixin):
@@ -898,7 +925,11 @@ class TestKeep:
 
     def verify(self, ts, rate, random_seed):
         no_keep = msprime.sim_mutations(
-            ts, rate=rate, random_seed=random_seed, discrete_genome=False
+            ts,
+            rate=rate,
+            random_seed=random_seed,
+            discrete_genome=False,
+            keep=False,
         )
         assert no_keep.num_sites > 0
         keep = msprime.sim_mutations(
@@ -1072,7 +1103,7 @@ class TestKeep:
                 ts, rate=1, random_seed=1, keep=True, discrete_genome=False
             )
 
-    def test_keep_mutations_before_end_time(self):
+    def test_add_ancestral(self):
         ts = msprime.sim_ancestry(
             12, recombination_rate=3, random_seed=3, sequence_length=10
         )
@@ -1087,7 +1118,7 @@ class TestKeep:
             rate=10,
             random_seed=3,
             discrete_genome=True,
-            kept_mutations_before_end_time=True,
+            add_ancestral=True,
         )
         assert ts_2mut.num_mutations > ts_mut.num_mutations
 
@@ -1114,6 +1145,27 @@ class TestKeep:
             end_time=1.0,
         )
         assert ts_2mut.num_mutations > ts_mut.num_mutations
+
+    def test_keep_ancestral_many_mutations(self):
+        ts = msprime.sim_ancestry(5, random_seed=3)
+        ts_mut1 = msprime.sim_mutations(ts, rate=1, random_seed=1)
+        assert ts_mut1.num_sites == 1
+        assert ts_mut1.num_mutations > 1
+        ts_mut2 = msprime.sim_mutations(
+            ts_mut1, rate=1, random_seed=1, add_ancestral=True
+        )
+        assert ts_mut1.num_sites == 1
+        assert ts_mut2.num_mutations > ts_mut1.num_mutations
+        # Check that decoding variants succeeds
+        assert len(list(ts_mut2.variants())) == ts_mut2.num_sites
+
+    def test_keep_ancestral_mutate(self):
+        ts = msprime.sim_ancestry(5, random_seed=3)
+        ts_mut1 = msprime.mutate(ts, rate=1, random_seed=1)
+        ts_mut2 = msprime.mutate(ts_mut1, rate=1, random_seed=1, keep=True)
+        assert set(ts_mut1.tables.sites.position) < set(ts_mut2.tables.sites.position)
+        # Check that decoding variants succeeds
+        assert len(list(ts_mut2.variants())) == ts_mut2.num_sites
 
 
 class StatisticalTestMixin:
@@ -1423,7 +1475,7 @@ class TestInfiniteAllelesMutationModel:
             random_seed=1,
             keep=True,
             discrete_genome=True,
-            kept_mutations_before_end_time=True,
+            add_ancestral=True,
         )
         self.validate_unique_alleles(ts)
 
@@ -1444,7 +1496,7 @@ class TestPythonMutationGenerator:
                 rate=rate,
                 keep=keep,
                 discrete_genome=discrete_genome,
-                kept_mutations_before_end_time=True,
+                add_ancestral=True,
                 **kwargs,
             )
             ts2 = py_sim_mutations(
