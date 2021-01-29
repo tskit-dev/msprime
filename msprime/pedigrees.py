@@ -268,7 +268,7 @@ class Pedigree:
                 usecols.append(c)
         usecols = sorted(usecols)
 
-        data = np.genfromtxt(pedfile, skip_header=1, usecols=usecols, dtype=float)
+        data = np.genfromtxt(pedfile, usecols=usecols, dtype=float)
 
         individual = data[:, cols["individual"]].astype(int)
         parent_IDs = data[:, cols["parents"]].astype(int)
@@ -349,7 +349,7 @@ class Pedigree:
         pedarray[:, cols["parents"]] = parent_IDs
 
         with open(fname, "w") as f:
-            header = "ind\tfather\tmother\ttime\n"
+            header = "#ind\tfather\tmother\ttime\n"
             f.write(header)
             for row in pedarray:
                 f.write("\t".join([str(x) for x in row]) + "\n")
