@@ -268,7 +268,7 @@ class Pedigree:
                 usecols.append(c)
         usecols = sorted(usecols)
 
-        data = np.genfromtxt(pedfile, skip_header=1, usecols=usecols, dtype=float)
+        data = np.genfromtxt(pedfile, usecols=usecols, dtype=float)
 
         individual = data[:, cols["individual"]].astype(int)
         parent_IDs = data[:, cols["parents"]].astype(int)

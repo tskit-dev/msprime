@@ -94,6 +94,16 @@ class TestPedigree(unittest.TestCase):
         # TODO compre this to the file above.
         assert isinstance(ped_from_npy, msprime.Pedigree)
 
+    def test_pedigree_inputs(self):
+        test_data_dir = "tests/data/pedigrees/"
+        test_peds = os.listdir(test_data_dir)
+
+        for ped in test_peds:
+            ped_with_time = msprime.Pedigree.read_txt(test_data_dir + ped, time_col=3)
+            ped_no_time = msprime.Pedigree.read_txt(test_data_dir + ped, time_col=None)
+            print(ped, ped_with_time.time)
+            assert (ped_with_time.time == ped_no_time.time).all()
+
     def test_pedigree_times(self):
         individual = np.array([1, 2, 3, 4])
         time = np.array([0, 0, 1, 1])
