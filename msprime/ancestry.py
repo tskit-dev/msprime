@@ -566,7 +566,7 @@ def simulate(
     :param int num_replicates: The number of replicates of the specified
         parameters to simulate. If this is not specified or None,
         no replication is performed and a :class:`tskit.TreeSequence` object
-        returned. If :obj:`num_replicates` is provided, the specified
+        returned. If `num_replicates` is provided, the specified
         number of replicates is performed, and an iterator over the
         resulting :class:`tskit.TreeSequence` objects returned.
     :param tskit.TreeSequence from_ts: If specified, initialise the simulation
@@ -603,7 +603,7 @@ def simulate(
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
-        :obj:`num_replicates` parameter has been used.
+        `num_replicates` parameter has been used.
     :rtype: :class:`tskit.TreeSequence` or an iterator over
         :class:`tskit.TreeSequence` replicates.
     """
@@ -1079,7 +1079,7 @@ def sim_ancestry(
     :param int num_replicates: The number of replicates of the specified
         parameters to simulate. If this is not specified or `None`,
         no replication is performed and a :class:`tskit.TreeSequence` object
-        returned. If :obj:`num_replicates` is provided, the specified
+        returned. If `num_replicates` is provided, the specified
         number of replicates is performed, and an iterator over the
         resulting :class:`tskit.TreeSequence` objects returned.
         See :ref:`sec_ancestry_replication` for examples.
@@ -1113,14 +1113,14 @@ def sim_ancestry(
         the genome. See :ref:`sec_ancestry_end_time` for examples.
     :param model: The ancestry model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
-        a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
+        an ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
         Please see the :ref:`sec_ancestry_models` section for more details
-        on specifying simulations models.
-    :type model: str or simulation model instance
+        on specifying ancestry models.
+    :type model: str or .AncestryModel
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
-        :obj:`num_replicates` parameter has been used.
+        `num_replicates` parameter has been used.
     :rtype: :class:`tskit.TreeSequence` or an iterator over
         :class:`tskit.TreeSequence` replicates.
     """
@@ -1412,13 +1412,13 @@ class AncestryModelChange:
         callable, the time at which the model changes is the result
         of calling this function with the time that the previous model
         started with as a parameter.
-    :param model: The new simulation model to use.
+    :param model: The new ancestry model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
         an ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
         Please see the :ref:`sec_ancestry_models` section for more details
         on specifying these models. If this is None (the default) the model is
         changed to the standard coalescent.
-    :type model: str or ancestry model instance
+    :type model: str or .AncestryModel
     """
 
     time: Union[float, None] = None

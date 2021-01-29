@@ -123,6 +123,25 @@ function and is very similar. There are some important differences though:
 
 ## API Reference
 
+Population structure is modelled in `msprime` by specifying a fixed number of
+subpopulations, with the migration rates between those subpopulations defined
+by a migration matrix. Each subpopulation has an `initial_size` that defines
+its absolute diploid size at time zero and a per-generation `growth_rate` which
+specifies the exponential growth rate of the sub-population. We must also
+define the number of genomes to sample from each subpopulation. The number of
+populations and their initial configuration is defined using the
+`population_configurations` parameter to {func}`.simulate`, which takes a list
+of {class}`.PopulationConfiguration` instances. Population IDs are zero
+indexed, and correspond to their position in the list.
+
+Demographic events change some aspect of the population configuration
+at some time in the past, and are specified using the `demographic_events`
+parameter to {func}`.simulate`. Each element of this list must be an
+instance of one of the following demographic events
+that are currently supported. Note that all times are measured in
+generations, all sizes are absolute (i.e., *not* relative to {math}`N_e`),
+and all rates are per-generation.
+
 
 ```{eval-rst}
 .. autoclass:: msprime.PopulationConfiguration
