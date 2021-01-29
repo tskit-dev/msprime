@@ -325,19 +325,6 @@ six sample *nodes*.
 .. todo:: This is text taken from the old api.rst. Reuse/adapt as appropriate.
 ```
 
-When running simulations we define the length {math}`L` of the sequence in
-question using the `length` parameter. This defines the coordinate space
-within which trees and mutations are defined. {math}`L` is a continuous value,
-so units are arbitrary, and coordinates can take any continuous value from {math}`0` up to
-(but not including) {math}`L`. (So, although we recommend setting the units of length to be
-analogous to "bases", events can occur at fractional positions.)
-Mutations occur in an infinite sites process along this sequence,
-and mutation rates are specified per generation, per unit of sequence length.
-Thus, given the per-generation mutation rate {math}`\mu`, the rate of mutation
-over the entire sequence in coalescent time units is {math}`\theta = 4 N_e \mu
-L`. It is important to remember these scaling factors when comparing with
-analytical results!
-
 (sec_ancestry_genome_length)=
 
 ### Genome length

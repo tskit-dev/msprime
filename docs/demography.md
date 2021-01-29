@@ -48,82 +48,6 @@ any outstanding TODOs before opening issues.
 
 ---
 
-## Old text
-
-```{eval-rst}
-.. todo:: This is the text from the old API docs. Reuse somewhere more appropriate,
-    either by having a "summary" section of by moving bits of the text into the
-    relevant sections.
-```
-
-Population structure is modelled by specifying a fixed number of subpopulations
-{math}`d`, and a {math}`d \times d` matrix {math}`M` of per-generation
-migration rates. The {math}`(j,k)^{th}` entry of {math}`M` is the expected number
-of migrants moving from population {math}`k` to population {math}`j` per
-generation, divided by the size of population {math}`j`. In terms of the
-coalescent process, {math}`M_{j,k}` gives the rate at which an ancestral
-lineage moves from population {math}`j` to population {math}`k`, as one follows
-it back through time. In continuous-time models, when {math}`M_{j,k}` is close
-to zero, this rate is approximately equivalent to the fraction of population {math}`j`
-that is replaced each generation by migrants from population {math}`k`. In
-discrete-time models, the equivalence is exact and each row of {math}`M` has
-the constraint {math}`\sum_{k \neq j} M_{j,k} \leq 1`. This differs from the
-migration matrix one usually uses in population demography: if {math}`m_{k,j}`
-is the proportion of individuals (in the usual sense; not lineages) in
-population {math}`k` that move to population {math}`j` per generation, then
-translating this proportion of population {math}`k` to a proportion of
-population {math}`j`, we have {math}`M_{j,k} = m_{k,j} \times N_k / N_j`.
-
-Each subpopulation has an initial absolute population size {math}`s`
-and a per generation exponential growth rate {math}`\alpha`. The size of a
-given population at time {math}`t` in the past (measured in generations) is
-therefore given by {math}`s e^{-\alpha t}`. Demographic events that occur in
-the history of the simulated population alter some aspect of this population
-configuration at a particular time in the past.
-
-
-```{eval-rst}
-.. todo:: refactor this text here which is drawn from the old api.rst
-    page.
-```
-
-Population structure is modelled in `msprime` by specifying a fixed number of
-subpopulations, with the migration rates between those subpopulations defined by a migration
-matrix. Each subpopulation has an `initial_size` that defines its absolute diploid size at
-time zero and a per-generation `growth_rate` which specifies the exponential
-growth rate of the sub-population. We must also define the number of genomes to
-sample from each subpopulation. The number of populations and their initial
-configuration is defined using the `population_configurations` parameter to
-{func}`.simulate`, which takes a list of {class}`.PopulationConfiguration`
-instances. Population IDs are zero indexed, and correspond to their position in
-the list.
-
-Samples are drawn sequentially from populations in increasing order of
-population ID. For example, if we specified an overall sample size of 6, and
-specify that 2 samples are drawn from population 0 and 4 from population 1,
-then samples 0 and 1 will be initially located in population 0, and
-samples 2, 3, 4, and 5 will be drawn from population 2.
-
-<!---
-TODO do something with this text.
--->
-
-<!---
-Given :math:`N` populations, migration matrices are specified using an :math:`N
--->
-
-<!---
-\times N` matrix of between-subpopulation migration rates. See the
--->
-
-<!---
-documentation for :func:`.simulate` and the `Simulation model`_ section for
--->
-
-<!---
-more details on the migration rates.
--->
-
 (sec_demography_migration)=
 
 ## Migration rates
@@ -131,14 +55,6 @@ more details on the migration rates.
 (sec_demography_events)=
 
 ## Demographic Events
-
-Demographic events change some aspect of the population configuration
-at some time in the past, and are specified using the `demographic_events`
-parameter to {func}`.simulate`. Each element of this list must be an
-instance of one of the following demographic events
-that are currently supported. Note that all times are measured in
-generations, all sizes are absolute (i.e., *not* relative to {math}`N_e`),
-and all rates are per-generation.
 
 ## Species trees
 
