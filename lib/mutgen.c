@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2020 University of Oxford
+** Copyright (C) 2015-2021 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -1069,6 +1069,13 @@ mutgen_populate_tables(mutgen_t *self)
                     parent_id = TSK_NULL;
                 } else {
                     parent_id = m->parent->id;
+                    if (m->derived_state_length == m->parent->derived_state_length
+                        && memcmp(m->derived_state, m->parent->derived_state,
+                               m->derived_state_length)
+                               == 0) {
+                        ret = MSP_ERR_BAD_ANCESTRAL_MUTATION;
+                        goto out;
+                    }
                     tsk_bug_assert(parent_id != TSK_NULL);
                 }
                 mutation_id = tsk_mutation_table_add_row(mutations, site_id, m->node,

@@ -1148,6 +1148,7 @@ def mutate(
         keep=keep,
         start_time=start_time,
         end_time=end_time,
+        add_ancestral=True,
         discrete_genome=False,
     )
 
@@ -1158,11 +1159,11 @@ def sim_mutations(
     *,
     random_seed=None,
     model=None,
-    keep=None,
     start_time=None,
     end_time=None,
     discrete_genome=None,
-    kept_mutations_before_end_time=None,
+    keep=None,
+    add_ancestral=None,
 ):
     """
     Simulates mutations on the specified ancestry and returns the resulting
@@ -1183,25 +1184,34 @@ def sim_mutations(
     then the same mutations will be generated. If no random seed is specified
     then one is generated automatically.
 
-    By default, sites and mutations in the input tree sequence are
-    discarded. If the ``keep`` parameter is true, however, *additional*
-    mutations are simulated. Under the infinite sites mutation model, all new
-    mutations generated will occur at distinct positions from each other and
-    from any existing mutations (by rejection sampling). Furthermore, if sites
-    are discrete, trying to simulate mutations at time periods that are older
-    than mutations kept from the original tree sequence is an error, because
-    this would create an extra transition (from the new allele to the old
-    one below it) that may be incorrect according to the model of mutation.
-    Under a state-independent mutation model, however (e.g., Jukes-Cantor),
-    there is no problem, and ``kept_mutations_before_end_time=True`` may be
-    set to allow adding new mutations around or above existing ones.
-
     The time interval over which mutations can occur may be controlled
     using the ``start_time`` and ``end_time`` parameters. The ``start_time``
     defines the lower bound (in time-ago) on this interval and ``max_time``
     the upper bound. Note that we may have mutations associated with
     nodes with time <= ``start_time`` since mutations store the node at the
     bottom (i.e., towards the leaves) of the branch that they occur on.
+
+    If the tree sequence already has mutations, these are by default retained,
+    but can be discarded by passing ``keep=False``. However, adding new
+    mutations to a tree sequence with existing mutations must be done with
+    caution, since it can lead to incorrect or nonsensical results if mutation
+    probabilities differ by ancestral state. (As an extreme example, suppose
+    that X->Y and X->Z are allowable transitions, but Y->Z is not. If a branch
+    already has an X->Y mutation on it, then calling `sim_mutations(...,
+    keep=True)` might insert an X->Z mutation above the existing mutation, thus
+    implying the impossible chain X->Y->Z.)  For this reason, if this method
+    attempts to add a new mutation ancestral to any existing mutation, an error
+    will occur, unless ``add_ancestral=True``. Furthermore, even if
+    ``add_ancestral`` is True, this will throw an error if there are any
+    mutations that result in a silent transition (e.g., placing a mutation to A
+    above an existing mutation to A), since silent transitions are not allowed
+    in tskit. The ``add_ancestral`` parameter has no effect if ``keep=False``.
+
+    In summary, to add more mutations to a tree sequence with existing
+    mutations, you need to either ensure that no new mutations are ancestral to
+    existing ones (e.g., using the ``end_time`` parameter), or set
+    ``add_ancestral=True`` and be prepared for ocassional errors when silent
+    mutations arise.
 
     :param tskit.TreeSequence tree_sequence: The tree sequence onto which we
         wish to throw mutations.
@@ -1219,16 +1229,15 @@ def sim_mutations(
         mutation model is used. Please see the
         :ref:`sec_mutations_models` section for more details
         on specifying mutation models.
-    :param bool keep: Whether to keep existing mutations (default: False).
     :param float start_time: The minimum time ago at which a mutation can
         occur. (Default: no restriction.)
     :param float end_time: The maximum time ago at which a mutation can occur
         (Default: no restriction).
     :param bool discrete_genome: Whether to generate mutations at only integer positions
         along the genome (Default=True).
-    :param bool kept_mutations_before_end_time: Whether to allow mutations to be added
-        ancestrally to existing (kept) mutations. This flag has no effect
-        if either keep or discrete_genome are False.
+    :param bool keep: Whether to keep existing mutations. (default: True)
+    :param bool add_ancestral: Whether to allow the addition of new mutations
+        ancestral to existing ones. (default: False)
     :return: The :class:`tskit.TreeSequence` object resulting from overlaying
         mutations on the input tree sequence.
     :rtype: :class:`tskit.TreeSequence`
@@ -1258,10 +1267,8 @@ def sim_mutations(
     if start_time > end_time:
         raise ValueError("start_time must be <= end_time")
     discrete_genome = core._parse_flag(discrete_genome, default=True)
-    keep = core._parse_flag(keep, default=False)
-    kept_mutations_before_end_time = core._parse_flag(
-        kept_mutations_before_end_time, default=False
-    )
+    keep = core._parse_flag(keep, default=True)
+    add_ancestral = core._parse_flag(add_ancestral, default=False)
 
     model = mutation_model_factory(model)
 
@@ -1285,7 +1292,7 @@ def sim_mutations(
         model=model,
         discrete_genome=discrete_genome,
         keep=keep,
-        kept_mutations_before_end_time=kept_mutations_before_end_time,
+        kept_mutations_before_end_time=add_ancestral,
         start_time=start_time,
         end_time=end_time,
     )
