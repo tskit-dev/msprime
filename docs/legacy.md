@@ -48,14 +48,16 @@ the {ref}`updated recipe <sec_ancestry_multiple_chromosomes>`.
 The new {func}`.sim_ancestry` function replaces the 0.x {func}`.simulate`
 function and is very similar. There are some important differences though:
 
-* The {}`samples` argument now refers to the **number of individuals**
+* The {}`samples` parameter now refers to the **number of individuals**
   rather than **the number of nodes** (i.e. monoploid genomes).
   Because the default {ref}`ploidy <sec_ancestry_ploidy>`
   is 2 (see the next point) the upshot is that `sim_ancestry(2)` will
   result in a tree sequence with *four* sample nodes, not two. (It is
   possible to override this behaviour using the list of {class}`.SampleSet`
-  objects argument to `samples`.)
-* There is now a {ref}`sec_ancestry_ploidy` argument, which has
+  objects parameter to `samples`.)
+* The `Ne` parameter in  0.x {func}`.simulate` function has been replaced
+  with the `population_size` parameter.
+* There is now a {ref}`sec_ancestry_ploidy` parameter, which has
   two effects:
 
   1. Sets the default number of sample nodes per *individual*
@@ -63,13 +65,13 @@ function and is very similar. There are some important differences though:
      that explains this effect.) By default `ploidy` is 2 and
      time is scaled scaled in units of 4N generations, which is the same as
      msprime 0.x.
-* Rather than two arguments `num_samples` and `samples`, the
-  {func}`.sim_ancestry` function has a single argument `samples` which
-  has different behaviour depending on the type of arguments provided.
+* Rather than two parameters `num_samples` and `samples`, the
+  {func}`.sim_ancestry` function has a single parameter `samples` which
+  has different behaviour depending on the type of parameters provided.
   See {ref}`sec_ancestry_samples` for details.
 
   Note in particular that a list of `Sample` objects is **not** supported.
-* Similarly, there is now one argument `recombination_rate` which can
+* Similarly, there is now one parameter `recombination_rate` which can
   be either a single value or a {class}`.RateMap` object. Note that the
   0.x {class}`.RecombinationMap` is deprecated and not supported as input
   to {func}`.sim_ancestry`. See {ref}`sec_ancestry_recombination` for more
@@ -77,13 +79,13 @@ function and is very similar. There are some important differences though:
 * Simulations are peformed on a **discrete** genome by default. To get the
   0.x behaviour of a continuous genome, set `discrete_genome=False`.
   See {ref}`sec_ancestry_discrete_genome` for more details.
-* The `from_ts` argument used has been renamed to `initial_state` and
+* The `from_ts` parameter used has been renamed to `initial_state` and
   accepts either a {class}`tskit.TableCollection` or {class}`tskit.TreeSequence`
-  argument. See {ref}`sec_ancestry_initial_state` for details.
-* There is **no** `mutation_rate` argument to {func}`.sim_ancestry`: use
+  parameter. See {ref}`sec_ancestry_initial_state` for details.
+* There is **no** `mutation_rate` parameter to {func}`.sim_ancestry`: use
   {func}`.sim_mutations` instead.
 * The `population_configurations`, `migration_matrix` and `demographic_events`
-  arguments have been replace with a single argument `demography`, which must take
+  parameters have been replace with a single parameter `demography`, which must take
   a {class}`.Demography` instance. (See the next section for more details.)
 
 ## Demography
