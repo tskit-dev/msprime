@@ -1,0 +1,59 @@
+Mac OS Catalina
+
+git clone git@github.com:tskit-dev/msprime.git --recurse-submodules
+git submodule update --init --recursive
+python3 -m pip --version
+brew update
+brew install gsl
+sudo ln -s /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/* /usr/local/include/
+export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+python3 -m pip install msprime
+python3 -m pip install -r requirements/development.txt
+make
+python3 -m pytest
+pre-commit install
+
+######
+https://stdpopsim.readthedocs.io/en/latest/development.html#github-workflow
+
+1) fork
+2) clone
+3) set up an upstream remote
+
+git remote -v
+## https://github.com/cdquinto/msprime.git
+
+git remote add upstream https://github.com/tskit-dev/msprime.git
+
+git remote -v
+
+## origin	https://github.com/cdquinto/msprime.git (fetch)
+origin	https://github.com/cdquinto/msprime.git (push)
+upstream	https://github.com/tskit-dev/msprime.git (fetch)
+upstream	https://github.com/tskit-dev/msprime.git (push)
+
+git fetch upstream
+git checkout upstream/main
+git checkout -b census_event_docs
+
+## change
+.. jupyter-execute:: instead of .. code-block:: python
+
+git status
+git add file
+git commit -m "message"
+
+git push --set-upstream origin census_event_docs
+git push
+
+####
+
+In my branch, to get my repo up-to-date
+
+git fetch upstream
+git rebase -i upstream/main
+in the editor, change pick to s, esc + : + wq + enter (if I have more than 2 commits, then I leave the 1st line to pick, and other to s)
+
+git push -f origin census_event_docs
+
+then in GitHub, comment my PR. the changes will be updated automatically.
