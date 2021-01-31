@@ -105,9 +105,18 @@ is split into two main sections:
 Further documentation where features are combined to perform specific 
 tasks is provided in the [tskit tutorials](https://tskit.dev/tutorials) site.
 
-To get started writing documentation for msprime, first follow the
-{ref}`Quickstart <sec_development_quickstart>`. Once you have created and
-checked out a "topic branch", you are ready to start editing the documentation.
+Documentation can be written on GitHub or locally. If you are new to contributing 
+to msprime and you will be making minor edits to markdown text, you may find
+it easier to make edits on GitHub. To do this, hover your mouse over the GitHub 
+icon in the top right corner of the documentation, and click "suggest edit". 
+You can then edit and preview markdown in GitHub's user interface. Clicking 
+"propose change" at the bottom of the page will commit to a new branch on your fork. 
+You can then create a pull request for your proposed change. On the other hand, 
+if you are already familiar with contributing to msprime, or have more than simple 
+markdown edits to add, you can edit and {ref}`build 
+<sec_development_documentation_building>` the documentation locally. To do that, 
+first follow the {ref}`Quickstart <sec_development_quickstart>`. Once you have created 
+and checked out a "topic branch", you are ready to start editing the documentation.
 
 :::{note}
 Please make sure you have built the low-level {ref}`C module <sec_development_c_module>`
