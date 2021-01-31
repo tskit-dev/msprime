@@ -21,11 +21,14 @@ Core functions and classes used throughout msprime.
 """
 from __future__ import annotations
 
+import dataclasses
 import numbers
 import os
 import random
+import textwrap
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Union
 
 from msprime import _msprime
@@ -117,3 +120,44 @@ def _parse_flag(value: Any, *, default: bool) -> bool:
     if not isinstance(value, bool):
         raise TypeError("Boolean flag must be True, False, or None (the default value)")
     return value
+
+
+@dataclasses.dataclass
+class TableEntry:
+    data: str
+    extra: Union[str, None] = None
+
+    def as_html(self):
+        ret = "<td"
+        if self.extra is not None:
+            wrapped = textwrap.fill(self.extra, 80)
+            ret += f" title='{wrapped}'"
+        ret += f">{self.data}</td>"
+        return ret
+
+
+def html_table(caption: str, column_titles: List[str], data: List[List[TableEntry]]):
+    """
+    Returns a HTML table formatted with the specified data. All the values should
+    be preformatted strings.
+    """
+    header = "".join(f"<th>{col_title}</th>" for col_title in column_titles)
+    rows = ""
+    for row_data in data:
+        assert len(column_titles) == len(row_data)
+        row = ""
+        for item in row_data:
+            if not isinstance(item, TableEntry):
+                item = TableEntry(item)
+            row += item.as_html()
+        rows += f"<tr>{row}</tr>"
+    s = (
+        "<table>"
+        f"<caption>{caption}</caption>"
+        "<thead>"
+        "<tr>" + header + "</tr>"
+        "</thead>"
+        "<tbody>" + rows + "</tbody>"
+        "</table>"
+    )
+    return s

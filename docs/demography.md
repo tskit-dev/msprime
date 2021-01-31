@@ -69,9 +69,20 @@ any outstanding TODOs before opening issues.
 
 ### Initial size
 
+
+
 (sec_demography_migration)=
 
 ## Migration rates
+
+
+```{code-cell}
+
+import msprime
+
+demography = msprime.Demography.stepping_stone_model([10] * 3, migration_rate=0.1)
+demography
+```
 
 (sec_demography_events)=
 
@@ -139,7 +150,7 @@ demography = msprime.Demography.from_species_tree(
     initial_size=10_000,
     branch_length_units="myr",
     generation_time=28)
-demography
+demography.debug()
 ```
 
 Because the species tree does not contain complete information about the 
@@ -149,12 +160,6 @@ populations; here we give all the populations a fixed size of 10,000
 (there is much more flexibility here, however). Because the branch
 lengths in the species tree are given in millions of years, we also
 need provide a ``branch_length_units`` parameter and a ``generation_time``.
-
-
-```{code-cell}
-
-demography.debug().print_history()
-```
 
 The epoch boundaries 200000, 307142.9, and 642857.1 correspond to the species
 divergence times 5.6, 8.6, and 18.0 after converting the branch length units
