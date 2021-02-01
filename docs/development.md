@@ -110,7 +110,9 @@ to msprime and you will be making minor edits to markdown text, you may find
 it easier to make edits on GitHub. To do this, hover your mouse over the GitHub 
 icon in the top right corner of the documentation, and click "suggest edit". 
 You can then edit and preview markdown in GitHub's user interface. Clicking 
-"propose change" at the bottom of the page will commit to a new branch on your fork. 
+"propose change" at the bottom of the page will commit to a new branch on your fork.
+If you do not already have a fork of the msprime repository, GitHub will prompt you 
+to "fork this repository" - go ahead and create your fork. 
 You can then create a pull request for your proposed change. On the other hand, 
 if you are already familiar with contributing to msprime, or have more than simple 
 markdown edits to add, you can edit and {ref}`build 
