@@ -20,8 +20,8 @@ it should remain working indefinitely.
 
 ## Upgrading code 
 
-This section is to help 0.x users of the get up to speed quickly, summarising the new
-APIs and their main differences to what you are used to.
+This section is to help legacy 0.x users of msprime get up to speed quickly, summarising 
+the new APIs and their main differences to what you are used to in the 0.x versions.
 
 The main change is that there are two new functions, {func}`.sim_ancestry` and
 {func}`.sim_mutations` which correspond to the 0.x functions {func}`.simulate`
@@ -48,7 +48,7 @@ the {ref}`updated recipe <sec_ancestry_multiple_chromosomes>`.
 The new {func}`.sim_ancestry` function replaces the 0.x {func}`.simulate`
 function and is very similar. There are some important differences though:
 
-* The {}`samples` parameter now refers to the **number of individuals**
+* The `samples` parameter now refers to the **number of individuals**
   rather than **the number of nodes** (i.e. monoploid genomes).
   Because the default {ref}`ploidy <sec_ancestry_ploidy>`
   is 2 (see the next point) the upshot is that `sim_ancestry(2)` will
@@ -105,7 +105,7 @@ function and is very similar. There are some important differences though:
 * For symmetry with the {func}`.sim_ancestry` function, there is now a {func}`.sim_mutations`
   function. The 0.x {func}`.mutate` function is **deprecated**.
 * The {func}`.sim_mutations` function works on a **discrete** genome by default.
-* There are now also many new mutation models supported by :func:.sim_mutations;
+* There are now also many new mutation models supported by {func}`.sim_mutations`;
   see {ref}`sec_mutations` for details. These are *not* supported in the deprecated
   {func}`.mutate` function.
 * The simulated mutations now have a simulated ``time`` value, which specifies the 
