@@ -206,8 +206,15 @@ def plot_qq(v1, v2):
     sm.qqplot_2samples(v1, v2, line="45")
 
 
-def plot_breakpoints_hist(v1, v2, v1_name, v2_name):
+def plot_stat_hist(v1, v2, v1_name, v2_name):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        sns.kdeplot(v1, color="b", shade=True, label=v1_name, legend=False)
+        sns.kdeplot(v2, color="r", shade=True, label=v2_name, legend=False)
+        pyplot.legend(loc="upper right")
 
+
+def plot_breakpoints_hist(v1, v2, v1_name, v2_name):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         sns.kdeplot(v1, color="b", label=v1_name, shade=True, legend=False)
@@ -257,12 +264,19 @@ class Test:
             if stat == "breakpoints":
                 plot_breakpoints_hist(flatten(v1), flatten(v2), df1_name, df2_name)
                 pyplot.xlabel("genome")
+                f = self._build_filename(stats_type, stat)
+                pyplot.savefig(f, dpi=72)
             else:
                 plot_qq(v1, v2)
                 pyplot.xlabel(df1_name)
                 pyplot.ylabel(df2_name)
-            f = self._build_filename(stats_type, stat)
-            pyplot.savefig(f, dpi=72)
+                f = self._build_filename(stats_type, stat)
+                pyplot.savefig(f, dpi=72)
+                pyplot.close("all")
+                plot_stat_hist(v1, v2, df1_name, df2_name)
+                f = self._build_filename(stats_type, stat)
+                f = str(f) + ".hist.png"
+                pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
     def get_ms_seeds(self):
@@ -724,27 +738,36 @@ class DiscoalTest(Test):
                 theta = float(tokens[i + 1])
             if tokens[i] == "-r":
                 rho = float(tokens[i + 1])
-        mod_list = [None]
+        mod_list = [("hudson")]
         if alpha is not None:
             # sweep model
+            s = alpha / (2 * refsize)
             mod = msprime.SweepGenicSelection(
-                position=sweep_site,
+                position=np.floor(sweep_site * seq_length),
                 start_frequency=1.0 / (2 * refsize),
                 end_frequency=1.0 - (1.0 / (2 * refsize)),
-                alpha=alpha,
-                dt=1.0 / (40 * refsize),
+                s=s * 2,  # discoal fitness model is 1, 1+s, 1+2s
+                dt=1e-6,
             )
             mod_list.append((sweep_mod_time, mod))
+            # if an event is defined from discoal line
+            # best thing to do is rescale to Ne=0.25
+            # so that time scale are consistent
+            # see note at msprime/cli.py line 626
+            # and following for alternate solution
+            if sweep_mod_time > 0:
+                refsize = 0.25
+                mod.s = alpha / refsize
         # append final model
-        mod_list.append((None, None))
+        mod_list.append((None, "hudson"))
         # scale theta and rho and create recomb_map
         recomb_map = msprime.RecombinationMap.uniform_map(
-            seq_length, rho / (seq_length - 1)
+            seq_length, rho / 4 / refsize / (seq_length - 1)
         )
-        mu = theta / seq_length
+        mu = theta / 4 / refsize / seq_length
         replicates = msprime.simulate(
             sample_size,
-            Ne=0.25,
+            Ne=refsize,
             model=mod_list,
             recombination_map=recomb_map,
             mutation_rate=mu,
@@ -814,12 +837,44 @@ class DiscoalSweeps(DiscoalTest):
         cmd = "10 1000 10000 -t 10.0 -r 10.0"
         self._run(cmd)
 
-    def test_sweep_ex1(self):
-        cmd = "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a 500 -x 0.5 -N 10000"
+    def test_sweep_no_rec_ex1(self):
+        cmd = "10 1000 10000 -t 10.0 -r 0.0 -ws 0 -a 100 -x 0.5 -N 10000"
         self._run(cmd)
 
-    def test_sweep_ex2(self):
-        cmd = "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a 5000 -x 0.5 -N 10000"
+    def test_sweep_no_rec_ex2(self):
+        cmd = "10 1000 10000 -t 10.0 -r 0.0 -ws 0 -a 200 -x 0.5 -N 10000"
+        self._run(cmd)
+
+    def test_sweep_rec_ex1(self):
+        cmd = "10 1000 10000 -t 10.0 -r 10.0 -ws 0 -a 1000 -x 0.5 -N 10000"
+        self._run(cmd)
+
+    def test_sweep_rec_ex2(self):
+        cmd = "10 1000 10000 -t 10.0 -r 20.0 -ws 0 -a 1000 -x 0.5 -N 10000"
+        self._run(cmd)
+
+    def test_sweep_rec_ex3(self):
+        cmd = "10 1000 10000 -t 10.0 -r 100.0 -ws 0 -a 1000 -x 0.5 -N 10000"
+        self._run(cmd)
+
+    def test_sweep_rec_ex4(self):
+        cmd = "10 1000 10000 -t 10.0 -r 400.0 -ws 0 -a 2000 -x 0.5 -N 10000"
+        self._run(cmd)
+
+    def test_sweep_rec_ex5(self):
+        cmd = "10 1000 10000 -t 100.0 -r 100.0 -ws 0 -a 250 -x 0.5 -N 10000"
+        self._run(cmd)
+
+    def test_sweep_tau_ex1(self):
+        cmd = "10 1000 10000 -t 10.0 -r 20.0 -ws 0.001 -a 250 -x 0.5 -N 10000"
+        self._run(cmd)
+
+    def test_sweep_tau_ex2(self):
+        cmd = "10 1000 10000 -t 10.0 -r 20.0 -ws 0.01 -a 250 -x 0.5 -N 10000"
+        self._run(cmd)
+
+    def test_sweep_tau_ex3(self):
+        cmd = "10 1000 10000 -t 10.0 -r 20.0 -ws 1.0 -a 250 -x 0.5 -N 10000"
         self._run(cmd)
 
 
@@ -1207,7 +1262,7 @@ class SweepAnalytical(Test):
         return 4.0 / s * inner
 
     def test_sojourn_time(self):
-        alphas = np.arange(100, 5000, 100)
+        alphas = np.arange(5e-3, 5e-2, 5e-3)
         refsize = 1e4
         nreps = 500
         seqlen = 1e4
@@ -1215,17 +1270,18 @@ class SweepAnalytical(Test):
         rho = 0
         p0 = 1.0 / (2 * refsize)
         p1 = 1 - p0
-        dt = 1.0 / (40 * refsize)
+        dt = 1.0 / (400 * refsize)
         pos = np.floor(seqlen / 2)
         df = pd.DataFrame()
         data = collections.defaultdict(list)
         for a in alphas:
             mod = msprime.SweepGenicSelection(
-                start_frequency=p0, end_frequency=p1, alpha=a, dt=dt, position=pos
+                start_frequency=p0, end_frequency=p1, s=a, dt=dt, position=pos
             )
+            s = a / 2 / refsize
             replicates = msprime.simulate(
-                nreps,
-                Ne=0.25,
+                10,
+                Ne=refsize,
                 model=[mod],
                 length=seqlen,
                 num_labels=2,
@@ -1245,7 +1301,58 @@ class SweepAnalytical(Test):
                 reptimes[i] = np.max(tree_times)
                 i += 1
             data["alpha_means"].append(np.mean(reptimes))
-            data["exp_means"].append(self.hermissonPennings_exp_sojourn(a) / 2)
+            data["exp_means"].append(self.charlesworth_exp_sojourn(a, s))
+        df = pd.DataFrame.from_dict(data)
+        df = df.fillna(0)
+        sm.qqplot_2samples(df["exp_means"], df["alpha_means"], line="45")
+        pyplot.xlabel("expected sojourn time")
+        pyplot.ylabel("simulated sojourn time")
+        f = self.output_dir / "sojourn.png"
+        pyplot.savefig(f, dpi=72)
+        pyplot.close("all")
+
+    def test_sojourn_time2(self):
+        alpha = 1000
+        refsizes = [0.25, 0.5, 1.0]
+        selrefsize = 1000
+        nreps = 500
+        seqlen = 1e4
+        mu = 2.5e-8
+        rho = 0
+        p0 = 1.0 / (2 * selrefsize)
+        p1 = 1 - p0
+        dt = 1.0 / (400 * selrefsize)
+        pos = np.floor(seqlen / 2)
+        df = pd.DataFrame()
+        data = collections.defaultdict(list)
+        for n in refsizes:
+            s = alpha / (2 * n)
+            mod = msprime.SweepGenicSelection(
+                start_frequency=p0, end_frequency=p1, s=s, dt=dt, position=pos
+            )
+            replicates = msprime.simulate(
+                10,
+                Ne=n,
+                model=[mod],
+                length=seqlen,
+                num_labels=2,
+                recombination_rate=rho,
+                mutation_rate=mu,
+                num_replicates=nreps,
+            )
+
+            reptimes = np.zeros(nreps)
+            i = 0
+            for x in replicates:
+                tree_times = np.zeros(x.num_trees)
+                j = 0
+                for tree in x.trees():
+                    tree_times[j] = np.max([tree.time(root) for root in tree.roots])
+                    j += 1
+                reptimes[i] = np.max(tree_times)
+                i += 1
+            data["alpha_means"].append(np.mean(reptimes))
+            data["exp_means"].append(self.hermissonPennings_exp_sojourn(alpha) * 2 * n)
         df = pd.DataFrame.from_dict(data)
         df = df.fillna(0)
         sm.qqplot_2samples(df["exp_means"], df["alpha_means"], line="45")

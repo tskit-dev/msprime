@@ -6,3 +6,4 @@ jupyter-book==0.10.0
 tskit==0.3.3
 newick==1.0.0
 PyGithub==1.53
+matplotlib==3.3.0

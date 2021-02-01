@@ -1325,6 +1325,13 @@ class Simulator(_msprime.Simulator):
                     f"current time = {current_time}; start_time = {model_start_time}"
                 )
             self._run_until(model_start_time, event_chunk, debug_func)
+            logger.info(
+                "model %s ended at time=%g nodes=%d edges=%d",
+                self.model,
+                self.time,
+                self.num_nodes,
+                self.num_edges,
+            )
             if self.time > model_start_time:
                 raise NotImplementedError(
                     "The previously running model does not support ending early "
@@ -1698,7 +1705,51 @@ class DiracCoalescent(ParametricAncestryModel):
 @dataclasses.dataclass
 class SweepGenicSelection(ParametricAncestryModel):
     """
-    .. todo:: Document me
+    A selective sweep that has occured in the history of the sample.
+    This will lead to a burst of rapid coalescence near the selected site.
+
+    The strength of selection during the sweep is determined by the
+    parameter :math:`s`. Here we define s such that the
+    fitness of the three genotypes at our benefical locus are
+    :math:`W_{bb}=1`, :math:`W_{Bb}=1 + s/2`, :math:`W_{BB}=1 + s`.
+    Thus fitness of the heterozygote is intermediate to the
+    two homozygotes.
+
+    The model is one of a
+    a structured coalescent where selective backgrounds are defined as in
+    `Braverman et al. (1995) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1206652/>`_
+    The implementation details here follow closely to those in discoal,
+    `Kern and Schrider (2016)
+    <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5167068/>`_
+
+    See :ref:`sec_ancestry_models_selective_sweeps` for a basic usage and example and
+    :ref:`sec_ancestry_models_sweep_types` for details on how to specify different
+    types of sweeps.
+
+    .. warning::
+        If the effective strength of selection (:math:`2Ns`) is sufficiently large
+        the time difference between successive events can be smaller than
+        the finite precision available, leading to zero length branches
+        in the output trees. As this is not allowed by tskit, an error
+        will be raised.
+
+    .. warning::
+        Currently models with more than one population and a selective sweep
+        are not implemented. Further population size change during the sweep
+        is not yet possible in msprime.
+
+    :param float position: the location of the beneficial allele along the
+        chromosome.
+    :param float start_frequency: population frequency of the benefical
+        allele at the start of the selective sweep. E.g., for a *de novo*
+        allele in a diploid population of size N, start frequency would be
+        :math:`1/2N`.
+    :param float end_frequency: population frequency of the beneficial
+        allele at the end of the selective sweep.
+    :param float s: :math:`s` is the selection coefficient of the beneficial mutation.
+    :param float dt: dt is the small increment of time for stepping through
+        the sweep phase of the model. a good rule of thumb is for this to be
+        approximately :math:`1/40N` or smaller.
     """
 
     name = "sweep_genic_selection"
@@ -1706,5 +1757,5 @@ class SweepGenicSelection(ParametricAncestryModel):
     position: Union[float, None] = None
     start_frequency: Union[float, None] = None
     end_frequency: Union[float, None] = None
-    alpha: Union[float, None] = None
+    s: Union[float, None] = None
     dt: Union[float, None] = None

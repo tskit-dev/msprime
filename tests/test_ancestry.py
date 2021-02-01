@@ -1217,7 +1217,7 @@ class TestParseSimulate:
     def test_new_old_style_model_changes_equal(self):
         models = [
             msprime.SweepGenicSelection(
-                position=j, start_frequency=j, end_frequency=j, alpha=j, dt=j
+                position=j, start_frequency=j, end_frequency=j, s=j, dt=j
             )
             for j in range(1, 10)
         ]
@@ -1552,7 +1552,7 @@ class TestSimAncestryInterface:
             position=0.5,
             start_frequency=1.0 / (2 * N),
             end_frequency=1.0 - (1.0 / (2 * N)),
-            alpha=1000,
+            s=1000,
             dt=1e-6,
         )
         ts = msprime.sim_ancestry(10, model=model)
@@ -1877,7 +1877,7 @@ class TestReprRoundTrip:
             msprime.DiracCoalescent(),
             msprime.DiracCoalescent(psi=1234, c=56),
             msprime.SweepGenicSelection(
-                position=1, start_frequency=0.5, end_frequency=0.9, alpha=1, dt=1e-4
+                position=1, start_frequency=0.5, end_frequency=0.9, s=0.1, dt=1e-4
             ),
         ]
         self.assert_repr_round_trip(examples)

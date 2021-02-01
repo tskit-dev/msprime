@@ -135,7 +135,7 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_TRAJECTORY_START_END:
             ret = "Start frequency must be less than end frequency";
             break;
-        case MSP_ERR_BAD_SWEEP_GENIC_SELECTION_ALPHA:
+        case MSP_ERR_BAD_SWEEP_GENIC_SELECTION_S:
             ret = "alpha must be > 0";
             break;
         case MSP_ERR_EVENTS_DURING_SWEEP:

@@ -148,7 +148,7 @@ typedef struct {
     /* TODO document these parameters.*/
     double start_frequency;
     double end_frequency;
-    double alpha;
+    double s;
     double dt;
 } genic_selection_trajectory_t;
 
@@ -385,7 +385,7 @@ int msp_set_simulation_model_wf_ped(msp_t *self);
 int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
 int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
 int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
-    double start_frequency, double end_frequency, double alpha, double dt);
+    double start_frequency, double end_frequency, double s, double dt);
 
 int msp_set_start_time(msp_t *self, double start_time);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);

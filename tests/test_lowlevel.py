@@ -86,7 +86,7 @@ def get_sweep_genic_selection_model(
     position=0.5,
     start_frequency=0.1,
     end_frequency=0.9,
-    alpha=0.1,
+    s=0.1,
     dt=0.1,
 ):
     """
@@ -97,7 +97,7 @@ def get_sweep_genic_selection_model(
         position=position,
         start_frequency=start_frequency,
         end_frequency=end_frequency,
-        alpha=alpha,
+        s=s,
         dt=dt,
     )
 
@@ -1258,7 +1258,7 @@ class TestSimulator(LowLevelTestCase):
             position=0.5,
             start_frequency=0.1,
             end_frequency=0.5,
-            alpha=0.1,
+            s=0.1,
         )
         with pytest.raises(ValueError):
             f(model=model)
@@ -1282,7 +1282,7 @@ class TestSimulator(LowLevelTestCase):
             model = get_sweep_genic_selection_model(end_frequency=bad_type)
             with pytest.raises(TypeError):
                 f(model=model)
-            model = get_sweep_genic_selection_model(alpha=bad_type)
+            model = get_sweep_genic_selection_model(s=bad_type)
             with pytest.raises(TypeError):
                 f(model=model)
             model = get_sweep_genic_selection_model(dt=bad_type)

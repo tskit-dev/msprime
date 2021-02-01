@@ -1014,7 +1014,7 @@ Simulator_parse_sweep_genic_selection_model(Simulator *self, PyObject *py_model)
 {
     int ret = -1;
     int err;
-    double position, start_frequency, end_frequency, alpha, dt;
+    double position, start_frequency, end_frequency, s, dt;
     PyObject *value;
 
     value = get_dict_number(py_model, "position");
@@ -1035,11 +1035,11 @@ Simulator_parse_sweep_genic_selection_model(Simulator *self, PyObject *py_model)
     }
     end_frequency = PyFloat_AsDouble(value);
 
-    value = get_dict_number(py_model, "alpha");
+    value = get_dict_number(py_model, "s");
     if (value == NULL) {
         goto out;
     }
-    alpha = PyFloat_AsDouble(value);
+    s = PyFloat_AsDouble(value);
 
     value = get_dict_number(py_model, "dt");
     if (value == NULL) {
@@ -1048,7 +1048,7 @@ Simulator_parse_sweep_genic_selection_model(Simulator *self, PyObject *py_model)
     dt = PyFloat_AsDouble(value);
 
     err = msp_set_simulation_model_sweep_genic_selection(self->sim,
-            position, start_frequency, end_frequency, alpha, dt);
+            position, start_frequency, end_frequency, s, dt);
     if (err != 0) {
         handle_input_error("sweep genic selection", err);
         goto out;

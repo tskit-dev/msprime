@@ -75,7 +75,7 @@
 #define MSP_ERR_BAD_TIME_DELTA                                      -30
 #define MSP_ERR_BAD_ALLELE_FREQUENCY                                -31
 #define MSP_ERR_BAD_TRAJECTORY_START_END                            -32
-#define MSP_ERR_BAD_SWEEP_GENIC_SELECTION_ALPHA                     -33
+#define MSP_ERR_BAD_SWEEP_GENIC_SELECTION_S                         -33
 #define MSP_ERR_EVENTS_DURING_SWEEP                                 -34
 #define MSP_ERR_UNSUPPORTED_OPERATION                               -35
 #define MSP_ERR_DTWF_ZERO_POPULATION_SIZE                           -36
