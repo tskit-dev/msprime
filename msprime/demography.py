@@ -29,6 +29,7 @@ import logging
 import math
 import sys
 import warnings
+from typing import ClassVar
 from typing import List
 from typing import Union
 
@@ -36,6 +37,7 @@ import numpy as np
 import tskit
 
 from . import ancestry
+from . import core
 from . import species_trees
 
 
@@ -114,6 +116,78 @@ class Demography:
         # Sort demographic events by time.
         self.events.sort(key=lambda de: de.time)
         self.__name_id_map = None
+
+    def __str__(self):
+        s = ""
+        for pop in self.populations:
+            s += f"{pop}\n"
+        s += f"migration_matrix = \n{self.migration_matrix}\n"
+        s += "Events:\n"
+        for event in self.events:
+            s += f"{event}\n"
+        return s
+
+    def _populations_html(self):
+        col_titles = [
+            "id",
+            "name",
+            "description",
+            "initial_size",
+            "growth_rate",
+            "extra_metadata",
+        ]
+        data = []
+        for j, pop in enumerate(self.populations):
+            row = [str(j)] + [f"{getattr(pop, attr)}" for attr in col_titles[1:]]
+            data.append(row)
+        return core.html_table("Populations", col_titles, data)
+
+    def _migration_rate_info(self, source, dest, rate):
+        extra = None
+        if source != dest:
+            extra = (
+                "Backwards in time migration rate from population "
+                f"{self.populations[source].name} to {self.populations[dest].name} "
+                f"= {rate} per generation. "
+                "Equivalant to **IMPLEMENT ME** forwards in time"
+            )
+        return core.TableEntry(f"{rate:.4g}", extra)
+
+    def _migration_matrix_html(self):
+        col_titles = [""] + [pop.name for pop in self.populations]
+        data = []
+        for j in range(self.num_populations):
+            row = [self.populations[j].name] + [
+                self._migration_rate_info(j, k, self.migration_matrix[j, k])
+                for k in range(self.num_populations)
+            ]
+            data.append(row)
+        return core.html_table("Migration matrix", col_titles, data)
+
+    def _events_html(self, events, title="Events"):
+        col_titles = ["time", "type", "description"]
+        data = []
+        for event in events:
+            class_name = event.__class__.__name__
+            type_html = (
+                "<a href='https://tskit.dev/msprime/docs/latest/api.html#msprime."
+                f"{class_name}'>{event._type_str}</a>"
+            )
+            description = core.TableEntry(
+                event._short_description(), event._long_description()
+            )
+            row = [f"{event.time:.4g}", type_html, description]
+            data.append(row)
+        return core.html_table(title, col_titles, data)
+
+    def _repr_html_(self):
+        return (
+            "<p>"
+            + self._populations_html()
+            + self._migration_matrix_html()
+            + self._events_html(self.events)
+            + "</p>"
+        )
 
     def name_to_id(self, name):
         """
@@ -750,6 +824,15 @@ class DemographicEvent:
 
     time: float
 
+    def _short_description(self):
+        raise NotImplementedError()
+
+    def _long_description(self):
+        raise NotImplementedError()
+
+    def __str__(self):
+        return f"{self._type_str}: {self._short_description()}"
+
     def asdict(self):
         return {
             key: getattr(self, key)
@@ -788,6 +871,8 @@ class PopulationParametersChange(DemographicEvent):
     # TODO add a formal deprecation notice
     population_id: Union[int, None] = dataclasses.field(default=None, repr=False)
 
+    _type_str: ClassVar[str] = "Population parameter change"
+
     def __post_init__(self):
 
         if self.population_id is not None and self.population is not None:
@@ -817,12 +902,20 @@ class PopulationParametersChange(DemographicEvent):
             ret["initial_size"] = self.initial_size
         return ret
 
-    def __str__(self):
-        s = f"Population parameter change for {self.population}: "
+    def _short_description(self):
+        s = f"population={self.population}: "
         if self.initial_size is not None:
-            s += f"initial_size -> {self.initial_size} "
+            s += f"initial_size → {self.initial_size} "
         if self.growth_rate is not None:
-            s += f"growth_rate -> {self.growth_rate} "
+            s += f"growth_rate → {self.growth_rate} "
+        return s[:-1]
+
+    def _long_description(self):
+        s = ""
+        if self.initial_size is not None:
+            s += f"New initial_size = {self.initial_size} "
+        if self.growth_rate is not None:
+            s += f"New growth_rate = {self.growth_rate} "
         return s[:-1]
 
 
@@ -855,6 +948,8 @@ class MigrationRateChange(DemographicEvent):
     # TODO add a formal deprecation notice
     matrix_index: Union[tuple, None] = dataclasses.field(default=None, repr=False)
 
+    _type_str: ClassVar[str] = "Migration rate change"
+
     def __post_init__(self):
         # If the deprecated form is used, it overwrites the values of source
         # and dest
@@ -873,12 +968,15 @@ class MigrationRateChange(DemographicEvent):
             "dest": self.dest,
         }
 
-    def __str__(self):
+    def _short_description(self):
+        return f"source={self.source} dest={self.dest} rate={self.rate}"
+
+    def _long_description(self):
         if self.source == -1 and self.dest == -1:
-            ret = f"Migration rate change to {self.rate} everywhere"
+            ret = f"change to {self.rate} everywhere"
         else:
             matrix_index = (self.source, self.dest)
-            ret = f"Migration rate change for {matrix_index} to {self.rate}"
+            ret = f"change for {matrix_index} to {self.rate}"
         return ret
 
 
@@ -912,6 +1010,8 @@ class MassMigration(DemographicEvent):
     # TODO add a formal deprecation notice
     destination: Union[int, None] = dataclasses.field(default=None, repr=False)
 
+    _type_str: ClassVar[str] = dataclasses.field(default="Mass Migration", repr=False)
+
     def __post_init__(self):
         if self.dest is not None and self.destination is not None:
             raise ValueError("dest and destination are aliases; cannot supply both")
@@ -929,12 +1029,13 @@ class MassMigration(DemographicEvent):
             "proportion": self.proportion,
         }
 
-    def __str__(self):
+    def _short_description(self):
+        return f"proportion={self.proportion} source={self.source} dest={self.dest}"
+
+    def _long_description(self):
         return (
-            "Mass migration: "
             "Lineages moved with probability {} backwards in time with "
-            "source {} & dest {}"
-            "\n                     "
+            "source {} and dest {} "
             "(equivalent to migration from {} to {} forwards in time)".format(
                 self.proportion, self.source, self.dest, self.dest, self.source
             )
@@ -957,10 +1058,17 @@ class SimpleBottleneck(DemographicEvent):
             "proportion": self.proportion,
         }
 
-    def __str__(self):
-        return (
-            "Simple bottleneck: lineages in population {} coalesce "
-            "probability {}".format(self.population, self.proportion)
+    _type_str: ClassVar[str] = dataclasses.field(
+        default="Simple Bottleneck", repr=False
+    )
+
+    def _short_description(self):
+        return f"population={self.population} proportion={self.proportion}"
+
+    def _long_description(self):
+
+        return "lineages in population {} coalesce with " "probability {}".format(
+            self.population, self.proportion
         )
 
 
@@ -980,9 +1088,16 @@ class InstantaneousBottleneck(DemographicEvent):
             "strength": self.strength,
         }
 
-    def __str__(self):
+    _type_str: ClassVar[str] = dataclasses.field(
+        default="Instantaneous Bottleneck", repr=False
+    )
+
+    def _short_description(self):
+        return f"population={self.population} strength={self.strength}"
+
+    def _long_description(self):
         return (
-            "Instantaneous bottleneck in population {}: equivalent to {} "
+            "population {}: equivalent to {} "
             "generations of the coalescent".format(self.population, self.strength)
         )
 
@@ -1002,6 +1117,8 @@ class CensusEvent(DemographicEvent):
     :param float time: The time at which this event occurs in generations.
     """
 
+    _type_str: ClassVar[str] = dataclasses.field(default="Census", repr=False)
+
     def get_ll_representation(self, num_populations=None):
         # We need to keep the num_populations argument until stdpopsim 0.1 is out
         # https://github.com/tskit-dev/msprime/issues/1037
@@ -1010,8 +1127,11 @@ class CensusEvent(DemographicEvent):
             "time": self.time,
         }
 
-    def __str__(self):
-        return "Census event"
+    def _short_description(self):
+        return "Record location of lineages"
+
+    def _long_description(self):
+        return None
 
 
 @dataclasses.dataclass
@@ -1146,6 +1266,43 @@ class DemographyDebugger:
                         f"population {k}. This almost certainly indicates "
                         "demographic misspecification."
                     )
+
+    def _populations_html(self, epoch):
+        column_titles = ["", "start", "end", "growth_rate"] + [
+            pop.name for pop in self.demography.populations
+        ]
+        data = []
+        for j, pop in enumerate(epoch.populations):
+            row = [
+                self.demography.populations[j].name,
+                f"{pop.start_size: .3g}",
+                f"{pop.end_size: .3g}",
+                f"{pop.growth_rate: .3g}",
+            ]
+            for k in range(self.demography.num_populations):
+                item = self.demography._migration_rate_info(
+                    j, k, epoch.migration_matrix[j, k]
+                )
+                row.append(item)
+            data.append(row)
+        return core.html_table("", column_titles, data)
+
+    def _repr_html_(self):
+        out = ""
+        for j, epoch in enumerate(self.epochs):
+            if j > 0:
+                if len(epoch.demographic_events) > 0:
+                    title = f"Events @ generation {epoch.start_time}"
+                    out += self.demography._events_html(epoch.demographic_events, title)
+                out += "</p>"
+            else:
+                assert len(epoch.demographic_events) == 0
+            epoch_title = f"Epoch: {epoch.start_time} -- {epoch.end_time} generations"
+            out += "<p>"
+            out += f"<h3>{epoch_title}</h3>"
+            out += self._populations_html(epoch)
+        out += "</p>"
+        return f"<div>{out}</div>"
 
     def _print_populations(self, epoch, output):
         field_width = self.precision + 6
