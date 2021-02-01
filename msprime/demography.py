@@ -237,7 +237,7 @@ class Demography:
         tree,
         initial_size,
         *,
-        branch_length_units="gen",
+        time_units="gen",
         generation_time=None,
         growth_rate=None,
     ):
@@ -300,7 +300,7 @@ class Demography:
         :param growth_rate: Each population's growth_rate. May be a single number
             or a mapping from population names to their exponential growth rates.
             Defaults to zero.
-        :param str branch_length_units: The units of time in which the species tree's
+        :param str time_units: The units of time in which the species tree's
             branch lengths are measured. Allowed branch length units are millions of
             years, years, and generations; these should be specified with the strings
             ``"myr"``, ``"yr"``, or ``"gen"``, respectively. This defaults to
@@ -315,12 +315,12 @@ class Demography:
             tree,
             initial_size=initial_size,
             growth_rate=growth_rate,
-            branch_length_units=branch_length_units,
+            time_units=time_units,
             generation_time=generation_time,
         )
 
     @staticmethod
-    def from_starbeast(tree, generation_time, branch_length_units="myr"):
+    def from_starbeast(tree, generation_time, time_units="myr"):
         """
         Parse a species tree produced by the program `TreeAnnotator
         <https://www.beast2.org/treeannotator>`_
@@ -364,7 +364,7 @@ class Demography:
             lengths, and branch annotation. Typically, this string is the entire content
             of a file written by TreeAnnotator.
         :param float generation_time: The number of years per generation.
-        :param str branch_length_units: The units of time in which the species tree's
+        :param str time_units: The units of time in which the species tree's
             branch lengths are measured. Allowed branch length units are millions of
             years, and years; these should be specified with the strings ``"myr"`` or
             ``"yr"``, respectively. This defaults to ``"myr"``.
@@ -375,7 +375,7 @@ class Demography:
         return species_trees.parse_starbeast(
             tree=tree,
             generation_time=generation_time,
-            branch_length_units=branch_length_units,
+            time_units=time_units,
         )
 
     @staticmethod
