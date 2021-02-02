@@ -19,10 +19,12 @@
 """
 Test cases for demographic events in msprime.
 """
+import io
 import itertools
 import json
 import math
 import random
+import textwrap
 import unittest
 import warnings
 import xml
@@ -208,7 +210,6 @@ class TestNePopulationSizeEquivalence:
             self.assert_tree_sequences_equal(ts1, ts2)
 
 
-@pytest.mark.skip(reason="TEMPORARY")
 class TestIntrospectionInterface:
     """
     Tests that we have meaningful repr and str functions for all the
@@ -222,69 +223,37 @@ class TestIntrospectionInterface:
             "growth_rate=None, population=1)"
         )
         assert repr(event) == repr_s
-        str_s = "Population parameter change for 1: initial_size -> 2.0"
-        assert str(event) == str_s
-
-        event = msprime.PopulationParametersChange(1.0, population=1, growth_rate=2.0)
-        str_s = "Population parameter change for 1: growth_rate -> 2.0"
-        assert str(event) == str_s
-
-        event = msprime.PopulationParametersChange(
-            1.0, population=1, growth_rate=2.0, initial_size=4.0
-        )
-        str_s = (
-            "Population parameter change for 1: initial_size -> 4.0 growth_rate -> 2.0"
-        )
-        assert str(event) == str_s
+        assert str(event) == repr_s
 
     def test_migration_rate_change(self):
         event = msprime.MigrationRateChange(time=1, rate=2)
         repr_s = "MigrationRateChange(time=1, rate=2, source=-1, dest=-1)"
-        str_s = "Migration rate change to 2 everywhere"
         assert repr(event) == repr_s
-        assert str(event) == str_s
-
-        event = msprime.MigrationRateChange(time=1, rate=2, source=0, dest=1)
-        repr_s = "MigrationRateChange(time=1, rate=2, source=0, dest=1)"
-        str_s = "Migration rate change for (0, 1) to 2"
-        assert repr(event) == repr_s
-        assert str(event) == str_s
+        assert str(event) == repr_s
 
     def test_mass_migration(self):
         event = msprime.MassMigration(time=1, proportion=0.5, source=0, dest=1)
         repr_s = "MassMigration(time=1, source=0, dest=1, proportion=0.5)"
-        str_s = (
-            "Mass migration: Lineages moved with probability 0.5 backwards in time "
-            "with source 0 & dest 1 (equivalent to migration from 1 to 0 "
-            "forwards in time)"
-        )
         assert repr(event) == repr_s
-        # Too much hassle to track the exact whitespace in the output string.
-        assert str(event).split() == str_s.split()
+        assert str(event) == repr_s
 
     def test_simple_bottleneck(self):
         event = msprime.SimpleBottleneck(time=1, population=1, proportion=0.5)
         repr_s = "SimpleBottleneck(time=1, population=1, proportion=0.5)"
-        str_s = "Simple bottleneck: lineages in population 1 coalesce probability 0.5"
         assert repr(event) == repr_s
-        assert str(event) == str_s
+        assert str(event) == repr_s
 
     def test_instantaneous_bottleneck(self):
         event = msprime.InstantaneousBottleneck(time=1, population=1, strength=1.5)
         repr_s = "InstantaneousBottleneck(time=1, population=1, strength=1.5)"
-        str_s = (
-            "Instantaneous bottleneck in population 1: equivalent to 1.5 "
-            "generations of the coalescent"
-        )
         assert repr(event) == repr_s
-        assert str(event) == str_s
+        assert str(event) == repr_s
 
     def test_census(self):
         event = msprime.CensusEvent(time=1)
         repr_s = "CensusEvent(time=1)"
-        str_s = "Census event"
         assert repr(event) == repr_s
-        assert str(event) == str_s
+        assert str(event) == repr_s
 
 
 class TestDemographicEventsHaveExtraLLParameter:
@@ -897,6 +866,73 @@ class TestDemographyDebugger:
             assert len(w) == 0
 
 
+class TestDemographicEventMessages:
+    def test_population_parameters_change(self):
+        event = msprime.PopulationParametersChange(1.0, population=1, initial_size=2.0)
+        assert event._parameters() == "population=1, initial_size=2.0"
+        assert event._effect() == "initial_size → 2.0 for population 1"
+
+        event = msprime.PopulationParametersChange(
+            1.0, population="XX", growth_rate=2.0
+        )
+        assert event._parameters() == "population=XX, growth_rate=2.0"
+        assert event._effect() == "growth_rate → 2.0 for population XX"
+
+        event = msprime.PopulationParametersChange(
+            1.0, population=0, initial_size=3, growth_rate=2.0
+        )
+        assert event._parameters() == "population=0, initial_size=3, growth_rate=2.0"
+        assert (
+            event._effect() == "initial_size → 3 and growth_rate → 2.0 for population 0"
+        )
+
+        for pop in [None, -1]:
+            event = msprime.PopulationParametersChange(
+                1.0, population=pop, growth_rate=2.0
+            )
+            assert event._parameters() == "population=-1, growth_rate=2.0"
+            assert event._effect() == "growth_rate → 2.0 for all populations"
+
+    def test_migration_rate_change(self):
+        event = msprime.MigrationRateChange(time=1, rate=2)
+        assert event._parameters() == "source=-1, dest=-1, rate=2"
+        assert (
+            event._effect() == "Backwards-time migration rate for all populations → 2"
+        )
+
+        event = msprime.MigrationRateChange(source=0, dest=1, time=1, rate=6)
+        assert event._parameters() == "source=0, dest=1, rate=6"
+        assert event._effect() == ("Backwards-time migration rate from 0 to 1 → 6")
+
+    def test_mass_migration(self):
+        event = msprime.MassMigration(time=1, proportion=0.5, source=0, dest=1)
+        event._parameters() == "source=0, dest=1, proportion=0.5"
+        effect = (
+            "Lineages currently in population 0 move to 1 with probability 0.5 "
+            "(equivalent to individuals migrating from 1 to 0 forwards in time)"
+        )
+        assert event._effect() == effect
+
+    def test_simple_bottleneck(self):
+        event = msprime.SimpleBottleneck(time=1, population=1, proportion=0.5)
+        assert event._parameters() == "population=1, proportion=0.5"
+        assert event._effect() == (
+            "Lineages in population 1 coalesce with probability 0.5"
+        )
+
+    def test_instantaneous_bottleneck(self):
+        event = msprime.InstantaneousBottleneck(time=1, population=1, strength=1.5)
+        assert event._parameters() == "population=1, strength=1.5"
+        assert event._effect() == "Equivalent to 1.5 generations of the coalescent"
+
+    def test_census(self):
+        event = msprime.CensusEvent(time=1)
+        assert event._parameters() == ""
+        assert event._effect() == (
+            "Insert census nodes to record the location of all lineages"
+        )
+
+
 class DebugOutputBase:
     def test_zero_samples_old_style(self):
         population_configurations = [msprime.PopulationConfiguration(0)]
@@ -980,16 +1016,161 @@ class TestDemographyDebuggerHtml(DebugOutputBase):
 class TestDemographyText(DebugOutputBase):
     def verify(self, demography):
         text = str(demography)
-        assert len(text) > 0
-        # TODO add some semantic checks on the output
+        assert text.startswith("Demography")
+        sections = text.split("╟")
+        assert len(sections) == 4
+        assert sections[0].startswith("Demography")
+        sec_demography = sections[1].splitlines()
+        assert len(sec_demography) == demography.num_populations + 5
+        sec_migration_matrix = sections[2].splitlines()
+        assert len(sec_migration_matrix) == demography.num_populations + 5
+        # We don't really know how many lines will be in the events section.
 
 
 class TestDemographyDebuggerText(DebugOutputBase):
     def verify(self, demography):
         debugger = demography.debug()
         text = str(debugger)
-        assert len(text) > 0
-        # TODO add some semantic checks on the output
+        assert text.startswith("DemographyDebugger")
+        sections = text.split("Epoch")
+        assert len(sections) - 1 == len(debugger.epochs)
+        # Check the deprecated interface.
+        buff = io.StringIO()
+        debugger.print_history(buff)
+        assert text == buff.getvalue()
+
+
+class TestDemographyTextExamples:
+    def test_one_population(self):
+        demography = msprime.Demography.isolated_model([10])
+        out = textwrap.dedent(
+            """\
+        Demography
+        ╟  Populations
+        ║  ┌────────────────────────────────────────────────────────────────────────┐
+        ║  │ id │name   │description  │initial_size  │ growth_rate │extra_metadata  │
+        ║  ├────────────────────────────────────────────────────────────────────────┤
+        ║  │ 0  │pop_0  │None         │10.0          │     0.0     │{}              │
+        ║  └────────────────────────────────────────────────────────────────────────┘
+        ╟  Migration Matrix
+        ║  ┌───────────────┐
+        ║  │       │ pop_0 │
+        ║  ├───────────────┤
+        ║  │  pop_0│   0   │
+        ║  └───────────────┘
+        ╟  Events
+        ║  ┌───────────────────────────────────┐
+        ║  │  time│type  │parameters  │effect  │
+        ║  ├───────────────────────────────────┤
+        ║  └───────────────────────────────────┘
+        """
+        )
+        assert out == str(demography)
+
+    def test_two_populations(self):
+        demography = msprime.Demography.isolated_model([10, 20], growth_rate=[1, 2])
+        demography.migration_matrix[0, 1] = 0.1
+        demography.migration_matrix[1, 0] = 0.2
+        out = textwrap.dedent(
+            """\
+        Demography
+        ╟  Populations
+        ║  ┌────────────────────────────────────────────────────────────────────────┐
+        ║  │ id │name   │description  │initial_size  │ growth_rate │extra_metadata  │
+        ║  ├────────────────────────────────────────────────────────────────────────┤
+        ║  │ 0  │pop_0  │None         │10.0          │     1.0     │{}              │
+        ║  │ 1  │pop_1  │None         │20.0          │     2.0     │{}              │
+        ║  └────────────────────────────────────────────────────────────────────────┘
+        ╟  Migration Matrix
+        ║  ┌───────────────────────┐
+        ║  │       │ pop_0 │ pop_1 │
+        ║  ├───────────────────────┤
+        ║  │  pop_0│   0   │  0.1  │
+        ║  │  pop_1│  0.2  │   0   │
+        ║  └───────────────────────┘
+        ╟  Events
+        ║  ┌───────────────────────────────────┐
+        ║  │  time│type  │parameters  │effect  │
+        ║  ├───────────────────────────────────┤
+        ║  └───────────────────────────────────┘
+        """
+        )
+        assert out == str(demography)
+
+    def test_all_events(self):
+        demography = msprime.Demography.isolated_model([1, 1])
+        demography.events = [
+            msprime.PopulationParametersChange(0.1, initial_size=2),
+            msprime.PopulationParametersChange(0.1, growth_rate=10),
+            msprime.PopulationParametersChange(0.1, growth_rate=10, initial_size=1),
+            msprime.MigrationRateChange(0.2, matrix_index=(0, 1), rate=1),
+            msprime.MigrationRateChange(0.2, matrix_index=(1, 0), rate=1),
+            msprime.MassMigration(0.4, source=1, dest=0),
+            msprime.MigrationRateChange(0.4, rate=0),
+            msprime.InstantaneousBottleneck(0.5, population=0, strength=100),
+            msprime.CensusEvent(0.55),
+            msprime.SimpleBottleneck(0.56, population=1, proportion=0.1),
+        ]
+
+        out = textwrap.dedent(
+            """\
+        Demography
+        ╟  Populations
+        ║  ┌────────────────────────────────────────────────────────────────────────┐
+        ║  │ id │name   │description  │initial_size  │ growth_rate │extra_metadata  │
+        ║  ├────────────────────────────────────────────────────────────────────────┤
+        ║  │ 0  │pop_0  │None         │1.0           │     0.0     │{}              │
+        ║  │ 1  │pop_1  │None         │1.0           │     0.0     │{}              │
+        ║  └────────────────────────────────────────────────────────────────────────┘
+        ╟  Migration Matrix
+        ║  ┌───────────────────────┐
+        ║  │       │ pop_0 │ pop_1 │
+        ║  ├───────────────────────┤
+        ║  │  pop_0│   0   │   0   │
+        ║  │  pop_1│   0   │   0   │
+        ║  └───────────────────────┘
+        ╟  Events
+        ║  ┌──────────────────────────────────────────────────────────────────────────────────────┐
+        ║  │  time│type            │parameters           │effect                                  │
+        ║  ├──────────────────────────────────────────────────────────────────────────────────────┤
+        ║  │   0.1│Population      │population=-1,       │initial_size → 2 for all populations    │
+        ║  │      │parameter       │initial_size=2       │                                        │
+        ║  │      │change          │                     │                                        │
+        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
+        ║  │   0.1│Population      │population=-1,       │growth_rate → 10 for all populations    │
+        ║  │      │parameter       │growth_rate=10       │                                        │
+        ║  │      │change          │                     │                                        │
+        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
+        ║  │   0.1│Population      │population=-1,       │initial_size → 1 and growth_rate → 10   │
+        ║  │      │parameter       │initial_size=1,      │for all populations                     │
+        ║  │      │change          │growth_rate=10       │                                        │
+        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
+        ║  │   0.2│Migration rate  │source=0, dest=1,    │Backwards-time migration rate from 0    │
+        ║  │      │change          │rate=1               │to 1 → 1                                │
+        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
+        ║  │   0.2│Migration rate  │source=1, dest=0,    │Backwards-time migration rate from 1    │
+        ║  │      │change          │rate=1               │to 0 → 1                                │
+        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
+        ║  │   0.4│Mass Migration  │source=1, dest=0,    │Lineages currently in population 1      │
+        ║  │      │                │proportion=1.0       │move to 0 with probability 1.0          │
+        ║  │      │                │                     │(equivalent to individuals migrating    │
+        ║  │      │                │                     │from 0 to 1 forwards in time)           │
+        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
+        ║  │   0.4│Migration rate  │source=-1, dest=-1,  │Backwards-time migration rate for all   │
+        ║  │      │change          │rate=0               │populations → 0                         │
+        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
+        ║  │   0.5│Instantaneous   │population=0,        │Equivalent to 100 generations of the    │
+        ║  │      │Bottleneck      │strength=100         │coalescent                              │
+        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
+        ║  │  0.55│Census          │                     │Insert census nodes to record the       │
+        ║  │      │                │                     │location of all lineages                │
+        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
+        ║  │  0.56│Simple          │population=1,        │Lineages in population 1 coalesce with  │
+        ║  │      │Bottleneck      │proportion=0.1       │probability 0.1                         │
+        ║  └──────────────────────────────────────────────────────────────────────────────────────┘
+        """  # noqa: B950
+        )
+        assert out == str(demography)
 
 
 class TestDemographyTrajectories(unittest.TestCase):
@@ -3801,9 +3982,9 @@ class TestDemographicEventBase:
     def test_str_methods_not_implemented(self):
         de = msprime.DemographicEvent(0)
         with pytest.raises(NotImplementedError):
-            de._short_description()
+            de._parameters()
         with pytest.raises(NotImplementedError):
-            de._long_description()
+            de._effect()
 
 
 class TestDemographyObject:
@@ -3874,6 +4055,7 @@ class TestDemographyObject:
     def test_isolated_model(self):
         demography = msprime.Demography.isolated_model([2])
         assert demography.num_populations == 1
+        assert demography.num_events == 0
         assert demography.populations[0].initial_size == 2
         assert demography.populations[0].growth_rate == 0
 
@@ -3926,6 +4108,7 @@ class TestDemographyObject:
         assert demography.populations[2].name == "pop_2"
         assert demography.populations[2].initial_size == 1000
         assert np.all(demography.migration_matrix == 0)
+        assert demography.num_events == len(demography.events)
         assert len(demography.events) == 2
         assert demography.events[0].time == 10
         assert demography.events[0].source == 0

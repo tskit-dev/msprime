@@ -31,6 +31,8 @@ from typing import Dict
 from typing import List
 from typing import Union
 
+import numpy as np
+
 from msprime import _msprime
 
 __version__ = "undefined"
@@ -135,11 +137,15 @@ class TableEntry:
         ret += f">{self.data}</td>"
         return ret
 
+    def as_text(self):
+        return self.data
 
-def html_table(caption: str, column_titles: List[str], data: List[List[TableEntry]]):
+
+def html_table(
+    caption: str, column_titles: List[str], data: List[List[Union[TableEntry, str]]]
+):
     """
-    Returns a HTML table formatted with the specified data. All the values should
-    be preformatted strings.
+    Returns a HTML table formatted with the specified data.
     """
     header = "".join(f"<th>{col_title}</th>" for col_title in column_titles)
     rows = ""
@@ -161,3 +167,56 @@ def html_table(caption: str, column_titles: List[str], data: List[List[TableEntr
         "</table>"
     )
     return s
+
+
+def _text_table_row(data, alignments, widths):
+    num_lines = max(len(item) for item in data)
+    for item in data:
+        assert isinstance(item, list)
+        item.extend([""] * (num_lines - len(item)))
+        assert len(item) == num_lines
+    s = ""
+    for line in range(num_lines):
+        out_line = "│"
+        for value, align, width in zip(data, alignments, widths):
+            out_line += f"{value[line]:{align}{width - 1}}│"
+        out_line += "\n"
+        s += out_line
+    return s
+
+
+def text_table(
+    caption: str,
+    column_titles: List[List[str]],
+    column_alignments: List[str],
+    data: List[List[List[str]]],
+    internal_hlines=False,
+):
+    """
+    Returns a text table formatted with the specified data. Column alignments
+    should be values used in Python's string formatting mini-language.
+
+    Each item in the table should be a *list* of strings, which are the lines
+    of text to be shown in that table cell.
+    """
+    N = len(column_titles)
+    assert len(column_alignments) == N
+    widths = np.array([len(title) for title in column_titles], dtype=int)
+    for row in data + [column_titles]:
+        assert N == len(row)
+        for j in range(N):
+            widths[j] = max(widths[j], max([len(line) for line in row[j]], default=0))
+    widths += 3
+
+    hline = "─" * (sum(widths) - 1)
+    internal_hline = "┈" * (sum(widths) - 1)
+    out = f"{caption}\n"
+    out += f"┌{hline}┐\n"
+    out += f"{_text_table_row(column_titles, column_alignments, widths)}"
+    out += f"├{hline}┤\n"
+    for j, split_row in enumerate(data):
+        out += f"{_text_table_row(split_row, column_alignments, widths)}"
+        if internal_hlines and j < len(data) - 1:
+            out += f"│{internal_hline}│\n"
+    out += f"└{hline}┘\n"
+    return out
