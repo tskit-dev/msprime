@@ -111,10 +111,11 @@ If you do not already have a fork of the msprime repository, GitHub will prompt 
 to "fork this repository" - go ahead and create your fork. 
 You can then create a pull request for your proposed change. On the other hand, 
 if you are already familiar with contributing to msprime, or have more than simple 
-markdown edits to add, you can edit and {ref}`build 
-<sec_development_documentation_building>` the documentation locally. To do that, 
-first follow the {ref}`Quickstart <sec_development_quickstart>`. Once you have created 
-and checked out a "topic branch", you are ready to start editing the documentation.
+markdown edits to add, you can edit and
+{ref}`build <sec_development_documentation_building>` the documentation locally.
+To do that, first follow the {ref}`Quickstart <sec_development_quickstart>`.
+Once you have created and checked out a "topic branch", you are ready to start
+editing the documentation.
 
 :::{note}
 Please make sure you have built the low-level {ref}`C module <sec_development_c_module>`
