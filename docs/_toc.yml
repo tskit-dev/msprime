@@ -21,6 +21,7 @@
 
 - part: Miscellaneous
   chapters:
+  - file : notes_ms_users
   - file: development
   - file: legacy
 

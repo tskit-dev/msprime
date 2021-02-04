@@ -52,11 +52,7 @@ please open an [issue](<http://github.com/tskit-dev/msprime/issues>) or
 ## System requirements
 
 To develop with msprime you will need to have [GSL](https://www.gnu.org/software/gsl/)
-installed.
-
-```{eval-rst}
-.. todo:: Add guide for how to install GSL on some common platforms.
-```
+installed. See section {ref}`sec_pip_install_source` for how to install GSL on some common platforms.
 
 ## Overview
 
@@ -92,29 +88,41 @@ combinations of tests on different platforms:
 ## Documentation
 
 The msprime manual exists to provide users with a comprehensive and authoritative
-source of information on msprime's interfaces. From a high-level, the documentation 
+source of information on msprime's interfaces. From a high-level, the documentation
 is split into two main sections:
 
 1. The API Reference documentation provides a concise and precise description of
    a particular function or class. See the {ref}`sec_development_documentation_api`
    section for details.
-2. Thematically structured sections which discuss the functionality and 
-   explain features via minimal examples. See the 
+2. Thematically structured sections which discuss the functionality and
+   explain features via minimal examples. See the
     {ref}`sec_development_documentation_examples` section for details.
 
-Further documentation where features are combined to perform specific 
+Further documentation where features are combined to perform specific
 tasks is provided in the [tskit tutorials](https://tskit.dev/tutorials) site.
 
-To get started writing documentation for msprime, first follow the
-{ref}`Quickstart <sec_development_quickstart>`. Once you have created and
-checked out a "topic branch", you are ready to start editing the documentation.
+Documentation can be written on GitHub or locally. If you are new to contributing 
+to msprime and you will be making minor edits to markdown text, you may find
+it easier to make edits on GitHub. To do this, hover your mouse over the GitHub 
+icon in the top right corner of the documentation, and click "suggest edit". 
+You can then edit and preview markdown in GitHub's user interface. Clicking 
+"propose change" at the bottom of the page will commit to a new branch on your fork.
+If you do not already have a fork of the msprime repository, GitHub will prompt you 
+to "fork this repository" - go ahead and create your fork. 
+You can then create a pull request for your proposed change. On the other hand, 
+if you are already familiar with contributing to msprime, or have more than simple 
+markdown edits to add, you can edit and
+{ref}`build <sec_development_documentation_building>` the documentation locally.
+To do that, first follow the {ref}`Quickstart <sec_development_quickstart>`.
+Once you have created and checked out a "topic branch", you are ready to start
+editing the documentation.
 
 :::{note}
 Please make sure you have built the low-level {ref}`C module <sec_development_c_module>`
-by running ``make`` in the project root directory before going any further. 
+by running ``make`` in the project root directory before going any further.
 A lot of inscrutable errors are caused by a mismatch between the low-level C module
 installed in your system (or an older development version you previously compiled)
-and the local development version of msprime. 
+and the local development version of msprime.
 :::
 
 (sec_development_documentation_building)=
@@ -134,27 +142,27 @@ Jupyter notebook content.
 ### JupyterBook
 
 Documentation for msprime is built using [Jupyter Book](https://jupyterbook.org),
-which allows us to mix API documentation generated automatically using 
-[Sphinx](https://www.sphinx-doc.org) with code examples evaluated in a 
-local [Jupyter](https://jupyter.org) kernel. This is a very powerful 
-system that allows us to generate beautiful and useful documentation, 
-but it is quite new and has some quirks and gotchas. 
-In particular, because of the mixture of API documentation and notebook 
-content we need to write documentation using **two different markup 
+which allows us to mix API documentation generated automatically using
+[Sphinx](https://www.sphinx-doc.org) with code examples evaluated in a
+local [Jupyter](https://jupyter.org) kernel. This is a very powerful
+system that allows us to generate beautiful and useful documentation,
+but it is quite new and has some quirks and gotchas.
+In particular, because of the mixture of API documentation and notebook
+content we need to write documentation using **two different markup
 languages**.
 
 #### reStructuredText
 
 All of the documentation for previous versions of msprime was written
 using the [reStructuredText](<https://docutils.sourceforge.io/rst.html>) format
-(rST) which is the default for Python documentation. Because of this, all of 
+(rST) which is the default for Python documentation. Because of this, all of
 the API docstrings (see the {ref}`sec_development_documentation_api` section)
 are written using rST. Converting these docstrings to Markdown
-would be a lot of work (and support from upstream tools for Markdown 
-dosctrings is patchy), and so we need to use rST for this 
+would be a lot of work (and support from upstream tools for Markdown
+dosctrings is patchy), and so we need to use rST for this
 purpose for the forseeable future.
 
-Some of the directives we use are only available in rST, and so these 
+Some of the directives we use are only available in rST, and so these
 must be enclosed in ``eval-rst`` blocks like so:
 
 ````md
@@ -165,12 +173,12 @@ must be enclosed in ``eval-rst`` blocks like so:
 
 #### Markdown
 
-Everything **besides** API docstrings is written using 
-[MyST Markdown](https://jupyterbook.org/content/myst.html). This is a 
-superset of [common Markdown](https://commonmark.org) which 
+Everything **besides** API docstrings is written using
+[MyST Markdown](https://jupyterbook.org/content/myst.html). This is a
+superset of [common Markdown](https://commonmark.org) which
 enables executable Jupyter content to be included in the documentation.
-In particular, JupyterBook and MyST are built on top of 
-[Sphinx](https://www.sphinx-doc.org) which allows us to do lots 
+In particular, JupyterBook and MyST are built on top of
+[Sphinx](https://www.sphinx-doc.org) which allows us to do lots
 of cross-referencing.
 
 Some useful links:
@@ -181,32 +189,32 @@ Some useful links:
   documentation has lots of helpful examples and links.
 - The [MyST Syntax Guide](https://myst-parser.readthedocs.io/en/latest/using/syntax.html)
   is a good reference for the full syntax
-- Sphinx 
-  [directives](https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html). 
-  Some of these will work with Jupyter Book, some won't. There's currently no 
-  comprehensive list of those that do. However, we tend to only use a small subset 
-  of the available directives, and you can usually get by following existing 
+- Sphinx
+  [directives](https://www.sphinx-doc.org/en/master/usage/restructuredtext/directives.html).
+  Some of these will work with Jupyter Book, some won't. There's currently no
+  comprehensive list of those that do. However, we tend to only use a small subset
+  of the available directives, and you can usually get by following existing
   local examples.
 - The [types of source files](https://jupyterbook.org/file-types/index.html)
-  section in the Jupyter Book documentation is useful reference for mixing 
+  section in the Jupyter Book documentation is useful reference for mixing
   and matching Markdown and rST like we're doing.
 
 (sec_development_documentation_api)=
-### API Reference 
+### API Reference
 
-API reference documentation is provided by 
+API reference documentation is provided by
 [docstrings](https://www.python.org/dev/peps/pep-0257/) in the source
-code. These docstrings are written using 
-[reStructuredText](<https://docutils.sourceforge.io/rst.html>) 
+code. These docstrings are written using
+[reStructuredText](<https://docutils.sourceforge.io/rst.html>)
 and [Sphinx](https://www.sphinx-doc.org).
 
-Docstrings should be **concise** and **precise**. Examples should not 
-be provided directly in the docstrings, but each significant 
+Docstrings should be **concise** and **precise**. Examples should not
+be provided directly in the docstrings, but each significant
 parameter (e.g.) in a function should have links to the corresponding
 {ref}`examples <sec_development_documentation_examples>` section.
 
 ```{eval-rst}
-.. todo:: Provide an example of a well-documented docstring with 
+.. todo:: Provide an example of a well-documented docstring with
     links to an examples section. We should use one of the simpler
     functions as an example of this.
 ```
@@ -214,17 +222,17 @@ parameter (e.g.) in a function should have links to the corresponding
 (sec_development_documentation_examples)=
 ### Examples
 
-The API reference documentation is gives precise formal information about 
-how to use a particular function of class. The rest of the manual should 
+The API reference documentation is gives precise formal information about
+how to use a particular function of class. The rest of the manual should
 provide the discussion and examples needed to contextualise this information
-and help users to orient themselves. The examples section for a given 
+and help users to orient themselves. The examples section for a given
 feature (e.g., function parameter) should:
 
 - Provide some background into what this feature is for, so that an
   unsure reader can quickly orien themselves (external links to explain
   concepts is good for this).
-- Give examples using inline Jupyter code to illustrate the various 
-  different ways that this feature can be used. These examples should 
+- Give examples using inline Jupyter code to illustrate the various
+  different ways that this feature can be used. These examples should
   be as small as possible, so that the overall document runs quickly.
 
 Juptyer notebook code is incluced by using blocks like this:
@@ -237,11 +245,11 @@ a
 ```
 ````
 
-These cells behave exactly like they would in a Jupyter notebook (the 
+These cells behave exactly like they would in a Jupyter notebook (the
 whole document is actually treated and executed like one notebook)
 
 :::{warning}
-For a document to be evaluated as a notebook you **must** have 
+For a document to be evaluated as a notebook you **must** have
 exactly the right [YAML Frontmatter](
 https://jupyterbook.org/reference/cheatsheet.html#executable-code)
 at the top of the file.
@@ -250,27 +258,27 @@ at the top of the file.
 (sec_development_documentation_cross_referencing)=
 ### Cross referencing
 
-Cross referencing is done by using the ``{ref}`` inline role 
+Cross referencing is done by using the ``{ref}`` inline role
 (see Jupyter Book [documentation](https://jupyterbook.org/content/citations.html)
 for more details) to link
 to labelled sections within the manual or to API documentation.
 
 Sections within the manual should be labelled hierachically, for example
-this section is labelled like this: 
+this section is labelled like this:
 
 ````md
 (sec_development_documentation_cross_referencing)=
 ### Cross referencing
 ````
 
-Elsewhere in the Markdown documentation we can then refer to this 
+Elsewhere in the Markdown documentation we can then refer to this
 section like:
 
 ````md
 See the {ref}`sec_development_documentation_cross_referencing` section for details.
 ````
 
-Cross references like this will automatically use the section name 
+Cross references like this will automatically use the section name
 as the link text, which we can override if we like:
 
 ````md
@@ -282,15 +290,15 @@ To refer to a given section from an rST docstring, we'd do something like
 See the :ref:`sec_development_documentation_cross_referencing` section for more details.
 ````
 
-When we want to refer to the API documentation for a function or class, we 
+When we want to refer to the API documentation for a function or class, we
 use the appropriate inline text role to do so. For example,
 
 ````md
 The {func}`.sim_ancestry` function lets us simulate ancestral histories.
 ````
 
-It's a good idea to always use this form when referring to functions 
-or classes so that the reader always has direct access to the API 
+It's a good idea to always use this form when referring to functions
+or classes so that the reader always has direct access to the API
 documentation for a given function when they might it.
 
 ## High-level Python
@@ -603,7 +611,7 @@ debugging.
 .. todo:: Change to intersphinx mapping for this link.
 ```
 
-Please see the documentation for the 
+Please see the documentation for the
 [tskit C API](https://tskit.readthedocs.io/en/stable/c-api.html#sec-c-api-overview-structure)
 for more details on the how APIs are structured.
 
@@ -785,5 +793,3 @@ $ podman build -t tskit/msprime .
   programs (e.g., pip versus installing locally from source)! In python,
   `msprime.__file__` will tell you the location of the package that is being
   used.
-
-

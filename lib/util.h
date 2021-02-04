@@ -113,6 +113,7 @@
 #define MSP_ERR_BAD_ANCIENT_SAMPLE_NODE                             -69
 #define MSP_ERR_UNKNOWN_TIME_NOT_SUPPORTED                          -70
 #define MSP_ERR_DTWF_DIPLOID_ONLY                                   -71
+#define MSP_ERR_BAD_ANCESTRAL_MUTATION                              -72
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */

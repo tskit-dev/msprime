@@ -17,7 +17,7 @@ kernelspec:
 
     import msprime
     from IPython.display import SVG
-    # Doing this to make the notebook outputs deterministic. 
+    # Doing this to make the notebook outputs deterministic.
     # DO NOT DO THIS IN YOUR CODE
     msprime.core.set_seed_rng_seed(42)
 ```
@@ -26,10 +26,10 @@ kernelspec:
 
 # Ancestry
 
-Msprime simulates the ancestry of sampled genomes under a number of 
-different backwards-in-time population genetic 
-{ref}`models <sec_ancestry_models>`. The simulated ancestry is 
-represented as a [succinct tree sequence](https://tskit.dev) using 
+Msprime simulates the ancestry of sampled genomes under a number of
+different backwards-in-time population genetic
+{ref}`models <sec_ancestry_models>`. The simulated ancestry is
+represented as a [succinct tree sequence](https://tskit.dev) using
 the [tskit](https://tskit.dev/tskit) library, which provides an
 extensive suite of operations for analysing genealogical trees
 and DNA sequence data. See the {ref}`tutorials:sec_tskit_getting_started`
@@ -45,13 +45,13 @@ ts
 
 The {func}`.sim_ancestry` function has many parameters to specify
 the details of the simulations. The {func}`API documentation <.sim_ancestry>`
-contains a precise description of the parameter; the sections 
-in this page provide some explanation and examples of how to use these 
+contains a precise description of the parameter; the sections
+in this page provide some explanation and examples of how to use these
 parameters.
 
 :::{note}
 It's important to note that {func}`.sim_ancestry` only simulates
-the ancestral trees for samples: if we want actual sequence data 
+the ancestral trees for samples: if we want actual sequence data
 then we need to additionally simulate mutations on these trees.
 See the {ref}`sec_mutations` section for more information on how to do
 this.
@@ -357,7 +357,7 @@ must define a `sequence_length`:
 ```
 
 ```{code-cell}
-    
+
 
     assert ts.num_trees > 1
 ```
@@ -402,7 +402,7 @@ so that genome coordinates are at integer positions:
 ```
 
 ```{code-cell}
-    
+
 
     assert 1 < ts.num_trees < 5
 
@@ -425,7 +425,7 @@ We can also simulate a continous genome by setting
 ```
 
 ```{code-cell}
-    
+
 
     assert 1 < ts.num_trees < 5
 ```
@@ -478,7 +478,7 @@ recombination model and number of loci.
 ```
 
 ```{code-cell}
-    
+
 
     assert 1 < ts.num_trees < 5
 ```
@@ -512,7 +512,7 @@ In the following example one gene conversion event of length 1 has occured.
 ```
 
 ```{code-cell}
-    
+
 
     assert 1 < ts.num_trees < 5
 ```
@@ -533,7 +533,7 @@ continuous genome of length 1 and scaled gene conversion parameters.
 ```
 
 ```{code-cell}
-    
+
 
     assert 1 < ts.num_trees < 5
 ```
@@ -553,7 +553,7 @@ to a gene conversion event covering the tract from site 76 to site 80.
 ```
 
 ```{code-cell}
-    
+
 
     assert 1 < ts.num_trees < 6
 ```
@@ -576,7 +576,7 @@ site 10 and site 11 and a constant gene conversion rate with a mean tract length
 ```
 
 ```{code-cell}
-    
+
 
     assert 1 < ts.num_trees < 5
 
@@ -1040,7 +1040,7 @@ example.)
 ```
 
 ```{eval-rst}
-.. todo:: quick overview of what a model *is* and also an example of 
+.. todo:: quick overview of what a model *is* and also an example of
   how to use it.
 
 ```
@@ -1050,7 +1050,7 @@ example.)
 ### Hudson coalescent
 
 The default simulation model in `msprime` is the coalescent
-with recombination, based on the classical `ms` program. 
+with recombination, based on the classical `ms` program.
 Please see the {class}`API documentation<.StandardCoalescent>`
 for a formal description of the model.
 
@@ -1073,7 +1073,7 @@ in msprime if we don't specify any value for the `model` parameter.
 
 
 ```{eval-rst}
-.. todo:: Write this section, including a simple example ideally showing 
+.. todo:: Write this section, including a simple example ideally showing
     a property of an SMC simulation
 
 ```
@@ -1316,41 +1316,3 @@ happened during the Wright-Fisher phase of the simulation, and as-of 500
 generations in the past, there were only two lineages left. The continuous
 time standard coalescent model was then used to simulate the ancient past of
 these two lineages.
-
-## Notes for ms users
-
-```{eval-rst}
-.. todo:: This is copied from the old api.rst page and needs some updating.
-```
-
-The simulation model in `msprime` closely follows the classical `ms`
-program. Unlike `ms`, however, time is measured in generations rather than
-in units of {math}`4 N_e` generations, i.e., "coalescent units".
-This means that when simulating a population with diploid effective size {math}`N_e`,
-the mean time to coalescence between two samples
-in an `msprime` simulation will be around {math}`2 N_e`,
-while in an `ms` simulation, the mean time will be around {math}`0.5`.
-Internally, `msprime` uses the same algorithm as `ms`,
-and so the `Ne` parameter to the {func}`.simulate` function
-still acts as a time scaling, and can be set to `0.5` to match many theoretical results,
-or to `0.25` to match `ms`. Population sizes for each
-subpopulation and for past demographic events are also defined as absolute values, **not**
-scaled by `Ne`. All migration rates and growth rates are also per generation.
-
-:::{warning}
-
-This parameterisation of recombination, mutation and
-migration rates is different to {program}`ms`, which states these
-rates over the entire region and in coalescent time units. The
-motivation for this is to allow the user change the size of the simulated
-region without having to rescale the recombination, gene conversion, and mutation rates,
-and to also allow users directly state times and rates in units of
-generations. However, the `mspms` command line application is
-fully {program}`ms` compatible.
-If recombination and gene conversion are combined the gene conversion
-rate in {program}`ms` is determined by the ratio {math}`f`, which corresponds to
-setting {math}`g = f r`. In `msprime` the gene conversion rate {math}`g` is
-set independently and does not depend on the recombination rate. However,
-`mspms` mimics the {program}`ms` behaviour.
-
-:::

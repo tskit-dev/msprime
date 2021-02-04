@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2016-2020 University of Oxford
+** Copyright (C) 2016-2021 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -508,7 +508,6 @@ static void
 test_single_tree_mutgen_keep_sites_many_mutations(void)
 {
     int ret = 0;
-    int j;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
     mutgen_t mutgen;
@@ -520,23 +519,17 @@ test_single_tree_mutgen_keep_sites_many_mutations(void)
     ret = matrix_mutation_model_factory(&mut_model, ALPHABET_NUCLEOTIDE);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    for (j = 0; j < 8192; j++) {
-        ret = tsk_mutation_table_add_row(
-            &tables.mutations, 0, 0, -1, 0.0, "C", 1, NULL, 0);
-        CU_ASSERT_EQUAL_FATAL(ret, j + 1);
-    }
-
     gsl_rng_set(rng, 2);
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_rate(&mutgen, 10);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    for (j = 0; j < 10; j++) {
-        ret = mutgen_generate(&mutgen, MSP_KEEP_SITES);
-        CU_ASSERT_EQUAL_FATAL(ret, 0);
-    }
-    CU_ASSERT_TRUE(tables.sites.num_rows > 2);
+    ret = mutgen_generate(&mutgen,
+        MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ANCESTRAL_MUTATION);
 
     mutgen_free(&mutgen);
     mutation_model_free(&mut_model);
