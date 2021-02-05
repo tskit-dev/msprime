@@ -24,9 +24,6 @@ html:
   extra_navbar: msprime __MSPRIME_VERSION__
   extra_footer: msprime __MSPRIME_VERSION__
 
-parse:
-    myst_extended_syntax: true
-
 sphinx:
     extra_extensions:
     - sphinx.ext.autodoc
@@ -35,6 +32,7 @@ sphinx:
     - sphinx.ext.intersphinx
     - sphinx_issues
     - sphinxarg.ext
+
     config:
       issues_github_path: tskit-dev/msprime
       todo_include_todos: true
@@ -43,3 +41,6 @@ sphinx:
         tskit: ["https://tskit.readthedocs.io/en/stable", null]
         tutorials: ["https://tskit.dev/tutorials/", null]
         stdpopsim: ["https://stdpopsim.readthedocs.io/en/stable", null]
+      myst_enable_extensions:
+      - colon_fence
+      - deflist
