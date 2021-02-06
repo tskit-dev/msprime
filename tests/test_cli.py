@@ -26,6 +26,7 @@ import random
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import newick
 import numpy as np
@@ -48,7 +49,10 @@ def capture_output(func, *args, **kwargs):
     sys.stderr = buffer_class()
 
     try:
-        func(*args, **kwargs)
+        # Recent versions of MacOS seem to have issues with us calling signal
+        # during tests.
+        with mock.patch("signal.signal"):
+            func(*args, **kwargs)
         stdout_output = sys.stdout.getvalue()
         stderr_output = sys.stderr.getvalue()
     finally:

@@ -24,10 +24,10 @@ from __future__ import annotations
 import collections
 import dataclasses
 import inspect
-import io
 import logging
 import math
 import sys
+import textwrap
 import warnings
 from typing import ClassVar
 from typing import List
@@ -117,17 +117,7 @@ class Demography:
         self.events.sort(key=lambda de: de.time)
         self.__name_id_map = None
 
-    def __str__(self):
-        s = ""
-        for pop in self.populations:
-            s += f"{pop}\n"
-        s += f"migration_matrix = \n{self.migration_matrix}\n"
-        s += "Events:\n"
-        for event in self.events:
-            s += f"{event}\n"
-        return s
-
-    def _populations_html(self):
+    def _populations_table(self):
         col_titles = [
             "id",
             "name",
@@ -140,6 +130,24 @@ class Demography:
         for j, pop in enumerate(self.populations):
             row = [str(j)] + [f"{getattr(pop, attr)}" for attr in col_titles[1:]]
             data.append(row)
+        return col_titles, data
+
+    def _populations_text(self):
+        col_titles, data = self._populations_table()
+        alignments = ["^", "<", "<", "<", "^", "<"]
+        data = [
+            [
+                [item.as_text() if isinstance(item, core.TableEntry) else item]
+                for item in row
+            ]
+            for row in data
+        ]
+        return core.text_table(
+            "Populations", [[title] for title in col_titles], alignments, data
+        )
+
+    def _populations_html(self):
+        col_titles, data = self._populations_table()
         return core.html_table("Populations", col_titles, data)
 
     def _migration_rate_info(self, source, dest, rate):
@@ -153,7 +161,7 @@ class Demography:
             )
         return core.TableEntry(f"{rate:.4g}", extra)
 
-    def _migration_matrix_html(self):
+    def _migration_matrix_table(self):
         col_titles = [""] + [pop.name for pop in self.populations]
         data = []
         for j in range(self.num_populations):
@@ -162,21 +170,51 @@ class Demography:
                 for k in range(self.num_populations)
             ]
             data.append(row)
+        return col_titles, data
+
+    def _migration_matrix_text(self):
+        col_titles, data = self._migration_matrix_table()
+        alignments = ">" + "^" * self.num_populations
+        data = [
+            [
+                [item.as_text() if isinstance(item, core.TableEntry) else item]
+                for item in row
+            ]
+            for row in data
+        ]
+        return core.text_table(
+            "Migration Matrix", [[title] for title in col_titles], alignments, data
+        )
+
+    def _migration_matrix_html(self):
+        col_titles, data = self._migration_matrix_table()
         return core.html_table("Migration matrix", col_titles, data)
 
+    def _events_text(self, events, title="Events"):
+        col_titles = [["time"], ["type"], ["parameters"], ["effect"]]
+        alignments = "><<<"
+        data = []
+        for event in events:
+            type_text = textwrap.wrap(event._type_str, 15)
+            description = textwrap.wrap(event._parameters(), 20)
+            effect = textwrap.wrap(event._effect(), 38)
+            row = [[f"{event.time:.4g}"], type_text, description, effect]
+            data.append(row)
+        return core.text_table(
+            title, col_titles, alignments, data, internal_hlines=True
+        )
+
     def _events_html(self, events, title="Events"):
-        col_titles = ["time", "type", "description"]
+        col_titles = ["time", "type", "parameters", "effect"]
         data = []
         for event in events:
             class_name = event.__class__.__name__
+            # TODO change this to stable when 1.0 is released.
             type_html = (
                 "<a href='https://tskit.dev/msprime/docs/latest/api.html#msprime."
                 f"{class_name}'>{event._type_str}</a>"
             )
-            description = core.TableEntry(
-                event._short_description(), event._long_description()
-            )
-            row = [f"{event.time:.4g}", type_html, description]
+            row = [f"{event.time:.4g}", type_html, event._parameters(), event._effect()]
             data.append(row)
         return core.html_table(title, col_titles, data)
 
@@ -188,6 +226,26 @@ class Demography:
             + self._events_html(self.events)
             + "</p>"
         )
+
+    def __str__(self):
+        populations = self._populations_text()
+        migration_matrix = self._migration_matrix_text()
+        events = self._events_text(self.events)
+
+        def indent(table):
+            lines = table.splitlines()
+            s = "╟  " + lines[0] + "\n"
+            for line in lines[1:]:
+                s += "║  " + line + "\n"
+            return s
+
+        s = (
+            "Demography\n"
+            + indent(populations)
+            + indent(migration_matrix)
+            + indent(events)
+        )
+        return s
 
     def name_to_id(self, name):
         """
@@ -211,6 +269,10 @@ class Demography:
     @property
     def num_populations(self):
         return len(self.populations)
+
+    @property
+    def num_events(self):
+        return len(self.events)
 
     def validate(self):
         """
@@ -824,14 +886,11 @@ class DemographicEvent:
 
     time: float
 
-    def _short_description(self):
+    def _parameters(self):
         raise NotImplementedError()
 
-    def _long_description(self):
+    def _effect(self):
         raise NotImplementedError()
-
-    def __str__(self):
-        return f"{self._type_str}: {self._short_description()}"
 
     def asdict(self):
         return {
@@ -902,21 +961,28 @@ class PopulationParametersChange(DemographicEvent):
             ret["initial_size"] = self.initial_size
         return ret
 
-    def _short_description(self):
-        s = f"population={self.population}: "
+    def _parameters(self):
+        s = f"population={self.population}, "
         if self.initial_size is not None:
-            s += f"initial_size → {self.initial_size} "
+            s += f"initial_size={self.initial_size}, "
         if self.growth_rate is not None:
-            s += f"growth_rate → {self.growth_rate} "
-        return s[:-1]
+            s += f"growth_rate={self.growth_rate}, "
+        return s[:-2]
 
-    def _long_description(self):
+    def _effect(self):
         s = ""
         if self.initial_size is not None:
-            s += f"New initial_size = {self.initial_size} "
+            s += f"initial_size → {self.initial_size} "
+            if self.growth_rate is not None:
+                s += "and "
         if self.growth_rate is not None:
-            s += f"New growth_rate = {self.growth_rate} "
-        return s[:-1]
+            s += f"growth_rate → {self.growth_rate} "
+        s += "for"
+        if self.population == -1:
+            s += " all populations"
+        else:
+            s += f" population {self.population}"
+        return s
 
 
 @dataclasses.dataclass
@@ -968,15 +1034,16 @@ class MigrationRateChange(DemographicEvent):
             "dest": self.dest,
         }
 
-    def _short_description(self):
-        return f"source={self.source} dest={self.dest} rate={self.rate}"
+    def _parameters(self):
+        return f"source={self.source}, dest={self.dest}, rate={self.rate}"
 
-    def _long_description(self):
+    def _effect(self):
+        ret = "Backwards-time migration rate "
         if self.source == -1 and self.dest == -1:
-            ret = f"change to {self.rate} everywhere"
+            ret += "for all populations "
         else:
-            matrix_index = (self.source, self.dest)
-            ret = f"change for {matrix_index} to {self.rate}"
+            ret += f"from {self.source} to {self.dest} "
+        ret += f"→ {self.rate}"
         return ret
 
 
@@ -1029,16 +1096,14 @@ class MassMigration(DemographicEvent):
             "proportion": self.proportion,
         }
 
-    def _short_description(self):
-        return f"proportion={self.proportion} source={self.source} dest={self.dest}"
+    def _parameters(self):
+        return f"source={self.source}, dest={self.dest}, proportion={self.proportion}"
 
-    def _long_description(self):
+    def _effect(self):
         return (
-            "Lineages moved with probability {} backwards in time with "
-            "source {} and dest {} "
-            "(equivalent to migration from {} to {} forwards in time)".format(
-                self.proportion, self.source, self.dest, self.dest, self.source
-            )
+            f"Lineages currently in population {self.source} move to {self.dest} "
+            f"with probability {self.proportion} (equivalent to individuals "
+            f"migrating from {self.dest} to {self.source} forwards in time)"
         )
 
 
@@ -1062,13 +1127,13 @@ class SimpleBottleneck(DemographicEvent):
         default="Simple Bottleneck", repr=False
     )
 
-    def _short_description(self):
-        return f"population={self.population} proportion={self.proportion}"
+    def _parameters(self):
+        return f"population={self.population}, proportion={self.proportion}"
 
-    def _long_description(self):
-
-        return "lineages in population {} coalesce with " "probability {}".format(
-            self.population, self.proportion
+    def _effect(self):
+        return (
+            f"Lineages in population {self.population} coalesce with "
+            f"probability {self.proportion}"
         )
 
 
@@ -1092,14 +1157,11 @@ class InstantaneousBottleneck(DemographicEvent):
         default="Instantaneous Bottleneck", repr=False
     )
 
-    def _short_description(self):
-        return f"population={self.population} strength={self.strength}"
+    def _parameters(self):
+        return f"population={self.population}, strength={self.strength}"
 
-    def _long_description(self):
-        return (
-            "population {}: equivalent to {} "
-            "generations of the coalescent".format(self.population, self.strength)
-        )
+    def _effect(self):
+        return f"Equivalent to {self.strength} generations of the coalescent"
 
 
 @dataclasses.dataclass
@@ -1127,15 +1189,15 @@ class CensusEvent(DemographicEvent):
             "time": self.time,
         }
 
-    def _short_description(self):
-        return "Record location of lineages"
+    def _parameters(self):
+        return ""
 
-    def _long_description(self):
-        return None
+    def _effect(self):
+        return "Insert census nodes to record the location of all lineages"
 
 
 @dataclasses.dataclass
-class PopulationParameters:
+class PopulationState:
     """
     Simple class to represent the state of a population in terms of its
     demographic parameters.
@@ -1155,9 +1217,9 @@ class Epoch:
 
     start_time: float
     end_time: float
-    populations: list
+    populations: List[PopulationState]
     migration_matrix: list  # TODO numpy array
-    demographic_events: list
+    demographic_events: List[DemographicEvent]
 
 
 def _matrix_exponential(A):
@@ -1191,7 +1253,6 @@ class DemographyDebugger:
         *,
         demography=None,
     ):
-        self.precision = 3
         if demography is None:
             # Support the pre-1.0 syntax
             demography = Demography.from_old_style(
@@ -1237,7 +1298,7 @@ class DemographyDebugger:
                 conf["growth_rate"] for conf in simulator.population_configuration
             ]
             populations = [
-                PopulationParameters(
+                PopulationState(
                     start_size=simulator.compute_population_size(j, start_time),
                     end_size=simulator.compute_population_size(j, end_time),
                     growth_rate=growth_rates[j],
@@ -1287,6 +1348,24 @@ class DemographyDebugger:
             data.append(row)
         return core.html_table("", column_titles, data)
 
+    def _populations_text(self, epoch):
+        column_titles = [[""], ["start"], ["end"], ["growth_rate"]] + [
+            [pop.name] for pop in self.demography.populations
+        ]
+        alignments = ">>><" + "^" * self.demography.num_populations
+        data = []
+        for j, pop in enumerate(epoch.populations):
+            row = [
+                [self.demography.populations[j].name],
+                [f"{pop.start_size: .3g}"],
+                [f"{pop.end_size: .3g}"],
+                [f"{pop.growth_rate: .3g}"],
+            ]
+            for k in range(self.demography.num_populations):
+                row.append([f"{epoch.migration_matrix[j, k]:.3g}"])
+            data.append(row)
+        return core.text_table("Population state", column_titles, alignments, data)
+
     def _repr_html_(self):
         out = ""
         for j, epoch in enumerate(self.epochs):
@@ -1304,94 +1383,40 @@ class DemographyDebugger:
         out += "</p>"
         return f"<div>{out}</div>"
 
-    def _print_populations(self, epoch, output):
-        field_width = self.precision + 6
-        growth_rate_field_width = 14
-        sep_str = " | "
-        N = len(epoch.migration_matrix)
-        fmt = (
-            "{id:<2} "
-            "{start_size:^{field_width}}"
-            "{end_size:^{field_width}}"
-            "{growth_rate:>{growth_rate_field_width}}"
-        )
-        print(
-            fmt.format(
-                id="",
-                start_size="start",
-                end_size="end",
-                growth_rate="growth_rate",
-                field_width=field_width,
-                growth_rate_field_width=growth_rate_field_width,
-            ),
-            end=sep_str,
-            file=output,
-        )
-        for k in range(N):
-            print("{0:^{1}}".format(k, field_width), end="", file=output)
-        print(file=output)
-        h = "-" * (field_width - 1)
-        print(
-            fmt.format(
-                id="",
-                start_size=h,
-                end_size=h,
-                growth_rate=h,
-                field_width=field_width,
-                growth_rate_field_width=growth_rate_field_width,
-            ),
-            end=sep_str,
-            file=output,
-        )
-        for _ in range(N):
-            s = "-" * (field_width - 1)
-            print("{0:<{1}}".format(s, field_width), end="", file=output)
-        print(file=output)
-        for j, pop in enumerate(epoch.populations):
-            s = (
-                "{id:<2}|"
-                "{start_size:^{field_width}.{precision}g}"
-                "{end_size:^{field_width}.{precision}g}"
-                "{growth_rate:>{growth_rate_field_width}.{precision}g}"
-            ).format(
-                id=j,
-                start_size=pop.start_size,
-                end_size=pop.end_size,
-                growth_rate=pop.growth_rate,
-                precision=self.precision,
-                field_width=field_width,
-                growth_rate_field_width=growth_rate_field_width,
-            )
-            print(s, end=sep_str, file=output)
-            for k in range(N):
-                x = epoch.migration_matrix[j][k]
-                print(
-                    "{0:^{1}.{2}g}".format(x, field_width, self.precision),
-                    end="",
-                    file=output,
-                )
-            print(file=output)
-
     def print_history(self, output=sys.stdout):
         """
         Prints a summary of the history of the populations.
+
+        Deprecated since 1.0: use ``print(debugger)`` instead.
         """
-        for epoch in self.epochs:
-            if len(epoch.demographic_events) > 0:
-                print(f"Events @ generation {epoch.start_time}", file=output)
-            for event in epoch.demographic_events:
-                print("   -", event, file=output)
-            s = f"Epoch: {epoch.start_time} -- {epoch.end_time} generations"
-            print("=" * len(s), file=output)
-            print(s, file=output)
-            print("=" * len(s), file=output)
-            self._print_populations(epoch, output)
-            print(file=output)
+        print(self, file=output, end="")
 
     def __str__(self):
-        buff = io.StringIO()
-        self.print_history(buff)
-        return buff.getvalue()
+        def indent(table, header_char="╟", depth=4):
+            lines = table.splitlines()
+            s = header_char + (" " * depth) + lines[0] + "\n"
+            for line in lines[1:]:
+                s += "║" + (" " * depth) + line + "\n"
+            return s
+
+        def box(title):
+            N = len(title) + 2
+            top = "╠" + ("═" * N) + "╗"
+            bottom = "╠" + ("═" * N) + "╝"
+            return f"{top}\n║ {title} ║\n{bottom}\n"
+
+        out = "DemographyDebugger\n"
+        for j, epoch in enumerate(self.epochs):
+            if j > 0:
+                if len(epoch.demographic_events) > 0:
+                    title = f"Events @ generation {epoch.start_time}"
+                    out += indent(
+                        self.demography._events_text(epoch.demographic_events, title)
+                    )
+            epoch_title = f"Epoch: {epoch.start_time} -- {epoch.end_time} generations"
+            out += box(epoch_title)
+            out += indent(self._populations_text(epoch))
+        return out
 
     def population_size_trajectory(self, steps):
         """
