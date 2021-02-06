@@ -728,18 +728,6 @@ def _parse_rate_map(rate_param, sequence_length, name):
     return rate_map
 
 
-def _get_population(demography, key):
-    if isinstance(key, str):
-        pop_id = demography.name_to_id(key)
-    elif core.isinteger(key):
-        pop_id = int(key)
-        if pop_id < 0 or pop_id >= demography.num_populations:
-            raise ValueError(f"Population ID '{key}' out of bounds")
-    else:
-        raise TypeError("Population references either be integer IDs or string names")
-    return pop_id
-
-
 def _insert_sample_sets(sample_sets, demography, default_ploidy, tables):
     """
     Insert the samples described in the specified {population_id: num_samples}
@@ -747,12 +735,12 @@ def _insert_sample_sets(sample_sets, demography, default_ploidy, tables):
     """
     for sample_set in sample_sets:
         n = sample_set.num_samples
-        population = demography.populations[sample_set.population]
+        population = demography[sample_set.population]
         time = population.sampling_time if sample_set.time is None else sample_set.time
         ploidy = default_ploidy if sample_set.ploidy is None else sample_set.ploidy
         logger.info(
             f"Sampling {n} individuals with ploidy {ploidy} in population "
-            f"{sample_set.population} (name='{population.name}') at time {time}"
+            f"{population.id} (name='{population.name}') at time {time}"
         )
         node_individual = len(tables.individuals) + np.repeat(
             np.arange(n, dtype=np.int32), ploidy
@@ -763,7 +751,7 @@ def _insert_sample_sets(sample_sets, demography, default_ploidy, tables):
         tables.nodes.append_columns(
             flags=np.full(N, tskit.NODE_IS_SAMPLE, dtype=np.uint32),
             time=np.full(N, time),
-            population=np.full(N, sample_set.population, dtype=np.int32),
+            population=np.full(N, population.id, dtype=np.int32),
             individual=node_individual,
         )
 
@@ -788,8 +776,6 @@ def _parse_sample_sets(sample_sets, demography):
                 raise ValueError(
                     "Must specify a SampleSet population in multipopulation models"
                 )
-        else:
-            sample_set.population = _get_population(demography, sample_set.population)
 
     if sum(sample_set.num_samples for sample_set in sample_sets) == 0:
         raise ValueError("Zero samples specified")
@@ -1211,7 +1197,8 @@ class Simulator(_msprime.Simulator):
         ll_simulation_model = model.get_ll_representation()
         ll_population_configuration = [pop.asdict() for pop in demography.populations]
         ll_demographic_events = [
-            event.get_ll_representation() for event in demography.events
+            event.get_ll_representation(demography=demography)
+            for event in demography.events
         ]
         ll_recomb_map = recombination_map.asdict()
         ll_tables = _msprime.LightweightTableCollection(tables.sequence_length)
@@ -1400,7 +1387,7 @@ class SampleSet:
     """
 
     num_samples: int
-    population: Union[int, None] = None
+    population: Union[int, str, None] = None
     time: Union[float, None] = None
     ploidy: Union[int, None] = None
 

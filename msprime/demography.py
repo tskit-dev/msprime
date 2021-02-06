@@ -22,13 +22,16 @@ Module responsible for defining and debugging demographic models.
 from __future__ import annotations
 
 import collections
+import copy
 import dataclasses
 import inspect
+import itertools
 import logging
 import math
 import sys
 import textwrap
 import warnings
+from typing import Any
 from typing import ClassVar
 from typing import List
 from typing import Union
@@ -60,62 +63,211 @@ def check_migration_rate(migration_rate):
         raise ValueError("Migration rates must be non-negative")
 
 
-def check_population_size(Ne):
+@dataclasses.dataclass
+class Population:
     """
-    Check if an input population size makes sense.
+    Define a :ref:`population <sec_demography_populations>` in a
+    :class:`.Demography`.
+
+    :ivar initial_size: The absolute size of the population at time zero.
+    :vartype initial_size: float
+    :var growth_rate: The exponential growth rate of the
+        population per generation (forwards in time).
+        Growth rates can be negative. This is zero for a
+        constant population size, and positive for a population that has been
+        growing. Defaults to 0.
+    :vartype growth_rate: float
+    :ivar name: The name of the population. If specified this must be a uniquely
+        identifying string and must be a valid Python identifier (i.e., could be
+        used as a variable name in Python code).
+    :vartype name: str
+    :ivar description: A short description of the population. Defaults to the
+        empty string if not specified.
+    :vartype description: str
+    :ivar extra_metadata: A JSON-encodable dictionary of metadata items to be
+        stored in the associated tskit population object. This dictionary
+        must not contain keys for any of the pre-defined metadata items.
+    :vartype extra_metadata: dict
+    :ivar sampling_time: The default time at which samples are drawn from
+        this population. See the :ref:`sec_ancestry_samples_sampling_time`
+        section for more details.
+    :vartype sampling_time: float
+    :ivar id: The integer ID of this population within the parent
+        :class:`.Demography`. This attribute is assigned by the Demography
+        class and should not be set or changed by user code.
+    :vartype id: int
     """
-    if Ne is not None and Ne <= 0:
-        raise ValueError("Population size must be positive")
+
+    initial_size: float
+    growth_rate: float = 0.0
+    name: Union[str, None] = None
+    description: str = ""
+    extra_metadata: dict = dataclasses.field(default_factory=dict)
+    sampling_time: float = 0
+
+    # Keeping this as something we can init because this stops us
+    # doing things like round-tripping through repr. The warning
+    # above should suffice.
+    id: Union[int, None] = dataclasses.field(default=None)  # noqa: A003
+
+    def asdict(self):
+        return dataclasses.asdict(self)
+
+    @staticmethod
+    def from_old_style(pop_config, Ne=1):
+        """
+        Returns a Population object derived from the specified old-style
+        PopulationConfiguration. The Ne value is used as the ``initial_size``
+        if this is not provided in the PopulationConfiguration.
+
+        :meta private:
+        """
+        initial_size = (
+            Ne if pop_config.initial_size is None else pop_config.initial_size
+        )
+        population = Population(
+            initial_size=initial_size,
+            growth_rate=pop_config.growth_rate,
+        )
+        metadata = pop_config.metadata
+        if metadata is not None and isinstance(metadata, collections.abc.Mapping):
+            metadata = metadata.copy()
+            if "name" in metadata:
+                population.name = metadata.pop("name")
+            if "description" in metadata:
+                population.description = metadata.pop("description")
+        population.extra_metadata = metadata
+        return population
+
+    def validate(self):
+        # TODO more checks
+        if self.initial_size < 0:
+            raise ValueError("Negative population size")
+        if self.name is None:
+            raise ValueError("A population name must be set.")
+        if not self.name.isidentifier():
+            raise ValueError("A population name must be a valid Python identifier")
 
 
 @dataclasses.dataclass
 class Demography:
     """
-    A description of a demographic model for an msprime simulation.
-
-    TODO document properly.
-
-    Population structure is modelled by specifying a fixed number of
-    subpopulations :math:`d`, and a :math:`d \\times d` matrix :math:`M` of
-    per-generation migration rates. The :math:`(j,k)^{th}` entry of :math:`M`
-    is the expected number of migrants moving from population :math:`k` to
-    population :math:`j` per generation, divided by the size of population
-    :math:`j`. In terms of the coalescent process, :math:`M_{j,k}` gives the
-    rate at which an ancestral lineage moves from population :math:`j` to
-    population :math:`k`, as one follows it back through time. In
-    continuous-time models, when :math:`M_{j,k}` is close to zero, this rate is
-    approximately equivalent to the fraction of population :math:`j` that is
-    replaced each generation by migrants from population :math:`k`. In
-    discrete-time models, the equivalence is exact and each row of :math:`M`
-    has the constraint :math:`\\sum_{k \\neq j} M_{j,k} \\leq 1`. This differs
-    from the migration matrix one usually uses in population demography: if
-    :math:`m_{k,j}` is the proportion of individuals (in the usual sense; not
-    lineages) in population :math:`k` that move to population :math:`j` per
-    generation, then translating this proportion of population :math:`k` to a
-    proportion of population :math:`j`, we have :math:`M_{j,k} = m_{k,j}
-    \\times N_k / N_j`.
-
-    Each subpopulation has an initial absolute population size :math:`s`
-    and a per generation exponential growth rate :math:`\\alpha`. The size of a
-    given population at time :math:`t` in the past (measured in generations) is
-    therefore given by :math:`s e^{-\\alpha t}`. Demographic events that occur in
-    the history of the simulated population alter some aspect of this population
-    configuration at a particular time in the past.
-
+    The definition of a demographic model for an msprime simulation,
+    consisting of a set of populations, a migration matrix, and a list
+    of demographic events. See the :ref:`sec_demography_definitions`
+    section for precise mathematical definitions of these concepts.
     """
 
     populations: List[Population] = dataclasses.field(default_factory=list)
     events: List = dataclasses.field(default_factory=list)
-    migration_matrix: Union[np.ndarray, None] = None
+    # Until we can use numpy type hints properly, it's not worth adding them
+    # here. We still have to add in ignores below for indexed assignment errors.
+    migration_matrix: Union[Any, None] = None
 
     def __post_init__(self):
         if self.migration_matrix is None:
             N = self.num_populations
             self.migration_matrix = np.zeros((N, N))
 
-        # Sort demographic events by time.
+        # Sort demographic events by time. Sorting is stable so the relative
+        # order of events at the same time will be preserved.
         self.events.sort(key=lambda de: de.time)
-        self.__name_id_map = None
+
+        # People might get cryptic errors from passing in copies of the same
+        # population, so check for it.
+        if len({id(pop) for pop in self.populations}) != len(self.populations):
+            raise ValueError("Population objects must be distinct")
+
+        # Assign the IDs and default names, if needed.
+        for j, population in enumerate(self.populations):
+            if population.id is not None:
+                raise ValueError(
+                    "Population ID should not be set before using to create "
+                    "a Demography"
+                )
+            population.id = j
+            if population.name is None:
+                population.name = f"pop_{j}"
+        self._validate_populations()
+
+    def add_population(self, population: Population):
+        """
+        Adds the specified :class:`.Population` to this Demography,
+        setting default attributes appropriately. Note that this method
+        uses the input object and will update its state.
+
+        :param Population population: The Population object to insert.
+        """
+        if not isinstance(population, Population):
+            raise TypeError("Input must be an instance of Population")
+        if population.id is not None:
+            raise ValueError(
+                "Population ID should not be set before adding to a demography"
+            )
+        N = self.num_populations
+        population.id = N
+        if population.name is None:
+            population.name = f"pop_{population.id}"
+        self.populations.append(population)
+        M = self.migration_matrix
+        self.migration_matrix = np.zeros((N + 1, N + 1))
+        self.migration_matrix[:N, :N] = M
+        self._validate_populations()
+
+    def set_migration_rate(
+        self, source: Union[str, int], dest: Union[str, int], rate: float
+    ):
+        """
+        Sets the backwards-time rate of migration from the specified ``source``
+        population to ``dest`` to the specified value. This has the effect of
+        setting ``demography.migration_matrix[source, dest] = rate``.
+
+        .. warning:: Note this is the **backwards time** migration rate and that
+            ``source`` and ``dest`` are from the perspective of lineages in the
+            coalescent process. See :ref:`sec_demography_migration` for more
+            details and clarification on this vital point.
+
+        The ``source`` and ``dest`` populations can be referred to either by
+        their integer ``id`` or string ``name`` values.
+
+        :param str,int source: The source population from which lineages originate
+            in the backwards-time process.
+        :param str,int dest: The destination population where lineages are move
+            to in the backwards-time process.
+        :param float rate: The per-generation migration rate.
+        """
+        source = self[source].id
+        dest = self[dest].id
+        if source == dest:
+            raise ValueError("The source and dest populations must be different")
+        self.migration_matrix[source, dest] = rate  # type: ignore
+
+    def set_symmetric_migration_rate(
+        self, populations: List[Union[str, int]], rate: float
+    ):
+        """
+        Sets the symmetric migration rate between all pairs of populations in
+        the specified list to the specified value. For a given pair of population
+        IDs ``j`` and ``k``, this sets ``demography.migration_matrix[j, k] = rate``
+        and ``demography.migration_matrix[k, j] = rate``.
+
+        Populations may be specified either by their integer IDs or by
+        their string names.
+
+        :param list populations: An iterable of population identifiers (integer
+            IDs or string names).
+        :param float rate: The value to set the migration matrix entries to.
+        """
+        # There's an argument for not checking this so that corner cases on
+        # single population models can be handled. However, it's nearly always
+        # going to be a user error where someone forgets the second population
+        # so it seems better to raise an error to prevent hard-to-detect mistakes.
+        if len(populations) < 2:
+            raise ValueError("Must specify at least two populations")
+        pop_ids = [self[identifier].id for identifier in populations]
+        for pop_j, pop_k in itertools.combinations(pop_ids, 2):
+            self.migration_matrix[pop_j, pop_k] = rate  # type: ignore
+            self.migration_matrix[pop_k, pop_j] = rate  # type: ignore
 
     def _populations_table(self):
         col_titles = [
@@ -247,24 +399,25 @@ class Demography:
         )
         return s
 
-    def name_to_id(self, name):
+    def __getitem__(self, identifier):
         """
-        Returns the integer ID (i.e., its position in the list of populations)
-        of the population with the specified name. If the name does not exist,
-        raise a KeyError.
-
-        Note: this function will raise an error if called before the ``validate``
-        method is called.
-
-        :param str name: The name of the population we wish to look up.
-        :return: The integer ID of the population.
-        :rtype: int
+        Returns the population with the specified ID or name.
         """
-        if self.__name_id_map is None:
-            raise ValueError("Cannot call name_to_id before calling validate()")
-        if name not in self.__name_id_map:
-            raise KeyError(f"Population with name '{name}' not found in demography")
-        return self.__name_id_map[name]
+        if isinstance(identifier, str):
+            for population in self.populations:
+                if population.name == identifier:
+                    return population
+            else:
+                raise KeyError(f"Population with name '{identifier}' not found")
+        elif core.isinteger(identifier):
+            # We don't support negative indexing here because -1 is used as
+            # way to refer to *all* populations in demographic events, and
+            # it would be too easy to introduce bugs in old code if we changed
+            # the meaning of this.
+            if identifier < 0 or identifier >= self.num_populations:
+                raise KeyError(f"Population id {identifier} out of bounds")
+            return self.populations[identifier]
+        raise TypeError("Keys must be either string population names or integer IDs")
 
     @property
     def num_populations(self):
@@ -274,11 +427,26 @@ class Demography:
     def num_events(self):
         return len(self.events)
 
+    def _validate_populations(self):
+        names = set()
+        for j, population in enumerate(self.populations):
+            if population.id != j:
+                raise ValueError(
+                    "Incorrect population ID. ID values should not be updated "
+                    "by users. Please use Demography.add_population to add extra "
+                    "populations after initialisation."
+                )
+            population.validate()
+            if population.name in names:
+                raise ValueError(f"Duplicate population name: '{population.name}'")
+            names.add(population.name)
+
     def validate(self):
         """
         Checks the demography looks sensible and raises errors/warnings
         appropriately.
         """
+        self._validate_populations()
         migration_matrix = np.array(self.migration_matrix)
         N = self.num_populations
         if migration_matrix.shape != (N, N):
@@ -298,17 +466,12 @@ class Demography:
                     "instances sorted in non-decreasing order of time."
                 )
 
-        self.__name_id_map = {}
-        for j, population in enumerate(self.populations):
-            population.validate()
-            if population.name in self.__name_id_map:
-                raise ValueError(f"Duplicate population name: '{population.name}'")
-            self.__name_id_map[population.name] = j
-
     def insert_populations(self, tables):
         """
         Insert population definitions for this demography into the specified
         set of tables.
+
+        :meta private:
         """
         metadata_schema = tskit.MetadataSchema(
             {
@@ -525,22 +688,17 @@ class Demography:
         Creates a Demography object from the pre 1.0 style input parameters,
         reproducing the old semantics with respect to default values.
         """
-        demography = Demography()
-        if population_configurations is None:
-            demography.populations = [Population(initial_size=Ne)]
-        else:
-            for pop_config in population_configurations:
-                demography.populations.append(Population.from_old_style(pop_config, Ne))
-        for j, population in enumerate(demography.populations):
-            if population.name is None:
-                population.name = f"pop_{j}"
-        if migration_matrix is None:
-            migration_matrix = np.zeros(
-                (demography.num_populations, demography.num_populations)
-            )
-        demography.migration_matrix = migration_matrix
+        populations = [Population(initial_size=Ne)]
+        if population_configurations is not None:
+            populations = [
+                Population.from_old_style(pop_config, Ne)
+                for pop_config in population_configurations
+            ]
+        demography = Demography(populations)
+        if migration_matrix is not None:
+            demography.migration_matrix = np.array(migration_matrix)
         if demographic_events is not None:
-            demography.events = demographic_events
+            demography.events = copy.deepcopy(demographic_events)
         return demography
 
     @staticmethod
@@ -586,7 +744,6 @@ class Demography:
             Population(
                 initial_size=initial_size[j],
                 growth_rate=growth_rate[j],
-                name=f"pop_{j}",
             )
             for j in range(len(initial_size))
         ]
@@ -631,9 +788,9 @@ class Demography:
         specified rate. Please see :ref:`sec_demography` for more details on
         population sizes and growth rates.
 
-        .. note:: The current implementation on supports a one-dimensional stepping
-            stone model, but higher dimensions could also be supported. Please
-            open an issue on GitHub if this feature would be useful to you.
+        .. note:: The current implementation only supports a one-dimensional
+            stepping stone model, but higher dimensions could also be supported.
+            Please open an issue on GitHub if this feature would be useful to you.
 
         :param array_like initial_size: the ``initial_size`` value for each
             of the :class:`.Population` in the returned model. The length
@@ -758,80 +915,6 @@ class Demography:
     #     return model
 
 
-# TODO fixup the documentation here. This definition is partly lifted
-# from stdpopsim and also derived from PopulationConfiguration. The
-# idea is that PopulationConfiguration is to be maintained
-# indefinitely as the old-style interface, but we convert to Population
-# internally. Getting rid of PopConfig makes sense for two reasons:
-# 1) it's a clunky and confusing name and 2) The sample_size
-# attribute makes things really awkward, as it conflates declaring
-# structure and how you sample from it.
-
-
-@dataclasses.dataclass
-class Population:
-    """
-    Define a single population in a simulation.
-
-    :ivar initial_size: The absolute size of the population at time zero.
-    :vartype initial_size: float
-    :var growth_rate: The exponential growth rate of the
-        population per generation (forwards in time).
-        Growth rates can be negative. This is zero for a
-        constant population size, and positive for a population that has been
-        growing. Defaults to 0.
-    :vartype growth_rate: float
-    :ivar name: The name of the population. If specified this must be a uniquely
-        identifying string.
-    :vartype name: str
-    :ivar description: a short description of the population
-    :vartype description: str
-    """
-
-    initial_size: float
-    growth_rate: float = 0.0
-    name: Union[str, None] = None
-    description: Union[str, None] = None
-    extra_metadata: dict = dataclasses.field(default_factory=dict)
-    sampling_time: float = 0
-
-    def asdict(self):
-        return dataclasses.asdict(self)
-
-    @staticmethod
-    def from_old_style(pop_config, Ne=1):
-        """
-        Returns a Population object derived from the specified old-style
-        PopulationConfiguration. The Ne value is used as the ``initial_size``
-        if this is not provided in the PopulationConfiguration.
-        """
-        initial_size = (
-            Ne if pop_config.initial_size is None else pop_config.initial_size
-        )
-        population = Population(
-            initial_size=initial_size,
-            growth_rate=pop_config.growth_rate,
-        )
-        metadata = pop_config.metadata
-        if metadata is not None and isinstance(metadata, collections.abc.Mapping):
-            metadata = metadata.copy()
-            if "name" in metadata:
-                population.name = metadata.pop("name")
-            if "description" in metadata:
-                population.description = metadata.pop("description")
-        population.extra_metadata = metadata
-        return population
-
-    def validate(self):
-        # TODO more checks
-        if self.initial_size < 0:
-            raise ValueError("Negative population size")
-        if self.name is None:
-            raise ValueError("A population name must be set.")
-        if not self.name.isidentifier():
-            raise ValueError("A population name must be a valid Python identifier")
-
-
 # This was lifted out of older code as-is. No point in updating it
 # to use dataclasses, since all we want to do is maintain compatability
 # with older code.
@@ -876,6 +959,24 @@ class PopulationConfiguration:
             growth_rate=self.growth_rate,
             metadata=self.metadata,
         )
+
+
+def _convert_id(demography, population_ref):
+    """
+    Converts the specified population reference into an integer,
+    suitable for input into the low-level code. We treat -1 as a special
+    case because it's used as meaning "all populations" by the events.
+
+    We need this awkward workaround taking into account that
+    demography might be None because stdpopsim is using this API
+    and won't provide this argument. All stdpopsim population references
+    will be integers, though.
+
+    https://github.com/tskit-dev/msprime/issues/1037
+    """
+    if demography is None or population_ref == -1:
+        return population_ref
+    return demography[population_ref].id
 
 
 @dataclasses.dataclass
@@ -947,13 +1048,13 @@ class PopulationParametersChange(DemographicEvent):
             raise ValueError("Cannot have a population size < 0")
         self.population = -1 if self.population is None else self.population
 
-    def get_ll_representation(self, num_populations=None):
+    def get_ll_representation(self, num_populations=None, demography=None):
         # We need to keep the num_populations argument until stdpopsim 0.2 is out
         # https://github.com/tskit-dev/msprime/issues/1037
         ret = {
             "type": "population_parameters_change",
             "time": self.time,
-            "population": self.population,
+            "population": _convert_id(demography, self.population),
         }
         if self.growth_rate is not None:
             ret["growth_rate"] = self.growth_rate
@@ -1023,15 +1124,15 @@ class MigrationRateChange(DemographicEvent):
             self.source = self.matrix_index[0]
             self.dest = self.matrix_index[1]
 
-    def get_ll_representation(self, num_populations=None):
+    def get_ll_representation(self, num_populations=None, demography=None):
         # We need to keep the num_populations argument until stdpopsim 0.1 is out
         # https://github.com/tskit-dev/msprime/issues/1037
         return {
             "type": "migration_rate_change",
             "time": self.time,
             "migration_rate": self.rate,
-            "source": self.source,
-            "dest": self.dest,
+            "source": _convert_id(demography, self.source),
+            "dest": _convert_id(demography, self.dest),
         }
 
     def _parameters(self):
@@ -1085,14 +1186,14 @@ class MassMigration(DemographicEvent):
         if self.destination is not None:
             self.dest = self.destination
 
-    def get_ll_representation(self, num_populations=None):
+    def get_ll_representation(self, num_populations=None, demography=None):
         # We need to keep the num_populations argument until stdpopsim 0.1 is out
         # https://github.com/tskit-dev/msprime/issues/1037
         return {
             "type": "mass_migration",
             "time": self.time,
-            "source": self.source,
-            "dest": self.dest,
+            "source": _convert_id(demography, self.source),
+            "dest": _convert_id(demography, self.dest),
             "proportion": self.proportion,
         }
 
@@ -1100,11 +1201,21 @@ class MassMigration(DemographicEvent):
         return f"source={self.source}, dest={self.dest}, proportion={self.proportion}"
 
     def _effect(self):
-        return (
-            f"Lineages currently in population {self.source} move to {self.dest} "
-            f"with probability {self.proportion} (equivalent to individuals "
+        if self.proportion == 1.0:
+            ret = (
+                f"All lineages currently in population {self.source} move "
+                f"to {self.dest} "
+            )
+        else:
+            ret = (
+                f"Lineages currently in population {self.source} move to {self.dest} "
+                f"with probability {self.proportion} "
+            )
+        ret += (
+            "(equivalent to individuals "
             f"migrating from {self.dest} to {self.source} forwards in time)"
         )
+        return ret
 
 
 # This is an unsupported/undocumented demographic event.
@@ -1113,13 +1224,13 @@ class SimpleBottleneck(DemographicEvent):
     population: int
     proportion: float = 1.0
 
-    def get_ll_representation(self, num_populations=None):
+    def get_ll_representation(self, num_populations=None, demography=None):
         # We need to keep the num_populations argument until stdpopsim 0.1 is out
         # https://github.com/tskit-dev/msprime/issues/1037
         return {
             "type": "simple_bottleneck",
             "time": self.time,
-            "population": self.population,
+            "population": _convert_id(demography, self.population),
             "proportion": self.proportion,
         }
 
@@ -1143,13 +1254,13 @@ class InstantaneousBottleneck(DemographicEvent):
     population: int
     strength: float = 1.0
 
-    def get_ll_representation(self, num_populations=None):
+    def get_ll_representation(self, num_populations=None, demography=None):
         # We need to keep the num_populations argument until stdpopsim 0.1 is out
         # https://github.com/tskit-dev/msprime/issues/1037
         return {
             "type": "instantaneous_bottleneck",
             "time": self.time,
-            "population": self.population,
+            "population": _convert_id(demography, self.population),
             "strength": self.strength,
         }
 
@@ -1181,7 +1292,7 @@ class CensusEvent(DemographicEvent):
 
     _type_str: ClassVar[str] = dataclasses.field(default="Census", repr=False)
 
-    def get_ll_representation(self, num_populations=None):
+    def get_ll_representation(self, num_populations=None, demography=None):
         # We need to keep the num_populations argument until stdpopsim 0.1 is out
         # https://github.com/tskit-dev/msprime/issues/1037
         return {
@@ -1238,8 +1349,12 @@ def _matrix_exponential(A):
 
 class DemographyDebugger:
     """
-    A class to facilitate debugging of population parameters and migration
-    rates in the past.
+    Utilities to compute and display information about the state of populations
+    during the different simulation epochs defined by demographic events.
+
+    .. warning:: This class is not intended to be instantiated directly using
+        the contructor - please use :meth:`.Demography.debug()` to obtain
+        a DemographyDebugger for a given :class:`.Demography` instead.
     """
 
     def __init__(
@@ -1320,7 +1435,8 @@ class DemographyDebugger:
                 if isinstance(de, MassMigration) and de.proportion == 1:
                     merged_pops.add(de.source)
             mm = epoch.migration_matrix
-            for k in merged_pops:
+            for pop_k in merged_pops:
+                k = self.demography[pop_k].id
                 if any(mm[k, :] != 0) or any(mm[:, k] != 0):
                     warnings.warn(
                         "Non-zero migration rates exist after merging "

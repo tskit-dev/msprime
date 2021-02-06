@@ -47,17 +47,23 @@
   SLiMMutationModel
 ```
 
-### Demography
+### Defining demography
 
 ```{eval-rst}
 .. autosummary::
 
   Demography
-  DemographyDebugger
   Population
-  MassMigration 
+  DemographyDebugger
+```
+### Demographic events
+
+```{eval-rst}
+.. autosummary::
+
   PopulationParametersChange
   MigrationRateChange
+  MassMigration 
 ```
 
 

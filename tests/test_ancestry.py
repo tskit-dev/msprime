@@ -905,7 +905,7 @@ class TestSimAncestrySamples:
         demography = msprime.Demography.stepping_stone_model([1, 1], 0)
         for bad_pop in [-1, 2]:
             samples = [msprime.SampleSet(2, time=0, population=bad_pop)]
-            with pytest.raises(ValueError):
+            with pytest.raises(KeyError):
                 ancestry._parse_sim_ancestry(samples=samples, demography=demography)
         for bad_pop in [1.1, ValueError]:
             samples = [msprime.SampleSet(2, time=0, population=bad_pop)]
@@ -1058,7 +1058,7 @@ class TestParseSimulate:
                     f(bad_type)
             # Now check for the structure of the matrix.
             matrix[0][0] = "bad value"
-            with pytest.raises(ValueError):
+            with pytest.raises(TypeError):
                 f(matrix)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
