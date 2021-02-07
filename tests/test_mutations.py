@@ -275,6 +275,80 @@ class TestMatrixMutationModel:
         self.validate_stationary(model)
 
 
+class TestMutateRateMap:
+    def test_no_muts(self):
+        ts = msprime.sim_ancestry(10, sequence_length=10, random_seed=2)
+        pos = [0, 3, 7, 10]
+        rate = [1.0, 0.0, 1.0]
+        mut_map = msprime.RateMap(position=pos, rate=rate)
+        ts = msprime.sim_mutations(
+            ts, rate=mut_map, random_seed=1, discrete_genome=True
+        )
+        site_pos = ts.tables.sites.position
+        assert np.all(site_pos == [0, 1, 2, 7, 8, 9])
+
+    def test_many_edges(self):
+        ts = msprime.sim_ancestry(
+            10, sequence_length=10, random_seed=6, recombination_rate=10
+        )
+        pos = [0, 3, 7, 10]
+        rate = [1.0, 0.0, 1.0]
+        mut_map = msprime.RateMap(position=pos, rate=rate)
+        ts = msprime.sim_mutations(
+            ts, rate=mut_map, random_seed=1, discrete_genome=True
+        )
+        site_pos = ts.tables.sites.position
+        assert np.all(site_pos == [0, 1, 2, 7, 8, 9])
+
+    def test_noninteger_positions_discrete(self):
+        ts = msprime.sim_ancestry(
+            10, sequence_length=10, random_seed=2, recombination_rate=1.0
+        )
+        pos = [0, 2.9, 4.3, 4.9, 9.5, 10]
+        rate = [1.0, 0.0, 10.0, 0.0, 10.0]
+        mut_map = msprime.RateMap(position=pos, rate=rate)
+        ts = msprime.sim_mutations(
+            ts, rate=mut_map, random_seed=2, discrete_genome=True
+        )
+        site_pos = ts.tables.sites.position
+        assert np.all(site_pos == [0, 1, 2])
+
+    def test_noninteger_positions_continuous(self):
+        ts = msprime.sim_ancestry(
+            10,
+            sequence_length=10,
+            random_seed=4,
+            discrete_genome=False,
+            recombination_rate=1.0,
+        )
+        pos = [0, 3, 4.3, 4.9, 10]
+        rate = [1.0, 0.0, 1.0, 0.0]
+        mut_map = msprime.RateMap(position=pos, rate=rate)
+        ts = msprime.sim_mutations(
+            ts, rate=mut_map, random_seed=2, discrete_genome=False
+        )
+        site_pos = ts.tables.sites.position
+        for left, right, rate in zip(pos[:-1], pos[1:], rate):
+            n = np.sum(np.logical_and(site_pos >= left, site_pos < right))
+            assert (n > 0) == (rate > 0)
+
+    def test_rate_map_applies_only_to_integers(self):
+        ts = msprime.sim_ancestry(
+            10,
+            sequence_length=10,
+            random_seed=3,
+            discrete_genome=True,
+            recombination_rate=1.0,
+        )
+        pos = [0, 0.5, 1.0, 4.5, 5.0, 9.5, 10]
+        rate = [0, 10, 0, 10, 0, 10]
+        mut_map = msprime.RateMap(position=pos, rate=rate)
+        ts = msprime.sim_mutations(
+            ts, rate=mut_map, random_seed=2, discrete_genome=True
+        )
+        assert ts.num_mutations == 0
+
+
 class MutateMixin:
     def verify_topology(self, source, dest):
         assert source.nodes == dest.nodes
