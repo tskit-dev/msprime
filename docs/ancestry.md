@@ -625,6 +625,11 @@ recent past. Because correlations between chromosomes break down very rapidly,
 we only need to simulate using `dtwf` for roughly 10-20 generations, after which
 we can switch to the `hudson` model to finish the simulation more efficiently.
 
+{ref}`Multiple merger coalescents <sec_ancestry_models_multiple_mergers>`
+result in positively correlated ancestries between unlinked chromosomes. The
+correlations do not break down in time so that multiple chromosomes should not
+be simulated independently.
+
 For example, simulating 10 sampled diploid individuals using the recombination
 map defined above for three chromosomes and switching from the `dtwf` to
 `hudson` model 20 generations ago, we run
