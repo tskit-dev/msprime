@@ -1112,7 +1112,9 @@ mutgen_place_mutations(mutgen_t *self, bool discrete_sites)
      * a unit of "mutation mass" on each integer, so that
      * in a segment [left, right) there can be mutations at the
      * integers {ceil(left), ceil(left) + 1, ..., ceil(right) - 1},
-     * and the total mutation "length" is ceil(right) - ceil(left). */
+     * and no mutations if ceil(left) == ceil(right).
+     * In other words, each interval of the rate map only applies to
+     * the integers that fall inside it. */
     int ret = 0;
     const double *map_position = self->rate_map.position;
     const double *map_rate = self->rate_map.rate;
@@ -1179,6 +1181,7 @@ mutgen_place_mutations(mutgen_t *self, bool discrete_sites)
                     goto out;
                 }
             }
+            left = right;
             map_index++;
         }
     }

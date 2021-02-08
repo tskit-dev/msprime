@@ -4384,6 +4384,107 @@ class MutationStatsTest(Test):
         )
 
 
+class MutationRateMapTest(Test):
+    def verify_subdivided(self, ts, rate_map, discrete=False):
+        outfile = self._build_filename(None, "mutation_counts")
+        sub_pos = np.unique(
+            np.sort(
+                np.concatenate(
+                    [
+                        rate_map.position,
+                        np.linspace(
+                            rate_map.start_position, rate_map.end_position, 101
+                        ),
+                    ]
+                )
+            )
+        )
+        sub_rate = [rate_map.get_rate(p) for p in sub_pos[:-1]]
+        sub_map = msprime.RateMap(position=sub_pos, rate=sub_rate)
+        t0 = msprime.sim_mutations(ts, rate=rate_map, discrete_genome=discrete).tables
+        t1 = msprime.sim_mutations(ts, rate=sub_map, discrete_genome=discrete).tables
+        if discrete:
+            # make an equivalent map with breaks on integers
+            # to use in calculating expected values
+            int_pos = np.unique(np.ceil(rate_map.position))
+            int_rate = [rate_map.get_rate(p) for p in int_pos[:-1]]
+            rate_map = msprime.RateMap(int_pos, int_rate)
+
+        bins = np.linspace(0, ts.sequence_length, min(101, int(ts.sequence_length + 1)))
+        breaks = np.unique(np.sort(np.concatenate([bins, rate_map.position])))
+        segsites = ts.segregating_sites(windows=breaks, mode="branch")
+        expected = np.bincount(
+            np.searchsorted(bins, breaks[:-1], "right") - 1,
+            weights=segsites,
+            minlength=len(bins) - 1,
+        )
+        for j in range(len(expected)):
+            left = bins[j]
+            right = bins[j + 1]
+            mass = rate_map.get_cumulative_mass(right) - rate_map.get_cumulative_mass(
+                left
+            )
+            expected[j] *= mass
+        lower = scipy.stats.poisson.ppf(0.025, expected)
+        upper = scipy.stats.poisson.ppf(1 - 0.025, expected)
+        counts0 = np.bincount(
+            np.digitize(t0.sites.position[t0.mutations.site], bins) - 1,
+            minlength=len(bins) - 1,
+        )
+        counts1 = np.bincount(
+            np.digitize(t1.sites.position[t1.mutations.site], bins) - 1,
+            minlength=len(bins) - 1,
+        )
+
+        fig, ax = pyplot.subplots(1, 1, figsize=(8, 6))
+        ax.scatter(bins[:-1], counts0, label="coarse map")
+        ax.scatter(bins[:-1], counts1, label="fine map")
+        ax.plot(bins[:-1], expected, label="expected number")
+        ax.plot(bins[:-1], lower, "r:", linewidth=2, label="rough expected bounds")
+        ax.plot(bins[:-1], upper, "r:", linewidth=2)
+        ax.set_xlabel("Position")
+        ax.set_ylabel("Num mutations in bin")
+        ax.legend()
+        pyplot.savefig(outfile, dpi=72)
+        pyplot.close(fig)
+
+    def test_subdivide(self):
+        ts = msprime.sim_ancestry(
+            1000,
+            sequence_length=1e6,
+            recombination_rate=1e-8,
+            population_size=10000,
+            random_seed=1,
+        )
+        rate_map = msprime.RateMap([0, 1e6], [1e-8])
+        self.verify_subdivided(ts, rate_map)
+
+    def test_varying_rate(self):
+        ts = msprime.sim_ancestry(
+            1000,
+            sequence_length=1e6,
+            recombination_rate=1e-8,
+            population_size=10000,
+            random_seed=1,
+        )
+        rate_map = msprime.RateMap([0, 3e5, 6e5, 1e6], [2e-8, 1e-9, 1e-8])
+        self.verify_subdivided(ts, rate_map)
+
+    def test_shorter_chromosome(self):
+        ts = msprime.sim_ancestry(
+            1000,
+            sequence_length=20,
+            recombination_rate=0.05,
+            population_size=100,
+            random_seed=12,
+        )
+        rate_map = msprime.RateMap(
+            position=[0, 1.1, 10, 11.5, 13.8, 15.2, 15.9, 20],
+            rate=[0.1, 0.2, 0.0, 0.2, 0.0, 100, 0.0],
+        )
+        self.verify_subdivided(ts, rate_map, discrete=True)
+
+
 class MutationTest(Test):
     def _transition_matrix_chi_sq(self, transitions, transition_matrix):
         tm_chisq = []
