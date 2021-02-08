@@ -155,7 +155,7 @@ based on a species tree, and then draw samples using the species names.
 ```{code-cell}
 demography = msprime.Demography.from_species_tree(
     "(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
-    branch_length_units="myr",
+    time_units="myr",
     initial_size=10**4,
     generation_time=20)
 ts = msprime.sim_ancestry({"gorilla": 2, "human": 4}, demography=demography)
