@@ -27,7 +27,7 @@ import newick
 from . import demography as demog
 
 
-def parse_starbeast(tree, generation_time, branch_length_units="myr"):
+def parse_starbeast(tree, generation_time, time_units="myr"):
     """
     Parse a nexusencoded species tree into a Demography object. See the
     documentation of :class:`.Demography.from_starbeast` (the public interface)
@@ -36,16 +36,16 @@ def parse_starbeast(tree, generation_time, branch_length_units="myr"):
 
     # Make sure that branch length units are either "myr" or "yr".
     allowed_branch_lenth_units = ["myr", "yr"]
-    if branch_length_units not in allowed_branch_lenth_units:
+    if time_units not in allowed_branch_lenth_units:
         err = "The specified units for branch lengths ("
-        err += f'"{branch_length_units}") are not accepted. '
+        err += f'"{time_units}") are not accepted. '
         err += 'Accepted units are "myr" (millions of years) or "yr" (years).'
         raise ValueError(err)
 
     generation_time = check_generation_time(generation_time)
     # Get the number of generations per branch length unit.
     generations_per_branch_length_unit = get_generations_per_branch_length_unit(
-        branch_length_units, generation_time
+        time_units, generation_time
     )
 
     translate_string, tree_string = parse_nexus(tree)
@@ -90,7 +90,7 @@ def parse_species_tree(
     tree,
     initial_size,
     *,
-    branch_length_units="gen",
+    time_units="gen",
     generation_time=None,
     growth_rate=None,
 ):
@@ -101,9 +101,9 @@ def parse_species_tree(
     """
     # Make sure that branch length units are either "myr", "yr", or "gen".
     allowed_branch_lenth_units = ["myr", "yr", "gen"]
-    if branch_length_units not in allowed_branch_lenth_units:
+    if time_units not in allowed_branch_lenth_units:
         err = "The specified units for branch lengths ("
-        err += f'"{branch_length_units}") are not accepted. '
+        err += f'"{time_units}") are not accepted. '
         err += 'Accepted units are "myr" (millions of years), "yr" (years), '
         err += 'and "gen" (generations).'
         raise ValueError(err)
@@ -119,7 +119,7 @@ def parse_species_tree(
 
     # Make sure that the generation time is specified if and only if
     # branch lengths are not in units of generations.
-    if branch_length_units == "gen":
+    if time_units == "gen":
         if generation_time is not None:
             err = 'With branch lengths in units of generations ("gen"), '
             err += "a generation time should not be specified additionally."
@@ -127,13 +127,13 @@ def parse_species_tree(
     else:
         if generation_time is None:
             err = "With branch lengths in units of "
-            err += f'"{branch_length_units}", a generation time must be '
+            err += f'"{time_units}", a generation time must be '
             err += "specified additionally."
             raise ValueError(err)
 
     # Get the number of generations per branch length unit.
     generations_per_branch_length_unit = get_generations_per_branch_length_unit(
-        branch_length_units, generation_time
+        time_units, generation_time
     )
 
     # Parse the tree with the newick library.
@@ -265,14 +265,14 @@ def check_generation_time(generation_time):
     return generation_time
 
 
-def get_generations_per_branch_length_unit(branch_length_units, generation_time):
+def get_generations_per_branch_length_unit(time_units, generation_time):
     """
     Method to calculate the number of generations per branch length
     unit, given the branch length unit and a generation time.
     """
-    if branch_length_units == "gen":
+    if time_units == "gen":
         generations_per_branch_length_unit = 1
-    elif branch_length_units == "myr":
+    elif time_units == "myr":
         generations_per_branch_length_unit = 10 ** 6 / generation_time
     else:
         generations_per_branch_length_unit = 1 / generation_time

@@ -958,7 +958,7 @@ class DebugOutputBase:
         demography = msprime.Demography.from_species_tree(
             "(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
             initial_size=10_000,
-            branch_length_units="myr",
+            time_units="myr",
             generation_time=28,
         )
         self.verify(demography)

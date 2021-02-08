@@ -162,7 +162,7 @@ class TestSpeciesTreeRoundTrip:
         tree,
         newick=None,
         initial_size=1,
-        branch_length_units="gen",
+        time_units="gen",
         generation_time=None,
     ):
         if newick is None:
@@ -170,7 +170,7 @@ class TestSpeciesTreeRoundTrip:
         demography = species_trees.parse_species_tree(
             newick,
             initial_size=initial_size,
-            branch_length_units=branch_length_units,
+            time_units=time_units,
             generation_time=generation_time,
         )
         assert demography.num_populations == tree.num_nodes
@@ -269,7 +269,7 @@ class TestSpeciesTreeRoundTrip:
         ts = msprime.simulate(10, random_seed=2)
         generation_time = 5
         tree = ts.first()
-        self.verify(tree, initial_size=1, branch_length_units="yr", generation_time=1)
+        self.verify(tree, initial_size=1, time_units="yr", generation_time=1)
         tables = ts.dump_tables()
         times = tables.nodes.time
         flags = tables.nodes.flags
@@ -280,7 +280,7 @@ class TestSpeciesTreeRoundTrip:
         self.verify(
             tree,
             newick=self.make_newick(scaled_tree),
-            branch_length_units="yr",
+            time_units="yr",
             generation_time=generation_time,
         )
 
@@ -298,7 +298,7 @@ class TestSpeciesTreeRoundTrip:
         self.verify(
             tree,
             newick=self.make_newick(scaled_tree),
-            branch_length_units="myr",
+            time_units="myr",
             generation_time=generation_time,
         )
 
@@ -369,14 +369,12 @@ class TestStarbeastRoundTrip:
         tree,
         pop_size_map,
         nexus=None,
-        branch_length_units="yr",
+        time_units="yr",
         generation_time=1,
     ):
         if nexus is None:
             nexus = make_nexus(tree, pop_size_map)
-        demography = species_trees.parse_starbeast(
-            nexus, generation_time, branch_length_units
-        )
+        demography = species_trees.parse_starbeast(nexus, generation_time, time_units)
         assert demography.num_populations == tree.num_nodes
         for pop in demography.populations:
             assert pop.growth_rate == 0
@@ -473,7 +471,7 @@ class TestStarbeastRoundTrip:
             scaled_tree,
             nexus=nexus,
             pop_size_map=scaled_pop_size_map,
-            branch_length_units="myr",
+            time_units="myr",
             generation_time=generation_time,
         )
 
@@ -521,14 +519,14 @@ class TestSpeciesTreeParsingErrors:
 
     def test_bad_parameter(self):
         good_tree = "(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)"
-        good_branch_length_units = "myr"
+        good_time_units = "myr"
         good_ne = 10000
         good_generation_time = 5
-        for bad_branch_length_units in [-3, "asdf", ["myr"]]:
+        for bad_time_units in [-3, "asdf", ["myr"]]:
             with pytest.raises(ValueError):
                 species_trees.parse_species_tree(
                     good_tree,
-                    branch_length_units=bad_branch_length_units,
+                    time_units=bad_time_units,
                     initial_size=good_ne,
                     generation_time=good_generation_time,
                 )
@@ -540,7 +538,7 @@ class TestSpeciesTreeParsingErrors:
             with pytest.raises(ValueError):
                 species_trees.parse_species_tree(
                     good_tree,
-                    branch_length_units=good_branch_length_units,
+                    time_units=good_time_units,
                     initial_size=bad_ne,
                     generation_time=good_generation_time,
                 )
@@ -548,15 +546,15 @@ class TestSpeciesTreeParsingErrors:
             with pytest.raises(ValueError):
                 species_trees.parse_species_tree(
                     good_tree,
-                    branch_length_units=good_branch_length_units,
+                    time_units=good_time_units,
                     initial_size=good_ne,
                     generation_time=bad_generation_time,
                 )
-        for bad_branch_length_units in ["gen"]:
+        for bad_time_units in ["gen"]:
             with pytest.raises(ValueError):
                 species_trees.parse_species_tree(
                     good_tree,
-                    branch_length_units=bad_branch_length_units,
+                    time_units=bad_time_units,
                     initial_size=good_ne,
                     generation_time=good_generation_time,
                 )
@@ -569,12 +567,12 @@ class TestSpeciesTreeExamples:
 
     def test_4_species_parse(self):
         good_tree = "(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)"
-        good_branch_length_units = "myr"
+        good_time_units = "myr"
         good_ne = 10000
         good_generation_time = 20
         spec = species_trees.parse_species_tree(
             good_tree,
-            branch_length_units=good_branch_length_units,
+            time_units=good_time_units,
             initial_size=good_ne,
             generation_time=good_generation_time,
         )
@@ -593,7 +591,7 @@ class TestSpeciesTreeExamples:
         )
         spec = species_trees.parse_species_tree(
             species_tree,
-            branch_length_units="myr",
+            time_units="myr",
             initial_size=10000,
             generation_time=20,
         )
@@ -750,26 +748,26 @@ class TestStarbeastParsingErrors:
     def test_bad_parameter(self):
         with open("tests/data/species_trees/91genes_species_rev.tre") as f:
             good_tree = f.read()
-            good_branch_length_units = "myr"
-            for bad_branch_length_units in [-3, "asdf", ["myr"], "gen"]:
+            good_time_units = "myr"
+            for bad_time_units in [-3, "asdf", ["myr"], "gen"]:
                 with pytest.raises(ValueError):
                     species_trees.parse_starbeast(
                         tree=f.read(),
-                        branch_length_units=bad_branch_length_units,
+                        time_units=bad_time_units,
                         generation_time=5,
                     )
             for bad_generation_time in [-3, "sdf"]:
                 with pytest.raises(ValueError):
                     species_trees.parse_starbeast(
                         tree=good_tree,
-                        branch_length_units=good_branch_length_units,
+                        time_units=good_time_units,
                         generation_time=bad_generation_time,
                     )
             for bad_generation_time in [None, {}]:
                 with pytest.raises(TypeError):
                     species_trees.parse_starbeast(
                         tree=good_tree,
-                        branch_length_units=good_branch_length_units,
+                        time_units=good_time_units,
                         generation_time=bad_generation_time,
                     )
 
@@ -782,11 +780,11 @@ class TestStarbeastExamples:
     def test_12_species(self):
         with open("tests/data/species_trees/91genes_species_rev.tre") as f:
             good_tree = f.read()
-            good_branch_length_units = "myr"
+            good_time_units = "myr"
             good_generation_time = 5
             spec = species_trees.parse_starbeast(
                 tree=good_tree,
-                branch_length_units=good_branch_length_units,
+                time_units=good_time_units,
                 generation_time=good_generation_time,
             )
             assert len(spec.populations) == 23

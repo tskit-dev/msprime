@@ -55,7 +55,7 @@ any outstanding TODOs before opening issues.
 
 {meth}`.Demography.debug`                  
 : Get a Debugger for a demography          
- 
+
 {class}`.DemographyDebugger`               
 : Debugger for demographic models          
 
@@ -93,7 +93,7 @@ demography
 ### Species trees
 
 ```{eval-rst}
-.. todo:: This section needs another pass once the rest of the sections 
+.. todo:: This section needs another pass once the rest of the sections
     have a draft. We also need to improve the visualisation tools here
     to help explain stuff.
 ```
@@ -101,20 +101,20 @@ demography
 Species trees hold information about the sequence and the times at which species
 diverged from each other. Viewed backwards in time, divergence events are equivalent
 to mass migration events in which all lineages from one population move to another
-population. The {meth}`.Demography.from_species_tree` method parses a 
-species tree in [Newick format](https://en.wikipedia.org/wiki/Newick_format) 
+population. The {meth}`.Demography.from_species_tree` method parses a
+species tree in [Newick format](https://en.wikipedia.org/wiki/Newick_format)
 and returns a {class}`.Demography` object. These species trees do not contain
 any information on the sizes of the relevant populations, however, and so these
-must be specified separately using the ``initial_size`` argument 
+must be specified separately using the ``initial_size`` argument
 (see `ref`{sec_demography_populations_initial_size}).
-When species trees are estimated with a program like 
-[StarBEAST](<https://academic.oup.com/mbe/article/34/8/2101/3738283>) they can 
+When species trees are estimated with a program like
+[StarBEAST](<https://academic.oup.com/mbe/article/34/8/2101/3738283>) they can
 contain estimates on the population sizes of extant and ancestral species.
-The {meth}`.Demography.from_starbeast` method parses species trees estimated 
+The {meth}`.Demography.from_starbeast` method parses species trees estimated
 with StarBEAST and sets the population sizes accordingly.
 
 :::{note}
-When a species tree has branch lengths in units of years or millions of years 
+When a species tree has branch lengths in units of years or millions of years
 rather than generations (which is common), a generation time in years
 must be specified.
 :::
@@ -138,7 +138,7 @@ looks like this:
 
 The numbers written on branches indicate the lengths of these branches,
 which in this case is expressed in millions of years. We can then
-convert this species tree into a {class}`.Demography` using the 
+convert this species tree into a {class}`.Demography` using the
 {meth}`.Demography.from_species_tree`:
 
 ```{code-cell}
@@ -148,18 +148,18 @@ import msprime
 demography = msprime.Demography.from_species_tree(
     "(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
     initial_size=10_000,
-    branch_length_units="myr",
+    time_units="myr",
     generation_time=28)
 demography.debug()
 ```
 
-Because the species tree does not contain complete information about the 
-demographic model, we must provide some extra information. The 
-``initial_size`` parameter lets us specify the size of each of the 
+Because the species tree does not contain complete information about the
+demographic model, we must provide some extra information. The
+``initial_size`` parameter lets us specify the size of each of the
 populations; here we give all the populations a fixed size of 10,000
 (there is much more flexibility here, however). Because the branch
 lengths in the species tree are given in millions of years, we also
-need provide a ``branch_length_units`` parameter and a ``generation_time``.
+need provide a ``time_units`` parameter and a ``generation_time``.
 
 The epoch boundaries 200000, 307142.9, and 642857.1 correspond to the species
 divergence times 5.6, 8.6, and 18.0 after converting the branch length units
@@ -183,4 +183,3 @@ metadata:
 for population in ts.populations():
     print(population.metadata)
 ```
-
