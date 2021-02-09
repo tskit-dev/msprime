@@ -17,6 +17,7 @@ kernelspec:
 
     import msprime
     from IPython.display import SVG
+    from matplotlib import pyplot as plt
     # Doing this to make the notebook outputs deterministic.
     # DO NOT DO THIS IN YOUR CODE
     msprime.core.set_seed_rng_seed(42)
@@ -1264,13 +1265,89 @@ print(tree.tmrca(0,1))
 
 ### Selective sweeps
 
-```{eval-rst}
-.. todo:: Document the selective sweep models.
+Msprime provides the option to perform coalescent approximations
+to selective sweeps, in which a beneficial mutation moves through
+the population. This is done through the use of a structured 
+coalescent model in the spirit of 
+[Braverman et al. (1995)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1206652/).
+
+Looking backwards in time the population enters a sweep phase where
+the population is split between two classes of selective backgrounds,
+those linked to the beneficial allele, call it {math}`B`, and those not,
+{math}`b`. During this portion of the simulation we track competing
+rates of coalescence and recombination on the {math}`B` and {math}`b`
+backgrounds.
+
+This implementation is reasonable general, althougth there are 
+current limitations (e.g., no change of population size during
+a sweep). The user supplies a final allele frequency and a starting
+allele frequency, between which msprime will simulate a stochastic 
+sweep trajectory according to a conditional diffusion model [(Coop
+and Griffiths, 2004](https://pubmed.ncbi.nlm.nih.gov/15465123/);
+[Kim and Stephan 2002](https://pubmed.ncbi.nlm.nih.gov/11861577/)).
+
+Beyond the start and end frequencies of the sweep trajectory, the user
+must specify the selection coefficient of the beneficial mutation 
+{math}`s` the selective
+advantage of the {math}`B` homozygote over the {math}`b` homozygote
+and {math}`h=0.5`. The position represents the location along
+the chromosome where the beneficial allele occurs.
+ All other parameters can be set as usual. 
+
+As an example, let's perform 50 replicate hard sweep simulations using 
+msprime and then plot mean {meth}`pairwise diversity<tskit.TreeSequence.diversity>` in windows across the simulated
+region. The position is set to the middle of the chromosome, so we
+expect to see the characteristic valley of diversity following our sweeps.
+The key step here is to build a list of models which includes
+a {class}`SweepGenicSelection<.SweepGenicSelection>` model.
+
+```{code-cell}
+from matplotlib import pyplot as plt
+
+Ne = 1e3
+s = 0.25 
+# define hard sweep model
+sweep = msprime.SweepGenicSelection(
+    position=1e6 / 2,  # middle of chrom
+    start_frequency=1.0 / (2 * Ne),
+    end_frequency=1.0 - (1.0 / (2 * Ne)),
+    s=s,
+    dt=1e-6,
+)
+
+reps = msprime.sim_ancestry(
+    5,
+    population_size=Ne,
+    model=[sweep, (None, 'hudson')],
+    recombination_rate=1e-7,
+    sequence_length = 1e6,
+    num_replicates=50,
+    )
+
+wins = np.linspace(0,int(1e6),21)
+mids = (wins[1:] + wins[:-1]) / 2
+    
+msp_pis = []
+for ts in reps:
+	mutated_ts = msprime.sim_mutations(ts, rate=1e-8)
+	msp_pis.append(mutated_ts.diversity(windows=wins))
+
+plt.plot(mids,np.array(msp_pis).mean(axis=0), label="msp")   
+plt.axhline(4 * Ne * 1e-8, linestyle=":", label=r'neutral $\pi$')
+plt.ylabel(r'$\pi$'); plt.ylabel('position (bp)')
+plt.legend()
 ```
+As we can see, the selective sweep has reduced variation in the region
+most closely linked to the beneficial allele and then heterozygosity
+increases with distance to each side. 
+
+(sec_ancestry_models_sweep_types)=
+
+#### Sweep model examples
 
 ```{eval-rst}
-.. todo:: examples of the selective sweeps models. We want to have
-    a single sweep reverting to Hudson, and also lots of sweeps.
+.. todo:: Need to add some examples to this section and build it out. 
+    want examples of hard sweeps, partial sweeps, and soft sweeps.
 ```
 
 (sec_ancestry_models_multiple_models)=

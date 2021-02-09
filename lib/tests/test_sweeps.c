@@ -66,11 +66,11 @@ verify_simple_genic_selection_trajectory(
 static void
 test_genic_selection_trajectory(void)
 {
-    verify_simple_genic_selection_trajectory(0.1, 0.9, 0.1, 0.0125);
-    verify_simple_genic_selection_trajectory(0.1, 0.9, 0.01, 0.00125);
-    verify_simple_genic_selection_trajectory(0.8999, 0.9, 0.1, 0.2);
-    verify_simple_genic_selection_trajectory(0.1, 0.9, 100, 0.1);
-    verify_simple_genic_selection_trajectory(0.1, 0.9, 1, 10);
+    verify_simple_genic_selection_trajectory(0.1, 0.9, 200, 0.0001);
+    verify_simple_genic_selection_trajectory(0.1, 0.9, 101, 0.000001);
+    verify_simple_genic_selection_trajectory(0.8, 0.9, 500, 0.000002);
+    verify_simple_genic_selection_trajectory(0.1, 0.7, 100, 0.000001);
+    verify_simple_genic_selection_trajectory(0.1, 0.4, 50, 0.0001);
 }
 
 static void
@@ -114,7 +114,7 @@ test_sweep_genic_selection_bad_parameters(void)
     ret = msp_set_simulation_model_sweep_genic_selection(&msp, 5.0, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_POSITION);
     ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, -666, 0.1);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_GENIC_SELECTION_ALPHA);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SWEEP_GENIC_SELECTION_S);
 
     ret = msp_set_simulation_model_sweep_genic_selection(&msp, 0.5, 0.1, 0.9, 0.1, 0.1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -178,7 +178,7 @@ test_sweep_genic_selection_events(void)
 }
 
 static void
-verify_sweep_genic_selection(double sequence_length, double growth_rate)
+verify_sweep_genic_selection(double sequence_length, double s)
 {
     int j, ret;
     uint32_t n = 10;
@@ -195,10 +195,8 @@ verify_sweep_genic_selection(double sequence_length, double growth_rate)
         ret = msp_set_num_labels(&msp, 2);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_simulation_model_sweep_genic_selection(
-            &msp, sequence_length / 2, 0.1, 0.9, 0.1, 0.01);
+            &msp, sequence_length / 2, 0.1, 0.9, s, 1e-6);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = msp_set_population_configuration(&msp, 0, 1.0, growth_rate);
-        CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(&msp);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
@@ -223,17 +221,17 @@ verify_sweep_genic_selection(double sequence_length, double growth_rate)
 static void
 test_sweep_genic_selection_single_locus(void)
 {
-    verify_sweep_genic_selection(1, 0.0);
-    verify_sweep_genic_selection(1, 1.0);
-    verify_sweep_genic_selection(1, -1.0);
+    verify_sweep_genic_selection(1, 0.02);
+    verify_sweep_genic_selection(1, 0.01);
+    verify_sweep_genic_selection(1, 0.06);
 }
 
 static void
 test_sweep_genic_selection_recomb(void)
 {
-    verify_sweep_genic_selection(100, 0.0);
-    verify_sweep_genic_selection(100, 1.0);
-    verify_sweep_genic_selection(100, -1.0);
+    verify_sweep_genic_selection(10, 0.2);
+    verify_sweep_genic_selection(10, 1.0);
+    verify_sweep_genic_selection(10, 1e-2);
 }
 
 static void
@@ -326,10 +324,10 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
            " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
      */
     int ret;
-    uint32_t n = 100;
+    uint32_t n = 10;
     double num_loci = 500001;
-    double position = 0.5;
-    double alpha = 10000;
+    double position = num_loci / 2;
+    double s = 10000;
     double recom_rate = 0.0004;
     double start_frequency = 0.5 / 10000;
     double end_frequency = 0.9;
@@ -356,7 +354,7 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
     msp_set_segment_block_size(&msp, 65536);
 
     ret = msp_set_simulation_model_sweep_genic_selection(
-        &msp, position, start_frequency, end_frequency, alpha, dt);
+        &msp, position, start_frequency, end_frequency, s, dt);
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_initialise(&msp);
