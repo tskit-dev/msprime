@@ -6745,7 +6745,7 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
     x = trajectory.end_frequency;
     num_steps = 0;
     t = 0;
-    sim_time = simulator->time;
+    sim_time = simulator->time; /*time in generations*/
     time[num_steps] = t;
     allele_frequency[num_steps] = x;
     num_steps++;

@@ -76,6 +76,7 @@ import dendropy
 import matplotlib
 import numpy as np
 import pandas as pd
+import pyslim
 import pyvolve
 import scipy.special
 import scipy.stats
@@ -175,6 +176,63 @@ def write_slim_script(outfile, format_dict):
         catn('No coalescence after 100000 generations!');
     }}
     """
+    with open(outfile, "w") as f:
+        f.write(slim_str.format(**format_dict))
+
+
+def write_sweep_slim_script(outfile, format_dict):
+    slim_str = """
+        initialize() {{
+        initializeTreeSeq();
+        initializeMutationRate(0);
+        initializeMutationType('m1', 0.5, 'f', 0.0);
+        initializeMutationType('m2', 0.5, 'f', {s});
+        initializeGenomicElementType('g1', m1, 1.0);
+        initializeGenomicElement(g1, 0, {NUMLOCI});
+        initializeRecombinationRate({r});
+        }}
+        s1 200000 late() {{
+                sim.treeSeqOutput('{OUTFILE}');
+                    sim.simulationFinished();
+        }}
+
+        1 {{
+            // save this run's identifier, used to save and restore
+            defineConstant("simID", getSeed());
+            sim.addSubpop("p1", {POPSIZE});
+            sim.setValue("flag",0);
+        }}
+
+        2 late() {{
+            // save the state of the simulation
+            sim.treeSeqOutput("/tmp/slim_" + simID + ".trees");
+            target = sample(p1.genomes, 1);
+            target.addNewDrawnMutation(m2, {SWEEPPOS});
+        }}
+        2:2000 late() {{
+            if (sim.countOfMutationsOfType(m2) == 0)
+            {{
+                fixed = (sum(sim.substitutions.mutationType == m2) == 1);
+                if (fixed){{
+                    sim.setValue("flag", sim.getValue("flag") + 1);
+                    }}
+                if (fixed)
+                {{
+                    if (sim.getValue("flag") == 1){{
+                        sim.rescheduleScriptBlock(s1,
+                        start=sim.generation+{TAU}, end=sim.generation+{TAU});
+                    }}
+                }}
+                else
+                {{
+                    sim.readFromPopulationFile("/tmp/slim_" + simID + ".trees");
+                    setSeed(rdunif(1, 0, asInteger(2^62) - 1));
+                    target = sample(p1.genomes, 1);
+                    target.addNewDrawnMutation(m2, {SWEEPPOS});
+                }}
+            }}
+        }}
+        """
     with open(outfile, "w") as f:
         f.write(slim_str.format(**format_dict))
 
@@ -876,6 +934,184 @@ class DiscoalSweeps(DiscoalTest):
     def test_sweep_tau_ex3(self):
         cmd = "10 1000 10000 -t 10.0 -r 20.0 -ws 1.0 -a 250 -x 0.5 -N 10000"
         self._run(cmd)
+
+
+def sample_recap_simplify(slim_ts, sample_size, Ne, r, mu):
+    """
+    takes a ts from slim and samples, recaps, simplifies
+    """
+    recap = msprime.sim_ancestry(
+        initial_state=slim_ts,
+        population_size=Ne,
+        recombination_rate=r,
+        start_time=slim_ts.metadata["SLiM"]["generation"],
+    )
+    rts = pyslim.SlimTreeSequence(recap)
+    logging.debug(f"pyslim: slim generation:{slim_ts.metadata['SLiM']['generation']}")
+    alive_inds = rts.individuals_alive_at(0)
+    keep_indivs = np.random.choice(alive_inds, sample_size, replace=False)
+    keep_nodes = []
+    for i in keep_indivs:
+        keep_nodes.extend(rts.individual(i).nodes)
+    logging.debug(f"before simplify {rts.num_nodes} nodes")
+    sts = rts.simplify(keep_nodes)
+    logging.debug(f"after simplify {sts.num_nodes} nodes")
+    logging.debug(f"after simplify {sts.num_trees} trees")
+    return pyslim.SlimTreeSequence(msprime.mutate(sts, rate=mu))
+
+
+class SweepVsSlim(Test):
+    """
+    Tests where we compare the msprime sweeps with SLiM simulations.
+    """
+
+    def run_sweep_slim_comparison(self, slim_args, **kwargs):
+        df = pd.DataFrame()
+
+        kwargs["model"] = "msp"
+        logging.debug(f"Running: {kwargs}")
+        seq_length = kwargs.get("seq_length")
+        pop_size = kwargs.get("pop_size")
+        s = kwargs.get("s")
+        tau = kwargs.get("tau")
+        sample_size = kwargs.get("sample_size")
+        recombination_rate = kwargs.get("recombination_rate")
+        num_replicates = kwargs.get("num_replicates")
+        sweep = msprime.SweepGenicSelection(
+            position=seq_length / 2,
+            start_frequency=1.0 / (2 * pop_size),
+            end_frequency=1.0 - (1.0 / (2 * pop_size)),
+            s=s,
+            dt=1e-6,
+        )
+        replicates = msprime.sim_ancestry(
+            sample_size,
+            population_size=pop_size,
+            model=[None, (tau, sweep), (None, "hudson")],
+            recombination_rate=recombination_rate,
+            sequence_length=seq_length,
+            num_replicates=num_replicates,
+        )
+        wins = range(0, int(seq_length + 1), int(seq_length / 20))
+        mids = np.zeros(len(wins) - 1)
+        for i in range(len(wins) - 1):
+            mids[i] = (wins[i + 1] + wins[i]) / 2
+        msp_win_pis = []
+        slim_win_pis = []
+        data = collections.defaultdict(list)
+        for ts in replicates:
+            t_mrca = np.zeros(ts.num_trees)
+            for tree in ts.trees():
+                t_mrca[tree.index] = tree.time(tree.root)
+            data["tmrca_mean"].append(np.mean(t_mrca))
+            data["num_trees"].append(ts.num_trees)
+            mutated_ts = msprime.sim_mutations(ts, rate=1e-8)
+            data["pi"].append(mutated_ts.diversity().reshape((1,))[0])
+            data["model"].append("msp")
+            msp_num_samples = ts.num_samples
+            msp_win_pis.append(mutated_ts.diversity(windows=wins))
+        slim_script = self.output_dir / "slim_script.txt"
+        outfile = self.output_dir / "slim.trees"
+        slim_args["OUTFILE"] = str(outfile)
+        write_sweep_slim_script(slim_script, slim_args)
+
+        cmd = _slim_executable + [slim_script]
+        for _ in range(kwargs["num_replicates"]):
+            subprocess.check_output(cmd)
+            ts = pyslim.load(outfile)
+            rts = sample_recap_simplify(
+                ts, sample_size, pop_size, recombination_rate, 1e-8
+            )
+            assert rts.num_samples == msp_num_samples
+
+            t_mrca = np.zeros(rts.num_trees)
+            for tree in rts.trees():
+                t_mrca[tree.index] = tree.time(tree.root)
+
+            data["tmrca_mean"].append(np.mean(t_mrca))
+            data["num_trees"].append(rts.num_trees)
+            slim_win_pis.append(rts.diversity(windows=wins))
+            data["pi"].append(rts.diversity().reshape((1,))[0])
+            data["model"].append("slim")
+        df = df.append(pd.DataFrame(data))
+
+        df_slim = df[df.model == "slim"]
+        df_msp = df[df.model == "msp"]
+        for stat in ["tmrca_mean", "num_trees", "pi"]:
+            v1 = df_slim[stat]
+            v2 = df_msp[stat]
+            sm.graphics.qqplot(v1)
+            sm.qqplot_2samples(v1, v2, line="45")
+            pyplot.xlabel("msp")
+            pyplot.ylabel("SLiM")
+            f = self.output_dir / f"{stat}.png"
+            pyplot.savefig(f, dpi=72)
+            pyplot.close("all")
+            plot_stat_hist(v1, v2, "slim", "msp")
+            f = self.output_dir / f"{stat}.hist.png"
+            pyplot.savefig(f, dpi=72)
+            pyplot.close("all")
+        pyplot.plot(mids, np.array(msp_win_pis).mean(axis=0), label="msp")
+        pyplot.plot(mids, np.array(slim_win_pis).mean(axis=0), label="slim")
+        pyplot.title(f"tau: {tau}")
+        pyplot.xlabel("location (bp)")
+        pyplot.ylabel("pairwise diversity")
+        pyplot.legend()
+        f = self.output_dir / "pi_wins.png"
+        pyplot.savefig(f, dpi=72)
+        pyplot.close("all")
+
+    def _run(
+        self,
+        sample_size,
+        seq_length,
+        pop_size,
+        recombination_rate,
+        s,
+        tau,
+        num_replicates=None,
+    ):
+        """
+        basic tests for sweeps vs slim
+        """
+        slim_args = {}
+
+        if num_replicates is None:
+            num_replicates = 20
+
+        # These are *diploid* samples in msprime
+        slim_args["sample_size"] = 2 * sample_size
+        slim_args["r"] = recombination_rate
+        slim_args["NUMLOCI"] = int(seq_length - 1)
+        slim_args["POPSIZE"] = int(pop_size)
+        slim_args["TAU"] = tau
+        slim_args["s"] = s
+        slim_args["SWEEPPOS"] = int(seq_length / 2)
+        self.run_sweep_slim_comparison(
+            slim_args,
+            pop_size=pop_size,
+            sample_size=sample_size,
+            num_replicates=num_replicates,
+            seq_length=seq_length,
+            tau=tau,
+            s=s,
+            recombination_rate=recombination_rate,
+        )
+
+    def test_sweep_vs_slim_ex1(self):
+        self._run(10, 1e6, 1e3, 1e-7, 0.25, 1, num_replicates=10)
+
+    def test_sweep_vs_slim_ex2(self):
+        self._run(10, 1e6, 1e3, 1e-7, 0.25, 200, num_replicates=10)
+
+    def test_sweep_vs_slim_ex3(self):
+        self._run(10, 1e6, 1e3, 1e-7, 0.25, 1000, num_replicates=10)
+
+    def test_sweep_vs_slim_ex4(self):
+        self._run(10, 1e6, 1e3, 1e-7, 0.25, 2000, num_replicates=10)
+
+    def test_sweep_vs_slim_ex5(self):
+        self._run(10, 1e6, 1e3, 1e-7, 0.25, 5000, num_replicates=10)
 
 
 # FIXME disabling these for now because they are unreliable and result in
