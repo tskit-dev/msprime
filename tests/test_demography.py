@@ -237,8 +237,8 @@ class TestIntrospectionInterface:
         assert str(event) == repr_s
 
     def test_population_split(self):
-        event = msprime.PopulationSplit(time=1, source=[0], dest=1)
-        repr_s = "PopulationSplit(time=1, source=[0], dest=1)"
+        event = msprime.PopulationSplit(time=1, derived=[0], ancestral=1)
+        repr_s = "PopulationSplit(time=1, derived=[0], ancestral=1)"
         assert repr(event) == repr_s
         assert str(event) == repr_s
 
@@ -282,7 +282,7 @@ class TestDemographicEventsHaveExtraLLParameter:
             msprime.PopulationParametersChange(1.0, population=1, initial_size=2.0),
             msprime.MigrationRateChange(1.0, 1.0),
             msprime.MassMigration(1.0, source=0, dest=1),
-            msprime.PopulationSplit(1.0, source=[0], dest=1),
+            msprime.PopulationSplit(1.0, derived=[0], ancestral=1),
             msprime.SimpleBottleneck(1.0, 0),
             msprime.InstantaneousBottleneck(1.0, 0),
             msprime.CensusEvent(1.0),
@@ -681,15 +681,15 @@ class TestLowLevelRepresentation:
     def test_population_split(self):
         g = 1234
         demography = msprime.Demography.isolated_model([10] * 10)
-        event = msprime.PopulationSplit(time=g, source=["pop_0"], dest="pop_1")
+        event = msprime.PopulationSplit(time=g, derived=["pop_0"], ancestral="pop_1")
         ll_event = {
             "type": "population_split",
             "time": g,
-            "source": [0],
-            "dest": 1,
+            "derived": [0],
+            "ancestral": 1,
         }
         assert event.get_ll_representation(demography=demography) == ll_event
-        event = msprime.PopulationSplit(time=g, source=[0], dest=1)
+        event = msprime.PopulationSplit(time=g, derived=[0], ancestral=1)
         assert event.get_ll_representation(demography=demography) == ll_event
 
     def test_simple_bottleneck(self):
@@ -1128,7 +1128,7 @@ class DebugOutputBase:
             msprime.MigrationRateChange(0.2, source=0, dest=1, rate=1),
             msprime.MigrationRateChange(0.2, matrix_index=(1, 0), rate=1),
             msprime.MassMigration(0.4, source=1, dest=0),
-            msprime.PopulationSplit(0.4, source=[1], dest=0),
+            msprime.PopulationSplit(0.4, derived=[1], ancestral=0),
             msprime.MigrationRateChange(0.4, rate=0),
             msprime.InstantaneousBottleneck(0.5, population=0, strength=100),
             msprime.CensusEvent(0.55),
@@ -1144,7 +1144,7 @@ class DebugOutputBase:
             msprime.MigrationRateChange(0.2, source="pop_0", dest="pop_1", rate=1),
             msprime.MigrationRateChange(0.2, source="pop_1", dest="pop_0", rate=1),
             msprime.MassMigration(0.4, source="pop_1", dest="pop_0"),
-            msprime.PopulationSplit(0.4, source=["pop_1"], dest="pop_0"),
+            msprime.PopulationSplit(0.4, derived=["pop_1"], ancestral="pop_0"),
             msprime.MigrationRateChange(0.4, rate=0),
             msprime.InstantaneousBottleneck(0.5, population="pop_0", strength=100),
             msprime.CensusEvent(0.55),
@@ -4308,12 +4308,14 @@ class TestPopulationNamesInEvents:
 
     def test_population_split(self):
         demography = msprime.Demography.isolated_model([1000, 1000])
-        demography.events = [msprime.PopulationSplit(1, source=[0], dest=1)]
+        demography.events = [msprime.PopulationSplit(1, derived=[0], ancestral=1)]
         ts1 = msprime.sim_ancestry(
             {0: 1, 1: 1}, demography=demography, random_seed=1234
         )
 
-        demography.events = [msprime.PopulationSplit(1, source=["pop_0"], dest="pop_1")]
+        demography.events = [
+            msprime.PopulationSplit(1, derived=["pop_0"], ancestral="pop_1")
+        ]
         ts2 = msprime.sim_ancestry(
             {0: 1, 1: 1}, demography=demography, random_seed=1234
         )
@@ -4386,7 +4388,7 @@ class TestPopulationSplit:
         )
         demography.set_symmetric_migration_rate(["A", "B"], 0.1)
         demography.events = [
-            msprime.PopulationSplit(10, source=["A", "B"], dest="root")
+            msprime.PopulationSplit(10, derived=["A", "B"], ancestral="root")
         ]
         dbg = demography.debug()
         assert len(dbg.epochs) == 2
@@ -4408,7 +4410,7 @@ class TestPopulationSplit:
         )
         demography.set_symmetric_migration_rate(["A", "B", "C"], 0.1)
         demography.events = [
-            msprime.PopulationSplit(10, source=["A", "B", "C"], dest="root")
+            msprime.PopulationSplit(10, derived=["A", "B", "C"], ancestral="root")
         ]
         dbg = demography.debug()
         assert len(dbg.epochs) == 2
@@ -4431,10 +4433,10 @@ class TestPopulationSplit:
         )
         demography.set_symmetric_migration_rate(["A", "B", "C"], 0.1)
         demography.events = [
-            msprime.PopulationSplit(10, source=["A", "B"], dest="AB"),
+            msprime.PopulationSplit(10, derived=["A", "B"], ancestral="AB"),
             msprime.MigrationRateChange(10, source="C", dest="AB", rate=0.1),
             msprime.MigrationRateChange(10, source="AB", dest="C", rate=0.1),
-            msprime.PopulationSplit(20, source=["AB", "C"], dest="ABC"),
+            msprime.PopulationSplit(20, derived=["AB", "C"], ancestral="ABC"),
         ]
         dbg = demography.debug()
         assert len(dbg.epochs) == 3
@@ -4464,11 +4466,11 @@ class TestPopulationSplit:
         )
         demography.set_symmetric_migration_rate(["A", "B", "C", "D"], 0.1)
         demography.events = [
-            msprime.PopulationSplit(10, source=["A", "B"], dest="AB"),
-            msprime.PopulationSplit(20, source=["C", "D"], dest="CD"),
+            msprime.PopulationSplit(10, derived=["A", "B"], ancestral="AB"),
+            msprime.PopulationSplit(20, derived=["C", "D"], ancestral="CD"),
             msprime.MigrationRateChange(20, source="CD", dest="AB", rate=0.1),
             msprime.MigrationRateChange(20, source="AB", dest="CD", rate=0.1),
-            msprime.PopulationSplit(30, source=["AB", "CD"], dest="ABCD"),
+            msprime.PopulationSplit(30, derived=["AB", "CD"], ancestral="ABCD"),
         ]
         dbg = demography.debug()
         assert len(dbg.epochs) == 4

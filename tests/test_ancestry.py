@@ -1836,7 +1836,7 @@ class TestReprRoundTrip:
 
     def test_population_split(self):
         examples = [
-            msprime.PopulationSplit(time=1, source=[1, 2], dest=3),
+            msprime.PopulationSplit(time=1, derived=[1, 2], ancestral=3),
         ]
         self.assert_repr_round_trip(examples)
 

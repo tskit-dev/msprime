@@ -5829,24 +5829,25 @@ static int
 msp_population_split(msp_t *self, demographic_event_t *event)
 {
     int ret = 0;
-    population_id_t *source = event->params.population_split.source;
-    population_id_t destination = event->params.population_split.destination;
-    size_t num_populations = event->params.population_split.num_source_populations;
+    population_id_t *derived = event->params.population_split.derived;
+    population_id_t ancestral = event->params.population_split.ancestral;
+    size_t num_populations = event->params.population_split.num_derived;
     demographic_event_t mass_migration;
     size_t j, k;
     size_t N = self->num_populations;
 
-    mass_migration.params.mass_migration.destination = destination;
+    /* The mass migration moves lineages into the ancestral population */
+    mass_migration.params.mass_migration.destination = ancestral;
     mass_migration.params.mass_migration.proportion = 1.0;
 
     for (j = 0; j < num_populations; j++) {
-        /* Turn off all migration to and from source[j] */
+        /* Turn off all migration to and from derived[j] */
         for (k = 0; k < self->num_populations; k++) {
-            self->migration_matrix[((size_t) source[j] * N) + k] = 0;
-            self->migration_matrix[k * N + (size_t) source[j]] = 0;
+            self->migration_matrix[((size_t) derived[j] * N) + k] = 0;
+            self->migration_matrix[k * N + (size_t) derived[j]] = 0;
         }
-        /* Move all lineages out of source and into dest */
-        mass_migration.params.mass_migration.source = source[j];
+        /* Move all lineages out of derived and into ancestral */
+        mass_migration.params.mass_migration.source = derived[j];
         ret = msp_mass_migration(self, &mass_migration);
         if (ret != 0) {
             goto out;
@@ -5860,17 +5861,17 @@ static void
 msp_print_population_split(
     msp_t *MSP_UNUSED(self), demographic_event_t *event, FILE *out)
 {
-    size_t num_populations = event->params.population_split.num_source_populations;
+    size_t num_populations = event->params.population_split.num_derived;
     size_t j;
 
     fprintf(out, "%f\tpopulation_split: %d [", event->time, (int) num_populations);
     for (j = 0; j < num_populations; j++) {
-        fprintf(out, "%d", event->params.population_split.source[j]);
+        fprintf(out, "%d", event->params.population_split.derived[j]);
         if (j < num_populations - 1) {
             fprintf(out, ", ");
         }
     }
-    fprintf(out, "] -> %d \n", event->params.population_split.destination);
+    fprintf(out, "] -> %d \n", event->params.population_split.ancestral);
 }
 
 /* Adds a population split event.
@@ -5878,28 +5879,28 @@ msp_print_population_split(
  * arrays of the correct type from numpy where we have to specify the size.
  */
 int MSP_WARN_UNUSED
-msp_add_population_split(msp_t *self, double time, size_t num_source_populations,
-    int32_t *source, int destination)
+msp_add_population_split(
+    msp_t *self, double time, size_t num_derived, int32_t *derived, int ancestral)
 {
     int ret = 0;
     size_t j;
     demographic_event_t *de;
     int N = (int) self->num_populations;
 
-    if (num_source_populations >= MSP_MAX_SPLIT_POPULATIONS) {
+    if (num_derived >= MSP_MAX_SPLIT_POPULATIONS) {
         ret = MSP_ERR_TOO_MANY_SPLIT_POPULATIONS;
         goto out;
     }
-    if (destination < 0 || destination >= N) {
+    if (ancestral < 0 || ancestral >= N) {
         ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
         goto out;
     }
-    for (j = 0; j < num_source_populations; j++) {
-        if (source[j] < 0 || source[j] >= N) {
+    for (j = 0; j < num_derived; j++) {
+        if (derived[j] < 0 || derived[j] >= N) {
             ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
             goto out;
         }
-        if (source[j] == destination) {
+        if (derived[j] == ancestral) {
             ret = MSP_ERR_SOURCE_DEST_EQUAL;
             goto out;
         }
@@ -5909,11 +5910,11 @@ msp_add_population_split(msp_t *self, double time, size_t num_source_populations
     if (ret != 0) {
         goto out;
     }
-    for (j = 0; j < num_source_populations; j++) {
-        de->params.population_split.source[j] = source[j];
+    for (j = 0; j < num_derived; j++) {
+        de->params.population_split.derived[j] = derived[j];
     }
-    de->params.population_split.destination = destination;
-    de->params.population_split.num_source_populations = num_source_populations;
+    de->params.population_split.ancestral = ancestral;
+    de->params.population_split.num_derived = num_derived;
     de->change_state = msp_population_split;
     de->print_state = msp_print_population_split;
     ret = 0;

@@ -1223,12 +1223,12 @@ class PopulationSplit(DemographicEvent):
     """
 
     :param float time: The time at which this event occurs in generations.
-    :param list(int) source: The ID(s) of the source population(s).
-    :param int dest: The ID of the destination population.
+    :param list(int) derived: The ID(s) of the derived population(s).
+    :param int ancestral: The ID of the ancestral population.
     """
 
-    source: List[Union[int, str]]
-    dest: Union[int, str]
+    derived: List[Union[int, str]]
+    ancestral: Union[int, str]
 
     _type_str: ClassVar[str] = dataclasses.field(default="Population Split", repr=False)
 
@@ -1238,12 +1238,14 @@ class PopulationSplit(DemographicEvent):
         return {
             "type": "population_split",
             "time": self.time,
-            "source": [_convert_id(demography, pop) for pop in self.source],
-            "dest": _convert_id(demography, self.dest),
+            "derived": [_convert_id(demography, pop) for pop in self.derived],
+            "ancestral": _convert_id(demography, self.ancestral),
         }
 
     def _parameters(self):
-        return f"source={self.source}, dest={self.dest}"
+        # TODO need to render derived a bit better. Coming out as ['A', 'B']
+        # rather than [A, B] at the moment.
+        return f"derived={self.derived}, ancestral={self.ancestral}"
 
     def _effect(self):
         return "TODO"

@@ -101,19 +101,6 @@ def ooa_model():
     """
     populations = [
         msprime.Population(
-            name="ancestral",
-            description="Equilibrium/root population",
-            initial_size=7300,
-        ),
-        msprime.Population(
-            name="AMH", description="Anatomically modern humans", initial_size=12300
-        ),
-        msprime.Population(
-            name="OOA",
-            description="Bottleneck out-of-Africa population",
-            initial_size=2100,
-        ),
-        msprime.Population(
             name="YRI",
             description="Yoruba in Ibadan, Nigeria",
             initial_size=12300,
@@ -132,6 +119,19 @@ def ooa_model():
             initial_size=510,
             growth_rate=0.0055,
         ),
+        msprime.Population(
+            name="OOA",
+            description="Bottleneck out-of-Africa population",
+            initial_size=2100,
+        ),
+        msprime.Population(
+            name="AMH", description="Anatomically modern humans", initial_size=12300
+        ),
+        msprime.Population(
+            name="ancestral",
+            description="Equilibrium/root population",
+            initial_size=7300,
+        ),
     ]
 
     demography = msprime.Demography(populations)
@@ -149,23 +149,17 @@ def ooa_model():
 
     demography.events = [
         # CEU and CHB merge into the OOA population
-        # Zero out the migration matrix first.
-        msprime.MigrationRateChange(T_OOA, rate=0),
-        msprime.MassMigration(time=T_OOA, source="CEU", dest="OOA", proportion=1),
-        msprime.MassMigration(time=T_OOA, source="CHB", dest="OOA", proportion=1),
+        msprime.PopulationSplit(time=T_OOA, derived=["CEU", "CHB"], ancestral="OOA"),
         # Set the migration rate between OOA and YRI
+        # TODO This should use a SymmetricMigrationRateChange event
         msprime.MigrationRateChange(
             time=T_OOA, source="YRI", dest="OOA", rate=yri_ooa_migration_rate
         ),
         msprime.MigrationRateChange(
             time=T_OOA, source="OOA", dest="YRI", rate=yri_ooa_migration_rate
         ),
-        # OOA and YRI merge into AMH population
-        msprime.MigrationRateChange(T_AMH, rate=0),
-        msprime.MassMigration(time=T_AMH, source="OOA", dest="AMH", proportion=1),
-        msprime.MassMigration(time=T_AMH, source="YRI", dest="AMH", proportion=1),
-        # The AMH population becomes the ancestral population
-        msprime.MassMigration(time=T_ANC, source="YRI", dest="ancestral", proportion=1),
+        msprime.PopulationSplit(time=T_AMH, derived=["YRI", "OOA"], ancestral="AMH"),
+        msprime.PopulationSplit(time=T_ANC, derived=["AMH"], ancestral="ancestral"),
     ]
     return demography
 
@@ -173,3 +167,5 @@ def ooa_model():
 def test_ooa():
     demography = ooa_model()
     assert demography.num_populations == 6
+
+    # print(demography.debug())

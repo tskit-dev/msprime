@@ -1242,36 +1242,36 @@ Simulator_parse_population_split(Simulator *self, double time, PyObject *py_even
 {
     int ret = -1;
     PyObject *value;
-    PyArrayObject *source_array = NULL;
-    int err, dest;
+    PyArrayObject *derived_array = NULL;
+    int err, ancestral;
     npy_intp *dims;
 
-    value = get_dict_value(py_event, "source");
+    value = get_dict_value(py_event, "derived");
     if (value == NULL) {
         goto out;
     }
-    source_array = (PyArrayObject *) PyArray_FROMANY(
+    derived_array = (PyArrayObject *) PyArray_FROMANY(
             value, NPY_INT32, 1, 1, NPY_ARRAY_IN_ARRAY);
-    if (source_array == NULL) {
+    if (derived_array == NULL) {
         goto out;
     }
-    dims = PyArray_DIMS(source_array);
+    dims = PyArray_DIMS(derived_array);
 
-    value = get_dict_number(py_event, "dest");
+    value = get_dict_number(py_event, "ancestral");
     if (value == NULL) {
         goto out;
     }
-    dest = (int) PyLong_AsLong(value);
+    ancestral = (int) PyLong_AsLong(value);
 
     err = msp_add_population_split(self->sim, time, (size_t) dims[0],
-            PyArray_DATA(source_array), dest);
+            PyArray_DATA(derived_array), ancestral);
     if (err != 0) {
         handle_input_error("population split", err);
         goto out;
     }
     ret = 0;
 out:
-    Py_XDECREF(source_array);
+    Py_XDECREF(derived_array);
     return ret;
 }
 

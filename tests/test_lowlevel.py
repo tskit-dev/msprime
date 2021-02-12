@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2020 University of Oxford
+# Copyright (C) 2015-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -193,16 +193,16 @@ def get_mass_migration_event(time=0.0, source=0, dest=1, proportion=1):
     }
 
 
-def get_population_split_event(time=0.0, source=None, dest=1):
+def get_population_split_event(time=0.0, derived=None, ancestral=1):
     """
     Returns a population split demographic event.
     """
-    source = [0] if source is None else source
+    derived = [0] if derived is None else derived
     return {
         "type": "population_split",
         "time": time,
-        "source": source,
-        "dest": dest,
+        "derived": derived,
+        "ancestral": ancestral,
     }
 
 
@@ -1599,8 +1599,8 @@ class TestSimulator(LowLevelTestCase):
             with pytest.raises(TypeError):
                 f([event])
 
-            # We test the bad types for source elsewhere as it's more complicated.
-            event = get_population_split_event(source=[0], dest=bad_type)
+            # We test the bad types for derived elsewhere as it's more complicated.
+            event = get_population_split_event(derived=[0], ancestral=bad_type)
             with pytest.raises(TypeError):
                 f([event])
 
@@ -1673,10 +1673,10 @@ class TestSimulator(LowLevelTestCase):
             event = get_simple_bottleneck_event(population=bad_pop_id)
             with pytest.raises(_msprime.InputError):
                 f([event])
-            event = get_population_split_event(source=[bad_pop_id])
+            event = get_population_split_event(derived=[bad_pop_id])
             with pytest.raises(_msprime.InputError):
                 f([event])
-            event = get_population_split_event(dest=bad_pop_id)
+            event = get_population_split_event(ancestral=bad_pop_id)
             with pytest.raises(_msprime.InputError):
                 f([event])
         # Negative size values not allowed
@@ -1918,7 +1918,7 @@ class TestSimulator(LowLevelTestCase):
         assert pop_sizes_before[0] == pop_sizes_after[1]
 
     def test_population_split_errors(self):
-        def f(source):
+        def f(derived):
             return make_sim(
                 samples=10,
                 num_populations=3,
@@ -1928,7 +1928,7 @@ class TestSimulator(LowLevelTestCase):
                     get_population_configuration(),
                 ],
                 demographic_events=[
-                    get_population_split_event(0, source=source, dest=1)
+                    get_population_split_event(0, derived=derived, ancestral=1)
                 ],
                 migration_matrix=[[0, 0, 0], [0, 0, 0], [0, 0, 0]],
             )
@@ -1955,7 +1955,7 @@ class TestSimulator(LowLevelTestCase):
                 get_population_configuration(),
             ],
             demographic_events=[
-                get_population_split_event(t + dt, source=[0, 1], dest=2),
+                get_population_split_event(t + dt, derived=[0, 1], ancestral=2),
             ],
             migration_matrix=[[0, 0, 0], [0, 0, 0], [0, 0, 0]],
         )

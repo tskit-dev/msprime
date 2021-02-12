@@ -280,9 +280,9 @@ typedef struct {
 #define MSP_MAX_SPLIT_POPULATIONS 100
 
 typedef struct {
-    population_id_t source[MSP_MAX_SPLIT_POPULATIONS];
-    population_id_t destination;
-    size_t num_source_populations;
+    population_id_t derived[MSP_MAX_SPLIT_POPULATIONS];
+    population_id_t ancestral;
+    size_t num_derived;
 } population_split_t;
 
 typedef struct {
@@ -425,7 +425,7 @@ int msp_add_migration_rate_change(
 int msp_add_mass_migration(
     msp_t *self, double time, int source, int dest, double proportion);
 int msp_add_population_split(
-    msp_t *self, double time, size_t num_populations, int32_t *source, int destination);
+    msp_t *self, double time, size_t num_derived, int32_t *derived, int ancestral);
 int msp_add_simple_bottleneck(
     msp_t *self, double time, int population_id, double intensity);
 int msp_add_instantaneous_bottleneck(
