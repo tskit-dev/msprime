@@ -514,7 +514,7 @@ def create_simulation_runner(parser, arg_list):
         for row in migration_matrix:
             row.append(0)
         migration_matrix.append([0 for j in range(num_populations)])
-        demography.populations.append(msprime.Population(initial_size=1))
+        demography.add_population(msprime.Population(initial_size=1))
         num_samples.append(0)
 
     # Add the demographic events
