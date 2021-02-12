@@ -1834,6 +1834,12 @@ class TestReprRoundTrip:
         ]
         self.assert_repr_round_trip(examples)
 
+    def test_population_split(self):
+        examples = [
+            msprime.PopulationSplit(time=1, source=[1, 2], dest=3),
+        ]
+        self.assert_repr_round_trip(examples)
+
     def test_simulation_model_change(self):
         examples = [
             msprime.SimulationModelChange(),

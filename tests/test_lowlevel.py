@@ -193,6 +193,19 @@ def get_mass_migration_event(time=0.0, source=0, dest=1, proportion=1):
     }
 
 
+def get_population_split_event(time=0.0, source=None, dest=1):
+    """
+    Returns a population split demographic event.
+    """
+    source = [0] if source is None else source
+    return {
+        "type": "population_split",
+        "time": time,
+        "source": source,
+        "dest": dest,
+    }
+
+
 def get_simple_bottleneck_event(time=0.0, population=0, proportion=1):
     """
     Returns a simple bottleneck demographic event.
@@ -1528,6 +1541,7 @@ class TestSimulator(LowLevelTestCase):
             get_growth_rate_change_event,
             get_migration_rate_change_event,
             get_mass_migration_event,
+            get_population_split_event,
             get_simple_bottleneck_event,
             get_instantaneous_bottleneck_event,
         ]
@@ -1585,6 +1599,11 @@ class TestSimulator(LowLevelTestCase):
             with pytest.raises(TypeError):
                 f([event])
 
+            # We test the bad types for source elsewhere as it's more complicated.
+            event = get_population_split_event(source=[0], dest=bad_type)
+            with pytest.raises(TypeError):
+                f([event])
+
             event = get_migration_rate_change_event(source=bad_type)
             with pytest.raises(TypeError):
                 f([event])
@@ -1621,6 +1640,7 @@ class TestSimulator(LowLevelTestCase):
             get_growth_rate_change_event,
             get_migration_rate_change_event,
             get_mass_migration_event,
+            get_population_split_event,
             get_simple_bottleneck_event,
             get_instantaneous_bottleneck_event,
         ]
@@ -1651,6 +1671,12 @@ class TestSimulator(LowLevelTestCase):
             with pytest.raises(_msprime.InputError):
                 f([event])
             event = get_simple_bottleneck_event(population=bad_pop_id)
+            with pytest.raises(_msprime.InputError):
+                f([event])
+            event = get_population_split_event(source=[bad_pop_id])
+            with pytest.raises(_msprime.InputError):
+                f([event])
+            event = get_population_split_event(dest=bad_pop_id)
             with pytest.raises(_msprime.InputError):
                 f([event])
         # Negative size values not allowed
@@ -1714,6 +1740,7 @@ class TestSimulator(LowLevelTestCase):
             get_growth_rate_change_event,
             get_migration_rate_change_event,
             get_mass_migration_event,
+            get_population_split_event,
             get_simple_bottleneck_event,
         ]
         events = []
@@ -1889,6 +1916,61 @@ class TestSimulator(LowLevelTestCase):
             for _, _, _, pop_id in ind:
                 pop_sizes_after[pop_id] += 1
         assert pop_sizes_before[0] == pop_sizes_after[1]
+
+    def test_population_split_errors(self):
+        def f(source):
+            return make_sim(
+                samples=10,
+                num_populations=3,
+                population_configuration=[
+                    get_population_configuration(),
+                    get_population_configuration(),
+                    get_population_configuration(),
+                ],
+                demographic_events=[
+                    get_population_split_event(0, source=source, dest=1)
+                ],
+                migration_matrix=[[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+            )
+
+        for bad_array in [{}, [[], []], ["sdf"]]:
+            with pytest.raises(ValueError):
+                f(bad_array)
+        for too_large in [100, 101, 10 ** 6]:
+            with pytest.raises(_msprime.InputError, match="more than 100"):
+                f(range(too_large))
+            with pytest.raises(_msprime.InputError, match="more than 100"):
+                f(np.arange(too_large, dtype=np.int32))
+
+    def test_population_split(self):
+        n = 10
+        t = 0.01
+        dt = 0.0000001
+        sim = make_sim(
+            samples=n,
+            num_populations=3,
+            population_configuration=[
+                get_population_configuration(),
+                get_population_configuration(),
+                get_population_configuration(),
+            ],
+            demographic_events=[
+                get_population_split_event(t + dt, source=[0, 1], dest=2),
+            ],
+            migration_matrix=[[0, 0, 0], [0, 0, 0], [0, 0, 0]],
+        )
+        sim.run(t)
+        pop_sizes_before = [0, 0, 0]
+        for ind in sim.ancestors:
+            for _, _, _, pop_id in ind:
+                pop_sizes_before[pop_id] += 1
+        assert pop_sizes_before[2] == 0
+        sim.run(t + 2 * dt)
+        pop_sizes_after = [0, 0, 0]
+        for ind in sim.ancestors:
+            for _, _, _, pop_id in ind:
+                pop_sizes_after[pop_id] += 1
+        assert pop_sizes_after[2] == sum(pop_sizes_before[:2])
 
     def test_bottleneck(self):
         n = 10

@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2020 University of Oxford
+** Copyright (C) 2015-2021 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -5818,6 +5818,104 @@ msp_add_mass_migration(
     de->params.mass_migration.proportion = proportion;
     de->change_state = msp_mass_migration;
     de->print_state = msp_print_mass_migration;
+    ret = 0;
+out:
+    return ret;
+}
+
+/* Population split */
+
+static int
+msp_population_split(msp_t *self, demographic_event_t *event)
+{
+    int ret = 0;
+    population_id_t *source = event->params.population_split.source;
+    population_id_t destination = event->params.population_split.destination;
+    size_t num_populations = event->params.population_split.num_source_populations;
+    demographic_event_t mass_migration;
+    size_t j, k;
+    size_t N = self->num_populations;
+
+    mass_migration.params.mass_migration.destination = destination;
+    mass_migration.params.mass_migration.proportion = 1.0;
+
+    for (j = 0; j < num_populations; j++) {
+        /* Turn off all migration to and from source[j] */
+        for (k = 0; k < self->num_populations; k++) {
+            self->migration_matrix[((size_t) source[j] * N) + k] = 0;
+            self->migration_matrix[k * N + (size_t) source[j]] = 0;
+        }
+        /* Move all lineages out of source and into dest */
+        mass_migration.params.mass_migration.source = source[j];
+        ret = msp_mass_migration(self, &mass_migration);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+static void
+msp_print_population_split(
+    msp_t *MSP_UNUSED(self), demographic_event_t *event, FILE *out)
+{
+    size_t num_populations = event->params.population_split.num_source_populations;
+    size_t j;
+
+    fprintf(out, "%f\tpopulation_split: %d [", event->time, (int) num_populations);
+    for (j = 0; j < num_populations; j++) {
+        fprintf(out, "%d", event->params.population_split.source[j]);
+        if (j < num_populations - 1) {
+            fprintf(out, ", ");
+        }
+    }
+    fprintf(out, "] -> %d \n", event->params.population_split.destination);
+}
+
+/* Adds a population split event.
+ * Note: we use the int32_t type here so we can be sure we're passing in
+ * arrays of the correct type from numpy where we have to specify the size.
+ */
+int MSP_WARN_UNUSED
+msp_add_population_split(msp_t *self, double time, size_t num_source_populations,
+    int32_t *source, int destination)
+{
+    int ret = 0;
+    size_t j;
+    demographic_event_t *de;
+    int N = (int) self->num_populations;
+
+    if (num_source_populations >= MSP_MAX_SPLIT_POPULATIONS) {
+        ret = MSP_ERR_TOO_MANY_SPLIT_POPULATIONS;
+        goto out;
+    }
+    if (destination < 0 || destination >= N) {
+        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
+        goto out;
+    }
+    for (j = 0; j < num_source_populations; j++) {
+        if (source[j] < 0 || source[j] >= N) {
+            ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (source[j] == destination) {
+            ret = MSP_ERR_SOURCE_DEST_EQUAL;
+            goto out;
+        }
+    }
+
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_source_populations; j++) {
+        de->params.population_split.source[j] = source[j];
+    }
+    de->params.population_split.destination = destination;
+    de->params.population_split.num_source_populations = num_source_populations;
+    de->change_state = msp_population_split;
+    de->print_state = msp_print_population_split;
     ret = 0;
 out:
     return ret;

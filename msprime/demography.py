@@ -1218,6 +1218,37 @@ class MassMigration(DemographicEvent):
         return ret
 
 
+@dataclasses.dataclass
+class PopulationSplit(DemographicEvent):
+    """
+
+    :param float time: The time at which this event occurs in generations.
+    :param list(int) source: The ID(s) of the source population(s).
+    :param int dest: The ID of the destination population.
+    """
+
+    source: List[Union[int, str]]
+    dest: Union[int, str]
+
+    _type_str: ClassVar[str] = dataclasses.field(default="Population Split", repr=False)
+
+    def get_ll_representation(self, num_populations=None, demography=None):
+        # We need to keep the num_populations argument until stdpopsim 0.1 is out
+        # https://github.com/tskit-dev/msprime/issues/1037
+        return {
+            "type": "population_split",
+            "time": self.time,
+            "source": [_convert_id(demography, pop) for pop in self.source],
+            "dest": _convert_id(demography, self.dest),
+        }
+
+    def _parameters(self):
+        return f"source={self.source}, dest={self.dest}"
+
+    def _effect(self):
+        return "TODO"
+
+
 # This is an unsupported/undocumented demographic event.
 @dataclasses.dataclass
 class SimpleBottleneck(DemographicEvent):

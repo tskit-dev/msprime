@@ -274,6 +274,17 @@ typedef struct {
     double proportion;
 } mass_migration_t;
 
+/* Arbitrary limit, saves us having to put in complex malloc/free
+ * logic in the demographic_events. Can easily be changed if
+ * needs be. */
+#define MSP_MAX_SPLIT_POPULATIONS 100
+
+typedef struct {
+    population_id_t source[MSP_MAX_SPLIT_POPULATIONS];
+    population_id_t destination;
+    size_t num_source_populations;
+} population_split_t;
+
 typedef struct {
     population_id_t population;
     double proportion;
@@ -292,6 +303,7 @@ typedef struct demographic_event_t_t {
         simple_bottleneck_t simple_bottleneck;
         instantaneous_bottleneck_t instantaneous_bottleneck;
         mass_migration_t mass_migration;
+        population_split_t population_split;
         migration_rate_change_t migration_rate_change;
         population_parameters_change_t population_parameters_change;
     } params;
@@ -412,6 +424,8 @@ int msp_add_migration_rate_change(
     msp_t *self, double time, int source_pop, int dest_pop, double migration_rate);
 int msp_add_mass_migration(
     msp_t *self, double time, int source, int dest, double proportion);
+int msp_add_population_split(
+    msp_t *self, double time, size_t num_populations, int32_t *source, int destination);
 int msp_add_simple_bottleneck(
     msp_t *self, double time, int population_id, double intensity);
 int msp_add_instantaneous_bottleneck(
