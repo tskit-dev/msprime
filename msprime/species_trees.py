@@ -150,12 +150,12 @@ def parse_species_tree(
 
     def add_population(node):
         population_id = len(populations)
-        population_id_map[node] = population_id
         name = f"pop_{population_id}"
         if node.name is not None:
             stripped = node.name.strip()
             if len(stripped) > 0:
                 name = stripped
+        population_id_map[node] = name
         populations.append(
             demog.Population(
                 initial_size=initial_size[name],
@@ -163,7 +163,7 @@ def parse_species_tree(
                 name=name,
             )
         )
-        return population_id
+        return name
 
     # Add in the leaf populations first so that they get IDs 0..n - 1
     for node in root.walk():
@@ -175,14 +175,12 @@ def parse_species_tree(
     for node in root.walk("postorder"):
         if len(node.descendants) > 0:
             population_id = add_population(node)
-            for child in node.descendants:
-                events.append(
-                    demog.MassMigration(
-                        source=population_id_map[child],
-                        dest=population_id,
-                        time=node.time,
-                    )
+            child_pops = [population_id_map[child] for child in node.descendants]
+            events.append(
+                demog.PopulationSplit(
+                    time=node.time, derived=child_pops, ancestral=population_id
                 )
+            )
     demography = demog.Demography(populations=populations, events=events)
     demography.validate()
     return demography
@@ -208,15 +206,16 @@ def process_starbeast_tree(
 
     def add_population(node):
         population_id = len(populations)
-        population_id_map[node] = population_id
         name = f"pop_{population_id}"
         newick_id = node.name.strip().split("[")[0]
         if len(newick_id) > 0:
             name = species_name_map[newick_id]
+        # Use the name for references to make things easier to debug.
+        population_id_map[node] = name
         populations.append(
             demog.Population(initial_size=population_size_map[node], name=name)
         )
-        return population_id
+        return name
 
     for node in root.walk():
         if node.name is None:
@@ -233,15 +232,13 @@ def process_starbeast_tree(
     for node in root.walk("postorder"):
         if len(node.descendants) > 0:
             population_id = add_population(node)
-
-            for child in node.descendants:
-                events.append(
-                    demog.MassMigration(
-                        source=population_id_map[child],
-                        dest=population_id,
-                        time=node.time,
-                    )
+            events.append(
+                demog.PopulationSplit(
+                    time=node.time,
+                    ancestral=population_id,
+                    derived=[population_id_map[child] for child in node.descendants],
                 )
+            )
     demography = demog.Demography(populations=populations, events=events)
     demography.validate()
     return demography

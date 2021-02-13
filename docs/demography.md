@@ -410,6 +410,13 @@ demography.events = [
 demography.debug()
 ```
 
+(sec_demography_events_population_split)=
+
+### Population split
+
+```{eval-rst}
+.. todo:: Write this section
+```
 
 (sec_demography_events_mass_migration)=
 

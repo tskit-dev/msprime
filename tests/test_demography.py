@@ -4234,13 +4234,10 @@ class TestDemographyObject:
         assert demography.populations[2].initial_size == 1000
         assert np.all(demography.migration_matrix == 0)
         assert demography.num_events == len(demography.events)
-        assert len(demography.events) == 2
+        assert len(demography.events) == 1
         assert demography.events[0].time == 10
-        assert demography.events[0].source == 0
-        assert demography.events[0].dest == 2
-        assert demography.events[1].time == 10
-        assert demography.events[1].source == 1
-        assert demography.events[1].dest == 2
+        assert demography.events[0].ancestral == "pop_2"
+        assert demography.events[0].derived == ["popA", "popB"]
 
     def test_from_starbeast(self):
         with open("tests/data/species_trees/91genes_species_rev.tre") as f:

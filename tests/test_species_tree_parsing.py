@@ -203,17 +203,15 @@ class TestSpeciesTreeRoundTrip:
         # events should be output in increasing time order.
         j = 0
         for node in tree.nodes(order="timeasc"):
-            children = tree.children(node)
-            dest = pop_id_map[node]
-            for child in children:
+            if tree.is_internal(node):
                 event = demography.events[j]
                 j += 1
-                assert isinstance(event, msprime.MassMigration)
+                assert isinstance(event, msprime.PopulationSplit)
                 assert event.time == pytest.approx(tree.time(node))
-                source = pop_id_map[child]
-                assert event.source == source
-                assert event.dest == dest
-
+                assert event.ancestral == demography[pop_id_map[node]].name
+                assert event.derived == [
+                    demography[pop_id_map[child]].name for child in tree.children(node)
+                ]
         assert j == len(demography.events)
 
     def test_n2_binary(self):
@@ -407,17 +405,15 @@ class TestStarbeastRoundTrip:
         # events should be output in increasing time order.
         j = 0
         for node in tree.nodes(order="timeasc"):
-            children = tree.children(node)
-            dest = pop_id_map[node]
-            for child in children:
+            if tree.is_internal(node):
                 event = demography.events[j]
                 j += 1
-                assert isinstance(event, msprime.MassMigration)
+                assert isinstance(event, msprime.PopulationSplit)
                 assert event.time == pytest.approx(tree.time(node))
-                source = pop_id_map[child]
-                assert event.source == source
-                assert event.dest == dest
-
+                assert event.ancestral == demography[pop_id_map[node]].name
+                assert event.derived == [
+                    demography[pop_id_map[child]].name for child in tree.children(node)
+                ]
         assert j == len(demography.events)
 
     def test_n2_binary(self):
@@ -495,6 +491,12 @@ class TestSpeciesTreeParsingErrors:
                 tree="(popA:100.0,popB:10.0)", initial_size=1000
             )
 
+    def test_duplicate_name(self):
+        with pytest.raises(ValueError, match="Duplicate population name"):
+            species_trees.parse_species_tree(
+                tree="(popA:100.0,popA:100.0)", initial_size=1
+            )
+
     def test_bad_tree(self):
         bad_trees = [
             "",
@@ -570,20 +572,20 @@ class TestSpeciesTreeExamples:
         good_time_units = "myr"
         good_ne = 10000
         good_generation_time = 20
-        spec = species_trees.parse_species_tree(
+        demography = species_trees.parse_species_tree(
             good_tree,
             time_units=good_time_units,
             initial_size=good_ne,
             generation_time=good_generation_time,
         )
-        assert isinstance(spec.populations, list)
-        assert len(spec.populations) == 7
-        for pop in spec.populations:
+        assert isinstance(demography.populations, list)
+        assert len(demography.populations) == 7
+        for pop in demography.populations:
             assert isinstance(pop, msprime.demography.Population)
-        assert isinstance(spec.events, list)
-        assert len(spec.events) == 6
-        for mm in spec.events:
-            assert isinstance(mm, msprime.demography.MassMigration)
+        assert isinstance(demography.events, list)
+        assert len(demography.events) == 3
+        for mm in demography.events:
+            assert isinstance(mm, msprime.demography.PopulationSplit)
 
     def test_4_species_run(self):
         species_tree = (
@@ -717,7 +719,7 @@ class TestStarbeastParsingErrors:
         good = "(n1[&dmv={1}]:1.14,n2[&dmv={1}]:1.14)[&dmv={1}]"
         spec = species_trees.process_starbeast_tree(good, 1, name_map)
         assert len(spec.populations) == 3
-        assert len(spec.events) == 2
+        assert len(spec.events) == 1
         bad_examples = [
             # Missing one dmv
             "(n1[&dmv={1}]:1.14,n2[&dmv={1}]:1.14)[&={1}]",
@@ -792,6 +794,6 @@ class TestStarbeastExamples:
                 species_name = pop.name
                 assert species_name.startswith("spc")
                 assert species_name[3:].isnumeric()
-            assert len(spec.events) == 22
+            assert len(spec.events) == 11
             for mm in spec.events:
-                assert isinstance(mm, msprime.MassMigration)
+                assert isinstance(mm, msprime.PopulationSplit)

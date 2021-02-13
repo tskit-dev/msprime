@@ -556,19 +556,11 @@ class Demography:
         the list. Leaf populations are first in the list, and added in
         left-to-right order. Populations corresponding to the internal nodes
         are then added in a postorder traversal of the species tree. For each
-        internal node, :class:`.MassMigration` events are added so that
-        lineages move from its child populations at the appropriate time.
-
-        :warning: If continuous migration is added to the returned Demography
-            by updating the migration matrix, it is important to
-            note that the MassMigration events used to move lineages do *not*
-            alter migration rates, and it should be ensured that
-            migration rates to source populations of mass migration events are zero
-            after the mass migration (viewed backwards in time).
-
-        :todo: Implement the PopulationSplit event and document its use here.
-            We'll still need to put in a warning, so users know that the migration
-            matrix will be updated at every node.
+        internal node a :class:`.PopulationSplit` event is added so that
+        lineages move from its child populations at the appropriate time
+        and rates of continuous migration to and from the child populations is
+        set to zero. See the :ref:`sec_demography_events_population_split`
+        section for more details.
 
         The initial sizes and growth rates for the populations in the model are
         set via the ``initial_size`` and ``growth_rate`` arguments. These can be
@@ -583,7 +575,7 @@ class Demography:
             demography = msprime.Demography.from_species_tree(tree, initial_size)
 
         Note that it is possible to have default population sizes for unnamed
-        ancestral populations using a `collections.defaultdict`, e.g.,
+        ancestral populations using a :class:`python:collections.defaultdict`, e.g.,
 
         .. code-block:: python
 
@@ -638,26 +630,19 @@ class Demography:
         trees written by TreeAnnotator based on StarBEAST posterior tree
         distributions.
 
-        The returned :class:`.Demography` object contains a :class:`.Population` for
-        each node in the species tree. The population's ``name`` attribute will
-        be either the corresponding node label from the newick tree, if it exists,
-        or otherwise the name takes the form "pop_{j}", where j is the position
-        of the given population in the list. Leaf populations are first in the
-        list, and added in left-to-right order. Populations corresponding to the
-        internal nodes are then added in a postorder traversal of the species
-        tree. For each internal node, :class:`.MassMigration` events are added
-        so that lineages move from its child populations at the appropriate time.
-
-        :warning: If continuous migration is added to the returned Demography
-            by updating the migration matrix, it is important to
-            note that the MassMigration events used to move lineages do *not*
-            alter migration rates, and it should be ensured that
-            migration rates to source populations of mass migration events are zero
-            after the mass migration (viewed backwards in time).
-
-        :todo: Implement the PopulationSplit event and document its use here.
-            We'll still need to put in a warning, so users know that the migration
-            matrix will be updated at every node.
+        The returned :class:`.Demography` object contains a
+        :class:`.Population` for each node in the species tree. The
+        population's ``name`` attribute will be either the corresponding node
+        label from the newick tree, if it exists, or otherwise the name takes
+        the form "pop_{j}", where j is the position of the given population in
+        the list. Leaf populations are first in the list, and added in
+        left-to-right order. Populations corresponding to the internal nodes
+        are then added in a postorder traversal of the species tree. For each
+        internal node a :class:`.PopulationSplit` event is added so that
+        lineages move from its child populations at the appropriate time and
+        rates of continuous migration to and from the child populations is set
+        to zero. See the :ref:`sec_demography_events_population_split` section
+        for more details.
 
         :param str tree: The tree string in Nexus format, with named leaves, branch
             lengths, and branch annotation. Typically, this string is the entire content
