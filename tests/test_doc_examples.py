@@ -24,6 +24,7 @@ import io
 import sys
 from unittest import mock
 
+import numpy as np
 import stdpopsim
 
 import msprime
@@ -145,18 +146,13 @@ def ooa_model():
     T_OOA = 21.2e3 / generation_time
     T_AMH = 140e3 / generation_time
     T_ANC = 220e3 / generation_time
-    yri_ooa_migration_rate = 25e-5
 
     demography.events = [
         # CEU and CHB merge into the OOA population
         msprime.PopulationSplit(time=T_OOA, derived=["CEU", "CHB"], ancestral="OOA"),
         # Set the migration rate between OOA and YRI
-        # TODO This should use a SymmetricMigrationRateChange event
-        msprime.MigrationRateChange(
-            time=T_OOA, source="YRI", dest="OOA", rate=yri_ooa_migration_rate
-        ),
-        msprime.MigrationRateChange(
-            time=T_OOA, source="OOA", dest="YRI", rate=yri_ooa_migration_rate
+        msprime.SymmetricMigrationRateChange(
+            time=T_OOA, populations=["YRI", "OOA"], rate=25e-5
         ),
         msprime.PopulationSplit(time=T_AMH, derived=["YRI", "OOA"], ancestral="AMH"),
         msprime.PopulationSplit(time=T_ANC, derived=["AMH"], ancestral="ancestral"),
@@ -167,5 +163,7 @@ def ooa_model():
 def test_ooa():
     demography = ooa_model()
     assert demography.num_populations == 6
-
-    # print(demography.debug())
+    dbg = demography.debug()
+    assert len(dbg.epochs) == 4
+    for epoch in dbg.epochs[2:]:
+        assert np.all(epoch.migration_matrix == 0)

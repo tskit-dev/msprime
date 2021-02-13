@@ -1130,6 +1130,9 @@ class MigrationRateChange(DemographicEvent):
         return {
             "type": "migration_rate_change",
             "time": self.time,
+            # Note: We'd like to change the name here to "rate" but it's best
+            # to leave this alone until stdpopsim has been moved away from
+            # using this internal API.
             "migration_rate": self.rate,
             "source": _convert_id(demography, self.source),
             "dest": _convert_id(demography, self.dest),
@@ -1216,6 +1219,49 @@ class MassMigration(DemographicEvent):
             f"migrating from {self.dest} to {self.source} forwards in time)"
         )
         return ret
+
+
+@dataclasses.dataclass
+class SymmetricMigrationRateChange(DemographicEvent):
+    """
+    Sets the symmetric migration rate between all pairs of populations in
+    the specified list to the specified value. For a given pair of population
+    IDs ``j`` and ``k``, this sets ``migration_matrix[j, k] = rate``
+    and ``migration_matrix[k, j] = rate``.
+
+    Populations may be specified either by their integer IDs or by
+    their string names.
+
+    :param float time: The time at which this event occurs in generations.
+    :param list populations: An iterable of population identifiers (integer
+        IDs or string names).
+    :param float rate: The new migration rate.
+    """
+
+    populations: List[Union[int, str]]
+    rate: float
+
+    _type_str: ClassVar[str] = dataclasses.field(
+        default="Symmetric migration rate change", repr=False
+    )
+
+    def get_ll_representation(self, num_populations=None, demography=None):
+        # We need to keep the num_populations argument until stdpopsim 0.1 is out
+        # https://github.com/tskit-dev/msprime/issues/1037
+        return {
+            "type": "symmetric_migration_rate_change",
+            "time": self.time,
+            "populations": [_convert_id(demography, pop) for pop in self.populations],
+            "rate": self.rate,
+        }
+
+    def _parameters(self):
+        # TODO need to render derived a bit better. Coming out as ['A', 'B']
+        # rather than [A, B] at the moment.
+        return f"populations={self.populations}, rate={self.rate}"
+
+    def _effect(self):
+        return "TODO"
 
 
 @dataclasses.dataclass
