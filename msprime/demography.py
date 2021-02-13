@@ -1680,15 +1680,20 @@ class DemographyDebugger:
                 if len(epoch.demographic_events) > 0:
                     title = f"Events @ generation {epoch.start_time}"
                     out += self.demography._events_html(epoch.demographic_events, title)
-                out += "</p>"
+                out += "</div>"
             else:
                 assert len(epoch.demographic_events) == 0
             epoch_title = f"Epoch: {epoch.start_time} -- {epoch.end_time} generations"
-            out += "<p>"
+            out += '<div class="msprime-epoch">'
             out += f"<h3>{epoch_title}</h3>"
             out += self._populations_html(epoch)
-        out += "</p>"
-        return f"<div>{out}</div>"
+        out += "</div>"
+        return f"""<div>
+            <style scoped="">
+                .msprime-epoch:nth-child(odd) {{background: #f5f5f5;}}
+            </style>
+            {out}
+        </div>"""
 
     def print_history(self, output=sys.stdout):
         """

@@ -158,13 +158,21 @@ def html_table(
             row += item.as_html()
         rows += f"<tr>{row}</tr>"
     s = (
-        "<table>"
-        f"<caption>{caption}</caption>"
+        "<div>"
+        """<style scoped="">
+            .tskit-table thead tr th:only-of-type {vertical-align: middle;}
+            .tskit-table thead tr th {text-align: center;vertical-align: top;}
+            .tskit-table tbody td {text-align: right;padding: 0.5em 0.5em;}
+            .tskit-table tbody th {padding: 0.5em 0.5em;}
+        </style>"""
+        f"<h4>{caption}</h4>"
+        '<table border="1" class="tskit-table">'
         "<thead>"
         "<tr>" + header + "</tr>"
         "</thead>"
         "<tbody>" + rows + "</tbody>"
         "</table>"
+        "</div>"
     )
     return s
 
