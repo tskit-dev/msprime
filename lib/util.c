@@ -280,6 +280,9 @@ msp_strerror_internal(int err)
                   "If this is something that you need to do, please open an issue "
                   "on GitHub";
             break;
+        case MSP_ERR_DUPLICATE_POPULATION:
+            ret = "Population IDs must be unique";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                   "report!";

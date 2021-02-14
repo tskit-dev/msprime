@@ -561,8 +561,8 @@ populations = [
         name="AMH", description="Anatomically modern humans", initial_size=12300
     ),
     msprime.Population(
-        name="ancestral",
-        description="Equilibrium/root population",
+        name="ANC",
+        description="Ancestral equilibrium population",
         initial_size=7300,
     ),
 ]
@@ -580,8 +580,9 @@ demography.events = [
         time=T_OOA, populations=["YRI", "OOA"], rate=25e-5
     ),
     msprime.PopulationSplit(time=T_AMH, derived=["YRI", "OOA"], ancestral="AMH"),
-    msprime.PopulationSplit(time=T_ANC, derived=["AMH"], ancestral="ancestral"),
+    msprime.PopulationSplit(time=T_ANC, derived=["AMH"], ancestral="ANC"),
 ]
+
 demography.debug()
 
 ```
@@ -593,7 +594,7 @@ demography.debug()
 # Once we have an equivalent version in stdpopsim we can update here
 # to compare against that instead and remove the Demography._ooa_model()
 
-assert demography == msprime.Demography._ooa_model()
+demography.assert_equal(msprime.Demography._ooa_model())
 
 ```
 

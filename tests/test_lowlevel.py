@@ -1978,6 +1978,8 @@ class TestSimulator(LowLevelTestCase):
                 f(range(too_large))
             with pytest.raises(_msprime.InputError, match="more than 100"):
                 f(np.arange(too_large, dtype=np.int32))
+        with pytest.raises(_msprime.InputError, match="IDs must be unique"):
+            f([0, 0])
 
     def test_population_split(self):
         n = 10

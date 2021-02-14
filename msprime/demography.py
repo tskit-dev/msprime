@@ -348,7 +348,7 @@ class Demography:
         data = []
         for event in events:
             type_text = textwrap.wrap(event._type_str, 15)
-            description = textwrap.wrap(event._parameters(), 20)
+            description = textwrap.wrap(event._parameters(), 22)
             effect = textwrap.wrap(event._effect(), 38)
             row = [[f"{event.time:.4g}"], type_text, description, effect]
             data.append(row)
@@ -522,14 +522,31 @@ class Demography:
         return DemographyDebugger(demography=self)
 
     def __eq__(self, other):
-        if isinstance(other, Demography):
-            return (
-                self.populations == other.populations
-                and np.array_equal(self.migration_matrix, other.migration_matrix)
-                and self.events == other.events
-            )
-        else:
-            return super().__eq__(other)
+        try:
+            self.assert_equal(other)
+            return True
+        except AssertionError:
+            return False
+
+    def assert_equal(self, other: Demography):
+        """
+        Compares this Demography with specified ``other`` and raises an
+        AssertionError if they are not exactly equal.
+
+        :param Demography other: The other demography to compare against.
+        """
+        # TODO we could potentially do better here with error messages
+        # by showing a diff of the str() values for objects that differ.
+        assert isinstance(other, Demography)
+        assert self.num_populations == other.num_populations
+        for p1, p2 in zip(self.populations, other.populations):
+            assert p1 == p2, f"{p1} ≠ {p2}"
+        assert np.array_equal(
+            self.migration_matrix, other.migration_matrix
+        )  # type: ignore
+        assert self.num_events == other.num_events
+        for e1, e2 in zip(self.events, other.events):
+            assert e1 == e2, f"{e1} ≠ {e2}"
 
     @staticmethod
     def from_species_tree(
@@ -955,8 +972,8 @@ class Demography:
                 name="AMH", description="Anatomically modern humans", initial_size=12300
             ),
             Population(
-                name="ancestral",
-                description="Equilibrium/root population",
+                name="ANC",
+                description="Ancestral equilibrium population",
                 initial_size=7300,
             ),
         ]
@@ -967,6 +984,9 @@ class Demography:
         demography.set_symmetric_migration_rate(["YRI", "CHB"], 1.9e-5)
         demography.set_symmetric_migration_rate(["YRI", "CEU"], 3e-5)
 
+        # TODO these should be added use add_x rather then passing in
+        # lists of events. This'll reduce some boilerplate.
+
         demography.events = [
             # CEU and CHB merge into the OOA population
             PopulationSplit(time=T_OOA, derived=["CEU", "CHB"], ancestral="OOA"),
@@ -975,7 +995,7 @@ class Demography:
                 time=T_OOA, populations=["YRI", "OOA"], rate=25e-5
             ),
             PopulationSplit(time=T_AMH, derived=["YRI", "OOA"], ancestral="AMH"),
-            PopulationSplit(time=T_ANC, derived=["AMH"], ancestral="ancestral"),
+            PopulationSplit(time=T_ANC, derived=["AMH"], ancestral="ANC"),
         ]
         return demography
 
@@ -1042,6 +1062,14 @@ def _convert_id(demography, population_ref):
     if demography is None or population_ref == -1:
         return population_ref
     return demography[population_ref].id
+
+
+def _list_str(a: List):
+    """
+    Returns the specified items rendered as a string without quotes.
+    """
+    joined = ", ".join(str(item) for item in a)
+    return f"[{joined}]"
 
 
 @dataclasses.dataclass
@@ -1321,12 +1349,16 @@ class SymmetricMigrationRateChange(DemographicEvent):
         }
 
     def _parameters(self):
-        # TODO need to render derived a bit better. Coming out as ['A', 'B']
-        # rather than [A, B] at the moment.
-        return f"populations={self.populations}, rate={self.rate}"
+        return f"populations={_list_str(self.populations)}, rate={self.rate}"
 
     def _effect(self):
-        return "TODO"
+        s = "Sets the symmetric migration rate between "
+        if len(self.populations) == 2:
+            s += f"{self.populations[0]} and {self.populations[1]} "
+        else:
+            s += f"all pairs of populations in {_list_str(self.populations)} "
+        s += f"to {self.rate} per generation"
+        return s
 
 
 @dataclasses.dataclass
@@ -1354,12 +1386,27 @@ class PopulationSplit(DemographicEvent):
         }
 
     def _parameters(self):
-        # TODO need to render derived a bit better. Coming out as ['A', 'B']
-        # rather than [A, B] at the moment.
-        return f"derived={self.derived}, ancestral={self.ancestral}"
+        return f"derived={_list_str(self.derived)}, ancestral={self.ancestral}"
 
     def _effect(self):
-        return "TODO"
+        s = "Moves all lineages from "
+        if len(self.derived) == 1:
+            s += f"the '{self.derived[0]}' derived population "
+        else:
+            s += "derived populations "
+            if len(self.derived) == 2:
+                s += f"'{self.derived[0]}' and '{self.derived[1]}' "
+            else:
+                s += f"{_list_str(self.derived)} "
+        s += f"to the ancestral '{self.ancestral}' population. "
+        s += "Also set all migration rates to and from "
+        if len(self.derived) == 1:
+            s += f"'{self.derived[0]}' "
+        else:
+            s += "the derived populations "
+        s += "to zero."
+
+        return s
 
 
 # This is an unsupported/undocumented demographic event.

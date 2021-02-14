@@ -1963,6 +1963,10 @@ test_demographic_events(void)
         source[0] = -1;
         CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 1, source, 0),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+        source[0] = 0;
+        source[1] = 0;
+        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 2, source, 1),
+            MSP_ERR_DUPLICATE_POPULATION);
 
         CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -1, 0, 0.2),
             MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);

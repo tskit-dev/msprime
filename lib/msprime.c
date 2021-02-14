@@ -5886,6 +5886,12 @@ msp_add_population_split(
     size_t j;
     demographic_event_t *de;
     int N = (int) self->num_populations;
+    bool *population_used = calloc(self->num_populations, sizeof(*population_used));
+
+    if (population_used == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
 
     if (num_derived >= MSP_MAX_SPLIT_POPULATIONS) {
         ret = MSP_ERR_TOO_MANY_SPLIT_POPULATIONS;
@@ -5904,6 +5910,11 @@ msp_add_population_split(
             ret = MSP_ERR_SOURCE_DEST_EQUAL;
             goto out;
         }
+        if (population_used[derived[j]]) {
+            ret = MSP_ERR_DUPLICATE_POPULATION;
+            goto out;
+        }
+        population_used[derived[j]] = true;
     }
 
     ret = msp_add_demographic_event(self, time, &de);
@@ -5919,6 +5930,7 @@ msp_add_population_split(
     de->print_state = msp_print_population_split;
     ret = 0;
 out:
+    msp_safe_free(population_used);
     return ret;
 }
 

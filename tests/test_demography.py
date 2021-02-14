@@ -1077,17 +1077,47 @@ class TestDemographicEventMessages:
 
         event = msprime.MigrationRateChange(source=0, dest=1, time=1, rate=6)
         assert event._parameters() == "source=0, dest=1, rate=6"
-        assert event._effect() == ("Backwards-time migration rate from 0 to 1 → 6")
+        assert event._effect() == "Backwards-time migration rate from 0 to 1 → 6"
 
     def test_symmetric_migration_rate_change(self):
         event = msprime.SymmetricMigrationRateChange(time=1, populations=[0, 1], rate=2)
         assert event._parameters() == "populations=[0, 1], rate=2"
-        assert event._effect() == "TODO"
+        assert event._effect() == (
+            "Sets the symmetric migration rate between 0 and 1 to 2 per generation"
+        )
+        event = msprime.SymmetricMigrationRateChange(
+            time=1, populations=[0, 1, 2], rate=2
+        )
+        assert event._parameters() == "populations=[0, 1, 2], rate=2"
+        assert event._effect() == (
+            "Sets the symmetric migration rate between all pairs of populations "
+            "in [0, 1, 2] to 2 per generation"
+        )
 
     def test_population_split(self):
+        event = msprime.PopulationSplit(time=1, derived=[0], ancestral=2)
+        assert event._parameters() == "derived=[0], ancestral=2"
+        assert event._effect() == (
+            "Moves all lineages from the '0' derived population to the "
+            "ancestral '2' population. Also set all migration rates to and "
+            "from '0' to zero."
+        )
+
         event = msprime.PopulationSplit(time=1, derived=[0, 1], ancestral=2)
         assert event._parameters() == "derived=[0, 1], ancestral=2"
-        assert event._effect() == "TODO"
+        assert event._effect() == (
+            "Moves all lineages from derived populations '0' and '1' to the "
+            "ancestral '2' population. Also set all migration rates to and "
+            "from the derived populations to zero."
+        )
+
+        event = msprime.PopulationSplit(time=1, derived=[0, 1, 2], ancestral=3)
+        assert event._parameters() == "derived=[0, 1, 2], ancestral=3"
+        assert event._effect() == (
+            "Moves all lineages from derived populations [0, 1, 2] to the "
+            "ancestral '3' population. Also set all migration rates to and "
+            "from the derived populations to zero."
+        )
 
     def test_mass_migration(self):
         event = msprime.MassMigration(time=1, proportion=0.5, source=0, dest=1)
@@ -3993,13 +4023,23 @@ class TestDemographyObject:
         assert m1 == m1
         assert not (m1 != m2)
         assert not (m1 != m1)
+        assert m1 is not None
+        assert m1 != []
 
         m3 = msprime.Demography.island_model([1, 1], 1 / 3 + 0.001)
         assert m1 != m3
-        assert m1 != m3
+        assert m3 != m1
 
-        assert m1 is not None
-        assert m1 != []
+        assert m1 != msprime.Demography.isolated_model([1])
+        assert m1 != msprime.Demography.isolated_model([1, 1])
+        assert m1 != msprime.Demography.island_model([2, 1], 1 / 3)
+
+        m1.events.append(msprime.SymmetricMigrationRateChange(1, [0, 1], 0.1))
+        assert m1 != m2
+        m2.events.append(msprime.SymmetricMigrationRateChange(1, [0, 1], 0.1))
+        assert m1 == m2
+        m1.events[0].rate = 0.01
+        assert m1 != m2
 
     def test_debug(self):
         model = msprime.Demography.island_model([1, 1], 1 / 3)
@@ -4550,7 +4590,7 @@ def test_ooa():
         ["YRI", "CEU", "CHB"],
         ["YRI", "OOA"],
         ["AMH"],
-        ["ancestral"],
+        ["ANC"],
     ]
     assert len(epoch_pop_map) == debug_sps.num_epochs
     assert debug_local.num_epochs == debug_sps.num_epochs
