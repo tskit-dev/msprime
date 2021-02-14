@@ -15,8 +15,8 @@ kernelspec:
 ```{code-cell}
 :tags: [remove-cell]
 
-    import msprime
-    from IPython.display import SVG
+import msprime
+from IPython.display import SVG
 
 ```
 
@@ -468,71 +468,134 @@ demography.debug()
 
 ## Defining empirical models
 
+```{eval-rst}
+.. todo:: Update this text a bit once we've finalised the API.
+```
+
+To illustrate ``msprime``'s demography API on a real example from the
+literature, we implement the
+[Gutenkunst et al.](http://dx.doi.org/10.1371/journal.pgen.1000695)
+out-of-Africa model.
+The parameter values used are taken from
+[Table 1](http://dx.doi.org/10.1371/journal.pgen.1000695.t001).
+Here is an illustration of the model using the [demography
+package](https://github.com/apragsdale/demography>)
+(see also [Figure 2B](http://dx.doi.org/10.1371/journal.pgen.1000695.g002)
+of the Gutenkunst et. al paper):
+
+```{image} _static/Gutenkunst_OOA_diagram.svg
+:width: 500px
+:align: center
+:alt: Schematic of Gutenkunst et al. (2009) out-of-Africa model.
+```
+
+The code below is provided as an example to help you develop your
+own models. If you want to use this precise model in your analyses
+we strongly recommend using {ref}`stdpopsim <stdpopsim:sec_introduction>`,
+which provides a community maintained {ref}`catalog <stdpopsim:sec_catalog>`
+of species information and demographic models for simulation. The
+model given here is identical to the
+{ref}`HomSam/OutOfAfrica_3G09 <stdpopsim:sec_catalog_homsap_models_outofafrica_3g09>`
+model.
+
+```{eval-rst}
+.. todo:: The model isn't actually identical any more because we're adding
+    the new populations for OOA and ancestral. We should explain this
+    distinction, but hopefully the stdpopsim model will be updated to
+    use the demes-like approach soon too.
+```
+
+:::{warning}
+The version of this model in this documentatino from 31 May 2016 to 29 May 2020
+(on the stable branch) was **incorrect**. Specifically, it mistakenly
+allowed for migration to continue beyond the merger of the African and
+Eurasian bottleneck populations. This has now been fixed, but if you had
+copied this model from the tutorial for your own analyses, you should
+update your model code or use the implementation that has been verified in
+{ref}`stdpopsim project <stdpopsim:sec_introduction>`. See
+[here](https://github.com/jeromekelleher/msprime-model-errors) for more
+details on the faulty model and its likely effects on downstream analyses.
+:::
 
 ```{code-cell}
 import math
 
-# First we set out the maximum likelihood values of the various parameters
-# given in Table 1.
-N_A = 7300
-N_B = 2100
-N_AF = 12300
-N_EU0 = 1000
-N_AS0 = 510
 # Times are provided in years, so we convert into generations.
 generation_time = 25
-T_AF = 220e3 / generation_time
-T_B = 140e3 / generation_time
-T_EU_AS = 21.2e3 / generation_time
-# We need to work out the starting population sizes based on the growth
-# rates provided for these two populations
-r_EU = 0.004
-r_AS = 0.0055
-N_EU = N_EU0 / math.exp(-r_EU * T_EU_AS)
-N_AS = N_AS0 / math.exp(-r_AS * T_EU_AS)
-# Migration rates during the various epochs.
-m_AF_B = 25e-5
-m_AF_EU = 3e-5
-m_AF_AS = 1.9e-5
-m_EU_AS = 9.6e-5
-# Population IDs correspond to their indexes in the popupulation
-# configuration array. Therefore, we have 0=YRI, 1=CEU and 2=CHB
-# initially.
+T_OOA = 21.2e3 / generation_time
+T_AMH = 140e3 / generation_time
+T_ANC = 220e3 / generation_time
+# We need to work out the starting (diploid) population sizes based on
+# the growth rates provided for these two populations
+r_CEU = 0.004
+r_CHB = 0.0055
+N_CEU = 1000 / math.exp(-r_CEU * T_OOA)
+N_CHB = 510 / math.exp(-r_CHB * T_OOA)
 
 populations = [
-    msprime.Population(name="YRI", initial_size=N_AF),
-    msprime.Population(name="CEU", initial_size=N_EU, growth_rate=r_EU),
-    msprime.Population(name="CHB", initial_size=N_AS, growth_rate=r_AS),
-]
-migration_matrix = [
-    [0, m_AF_EU, m_AF_AS],
-    [m_AF_EU, 0, m_EU_AS],
-    [m_AF_AS, m_EU_AS, 0],
-]
-events = [
-    # CEU and CHB merge into B with rate changes at T_EU_AS
-    msprime.MassMigration(time=T_EU_AS, source=2, destination=1, proportion=1.0),
-    msprime.MigrationRateChange(time=T_EU_AS, rate=0),
-    msprime.MigrationRateChange(time=T_EU_AS, rate=m_AF_B, matrix_index=(0, 1)),
-    msprime.MigrationRateChange(time=T_EU_AS, rate=m_AF_B, matrix_index=(1, 0)),
-    msprime.PopulationParametersChange(
-        time=T_EU_AS, initial_size=N_B, growth_rate=0, population_id=1
+    msprime.Population(
+        name="YRI",
+        description="Yoruba in Ibadan, Nigeria",
+        initial_size=12300,
     ),
-    # Population B merges into YRI at T_B
-    msprime.MassMigration(time=T_B, source=1, destination=0, proportion=1.0),
-    msprime.MigrationRateChange(time=T_B, rate=0),
-    # Size changes to N_A at T_AF
-    msprime.PopulationParametersChange(
-        time=T_AF, initial_size=N_A, population_id=0
+    msprime.Population(
+        name="CEU",
+        description=(
+            "Utah Residents (CEPH) with Northern and Western European Ancestry"
+        ),
+        initial_size=N_CEU,
+        growth_rate=r_CEU,
+    ),
+    msprime.Population(
+        name="CHB",
+        description="Han Chinese in Beijing, China",
+        initial_size=N_CHB,
+        growth_rate=r_CHB,
+    ),
+    msprime.Population(
+        name="OOA",
+        description="Bottleneck out-of-Africa population",
+        initial_size=2100,
+    ),
+    msprime.Population(
+        name="AMH", description="Anatomically modern humans", initial_size=12300
+    ),
+    msprime.Population(
+        name="ancestral",
+        description="Equilibrium/root population",
+        initial_size=7300,
     ),
 ]
-demography = msprime.Demography(
-    populations=populations,
-    migration_matrix=migration_matrix,
-    events=events)
+
+demography = msprime.Demography(populations)
+# Set the migration rates between extant populations
+demography.set_symmetric_migration_rate(["CEU", "CHB"], 9.6e-5)
+demography.set_symmetric_migration_rate(["YRI", "CHB"], 1.9e-5)
+demography.set_symmetric_migration_rate(["YRI", "CEU"], 3e-5)
+demography.events = [
+    # CEU and CHB merge into the OOA population
+    msprime.PopulationSplit(time=T_OOA, derived=["CEU", "CHB"], ancestral="OOA"),
+    # Set the migration rate between OOA and YRI
+    msprime.SymmetricMigrationRateChange(
+        time=T_OOA, populations=["YRI", "OOA"], rate=25e-5
+    ),
+    msprime.PopulationSplit(time=T_AMH, derived=["YRI", "OOA"], ancestral="AMH"),
+    msprime.PopulationSplit(time=T_ANC, derived=["AMH"], ancestral="ancestral"),
+]
 demography.debug()
+
 ```
 
+```{code-cell}
+:tags: [remove-cell]
+
+# Make sure we don't insert any errors in this version of the model.
+# Once we have an equivalent version in stdpopsim we can update here
+# to compare against that instead and remove the Demography._ooa_model()
+
+assert demography == msprime.Demography._ooa_model()
+
+```
 
 ## Importing model definitions
 

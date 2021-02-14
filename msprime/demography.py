@@ -899,6 +899,86 @@ class Demography:
     #     ]
     #     return model
 
+    @staticmethod
+    def _ooa_model():
+        """
+        Returns the Gutenkunst et al three population out-of-Africa model.
+
+        This version is included here temporarily as a way to get some
+        test coverage on the model compared with stdpopsim. Because we
+        use this model in the documentation, we want make sure that it's
+        doing what we think. We compare the model defined here then with
+        the one presented in the docs, to ensure that no errors creep in.
+
+        Once the upstream code in stdpopsim is updated to use msprime 1.0
+        APIs we can remove this model and instead compare directly
+        to the stdpopsim model with .is_equivalent() or whatever.
+        """
+        # Times are provided in years, so we convert into generations.
+        generation_time = 25
+        T_OOA = 21.2e3 / generation_time
+        T_AMH = 140e3 / generation_time
+        T_ANC = 220e3 / generation_time
+        # We need to work out the starting (diploid) population sizes based on
+        # the growth rates provided for these two populations
+        r_CEU = 0.004
+        r_CHB = 0.0055
+        N_CEU = 1000 / math.exp(-r_CEU * T_OOA)
+        N_CHB = 510 / math.exp(-r_CHB * T_OOA)
+
+        populations = [
+            Population(
+                name="YRI",
+                description="Yoruba in Ibadan, Nigeria",
+                initial_size=12300,
+            ),
+            Population(
+                name="CEU",
+                description=(
+                    "Utah Residents (CEPH) with Northern and Western European Ancestry"
+                ),
+                initial_size=N_CEU,
+                growth_rate=r_CEU,
+            ),
+            Population(
+                name="CHB",
+                description="Han Chinese in Beijing, China",
+                initial_size=N_CHB,
+                growth_rate=r_CHB,
+            ),
+            Population(
+                name="OOA",
+                description="Bottleneck out-of-Africa population",
+                initial_size=2100,
+            ),
+            Population(
+                name="AMH", description="Anatomically modern humans", initial_size=12300
+            ),
+            Population(
+                name="ancestral",
+                description="Equilibrium/root population",
+                initial_size=7300,
+            ),
+        ]
+
+        demography = Demography(populations)
+        # Set the migration rates between extant populations
+        demography.set_symmetric_migration_rate(["CEU", "CHB"], 9.6e-5)
+        demography.set_symmetric_migration_rate(["YRI", "CHB"], 1.9e-5)
+        demography.set_symmetric_migration_rate(["YRI", "CEU"], 3e-5)
+
+        demography.events = [
+            # CEU and CHB merge into the OOA population
+            PopulationSplit(time=T_OOA, derived=["CEU", "CHB"], ancestral="OOA"),
+            # Set the migration rate between OOA and YRI
+            SymmetricMigrationRateChange(
+                time=T_OOA, populations=["YRI", "OOA"], rate=25e-5
+            ),
+            PopulationSplit(time=T_AMH, derived=["YRI", "OOA"], ancestral="AMH"),
+            PopulationSplit(time=T_ANC, derived=["AMH"], ancestral="ancestral"),
+        ]
+        return demography
+
 
 # This was lifted out of older code as-is. No point in updating it
 # to use dataclasses, since all we want to do is maintain compatability

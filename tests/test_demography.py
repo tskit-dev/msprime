@@ -33,6 +33,7 @@ from unittest import mock
 import numpy as np
 import pytest
 import scipy.linalg
+import stdpopsim
 import tskit
 
 import msprime
@@ -4526,3 +4527,59 @@ class TestPopulationSplit:
         )
         assert ts.tables.nodes.time[-1] > 30
         assert ts.tables.nodes.population[-1] == 6
+
+
+def test_ooa():
+    # This test is temporary while we are updating stdpopsim to use the
+    # msprime APIs. See the nodes in the _ooa_model() code.
+    demog_local = msprime.Demography._ooa_model()
+    debug_local = demog_local.debug()
+    model_sps = stdpopsim.get_species("HomSap").get_demographic_model(
+        "OutOfAfrica_3G09"
+    )
+    demog_sps = msprime.Demography.from_old_style(
+        model_sps.population_configurations,
+        migration_matrix=model_sps.migration_matrix,
+        demographic_events=model_sps.demographic_events,
+    )
+    debug_sps = demog_sps.debug()
+
+    # Map from local population names into the equivalent in the stdpopsim
+    # model, per epoch.
+    epoch_pop_map = [
+        ["YRI", "CEU", "CHB"],
+        ["YRI", "OOA"],
+        ["AMH"],
+        ["ancestral"],
+    ]
+    assert len(epoch_pop_map) == debug_sps.num_epochs
+    assert debug_local.num_epochs == debug_sps.num_epochs
+    # In epoch 0 the top corner of the migration matrix should be
+    # the same.
+    assert np.array_equal(
+        debug_local.epochs[0].migration_matrix[:3, :3],
+        debug_sps.epochs[0].migration_matrix,
+    )
+    assert np.all(debug_local.epochs[0].migration_matrix[3:, 3:] == 0)
+    # There's only migration between OOA and YRI in epoch 1
+    M = debug_local.epochs[1].migration_matrix.copy()
+    assert M[0, 3] == debug_sps.epochs[1].migration_matrix[0, 1]
+    assert M[3, 0] == debug_sps.epochs[1].migration_matrix[1, 0]
+    M[0, 3] = 0
+    M[3, 0] = 0
+    assert np.all(M == 0)
+
+    for pop_map, epoch_local, epoch_sps in zip(
+        epoch_pop_map, debug_local.epochs, debug_sps.epochs
+    ):
+        assert epoch_local.start_time == epoch_sps.start_time
+        assert epoch_local.end_time == epoch_sps.end_time
+        for pop_id_sps, local_pop_name in enumerate(pop_map):
+            pop_id_local = demog_local[local_pop_name].id
+            assert (
+                epoch_local.populations[pop_id_local]
+                == epoch_sps.populations[pop_id_sps]
+            )
+        if len(pop_map) == 1:
+            assert np.all(epoch_local.migration_matrix == 0)
+            assert np.all(epoch_sps.migration_matrix == 0)

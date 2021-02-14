@@ -24,10 +24,6 @@ import io
 import sys
 from unittest import mock
 
-import numpy as np
-import stdpopsim
-
-import msprime
 from docs import examples
 
 
@@ -43,28 +39,6 @@ def capture_stdout():
 
 
 class TestDocumentationExamples:
-    def test_ooa_model(self):
-        correct_model = stdpopsim.get_species("HomSap").get_demographic_model(
-            "OutOfAfrica_3G09"
-        )
-        ooa_docs = examples.out_of_africa()
-        pops = []
-        for pop_config in ooa_docs["population_configurations"]:
-            pops.append(stdpopsim.Population(id=None, description=None))
-            pop_config.sample_size = None
-
-        local_model = stdpopsim.DemographicModel(
-            id=None,
-            description=None,
-            long_description=None,
-            generation_time=None,
-            populations=pops,
-            population_configurations=ooa_docs["population_configurations"],
-            migration_matrix=ooa_docs["migration_matrix"],
-            demographic_events=ooa_docs["demographic_events"],
-        )
-        correct_model.verify_equal(local_model)
-
     def test_segregating_sites(self):
         with capture_stdout() as stdout:
             examples.segregating_sites(10, 5, 10)
@@ -88,82 +62,3 @@ class TestDocumentationExamples:
     def test_logging_debug(self):
         with mock.patch("daiquiri.setup"):
             examples.logging_debug_example()
-
-
-def ooa_model():
-    """
-    Returns the Gutenkunst et al three population OOA model.
-
-    THIS IS A DRAFT.
-
-    Basic conversion of the Demes model. Needs some review, but
-    not much point in putting in effort before getting the
-    population split event in place.
-    """
-    populations = [
-        msprime.Population(
-            name="YRI",
-            description="Yoruba in Ibadan, Nigeria",
-            initial_size=12300,
-        ),
-        msprime.Population(
-            name="CEU",
-            description=(
-                "Utah Residents (CEPH) with Northern and Western European Ancestry"
-            ),
-            initial_size=1000,
-            growth_rate=0.004,
-        ),
-        msprime.Population(
-            name="CHB",
-            description="Han Chinese in Beijing, China",
-            initial_size=510,
-            growth_rate=0.0055,
-        ),
-        msprime.Population(
-            name="OOA",
-            description="Bottleneck out-of-Africa population",
-            initial_size=2100,
-        ),
-        msprime.Population(
-            name="AMH", description="Anatomically modern humans", initial_size=12300
-        ),
-        msprime.Population(
-            name="ancestral",
-            description="Equilibrium/root population",
-            initial_size=7300,
-        ),
-    ]
-
-    demography = msprime.Demography(populations)
-    # Set the migration rates between extant populations
-    demography.set_symmetric_migration_rate(["CEU", "CHB"], 9.6e-5)
-    demography.set_symmetric_migration_rate(["YRI", "CHB"], 1.9e-5)
-    demography.set_symmetric_migration_rate(["YRI", "CEU"], 3e-5)
-
-    # Times are provided in years, so we convert into generations.
-    generation_time = 25
-    T_OOA = 21.2e3 / generation_time
-    T_AMH = 140e3 / generation_time
-    T_ANC = 220e3 / generation_time
-
-    demography.events = [
-        # CEU and CHB merge into the OOA population
-        msprime.PopulationSplit(time=T_OOA, derived=["CEU", "CHB"], ancestral="OOA"),
-        # Set the migration rate between OOA and YRI
-        msprime.SymmetricMigrationRateChange(
-            time=T_OOA, populations=["YRI", "OOA"], rate=25e-5
-        ),
-        msprime.PopulationSplit(time=T_AMH, derived=["YRI", "OOA"], ancestral="AMH"),
-        msprime.PopulationSplit(time=T_ANC, derived=["AMH"], ancestral="ancestral"),
-    ]
-    return demography
-
-
-def test_ooa():
-    demography = ooa_model()
-    assert demography.num_populations == 6
-    dbg = demography.debug()
-    assert len(dbg.epochs) == 4
-    for epoch in dbg.epochs[2:]:
-        assert np.all(epoch.migration_matrix == 0)
