@@ -934,7 +934,7 @@ Simulator_parse_population_configuration(Simulator *self, PyObject *py_pop_confi
 {
     int ret = -1;
     Py_ssize_t j;
-    double initial_size, growth_rate;
+    double start_size, growth_rate;
     int err;
     PyObject *item, *value;
 
@@ -944,18 +944,18 @@ Simulator_parse_population_configuration(Simulator *self, PyObject *py_pop_confi
             PyErr_SetString(PyExc_TypeError, "not a dictionary");
             goto out;
         }
-        value = get_dict_number(item, "initial_size");
+        value = get_dict_number(item, "start_size");
         if (value == NULL) {
             goto out;
         }
-        initial_size = PyFloat_AsDouble(value);
+        start_size = PyFloat_AsDouble(value);
         value = get_dict_number(item, "growth_rate");
         if (value == NULL) {
             goto out;
         }
         growth_rate = PyFloat_AsDouble(value);
         err = msp_set_population_configuration(self->sim, j,
-                initial_size, growth_rate);
+                start_size, growth_rate);
         if (err != 0) {
             handle_input_error("population configuration", err);
             goto out;
@@ -1371,7 +1371,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
 {
     int ret = -1;
     Py_ssize_t j;
-    double time, initial_size, growth_rate, migration_rate, proportion,
+    double time, start_size, growth_rate, migration_rate, proportion,
            strength;
     int err, population_id, source, destination;
     int is_population_parameter_change, is_migration_rate_change, is_mass_migration,
@@ -1386,7 +1386,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     PyObject *simple_bottleneck_s = NULL;
     PyObject *instantaneous_bottleneck_s = NULL;
     PyObject *census_event_s = NULL;
-    PyObject *initial_size_s = NULL;
+    PyObject *start_size_s = NULL;
     PyObject *growth_rate_s = NULL;
 
     /* Create the Python strings for comparison with the types and
@@ -1425,8 +1425,8 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     if (census_event_s == NULL) {
         goto out;
     }
-    initial_size_s = Py_BuildValue("s", "initial_size");
-    if (initial_size_s == NULL) {
+    start_size_s = Py_BuildValue("s", "start_size");
+    if (start_size_s == NULL) {
         goto out;
     }
     growth_rate_s = Py_BuildValue("s", "growth_rate");
@@ -1500,13 +1500,13 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
 
         err = 0;
         if (is_population_parameter_change) {
-            initial_size = GSL_NAN;
-            if (PyDict_Contains(item, initial_size_s)) {
-                value = get_dict_number(item, "initial_size");
+            start_size = GSL_NAN;
+            if (PyDict_Contains(item, start_size_s)) {
+                value = get_dict_number(item, "start_size");
                 if (value == NULL) {
                     goto out;
                 }
-                initial_size = PyFloat_AsDouble(value);
+                start_size = PyFloat_AsDouble(value);
             }
             growth_rate = GSL_NAN;
             if (PyDict_Contains(item, growth_rate_s)) {
@@ -1522,7 +1522,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             }
             population_id = (int) PyLong_AsLong(value);
             err = msp_add_population_parameters_change(self->sim, time,
-                    population_id, initial_size, growth_rate);
+                    population_id, start_size, growth_rate);
         } else if (is_migration_rate_change) {
             value = get_dict_number(item, "migration_rate");
             if (value == NULL) {
@@ -1615,7 +1615,7 @@ out:
     Py_XDECREF(population_split_s);
     Py_XDECREF(simple_bottleneck_s);
     Py_XDECREF(instantaneous_bottleneck_s);
-    Py_XDECREF(initial_size_s);
+    Py_XDECREF(start_size_s);
     Py_XDECREF(growth_rate_s);
     Py_XDECREF(census_event_s);
     return ret;
@@ -2473,7 +2473,7 @@ Simulator_get_population_configuration(Simulator *self, void *closure)
     size_t j = 0;
     size_t num_populations;
     int sim_ret = 0;
-    double initial_size, growth_rate;
+    double start_size, growth_rate;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -2485,13 +2485,13 @@ Simulator_get_population_configuration(Simulator *self, void *closure)
     }
     for (j = 0; j < num_populations; j++) {
         sim_ret = msp_get_population_configuration(self->sim, j,
-            &initial_size, &growth_rate);
+            &start_size, &growth_rate);
         if (sim_ret != 0) {
             handle_library_error(sim_ret);
             goto out;
         }
         d = Py_BuildValue("{s:d,s:d}",
-               "initial_size", initial_size,
+               "start_size", start_size,
                "growth_rate", growth_rate);
         if (d == NULL) {
             goto out;

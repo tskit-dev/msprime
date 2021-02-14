@@ -69,8 +69,8 @@ class Population:
     Define a :ref:`population <sec_demography_populations>` in a
     :class:`.Demography`.
 
-    :ivar initial_size: The absolute size of the population at time zero.
-    :vartype initial_size: float
+    :ivar start_size: The absolute size of the population at time zero.
+    :vartype start_size: float
     :var growth_rate: The exponential growth rate of the
         population per generation (forwards in time).
         Growth rates can be negative. This is zero for a
@@ -98,7 +98,14 @@ class Population:
     :vartype id: int
     """
 
-    initial_size: float
+    # id: str
+    # start_time: Union[None, float]
+    # description: Union[str, None]
+    # ancestors: List[Deme]
+    # proportions: Union[List[float], None]
+    # epochs: List[Epoch] = dataclasses.field(default_factory=list)
+
+    start_size: float
     growth_rate: float = 0.0
     name: Union[str, None] = None
     description: str = ""
@@ -117,16 +124,14 @@ class Population:
     def from_old_style(pop_config, Ne=1):
         """
         Returns a Population object derived from the specified old-style
-        PopulationConfiguration. The Ne value is used as the ``initial_size``
+        PopulationConfiguration. The Ne value is used as the ``start_size``
         if this is not provided in the PopulationConfiguration.
 
         :meta private:
         """
-        initial_size = (
-            Ne if pop_config.initial_size is None else pop_config.initial_size
-        )
+        start_size = Ne if pop_config.initial_size is None else pop_config.initial_size
         population = Population(
-            initial_size=initial_size,
+            start_size=start_size,
             growth_rate=pop_config.growth_rate,
         )
         metadata = pop_config.metadata
@@ -141,7 +146,7 @@ class Population:
 
     def validate(self):
         # TODO more checks
-        if self.initial_size < 0:
+        if self.start_size < 0:
             raise ValueError("Negative population size")
         if self.name is None:
             raise ValueError("A population name must be set.")
@@ -274,7 +279,7 @@ class Demography:
             "id",
             "name",
             "description",
-            "initial_size",
+            "start_size",
             "growth_rate",
             "extra_metadata",
         ]
@@ -551,7 +556,7 @@ class Demography:
     @staticmethod
     def from_species_tree(
         tree,
-        initial_size,
+        start_size,
         *,
         time_units="gen",
         generation_time=None,
@@ -580,7 +585,7 @@ class Demography:
         section for more details.
 
         The initial sizes and growth rates for the populations in the model are
-        set via the ``initial_size`` and ``growth_rate`` arguments. These can be
+        set via the ``start_size`` and ``growth_rate`` arguments. These can be
         specified in two ways: if a single number is provided, this is used
         for all populations. The argument may also be a mapping from population
         names to their respective values. For example:
@@ -588,8 +593,8 @@ class Demography:
         .. code-block:: python
 
             tree = "(A:10.0,B:10.0)C"
-            initial_size = {"A": 1000, "B": 2000, "C": 100}
-            demography = msprime.Demography.from_species_tree(tree, initial_size)
+            start_size = {"A": 1000, "B": 2000, "C": 100}
+            demography = msprime.Demography.from_species_tree(tree, start_size)
 
         Note that it is possible to have default population sizes for unnamed
         ancestral populations using a :class:`python:collections.defaultdict`, e.g.,
@@ -597,13 +602,13 @@ class Demography:
         .. code-block:: python
 
             tree = "(A:10.0,B:10.0)"
-            initial_size = collections.defaultdict(lambda: 100)
-            initial_size.update({"A": 1000, "B": 2000})
-            demography = msprime.Demography.from_species_tree(tree, initial_size)
+            start_size = collections.defaultdict(lambda: 100)
+            start_size.update({"A": 1000, "B": 2000})
+            demography = msprime.Demography.from_species_tree(tree, start_size)
 
         :param str tree: The tree string in Newick format, with named leaves and branch
             lengths.
-        :param initial_size: Each population's initial_size. May be a single number
+        :param start_size: Each population's start_size. May be a single number
             or a mapping from population names to their sizes.
         :param growth_rate: Each population's growth_rate. May be a single number
             or a mapping from population names to their exponential growth rates.
@@ -621,7 +626,7 @@ class Demography:
         """
         return species_trees.parse_species_tree(
             tree,
-            initial_size=initial_size,
+            start_size=start_size,
             growth_rate=growth_rate,
             time_units=time_units,
             generation_time=generation_time,
@@ -690,7 +695,7 @@ class Demography:
         Creates a Demography object from the pre 1.0 style input parameters,
         reproducing the old semantics with respect to default values.
         """
-        populations = [Population(initial_size=Ne)]
+        populations = [Population(start_size=Ne)]
         if population_configurations is not None:
             populations = [
                 Population.from_old_style(pop_config, Ne)
@@ -704,55 +709,55 @@ class Demography:
         return demography
 
     @staticmethod
-    def isolated_model(initial_size, *, growth_rate=None):
+    def isolated_model(start_size, *, growth_rate=None):
         """
         Returns a :class:`.Demography` object representing a collection of
         isolated populations with specified initial population sizes and
         growth rates. Please see :ref:`sec_demography` for more details on
         population sizes and growth rates.
 
-        :param array_like initial_size: the ``initial_size`` value for each
+        :param array_like start_size: the ``start_size`` value for each
             of the :class:`.Population` in the returned model. The length
             of the array corresponds to the number of populations.
             model.
         :param array_like growth_rate: The exponential growth rate for each
             population. Must be either None (the default, resulting a zero
-            growth rate) or an array with the same length as ``initial_size``.
+            growth rate) or an array with the same length as ``start_size``.
         :return: A Demography object representing this model, suitable as
             input to :func:`.simulate`.
         :rtype: .Demography
         """
-        initial_size = np.array(initial_size, dtype=np.float64)
-        if len(initial_size.shape) != 1:
+        start_size = np.array(start_size, dtype=np.float64)
+        if len(start_size.shape) != 1:
             raise ValueError(
-                "The initial_size argument must a 1D array of population size values"
+                "The start_size argument must a 1D array of population size values"
             )
         if growth_rate is None:
-            growth_rate = np.zeros_like(initial_size)
+            growth_rate = np.zeros_like(start_size)
         else:
             growth_rate = np.array(growth_rate, dtype=np.float64)
-        if initial_size.shape != growth_rate.shape:
+        if start_size.shape != growth_rate.shape:
             raise ValueError(
                 "If growth_rate is specified it must be a 1D array of the same "
                 "length as the population_size array"
             )
-        if np.any(initial_size < 0):
+        if np.any(start_size < 0):
             raise ValueError("population size values must be nonnegative.")
-        if not np.all(np.isfinite(initial_size)):
+        if not np.all(np.isfinite(start_size)):
             raise ValueError("population size values must be finite.")
         if not np.all(np.isfinite(growth_rate)):
             raise ValueError("growth_rate values must be finite.")
         populations = [
             Population(
-                initial_size=initial_size[j],
+                start_size=start_size[j],
                 growth_rate=growth_rate[j],
             )
-            for j in range(len(initial_size))
+            for j in range(len(start_size))
         ]
         return Demography(populations=populations)
 
     @staticmethod
-    def island_model(initial_size, migration_rate, *, growth_rate=None):
+    def island_model(start_size, migration_rate, *, growth_rate=None):
         """
         Returns a :class:`.Demography` object representing a collection of
         populations with specified initial population sizes and growth
@@ -760,7 +765,7 @@ class Demography:
         specified rate. Please see :ref:`sec_demography` for more details on
         population sizes and growth rates.
 
-        :param array_like initial_size: the ``initial_size`` value for each
+        :param array_like start_size: the ``start_size`` value for each
             of the :class:`.Population` in the returned model. The length
             of the array corresponds to the number of populations.
             model.
@@ -768,12 +773,12 @@ class Demography:
             populations.
         :param array_like growth_rate: The exponential growth rate for each
             population. Must be either None (the default, resulting a zero
-            growth rate) or an array with the same length as ``initial_size``.
+            growth rate) or an array with the same length as ``start_size``.
         :return: A Demography object representing this model, suitable as
             input to :func:`.simulate`.
         :rtype: .Demography
         """
-        model = Demography.isolated_model(initial_size, growth_rate=growth_rate)
+        model = Demography.isolated_model(start_size, growth_rate=growth_rate)
         check_migration_rate(migration_rate)
         model.migration_matrix[:] = migration_rate
         np.fill_diagonal(model.migration_matrix, 0)
@@ -781,7 +786,7 @@ class Demography:
 
     @staticmethod
     def stepping_stone_model(
-        initial_size, migration_rate, *, growth_rate=None, boundaries=False
+        start_size, migration_rate, *, growth_rate=None, boundaries=False
     ):
         """
         Returns a :class:`.Demography` object representing a collection of
@@ -794,14 +799,14 @@ class Demography:
             stepping stone model, but higher dimensions could also be supported.
             Please open an issue on GitHub if this feature would be useful to you.
 
-        :param array_like initial_size: the ``initial_size`` value for each
+        :param array_like start_size: the ``start_size`` value for each
             of the :class:`.Population` in the returned model. The length
             of the array corresponds to the number of populations.
         :param float migration_rate: The migration rate between adjacent pairs
             of populations.
         :param array_like growth_rate: The exponential growth rate for each
             population. Must be either None (the default, resulting a zero
-            growth rate) or an array with the same length as ``initial_size``.
+            growth rate) or an array with the same length as ``start_size``.
         :param bool boundaries: If True the stepping stone model has boundary
             conditions imposed so that demes at either end of the chain do
             not exchange migrats. If False (the default), the set of
@@ -811,13 +816,13 @@ class Demography:
             input to :func:`.simulate`.
         :rtype: .Demography
         """
-        initial_size = np.array(initial_size, dtype=np.float64)
-        if len(initial_size.shape) > 1:
+        start_size = np.array(start_size, dtype=np.float64)
+        if len(start_size.shape) > 1:
             raise ValueError(
                 "Only 1D stepping stone models currently supported. Please open "
                 "an issue on GitHub if you would like 2D (or more) models"
             )
-        model = Demography.isolated_model(initial_size, growth_rate=growth_rate)
+        model = Demography.isolated_model(start_size, growth_rate=growth_rate)
         check_migration_rate(migration_rate)
         if model.num_populations > 1:
             index1 = np.arange(model.num_populations, dtype=int)
@@ -858,7 +863,7 @@ class Demography:
     #     model = Demography()
     #     model.populations = [
     #         Population(
-    #             initial_size=N0,
+    #             start_size=N0,
     #             name="pop_0",
     #             description="Population in piecewise constant model",
     #         )
@@ -868,7 +873,7 @@ class Demography:
     #     for t, N in args:
     #         model.demographic_events.append(
     #             PopulationParametersChange(
-    #                 time=t, initial_size=N, growth_rate=0, population=0
+    #                 time=t, start_size=N, growth_rate=0, population=0
     #             )
     #         )
     #     return model
@@ -905,9 +910,9 @@ class Demography:
     #     """
     #     model = Demography()
     #     model.populations = [
-    #         Population(initial_size=N0),
-    #         Population(initial_size=N1),
-    #         Population(initial_size=NA),
+    #         Population(start_size=N0),
+    #         Population(start_size=N1),
+    #         Population(start_size=NA),
     #     ]
     #     model.migration_matrix = [[0, M01, 0], [M10, 0, 0], [0, 0, 0]]
     #     model.demographic_events = [
@@ -947,34 +952,34 @@ class Demography:
             Population(
                 name="YRI",
                 description="Yoruba in Ibadan, Nigeria",
-                initial_size=12300,
+                start_size=12300,
             ),
             Population(
                 name="CEU",
                 description=(
                     "Utah Residents (CEPH) with Northern and Western European Ancestry"
                 ),
-                initial_size=N_CEU,
+                start_size=N_CEU,
                 growth_rate=r_CEU,
             ),
             Population(
                 name="CHB",
                 description="Han Chinese in Beijing, China",
-                initial_size=N_CHB,
+                start_size=N_CHB,
                 growth_rate=r_CHB,
             ),
             Population(
                 name="OOA",
                 description="Bottleneck out-of-Africa population",
-                initial_size=2100,
+                start_size=2100,
             ),
             Population(
-                name="AMH", description="Anatomically modern humans", initial_size=12300
+                name="AMH", description="Anatomically modern humans", start_size=12300
             ),
             Population(
                 name="ANC",
                 description="Ancestral equilibrium population",
-                initial_size=7300,
+                start_size=7300,
             ),
         ]
 
@@ -1103,9 +1108,8 @@ class PopulationParametersChange(DemographicEvent):
     options from ``ms``. Note that unlike ``ms`` we do not automatically
     set growth rates to zero when the population size is changed.
 
-    :param float time: The length of time ago at which this event
-        occurred.
-    :param float initial_size: The absolute diploid size of the population
+    :param float time: The length of time ago at which this event occurred.
+    :param float start_size: The absolute size of the population
         at the beginning of the time slice starting at ``time``. If None,
         this is calculated according to the initial population size and
         growth rate over the preceding time slice.
@@ -1116,12 +1120,13 @@ class PopulationParametersChange(DemographicEvent):
         simultaneously.
     """
 
-    initial_size: Union[float, None] = None
+    start_size: Union[float, None] = None
     growth_rate: Union[float, None] = None
     # TODO change the default to -1 to match MigrationRateChange.
     population: Union[int, None] = None
     # Deprecated.
     # TODO add a formal deprecation notice
+    initial_size: Union[float, None] = dataclasses.field(default=None, repr=False)
     population_id: Union[int, None] = dataclasses.field(default=None, repr=False)
 
     _type_str: ClassVar[str] = "Population parameter change"
@@ -1132,12 +1137,18 @@ class PopulationParametersChange(DemographicEvent):
             raise ValueError(
                 "population_id and population are aliases; cannot supply both."
             )
-
         if self.population_id is not None:
             self.population = self.population_id
-        if self.growth_rate is None and self.initial_size is None:
-            raise ValueError("Must specify one or more of growth_rate and initial_size")
-        if self.initial_size is not None and self.initial_size < 0:
+        if self.initial_size is not None and self.start_size is not None:
+            raise ValueError(
+                "initial_size and start_size are aliases; cannot supply both."
+            )
+        if self.initial_size is not None:
+            self.start_size = self.initial_size
+
+        if self.growth_rate is None and self.start_size is None:
+            raise ValueError("Must specify one or more of growth_rate and start_size")
+        if self.start_size is not None and self.start_size < 0:
             raise ValueError("Cannot have a population size < 0")
         self.population = -1 if self.population is None else self.population
 
@@ -1151,22 +1162,22 @@ class PopulationParametersChange(DemographicEvent):
         }
         if self.growth_rate is not None:
             ret["growth_rate"] = self.growth_rate
-        if self.initial_size is not None:
-            ret["initial_size"] = self.initial_size
+        if self.start_size is not None:
+            ret["start_size"] = self.start_size
         return ret
 
     def _parameters(self):
         s = f"population={self.population}, "
-        if self.initial_size is not None:
-            s += f"initial_size={self.initial_size}, "
+        if self.start_size is not None:
+            s += f"start_size={self.start_size}, "
         if self.growth_rate is not None:
             s += f"growth_rate={self.growth_rate}, "
         return s[:-2]
 
     def _effect(self):
         s = ""
-        if self.initial_size is not None:
-            s += f"initial_size → {self.initial_size} "
+        if self.start_size is not None:
+            s += f"start_size → {self.start_size} "
             if self.growth_rate is not None:
                 s += "and "
         if self.growth_rate is not None:
@@ -1578,7 +1589,7 @@ class DemographyDebugger:
         # correctly initialised.
         samples = {}
         for j, pop in enumerate(self.demography.populations):
-            if pop.initial_size > 0 and pop.sampling_time == 0:
+            if pop.start_size > 0 and pop.sampling_time == 0:
                 samples[j] = 1
         if len(samples) == 0:
             raise ValueError("No population with non-zero initial size.")
@@ -1728,7 +1739,7 @@ class DemographyDebugger:
     def population_size_trajectory(self, steps):
         """
         This function returns an array of per-population effective population sizes,
-        as defined by the demographic model. These are the `initial_size`
+        as defined by the demographic model. These are the `start_size`
         parameters of the model, modified by any population growth rates.
         The sizes are computed at the time points given by `steps`.
 

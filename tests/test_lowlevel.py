@@ -102,12 +102,12 @@ def get_sweep_genic_selection_model(
     )
 
 
-def get_population_configuration(growth_rate=0.0, initial_size=1.0):
+def get_population_configuration(growth_rate=0.0, start_size=1.0):
     """
     Returns a population configuration dictionary suitable for passing
     to the low-level API.
     """
-    return {"growth_rate": growth_rate, "initial_size": initial_size}
+    return {"growth_rate": growth_rate, "start_size": start_size}
 
 
 def get_samples(num_samples):
@@ -132,7 +132,7 @@ def get_population_samples(*args):
 
 
 def get_population_parameters_change_event(
-    time=0.0, population=-1, initial_size=None, growth_rate=None
+    time=0.0, population=-1, start_size=None, growth_rate=None
 ):
     """
     Returns a population change event for the specified values.
@@ -142,8 +142,8 @@ def get_population_parameters_change_event(
         "time": time,
         "population": population,
     }
-    if initial_size is not None:
-        ret["initial_size"] = initial_size
+    if start_size is not None:
+        ret["start_size"] = start_size
     if growth_rate is not None:
         ret["growth_rate"] = growth_rate
     return ret
@@ -154,7 +154,7 @@ def get_size_change_event(time=0.0, size=1.0, population=-1):
     Returns a size change demographic event.
     """
     return get_population_parameters_change_event(
-        time, population, initial_size=size, growth_rate=0
+        time, population, start_size=size, growth_rate=0
     )
 
 
@@ -900,19 +900,19 @@ class TestSimulationState(LowLevelTestCase):
                 indexes = [population]
                 if population == -1:
                     indexes = range(N)
-                initial_size = event.get("initial_size", None)
+                start_size = event.get("start_size", None)
                 growth_rate = event.get("growth_rate", None)
                 for j in indexes:
-                    s = population_configuration[j]["initial_size"]
+                    s = population_configuration[j]["start_size"]
                     a = population_configuration[j]["growth_rate"]
-                    size = initial_size
-                    if initial_size is None:
+                    size = start_size
+                    if start_size is None:
                         # Calculate the new size
                         size = s * math.exp(-a * (t - start_times[j]))
                     alpha = a
                     if growth_rate is not None:
                         alpha = growth_rate
-                    population_configuration[j]["initial_size"] = size
+                    population_configuration[j]["start_size"] = size
                     population_configuration[j]["growth_rate"] = alpha
                     start_times[j] = t
             assert np.array_equal(sim.migration_matrix, migration_matrix)
@@ -1428,7 +1428,7 @@ class TestSimulator(LowLevelTestCase):
         with pytest.raises(ValueError):
             f([{}])
         # We must supply bot parameters.
-        parameters = ["initial_size", "growth_rate"]
+        parameters = ["start_size", "growth_rate"]
         for k in range(1, 3):
             for t in itertools.combinations(parameters, k):
                 d = {k: 2 for k in t}
@@ -1440,20 +1440,20 @@ class TestSimulator(LowLevelTestCase):
             f([{"start_time": 1, "type": -1000}])
         for bad_number in ["", None, [], {}]:
             with pytest.raises(TypeError):
-                f([get_population_configuration(initial_size=bad_number)])
+                f([get_population_configuration(start_size=bad_number)])
             with pytest.raises(TypeError):
                 f([get_population_configuration(growth_rate=bad_number)])
-        # Cannot have negative for initial_size
+        # Cannot have negative for start_size
         for bad_size in [-1, -1e300]:
             with pytest.raises(_msprime.InputError):
                 f(
-                    [get_population_configuration(initial_size=bad_size)],
+                    [get_population_configuration(start_size=bad_size)],
                 )
 
     def test_get_population_configurations(self):
         def f(num_samples, conf_tuples):
             population_configuration = [
-                get_population_configuration(initial_size=p, growth_rate=a)
+                get_population_configuration(start_size=p, growth_rate=a)
                 for p, a in conf_tuples
             ]
             N = len(population_configuration)
@@ -1468,7 +1468,7 @@ class TestSimulator(LowLevelTestCase):
             assert len(conf_dicts) == len(conf_tuples)
             for conf_dict, conf_tuple in zip(conf_dicts, conf_tuples):
                 assert len(conf_dict) == 2
-                assert conf_dict["initial_size"] == conf_tuple[0]
+                assert conf_dict["start_size"] == conf_tuple[0]
                 assert conf_dict["growth_rate"] == conf_tuple[1]
 
         f(2, [(1, 1)])
@@ -1716,7 +1716,7 @@ class TestSimulator(LowLevelTestCase):
         size_change_event = get_size_change_event(size=-5)
         with pytest.raises(_msprime.InputError):
             f([size_change_event])
-        # population changes where we specify neither initial_size
+        # population changes where we specify neither start_size
         # or growth rate are illegal.
         event = get_population_parameters_change_event()
         with pytest.raises(_msprime.InputError):

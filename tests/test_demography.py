@@ -117,7 +117,7 @@ class TestNePopulationSizeEquivalence:
                 random_seed=random_seed,
             )
             self.assert_tree_sequences_equal(ts1, ts2)
-            # Also setting initial_size=Ne is the same.
+            # Also setting start_size=Ne is the same.
             ts3 = msprime.simulate(
                 samples=samples,
                 Ne=Ne,
@@ -164,7 +164,7 @@ class TestNePopulationSizeEquivalence:
                 random_seed=random_seed,
             )
             self.assert_tree_sequences_equal(ts1, ts2)
-            # Also setting initial_size=Ne is the same.
+            # Also setting start_size=Ne is the same.
             ts3 = msprime.simulate(
                 samples=samples,
                 Ne=Ne,
@@ -217,9 +217,9 @@ class TestIntrospectionInterface:
     """
 
     def test_population_parameters_change(self):
-        event = msprime.PopulationParametersChange(1.0, population=1, initial_size=2.0)
+        event = msprime.PopulationParametersChange(1.0, population=1, start_size=2.0)
         repr_s = (
-            "PopulationParametersChange(time=1.0, initial_size=2.0, "
+            "PopulationParametersChange(time=1.0, start_size=2.0, "
             "growth_rate=None, population=1)"
         )
         assert repr(event) == repr_s
@@ -286,7 +286,7 @@ class TestDemographicEventsHaveExtraLLParameter:
 
     def test_demographic_events_have_param(self):
         events = [
-            msprime.PopulationParametersChange(1.0, population=1, initial_size=2.0),
+            msprime.PopulationParametersChange(1.0, population=1, start_size=2.0),
             msprime.MigrationRateChange(1.0, 1.0),
             msprime.MassMigration(1.0, source=0, dest=1),
             msprime.PopulationSplit(1.0, derived=[0], ancestral=1),
@@ -361,7 +361,7 @@ class TestBadDemographicParameters:
     def test_bad_population_size(self):
         for bad_size in [-1, -1e300]:
             with pytest.raises(ValueError):
-                msprime.PopulationParametersChange(0, initial_size=bad_size)
+                msprime.PopulationParametersChange(0, start_size=bad_size)
             with pytest.raises(ValueError):
                 msprime.PopulationConfiguration(
                     initial_size=bad_size,
@@ -391,7 +391,7 @@ class TestBadDemographicEvents:
     Tests for input errors when creating demographic events.
     """
 
-    def test_growth_rate_or_initial_size(self):
+    def test_growth_rate_or_start_size(self):
         with pytest.raises(ValueError):
             msprime.PopulationParametersChange(time=0)
 
@@ -423,10 +423,10 @@ class TestZeroPopulationSize(unittest.TestCase):
             msprime.MassMigration(self.T, source=1, dest=0),
             msprime.MassMigration(self.T, source=2, dest=0),
             msprime.PopulationParametersChange(
-                self.T, initial_size=self.N, population_id=0
+                self.T, start_size=self.N, population_id=0
             ),
-            msprime.PopulationParametersChange(self.T, initial_size=0, population_id=1),
-            msprime.PopulationParametersChange(self.T, initial_size=0, population_id=2),
+            msprime.PopulationParametersChange(self.T, start_size=0, population_id=1),
+            msprime.PopulationParametersChange(self.T, start_size=0, population_id=2),
         ]
 
     def test_demography_with_zero_sizes(self):
@@ -499,7 +499,7 @@ class TestDeprecatedParameters:
         with pytest.raises(ValueError):
             msprime.PopulationParametersChange(
                 time=0,
-                initial_size=1.1,
+                start_size=1.1,
                 growth_rate=0.1,
                 population=1,
                 population_id=1,
@@ -507,24 +507,32 @@ class TestDeprecatedParameters:
 
         for j in range(10):
             e = msprime.PopulationParametersChange(
-                time=0.1, initial_size=1.1, growth_rate=0.1, population=j
+                time=0.1, start_size=1.1, growth_rate=0.1, population=j
             )
             assert e.time == 0.1
-            assert e.initial_size == 1.1
+            assert e.start_size == 1.1
             assert e.growth_rate == 0.1
             assert e.population == j
             e = msprime.PopulationParametersChange(0.1, 1.1, 0.1, j)
             assert e.time == 0.1
-            assert e.initial_size == 1.1
+            assert e.start_size == 1.1
             assert e.growth_rate == 0.1
             assert e.population == j
             e = msprime.PopulationParametersChange(
-                time=0.1, initial_size=1.1, growth_rate=0.1, population_id=j
+                time=0.1, start_size=1.1, growth_rate=0.1, population_id=j
             )
             assert e.time == 0.1
-            assert e.initial_size == 1.1
+            assert e.start_size == 1.1
             assert e.growth_rate == 0.1
             assert e.population == j
+
+    def test_population_parameters_change_initial_size(self):
+        with pytest.raises(ValueError, match="are aliases"):
+            msprime.PopulationParametersChange(
+                time=0,
+                start_size=1.1,
+                initial_size=1.1,
+            )
 
 
 class TestLowLevelRepresentation:
@@ -541,12 +549,12 @@ class TestLowLevelRepresentation:
     def test_size_change_no_demography(self):
         g = 100
         new_size = 512
-        event = msprime.PopulationParametersChange(time=g, initial_size=new_size)
+        event = msprime.PopulationParametersChange(time=g, start_size=new_size)
         ll_event = {
             "type": "population_parameters_change",
             "time": g,
             "population": -1,
-            "initial_size": new_size,
+            "start_size": new_size,
         }
         assert event.get_ll_representation() == ll_event
 
@@ -555,13 +563,13 @@ class TestLowLevelRepresentation:
         new_size = 512
         demography = msprime.Demography.isolated_model([10] * 10)
         event = msprime.PopulationParametersChange(
-            time=g, initial_size=new_size, population="pop_0"
+            time=g, start_size=new_size, population="pop_0"
         )
         ll_event = {
             "type": "population_parameters_change",
             "time": g,
             "population": 0,
-            "initial_size": new_size,
+            "start_size": new_size,
         }
         assert event.get_ll_representation(demography=demography) == ll_event
 
@@ -603,16 +611,16 @@ class TestLowLevelRepresentation:
     def test_growth_rate_and_size_change(self):
         g = 1024
         growth_rate = 2
-        initial_size = 8192
+        start_size = 8192
         demography = msprime.Demography.isolated_model([10] * 10)
         event = msprime.PopulationParametersChange(
-            time=g, initial_size=initial_size, growth_rate=growth_rate, population=1
+            time=g, start_size=start_size, growth_rate=growth_rate, population=1
         )
         ll_event = {
             "type": "population_parameters_change",
             "time": g,
             "population": 1,
-            "initial_size": initial_size,
+            "start_size": start_size,
             "growth_rate": growth_rate,
         }
         assert event.get_ll_representation(demography=demography) == ll_event
@@ -867,7 +875,7 @@ class TestDemographyDebugger:
         d = e.demographic_events[0]
         assert d.time == 10
         assert d.growth_rate == 0
-        assert d.initial_size is None
+        assert d.start_size is None
         assert d.population == -1
         assert len(e.populations) == 2
         np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
@@ -1043,9 +1051,9 @@ class TestDemographyDebugger:
 
 class TestDemographicEventMessages:
     def test_population_parameters_change(self):
-        event = msprime.PopulationParametersChange(1.0, population=1, initial_size=2.0)
-        assert event._parameters() == "population=1, initial_size=2.0"
-        assert event._effect() == "initial_size → 2.0 for population 1"
+        event = msprime.PopulationParametersChange(1.0, population=1, start_size=2.0)
+        assert event._parameters() == "population=1, start_size=2.0"
+        assert event._effect() == "start_size → 2.0 for population 1"
 
         event = msprime.PopulationParametersChange(
             1.0, population="XX", growth_rate=2.0
@@ -1054,11 +1062,11 @@ class TestDemographicEventMessages:
         assert event._effect() == "growth_rate → 2.0 for population XX"
 
         event = msprime.PopulationParametersChange(
-            1.0, population=0, initial_size=3, growth_rate=2.0
+            1.0, population=0, start_size=3, growth_rate=2.0
         )
-        assert event._parameters() == "population=0, initial_size=3, growth_rate=2.0"
+        assert event._parameters() == "population=0, start_size=3, growth_rate=2.0"
         assert (
-            event._effect() == "initial_size → 3 and growth_rate → 2.0 for population 0"
+            event._effect() == "start_size → 3 and growth_rate → 2.0 for population 0"
         )
 
         for pop in [None, -1]:
@@ -1164,7 +1172,7 @@ class DebugOutputBase:
     def test_one_population(self):
         demography = msprime.Demography.isolated_model([10])
         demography.events = [
-            msprime.PopulationParametersChange(0.1, initial_size=2),
+            msprime.PopulationParametersChange(0.1, start_size=2),
             msprime.PopulationParametersChange(0.1, growth_rate=10),
         ]
         self.verify(demography)
@@ -1180,7 +1188,7 @@ class DebugOutputBase:
     def test_primates_species_tree(self):
         demography = msprime.Demography.from_species_tree(
             "(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)",
-            initial_size=10_000,
+            start_size=10_000,
             time_units="myr",
             generation_time=28,
         )
@@ -1189,7 +1197,7 @@ class DebugOutputBase:
     def test_all_events(self):
         demography = msprime.Demography.isolated_model([1, 1])
         demography.events = [
-            msprime.PopulationParametersChange(0.1, initial_size=2),
+            msprime.PopulationParametersChange(0.1, start_size=2),
             msprime.PopulationParametersChange(0.1, growth_rate=10),
             msprime.MigrationRateChange(0.2, source=0, dest=1, rate=1),
             msprime.MigrationRateChange(0.2, matrix_index=(1, 0), rate=1),
@@ -1206,7 +1214,7 @@ class DebugOutputBase:
     def test_all_events_string_names(self):
         demography = msprime.Demography.isolated_model([1, 1])
         demography.events = [
-            msprime.PopulationParametersChange(0.1, population="pop_0", initial_size=2),
+            msprime.PopulationParametersChange(0.1, population="pop_0", start_size=2),
             msprime.PopulationParametersChange(0.1, population="pop_0", growth_rate=10),
             msprime.MigrationRateChange(0.2, source="pop_0", dest="pop_1", rate=1),
             msprime.MigrationRateChange(0.2, source="pop_1", dest="pop_0", rate=1),
@@ -1291,11 +1299,11 @@ class TestDemographyTextExamples:
             """\
         Demography
         ╟  Populations
-        ║  ┌────────────────────────────────────────────────────────────────────────┐
-        ║  │ id │name   │description  │initial_size  │ growth_rate │extra_metadata  │
-        ║  ├────────────────────────────────────────────────────────────────────────┤
-        ║  │ 0  │pop_0  │             │10.0          │     0.0     │{}              │
-        ║  └────────────────────────────────────────────────────────────────────────┘
+        ║  ┌──────────────────────────────────────────────────────────────────────┐
+        ║  │ id │name   │description  │start_size  │ growth_rate │extra_metadata  │
+        ║  ├──────────────────────────────────────────────────────────────────────┤
+        ║  │ 0  │pop_0  │             │10.0        │     0.0     │{}              │
+        ║  └──────────────────────────────────────────────────────────────────────┘
         ╟  Migration Matrix
         ║  ┌───────────────┐
         ║  │       │ pop_0 │
@@ -1319,12 +1327,12 @@ class TestDemographyTextExamples:
             """\
         Demography
         ╟  Populations
-        ║  ┌────────────────────────────────────────────────────────────────────────┐
-        ║  │ id │name   │description  │initial_size  │ growth_rate │extra_metadata  │
-        ║  ├────────────────────────────────────────────────────────────────────────┤
-        ║  │ 0  │pop_0  │             │10.0          │     1.0     │{}              │
-        ║  │ 1  │pop_1  │             │20.0          │     2.0     │{}              │
-        ║  └────────────────────────────────────────────────────────────────────────┘
+        ║  ┌──────────────────────────────────────────────────────────────────────┐
+        ║  │ id │name   │description  │start_size  │ growth_rate │extra_metadata  │
+        ║  ├──────────────────────────────────────────────────────────────────────┤
+        ║  │ 0  │pop_0  │             │10.0        │     1.0     │{}              │
+        ║  │ 1  │pop_1  │             │20.0        │     2.0     │{}              │
+        ║  └──────────────────────────────────────────────────────────────────────┘
         ╟  Migration Matrix
         ║  ┌───────────────────────┐
         ║  │       │ pop_0 │ pop_1 │
@@ -1344,9 +1352,9 @@ class TestDemographyTextExamples:
     def test_all_events(self):
         demography = msprime.Demography.isolated_model([1, 1])
         demography.events = [
-            msprime.PopulationParametersChange(0.1, initial_size=2),
+            msprime.PopulationParametersChange(0.1, start_size=2),
             msprime.PopulationParametersChange(0.1, growth_rate=10),
-            msprime.PopulationParametersChange(0.1, growth_rate=10, initial_size=1),
+            msprime.PopulationParametersChange(0.1, growth_rate=10, start_size=1),
             msprime.MigrationRateChange(0.2, matrix_index=(0, 1), rate=1),
             msprime.MigrationRateChange(0.2, matrix_index=(1, 0), rate=1),
             msprime.MassMigration(0.4, source=1, dest=0, proportion=0.9),
@@ -1360,12 +1368,12 @@ class TestDemographyTextExamples:
             """\
         Demography
         ╟  Populations
-        ║  ┌────────────────────────────────────────────────────────────────────────┐
-        ║  │ id │name   │description  │initial_size  │ growth_rate │extra_metadata  │
-        ║  ├────────────────────────────────────────────────────────────────────────┤
-        ║  │ 0  │pop_0  │             │1.0           │     0.0     │{}              │
-        ║  │ 1  │pop_1  │             │1.0           │     0.0     │{}              │
-        ║  └────────────────────────────────────────────────────────────────────────┘
+        ║  ┌──────────────────────────────────────────────────────────────────────┐
+        ║  │ id │name   │description  │start_size  │ growth_rate │extra_metadata  │
+        ║  ├──────────────────────────────────────────────────────────────────────┤
+        ║  │ 0  │pop_0  │             │1.0         │     0.0     │{}              │
+        ║  │ 1  │pop_1  │             │1.0         │     0.0     │{}              │
+        ║  └──────────────────────────────────────────────────────────────────────┘
         ╟  Migration Matrix
         ║  ┌───────────────────────┐
         ║  │       │ pop_0 │ pop_1 │
@@ -1377,16 +1385,16 @@ class TestDemographyTextExamples:
         ║  ┌──────────────────────────────────────────────────────────────────────────────────────┐
         ║  │  time│type            │parameters           │effect                                  │
         ║  ├──────────────────────────────────────────────────────────────────────────────────────┤
-        ║  │   0.1│Population      │population=-1,       │initial_size → 2 for all populations    │
-        ║  │      │parameter       │initial_size=2       │                                        │
+        ║  │   0.1│Population      │population=-1,       │start_size → 2 for all populations      │
+        ║  │      │parameter       │start_size=2         │                                        │
         ║  │      │change          │                     │                                        │
         ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
         ║  │   0.1│Population      │population=-1,       │growth_rate → 10 for all populations    │
         ║  │      │parameter       │growth_rate=10       │                                        │
         ║  │      │change          │                     │                                        │
         ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │   0.1│Population      │population=-1,       │initial_size → 1 and growth_rate → 10   │
-        ║  │      │parameter       │initial_size=1,      │for all populations                     │
+        ║  │   0.1│Population      │population=-1,       │start_size → 1 and growth_rate → 10     │
+        ║  │      │parameter       │start_size=1,        │for all populations                     │
         ║  │      │change          │growth_rate=10       │                                        │
         ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
         ║  │   0.2│Migration rate  │source=0, dest=1,    │Backwards-time migration rate from 0    │
@@ -1440,9 +1448,9 @@ class TestDemographyTrajectories(unittest.TestCase):
             ],
             demographic_events=[
                 msprime.PopulationParametersChange(
-                    time=100, initial_size=200, population_id=0
+                    time=100, start_size=200, population_id=0
                 ),
-                msprime.PopulationParametersChange(time=300, initial_size=100),
+                msprime.PopulationParametersChange(time=300, start_size=100),
             ],
         )
         return ddb
@@ -1533,10 +1541,10 @@ class TestDemographyTrajectories(unittest.TestCase):
             ],
             demographic_events=[
                 msprime.PopulationParametersChange(
-                    time=100, initial_size=200, population_id=0
+                    time=100, start_size=200, population_id=0
                 ),
                 msprime.MassMigration(time=200, source=1, dest=0),
-                msprime.PopulationParametersChange(time=300, initial_size=100),
+                msprime.PopulationParametersChange(time=300, start_size=100),
             ],
             migration_matrix=[[0, 0], [0, 0]],
         )
@@ -1685,8 +1693,8 @@ class TestDemographyTrajectories(unittest.TestCase):
                 msprime.PopulationConfiguration(initial_size=N_A)
             ],
             demographic_events=[
-                msprime.PopulationParametersChange(time=100, initial_size=200),
-                msprime.PopulationParametersChange(time=300, initial_size=100),
+                msprime.PopulationParametersChange(time=100, start_size=200),
+                msprime.PopulationParametersChange(time=300, start_size=100),
             ],
         )
         steps = np.linspace(0, 400, 21)
@@ -1745,10 +1753,10 @@ class TestDemographyTrajectories(unittest.TestCase):
             ],
             demographic_events=[
                 msprime.PopulationParametersChange(
-                    time=100, initial_size=1e5, population_id=0, growth_rate=3e-3
+                    time=100, start_size=1e5, population_id=0, growth_rate=3e-3
                 ),
                 msprime.PopulationParametersChange(
-                    time=300, initial_size=1e6, population_id=0, growth_rate=7e-4
+                    time=300, start_size=1e6, population_id=0, growth_rate=7e-4
                 ),
             ],
             migration_matrix=[[0, 0], [0, 0]],
@@ -1775,17 +1783,17 @@ class TestDemographyTrajectories(unittest.TestCase):
             ],
             demographic_events=[
                 msprime.PopulationParametersChange(
-                    time=100, initial_size=1e5, population_id=0, growth_rate=0
+                    time=100, start_size=1e5, population_id=0, growth_rate=0
                 ),
                 msprime.PopulationParametersChange(
-                    time=100, initial_size=1e5, population_id=1, growth_rate=7e-4
+                    time=100, start_size=1e5, population_id=1, growth_rate=7e-4
                 ),
                 msprime.MassMigration(time=100, source=1, dest=0),
                 msprime.PopulationParametersChange(
-                    time=200, initial_size=1e6, population_id=0, growth_rate=-1e-2
+                    time=200, start_size=1e6, population_id=0, growth_rate=-1e-2
                 ),
                 msprime.PopulationParametersChange(
-                    time=300, initial_size=1e6, population_id=0, growth_rate=0
+                    time=300, start_size=1e6, population_id=0, growth_rate=0
                 ),
             ],
             migration_matrix=[[0, 0], [0, 0]],
@@ -1808,10 +1816,10 @@ class TestDemographyTrajectories(unittest.TestCase):
             ],
             demographic_events=[
                 msprime.PopulationParametersChange(
-                    time=100, initial_size=1e2, population_id=0, growth_rate=3e-3
+                    time=100, start_size=1e2, population_id=0, growth_rate=3e-3
                 ),
                 msprime.PopulationParametersChange(
-                    time=300, initial_size=1e3, population_id=0, growth_rate=7e-4
+                    time=300, start_size=1e3, population_id=0, growth_rate=7e-4
                 ),
             ],
             migration_matrix=[[0, 0], [0, 0]],
@@ -1997,7 +2005,7 @@ class TestEventTimes:
             msprime.simulate(
                 sample_size=10,
                 demographic_events=[
-                    msprime.PopulationParametersChange(time=-1, initial_size=2)
+                    msprime.PopulationParametersChange(time=-1, start_size=2)
                 ],
             )
 
@@ -2008,7 +2016,7 @@ class TestEventTimes:
                     sample_size=10,
                     start_time=start_time,
                     demographic_events=[
-                        msprime.PopulationParametersChange(time=time, initial_size=2)
+                        msprime.PopulationParametersChange(time=time, start_size=2)
                     ],
                 )
                 assert ts.first().num_roots == 1
@@ -2713,7 +2721,7 @@ class TimeUnitsMixin:
         # coalescence.
         demographic_events = [
             msprime.MassMigration(time=g, source=1, dest=0),
-            msprime.PopulationParametersChange(time=g, initial_size=1),
+            msprime.PopulationParametersChange(time=g, start_size=1),
         ]
         reps = msprime.simulate(
             Ne=Ne,
@@ -3888,21 +3896,19 @@ class TestIslandModel(TestPreCannedModels):
             assert ts.num_populations == N
             assert ts.num_samples == 2 * N
 
-    def test_initial_size(self):
+    def test_start_size(self):
         for Ne in [0.1, 1, 10]:
             model = msprime.Demography.island_model([Ne, Ne], 0.1)
-            assert model.populations[0].initial_size == Ne
-            assert model.populations[1].initial_size == Ne
+            assert model.populations[0].start_size == Ne
+            assert model.populations[1].start_size == Ne
 
     def test_migration_zero(self):
-        initial_size = [1, 2, 3, 4]
+        start_size = [1, 2, 3, 4]
         growth_rate = [0.1, 0.2, 0.3, 0.4]
         model1 = msprime.Demography.island_model(
-            initial_size, growth_rate=growth_rate, migration_rate=0
+            start_size, growth_rate=growth_rate, migration_rate=0
         )
-        model2 = msprime.Demography.isolated_model(
-            initial_size, growth_rate=growth_rate
-        )
+        model2 = msprime.Demography.isolated_model(start_size, growth_rate=growth_rate)
         assert model1 == model2
 
 
@@ -3916,14 +3922,12 @@ class TestSteppingStoneModel(TestPreCannedModels):
                 msprime.Demography.stepping_stone_model([1], bad_m)
 
     def test_migration_zero(self):
-        initial_size = [1, 2, 3, 4]
+        start_size = [1, 2, 3, 4]
         growth_rate = [0.1, 0.2, 0.3, 0.4]
         model1 = msprime.Demography.stepping_stone_model(
-            initial_size, growth_rate=growth_rate, migration_rate=0
+            start_size, growth_rate=growth_rate, migration_rate=0
         )
-        model2 = msprime.Demography.isolated_model(
-            initial_size, growth_rate=growth_rate
-        )
+        model2 = msprime.Demography.isolated_model(start_size, growth_rate=growth_rate)
         assert model1 == model2
 
     def test_one_pop(self):
@@ -3993,12 +3997,12 @@ class TestSteppingStoneModel(TestPreCannedModels):
 
     def test_Ne(self):
         model = msprime.Demography.stepping_stone_model([1, 1], 0.1)
-        assert model.populations[0].initial_size == 1
-        assert model.populations[1].initial_size == 1
+        assert model.populations[0].start_size == 1
+        assert model.populations[1].start_size == 1
         for Ne in [0.1, 1, 10]:
             model = msprime.Demography.stepping_stone_model([Ne, Ne], 0.1)
-            assert model.populations[0].initial_size == Ne
-            assert model.populations[1].initial_size == Ne
+            assert model.populations[0].start_size == Ne
+            assert model.populations[1].start_size == Ne
 
 
 class TestDemographicEventBase:
@@ -4116,14 +4120,14 @@ class TestDemographyObject:
         model = msprime.Demography.island_model([1, 1], 0.1)
         M = np.array([[0, 0.1], [0.1, 0]])
         assert np.array_equal(model.migration_matrix, M)
-        model.add_population(msprime.Population(initial_size=1))
+        model.add_population(msprime.Population(start_size=1))
         M = np.array([[0, 0.1, 0], [0.1, 0, 0], [0, 0, 0]])
         assert np.array_equal(model.migration_matrix, M)
 
         model = msprime.Demography.island_model([1, 1, 1], 0.1)
         M = np.array([[0, 0.1, 0.1], [0.1, 0, 0.1], [0.1, 0.1, 0]])
         assert np.array_equal(model.migration_matrix, M)
-        model.add_population(msprime.Population(initial_size=1))
+        model.add_population(msprime.Population(start_size=1))
         M = np.array(
             [[0, 0.1, 0.1, 0], [0.1, 0, 0.1, 0], [0.1, 0.1, 0, 0], [0, 0, 0, 0]]
         )
@@ -4222,26 +4226,26 @@ class TestDemographyObject:
         demography = msprime.Demography.isolated_model([2])
         assert demography.num_populations == 1
         assert demography.num_events == 0
-        assert demography.populations[0].initial_size == 2
+        assert demography.populations[0].start_size == 2
         assert demography.populations[0].growth_rate == 0
 
         demography = msprime.Demography.isolated_model([2], growth_rate=[3])
         assert demography.num_populations == 1
-        assert demography.populations[0].initial_size == 2
+        assert demography.populations[0].start_size == 2
         assert demography.populations[0].growth_rate == 3
 
         demography = msprime.Demography.isolated_model([5, 6])
         assert demography.num_populations == 2
-        assert demography.populations[0].initial_size == 5
+        assert demography.populations[0].start_size == 5
         assert demography.populations[0].growth_rate == 0
-        assert demography.populations[1].initial_size == 6
+        assert demography.populations[1].start_size == 6
         assert demography.populations[1].growth_rate == 0
 
         demography = msprime.Demography.isolated_model([5, 6], growth_rate=[7, 8])
         assert demography.num_populations == 2
-        assert demography.populations[0].initial_size == 5
+        assert demography.populations[0].start_size == 5
         assert demography.populations[0].growth_rate == 7
-        assert demography.populations[1].initial_size == 6
+        assert demography.populations[1].start_size == 6
         assert demography.populations[1].growth_rate == 8
 
     def test_isolated_model_errors(self):
@@ -4263,16 +4267,16 @@ class TestDemographyObject:
     def test_from_species_tree(self):
         # basic checks here - indepth testing in the test_species_tree_parsing.py file.
         demography = msprime.Demography.from_species_tree(
-            "(popA:10.0,popB:10.0)", initial_size=1000
+            "(popA:10.0,popB:10.0)", start_size=1000
         )
         assert isinstance(demography, msprime.Demography)
         assert len(demography.populations) == 3
         assert demography.populations[0].name == "popA"
-        assert demography.populations[0].initial_size == 1000
+        assert demography.populations[0].start_size == 1000
         assert demography.populations[1].name == "popB"
-        assert demography.populations[0].initial_size == 1000
+        assert demography.populations[0].start_size == 1000
         assert demography.populations[2].name == "pop_2"
-        assert demography.populations[2].initial_size == 1000
+        assert demography.populations[2].start_size == 1000
         assert np.all(demography.migration_matrix == 0)
         assert demography.num_events == len(demography.events)
         assert len(demography.events) == 1
@@ -4324,8 +4328,7 @@ class TestDemographyFromOldStyle:
 
     def test_demographic_events(self):
         events = [
-            msprime.PopulationParametersChange(time=j, initial_size=2)
-            for j in range(10)
+            msprime.PopulationParametersChange(time=j, start_size=2) for j in range(10)
         ]
         demog = msprime.Demography.from_old_style(demographic_events=events)
         assert demog.num_populations == 1
@@ -4344,13 +4347,13 @@ class TestPopulationFromOldStyle:
     def test_defaults(self):
         pop_config = msprime.PopulationConfiguration()
         pop = msprime.Population.from_old_style(pop_config)
-        assert pop.initial_size == 1
+        assert pop.start_size == 1
         assert pop_config.growth_rate == pop.growth_rate
 
     def test_Ne(self):
         pop_config = msprime.PopulationConfiguration()
         pop = msprime.Population.from_old_style(pop_config, Ne=1234)
-        assert pop.initial_size == 1234
+        assert pop.start_size == 1234
         assert pop_config.growth_rate == pop.growth_rate
 
     def test_values(self):
@@ -4358,7 +4361,7 @@ class TestPopulationFromOldStyle:
             initial_size=1234, growth_rate=5678
         )
         pop = msprime.Population.from_old_style(pop_config)
-        assert pop_config.initial_size == pop.initial_size
+        assert pop_config.initial_size == pop.start_size
         assert pop_config.growth_rate == pop.growth_rate
 
 
@@ -4415,12 +4418,12 @@ class TestPopulationNamesInEvents:
     def test_population_parameters_change(self):
         demography = msprime.Demography.isolated_model([1000, 1000])
         demography.events = [
-            msprime.PopulationParametersChange(1, population=0, initial_size=100)
+            msprime.PopulationParametersChange(1, population=0, start_size=100)
         ]
         ts1 = msprime.sim_ancestry({0: 1}, demography=demography, random_seed=1234)
 
         demography.events = [
-            msprime.PopulationParametersChange(1, population="pop_0", initial_size=100)
+            msprime.PopulationParametersChange(1, population="pop_0", start_size=100)
         ]
         ts2 = msprime.sim_ancestry({0: 1}, demography=demography, random_seed=1234)
         assert ts1.equals(ts2, ignore_provenance=True)
@@ -4458,9 +4461,9 @@ class TestPopulationSplit:
     def test_two_pop_tree(self):
         demography = msprime.Demography(
             [
-                msprime.Population(name="A", initial_size=100),
-                msprime.Population(name="B", initial_size=100),
-                msprime.Population(name="root", initial_size=100),
+                msprime.Population(name="A", start_size=100),
+                msprime.Population(name="B", start_size=100),
+                msprime.Population(name="root", start_size=100),
             ]
         )
         demography.set_symmetric_migration_rate(["A", "B"], 0.1)
@@ -4479,10 +4482,10 @@ class TestPopulationSplit:
     def test_three_pop_tree(self):
         demography = msprime.Demography(
             [
-                msprime.Population(name="A", initial_size=100),
-                msprime.Population(name="B", initial_size=100),
-                msprime.Population(name="C", initial_size=100),
-                msprime.Population(name="root", initial_size=100),
+                msprime.Population(name="A", start_size=100),
+                msprime.Population(name="B", start_size=100),
+                msprime.Population(name="C", start_size=100),
+                msprime.Population(name="root", start_size=100),
             ]
         )
         demography.set_symmetric_migration_rate(["A", "B", "C"], 0.1)
@@ -4501,11 +4504,11 @@ class TestPopulationSplit:
     def test_three_pop_binary_tree(self):
         demography = msprime.Demography(
             [
-                msprime.Population(name="A", initial_size=100),
-                msprime.Population(name="B", initial_size=100),
-                msprime.Population(name="C", initial_size=100),
-                msprime.Population(name="AB", initial_size=100),
-                msprime.Population(name="ABC", initial_size=100),
+                msprime.Population(name="A", start_size=100),
+                msprime.Population(name="B", start_size=100),
+                msprime.Population(name="C", start_size=100),
+                msprime.Population(name="AB", start_size=100),
+                msprime.Population(name="ABC", start_size=100),
             ]
         )
         demography.set_symmetric_migration_rate(["A", "B", "C"], 0.1)
@@ -4531,13 +4534,13 @@ class TestPopulationSplit:
     def test_four_pop_binary_tree(self):
         demography = msprime.Demography(
             [
-                msprime.Population(name="A", initial_size=100),
-                msprime.Population(name="B", initial_size=100),
-                msprime.Population(name="C", initial_size=100),
-                msprime.Population(name="D", initial_size=100),
-                msprime.Population(name="AB", initial_size=100),
-                msprime.Population(name="CD", initial_size=100),
-                msprime.Population(name="ABCD", initial_size=100),
+                msprime.Population(name="A", start_size=100),
+                msprime.Population(name="B", start_size=100),
+                msprime.Population(name="C", start_size=100),
+                msprime.Population(name="D", start_size=100),
+                msprime.Population(name="AB", start_size=100),
+                msprime.Population(name="CD", start_size=100),
+                msprime.Population(name="ABCD", start_size=100),
             ]
         )
         demography.set_symmetric_migration_rate(["A", "B", "C", "D"], 0.1)

@@ -491,7 +491,7 @@ def create_simulation_runner(parser, arg_list):
         demography.populations[pid].growth_rate = growth_rate
     for population_id, size in args.population_size:
         pid = convert_population_id(parser, population_id, num_populations)
-        demography.populations[pid].initial_size = size
+        demography.populations[pid].start_size = size
 
     demographic_events = []
     # First we look at population split events. We do this differently
@@ -514,7 +514,7 @@ def create_simulation_runner(parser, arg_list):
         for row in migration_matrix:
             row.append(0)
         migration_matrix.append([0 for j in range(num_populations)])
-        demography.add_population(msprime.Population(initial_size=1))
+        demography.add_population(msprime.Population(start_size=1))
         num_samples.append(0)
 
     # Add the demographic events
@@ -543,9 +543,7 @@ def create_simulation_runner(parser, arg_list):
         demographic_events.append(
             (
                 index,
-                msprime.PopulationParametersChange(
-                    time=t, initial_size=x, growth_rate=0
-                ),
+                msprime.PopulationParametersChange(time=t, start_size=x, growth_rate=0),
             )
         )
     for index, (t, population_id, x) in args.population_size_change:
@@ -555,7 +553,7 @@ def create_simulation_runner(parser, arg_list):
             (
                 index,
                 msprime.PopulationParametersChange(
-                    time=t, initial_size=x, growth_rate=0, population_id=pid
+                    time=t, start_size=x, growth_rate=0, population_id=pid
                 ),
             )
         )
@@ -628,10 +626,10 @@ def create_simulation_runner(parser, arg_list):
     # seems less awful.
     for msp_event in demography.events:
         if isinstance(msp_event, msprime.PopulationParametersChange):
-            if msp_event.initial_size is not None:
-                msp_event.initial_size /= 2
+            if msp_event.start_size is not None:
+                msp_event.start_size /= 2
     for j, pop in enumerate(demography.populations):
-        pop.initial_size /= 2
+        pop.start_size /= 2
         pop.name = f"pop_{j}"
 
     runner = SimulationRunner(

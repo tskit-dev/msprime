@@ -83,28 +83,28 @@ class TestParseNumberOrMapping:
 
 
 class TestSpeciesNamedInternalNodes:
-    def test_initial_size_full_map(self):
+    def test_start_size_full_map(self):
         tree = "(A:10.0,B:10.0)C"
-        initial_size = {"A": 234, "B": 567, "C": 8}
-        demography = msprime.Demography.from_species_tree(tree, initial_size)
+        start_size = {"A": 234, "B": 567, "C": 8}
+        demography = msprime.Demography.from_species_tree(tree, start_size)
         assert demography.populations[0].name == "A"
-        assert demography.populations[0].initial_size == 234
+        assert demography.populations[0].start_size == 234
         assert demography.populations[1].name == "B"
-        assert demography.populations[1].initial_size == 567
+        assert demography.populations[1].start_size == 567
         assert demography.populations[2].name == "C"
-        assert demography.populations[2].initial_size == 8
+        assert demography.populations[2].start_size == 8
 
-    def test_initial_size_partial_map(self):
+    def test_start_size_partial_map(self):
         tree = "(A:10.0,B:10.0)C"
-        initial_size = collections.defaultdict(lambda: 100)
-        initial_size.update({"A": 234, "C": 8})
-        demography = msprime.Demography.from_species_tree(tree, initial_size)
+        start_size = collections.defaultdict(lambda: 100)
+        start_size.update({"A": 234, "C": 8})
+        demography = msprime.Demography.from_species_tree(tree, start_size)
         assert demography.populations[0].name == "A"
-        assert demography.populations[0].initial_size == 234
+        assert demography.populations[0].start_size == 234
         assert demography.populations[1].name == "B"
-        assert demography.populations[1].initial_size == 100
+        assert demography.populations[1].start_size == 100
         assert demography.populations[2].name == "C"
-        assert demography.populations[2].initial_size == 8
+        assert demography.populations[2].start_size == 8
 
     def test_growth_rate_full_map(self):
         tree = "(A:10.0,B:10.0)C"
@@ -113,14 +113,14 @@ class TestSpeciesNamedInternalNodes:
             tree, 10, growth_rate=growth_rate
         )
         assert demography.populations[0].name == "A"
-        assert demography.populations[0].initial_size == 10
+        assert demography.populations[0].start_size == 10
         assert demography.populations[0].growth_rate == 234
         assert demography.populations[1].name == "B"
         assert demography.populations[1].growth_rate == 567
-        assert demography.populations[1].initial_size == 10
+        assert demography.populations[1].start_size == 10
         assert demography.populations[2].name == "C"
         assert demography.populations[2].growth_rate == 8
-        assert demography.populations[2].initial_size == 10
+        assert demography.populations[2].start_size == 10
 
     def test_growth_rate_partial_map(self):
         tree = "(A:10.0,B:10.0)C"
@@ -130,13 +130,13 @@ class TestSpeciesNamedInternalNodes:
             tree, 10, growth_rate=growth_rate
         )
         assert demography.populations[0].name == "A"
-        assert demography.populations[0].initial_size == 10
+        assert demography.populations[0].start_size == 10
         assert demography.populations[0].growth_rate == 234
         assert demography.populations[1].name == "B"
-        assert demography.populations[1].initial_size == 10
+        assert demography.populations[1].start_size == 10
         assert demography.populations[1].growth_rate == 100
         assert demography.populations[2].name == "C"
-        assert demography.populations[2].initial_size == 10
+        assert demography.populations[2].start_size == 10
         assert demography.populations[2].growth_rate == 8
 
 
@@ -155,13 +155,13 @@ class TestSpeciesTreeRoundTrip:
     def verify_non_ultrametric(self, tree):
         newick = tree.newick()
         with pytest.raises(ValueError):
-            species_trees.parse_species_tree(newick, initial_size=1)
+            species_trees.parse_species_tree(newick, start_size=1)
 
     def verify(
         self,
         tree,
         newick=None,
-        initial_size=1,
+        start_size=1,
         time_units="gen",
         generation_time=None,
     ):
@@ -169,13 +169,13 @@ class TestSpeciesTreeRoundTrip:
             newick = self.make_newick(tree)
         demography = species_trees.parse_species_tree(
             newick,
-            initial_size=initial_size,
+            start_size=start_size,
             time_units=time_units,
             generation_time=generation_time,
         )
         assert demography.num_populations == tree.num_nodes
         for pop in demography.populations:
-            assert pop.initial_size == initial_size
+            assert pop.start_size == start_size
             assert pop.growth_rate == 0
             assert pop.name is not None
 
@@ -225,7 +225,7 @@ class TestSpeciesTreeRoundTrip:
     def test_n5_binary(self):
         ts = msprime.simulate(5, random_seed=2)
         tree = ts.first()
-        self.verify(tree, initial_size=1)
+        self.verify(tree, start_size=1)
 
     def test_n5_binary_non_ultrametric(self):
         ts = msprime.simulate(samples=[(0, j) for j in range(5)], random_seed=2)
@@ -234,7 +234,7 @@ class TestSpeciesTreeRoundTrip:
     def test_n7_binary(self):
         ts = msprime.simulate(7, random_seed=2)
         tree = ts.first()
-        self.verify(tree, initial_size=11)
+        self.verify(tree, start_size=11)
 
     def test_n7_binary_embedded_whitespace(self):
         # Check for embedded whitespace in the newick string
@@ -257,17 +257,17 @@ class TestSpeciesTreeRoundTrip:
     def test_n100_binary(self):
         ts = msprime.simulate(100, random_seed=2)
         tree = ts.first()
-        self.verify(tree, initial_size=11)
+        self.verify(tree, start_size=11)
 
     def test_n10_non_binary(self):
         tree = get_non_binary_tree(10)
-        self.verify(tree, initial_size=3.1234)
+        self.verify(tree, start_size=3.1234)
 
     def test_n10_binary_years(self):
         ts = msprime.simulate(10, random_seed=2)
         generation_time = 5
         tree = ts.first()
-        self.verify(tree, initial_size=1, time_units="yr", generation_time=1)
+        self.verify(tree, start_size=1, time_units="yr", generation_time=1)
         tables = ts.dump_tables()
         times = tables.nodes.time
         flags = tables.nodes.flags
@@ -393,7 +393,7 @@ class TestStarbeastRoundTrip:
         for u in tree.nodes():
             pop = demography.populations[pop_id_map[u]]
             assert pop.growth_rate == 0
-            assert pop.initial_size == pop_size_map[u]
+            assert pop.start_size == pop_size_map[u]
             if tree.is_leaf(u):
                 # Note: we're assuming the default newick here in tskit that labels
                 # nodes as their id + 1.
@@ -483,18 +483,18 @@ class TestSpeciesTreeParsingErrors:
         with pytest.raises(TypeError):
             species_trees.parse_species_tree(tree="()")
         with pytest.raises(TypeError):
-            species_trees.parse_species_tree(initial_size=1)
+            species_trees.parse_species_tree(start_size=1)
 
     def test_unequal_branch_lengths(self):
         with pytest.raises(ValueError):
             species_trees.parse_species_tree(
-                tree="(popA:100.0,popB:10.0)", initial_size=1000
+                tree="(popA:100.0,popB:10.0)", start_size=1000
             )
 
     def test_duplicate_name(self):
         with pytest.raises(ValueError, match="Duplicate population name"):
             species_trees.parse_species_tree(
-                tree="(popA:100.0,popA:100.0)", initial_size=1
+                tree="(popA:100.0,popA:100.0)", start_size=1
             )
 
     def test_bad_tree(self):
@@ -517,7 +517,7 @@ class TestSpeciesTreeParsingErrors:
         ]
         for bad_tree in bad_trees:
             with pytest.raises(ValueError):
-                species_trees.parse_species_tree(tree=bad_tree, initial_size=1)
+                species_trees.parse_species_tree(tree=bad_tree, start_size=1)
 
     def test_bad_parameter(self):
         good_tree = "(((human:5.6,chimpanzee:5.6):3.0,gorilla:8.6):9.4,orangutan:18.0)"
@@ -529,7 +529,7 @@ class TestSpeciesTreeParsingErrors:
                 species_trees.parse_species_tree(
                     good_tree,
                     time_units=bad_time_units,
-                    initial_size=good_ne,
+                    start_size=good_ne,
                     generation_time=good_generation_time,
                 )
 
@@ -541,7 +541,7 @@ class TestSpeciesTreeParsingErrors:
                 species_trees.parse_species_tree(
                     good_tree,
                     time_units=good_time_units,
-                    initial_size=bad_ne,
+                    start_size=bad_ne,
                     generation_time=good_generation_time,
                 )
         for bad_generation_time in [None, -3, "x"]:
@@ -549,7 +549,7 @@ class TestSpeciesTreeParsingErrors:
                 species_trees.parse_species_tree(
                     good_tree,
                     time_units=good_time_units,
-                    initial_size=good_ne,
+                    start_size=good_ne,
                     generation_time=bad_generation_time,
                 )
         for bad_time_units in ["gen"]:
@@ -557,7 +557,7 @@ class TestSpeciesTreeParsingErrors:
                 species_trees.parse_species_tree(
                     good_tree,
                     time_units=bad_time_units,
-                    initial_size=good_ne,
+                    start_size=good_ne,
                     generation_time=good_generation_time,
                 )
 
@@ -575,7 +575,7 @@ class TestSpeciesTreeExamples:
         demography = species_trees.parse_species_tree(
             good_tree,
             time_units=good_time_units,
-            initial_size=good_ne,
+            start_size=good_ne,
             generation_time=good_generation_time,
         )
         assert isinstance(demography.populations, list)
@@ -594,7 +594,7 @@ class TestSpeciesTreeExamples:
         spec = species_trees.parse_species_tree(
             species_tree,
             time_units="myr",
-            initial_size=10000,
+            start_size=10000,
             generation_time=20,
         )
 

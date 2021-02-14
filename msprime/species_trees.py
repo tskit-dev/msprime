@@ -70,12 +70,12 @@ def parse_number_or_mapping(value, message):
     return value
 
 
-def parse_initial_size(initial_size):
+def parse_start_size(start_size):
     error_message = (
-        "initial_size argument must be a single number or a mapping from "
+        "start_size argument must be a single number or a mapping from "
         "species names to their population sizes."
     )
-    return parse_number_or_mapping(initial_size, error_message)
+    return parse_number_or_mapping(start_size, error_message)
 
 
 def parse_growth_rate(growth_rate):
@@ -88,7 +88,7 @@ def parse_growth_rate(growth_rate):
 
 def parse_species_tree(
     tree,
-    initial_size,
+    start_size,
     *,
     time_units="gen",
     generation_time=None,
@@ -108,7 +108,7 @@ def parse_species_tree(
         err += 'and "gen" (generations).'
         raise ValueError(err)
 
-    initial_size = parse_initial_size(initial_size)
+    start_size = parse_start_size(start_size)
     if growth_rate is None:
         growth_rate = 0
     growth_rate = parse_growth_rate(growth_rate)
@@ -158,7 +158,7 @@ def parse_species_tree(
         population_id_map[node] = name
         populations.append(
             demog.Population(
-                initial_size=initial_size[name],
+                start_size=start_size[name],
                 growth_rate=growth_rate[name],
                 name=name,
             )
@@ -213,7 +213,7 @@ def process_starbeast_tree(
         # Use the name for references to make things easier to debug.
         population_id_map[node] = name
         populations.append(
-            demog.Population(initial_size=population_size_map[node], name=name)
+            demog.Population(start_size=population_size_map[node], name=name)
         )
         return name
 

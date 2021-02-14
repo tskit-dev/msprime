@@ -630,12 +630,12 @@ class TestParseSimAncestry:
         # default is 1
         sim = ancestry._parse_sim_ancestry(10)
         assert sim.demography.num_populations == 1
-        assert sim.demography.populations[0].initial_size == 1
+        assert sim.demography.populations[0].start_size == 1
         assert sim.demography.populations[0].growth_rate == 0
         for pop_size in [2, 0.1, 100, 1e6, "100"]:
             sim = ancestry._parse_sim_ancestry(10, population_size=pop_size)
             assert sim.demography.num_populations == 1
-            assert sim.demography.populations[0].initial_size == float(pop_size)
+            assert sim.demography.populations[0].start_size == float(pop_size)
             assert sim.demography.populations[0].growth_rate == 0
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(10, population_size=-1)
@@ -662,7 +662,7 @@ class TestParseSimAncestry:
         with pytest.raises(TypeError):
             ancestry._parse_sim_ancestry(samples, demography="not a demography")
 
-        demography.populations[0].initial_size = -1
+        demography.populations[0].start_size = -1
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(samples, demography=demography)
 
@@ -979,10 +979,10 @@ class TestParseSimulate:
                 f(bad_value)
         for Ne in [1, 10, 1e5]:
             sim = f(Ne)
-            assert sim.demography.populations[0].initial_size == Ne
+            assert sim.demography.populations[0].start_size == Ne
         # Test the default.
         sim = ancestry._parse_simulate(10)
-        assert sim.demography.populations[0].initial_size == 1
+        assert sim.demography.populations[0].start_size == 1
 
     def test_population_configurations(self):
         def f(configs):
@@ -1001,7 +1001,7 @@ class TestParseSimulate:
             sim = ancestry._parse_simulate(population_configurations=pop_configs)
             assert len(sim.demography.populations) == len(pop_configs)
             for pop, pop_config in zip(sim.demography.populations, pop_configs):
-                assert pop.initial_size == pop_config.initial_size
+                assert pop.start_size == pop_config.initial_size
                 assert pop.growth_rate == pop_config.growth_rate
             tables = sim.copy_tables()
             assert len(tables.nodes) == sample_size
@@ -1803,19 +1803,19 @@ class TestReprRoundTrip:
 
     def test_population(self):
         examples = [
-            msprime.Population(initial_size=2),
+            msprime.Population(start_size=2),
             msprime.Population(2, growth_rate=5),
-            msprime.Population(initial_size=234, growth_rate=10),
+            msprime.Population(start_size=234, growth_rate=10),
         ]
         self.assert_repr_round_trip(examples)
 
     def test_population_parameters_change(self):
         examples = [
-            msprime.PopulationParametersChange(time=1, initial_size=1),
+            msprime.PopulationParametersChange(time=1, start_size=1),
             msprime.PopulationParametersChange(time=1, growth_rate=2),
             msprime.PopulationParametersChange(time=1, growth_rate=1, population=2),
             msprime.PopulationParametersChange(
-                time=3, initial_size=3, growth_rate=1, population=2
+                time=3, start_size=3, growth_rate=1, population=2
             ),
         ]
         self.assert_repr_round_trip(examples)
