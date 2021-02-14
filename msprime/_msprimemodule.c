@@ -1238,6 +1238,107 @@ out:
 }
 
 static int
+Simulator_parse_population_split(Simulator *self, double time, PyObject *py_event)
+{
+    int ret = -1;
+    PyObject *value;
+    PyArrayObject *derived_array = NULL;
+    int err, ancestral;
+    npy_intp *dims;
+
+    value = get_dict_value(py_event, "derived");
+    if (value == NULL) {
+        goto out;
+    }
+    derived_array = (PyArrayObject *) PyArray_FROMANY(
+            value, NPY_INT32, 1, 1, NPY_ARRAY_IN_ARRAY);
+    if (derived_array == NULL) {
+        goto out;
+    }
+    dims = PyArray_DIMS(derived_array);
+    if (dims[0] == 0) {
+        PyErr_SetString(PyExc_ValueError, "Must provide at least one derived population");
+        goto out;
+    }
+
+    value = get_dict_number(py_event, "ancestral");
+    if (value == NULL) {
+        goto out;
+    }
+    ancestral = (int) PyLong_AsLong(value);
+
+    err = msp_add_population_split(self->sim, time, (size_t) dims[0],
+            PyArray_DATA(derived_array), ancestral);
+    if (err != 0) {
+        handle_input_error("population split", err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(derived_array);
+    return ret;
+}
+
+static int
+Simulator_parse_symmetric_migration_rate_change(Simulator *self,
+        double time, PyObject *py_event)
+{
+    int ret = -1;
+    PyObject *value;
+    PyArrayObject *populations_array = NULL;
+    size_t j, k, N;
+    int32_t *populations;
+    double rate;
+    int err;
+    npy_intp *dims;
+
+    value = get_dict_value(py_event, "populations");
+    if (value == NULL) {
+        goto out;
+    }
+    populations_array = (PyArrayObject *) PyArray_FROMANY(
+            value, NPY_INT32, 1, 1, NPY_ARRAY_IN_ARRAY);
+    if (populations_array == NULL) {
+        goto out;
+    }
+    dims = PyArray_DIMS(populations_array);
+    N = dims[0];
+    populations = PyArray_DATA(populations_array);
+    if (N < 2) {
+        PyErr_SetString(PyExc_ValueError, "Must provide at least two populations");
+        goto out;
+    }
+
+    value = get_dict_number(py_event, "rate");
+    if (value == NULL) {
+        goto out;
+    }
+    rate = PyFloat_AsDouble(value);
+
+    /* Simpler to add migration_rate_change for all pairs than
+     * to create a specific event. We can do this, if it becomes a
+     * problem, though. (Maybe we have thousands of populations
+     * and we do lots of rate changes, e.g.)
+     */
+    for (j = 0; j < N; j++) {
+        for (k = 0; k < N; k++) {
+            if (j != k) {
+                err = msp_add_migration_rate_change(self->sim, time,
+                        populations[j], populations[k], rate);
+                if (err != 0) {
+                    handle_input_error("symmetric migration rate change", err);
+                    goto out;
+                }
+            }
+        }
+    }
+    ret = 0;
+out:
+    Py_XDECREF(populations_array);
+    return ret;
+}
+
+static int
 Simulator_parse_recombination_map(Simulator *self, PyObject *py_recomb_map)
 {
     int ret = -1;
@@ -1274,11 +1375,14 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
            strength;
     int err, population_id, source, destination;
     int is_population_parameter_change, is_migration_rate_change, is_mass_migration,
-        is_simple_bottleneck, is_instantaneous_bottleneck, is_census_event;
+        is_population_split, is_symmetric_migration_rate_change, is_simple_bottleneck,
+        is_instantaneous_bottleneck, is_census_event;
     PyObject *item, *value, *type;
     PyObject *population_parameter_change_s = NULL;
     PyObject *migration_rate_change_s = NULL;
+    PyObject *symmetric_migration_rate_change_s = NULL;
     PyObject *mass_migration_s = NULL;
+    PyObject *population_split_s = NULL;
     PyObject *simple_bottleneck_s = NULL;
     PyObject *instantaneous_bottleneck_s = NULL;
     PyObject *census_event_s = NULL;
@@ -1296,8 +1400,17 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     if (migration_rate_change_s == NULL) {
         goto out;
     }
+    symmetric_migration_rate_change_s = Py_BuildValue("s",
+            "symmetric_migration_rate_change");
+    if (symmetric_migration_rate_change_s == NULL) {
+        goto out;
+    }
     mass_migration_s = Py_BuildValue("s", "mass_migration");
     if (mass_migration_s == NULL) {
+        goto out;
+    }
+    population_split_s = Py_BuildValue("s", "population_split");
+    if (population_split_s == NULL) {
         goto out;
     }
     simple_bottleneck_s = Py_BuildValue("s", "simple_bottleneck");
@@ -1354,9 +1467,19 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
         if (is_migration_rate_change == -1) {
             goto out;
         }
+        is_symmetric_migration_rate_change = PyObject_RichCompareBool(type,
+                symmetric_migration_rate_change_s, Py_EQ);
+        if (is_symmetric_migration_rate_change == -1) {
+            goto out;
+        }
         is_mass_migration = PyObject_RichCompareBool(type, mass_migration_s,
                 Py_EQ);
         if (is_mass_migration == -1) {
+            goto out;
+        }
+        is_population_split = PyObject_RichCompareBool(type, population_split_s,
+                Py_EQ);
+        if (is_population_split == -1) {
             goto out;
         }
         is_simple_bottleneck = PyObject_RichCompareBool(
@@ -1374,6 +1497,8 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
         if (is_census_event == -1) {
             goto out;
         }
+
+        err = 0;
         if (is_population_parameter_change) {
             initial_size = GSL_NAN;
             if (PyDict_Contains(item, initial_size_s)) {
@@ -1434,6 +1559,14 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             destination = (int) PyLong_AsLong(value);
             err = msp_add_mass_migration(self->sim, time, source, destination,
                     proportion);
+        } else if (is_population_split) {
+            if (Simulator_parse_population_split(self, time, item) != 0) {
+                goto out;
+            }
+        } else if (is_symmetric_migration_rate_change) {
+            if (Simulator_parse_symmetric_migration_rate_change(self, time, item) != 0) {
+                goto out;
+            }
         } else if (is_simple_bottleneck) {
             value = get_dict_number(item, "proportion");
             if (value == NULL) {
@@ -1477,7 +1610,9 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
 out:
     Py_XDECREF(population_parameter_change_s);
     Py_XDECREF(migration_rate_change_s);
+    Py_XDECREF(symmetric_migration_rate_change_s);
     Py_XDECREF(mass_migration_s);
+    Py_XDECREF(population_split_s);
     Py_XDECREF(simple_bottleneck_s);
     Py_XDECREF(instantaneous_bottleneck_s);
     Py_XDECREF(initial_size_s);

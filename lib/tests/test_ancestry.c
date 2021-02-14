@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2016-2020 University of Oxford
+** Copyright (C) 2016-2021 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -1904,6 +1904,7 @@ test_demographic_events(void)
     gsl_rng *rng = safe_rng_alloc();
     double migration_matrix[] = { 0, 0.1, 0.1, 0 };
     double last_time, time, pop_size;
+    int source[2];
     tsk_table_collection_t tables;
     msp_t msp;
 
@@ -1951,6 +1952,21 @@ test_demographic_events(void)
             msp_add_mass_migration(&msp, 10, 0, 0, 1), MSP_ERR_SOURCE_DEST_EQUAL);
         CU_ASSERT_EQUAL(
             msp_add_mass_migration(&msp, 10, 0, 1, -5), MSP_ERR_BAD_PROPORTION);
+
+        source[0] = 0;
+        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 100, source, 1),
+            MSP_ERR_TOO_MANY_SPLIT_POPULATIONS);
+        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 1, source, 2),
+            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL_FATAL(
+            msp_add_population_split(&msp, 10, 1, source, 0), MSP_ERR_SOURCE_DEST_EQUAL);
+        source[0] = -1;
+        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 1, source, 0),
+            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+        source[0] = 0;
+        source[1] = 0;
+        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 2, source, 1),
+            MSP_ERR_DUPLICATE_POPULATION);
 
         CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -1, 0, 0.2),
             MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
@@ -2030,6 +2046,13 @@ test_demographic_events(void)
             ret = msp_add_mass_migration(&msp, 2.5, 1, 0, 0.6);
             CU_ASSERT_EQUAL(ret, 0);
         }
+
+        source[0] = 0;
+        /* Zero source populations have no effect */
+        ret = msp_add_population_split(&msp, 10.6, 0, source, 1);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_add_population_split(&msp, 10.6, 1, source, 1);
+        CU_ASSERT_EQUAL(ret, 0);
 
         CU_ASSERT_EQUAL(msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5),
             MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
@@ -2131,6 +2154,41 @@ test_demographic_events_start_time(void)
     }
 
     gsl_rng_free(rng);
+}
+
+static void
+test_population_split(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    sample_t samples[] = {
+        { .time = 0, .population = 0 },
+        { .time = 0, .population = 0 },
+        { .time = 0, .population = 1 },
+        { .time = 0, .population = 1 },
+        { .time = 0, .population = 2 },
+        { .time = 0, .population = 2 },
+    };
+    int source[] = { 0, 1, 2 };
+    tsk_table_collection_t tables;
+
+    ret = build_sim(&msp, &tables, rng, 1, 4, samples, 6);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_split(&msp, 0.5, 3, source, 3);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp, 0);
+    msp_print_state(&msp, _devnull);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
 }
 
 static void
@@ -2973,6 +3031,7 @@ main(int argc, char **argv)
         { "test_simulator_getters_setters", test_simulator_getters_setters },
         { "test_demographic_events", test_demographic_events },
         { "test_demographic_events_start_time", test_demographic_events_start_time },
+        { "test_population_split", test_population_split },
         { "test_census_event", test_census_event },
         { "test_time_travel_error", test_time_travel_error },
         { "test_floating_point_extremes", test_floating_point_extremes },

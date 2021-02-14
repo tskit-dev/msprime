@@ -33,6 +33,7 @@ from unittest import mock
 import numpy as np
 import pytest
 import scipy.linalg
+import stdpopsim
 import tskit
 
 import msprime
@@ -230,9 +231,21 @@ class TestIntrospectionInterface:
         assert repr(event) == repr_s
         assert str(event) == repr_s
 
+    def test_symmetric_migration_rate_change(self):
+        event = msprime.SymmetricMigrationRateChange(time=1, populations=[0, 1], rate=2)
+        repr_s = "SymmetricMigrationRateChange(time=1, populations=[0, 1], rate=2)"
+        assert repr(event) == repr_s
+        assert str(event) == repr_s
+
     def test_mass_migration(self):
         event = msprime.MassMigration(time=1, proportion=0.5, source=0, dest=1)
         repr_s = "MassMigration(time=1, source=0, dest=1, proportion=0.5)"
+        assert repr(event) == repr_s
+        assert str(event) == repr_s
+
+    def test_population_split(self):
+        event = msprime.PopulationSplit(time=1, derived=[0], ancestral=1)
+        repr_s = "PopulationSplit(time=1, derived=[0], ancestral=1)"
         assert repr(event) == repr_s
         assert str(event) == repr_s
 
@@ -276,6 +289,7 @@ class TestDemographicEventsHaveExtraLLParameter:
             msprime.PopulationParametersChange(1.0, population=1, initial_size=2.0),
             msprime.MigrationRateChange(1.0, 1.0),
             msprime.MassMigration(1.0, source=0, dest=1),
+            msprime.PopulationSplit(1.0, derived=[0], ancestral=1),
             msprime.SimpleBottleneck(1.0, 0),
             msprime.InstantaneousBottleneck(1.0, 0),
             msprime.CensusEvent(1.0),
@@ -654,6 +668,25 @@ class TestLowLevelRepresentation:
         event = msprime.MigrationRateChange(time=g, rate=migration_rate)
         assert event.get_ll_representation(demography=demography) == ll_event
 
+    def test_symmetric_migration_rate_change(self):
+        g = 1024
+        migration_rate = 0.125
+        demography = msprime.Demography.isolated_model([10] * 10)
+        event = msprime.SymmetricMigrationRateChange(
+            time=g, populations=["pop_0", "pop_1"], rate=migration_rate
+        )
+        ll_event = {
+            "type": "symmetric_migration_rate_change",
+            "time": g,
+            "populations": [0, 1],
+            "rate": migration_rate,
+        }
+        assert event.get_ll_representation(demography=demography) == ll_event
+        event = msprime.SymmetricMigrationRateChange(
+            time=g, populations=[0, 1], rate=migration_rate
+        )
+        assert event.get_ll_representation(demography=demography) == ll_event
+
     def test_mass_migration(self):
         g = 1234
         demography = msprime.Demography.isolated_model([10] * 10)
@@ -669,6 +702,20 @@ class TestLowLevelRepresentation:
         }
         assert event.get_ll_representation(demography=demography) == ll_event
         event = msprime.MassMigration(time=g, source=0, dest=1, proportion=0.5)
+        assert event.get_ll_representation(demography=demography) == ll_event
+
+    def test_population_split(self):
+        g = 1234
+        demography = msprime.Demography.isolated_model([10] * 10)
+        event = msprime.PopulationSplit(time=g, derived=["pop_0"], ancestral="pop_1")
+        ll_event = {
+            "type": "population_split",
+            "time": g,
+            "derived": [0],
+            "ancestral": 1,
+        }
+        assert event.get_ll_representation(demography=demography) == ll_event
+        event = msprime.PopulationSplit(time=g, derived=[0], ancestral=1)
         assert event.get_ll_representation(demography=demography) == ll_event
 
     def test_simple_bottleneck(self):
@@ -1030,7 +1077,47 @@ class TestDemographicEventMessages:
 
         event = msprime.MigrationRateChange(source=0, dest=1, time=1, rate=6)
         assert event._parameters() == "source=0, dest=1, rate=6"
-        assert event._effect() == ("Backwards-time migration rate from 0 to 1 → 6")
+        assert event._effect() == "Backwards-time migration rate from 0 to 1 → 6"
+
+    def test_symmetric_migration_rate_change(self):
+        event = msprime.SymmetricMigrationRateChange(time=1, populations=[0, 1], rate=2)
+        assert event._parameters() == "populations=[0, 1], rate=2"
+        assert event._effect() == (
+            "Sets the symmetric migration rate between 0 and 1 to 2 per generation"
+        )
+        event = msprime.SymmetricMigrationRateChange(
+            time=1, populations=[0, 1, 2], rate=2
+        )
+        assert event._parameters() == "populations=[0, 1, 2], rate=2"
+        assert event._effect() == (
+            "Sets the symmetric migration rate between all pairs of populations "
+            "in [0, 1, 2] to 2 per generation"
+        )
+
+    def test_population_split(self):
+        event = msprime.PopulationSplit(time=1, derived=[0], ancestral=2)
+        assert event._parameters() == "derived=[0], ancestral=2"
+        assert event._effect() == (
+            "Moves all lineages from the '0' derived population to the "
+            "ancestral '2' population. Also set all migration rates to and "
+            "from '0' to zero."
+        )
+
+        event = msprime.PopulationSplit(time=1, derived=[0, 1], ancestral=2)
+        assert event._parameters() == "derived=[0, 1], ancestral=2"
+        assert event._effect() == (
+            "Moves all lineages from derived populations '0' and '1' to the "
+            "ancestral '2' population. Also set all migration rates to and "
+            "from the derived populations to zero."
+        )
+
+        event = msprime.PopulationSplit(time=1, derived=[0, 1, 2], ancestral=3)
+        assert event._parameters() == "derived=[0, 1, 2], ancestral=3"
+        assert event._effect() == (
+            "Moves all lineages from derived populations [0, 1, 2] to the "
+            "ancestral '3' population. Also set all migration rates to and "
+            "from the derived populations to zero."
+        )
 
     def test_mass_migration(self):
         event = msprime.MassMigration(time=1, proportion=0.5, source=0, dest=1)
@@ -1106,7 +1193,9 @@ class DebugOutputBase:
             msprime.PopulationParametersChange(0.1, growth_rate=10),
             msprime.MigrationRateChange(0.2, source=0, dest=1, rate=1),
             msprime.MigrationRateChange(0.2, matrix_index=(1, 0), rate=1),
+            msprime.SymmetricMigrationRateChange(0.3, populations=[0, 1], rate=0.5),
             msprime.MassMigration(0.4, source=1, dest=0),
+            msprime.PopulationSplit(0.4, derived=[1], ancestral=0),
             msprime.MigrationRateChange(0.4, rate=0),
             msprime.InstantaneousBottleneck(0.5, population=0, strength=100),
             msprime.CensusEvent(0.55),
@@ -1121,7 +1210,11 @@ class DebugOutputBase:
             msprime.PopulationParametersChange(0.1, population="pop_0", growth_rate=10),
             msprime.MigrationRateChange(0.2, source="pop_0", dest="pop_1", rate=1),
             msprime.MigrationRateChange(0.2, source="pop_1", dest="pop_0", rate=1),
+            msprime.SymmetricMigrationRateChange(
+                0.3, populations=["pop_0", "pop_1"], rate=0.5
+            ),
             msprime.MassMigration(0.4, source="pop_1", dest="pop_0"),
+            msprime.PopulationSplit(0.4, derived=["pop_1"], ancestral="pop_0"),
             msprime.MigrationRateChange(0.4, rate=0),
             msprime.InstantaneousBottleneck(0.5, population="pop_0", strength=100),
             msprime.CensusEvent(0.55),
@@ -3930,13 +4023,23 @@ class TestDemographyObject:
         assert m1 == m1
         assert not (m1 != m2)
         assert not (m1 != m1)
+        assert m1 is not None
+        assert m1 != []
 
         m3 = msprime.Demography.island_model([1, 1], 1 / 3 + 0.001)
         assert m1 != m3
-        assert m1 != m3
+        assert m3 != m1
 
-        assert m1 is not None
-        assert m1 != []
+        assert m1 != msprime.Demography.isolated_model([1])
+        assert m1 != msprime.Demography.isolated_model([1, 1])
+        assert m1 != msprime.Demography.island_model([2, 1], 1 / 3)
+
+        m1.events.append(msprime.SymmetricMigrationRateChange(1, [0, 1], 0.1))
+        assert m1 != m2
+        m2.events.append(msprime.SymmetricMigrationRateChange(1, [0, 1], 0.1))
+        assert m1 == m2
+        m1.events[0].rate = 0.01
+        assert m1 != m2
 
     def test_debug(self):
         model = msprime.Demography.island_model([1, 1], 1 / 3)
@@ -4172,13 +4275,10 @@ class TestDemographyObject:
         assert demography.populations[2].initial_size == 1000
         assert np.all(demography.migration_matrix == 0)
         assert demography.num_events == len(demography.events)
-        assert len(demography.events) == 2
+        assert len(demography.events) == 1
         assert demography.events[0].time == 10
-        assert demography.events[0].source == 0
-        assert demography.events[0].dest == 2
-        assert demography.events[1].time == 10
-        assert demography.events[1].source == 1
-        assert demography.events[1].dest == 2
+        assert demography.events[0].ancestral == "pop_2"
+        assert demography.events[0].derived == ["popA", "popB"]
 
     def test_from_starbeast(self):
         with open("tests/data/species_trees/91genes_species_rev.tre") as f:
@@ -4283,6 +4383,21 @@ class TestPopulationNamesInEvents:
         )
         assert ts1.equals(ts2, ignore_provenance=True)
 
+    def test_population_split(self):
+        demography = msprime.Demography.isolated_model([1000, 1000])
+        demography.events = [msprime.PopulationSplit(1, derived=[0], ancestral=1)]
+        ts1 = msprime.sim_ancestry(
+            {0: 1, 1: 1}, demography=demography, random_seed=1234
+        )
+
+        demography.events = [
+            msprime.PopulationSplit(1, derived=["pop_0"], ancestral="pop_1")
+        ]
+        ts2 = msprime.sim_ancestry(
+            {0: 1, 1: 1}, demography=demography, random_seed=1234
+        )
+        assert ts1.equals(ts2, ignore_provenance=True)
+
     def test_migration_rate_change(self):
         demography = msprime.Demography.isolated_model([1000, 1000])
         demography.events = [msprime.MigrationRateChange(1, source=0, dest=1, rate=1)]
@@ -4333,3 +4448,178 @@ class TestPopulationNamesInEvents:
         ]
         ts2 = msprime.sim_ancestry({0: 1}, demography=demography, random_seed=1234)
         assert ts1.equals(ts2, ignore_provenance=True)
+
+
+class TestPopulationSplit:
+    """
+    Tests that the PopulationSplit event has the correct effects.
+    """
+
+    def test_two_pop_tree(self):
+        demography = msprime.Demography(
+            [
+                msprime.Population(name="A", initial_size=100),
+                msprime.Population(name="B", initial_size=100),
+                msprime.Population(name="root", initial_size=100),
+            ]
+        )
+        demography.set_symmetric_migration_rate(["A", "B"], 0.1)
+        demography.events = [
+            msprime.PopulationSplit(10, derived=["A", "B"], ancestral="root")
+        ]
+        dbg = demography.debug()
+        assert len(dbg.epochs) == 2
+        assert dbg.epochs[1].start_time == 10
+        assert np.all(dbg.epochs[1].migration_matrix == 0)
+        ts = msprime.sim_ancestry(
+            {"A": 1, "B": 1}, demography=demography, random_seed=32
+        )
+        assert ts.tables.nodes.time[-1] > 10
+
+    def test_three_pop_tree(self):
+        demography = msprime.Demography(
+            [
+                msprime.Population(name="A", initial_size=100),
+                msprime.Population(name="B", initial_size=100),
+                msprime.Population(name="C", initial_size=100),
+                msprime.Population(name="root", initial_size=100),
+            ]
+        )
+        demography.set_symmetric_migration_rate(["A", "B", "C"], 0.1)
+        demography.events = [
+            msprime.PopulationSplit(10, derived=["A", "B", "C"], ancestral="root")
+        ]
+        dbg = demography.debug()
+        assert len(dbg.epochs) == 2
+        assert dbg.epochs[1].start_time == 10
+        assert np.all(dbg.epochs[1].migration_matrix == 0)
+        ts = msprime.sim_ancestry(
+            {"A": 1, "B": 1, "C": 1}, demography=demography, random_seed=32
+        )
+        assert ts.tables.nodes.time[-1] > 10
+
+    def test_three_pop_binary_tree(self):
+        demography = msprime.Demography(
+            [
+                msprime.Population(name="A", initial_size=100),
+                msprime.Population(name="B", initial_size=100),
+                msprime.Population(name="C", initial_size=100),
+                msprime.Population(name="AB", initial_size=100),
+                msprime.Population(name="ABC", initial_size=100),
+            ]
+        )
+        demography.set_symmetric_migration_rate(["A", "B", "C"], 0.1)
+        demography.events = [
+            msprime.PopulationSplit(10, derived=["A", "B"], ancestral="AB"),
+            msprime.SymmetricMigrationRateChange(10, populations=["C", "AB"], rate=0.1),
+            msprime.PopulationSplit(20, derived=["AB", "C"], ancestral="ABC"),
+        ]
+        dbg = demography.debug()
+        assert len(dbg.epochs) == 3
+        assert dbg.epochs[1].start_time == 10
+        M = np.zeros((5, 5))
+        M[2, 3] = 0.1
+        M[3, 2] = 0.1
+        assert np.array_equal(M, dbg.epochs[1].migration_matrix)
+        assert dbg.epochs[2].start_time == 20
+        assert np.all(dbg.epochs[2].migration_matrix == 0)
+        ts = msprime.sim_ancestry(
+            {"A": 1, "B": 1, "C": 1}, demography=demography, random_seed=32
+        )
+        assert ts.tables.nodes.time[-1] > 20
+
+    def test_four_pop_binary_tree(self):
+        demography = msprime.Demography(
+            [
+                msprime.Population(name="A", initial_size=100),
+                msprime.Population(name="B", initial_size=100),
+                msprime.Population(name="C", initial_size=100),
+                msprime.Population(name="D", initial_size=100),
+                msprime.Population(name="AB", initial_size=100),
+                msprime.Population(name="CD", initial_size=100),
+                msprime.Population(name="ABCD", initial_size=100),
+            ]
+        )
+        demography.set_symmetric_migration_rate(["A", "B", "C", "D"], 0.1)
+        demography.events = [
+            msprime.PopulationSplit(10, derived=["A", "B"], ancestral="AB"),
+            msprime.PopulationSplit(20, derived=["C", "D"], ancestral="CD"),
+            msprime.SymmetricMigrationRateChange(
+                20, populations=["CD", "AB"], rate=0.1
+            ),
+            msprime.PopulationSplit(30, derived=["AB", "CD"], ancestral="ABCD"),
+        ]
+        dbg = demography.debug()
+        assert len(dbg.epochs) == 4
+        assert dbg.epochs[1].start_time == 10
+        M = np.zeros((7, 7))
+        M[2, 3] = 0.1
+        M[3, 2] = 0.1
+        assert np.array_equal(M, dbg.epochs[1].migration_matrix)
+        assert dbg.epochs[2].start_time == 20
+        M = np.zeros((7, 7))
+        M[4, 5] = 0.1
+        M[5, 4] = 0.1
+        assert np.array_equal(M, dbg.epochs[2].migration_matrix)
+        assert np.all(dbg.epochs[3].migration_matrix == 0)
+        ts = msprime.sim_ancestry(
+            {"A": 1, "B": 1, "C": 1, "D": 1}, demography=demography, random_seed=32
+        )
+        assert ts.tables.nodes.time[-1] > 30
+        assert ts.tables.nodes.population[-1] == 6
+
+
+def test_ooa():
+    # This test is temporary while we are updating stdpopsim to use the
+    # msprime APIs. See the nodes in the _ooa_model() code.
+    demog_local = msprime.Demography._ooa_model()
+    debug_local = demog_local.debug()
+    model_sps = stdpopsim.get_species("HomSap").get_demographic_model(
+        "OutOfAfrica_3G09"
+    )
+    demog_sps = msprime.Demography.from_old_style(
+        model_sps.population_configurations,
+        migration_matrix=model_sps.migration_matrix,
+        demographic_events=model_sps.demographic_events,
+    )
+    debug_sps = demog_sps.debug()
+
+    # Map from local population names into the equivalent in the stdpopsim
+    # model, per epoch.
+    epoch_pop_map = [
+        ["YRI", "CEU", "CHB"],
+        ["YRI", "OOA"],
+        ["AMH"],
+        ["ANC"],
+    ]
+    assert len(epoch_pop_map) == debug_sps.num_epochs
+    assert debug_local.num_epochs == debug_sps.num_epochs
+    # In epoch 0 the top corner of the migration matrix should be
+    # the same.
+    assert np.array_equal(
+        debug_local.epochs[0].migration_matrix[:3, :3],
+        debug_sps.epochs[0].migration_matrix,
+    )
+    assert np.all(debug_local.epochs[0].migration_matrix[3:, 3:] == 0)
+    # There's only migration between OOA and YRI in epoch 1
+    M = debug_local.epochs[1].migration_matrix.copy()
+    assert M[0, 3] == debug_sps.epochs[1].migration_matrix[0, 1]
+    assert M[3, 0] == debug_sps.epochs[1].migration_matrix[1, 0]
+    M[0, 3] = 0
+    M[3, 0] = 0
+    assert np.all(M == 0)
+
+    for pop_map, epoch_local, epoch_sps in zip(
+        epoch_pop_map, debug_local.epochs, debug_sps.epochs
+    ):
+        assert epoch_local.start_time == epoch_sps.start_time
+        assert epoch_local.end_time == epoch_sps.end_time
+        for pop_id_sps, local_pop_name in enumerate(pop_map):
+            pop_id_local = demog_local[local_pop_name].id
+            assert (
+                epoch_local.populations[pop_id_local]
+                == epoch_sps.populations[pop_id_sps]
+            )
+        if len(pop_map) == 1:
+            assert np.all(epoch_local.migration_matrix == 0)
+            assert np.all(epoch_sps.migration_matrix == 0)

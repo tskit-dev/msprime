@@ -348,7 +348,7 @@ class Demography:
         data = []
         for event in events:
             type_text = textwrap.wrap(event._type_str, 15)
-            description = textwrap.wrap(event._parameters(), 20)
+            description = textwrap.wrap(event._parameters(), 22)
             effect = textwrap.wrap(event._effect(), 38)
             row = [[f"{event.time:.4g}"], type_text, description, effect]
             data.append(row)
@@ -522,14 +522,31 @@ class Demography:
         return DemographyDebugger(demography=self)
 
     def __eq__(self, other):
-        if isinstance(other, Demography):
-            return (
-                self.populations == other.populations
-                and np.array_equal(self.migration_matrix, other.migration_matrix)
-                and self.events == other.events
-            )
-        else:
-            return super().__eq__(other)
+        try:
+            self.assert_equal(other)
+            return True
+        except AssertionError:
+            return False
+
+    def assert_equal(self, other: Demography):
+        """
+        Compares this Demography with specified ``other`` and raises an
+        AssertionError if they are not exactly equal.
+
+        :param Demography other: The other demography to compare against.
+        """
+        # TODO we could potentially do better here with error messages
+        # by showing a diff of the str() values for objects that differ.
+        assert isinstance(other, Demography)
+        assert self.num_populations == other.num_populations
+        for p1, p2 in zip(self.populations, other.populations):
+            assert p1 == p2, f"{p1} ≠ {p2}"
+        assert np.array_equal(
+            self.migration_matrix, other.migration_matrix
+        )  # type: ignore
+        assert self.num_events == other.num_events
+        for e1, e2 in zip(self.events, other.events):
+            assert e1 == e2, f"{e1} ≠ {e2}"
 
     @staticmethod
     def from_species_tree(
@@ -556,19 +573,11 @@ class Demography:
         the list. Leaf populations are first in the list, and added in
         left-to-right order. Populations corresponding to the internal nodes
         are then added in a postorder traversal of the species tree. For each
-        internal node, :class:`.MassMigration` events are added so that
-        lineages move from its child populations at the appropriate time.
-
-        :warning: If continuous migration is added to the returned Demography
-            by updating the migration matrix, it is important to
-            note that the MassMigration events used to move lineages do *not*
-            alter migration rates, and it should be ensured that
-            migration rates to source populations of mass migration events are zero
-            after the mass migration (viewed backwards in time).
-
-        :todo: Implement the PopulationSplit event and document its use here.
-            We'll still need to put in a warning, so users know that the migration
-            matrix will be updated at every node.
+        internal node a :class:`.PopulationSplit` event is added so that
+        lineages move from its child populations at the appropriate time
+        and rates of continuous migration to and from the child populations is
+        set to zero. See the :ref:`sec_demography_events_population_split`
+        section for more details.
 
         The initial sizes and growth rates for the populations in the model are
         set via the ``initial_size`` and ``growth_rate`` arguments. These can be
@@ -583,7 +592,7 @@ class Demography:
             demography = msprime.Demography.from_species_tree(tree, initial_size)
 
         Note that it is possible to have default population sizes for unnamed
-        ancestral populations using a `collections.defaultdict`, e.g.,
+        ancestral populations using a :class:`python:collections.defaultdict`, e.g.,
 
         .. code-block:: python
 
@@ -638,26 +647,19 @@ class Demography:
         trees written by TreeAnnotator based on StarBEAST posterior tree
         distributions.
 
-        The returned :class:`.Demography` object contains a :class:`.Population` for
-        each node in the species tree. The population's ``name`` attribute will
-        be either the corresponding node label from the newick tree, if it exists,
-        or otherwise the name takes the form "pop_{j}", where j is the position
-        of the given population in the list. Leaf populations are first in the
-        list, and added in left-to-right order. Populations corresponding to the
-        internal nodes are then added in a postorder traversal of the species
-        tree. For each internal node, :class:`.MassMigration` events are added
-        so that lineages move from its child populations at the appropriate time.
-
-        :warning: If continuous migration is added to the returned Demography
-            by updating the migration matrix, it is important to
-            note that the MassMigration events used to move lineages do *not*
-            alter migration rates, and it should be ensured that
-            migration rates to source populations of mass migration events are zero
-            after the mass migration (viewed backwards in time).
-
-        :todo: Implement the PopulationSplit event and document its use here.
-            We'll still need to put in a warning, so users know that the migration
-            matrix will be updated at every node.
+        The returned :class:`.Demography` object contains a
+        :class:`.Population` for each node in the species tree. The
+        population's ``name`` attribute will be either the corresponding node
+        label from the newick tree, if it exists, or otherwise the name takes
+        the form "pop_{j}", where j is the position of the given population in
+        the list. Leaf populations are first in the list, and added in
+        left-to-right order. Populations corresponding to the internal nodes
+        are then added in a postorder traversal of the species tree. For each
+        internal node a :class:`.PopulationSplit` event is added so that
+        lineages move from its child populations at the appropriate time and
+        rates of continuous migration to and from the child populations is set
+        to zero. See the :ref:`sec_demography_events_population_split` section
+        for more details.
 
         :param str tree: The tree string in Nexus format, with named leaves, branch
             lengths, and branch annotation. Typically, this string is the entire content
@@ -914,6 +916,89 @@ class Demography:
     #     ]
     #     return model
 
+    @staticmethod
+    def _ooa_model():
+        """
+        Returns the Gutenkunst et al three population out-of-Africa model.
+
+        This version is included here temporarily as a way to get some
+        test coverage on the model compared with stdpopsim. Because we
+        use this model in the documentation, we want make sure that it's
+        doing what we think. We compare the model defined here then with
+        the one presented in the docs, to ensure that no errors creep in.
+
+        Once the upstream code in stdpopsim is updated to use msprime 1.0
+        APIs we can remove this model and instead compare directly
+        to the stdpopsim model with .is_equivalent() or whatever.
+        """
+        # Times are provided in years, so we convert into generations.
+        generation_time = 25
+        T_OOA = 21.2e3 / generation_time
+        T_AMH = 140e3 / generation_time
+        T_ANC = 220e3 / generation_time
+        # We need to work out the starting (diploid) population sizes based on
+        # the growth rates provided for these two populations
+        r_CEU = 0.004
+        r_CHB = 0.0055
+        N_CEU = 1000 / math.exp(-r_CEU * T_OOA)
+        N_CHB = 510 / math.exp(-r_CHB * T_OOA)
+
+        populations = [
+            Population(
+                name="YRI",
+                description="Yoruba in Ibadan, Nigeria",
+                initial_size=12300,
+            ),
+            Population(
+                name="CEU",
+                description=(
+                    "Utah Residents (CEPH) with Northern and Western European Ancestry"
+                ),
+                initial_size=N_CEU,
+                growth_rate=r_CEU,
+            ),
+            Population(
+                name="CHB",
+                description="Han Chinese in Beijing, China",
+                initial_size=N_CHB,
+                growth_rate=r_CHB,
+            ),
+            Population(
+                name="OOA",
+                description="Bottleneck out-of-Africa population",
+                initial_size=2100,
+            ),
+            Population(
+                name="AMH", description="Anatomically modern humans", initial_size=12300
+            ),
+            Population(
+                name="ANC",
+                description="Ancestral equilibrium population",
+                initial_size=7300,
+            ),
+        ]
+
+        demography = Demography(populations)
+        # Set the migration rates between extant populations
+        demography.set_symmetric_migration_rate(["CEU", "CHB"], 9.6e-5)
+        demography.set_symmetric_migration_rate(["YRI", "CHB"], 1.9e-5)
+        demography.set_symmetric_migration_rate(["YRI", "CEU"], 3e-5)
+
+        # TODO these should be added use add_x rather then passing in
+        # lists of events. This'll reduce some boilerplate.
+
+        demography.events = [
+            # CEU and CHB merge into the OOA population
+            PopulationSplit(time=T_OOA, derived=["CEU", "CHB"], ancestral="OOA"),
+            # Set the migration rate between OOA and YRI
+            SymmetricMigrationRateChange(
+                time=T_OOA, populations=["YRI", "OOA"], rate=25e-5
+            ),
+            PopulationSplit(time=T_AMH, derived=["YRI", "OOA"], ancestral="AMH"),
+            PopulationSplit(time=T_ANC, derived=["AMH"], ancestral="ANC"),
+        ]
+        return demography
+
 
 # This was lifted out of older code as-is. No point in updating it
 # to use dataclasses, since all we want to do is maintain compatability
@@ -977,6 +1062,14 @@ def _convert_id(demography, population_ref):
     if demography is None or population_ref == -1:
         return population_ref
     return demography[population_ref].id
+
+
+def _list_str(a: List):
+    """
+    Returns the specified items rendered as a string without quotes.
+    """
+    joined = ", ".join(str(item) for item in a)
+    return f"[{joined}]"
 
 
 @dataclasses.dataclass
@@ -1130,6 +1223,9 @@ class MigrationRateChange(DemographicEvent):
         return {
             "type": "migration_rate_change",
             "time": self.time,
+            # Note: We'd like to change the name here to "rate" but it's best
+            # to leave this alone until stdpopsim has been moved away from
+            # using this internal API.
             "migration_rate": self.rate,
             "source": _convert_id(demography, self.source),
             "dest": _convert_id(demography, self.dest),
@@ -1216,6 +1312,101 @@ class MassMigration(DemographicEvent):
             f"migrating from {self.dest} to {self.source} forwards in time)"
         )
         return ret
+
+
+@dataclasses.dataclass
+class SymmetricMigrationRateChange(DemographicEvent):
+    """
+    Sets the symmetric migration rate between all pairs of populations in
+    the specified list to the specified value. For a given pair of population
+    IDs ``j`` and ``k``, this sets ``migration_matrix[j, k] = rate``
+    and ``migration_matrix[k, j] = rate``.
+
+    Populations may be specified either by their integer IDs or by
+    their string names.
+
+    :param float time: The time at which this event occurs in generations.
+    :param list populations: An iterable of population identifiers (integer
+        IDs or string names).
+    :param float rate: The new migration rate.
+    """
+
+    populations: List[Union[int, str]]
+    rate: float
+
+    _type_str: ClassVar[str] = dataclasses.field(
+        default="Symmetric migration rate change", repr=False
+    )
+
+    def get_ll_representation(self, num_populations=None, demography=None):
+        # We need to keep the num_populations argument until stdpopsim 0.1 is out
+        # https://github.com/tskit-dev/msprime/issues/1037
+        return {
+            "type": "symmetric_migration_rate_change",
+            "time": self.time,
+            "populations": [_convert_id(demography, pop) for pop in self.populations],
+            "rate": self.rate,
+        }
+
+    def _parameters(self):
+        return f"populations={_list_str(self.populations)}, rate={self.rate}"
+
+    def _effect(self):
+        s = "Sets the symmetric migration rate between "
+        if len(self.populations) == 2:
+            s += f"{self.populations[0]} and {self.populations[1]} "
+        else:
+            s += f"all pairs of populations in {_list_str(self.populations)} "
+        s += f"to {self.rate} per generation"
+        return s
+
+
+@dataclasses.dataclass
+class PopulationSplit(DemographicEvent):
+    """
+
+    :param float time: The time at which this event occurs in generations.
+    :param list(int) derived: The ID(s) of the derived population(s).
+    :param int ancestral: The ID of the ancestral population.
+    """
+
+    derived: List[Union[int, str]]
+    ancestral: Union[int, str]
+
+    _type_str: ClassVar[str] = dataclasses.field(default="Population Split", repr=False)
+
+    def get_ll_representation(self, num_populations=None, demography=None):
+        # We need to keep the num_populations argument until stdpopsim 0.1 is out
+        # https://github.com/tskit-dev/msprime/issues/1037
+        return {
+            "type": "population_split",
+            "time": self.time,
+            "derived": [_convert_id(demography, pop) for pop in self.derived],
+            "ancestral": _convert_id(demography, self.ancestral),
+        }
+
+    def _parameters(self):
+        return f"derived={_list_str(self.derived)}, ancestral={self.ancestral}"
+
+    def _effect(self):
+        s = "Moves all lineages from "
+        if len(self.derived) == 1:
+            s += f"the '{self.derived[0]}' derived population "
+        else:
+            s += "derived populations "
+            if len(self.derived) == 2:
+                s += f"'{self.derived[0]}' and '{self.derived[1]}' "
+            else:
+                s += f"{_list_str(self.derived)} "
+        s += f"to the ancestral '{self.ancestral}' population. "
+        s += "Also set all migration rates to and from "
+        if len(self.derived) == 1:
+            s += f"'{self.derived[0]}' "
+        else:
+            s += "the derived populations "
+        s += "to zero."
+
+        return s
 
 
 # This is an unsupported/undocumented demographic event.

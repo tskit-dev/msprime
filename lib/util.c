@@ -275,6 +275,14 @@ msp_strerror_internal(int err)
         case MSP_ERR_DTWF_DIPLOID_ONLY:
             ret = "The DTWF model only supports ploidy = 2";
             break;
+        case MSP_ERR_TOO_MANY_SPLIT_POPULATIONS:
+            ret = "Cannot have more than 100 populations splitting at once. "
+                  "If this is something that you need to do, please open an issue "
+                  "on GitHub";
+            break;
+        case MSP_ERR_DUPLICATE_POPULATION:
+            ret = "Population IDs must be unique";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                   "report!";
