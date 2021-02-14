@@ -105,11 +105,16 @@ class Population:
     # proportions: Union[List[float], None]
     # epochs: List[Epoch] = dataclasses.field(default_factory=list)
 
-    start_size: float
-    growth_rate: float = 0.0
+    start_time: Union[float, None] = None
+    end_time: Union[float, None] = None
+    start_size: Union[float, None] = None
+    growth_rate: Union[float, None] = 0.0
+    end_size: Union[float, None] = None
+    # Metadata
     name: Union[str, None] = None
     description: str = ""
     extra_metadata: dict = dataclasses.field(default_factory=dict)
+    # TODO remove - start_time is the sensible default now.
     sampling_time: float = 0
 
     # Keeping this as something we can init because this stops us
