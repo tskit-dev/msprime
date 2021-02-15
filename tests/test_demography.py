@@ -1231,16 +1231,16 @@ class TestDemographyHtml(DebugOutputBase):
         children = list(root)
         assert len(children) == 3
         for child in children:
-            assert child.tag == "table"
-        pop_table = children[0]
+            assert list(child)[2].tag == "table"
+        pop_table = list(children[0])[2]
         rows = list(pop_table.find("tbody"))
         assert len(rows) == demography.num_populations
-        migration_matrix_table = children[1]
+        migration_matrix_table = list(children[1])[2]
         rows = list(migration_matrix_table.find("tbody"))
         assert len(rows) == demography.num_populations
         for row in rows:
             assert len(row) == demography.num_populations + 1
-        events_table = children[2]
+        events_table = list(children[2])[2]
         rows = list(events_table.find("tbody"))
         assert len(rows) == len(demography.events)
         # TODO add more tests when the output format is finalised.
@@ -1253,7 +1253,7 @@ class TestDemographyDebuggerHtml(DebugOutputBase):
         root = xml.etree.ElementTree.fromstring(html)
         assert root.tag == "div"
         children = list(root)
-        assert len(children) == len(debugger.epochs)
+        assert len(children) - 1 == len(debugger.epochs)
         # TODO add more tests when the output format is finalised.
 
 
