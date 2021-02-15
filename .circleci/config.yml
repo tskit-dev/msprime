@@ -25,7 +25,8 @@ jobs:
             sudo apt-get update
             sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev ninja-build valgrind clang
             pip install --user -r requirements/CI-complete/requirements.txt
-            pip install --user meson twine
+            # FIXME pinning meson for now, https://github.com/tskit-dev/msprime/issues/1485
+            pip install --user twine meson==0.56
             # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
             echo 'export PATH=/home/circleci/.local/bin:$PATH' >> $BASH_ENV
       - save_cache:
@@ -46,12 +47,6 @@ jobs:
                         -n 8 tests
             codecov -X gcov -F python
             rm .coverage
-
-      - run:
-          name: Type hinting checks
-          # This is a pretty minimal check, we should have much more granular checking
-          # with missing imports. This gets us started, though.
-          command: mypy msprime/*.py --ignore-missing-imports
 
       - run:
           name: Compile C with gcc
