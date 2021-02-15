@@ -169,10 +169,6 @@ class Demography:
             N = self.num_populations
             self.migration_matrix = np.zeros((N, N))
 
-        # Sort demographic events by time. Sorting is stable so the relative
-        # order of events at the same time will be preserved.
-        self.events.sort(key=lambda de: de.time)
-
         # People might get cryptic errors from passing in copies of the same
         # population, so check for it.
         if len({id(pop) for pop in self.populations}) != len(self.populations):
@@ -268,6 +264,13 @@ class Demography:
         for pop_j, pop_k in itertools.combinations(pop_ids, 2):
             self.migration_matrix[pop_j, pop_k] = rate  # type: ignore
             self.migration_matrix[pop_k, pop_j] = rate  # type: ignore
+
+    def sort_events(self):
+        """
+        Sort demographic events by time. Sorting is stable so the relative
+        order of events at the same time will be preserved.
+        """
+        self.events.sort(key=lambda de: de.time)
 
     def _populations_table(self):
         col_titles = [
@@ -678,6 +681,86 @@ class Demography:
             generation_time=generation_time,
             time_units=time_units,
         )
+
+    @staticmethod
+    def from_demes(graph):
+        def get_growth_rate(epoch):
+            ret = 0
+            if epoch.end_size != epoch.start_size:
+                ret = -math.log(epoch.start_size / epoch.end_size) / epoch.time_span
+            return ret
+
+        graph = graph.in_generations()
+
+        demography = Demography()
+        for deme in graph.demes:
+            initial_size = 0
+            growth_rate = 0
+            last_epoch = deme.epochs[-1]
+            if last_epoch.end_time == 0:
+                initial_size = last_epoch.end_size
+                growth_rate = get_growth_rate(last_epoch)
+            demography.add_population(
+                Population(
+                    name=deme.id,
+                    description=deme.description,
+                    growth_rate=growth_rate,
+                    initial_size=initial_size,
+                    sampling_time=deme.end_time,
+                )
+            )
+            for epoch in deme.epochs:
+                new_initial_size = None
+                if initial_size != epoch.end_size:
+                    new_initial_size = epoch.end_size
+                new_growth_rate = None
+                alpha = get_growth_rate(epoch)
+                if growth_rate != alpha:
+                    new_growth_rate = alpha
+                if new_growth_rate is not None or new_initial_size is not None:
+                    demography.events.append(
+                        PopulationParametersChange(
+                            population=deme.id,
+                            time=epoch.end_time,
+                            initial_size=new_initial_size,
+                            growth_rate=new_growth_rate,
+                        )
+                    )
+                    initial_size = new_initial_size
+                    growth_rate = new_growth_rate
+        events = graph.list_demographic_events()
+        for split in events["splits"]:
+            demography.events.append(
+                PopulationSplit(
+                    time=split.time, ancestral=split.parent, derived=split.children
+                )
+            )
+        # TODO add other events.
+        for migration in graph.migrations:
+            if migration.end_time == 0:
+                demography.set_migration_rate(
+                    source=migration.dest, dest=migration.source, rate=migration.rate
+                )
+            else:
+                demography.events.append(
+                    MigrationRateChange(
+                        time=migration.end_time,
+                        source=migration.dest,
+                        dest=migration.source,
+                        rate=migration.rate,
+                    )
+                )
+            if not math.isinf(migration.start_time):
+                demography.events.append(
+                    MigrationRateChange(
+                        time=migration.start_time,
+                        source=migration.dest,
+                        dest=migration.source,
+                        rate=0,
+                    )
+                )
+        demography.sort_events()
+        return demography
 
     @staticmethod
     def from_old_style(

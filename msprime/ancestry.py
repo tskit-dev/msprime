@@ -33,6 +33,7 @@ import sys
 from typing import ClassVar
 from typing import Union
 
+import demes
 import numpy as np
 import tskit
 
@@ -935,11 +936,16 @@ def _parse_sim_ancestry(
         demography = demog.Demography.isolated_model(
             [population_size] * num_populations
         )
-    elif isinstance(demography, demog.Demography):
+    else:
         if population_size is not None:
             raise ValueError("Cannot specify demography and population size")
-    else:
-        raise TypeError("demography argument must be an instance of msprime.Demography")
+        if isinstance(demography, demes.Graph):
+            demography = demog.Demography.from_demes(demography)
+        elif not isinstance(demography, demog.Demography):
+            raise TypeError(
+                "demography argument must be an instance of demes.Graph or "
+                "msprime.Demography"
+            )
     demography.validate()
 
     if initial_state is None:

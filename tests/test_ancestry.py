@@ -26,6 +26,7 @@ import math
 import random
 import warnings
 
+import demes
 import numpy as np
 import pytest
 import tskit
@@ -1341,6 +1342,18 @@ class TestSimAncestryInterface:
             assert ts.sequence_length == 1
             assert ts.num_populations == 2
             assert ts.num_individuals == 2 * n
+
+    def test_demography_demes(self):
+
+        g = demes.Graph(
+            description="An example demes model",
+            time_units="generations",
+        )
+        g.deme("A", epochs=[demes.Epoch(start_size=100, end_time=0)])
+        g.deme("B", epochs=[demes.Epoch(start_size=100, end_time=0)])
+        g.symmetric_migration(demes=["A", "B"], rate=0.1)
+        ts = msprime.sim_ancestry({"A": 1, "B": 1}, demography=g, random_seed=1)
+        assert ts.num_populations == 2
 
     def test_random_seed(self):
         ts1 = msprime.sim_ancestry(10, random_seed=1)
