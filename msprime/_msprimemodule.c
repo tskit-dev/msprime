@@ -935,7 +935,7 @@ Simulator_parse_population_configuration(Simulator *self, PyObject *py_pop_confi
     int ret = -1;
     Py_ssize_t j;
     double initial_size, growth_rate;
-    int err;
+    int initially_active, err;
     PyObject *item, *value;
 
     for (j = 0; j < PyList_Size(py_pop_config); j++) {
@@ -954,8 +954,13 @@ Simulator_parse_population_configuration(Simulator *self, PyObject *py_pop_confi
             goto out;
         }
         growth_rate = PyFloat_AsDouble(value);
+        value = get_dict_number(item, "initially_active");
+        if (value == NULL) {
+            goto out;
+        }
+        initially_active = (int) PyLong_AsLong(value);
         err = msp_set_population_configuration(self->sim, j,
-                initial_size, growth_rate);
+                initial_size, growth_rate, (bool) initially_active);
         if (err != 0) {
             handle_input_error("population configuration", err);
             goto out;
@@ -1280,6 +1285,70 @@ out:
 }
 
 static int
+Simulator_parse_admixture(Simulator *self, double time, PyObject *py_event)
+{
+    int ret = -1;
+    PyObject *value;
+    PyArrayObject *ancestral_array = NULL;
+    PyArrayObject *proportions_array = NULL;
+    int err, derived;
+    npy_intp *dims, N;
+
+    value = get_dict_value(py_event, "ancestral");
+    if (value == NULL) {
+        goto out;
+    }
+    ancestral_array = (PyArrayObject *) PyArray_FROMANY(
+            value, NPY_INT32, 1, 1, NPY_ARRAY_IN_ARRAY);
+    if (ancestral_array == NULL) {
+        goto out;
+    }
+    dims = PyArray_DIMS(ancestral_array);
+    if (dims[0] == 0) {
+        PyErr_SetString(PyExc_ValueError,
+                "Must provide at least one ancestral population");
+        goto out;
+    }
+    N = dims[0];
+
+    value = get_dict_value(py_event, "proportions");
+    if (value == NULL) {
+        goto out;
+    }
+    proportions_array = (PyArrayObject *) PyArray_FROMANY(
+            value, NPY_FLOAT64, 1, 1, NPY_ARRAY_IN_ARRAY);
+    if (proportions_array == NULL) {
+        goto out;
+    }
+    dims = PyArray_DIMS(proportions_array);
+    if (dims[0] != N) {
+        PyErr_SetString(PyExc_ValueError,
+                "proportions must be same size as ancestral");
+        goto out;
+    }
+
+    value = get_dict_number(py_event, "derived");
+    if (value == NULL) {
+        goto out;
+    }
+    derived = (int) PyLong_AsLong(value);
+
+    err = msp_add_admixture(self->sim, time, derived,
+            (size_t) dims[0],
+            PyArray_DATA(ancestral_array),
+            PyArray_DATA(proportions_array));
+    if (err != 0) {
+        handle_input_error("population split", err);
+        goto out;
+    }
+    ret = 0;
+out:
+    Py_XDECREF(ancestral_array);
+    Py_XDECREF(proportions_array);
+    return ret;
+}
+
+static int
 Simulator_parse_symmetric_migration_rate_change(Simulator *self,
         double time, PyObject *py_event)
 {
@@ -1375,14 +1444,15 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
            strength;
     int err, population_id, source, destination;
     int is_population_parameter_change, is_migration_rate_change, is_mass_migration,
-        is_population_split, is_symmetric_migration_rate_change, is_simple_bottleneck,
-        is_instantaneous_bottleneck, is_census_event;
+        is_population_split, is_admixture, is_symmetric_migration_rate_change,
+        is_simple_bottleneck, is_instantaneous_bottleneck, is_census_event;
     PyObject *item, *value, *type;
     PyObject *population_parameter_change_s = NULL;
     PyObject *migration_rate_change_s = NULL;
     PyObject *symmetric_migration_rate_change_s = NULL;
     PyObject *mass_migration_s = NULL;
     PyObject *population_split_s = NULL;
+    PyObject *admixture_s = NULL;
     PyObject *simple_bottleneck_s = NULL;
     PyObject *instantaneous_bottleneck_s = NULL;
     PyObject *census_event_s = NULL;
@@ -1411,6 +1481,10 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     }
     population_split_s = Py_BuildValue("s", "population_split");
     if (population_split_s == NULL) {
+        goto out;
+    }
+    admixture_s = Py_BuildValue("s", "admixture");
+    if (admixture_s == NULL) {
         goto out;
     }
     simple_bottleneck_s = Py_BuildValue("s", "simple_bottleneck");
@@ -1480,6 +1554,10 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
         is_population_split = PyObject_RichCompareBool(type, population_split_s,
                 Py_EQ);
         if (is_population_split == -1) {
+            goto out;
+        }
+        is_admixture = PyObject_RichCompareBool(type, admixture_s, Py_EQ);
+        if (is_admixture == -1) {
             goto out;
         }
         is_simple_bottleneck = PyObject_RichCompareBool(
@@ -1563,6 +1641,10 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             if (Simulator_parse_population_split(self, time, item) != 0) {
                 goto out;
             }
+        } else if (is_admixture) {
+            if (Simulator_parse_admixture(self, time, item) != 0) {
+                goto out;
+            }
         } else if (is_symmetric_migration_rate_change) {
             if (Simulator_parse_symmetric_migration_rate_change(self, time, item) != 0) {
                 goto out;
@@ -1613,6 +1695,7 @@ out:
     Py_XDECREF(symmetric_migration_rate_change_s);
     Py_XDECREF(mass_migration_s);
     Py_XDECREF(population_split_s);
+    Py_XDECREF(admixture_s);
     Py_XDECREF(simple_bottleneck_s);
     Py_XDECREF(instantaneous_bottleneck_s);
     Py_XDECREF(initial_size_s);
@@ -2472,8 +2555,8 @@ Simulator_get_population_configuration(Simulator *self, void *closure)
     PyObject *d = NULL;
     size_t j = 0;
     size_t num_populations;
-    int sim_ret = 0;
     double initial_size, growth_rate;
+    int state;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -2484,15 +2567,12 @@ Simulator_get_population_configuration(Simulator *self, void *closure)
         goto out;
     }
     for (j = 0; j < num_populations; j++) {
-        sim_ret = msp_get_population_configuration(self->sim, j,
-            &initial_size, &growth_rate);
-        if (sim_ret != 0) {
-            handle_library_error(sim_ret);
-            goto out;
-        }
-        d = Py_BuildValue("{s:d,s:d}",
+        msp_get_population_configuration(self->sim, j,
+            &initial_size, &growth_rate, &state);
+        d = Py_BuildValue("{s:d,s:d,s:i}",
                "initial_size", initial_size,
-               "growth_rate", growth_rate);
+               "growth_rate", growth_rate,
+               "state", state);
         if (d == NULL) {
             goto out;
         }

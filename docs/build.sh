@@ -10,8 +10,10 @@ REPORTDIR=_build/html/reports
 jupyter-book build -W --keep-going .
 RETVAL=$?
 if [ $RETVAL -ne 0 ]; then
-    echo "Error occured; showing saved reports"
-    cat $REPORTDIR/*
+    if [ -e $REPORTDIR ]; then
+      echo "Error occured; showing saved reports"
+      cat $REPORTDIR/*
+    fi
 else
     # Clear out any old reports
     rm -f $REPORTDIR/*

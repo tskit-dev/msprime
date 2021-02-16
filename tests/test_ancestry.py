@@ -653,7 +653,7 @@ class TestParseSimAncestry:
         demography = msprime.Demography.stepping_stone_model([1] * 5, 0.1)
         samples = {0: 2}
         sim = ancestry._parse_sim_ancestry(samples, demography=demography)
-        assert sim.demography is demography
+        assert sim.demography is not demography
         assert sim.num_populations == demography.num_populations
         assert np.array_equal(sim.migration_matrix, demography.migration_matrix)
         # Numeric samples fail here as we have more than 1 population
@@ -854,6 +854,7 @@ class TestSimAncestrySamples:
         assert np.all(tables.nodes.population[:4] == 0)
 
     def verify_samples_map(self, samples, demography, ploidy):
+        demography = demography.validate()
         sim = ancestry._parse_sim_ancestry(
             samples=samples, demography=demography, ploidy=ploidy
         )

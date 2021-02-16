@@ -514,6 +514,7 @@ msp_alloc_populations(msp_t *self)
         self->initial_populations[j].growth_rate = 0.0;
         self->initial_populations[j].initial_size = 1.0;
         self->initial_populations[j].start_time = 0.0;
+        self->initial_populations[j].state = MSP_POP_STATE_ACTIVE;
     }
 out:
     return ret;
@@ -559,8 +560,8 @@ out:
 }
 
 int
-msp_set_population_configuration(
-    msp_t *self, int population_id, double initial_size, double growth_rate)
+msp_set_population_configuration(msp_t *self, int population_id, double initial_size,
+    double growth_rate, bool initially_active)
 {
     int ret = MSP_ERR_BAD_POPULATION_CONFIGURATION;
 
@@ -574,6 +575,8 @@ msp_set_population_configuration(
     }
     self->initial_populations[population_id].initial_size = initial_size;
     self->initial_populations[population_id].growth_rate = growth_rate;
+    self->initial_populations[population_id].state
+        = initially_active ? MSP_POP_STATE_ACTIVE : MSP_POP_STATE_INACTIVE;
     ret = 0;
 out:
     return ret;
@@ -1626,6 +1629,7 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "]\n");
     for (j = 0; j < self->num_populations; j++) {
         fprintf(out, "pop[%d]:\n", (int) j);
+        fprintf(out, "\tstate        = %d\n", self->populations[j].state);
         fprintf(out, "\tstart_time   = %.14g\n", self->populations[j].start_time);
         fprintf(out, "\tinitial_size = %.14g\n", self->populations[j].initial_size);
         fprintf(out, "\tgrowth_rate  = %.14g\n", self->populations[j].growth_rate);
@@ -1858,6 +1862,11 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
     int ret = 0;
     segment_t *ind, *x, *y, *new_ind;
     double recomb_mass, gc_mass;
+
+    if (self->populations[dest_pop].state != MSP_POP_STATE_ACTIVE) {
+        ret = MSP_ERR_POPULATION_INACTIVE_MOVE;
+        goto out;
+    }
 
     ind = (segment_t *) node->item;
     avl_unlink_node(source, node);
@@ -3418,9 +3427,15 @@ msp_insert_sample(msp_t *self, tsk_id_t node)
 {
     int ret = 0;
     segment_t *root_seg;
+    population_t pop;
 
     root_seg = self->root_segments[node];
-    if (self->populations[root_seg->population].initial_size == 0) {
+    pop = self->populations[root_seg->population];
+    if (pop.state != MSP_POP_STATE_ACTIVE) {
+        ret = MSP_ERR_POPULATION_INACTIVE_SAMPLE;
+        goto out;
+    }
+    if (pop.initial_size == 0) {
         ret = MSP_ERR_BAD_SAMPLES;
         goto out;
     }
@@ -3642,10 +3657,11 @@ msp_reset(msp_t *self)
     for (population_id = 0; population_id < (population_id_t) N; population_id++) {
         pop = self->populations + population_id;
         /* Set the initial population parameters */
-        initial_pop = self->initial_populations + population_id;
+        initial_pop = &self->initial_populations[population_id];
         pop->growth_rate = initial_pop->growth_rate;
         pop->initial_size = initial_pop->initial_size;
         pop->start_time = self->time;
+        pop->state = initial_pop->state;
     }
     /* Reset the tables to their correct position for replication */
     ret = tsk_table_collection_truncate(self->tables, &self->input_position);
@@ -3713,9 +3729,14 @@ msp_initialise_simulation_state(msp_t *self)
             min_root_time = GSL_MIN(node_time[root], min_root_time);
         }
     }
-    /* Make sure that the start-time is no less than the time of the
-     * youngest root */
-    self->start_time = GSL_MAX(self->start_time, min_root_time);
+    if (self->input_position.nodes == 0) {
+        /* When we're initialising for debugging we provide no samples. */
+        self->start_time = 0;
+    } else {
+        /* Make sure that the start-time is no less than the time of the
+         * youngest root */
+        self->start_time = GSL_MAX(self->start_time, min_root_time);
+    }
 
     /* Anything that has min_root_time is an initial sample, otherwise we
      * register them as sampling events */
@@ -5467,8 +5488,8 @@ msp_get_num_migration_events(msp_t *self, size_t *num_migration_events)
 }
 
 int MSP_WARN_UNUSED
-msp_get_population_configuration(
-    msp_t *self, size_t population_id, double *initial_size, double *growth_rate)
+msp_get_population_configuration(msp_t *self, size_t population_id, double *initial_size,
+    double *growth_rate, int *state)
 {
     int ret = 0;
     population_t *pop;
@@ -5480,6 +5501,7 @@ msp_get_population_configuration(
     pop = &self->populations[population_id];
     *initial_size = pop->initial_size;
     *growth_rate = pop->growth_rate;
+    *state = pop->state;
 out:
     return ret;
 }
@@ -5823,6 +5845,43 @@ out:
     return ret;
 }
 
+static void
+msp_deactivate_population(msp_t *self, int population_id)
+{
+    population_t *pop = &self->populations[population_id];
+
+    tsk_bug_assert(pop->state == MSP_POP_STATE_ACTIVE);
+    tsk_bug_assert(msp_get_num_population_ancestors(self, population_id) == 0);
+    pop->state = MSP_POP_STATE_PREVIOUSLY_ACTIVE;
+    /* Set these to zero for tidyness sake */
+    pop->initial_size = 0;
+    pop->growth_rate = 0;
+}
+
+static int
+msp_activate_population(msp_t *self, int population_id)
+{
+    int ret = 0;
+    population_t *pop = &self->populations[population_id];
+
+    /* It's not currently possible to do this because we're only calling
+     * msp_activate_population from population split, where we only activate
+     * if it's not already active. But, leaving this here as a reminder
+     * in case we ever do call activate from somewhere else.
+     */
+    /* if (pop->state == MSP_POP_STATE_ACTIVE) { */
+    /*     ret = MSP_ERR_POPULATION_CURRENTLY_ACTIVE; */
+    /*     goto out; */
+    /* } */
+    if (pop->state == MSP_POP_STATE_PREVIOUSLY_ACTIVE) {
+        ret = MSP_ERR_POPULATION_PREVIOUSLY_ACTIVE;
+        goto out;
+    }
+    pop->state = MSP_POP_STATE_ACTIVE;
+out:
+    return ret;
+}
+
 /* Population split */
 
 static int
@@ -5833,14 +5892,28 @@ msp_population_split(msp_t *self, demographic_event_t *event)
     population_id_t ancestral = event->params.population_split.ancestral;
     size_t num_populations = event->params.population_split.num_derived;
     demographic_event_t mass_migration;
+    population_t *pop = &self->populations[ancestral];
     size_t j, k;
     size_t N = self->num_populations;
+
+    if (pop->state != MSP_POP_STATE_ACTIVE) {
+        ret = msp_activate_population(self, ancestral);
+        if (ret != 0) {
+            goto out;
+        }
+    }
 
     /* The mass migration moves lineages into the ancestral population */
     mass_migration.params.mass_migration.destination = ancestral;
     mass_migration.params.mass_migration.proportion = 1.0;
 
     for (j = 0; j < num_populations; j++) {
+        pop = &self->populations[derived[j]];
+        if (pop->state != MSP_POP_STATE_ACTIVE) {
+            ret = MSP_ERR_SPLIT_DERIVED_NOT_ACTIVE;
+            goto out;
+        }
+
         /* Turn off all migration to and from derived[j] */
         for (k = 0; k < self->num_populations; k++) {
             self->migration_matrix[((size_t) derived[j] * N) + k] = 0;
@@ -5852,6 +5925,7 @@ msp_population_split(msp_t *self, demographic_event_t *event)
         if (ret != 0) {
             goto out;
         }
+        msp_deactivate_population(self, derived[j]);
     }
 out:
     return ret;
@@ -5874,6 +5948,48 @@ msp_print_population_split(
     fprintf(out, "] -> %d \n", event->params.population_split.ancestral);
 }
 
+static int MSP_WARN_UNUSED
+msp_check_event_populations(
+    msp_t *self, size_t num_populations, int32_t *populations, int different_population)
+{
+    int ret = 0;
+    int N = (int) self->num_populations;
+    size_t j;
+    bool *population_used = calloc(self->num_populations, sizeof(*population_used));
+
+    if (population_used == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+
+    if (num_populations >= MSP_MAX_EVENT_POPULATIONS) {
+        ret = MSP_ERR_TOO_MANY_EVENT_POPULATIONS;
+        goto out;
+    }
+    if (different_population < 0 || different_population >= N) {
+        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
+        goto out;
+    }
+    for (j = 0; j < num_populations; j++) {
+        if (populations[j] < 0 || populations[j] >= N) {
+            ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
+            goto out;
+        }
+        if (populations[j] == different_population) {
+            ret = MSP_ERR_SOURCE_DEST_EQUAL;
+            goto out;
+        }
+        if (population_used[populations[j]]) {
+            ret = MSP_ERR_DUPLICATE_POPULATION;
+            goto out;
+        }
+        population_used[populations[j]] = true;
+    }
+out:
+    msp_safe_free(population_used);
+    return ret;
+}
+
 /* Adds a population split event.
  * Note: we use the int32_t type here so we can be sure we're passing in
  * arrays of the correct type from numpy where we have to specify the size.
@@ -5885,36 +6001,10 @@ msp_add_population_split(
     int ret = 0;
     size_t j;
     demographic_event_t *de;
-    int N = (int) self->num_populations;
-    bool *population_used = calloc(self->num_populations, sizeof(*population_used));
 
-    if (population_used == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
+    ret = msp_check_event_populations(self, num_derived, derived, ancestral);
+    if (ret != 0) {
         goto out;
-    }
-
-    if (num_derived >= MSP_MAX_SPLIT_POPULATIONS) {
-        ret = MSP_ERR_TOO_MANY_SPLIT_POPULATIONS;
-        goto out;
-    }
-    if (ancestral < 0 || ancestral >= N) {
-        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
-        goto out;
-    }
-    for (j = 0; j < num_derived; j++) {
-        if (derived[j] < 0 || derived[j] >= N) {
-            ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
-            goto out;
-        }
-        if (derived[j] == ancestral) {
-            ret = MSP_ERR_SOURCE_DEST_EQUAL;
-            goto out;
-        }
-        if (population_used[derived[j]]) {
-            ret = MSP_ERR_DUPLICATE_POPULATION;
-            goto out;
-        }
-        population_used[derived[j]] = true;
     }
 
     ret = msp_add_demographic_event(self, time, &de);
@@ -5930,7 +6020,117 @@ msp_add_population_split(
     de->print_state = msp_print_population_split;
     ret = 0;
 out:
-    msp_safe_free(population_used);
+    return ret;
+}
+
+/* Admixture */
+
+static int
+msp_admixture(msp_t *self, demographic_event_t *event)
+{
+    int ret = 0;
+    population_id_t *ancestral = event->params.admixture.ancestral;
+    double *proportion = event->params.admixture.proportion;
+    population_id_t derived = event->params.admixture.derived;
+    population_t *pop;
+    size_t num_ancestral = event->params.admixture.num_ancestral;
+    size_t index;
+    avl_tree_t *source;
+    avl_node_t *node, *next;
+    double u;
+    label_id_t label = 0; /* For now only support label 0 */
+
+    pop = &self->populations[derived];
+    if (pop->state != MSP_POP_STATE_ACTIVE) {
+        ret = MSP_ERR_ADMIX_DERIVED_NOT_ACTIVE;
+        goto out;
+    }
+    for (index = 0; index < num_ancestral; index++) {
+        pop = &self->populations[ancestral[index]];
+        if (pop->state != MSP_POP_STATE_ACTIVE) {
+            ret = MSP_ERR_ADMIX_ANCESTRAL_NOT_ACTIVE;
+            goto out;
+        }
+    }
+
+    /*
+     * Move lineages from derived to ancestral[j] with probability
+     * proportion[j].
+     */
+    source = &self->populations[derived].ancestors[label];
+    node = source->head;
+    while (node != NULL) {
+        next = node->next;
+        u = gsl_rng_uniform(self->rng);
+        index = probability_list_select(u, num_ancestral, proportion);
+        ret = msp_move_individual(self, node, source, ancestral[index], label);
+        if (ret != 0) {
+            goto out;
+        }
+        node = next;
+    }
+    msp_deactivate_population(self, derived);
+out:
+    return ret;
+}
+
+static void
+msp_print_admixture(msp_t *MSP_UNUSED(self), demographic_event_t *event, FILE *out)
+{
+    size_t num_populations = event->params.admixture.num_ancestral;
+    size_t j;
+
+    fprintf(out, "%f\tadmixture: %d -> [", event->time, event->params.admixture.derived);
+    for (j = 0; j < num_populations; j++) {
+        fprintf(out, "(%d, p=%f)", event->params.admixture.ancestral[j],
+            event->params.admixture.proportion[j]);
+        if (j < num_populations - 1) {
+            fprintf(out, ", ");
+        }
+    }
+    fprintf(out, "]\n");
+}
+
+/* Adds an admixture event.
+ * Note: we use the int32_t type here so we can be sure we're passing in
+ * arrays of the correct type from numpy where we have to specify the size.
+ */
+int MSP_WARN_UNUSED
+msp_add_admixture(msp_t *self, double time, int derived, size_t num_ancestral,
+    int32_t *ancestral, double *proportion)
+{
+    int ret = 0;
+    size_t j;
+    demographic_event_t *de;
+
+    ret = msp_check_event_populations(self, num_ancestral, ancestral, derived);
+    if (ret != 0) {
+        goto out;
+    }
+
+    for (j = 0; j < num_ancestral; j++) {
+        /* We don't bother checking if the proportions sum to 1 as this
+         * is better done at higher levels, and the code is fairly robust
+         * to this type of misspecification. */
+        if (proportion[j] < 0 || proportion[j] > 1.0) {
+            ret = MSP_ERR_BAD_PROPORTION;
+            goto out;
+        }
+    }
+
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
+        goto out;
+    }
+    for (j = 0; j < num_ancestral; j++) {
+        de->params.admixture.ancestral[j] = ancestral[j];
+        de->params.admixture.proportion[j] = proportion[j];
+    }
+    de->params.admixture.derived = derived;
+    de->params.admixture.num_ancestral = num_ancestral;
+    de->change_state = msp_admixture;
+    de->print_state = msp_print_admixture;
+out:
     return ret;
 }
 

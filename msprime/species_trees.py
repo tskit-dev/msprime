@@ -144,26 +144,23 @@ def parse_species_tree(
     # Each divergence event (node in the tree) corresponds to an ancestral
     # population, and mass migration events with proportion 1 move all lineages
     # from the child populations into this new populationl
-    populations = []
-    events = []
+
     population_id_map = {}
+    demography = demog.Demography()
 
     def add_population(node):
-        population_id = len(populations)
-        name = f"pop_{population_id}"
+        name = None
         if node.name is not None:
             stripped = node.name.strip()
             if len(stripped) > 0:
                 name = stripped
-        population_id_map[node] = name
-        populations.append(
-            demog.Population(
-                initial_size=initial_size[name],
-                growth_rate=growth_rate[name],
-                name=name,
-            )
+        population = demography.add_population(
+            initial_size=initial_size[name],
+            growth_rate=growth_rate[name],
+            name=name,
         )
-        return name
+        population_id_map[node] = population.name
+        return population.name
 
     # Add in the leaf populations first so that they get IDs 0..n - 1
     for node in root.walk():
@@ -176,12 +173,10 @@ def parse_species_tree(
         if len(node.descendants) > 0:
             population_id = add_population(node)
             child_pops = [population_id_map[child] for child in node.descendants]
-            events.append(
-                demog.PopulationSplit(
-                    time=node.time, derived=child_pops, ancestral=population_id
-                )
+            demography.add_population_split(
+                time=node.time, derived=child_pops, ancestral=population_id
             )
-    demography = demog.Demography(populations=populations, events=events)
+    demography.sort_events()
     demography.validate()
     return demography
 
@@ -195,8 +190,7 @@ def process_starbeast_tree(
     demographic_events.
     """
     root = parse_newick(tree_string, generations_per_branch_length_unit)
-    populations = []
-    events = []
+    demography = demog.Demography()
     population_size_map = {}
     population_id_map = {}
 
@@ -205,17 +199,17 @@ def process_starbeast_tree(
     # and details of the extended newick annotations.
 
     def add_population(node):
-        population_id = len(populations)
-        name = f"pop_{population_id}"
+        name = None
         newick_id = node.name.strip().split("[")[0]
         if len(newick_id) > 0:
             name = species_name_map[newick_id]
-        # Use the name for references to make things easier to debug.
-        population_id_map[node] = name
-        populations.append(
-            demog.Population(initial_size=population_size_map[node], name=name)
+
+        population = demography.add_population(
+            initial_size=population_size_map[node], name=name
         )
-        return name
+
+        population_id_map[node] = population.name
+        return population.name
 
     for node in root.walk():
         if node.name is None:
@@ -232,14 +226,12 @@ def process_starbeast_tree(
     for node in root.walk("postorder"):
         if len(node.descendants) > 0:
             population_id = add_population(node)
-            events.append(
-                demog.PopulationSplit(
-                    time=node.time,
-                    ancestral=population_id,
-                    derived=[population_id_map[child] for child in node.descendants],
-                )
+            demography.add_population_split(
+                time=node.time,
+                ancestral=population_id,
+                derived=[population_id_map[child] for child in node.descendants],
             )
-    demography = demog.Demography(populations=populations, events=events)
+    demography.sort_events()
     demography.validate()
     return demography
 

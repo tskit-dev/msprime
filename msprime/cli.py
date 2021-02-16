@@ -514,7 +514,7 @@ def create_simulation_runner(parser, arg_list):
         for row in migration_matrix:
             row.append(0)
         migration_matrix.append([0 for j in range(num_populations)])
-        demography.add_population(msprime.Population(initial_size=1))
+        demography.add_population(initial_size=1)
         num_samples.append(0)
 
     # Add the demographic events
@@ -619,9 +619,9 @@ def create_simulation_runner(parser, arg_list):
     time_sorted = sorted(demographic_events, key=lambda x: x[1].time)
     if demographic_events != time_sorted:
         parser.error("Demographic events must be supplied in non-decreasing time order")
-
-    demography.events = [event for _, event in demographic_events]
-    demography.migration_matrix = migration_matrix
+    for _, event in demographic_events:
+        demography.add_event(event)
+    demography.migration_matrix[:] = migration_matrix
 
     # Adjust the population sizes so that the timescales agree. In principle
     # we could correct this with a ploidy value=0.5, but what we have here
@@ -630,9 +630,8 @@ def create_simulation_runner(parser, arg_list):
         if isinstance(msp_event, msprime.PopulationParametersChange):
             if msp_event.initial_size is not None:
                 msp_event.initial_size /= 2
-    for j, pop in enumerate(demography.populations):
+    for pop in demography.populations:
         pop.initial_size /= 2
-        pop.name = f"pop_{j}"
 
     runner = SimulationRunner(
         num_samples,
