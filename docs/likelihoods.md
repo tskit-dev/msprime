@@ -28,10 +28,14 @@ under the standard ancestral recombination graph (ARG); and that of a pattern
 of mutations given a tree sequence and per-site, per-generation mutation
 probability {math}`\mu` under the infinite sites model.
 
-These functions are provided within `msprime` because they are specific to
-the ARG and infinite sites models. More generic analysis tools for
-arbitrary tree sequences are provided within
-[tskit](https://tskit.dev/tskit/docs/stable/).
+:::{note}
+Generic analysis tools for arbitrary tree sequences, allowing efficient calculation
+of genetic diversity, allele frequency spectra, F statistics, and so on, are
+provided within [tskit](https://tskit.dev/tskit/docs/stable/) and described in the
+[statistics documentation](https://tskit.dev/tskit/docs/stable/stats.html).
+The likelihood functions below are provided by `msprime` because they are specific
+to the ARG and infinite sites models. 
+:::
 
 :::{warning}
 Evaluating these log likelihoods requires knowledge of a whole ARG,
