@@ -12,3 +12,4 @@ seaborn
 tqdm
 argparse
 daiquiri
+pyslim
