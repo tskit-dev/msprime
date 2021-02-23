@@ -16,6 +16,7 @@ kernelspec:
 
     import msprime
     from IPython.display import SVG
+    import numpy as np
     # Doing this to make the notebook outputs deterministic. 
     # DO NOT DO THIS IN YOUR CODE
     msprime.core.set_seed_rng_seed(42)
@@ -120,7 +121,7 @@ normal distribution centered at 1.
 
 ```{code-cell}
 ts = msprime.sim_ancestry(10, sequence_length=10, random_seed=1)
-pos = [0, 2, 5, 8]
+pos = [0, 2, 5, 10]
 rate = [1, 2, 0.5]
 ratemap = msprime.RateMap(pos, rate)
 mts = msprime.sim_mutations(ts, rate=ratemap, random_seed=1)
