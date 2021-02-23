@@ -37,55 +37,44 @@ any outstanding TODOs before opening issues.
 
 ## Quick reference
 
-```{eval-rst}
-.. todo:: 
-  These summaries need work. We can say more then "amino acids" e.g. for PAM
-```
 
 {func}`.sim_mutations`
-: Simulate mutations on ancestral topology  
+: Simulate mutations on ancestral topology 
 
 **Models**
 
 {class}`.BinaryMutationModel`             
-: 0/1 flip-flopping alleles                 
+: Basic binary mutation model with two flip-flopping alleles: "0" and "1".
 
 {class}`.JC69MutationModel`               
-: Jukes & Cantor '69, nucleotides           
+: Jukes & Cantor model '69 with equal probability of transitions between nucleotides
 
 {class}`.HKYMutationModel`                
-: Hasegawa, Kishino & Yano '85, nucleotides 
+: Hasegawa, Kishino & Yano model '85, different probabilities for transitions and transversions
 
 {class}`.F84MutationModel`                
-: Felsenstein '84, nucleotides              
+: Felsenstein model '84, different probabilities for transitions and transversions
 
 {class}`.GTRMutationModel`                
-: general time-reversible, nucleotides      
+: The Generalised Time-Reversible nucleotide mutation model, a general parameterization of a time-reversible mutation process
 
 {class}`.BLOSUM62MutationModel` 
-: amino acids                               
+: The BLOSUM62 model of time-reversible amino acid mutation
 
 {class}`.PAMMutationModel`              
-: amino acids                               
+: The PAM model of time-reversible amino acid mutation
 
 {class}`.MatrixMutationModel`             
-: general finite-state mutations            
+: Superclass of the specific mutation models with a finite set of states
 
 {class}`.InfiniteAllelesMutationModel`    
-: a generic infinite-alleles model          
+: A generic infinite-alleles mutation model          
 
 {class}`.SLiMMutationModel`               
-: SLiM compatible mutations                 
+: An infinite-alleles model of mutation producing SLiM-style mutations
 
 ---
 
-```{eval-rst}
-
-.. todo:: 
-    This has been copied directly from the api.rst file. Probably
-    needs some refactoring to use the newer docs arrangements.
-    Also all the labels need updating.
-```
 
 We can add mutations to a tree sequence simulated with {func}`.sim_ancestry` by
 using {func}`.sim_mutations`. We can specify a mutation rate or ratemap
@@ -125,50 +114,126 @@ mts.num_mutations
 ```
 
 It's also possible to provide a RateMap {class}`.RateMap` which specifies variable
-mutation rates across the genome.
+mutation rates across the genome. In this example, we choose positions uniformly along
+the length of the simulated sequence and randomly select five mutation rates from a
+normal distribution centered at 1. 
+
+```{code-cell}
+ts = msprime.sim_ancestry(10, sequence_length=10, random_seed=1)
+pos = [0, 2, 5, 8]
+rate = [1, 2, 0.5]
+ratemap = msprime.RateMap(pos, rate)
+mts = msprime.sim_mutations(ts, rate=ratemap, random_seed=1)
+```
 
 Be sure that the final position of your RateMap {class}`.RateMap` is the same as the
 `sequence_length` of the tree sequence you're adding mutations to!
-
 
 (sec_mutations_randomness)=
 
 ## Controlling randomness
 
-```{eval-rst}
-.. todo:: Documentation on the ``seed` parameter with examples. Can
-    link to the randomness section in ancstry.rst. Alternatively we
-    don't bother with this section and just link to the ancestry.rst
-    one from the ``seed`` parameter to mutate.
+As described in Section {ref}`sec_mutations_matrix_mutation_theory`, ``msprime`` uses
+pseudorandom number generation from the GNU science library for high-quality random
+number generation. Passing an integer to the ``random_seed`` parameter makes the output
+of {func}`.sim_mutations` deterministic.
+
+```{code-cell}
+mts_1 = msprime.sim_mutations(ts, rate=1, random_seed=7)
+mts_2 = msprime.sim_mutations(ts, rate=1, random_seed=7)
+np.array_equal(mts_1.tables.sites.position, mts_1.tables.sites.position)
 ```
 
 (sec_mutations_discrete)=
 
 ## Discrete or continuous
 
-```{eval-rst}
-.. todo:: Examples of using the ``discrete`` argument.
+As in {func}`.sim_ancestry` (see Section {ref}`sec_ancestry_discrete_genome`),
+the `discrete_genome` parameter controls whether to place mutations at discrete, integer
+coordinates or continously at floating point positions.
+`discrete_genome=True` by default:
+
+```{code-cell}
+mts = msprime.sim_mutations(ts, rate=1)
+mts.tables.sites.position
 ```
+
+Specifying `discrete_genome=False` places mutations at floating point positions
+continously along the genome.
+
+```{code-cell}
+mts = msprime.sim_mutations(ts, rate=1, random_seed=7, discrete_genome=False)
+mts.tables.sites.position
+```
+
+Note that using `discrete_genome=False` specifies an infinite sites model.
+
 
 (sec_mutations_time_span)=
 
 ## Restricting time span
 
-```{eval-rst}
-.. todo:: Docs and examples for the start_time and end_time params.
+The time range where mutations can appear can be restricted using the `start_time`
+and `end_time` parameters. For instance, the following only allows mutations to occur
+earlier than time ``1`` in the tree:
 
+```{code-cell}
+ts = msprime.sim_ancestry(2, random_seed=1)
+mts = msprime.sim_mutations(ts, rate=2, start_time=1, random_seed=1)
+mts.tables.mutations.time
 ```
+
+Note, however, that the child node of the edge where the mutation occured can be younger
+than `start_time`.
+
+```{code-cell}
+mts.tables.nodes.time[mts.tables.mutations.node]
+```
+
+It is also possible to use multiple calls of `{func}`.sim_mutations` with `start_time`
+and `end_time` specified to simulate differing mutation rates at different
+periods of time. For instance, the following code simulates mutations older than time
+``1`` at a low rate and a more recent period with a higher rate. 
+
+```{code-cell}
+ts = msprime.sim_ancestry(2, random_seed=1)
+mts = msprime.sim_mutations(ts, rate=0.1, start_time=1, random_seed=1)
+print(mts.tables.mutations.time)
+mts = msprime.sim_mutations(mts, rate=5, end_time=1, random_seed=1)
+print(mts.tables.mutations.time)
+```
+
+As explained in Section {ref}`sec_mutations_existing`, reversing the order of these two
+lines will result in an error, as older mutations must be added first.
 
 (sec_mutations_existing)=
 
 ## Existing mutations
 
-```{eval-rst}
-.. todo:: Docs and examples for what to do when you're adding mutations
-    to a ts that already has mutations. Like what the
-    ``kept_mutations_before_end_time`` parameter.
+If adding mutations to a tree sequence which already contains them, the `keep` parameter
+controls whether existing mutations are kept or discarded (the default is `keep=True`).
+For instance, in final code block in {ref}`sec_mutations_time_span`, mutations were
+progressively added to a simulated tree sequence.
 
+While it is simple to add younger mutations to a tree sequence which already contains
+mutations, adding a mutation ancestral to an existing mutation will result in
+an error unless `add_ancestral=True` is specified, as in the following code block:
+```{code-cell}
+ts = msprime.sim_ancestry(5, random_seed=1)
+mts = msprime.sim_mutations(ts, rate=1, random_seed=1)
+mts = msprime.sim_mutations(mts, rate=0.1, random_seed=5, add_ancestral=True)
 ```
+
+Note that specifying `add_ancestral=True` does not guarantee that mutations
+can be added to the tree sequence. If an added mutation causes a "silent transitions"
+or a mutation which would cause a nucleotide to transition to itself, such as "A -> A",
+an error is thrown as these transitions are not permitted in `tskit`.
+
+Even if no silent transitions occur, `add_ancestral` should be specified with care as
+adding ancestral mutations can be problematic. For instance, if mutations are added to
+a tree sequence under two different models, impossible transition may result. See
+`{func}`.sim_mutations` for further explanation.
+
 
 (sec_mutations_models)=
 
@@ -180,16 +245,16 @@ string describing the model (e.g. `model="jc69"`) or an instance of a
 model definition class (e.g `model=msprime.JC69MutationModel()`).
 Here are the available models; they are documented in more detail below.
 
-- {class}`.BinaryMutationModel`: 0/1 flip-flopping alleles
-- {class}`.JC69MutationModel`: Jukes & Cantor '69, nucleotides
-- {class}`.HKYMutationModel`: Hasegawa, Kishino & Yano '85, nucleotides
-- {class}`.F84MutationModel`: Felsenstein '84, nucleotides
-- {class}`.GTRMutationModel`: general time-reversible, nucleotides
-- {class}`.BLOSUM62MutationModel`: amino acids
-- {class}`.PAMMutationModel`: amino acids
-- {class}`.MatrixMutationModel`: general finite-state mutations
-- {class}`.InfiniteAllelesMutationModel`: a generic infinite-alleles model
-- {class}`.SLiMMutationModel`: infinite-alleles model generating SLiM mutations
+- {class}`.BinaryMutationModel`: Basic binary mutation model with two flip-flopping alleles: "0" and "1".
+- {class}`.JC69MutationModel`: Jukes & Cantor model '69 with equal probability of transitions between nucleotides
+- {class}`.HKYMutationModel`: Hasegawa, Kishino & Yano model '85, different probabilities for transitions and transversions
+- {class}`.F84MutationModel`: Felsenstein model '84, different probabilities for transitions and transversions
+- {class}`.GTRMutationModel`: The Generalised Time-Reversible nucleotide mutation model, a general parameterization of a time-reversible mutation process
+- {class}`.BLOSUM62MutationModel`: The BLOSUM62 model of time-reversible amino acid mutation
+- {class}`.PAMMutationModel`: The PAM model of time-reversible amino acid mutation
+- {class}`.MatrixMutationModel`: Superclass of the specific mutation models with a finite set of states
+- {class}`.InfiniteAllelesMutationModel`: A generic infinite-alleles mutation model
+- {class}`.SLiMMutationModel`: An infinite-alleles model of mutation producing SLiM-style mutations
 
 (sec_mutations_matrix_mutations_models)=
 
