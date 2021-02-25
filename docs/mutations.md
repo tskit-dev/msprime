@@ -110,7 +110,7 @@ overlay neutral mutations on this tree sequence.
 ## Controlling randomness
 
 ```{eval-rst}
-.. todo:: Documentation on the ``seed` parameter with examples. Can
+.. todo:: Documentation on the ``seed`` parameter with examples. Can
     link to the randomness section in ancstry.rst. Alternatively we
     don't bother with this section and just link to the ancestry.rst
     one from the ``seed`` parameter to mutate.
