@@ -534,11 +534,14 @@ class Demography:
     def _migration_rate_info(self, source, dest, rate):
         extra = None
         if source != dest:
+            source_name = self.populations[source].name
+            dest_name = self.populations[dest].name
             extra = (
                 "Backwards in time migration rate from population "
-                f"{self.populations[source].name} to {self.populations[dest].name} "
-                f"= {rate} per generation. "
-                "Equivalant to **IMPLEMENT ME** forwards in time"
+                f"{source_name} to {dest_name} = {rate} per generation. "
+                "Forwards in time, this is the expected number of migrants "
+                f"moving from {dest_name} to {source_name} "
+                f"per generation, divided by the size of {source_name}."
             )
         return core.TableEntry(f"{rate:.4g}", extra)
 
