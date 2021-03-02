@@ -499,19 +499,20 @@ class Demography:
         return self.add_event(CensusEvent(time))
 
     def _populations_table(self):
-        col_titles = [
-            "id",
-            "name",
-            "description",
-            "initial_size",
-            "growth_rate",
-            "sampling_time",
-            "extra_metadata",
+        cols = [
+            ("id", ""),
+            ("name", ""),
+            ("description", ""),
+            ("initial_size", ".1f"),
+            ("growth_rate", ".2f"),
+            ("sampling_time", ".2g"),
+            ("extra_metadata", ""),
         ]
         data = [
-            [f"{getattr(pop, attr)}" for attr in col_titles] for pop in self.populations
+            [f"{getattr(pop, attr):{fmt}}" for attr, fmt in cols]
+            for pop in self.populations
         ]
-        return col_titles, data
+        return [title for title, _ in cols], data
 
     def _populations_text(self):
         col_titles, data = self._populations_table()
@@ -605,11 +606,11 @@ class Demography:
     def _repr_html_(self):
         resolved = self.validate()
         return (
-            "<p>"
+            '<div style="margin-left:20px">'
             + resolved._populations_html()
             + resolved._migration_matrix_html()
             + resolved._events_html(self.events)
-            + "</p>"
+            + "</div>"
         )
 
     def __str__(self):
@@ -2738,21 +2739,19 @@ class DemographyDebugger:
         for epoch in self.epochs:
             if epoch.index > 0:
                 assert len(epoch.events) > 0
-                title = f"Events @ generation {epoch.start_time}"
+                title = f"Events @ generation {epoch.start_time:.3g}"
                 out += self.demography._events_html(epoch.events, title)
-                out += "</div>"
+                out += "</div></details>"
             else:
                 assert len(epoch.events) == 0
-            out += '<div class="msprime-epoch">'
-            out += f"<h3>{epoch._title_text()}</h3>"
+            title = epoch._title_text()
+            out += f'<details open="true"><summary>{title}</summary>'
+            # Indent the content div slightly
+            out += '<div style="margin-left:20px">'
             out += self._populations_html(epoch)
         out += "</div>"
-        return f"""<div>
-            <style scoped="">
-                .msprime-epoch:nth-child(odd) {{background: #f5f5f5;}}
-            </style>
-            {out}
-        </div>"""
+        out += "</details>"
+        return f"<div>{out}</div>"
 
     def print_history(self, output=sys.stdout):
         """

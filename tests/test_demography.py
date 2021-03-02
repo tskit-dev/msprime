@@ -1256,7 +1256,7 @@ class TestDemographyHtml(DebugOutputBase):
     def verify(self, demography):
         html = demography._repr_html_()
         root = xml.etree.ElementTree.fromstring(html)
-        assert root.tag == "p"
+        assert root.tag == "div"
         children = list(root)
         assert len(children) == 3
         for child in children:
@@ -1281,9 +1281,14 @@ class TestDemographyDebuggerHtml(DebugOutputBase):
         html = debugger._repr_html_()
         root = xml.etree.ElementTree.fromstring(html)
         assert root.tag == "div"
-        children = list(root)
-        assert len(children) - 1 == len(debugger.epochs)
-        # TODO add more tests when the output format is finalised.
+        root_children = list(root)
+        assert len(root_children) == len(debugger.epochs)
+        for details, epoch in zip(root_children, debugger.epochs):
+            assert details.tag == "details"
+            children = list(details)
+            assert children[0].tag == "summary"
+            assert children[1].tag == "div"
+            assert children[0].text == epoch._title_text()
 
 
 class TestDemographyText(DebugOutputBase):
@@ -1323,7 +1328,7 @@ class TestDemographyTextExamples:
         ║  ┌────────────────────────────────────────────────────────────────────────────────────────┐
         ║  │ id │name   │description  │initial_size  │ growth_rate │  sampling_time│extra_metadata  │
         ║  ├────────────────────────────────────────────────────────────────────────────────────────┤
-        ║  │ 0  │pop_0  │             │10.0          │     0.0     │              0│{}              │
+        ║  │ 0  │pop_0  │             │10.0          │    0.00     │              0│{}              │
         ║  └────────────────────────────────────────────────────────────────────────────────────────┘
         ╟  Migration Matrix
         ║  ┌───────────────┐
@@ -1351,8 +1356,8 @@ class TestDemographyTextExamples:
         ║  ┌────────────────────────────────────────────────────────────────────────────────────────┐
         ║  │ id │name   │description  │initial_size  │ growth_rate │  sampling_time│extra_metadata  │
         ║  ├────────────────────────────────────────────────────────────────────────────────────────┤
-        ║  │ 0  │pop_0  │             │10.0          │     1.0     │              0│{}              │
-        ║  │ 1  │pop_1  │             │20.0          │     2.0     │              0│{}              │
+        ║  │ 0  │pop_0  │             │10.0          │    1.00     │              0│{}              │
+        ║  │ 1  │pop_1  │             │20.0          │    2.00     │              0│{}              │
         ║  └────────────────────────────────────────────────────────────────────────────────────────┘
         ╟  Migration Matrix
         ║  ┌───────────────────────┐

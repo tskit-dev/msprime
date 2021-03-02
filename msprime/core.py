@@ -165,7 +165,7 @@ def html_table(
             .tskit-table tbody td {text-align: right;padding: 0.5em 0.5em;}
             .tskit-table tbody th {padding: 0.5em 0.5em;}
         </style>"""
-        f"<h4>{caption}</h4>"
+        f"<b>{caption}</b>"
         '<table border="1" class="tskit-table">'
         "<thead>"
         "<tr>" + header + "</tr>"
