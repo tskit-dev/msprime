@@ -1825,9 +1825,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
 
     def test_dtwf_vs_coalescent_2_pops_massmigration(self):
         demography = msprime.Demography.isolated_model([1000, 1000])
-        demography.events.append(
-            msprime.MassMigration(time=300, source=1, destination=0, proportion=1.0)
-        )
+        demography.events.add_mass_migration(source=1, destination=0, proportion=1.0)
         self._run(
             samples={0: 10, 1: 10},
             demography=demography,
@@ -1957,7 +1955,7 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
                 row[i] = 0
                 migration_matrix.append(row)
 
-        demography.migration_matrix = migration_matrix
+        demography.migration_matrix[:] = migration_matrix
 
         super()._run(
             samples={j: sample_size for j, sample_size in enumerate(sample_sizes)},
@@ -2130,7 +2128,7 @@ class DtwfVsSlim(Test):
                 row = [default_mig_rate] * num_pops
                 row[i] = 0
                 migration_matrix.append(row)
-        demography.migration_matrix = migration_matrix
+        demography.migration_matrix[:] = migration_matrix
 
         # SLiM rates are 'immigration' forwards in time, which matches
         # DTWF backwards-time 'emmigration'
@@ -2197,7 +2195,7 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
             migration_matrix.append(
                 [random.uniform(0.05, 0.25) * (j != i) for j in range(N)]
             )
-        demography.migration_matrix = migration_matrix
+        demography.migration_matrix[:] = migration_matrix
 
         # Add demographic events and some migration rate changes
         t_max = 1000
