@@ -993,13 +993,13 @@ def _parse_sim_ancestry(
 def sim_ancestry(
     samples=None,
     *,
+    demography=None,
     sequence_length=None,
     discrete_genome=None,
     recombination_rate=None,
     gene_conversion_rate=None,
     gene_conversion_tract_length=None,
     population_size=None,
-    demography=None,
     ploidy=None,
     model=None,
     initial_state=None,
@@ -1029,6 +1029,15 @@ def sim_ancestry(
         is usually associated with :math:`k` sample *nodes* (or genomes) when
         ``ploidy`` = :math:`k`. See :ref:`sec_ancestry_samples` for further details.
         Either ``samples`` or ``initial_state`` must be specified.
+    :param demography: The demographic model to simulate, describing the
+        extant and ancestral populations, their population sizes and growth
+        rates, their migration rates, and demographic events affecting the
+        populations over time. See the :ref:`sec_demography` section for
+        details on how to specify demographic models and
+        :ref:`sec_ancestry_samples` for details on how to specify the
+        populations that samples are drawn from. If not specified (or None) we
+        default to a single population with constant size 1
+        (see also the ``population_size`` parameter).
     :param int ploidy: The number of monoploid genomes per sample individual
         (Default=2). See :ref:`sec_ancestry_ploidy` for usage examples.
     :param float sequence_length: The length of the genome sequence to simulate.
