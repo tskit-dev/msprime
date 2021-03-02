@@ -1,5 +1,5 @@
 ********************
-1.0.0a5 - 2021-XX-XX
+1.0.0b0 - 2021-XX-XX
 ********************
 
 ** This changelog is incomplete and needs to be reviewed and updated **
@@ -41,6 +41,15 @@
 
 - Deprecate module attributes that were moved to tskit.
   (:user:`benjeffery`, :issue:`991`, :pr:`1158`)
+
+********************
+1.0.0a5 - 2021-03-02
+********************
+
+Fifth alpha release of 1.0 for early testing and evaluation.
+
+- Fixes bug in rate map for mutations (:issue:`1470`)
+- Add draft of new Demography API.
 
 ********************
 1.0.0a4 - 2021-02-01

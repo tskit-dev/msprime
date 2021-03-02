@@ -499,19 +499,20 @@ class Demography:
         return self.add_event(CensusEvent(time))
 
     def _populations_table(self):
-        col_titles = [
-            "id",
-            "name",
-            "description",
-            "initial_size",
-            "growth_rate",
-            "sampling_time",
-            "extra_metadata",
+        cols = [
+            ("id", ""),
+            ("name", ""),
+            ("description", ""),
+            ("initial_size", ".1f"),
+            ("growth_rate", ".2f"),
+            ("sampling_time", ".2g"),
+            ("extra_metadata", ""),
         ]
         data = [
-            [f"{getattr(pop, attr)}" for attr in col_titles] for pop in self.populations
+            [f"{getattr(pop, attr):{fmt}}" for attr, fmt in cols]
+            for pop in self.populations
         ]
-        return col_titles, data
+        return [title for title, _ in cols], data
 
     def _populations_text(self):
         col_titles, data = self._populations_table()
@@ -534,11 +535,14 @@ class Demography:
     def _migration_rate_info(self, source, dest, rate):
         extra = None
         if source != dest:
+            source_name = self.populations[source].name
+            dest_name = self.populations[dest].name
             extra = (
                 "Backwards in time migration rate from population "
-                f"{self.populations[source].name} to {self.populations[dest].name} "
-                f"= {rate} per generation. "
-                "Equivalant to **IMPLEMENT ME** forwards in time"
+                f"{source_name} to {dest_name} = {rate} per generation. "
+                "Forwards in time, this is the expected number of migrants "
+                f"moving from {dest_name} to {source_name} "
+                f"per generation, divided by the size of {source_name}."
             )
         return core.TableEntry(f"{rate:.4g}", extra)
 
@@ -602,11 +606,11 @@ class Demography:
     def _repr_html_(self):
         resolved = self.validate()
         return (
-            "<p>"
+            '<div style="margin-left:20px">'
             + resolved._populations_html()
             + resolved._migration_matrix_html()
             + resolved._events_html(self.events)
-            + "</p>"
+            + "</div>"
         )
 
     def __str__(self):
@@ -1040,7 +1044,7 @@ class Demography:
         time_units="gen",
         generation_time=None,
         growth_rate=None,
-    ):
+    ) -> Demography:
         """
         Parse a species tree in `Newick
         <https://en.wikipedia.org/wiki/Newick_format>`_ format and return the
@@ -1112,7 +1116,7 @@ class Demography:
         )
 
     @staticmethod
-    def from_starbeast(tree, generation_time, time_units="myr"):
+    def from_starbeast(tree, generation_time, time_units="myr") -> Demography:
         """
         Parse a species tree produced by the program `TreeAnnotator
         <https://www.beast2.org/treeannotator>`_
@@ -1168,7 +1172,7 @@ class Demography:
         migration_matrix: List[List[float]],
         demographic_events: List[DemographicEvent],
         population_map: [List[Dict[int, str]]],
-    ):
+    ) -> Demography:
         direct_model = Demography._from_old_style_simple(
             population_configurations, migration_matrix, demographic_events
         )
@@ -1384,7 +1388,7 @@ class Demography:
         population_configurations=None,
         migration_matrix=None,
         demographic_events=None,
-    ):
+    ) -> Demography:
         """
         Creates a Demography object from the pre 1.0 style input parameters,
         reproducing the old semantics with respect to default values.
@@ -1406,11 +1410,25 @@ class Demography:
         migration_matrix=None,
         demographic_events=None,
         Ne=1,
+        ignore_sample_size=False,
         population_map: Union[[List[Dict[int, Union[str, int]]]], None] = None,
-    ):
+    ) -> Demography:
         """
         Creates a Demography object from the pre 1.0 style input parameters,
         reproducing the old semantics with respect to default values.
+
+        No sample information is stored in the new-style :class:`.Demography`
+        objects, and therefore if the ``sample_size`` attribute of any
+        of the input :class:`.PopulationConfiguration` objects is set a
+        ValueError will be raised by default. However, if the
+        ``ignore_sample_size`` parameter is set to True, this check will
+        not be performed and the sample sizes specified in the old-style
+        :class:`.PopulationConfiguration` objects will be ignored.
+
+        Please see the :ref:`sec_ancestry_samples` section for details on
+        how to specify sample locations in :func:`.sim_ancestry`.
+
+        .. todo:: Document the remaining parameters.
         """
         if population_configurations is None:
             pop_configs = [PopulationConfiguration(initial_size=Ne)]
@@ -1419,6 +1437,18 @@ class Demography:
             for pop_config in pop_configs:
                 if pop_config.initial_size is None:
                     pop_config.initial_size = Ne
+
+                if pop_config.sample_size is not None and not ignore_sample_size:
+                    raise ValueError(
+                        "You have specified a `sample_size` in a "
+                        "PopulationConfiguration object that is to be converted "
+                        "into a new-style Demography object, "
+                        "which does not contain any information about samples. "
+                        "Please use the ``samples`` argument to sim_ancestry "
+                        "instead, which provides flexible options for sampling "
+                        "from different populations"
+                    )
+
         if population_map is None:
             return Demography._from_old_style_simple(
                 pop_configs, migration_matrix, demographic_events
@@ -1432,7 +1462,7 @@ class Demography:
             )
 
     @staticmethod
-    def isolated_model(initial_size, *, growth_rate=None):
+    def isolated_model(initial_size, *, growth_rate=None) -> Demography:
         """
         Returns a :class:`.Demography` object representing a collection of
         isolated populations with specified initial population sizes and
@@ -1480,7 +1510,7 @@ class Demography:
         return Demography(populations=populations)
 
     @staticmethod
-    def island_model(initial_size, migration_rate, *, growth_rate=None):
+    def island_model(initial_size, migration_rate, *, growth_rate=None) -> Demography:
         """
         Returns a :class:`.Demography` object representing a collection of
         populations with specified initial population sizes and growth
@@ -1510,7 +1540,7 @@ class Demography:
     @staticmethod
     def stepping_stone_model(
         initial_size, migration_rate, *, growth_rate=None, boundaries=False
-    ):
+    ) -> Demography:
         """
         Returns a :class:`.Demography` object representing a collection of
         populations with specified initial population sizes and growth
@@ -2590,6 +2620,7 @@ class DemographyDebugger:
                 migration_matrix=migration_matrix,
                 demographic_events=demographic_events,
                 Ne=Ne,
+                ignore_sample_size=True,
             )
         self.demography = demography.validate()
         self.num_populations = demography.num_populations
@@ -2708,21 +2739,19 @@ class DemographyDebugger:
         for epoch in self.epochs:
             if epoch.index > 0:
                 assert len(epoch.events) > 0
-                title = f"Events @ generation {epoch.start_time}"
+                title = f"Events @ generation {epoch.start_time:.3g}"
                 out += self.demography._events_html(epoch.events, title)
-                out += "</div>"
+                out += "</div></details>"
             else:
                 assert len(epoch.events) == 0
-            out += '<div class="msprime-epoch">'
-            out += f"<h3>{epoch._title_text()}</h3>"
+            title = epoch._title_text()
+            out += f'<details open="true"><summary>{title}</summary>'
+            # Indent the content div slightly
+            out += '<div style="margin-left:20px">'
             out += self._populations_html(epoch)
         out += "</div>"
-        return f"""<div>
-            <style scoped="">
-                .msprime-epoch:nth-child(odd) {{background: #f5f5f5;}}
-            </style>
-            {out}
-        </div>"""
+        out += "</details>"
+        return f"<div>{out}</div>"
 
     def print_history(self, output=sys.stdout):
         """
