@@ -3263,10 +3263,10 @@ PyInit__msprime(void)
             (PyObject *) &InfiniteAllelesMutationModelType);
 
     /* Errors and constants */
-    MsprimeInputError = PyErr_NewException("_msprime.InputError", NULL, NULL);
+    MsprimeInputError = PyErr_NewException("msprime._msprime.InputError", NULL, NULL);
     Py_INCREF(MsprimeInputError);
     PyModule_AddObject(module, "InputError", MsprimeInputError);
-    MsprimeLibraryError = PyErr_NewException("_msprime.LibraryError", NULL, NULL);
+    MsprimeLibraryError = PyErr_NewException("msprime._msprime.LibraryError", NULL, NULL);
     Py_INCREF(MsprimeLibraryError);
     PyModule_AddObject(module, "LibraryError", MsprimeLibraryError);
 
