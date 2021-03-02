@@ -217,6 +217,7 @@ def _demography_factory(
         migration_matrix=migration_matrix,
         demographic_events=demographic_events,
         Ne=Ne,
+        ignore_sample_size=True,
     )
     return demography.validate()
 

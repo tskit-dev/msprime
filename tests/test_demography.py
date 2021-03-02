@@ -1211,7 +1211,7 @@ class TestDemographicEventMessages:
 
 class DebugOutputBase:
     def test_zero_samples_old_style(self):
-        population_configurations = [msprime.PopulationConfiguration(0)]
+        population_configurations = [msprime.PopulationConfiguration()]
         self.verify(msprime.Demography.from_old_style(population_configurations))
 
     def test_one_population(self):
@@ -4412,6 +4412,15 @@ class TestDemographyFromOldStyle:
             assert demog.num_populations == n
             np.testing.assert_array_equal(demog.migration_matrix, np.zeros((n, n)))
             assert list(demog.events) == []
+
+    def test_ignore_sample_size(self):
+        pop_configs = [msprime.PopulationConfiguration(sample_size=1)]
+        with pytest.raises(ValueError, match="You have specified a `sample_size`"):
+            msprime.Demography.from_old_style(population_configurations=pop_configs)
+        demog = msprime.Demography.from_old_style(
+            population_configurations=pop_configs, ignore_sample_size=True
+        )
+        assert demog.num_populations == 1
 
     def test_migration_matrix(self):
         for n in range(1, 5):

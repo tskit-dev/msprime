@@ -1040,7 +1040,7 @@ class Demography:
         time_units="gen",
         generation_time=None,
         growth_rate=None,
-    ):
+    ) -> Demography:
         """
         Parse a species tree in `Newick
         <https://en.wikipedia.org/wiki/Newick_format>`_ format and return the
@@ -1112,7 +1112,7 @@ class Demography:
         )
 
     @staticmethod
-    def from_starbeast(tree, generation_time, time_units="myr"):
+    def from_starbeast(tree, generation_time, time_units="myr") -> Demography:
         """
         Parse a species tree produced by the program `TreeAnnotator
         <https://www.beast2.org/treeannotator>`_
@@ -1168,7 +1168,7 @@ class Demography:
         migration_matrix: List[List[float]],
         demographic_events: List[DemographicEvent],
         population_map: [List[Dict[int, str]]],
-    ):
+    ) -> Demography:
         direct_model = Demography._from_old_style_simple(
             population_configurations, migration_matrix, demographic_events
         )
@@ -1384,7 +1384,7 @@ class Demography:
         population_configurations=None,
         migration_matrix=None,
         demographic_events=None,
-    ):
+    ) -> Demography:
         """
         Creates a Demography object from the pre 1.0 style input parameters,
         reproducing the old semantics with respect to default values.
@@ -1406,11 +1406,25 @@ class Demography:
         migration_matrix=None,
         demographic_events=None,
         Ne=1,
+        ignore_sample_size=False,
         population_map: Union[[List[Dict[int, Union[str, int]]]], None] = None,
-    ):
+    ) -> Demography:
         """
         Creates a Demography object from the pre 1.0 style input parameters,
         reproducing the old semantics with respect to default values.
+
+        No sample information is stored in the new-style :class:`.Demography`
+        objects, and therefore if the ``sample_size`` attribute of any
+        of the input :class:`.PopulationConfiguration` objects is set a
+        ValueError will be raised by default. However, if the
+        ``ignore_sample_size`` parameter is set to True, this check will
+        not be performed and the sample sizes specified in the old-style
+        :class:`.PopulationConfiguration` objects will be ignored.
+
+        Please see the :ref:`sec_ancestry_samples` section for details on
+        how to specify sample locations in :func:`.sim_ancestry`.
+
+        .. todo:: Document the remaining parameters.
         """
         if population_configurations is None:
             pop_configs = [PopulationConfiguration(initial_size=Ne)]
@@ -1419,6 +1433,18 @@ class Demography:
             for pop_config in pop_configs:
                 if pop_config.initial_size is None:
                     pop_config.initial_size = Ne
+
+                if pop_config.sample_size is not None and not ignore_sample_size:
+                    raise ValueError(
+                        "You have specified a `sample_size` in a "
+                        "PopulationConfiguration object that is to be converted "
+                        "into a new-style Demography object, "
+                        "which does not contain any information about samples. "
+                        "Please use the ``samples`` argument to sim_ancestry "
+                        "instead, which provides flexible options for sampling "
+                        "from different populations"
+                    )
+
         if population_map is None:
             return Demography._from_old_style_simple(
                 pop_configs, migration_matrix, demographic_events
@@ -1432,7 +1458,7 @@ class Demography:
             )
 
     @staticmethod
-    def isolated_model(initial_size, *, growth_rate=None):
+    def isolated_model(initial_size, *, growth_rate=None) -> Demography:
         """
         Returns a :class:`.Demography` object representing a collection of
         isolated populations with specified initial population sizes and
@@ -1480,7 +1506,7 @@ class Demography:
         return Demography(populations=populations)
 
     @staticmethod
-    def island_model(initial_size, migration_rate, *, growth_rate=None):
+    def island_model(initial_size, migration_rate, *, growth_rate=None) -> Demography:
         """
         Returns a :class:`.Demography` object representing a collection of
         populations with specified initial population sizes and growth
@@ -1510,7 +1536,7 @@ class Demography:
     @staticmethod
     def stepping_stone_model(
         initial_size, migration_rate, *, growth_rate=None, boundaries=False
-    ):
+    ) -> Demography:
         """
         Returns a :class:`.Demography` object representing a collection of
         populations with specified initial population sizes and growth
@@ -2590,6 +2616,7 @@ class DemographyDebugger:
                 migration_matrix=migration_matrix,
                 demographic_events=demographic_events,
                 Ne=Ne,
+                ignore_sample_size=True,
             )
         self.demography = demography.validate()
         self.num_populations = demography.num_populations
