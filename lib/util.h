@@ -114,8 +114,14 @@
 #define MSP_ERR_UNKNOWN_TIME_NOT_SUPPORTED                          -70
 #define MSP_ERR_DTWF_DIPLOID_ONLY                                   -71
 #define MSP_ERR_BAD_ANCESTRAL_MUTATION                              -72
-#define MSP_ERR_TOO_MANY_SPLIT_POPULATIONS                          -73
+#define MSP_ERR_TOO_MANY_EVENT_POPULATIONS                          -73
 #define MSP_ERR_DUPLICATE_POPULATION                                -74
+#define MSP_ERR_POPULATION_INACTIVE_MOVE                            -75
+#define MSP_ERR_POPULATION_INACTIVE_SAMPLE                          -76
+#define MSP_ERR_POPULATION_PREVIOUSLY_ACTIVE                        -77
+#define MSP_ERR_ADMIX_ANCESTRAL_NOT_ACTIVE                          -78
+#define MSP_ERR_SPLIT_DERIVED_NOT_ACTIVE                            -79
+#define MSP_ERR_ADMIX_DERIVED_NOT_ACTIVE                            -80
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */

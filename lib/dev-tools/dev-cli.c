@@ -391,7 +391,7 @@ read_population_configuration(msp_t *msp, config_t *config)
             fatal_error("initial_size not specified");
         }
         initial_size = config_setting_get_float(t);
-        ret = msp_set_population_configuration(msp, j, initial_size, growth_rate);
+        ret = msp_set_population_configuration(msp, j, initial_size, growth_rate, true);
         if (ret != 0) {
             fatal_msprime_error(ret, __LINE__);
         }

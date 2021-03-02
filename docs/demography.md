@@ -24,6 +24,12 @@ from IPython.display import SVG
 
 # Demography
 
+:::{warning}
+This page is under heavy development and some parts are inconsistent.
+See the {ref}`sec_demography_defining_empirical_models` section for
+idiomatic examples of using the API to define models from the literature.
+:::
+
 By default, msprime assumes a single randomly mating population of a fixed
 size for {ref}`ancestry simulations <sec_ancestry>`, which is unrealistic
 for most purposes. To enable more realistic and complex simulations,
@@ -384,10 +390,10 @@ to 10 after 20 generations using the ``population=None`` shorthand.
 
 ```{code-cell}
 demography = msprime.Demography.island_model([100, 100], migration_rate=0.01)
-demography.events = [
-    msprime.PopulationParametersChange(time=10, population=0, initial_size=200),
-    msprime.PopulationParametersChange(time=20, population=None, initial_size=10),
-]
+demography.add_population_parameters_change(
+    time=10, population=0, initial_size=200)
+demography.add_population_parameters_change(
+    time=20, population=None, initial_size=10)
 demography.debug()
 ```
 
@@ -403,10 +409,8 @@ migration rate between all pairs of populations to 0.2.
 
 ```{code-cell}
 demography = msprime.Demography.isolated_model([100, 100])
-demography.events = [
-    msprime.MigrationRateChange(time=10, source=0, dest=1, rate=0.1),
-    msprime.MigrationRateChange(time=20, rate=0.2)
-]
+demography.add_migration_rate_change(time=10, source=0, dest=1, rate=0.1)
+demography.add_migration_rate_change(time=20, rate=0.2)
 demography.debug()
 ```
 
@@ -454,9 +458,7 @@ The effect of mass migration events are summarised in the
 
 ```{code-cell}
 demography = msprime.Demography.island_model([100, 100], migration_rate=0.1)
-demography.events = [
-    msprime.MassMigration(time=10, source=0, dest=1, proportion=0.5),
-]
+demography.add_mass_migration(time=10, source=0, dest=1, proportion=0.5)
 demography.debug()
 ```
 
@@ -466,7 +468,11 @@ demography.debug()
     implemented.
 ```
 
+(sec_demography_defining_empirical_models)=
+
 ## Defining empirical models
+
+### Splitting populations
 
 ```{eval-rst}
 .. todo:: Update this text a bit once we've finalised the API.
@@ -532,56 +538,55 @@ r_CHB = 0.0055
 N_CEU = 1000 / math.exp(-r_CEU * T_OOA)
 N_CHB = 510 / math.exp(-r_CHB * T_OOA)
 
-populations = [
-    msprime.Population(
-        name="YRI",
-        description="Yoruba in Ibadan, Nigeria",
-        initial_size=12300,
+demography = msprime.Demography()
+demography.add_population(
+    name="YRI",
+    description="Yoruba in Ibadan, Nigeria",
+    initial_size=12300,
+)
+demography.add_population(
+    name="CEU",
+    description=(
+        "Utah Residents (CEPH) with Northern and Western European Ancestry"
     ),
-    msprime.Population(
-        name="CEU",
-        description=(
-            "Utah Residents (CEPH) with Northern and Western European Ancestry"
-        ),
-        initial_size=N_CEU,
-        growth_rate=r_CEU,
-    ),
-    msprime.Population(
-        name="CHB",
-        description="Han Chinese in Beijing, China",
-        initial_size=N_CHB,
-        growth_rate=r_CHB,
-    ),
-    msprime.Population(
-        name="OOA",
-        description="Bottleneck out-of-Africa population",
-        initial_size=2100,
-    ),
-    msprime.Population(
-        name="AMH", description="Anatomically modern humans", initial_size=12300
-    ),
-    msprime.Population(
-        name="ANC",
-        description="Ancestral equilibrium population",
-        initial_size=7300,
-    ),
-]
+    initial_size=N_CEU,
+    growth_rate=r_CEU,
+)
+demography.add_population(
+    name="CHB",
+    description="Han Chinese in Beijing, China",
+    initial_size=N_CHB,
+    growth_rate=r_CHB,
+)
+demography.add_population(
+    name="OOA",
+    description="Bottleneck out-of-Africa population",
+    initial_size=2100,
+)
+demography.add_population(
+    name="AMH", description="Anatomically modern humans", initial_size=12300
+)
+demography.add_population(
+    name="ANC",
+    description="Ancestral equilibrium population",
+    initial_size=7300,
+)
 
-demography = msprime.Demography(populations)
 # Set the migration rates between extant populations
 demography.set_symmetric_migration_rate(["CEU", "CHB"], 9.6e-5)
 demography.set_symmetric_migration_rate(["YRI", "CHB"], 1.9e-5)
 demography.set_symmetric_migration_rate(["YRI", "CEU"], 3e-5)
-demography.events = [
-    # CEU and CHB merge into the OOA population
-    msprime.PopulationSplit(time=T_OOA, derived=["CEU", "CHB"], ancestral="OOA"),
-    # Set the migration rate between OOA and YRI
-    msprime.SymmetricMigrationRateChange(
-        time=T_OOA, populations=["YRI", "OOA"], rate=25e-5
-    ),
-    msprime.PopulationSplit(time=T_AMH, derived=["YRI", "OOA"], ancestral="AMH"),
-    msprime.PopulationSplit(time=T_ANC, derived=["AMH"], ancestral="ANC"),
-]
+
+demography.add_population_split(
+    time=T_OOA, derived=["CEU", "CHB"], ancestral="OOA"
+)
+demography.add_symmetric_migration_rate_change(
+    time=T_OOA, populations=["YRI", "OOA"], rate=25e-5
+)
+demography.add_population_split(
+    time=T_AMH, derived=["YRI", "OOA"], ancestral="AMH"
+)
+demography.add_population_split(time=T_ANC, derived=["AMH"], ancestral="ANC")
 
 demography.debug()
 
@@ -595,6 +600,213 @@ demography.debug()
 # to compare against that instead and remove the Demography._ooa_model()
 
 demography.assert_equal(msprime.Demography._ooa_model())
+
+```
+### Admixture
+
+
+```{code-cell}
+import math
+
+# Implementation of the stdpopsim AmericanAdmixture_4B11 model.
+T_OOA = 920
+N_EUR = 34039
+r_EUR = 0.0038
+N_EAS = 45852
+r_EAS = 0.0048
+T_ADMIX = 12
+N_ADMIX = 54664
+r_ADMIX = 0.05
+
+demography = msprime.Demography()
+demography.add_population(
+    name="AFR", description="African population", initial_size=14474
+)
+demography.add_population(
+    name="EUR",
+    description="European population",
+    initial_size=N_EUR,
+    growth_rate=r_EUR,
+)
+demography.add_population(
+    name="EAS",
+    description="East Asian population",
+    initial_size=N_EAS,
+    growth_rate=r_EAS,
+)
+demography.add_population(
+    name="ADMIX",
+    description="Admixed America",
+    initial_size=N_ADMIX,
+    growth_rate=r_ADMIX,
+)
+demography.add_admixture(
+    T_ADMIX,
+    derived="ADMIX",
+    ancestral=["AFR", "EUR", "EAS"],
+    proportions=[1 / 6, 2 / 6, 3 / 6],
+)
+demography.add_population(
+    name="OOA",
+    description="Bottleneck out-of-Africa population",
+    initial_size=1861,
+)
+demography.add_population(
+    name="AMH", description="Anatomically modern humans", initial_size=14474
+)
+demography.add_population(
+    name="ANC",
+    description="Ancestral equilibrium population",
+    initial_size=7310,
+)
+demography.set_symmetric_migration_rate(["AFR", "EUR"], 2.5e-5)
+demography.set_symmetric_migration_rate(["AFR", "EAS"], 0.78e-5)
+demography.set_symmetric_migration_rate(["EUR", "EAS"], 3.11e-5)
+
+demography.add_population_split(T_OOA, derived=["EUR", "EAS"], ancestral="OOA")
+demography.add_symmetric_migration_rate_change(
+    time=T_OOA, populations=["AFR", "OOA"], rate=15e-5
+)
+demography.add_population_split(2040, derived=["OOA", "AFR"], ancestral="AMH")
+demography.add_population_split(5920, derived=["AMH"], ancestral="ANC")
+
+demography.debug()
+```
+
+```{code-cell}
+:tags: [remove-cell]
+
+# Make sure we don't insert any errors in this version of the model.
+# Once we have an equivalent version in stdpopsim we can update here
+# to compare against that instead and remove the local model
+
+demography.assert_equal(msprime.Demography._american_admixture_model())
+
+```
+
+### Trunk population models
+
+For many empirical models we want to sequentially merge derived populations
+into a "trunk" population.
+
+```{eval-rst}
+.. todo::
+    It would be better to illustrate the merging-to-a-trunk idea with the OOA
+    model above, since that's what we already have an illustration of above
+    and it's a good bit simpler.
+```
+
+```{code-cell}
+import math
+
+# Times are provided in years, so we convert into generations.
+generation_time = 29
+T_OOA = 36_000 / generation_time
+T_AMH = 60_700 / generation_time
+T_ANC = 300_000 / generation_time
+T_ArchaicAFR = 499_000 / generation_time
+T_Neanderthal = 559_000 / generation_time
+T_archaic_migration_start = 18_700 / generation_time
+T_archaic_migration_end = 125_000 / generation_time
+
+# We need to work out the starting (diploid) population sizes based on
+# the growth rates provided for these two populations
+r_CEU = 0.00125
+r_CHB = 0.00372
+N_CEU = 2300 / math.exp(-r_CEU * T_OOA)
+N_CHB = 650 / math.exp(-r_CHB * T_OOA)
+
+demography = msprime.Demography()
+# This is the "trunk" population that we merge other populations into
+demography.add_population(
+    name="AFR",
+    description="African population",
+    initial_size=13900,
+    initially_active=True,
+)
+demography.add_population(
+    name="CEU",
+    description=(
+        "Utah Residents (CEPH) with Northern and Western European Ancestry"
+    ),
+    initial_size=N_CEU,
+    growth_rate=r_CEU,
+)
+demography.add_population(
+    name="CHB",
+    description="Han Chinese in Beijing, China",
+    initial_size=N_CHB,
+    growth_rate=r_CHB,
+)
+demography.add_population(
+    name="Neanderthal",
+    description="Putative Neanderthals",
+    initial_size=3600,
+)
+demography.add_population(
+    name="ArchaicAFR",
+    description="Putative Archaic Africans",
+    initial_size=3600,
+)
+demography.add_population(
+    name="OOA",
+    description="Bottleneck out-of-Africa population",
+    initial_size=880,
+)
+
+# Set the migration rates between extant populations
+demography.set_symmetric_migration_rate(["CEU", "CHB"], 11.3e-5)
+demography.set_symmetric_migration_rate(["AFR", "CEU"], 2.48e-5)
+
+demography.add_symmetric_migration_rate_change(
+    T_archaic_migration_start, ["CEU", "Neanderthal"], 0.825e-5
+)
+demography.add_symmetric_migration_rate_change(
+    T_archaic_migration_start, ["CHB", "Neanderthal"], 0.825e-5
+)
+demography.add_symmetric_migration_rate_change(
+    T_archaic_migration_start, ["ArchaicAFR", "AFR"], 1.98e-5
+)
+demography.add_migration_rate_change(T_archaic_migration_end, rate=0)
+
+demography.add_population_split(
+    time=T_OOA, derived=["CEU", "CHB"], ancestral="OOA"
+)
+demography.add_symmetric_migration_rate_change(
+    time=T_OOA, populations=["AFR", "OOA"], rate=52.2e-5
+)
+demography.add_symmetric_migration_rate_change(
+    time=T_OOA, populations=["OOA", "Neanderthal"], rate=0.825e-5
+)
+demography.add_population_split(time=T_AMH, derived=["OOA"], ancestral="AFR")
+demography.add_symmetric_migration_rate_change(
+    T_AMH, ["ArchaicAFR", "AFR"], 1.98e-5
+)
+demography.add_population_parameters_change(
+    time=T_AMH, population="AFR", initial_size=13900
+)
+demography.add_population_parameters_change(
+    time=T_ANC, population="AFR", initial_size=3600
+)
+demography.add_population_split(
+    time=T_ArchaicAFR, derived=["ArchaicAFR"], ancestral="AFR"
+)
+demography.add_population_split(
+    time=T_Neanderthal, derived=["Neanderthal"], ancestral="AFR"
+)
+demography.sort_events()
+
+demography.debug()
+```
+
+```{code-cell}
+:tags: [remove-cell]
+
+# Make sure we don't insert any errors in this version of the model.
+# Once we have an equivalent version in stdpopsim we can update here
+# to compare against that instead and remove the local model
+
+demography.assert_equal(msprime.Demography._ooa_archaic_model())
 
 ```
 

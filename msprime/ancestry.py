@@ -214,12 +214,11 @@ def _demography_factory(
 ):
     demography = demog.Demography.from_old_style(
         population_configurations,
-        migration_matrix,
-        demographic_events,
+        migration_matrix=migration_matrix,
+        demographic_events=demographic_events,
         Ne=Ne,
     )
-    demography.validate()
-    return demography
+    return demography.validate()
 
 
 def _build_initial_tables(*, sequence_length, samples, ploidy, demography, pedigree):
@@ -833,6 +832,7 @@ def _parse_sim_ancestry(
     record_full_arg=None,
     num_labels=None,
     random_seed=None,
+    init_for_debugger=False,
 ):
     """
     Argument parser for the sim_ancestry frontend. Interprets all the parameters
@@ -940,16 +940,17 @@ def _parse_sim_ancestry(
             raise ValueError("Cannot specify demography and population size")
     else:
         raise TypeError("demography argument must be an instance of msprime.Demography")
-    demography.validate()
+    demography = demography.validate()
 
     if initial_state is None:
-        if samples is None:
+        if samples is None and not init_for_debugger:
             raise ValueError(
                 "Either the samples or initial_state arguments must be provided"
             )
         initial_state = tskit.TableCollection(sequence_length)
         demography.insert_populations(initial_state)
-        _parse_samples(samples, demography, ploidy, initial_state)
+        if not init_for_debugger:
+            _parse_samples(samples, demography, ploidy, initial_state)
     else:
         if samples is not None:
             raise ValueError("Cannot specify both samples and initial_state")
@@ -1197,8 +1198,7 @@ class Simulator(_msprime.Simulator):
         ll_simulation_model = model.get_ll_representation()
         ll_population_configuration = [pop.asdict() for pop in demography.populations]
         ll_demographic_events = [
-            event.get_ll_representation(demography=demography)
-            for event in demography.events
+            event.get_ll_representation() for event in demography.events
         ]
         ll_recomb_map = recombination_map.asdict()
         ll_tables = _msprime.LightweightTableCollection(tables.sequence_length)
