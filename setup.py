@@ -1,21 +1,3 @@
-#
-# Copyright (C) 2015-2021 University of Oxford
-#
-# This file is part of msprime.
-#
-# msprime is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# msprime is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-#
 import os.path
 import platform
 import subprocess
@@ -129,49 +111,9 @@ _msprime_module = Extension(
     library_dirs=configurator.library_dirs,
 )
 
-numpy_ver = "numpy>=1.7"
-
-with open("README.rst") as f:
-    long_description = f.read()
 
 setup(
-    name="msprime",
-    description="A fast and accurate coalescent simulator.",
-    long_description=long_description,
-    packages=["msprime"],
-    author="Tskit Developers",
-    author_email="admin@tskit.dev",
-    url="https://pypi.org/project/msprime/",
-    entry_points={
-        "console_scripts": ["mspms=msprime.cli:mspms_main", "msp=msprime.cli:msp_main"]
-    },
-    include_package_data=True,
-    # NOTE: make sure this is the 'attrs' package, not 'attr'!
-    install_requires=[numpy_ver, "newick", "tskit>=0.3.3"],
-    ext_modules=[_msprime_module],
-    keywords=["Coalescent simulation", "ms", "tree sequence"],
-    license="GNU GPLv3+",
-    platforms=["POSIX", "Windows", "MacOS X"],
-    python_requires=">=3.6",
-    classifiers=[
-        "Programming Language :: C",
-        "Programming Language :: Python",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3 :: Only",
-        "Development Status :: 4 - Beta",
-        "Environment :: Other Environment",
-        "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-        "Operating System :: POSIX",
-        "Operating System :: MacOS :: MacOS X",
-        "Operating System :: Microsoft :: Windows",
-        "Topic :: Scientific/Engineering",
-        "Topic :: Scientific/Engineering :: Bio-Informatics",
-    ],
-    setup_requires=[numpy_ver, "setuptools_scm"],
     use_scm_version={"write_to": "msprime/_version.py"},
+    ext_modules=[_msprime_module],
     cmdclass={"build_ext": local_build_ext},
 )
