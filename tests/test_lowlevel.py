@@ -26,6 +26,7 @@ import io
 import itertools
 import math
 import pathlib
+import pickle
 import platform
 import random
 import tempfile
@@ -2991,3 +2992,13 @@ class TestLikelihood:
         lw_tables = _msprime.LightweightTableCollection(0)
         with pytest.raises(_msprime.LibraryError):
             _msprime.log_likelihood_arg(lw_tables, 1, 1)
+
+
+def test_pickle_exceptions():
+    exception = _msprime.LibraryError("xyz")
+    s = pickle.dumps(exception)
+    assert str(pickle.loads(s)) == str(exception)
+
+    exception = _msprime.InputError("xyz")
+    s = pickle.dumps(exception)
+    assert str(pickle.loads(s)) == str(exception)
