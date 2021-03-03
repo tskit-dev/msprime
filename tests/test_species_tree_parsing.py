@@ -797,3 +797,12 @@ class TestStarbeastExamples:
             assert len(spec.events) == 11
             for mm in spec.events:
                 assert isinstance(mm, msprime.PopulationSplit)
+
+
+def test_newick_import():
+    try:
+        species_trees._newick_imported = False
+        with pytest.raises(ImportError, match="The 'newick' module"):
+            species_trees.check_newick_import()
+    finally:
+        species_trees._newick_imported = True
