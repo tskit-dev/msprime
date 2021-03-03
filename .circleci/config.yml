@@ -82,6 +82,7 @@ jobs:
             python setup.py check
             python -m twine check dist/*.tar.gz --strict
             python -m build
+
       - run:
           name: Install from the distribution tarball
           command: |
@@ -89,3 +90,8 @@ jobs:
             source venv/bin/activate
             pip install --upgrade setuptools pip
             pip install dist/*.tar.gz
+            python -c 'import msprime; print(msprime.__version__)'
+
+            # We should still be able to import without the newick module
+            python -m pip uninstall -y newick
+            python -c 'import msprime; print(msprime.__version__)'

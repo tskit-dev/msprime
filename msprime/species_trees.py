@@ -22,18 +22,36 @@ Module responsible for parsing species trees.
 import collections
 import re
 
-import newick
+try:
+    _newick_imported = False
+    import newick
+
+    _newick_imported = True
+except ImportError:  # pragma: no cover
+    pass
 
 from . import demography as demog
 
 
+def check_newick_import():
+    if not _newick_imported:
+        raise ImportError(
+            "The 'newick' module is required for species tree parsing. "
+            "If you installed msprime using conda, please install the "
+            "newick module using `conda install -c bioconda newick` or "
+            "'pip install newick'. If you installed msprime using pip "
+            "newick should have been automatically installed; please "
+            "open an issue on GitHub with details of your installation."
+        )
+
+
 def parse_starbeast(tree, generation_time, time_units="myr"):
     """
-    Parse a nexusencoded species tree into a Demography object. See the
+    Parse a nexus encoded species tree into a Demography object. See the
     documentation of :class:`.Demography.from_starbeast` (the public interface)
     for details.
     """
-
+    check_newick_import()
     # Make sure that branch length units are either "myr" or "yr".
     allowed_branch_lenth_units = ["myr", "yr"]
     if time_units not in allowed_branch_lenth_units:
@@ -99,6 +117,7 @@ def parse_species_tree(
     documentation of :class:`.Demography.from_species_tree` (the public interface)
     for details.
     """
+    check_newick_import()
     # Make sure that branch length units are either "myr", "yr", or "gen".
     allowed_branch_lenth_units = ["myr", "yr", "gen"]
     if time_units not in allowed_branch_lenth_units:
