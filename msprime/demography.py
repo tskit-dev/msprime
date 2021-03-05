@@ -210,8 +210,9 @@ class Demography:
                 if name is not None and name != population.name:
                     # Maybe this should be a warning, or just ignored entirely?
                     raise ValueError(
-                        "Population name already set in old-style metadata and doesn't "
-                        "match supplied name"
+                        "Population name already set in old-style metadata "
+                        f"({name}) and doesn't match supplied name "
+                        f"({population.name})"
                     )
             if "description" in metadata:
                 population.description = metadata.pop("description")
@@ -652,7 +653,10 @@ class Demography:
             if identifier < 0 or identifier >= self.num_populations:
                 raise KeyError(f"Population id {identifier} out of bounds")
             return self.populations[identifier]
-        raise TypeError("Keys must be either string population names or integer IDs")
+        raise TypeError(
+            "Keys must be either string population names or integer IDs:"
+            f"identifier '{identifier}' is of type {type(identifier)}"
+        )
 
     def __contains__(self, identifier):
         """
@@ -2816,8 +2820,9 @@ class DemographyDebugger:
         ago.
 
         This function reports sampling probabilities _before_ mass migration events
-        at a step time, if a mass migration event occurs at one of those times.
-        Migrations will then effect the next time step.
+        (or other events that move lineages) at a step time, if a mass migration
+        event occurs at one of those times. Migrations will then effect the next
+        time step.
 
         :param list steps: A list of times to compute probabilities.
         :param sample_time: The time of sampling of the lineage. For any times in steps
@@ -2865,9 +2870,13 @@ class DemographyDebugger:
         mass_migration_objects = []
         mass_migration_times = []
         for demo in self.demography.events:
-            if isinstance(demo, MassMigration):
-                mass_migration_objects.append(demo)
-                mass_migration_times.append(demo.time)
+            if isinstance(demo, LineageMovementEvent):
+                # Convert higher-level lineage movement events like Admixtures
+                # and PopulationSplits into LineageMovement instances. These are
+                # equivalent to MassMigrations
+                for lm in demo._as_lineage_movements():
+                    mass_migration_objects.append(lm)
+                    mass_migration_times.append(demo.time)
 
         for jj in range(first_step, len(all_steps) - 1):
             t_j = all_steps[jj]
@@ -2903,11 +2912,27 @@ class DemographyDebugger:
         Given the sampling configuration, this function determines when lineages are
         possibly found within each population over epochs defined by demographic events
         and sampling times. If no sampling configuration is given, we assume we sample
-        lineages from every population at time zero. The samples are specified by a list
-        of msprime Sample objects, so that possible ancient samples may be accounted for.
+        lineages from every population at time zero.
 
-        :param list samples: A list of msprime Sample objects, which specify their
-            populations and times.
+        The epoch intervals returned are those in which there are *distinct*
+        configurations of possible lineage locations, and so the number of
+        returned epochs may be less than the total number of epochs defined
+        by the demography and will depend on the input sample configuration.
+
+        The samples are specified by either a list of population identifiers (
+        integer IDs or string names) or by a list of :class:`.SampleSet` objects,
+        allowing sampling times to be specified explicitly. If the ``time`` field
+        of the :class:`.SampleSet` is not specified (or population IDs are used)
+        samples are taken at the population's `sampling_time`. Only
+        :class:`.SampleSet` objects with ``num_samples > 0`` are counted as
+        contributing samples to a particular population.
+
+        To support legacy code, :class:`.Sample` objects from the 0.x API
+        can also provided, although its use is discouraged in new code.
+
+        :param list samples: The populations that we sample from. Can be either
+            a list of population identifiers, :class:`.SampleSet` or
+            :class:`.Sample` objects.
         :return: Returns a dictionary with epoch intervals as keys whose values are a
             list with length equal to the number of populations with True and False
             indicating which populations could possibly contain lineages over that
@@ -2915,15 +2940,32 @@ class DemographyDebugger:
             The first epoch necessarily starts at time 0, and the final epoch has end
             time of infinity.
         """
-        # get configuration of sampling times from samples ({time:[pops_sampled_from]})
         if samples is None:
-            sampling_times = {0: [i for i in range(self.num_populations)]}
-        else:
-            sampling_times = collections.defaultdict(list)
-            for sample in samples:
-                sampling_times[sample.time].append(sample.population)
-            for t in sampling_times.keys():
-                sampling_times[t] = list(set(sampling_times[t]))
+            samples = [
+                pop.id for pop in self.demography.populations if pop.sampling_time == 0
+            ]
+
+        # get configuration of sampling times from samples ({time:[pops_sampled_from]})
+        sampling_times = collections.defaultdict(list)
+        for sample in samples:
+            if isinstance(sample, (ancestry.Sample, ancestry.SampleSet)):
+                pop_id = self.demography[sample.population].id
+                sample_time = (
+                    self.demography[pop_id].sampling_time
+                    if sample.time is None
+                    else sample.time
+                )
+                if isinstance(sample, ancestry.SampleSet) and sample.num_samples <= 0:
+                    # If someone specifies 0 samples it should not be counted
+                    continue
+            else:
+                # Assume this is a population identifier.
+                pop = self.demography[sample]
+                pop_id = pop.id
+                sample_time = pop.sampling_time
+            sampling_times[sample_time].append(pop_id)
+        for t in sampling_times.keys():
+            sampling_times[t] = list(set(sampling_times[t]))
 
         all_steps = sorted(
             list(set([t for t in self.epoch_times] + list(sampling_times.keys())))

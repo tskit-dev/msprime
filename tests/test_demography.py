@@ -3644,7 +3644,7 @@ class TestCensusEvent:
         assert ts.tables.nodes == tsc.tables.nodes
 
 
-class TestPossibleLineages:
+class TestPossibleLineagesOldStyle:
     """
     Tests for checking where lineages are possible within the demography debugger.
     """
@@ -3765,6 +3765,138 @@ class TestPossibleLineages:
         assert np.all(lineages[(400, 600)] == [1, 0, 1, 0, 1])
         assert np.all(lineages[(600, 700)] == [1, 0, 0, 0, 1])
         assert np.all(lineages[(700, np.inf)] == [1, 0, 0, 0, 0])
+
+
+class TestPossibleLineages:
+    def test_sample_definitions(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        debug = demography.debug()
+
+        lineages = debug.possible_lineage_locations(samples=["A", "B"])
+        assert list(lineages[(0, np.inf)]) == [True, True]
+        lineages = debug.possible_lineage_locations(samples=[0, 1])
+        assert list(lineages[(0, np.inf)]) == [True, True]
+        lineages = debug.possible_lineage_locations(
+            samples=[
+                msprime.Sample(population=0, time=0),
+                msprime.Sample(population=1, time=0),
+            ]
+        )
+        assert list(lineages[(0, np.inf)]) == [True, True]
+        lineages = debug.possible_lineage_locations(
+            samples=[
+                msprime.SampleSet(1, population=0),
+                msprime.SampleSet(1, population=1),
+            ]
+        )
+        assert list(lineages[(0, np.inf)]) == [True, True]
+
+        lineages = debug.possible_lineage_locations(samples=["A"])
+        assert list(lineages[(0, np.inf)]) == [True, False]
+        lineages = debug.possible_lineage_locations(samples=[0])
+        assert list(lineages[(0, np.inf)]) == [True, False]
+        lineages = debug.possible_lineage_locations(
+            samples=[
+                msprime.Sample(population=0, time=0),
+            ]
+        )
+        assert list(lineages[(0, np.inf)]) == [True, False]
+        lineages = debug.possible_lineage_locations(
+            samples=[
+                msprime.SampleSet(1, population=0),
+            ]
+        )
+        assert list(lineages[(0, np.inf)]) == [True, False]
+
+    def test_zero_num_samples_accounted_for(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        debug = demography.debug()
+        lineages = debug.possible_lineage_locations(
+            samples=[
+                msprime.SampleSet(1, population=0),
+                msprime.SampleSet(num_samples=0, population=1),
+            ]
+        )
+        assert list(lineages[(0, np.inf)]) == [True, False]
+
+    def test_population_split(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
+        demography.add_population_split(time=1, ancestral="C", derived=["A", "B"])
+        debug = demography.debug()
+        lineages = debug.possible_lineage_locations(samples=["A", "B"])
+        assert len(lineages) == 2
+        assert list(lineages[(0, 1.0)]) == [True, True, False]
+        assert list(lineages[(1.0, np.inf)]) == [False, False, True]
+
+        # By default we put lineages in all populations with sampling time = 0
+        lineages = debug.possible_lineage_locations()
+        assert len(lineages) == 2
+        assert list(lineages[(0, 1.0)]) == [True, True, False]
+        assert list(lineages[(1.0, np.inf)]) == [False, False, True]
+
+        lineages = debug.possible_lineage_locations(samples=["A", "B", "C"])
+        assert len(lineages) == 2
+        assert list(lineages[(0, 1.0)]) == [True, True, False]
+        assert list(lineages[(1.0, np.inf)]) == [False, False, True]
+
+        lineages = debug.possible_lineage_locations(samples=["C"])
+        assert len(lineages) == 2
+        assert list(lineages[(0, 1.0)]) == [False, False, False]
+        assert list(lineages[(1.0, np.inf)]) == [False, False, True]
+
+    def test_admixture(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
+        demography.add_admixture(
+            time=1, ancestral=["B", "C"], proportions=[0.5, 0.5], derived="A"
+        )
+        debug = demography.debug()
+        lineages = debug.possible_lineage_locations(["A", "B", "C"])
+        assert len(lineages) == 2
+        assert list(lineages[(0, 1.0)]) == [True, True, True]
+        assert list(lineages[(1.0, np.inf)]) == [False, True, True]
+
+        lineages = debug.possible_lineage_locations()
+        assert len(lineages) == 2
+        assert list(lineages[(0, 1.0)]) == [True, True, True]
+        assert list(lineages[(1.0, np.inf)]) == [False, True, True]
+
+        lineages = debug.possible_lineage_locations(["A"])
+        assert len(lineages) == 2
+        assert list(lineages[(0, 1.0)]) == [True, False, False]
+        assert list(lineages[(1.0, np.inf)]) == [False, True, True]
+
+        lineages = debug.possible_lineage_locations(["B", "C"])
+        # Epochs get merged.
+        assert len(lineages) == 1
+        assert list(lineages[(0, np.inf)]) == [False, True, True]
+
+    def test_admixture_zero_proportion(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
+        demography.add_admixture(
+            time=1, ancestral=["B", "C"], proportions=[0.0, 1.0], derived="A"
+        )
+        debug = demography.debug()
+        lineages = debug.possible_lineage_locations(["A", "B", "C"])
+        assert len(lineages) == 2
+        assert list(lineages[(0, 1.0)]) == [True, True, True]
+        assert list(lineages[(1.0, np.inf)]) == [False, True, True]
+        lineages = debug.possible_lineage_locations(["A"])
+        assert len(lineages) == 2
+        assert list(lineages[(0, 1.0)]) == [True, False, False]
+        assert list(lineages[(1.0, np.inf)]) == [False, False, True]
 
 
 class TestLineageProbabilities:
