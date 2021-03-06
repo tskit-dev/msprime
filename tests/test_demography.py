@@ -5253,6 +5253,31 @@ class TestNormaliseLineageMovements:
         }
         assert equiv == demography._normalise_lineage_movements(demography.events)
 
+    def test_admixture_zero_proportion(self):
+        demography = msprime.Demography.isolated_model([10] * 10)
+        demography.add_admixture(
+            time=0.1, derived=0, ancestral=[1, 2], proportions=[0, 1]
+        )
+        equiv = {
+            0: [
+                msprime.LineageMovement(0, 1, 0),
+                msprime.LineageMovement(0, 2, 1),
+            ]
+        }
+        assert equiv == demography._normalise_lineage_movements(demography.events)
+
+        demography = msprime.Demography.isolated_model([10] * 10)
+        demography.add_admixture(
+            time=0.1, derived=0, ancestral=[1, 2], proportions=[1, 0]
+        )
+        equiv = {
+            0: [
+                msprime.LineageMovement(0, 1, 1),
+                msprime.LineageMovement(0, 2, 0),
+            ]
+        }
+        assert equiv == demography._normalise_lineage_movements(demography.events)
+
 
 class TestProportionConversion:
     """
@@ -5284,7 +5309,12 @@ class TestProportionConversion:
         "P",
         [
             [1],
+            [0, 1],
+            [1, 0],
             [1 / 2, 1 / 2],
+            [1 / 2, 1 / 2, 0],
+            [1 / 2, 0, 1 / 2],
+            [0, 1 / 2, 1 / 2],
             [1 / 3] * 3,
             [1 / 6] * 6,
             [2 / 6, 1 / 6, 2 / 6, 1 / 6],
