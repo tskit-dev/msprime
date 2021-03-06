@@ -2490,7 +2490,11 @@ def _proportions_to_sequential(P):
     # Conditioned on having already distributed a fraction q of the
     # lineages, the we need a fraction p / (1 - q) of the remaining
     # lineages to get an overall proportion of p
-    C = [P[j] / (1 - sum(P[:j])) for j in range(len(P))]
+    C = [0 for _ in P]
+    for j in range(len(P)):
+        s = sum(P[:j])
+        if s < 1:
+            C[j] = P[j] / (1 - s)
     return C
 
 
