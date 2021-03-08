@@ -5584,6 +5584,171 @@ class OlderMsprimeTest(Test):
         self._run(1000, sample_size=2, Ne=10 ** 4, recombination_rate=1e-8, length=1e7)
 
 
+class InstantaneousBottleneckExpectedSfs(Test):
+    """
+    Tests that instantaneous bottlenecks gives us the expected SFS
+    from analytical results (Bunnefeld et al 2016).
+    """
+
+    def bottleneck_sfs_n4(self, T, strength):
+        B = strength
+        s = 1 - np.exp(-B)
+        p = s * (
+            -6
+            + 15 * s
+            - 20 * np.power(s, 2)
+            + 15 * np.power(s, 3)
+            - 6 * np.power(s, 4)
+            + np.power(s, 5)
+        )
+
+        expsfsBottlN = [
+            2
+            / 15
+            * (
+                np.exp(-6 * T)
+                * (
+                    15 * np.exp(6 * T)
+                    - 9 * np.exp(5 * T) * s
+                    - 5 * np.exp(3 * T) * s * (3 - 3 * s + np.power(s, 2))
+                    + p
+                )
+            ),
+            1 / 5 * np.exp(-6 * T) * (5 * np.exp(6 * T) - 6 * np.exp(5 * T) * s - p),
+            2
+            / 15
+            * np.exp(-6 * T)
+            * (
+                5 * np.exp(6 * T)
+                - 9 * np.exp(5 * T) * s
+                + 5 * np.exp(3 * T) * s * (3 - 3 * s + np.power(s, 2))
+                + p
+            ),
+        ]
+
+        return expsfsBottlN / np.sum(expsfsBottlN)
+
+    def _run(self, T, strength):
+        B = strength
+        expsfsBottlN = self.bottleneck_sfs_n4(T, B)
+        logging.debug(f"T={T} B={B} sfs={expsfsBottlN}")
+
+        numrep = 10000
+        nsamp = 4
+        demography = msprime.Demography.isolated_model([1])
+        demography.add_instantaneous_bottleneck(T, strength=B, population=0)
+        reps = msprime.sim_ancestry(
+            samples=nsamp, ploidy=1, demography=demography, num_replicates=numrep
+        )
+
+        Blist = np.zeros((numrep, nsamp + 1))
+        for rep_index, ts in enumerate(reps):
+            afs = ts.allele_frequency_spectrum(
+                mode="branch", polarised=True, span_normalise=False
+            )
+            Blist[rep_index] += afs
+
+        data = np.mean(Blist, axis=0)
+        data /= np.sum(data)
+
+        fig, ax = pyplot.subplots()
+        index = np.arange(1, 4)
+        bar_width = 0.4
+        opacity = 0.9
+
+        ax.bar(index + bar_width, expsfsBottlN, bar_width, alpha=opacity, label="exp")
+        ax.bar(index + 2 * bar_width, data[1:4], bar_width, alpha=opacity, label="exp")
+        f = self.output_dir / f"sfs_T={T}.png"
+        pyplot.savefig(f, dpi=72)
+        pyplot.close("all")
+
+    def _run_times(self, strength):
+        for T in [0.001, 0.4, 1, 2, 8]:
+            self._run(T, strength=strength)
+
+    def test_instantaneous_bottleneck_sfs_strength_1(self):
+        self._run_times(1)
+
+    def test_instantaneous_bottleneck_sfs_strength_4(self):
+        self._run_times(4)
+
+    def test_instantaneous_bottleneck_sfs_strength_0_1(self):
+        self._run_times(0.1)
+
+
+class InstantaneousBottleneckCoalescenceTime(Test):
+    """
+    Checks that we get the correct expected coalescent time for
+    instantaneous bottlenecks.
+    """
+
+    def simulate_coalescence_time(self, T, strength, numrep=1000):
+        demography = msprime.Demography.isolated_model([1])
+        demography.add_instantaneous_bottleneck(time=T, strength=strength, population=0)
+        reps = msprime.sim_ancestry(
+            samples=2, ploidy=1, demography=demography, num_replicates=numrep
+        )
+
+        T = np.zeros(numrep)
+        for j, ts in enumerate(reps):
+            tree = ts.first()
+            T[j] = tree.time(tree.root)
+        return T
+
+    def _run(self, T):
+        numrep = 1000
+        bottT = T
+
+        # Recording the mean pairwise coalescence times and the fraction
+        # of replicates with t>T for a grid of bottleneck strengths:
+        bottBlist = np.arange(0.0, 5, 0.25)
+        dat = np.zeros(len(bottBlist))
+        prob = np.zeros(len(bottBlist))
+        for j in range(len(bottBlist)):
+            sim = self.simulate_coalescence_time(
+                strength=bottBlist[j], T=bottT, numrep=numrep
+            )
+            dat[j] = np.mean(sim, axis=0)
+            prob[j] = len(sim[sim > bottT]) / numrep
+
+        expprob = [np.exp(-(bottT + i)) for i in bottBlist]
+        expMean = [1 + np.exp(-(bottT + i)) - np.exp(-bottT) for i in bottBlist]
+
+        pyplot.plot(bottBlist, expprob, marker="o", linewidth=5, label="Analytical")
+        pyplot.plot(
+            bottBlist, prob, marker="o", linewidth=1, markersize=8, label="Simulations"
+        )
+        pyplot.xlabel("Bottleneck Strength B")
+        pyplot.ylabel("p(t>T)")
+        f = self.output_dir / f"T={T}_proba.png"
+        pyplot.legend()
+        pyplot.savefig(f, dpi=72)
+        pyplot.close("all")
+
+        pyplot.plot(bottBlist, expMean, marker="o", linewidth=5, label="Analytical")
+        pyplot.plot(
+            bottBlist, dat, marker="o", linewidth=1, markersize=8, label="Simulations"
+        )
+        pyplot.xlabel("Bottleneck Strength B")
+        pyplot.ylabel("E[t]")
+        pyplot.legend()
+        f = self.output_dir / f"T={T}_time.png"
+        pyplot.savefig(f, dpi=72)
+        pyplot.close("all")
+
+    def test_bottleneck_coalescence_time_T0_1(self):
+        self._run(0.1)
+
+    def test_bottleneck_coalescence_time_T0_4(self):
+        self._run(0.4)
+
+    def test_bottleneck_coalescence_time_T1(self):
+        self._run(1)
+
+    def test_bottleneck_coalescence_time_T2(self):
+        self._run(2)
+
+
 ###############################################
 # Infrastructure for running the tests and CLI
 ###############################################

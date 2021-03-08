@@ -632,6 +632,20 @@ class Demography(collections.abc.Mapping):
         population: Union[int, str],
         proportion: Union[float, None] = None,
     ) -> SimpleBottleneck:
+        """
+        Adds a population bottleneck at the specified time in which each lineage
+        has probablility equal to ``proportion`` of coalescing into a single
+        ancestor.
+
+        Please see the :ref:`sec_demography_events_simple_bottleneck` section
+        for more details.
+
+        :param float time: The length of time ago at which this event
+            occurred.
+        :param str, int population: The ID of the population affected.
+        :param float proportion: The probability of each lineage coalescing
+            into a single ancestor. Defaults to 1.0.
+        """
         proportion = 1.0 if proportion is None else proportion
         self._check_population_references([population])
         return self.add_event(
@@ -641,6 +655,24 @@ class Demography(collections.abc.Mapping):
     def add_instantaneous_bottleneck(
         self, time: float, *, population: Union[str, int], strength: float
     ) -> InstantaneousBottleneck:
+        """
+        Adds a bottleneck at the specified time in the specified population
+        that is equivalent to the coalescent process running for ``strength``
+        generations.
+
+        Please see the :ref:`sec_demography_events_instantaneous_bottleneck`
+        section for more details.
+
+        .. note:: The :ref:`ploidy<sec_ancestry_ploidy_coalescent_time_scales>`
+            is also use to scale the time scale of the coalescent process
+            during the bottleneck.
+
+        :param float time: The length of time ago at which this event
+            occurred.
+        :param str, int population: The ID of the population affected.
+        :param float strength: The equivalent amount of time in the standard
+            coalescent.
+        """
         self._check_population_references([population])
         return self.add_event(
             InstantaneousBottleneck(time=time, population=population, strength=strength)
