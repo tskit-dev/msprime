@@ -1220,6 +1220,12 @@ class DebugOutputBase:
         demography.add_population_parameters_change(0.1, growth_rate=10),
         self.verify(demography)
 
+    def test_funky_metadata(self):
+        demography = msprime.Demography()
+        # name is safe because it must be a Python identifier
+        demography.add_population(description="<>&", extra_metadata={"&": "</>"})
+        self.verify(demography)
+
     def test_no_events(self):
         demography = msprime.Demography.isolated_model([10, 11])
         self.verify(demography)
@@ -1375,27 +1381,70 @@ class TestDemographyTextExamples:
         )
         assert out == str(demography)
 
-    @pytest.mark.skip("Skipping until events are stable.")
-    def test_all_events(self):
-        demography = all_events_example_demography(integer_ids=True)
-
+    def test_extra_metadata(self):
+        demography = msprime.Demography()
+        demography.add_population(
+            name="pop", description="desc", extra_metadata={"A": 1, "B": 2}
+        )
         out = textwrap.dedent(
             """\
         Demography
         ╟  Populations
-        ║  ┌────────────────────────────────────────────────────────────────────────┐
-        ║  │ id │name   │description  │initial_size  │ growth_rate │extra_metadata  │
-        ║  ├────────────────────────────────────────────────────────────────────────┤
-        ║  │ 0  │pop_0  │             │1.0           │     0.0     │{}              │
-        ║  │ 1  │pop_1  │             │1.0           │     0.0     │{}              │
-        ║  └────────────────────────────────────────────────────────────────────────┘
+        ║  ┌─────────────────────────────────────────────────────────────────────────────────────────┐
+        ║  │ id │name  │description  │initial_size  │ growth_rate │  sampling_time│extra_metadata    │
+        ║  ├─────────────────────────────────────────────────────────────────────────────────────────┤
+        ║  │ 0  │pop   │desc         │1.0           │    0.00     │              0│{'A': 1, 'B': 2}  │
+        ║  └─────────────────────────────────────────────────────────────────────────────────────────┘
         ╟  Migration Matrix
-        ║  ┌───────────────────────┐
-        ║  │       │ pop_0 │ pop_1 │
-        ║  ├───────────────────────┤
-        ║  │  pop_0│   0   │   0   │
-        ║  │  pop_1│   0   │   0   │
-        ║  └───────────────────────┘
+        ║  ┌───────────┐
+        ║  │     │ pop │
+        ║  ├───────────┤
+        ║  │  pop│  0  │
+        ║  └───────────┘
+        ╟  Events
+        ║  ┌───────────────────────────────────┐
+        ║  │  time│type  │parameters  │effect  │
+        ║  ├───────────────────────────────────┤
+        ║  └───────────────────────────────────┘
+        """  # noqa: B950
+        )
+        assert out == str(demography)
+
+    def test_all_events(self):
+        demography = all_events_example_demography(integer_ids=True)
+        out = textwrap.dedent(
+            """\
+        Demography
+        ╟  Populations
+        ║  ┌────────────────────────────────────────────────────────────────────────────────────────┐
+        ║  │ id │name   │description  │initial_size  │ growth_rate │  sampling_time│extra_metadata  │
+        ║  ├────────────────────────────────────────────────────────────────────────────────────────┤
+        ║  │ 0  │pop_0  │             │10.0          │    0.00     │              0│{}              │
+        ║  │ 1  │pop_1  │             │10.0          │    0.00     │              0│{}              │
+        ║  │ 2  │pop_2  │             │10.0          │    0.00     │              0│{}              │
+        ║  │ 3  │pop_3  │             │10.0          │    0.00     │              0│{}              │
+        ║  │ 4  │pop_4  │             │10.0          │    0.00     │              0│{}              │
+        ║  │ 5  │pop_5  │             │10.0          │    0.00     │            0.4│{}              │
+        ║  │ 6  │pop_6  │             │10.0          │    0.00     │              0│{}              │
+        ║  │ 7  │pop_7  │             │10.0          │    0.00     │              0│{}              │
+        ║  │ 8  │pop_8  │             │10.0          │    0.00     │              0│{}              │
+        ║  │ 9  │pop_9  │             │10.0          │    0.00     │              0│{}              │
+        ║  └────────────────────────────────────────────────────────────────────────────────────────┘
+        ╟  Migration Matrix
+        ║  ┌───────────────────────────────────────────────────────────────────────────────────────┐
+        ║  │       │ pop_0 │ pop_1 │ pop_2 │ pop_3 │ pop_4 │ pop_5 │ pop_6 │ pop_7 │ pop_8 │ pop_9 │
+        ║  ├───────────────────────────────────────────────────────────────────────────────────────┤
+        ║  │  pop_0│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
+        ║  │  pop_1│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
+        ║  │  pop_2│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
+        ║  │  pop_3│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
+        ║  │  pop_4│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
+        ║  │  pop_5│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
+        ║  │  pop_6│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
+        ║  │  pop_7│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
+        ║  │  pop_8│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
+        ║  │  pop_9│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
+        ║  └───────────────────────────────────────────────────────────────────────────────────────┘
         ╟  Events
         ║  ┌──────────────────────────────────────────────────────────────────────────────────────┐
         ║  │  time│type            │parameters           │effect                                  │
@@ -1408,23 +1457,34 @@ class TestDemographyTextExamples:
         ║  │      │parameter       │growth_rate=10       │                                        │
         ║  │      │change          │                     │                                        │
         ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │   0.1│Population      │population=-1,       │initial_size → 1 and growth_rate → 10   │
-        ║  │      │parameter       │initial_size=1,      │for all populations                     │
-        ║  │      │change          │growth_rate=10       │                                        │
-        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
         ║  │   0.2│Migration rate  │source=0, dest=1,    │Backwards-time migration rate from 0    │
         ║  │      │change          │rate=1               │to 1 → 1                                │
         ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │   0.2│Migration rate  │source=1, dest=0,    │Backwards-time migration rate from 1    │
-        ║  │      │change          │rate=1               │to 0 → 1                                │
-        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │   0.4│Mass Migration  │source=1, dest=0,    │Lineages currently in population 1      │
-        ║  │      │                │proportion=0.9       │move to 0 with probability 0.9          │
-        ║  │      │                │                     │(equivalent to individuals migrating    │
-        ║  │      │                │                     │from 0 to 1 forwards in time)           │
+        ║  │   0.3│Symmetric       │populations=[0, 1],  │Sets the symmetric migration rate       │
+        ║  │      │migration rate  │rate=0.5             │between 0 and 1 to 0.5 per generation   │
+        ║  │      │change          │                     │                                        │
         ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
         ║  │   0.4│Migration rate  │source=-1, dest=-1,  │Backwards-time migration rate for all   │
         ║  │      │change          │rate=0               │populations → 0                         │
+        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
+        ║  │   0.4│Mass Migration  │source=1, dest=0,    │Lineages currently in population 1      │
+        ║  │      │                │proportion=0.5       │move to 0 with probability 0.5          │
+        ║  │      │                │                     │(equivalent to individuals migrating    │
+        ║  │      │                │                     │from 0 to 1 forwards in time)           │
+        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
+        ║  │   0.4│Population      │derived=[3, 4],      │Moves all lineages from derived         │
+        ║  │      │Split           │ancestral=5          │populations '3' and '4' to the          │
+        ║  │      │                │                     │ancestral '5' population. Also set the  │
+        ║  │      │                │                     │derived populations to inactive, and    │
+        ║  │      │                │                     │all migration rates to and from the     │
+        ║  │      │                │                     │derived populations to zero.            │
+        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
+        ║  │  0.45│Admixture       │derived=7            │Moves all lineages from admixed         │
+        ║  │      │                │ancestral=[8, 9]     │population '7' to ancestral             │
+        ║  │      │                │proportions=[0.50,   │populations. Lineages move to '8' with  │
+        ║  │      │                │0.50]                │proba 0.5; '9' with proba 0.5. Set '7'  │
+        ║  │      │                │                     │to inactive, and all migration rates    │
+        ║  │      │                │                     │to and from '7' to zero.                │
         ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
         ║  │   0.5│Instantaneous   │population=0,        │Equivalent to 100 generations of the    │
         ║  │      │Bottleneck      │strength=100         │coalescent                              │
