@@ -1220,6 +1220,12 @@ class DebugOutputBase:
         demography.add_population_parameters_change(0.1, growth_rate=10),
         self.verify(demography)
 
+    def test_funky_metadata(self):
+        demography = msprime.Demography()
+        # name is safe because it must be a Python identifier
+        demography.add_population(description="<>&", extra_metadata={"&": "</>"})
+        self.verify(demography)
+
     def test_no_events(self):
         demography = msprime.Demography.isolated_model([10, 11])
         self.verify(demography)
@@ -1366,6 +1372,35 @@ class TestDemographyTextExamples:
         ║  │  pop_0│   0   │  0.1  │
         ║  │  pop_1│  0.2  │   0   │
         ║  └───────────────────────┘
+        ╟  Events
+        ║  ┌───────────────────────────────────┐
+        ║  │  time│type  │parameters  │effect  │
+        ║  ├───────────────────────────────────┤
+        ║  └───────────────────────────────────┘
+        """  # noqa: B950
+        )
+        assert out == str(demography)
+
+    def test_extra_metadata(self):
+        demography = msprime.Demography()
+        demography.add_population(
+            name="pop", description="desc", extra_metadata={"A": 1, "B": 2}
+        )
+        out = textwrap.dedent(
+            """\
+        Demography
+        ╟  Populations
+        ║  ┌─────────────────────────────────────────────────────────────────────────────────────────┐
+        ║  │ id │name  │description  │initial_size  │ growth_rate │  sampling_time│extra_metadata    │
+        ║  ├─────────────────────────────────────────────────────────────────────────────────────────┤
+        ║  │ 0  │pop   │desc         │1.0           │    0.00     │              0│{'A': 1, 'B': 2}  │
+        ║  └─────────────────────────────────────────────────────────────────────────────────────────┘
+        ╟  Migration Matrix
+        ║  ┌───────────┐
+        ║  │     │ pop │
+        ║  ├───────────┤
+        ║  │  pop│  0  │
+        ║  └───────────┘
         ╟  Events
         ║  ┌───────────────────────────────────┐
         ║  │  time│type  │parameters  │effect  │

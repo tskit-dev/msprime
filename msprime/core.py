@@ -22,6 +22,7 @@ Core functions and classes used throughout msprime.
 from __future__ import annotations
 
 import dataclasses
+import html
 import numbers
 import os
 import random
@@ -132,9 +133,9 @@ class TableEntry:
     def as_html(self):
         ret = "<td"
         if self.extra is not None:
-            wrapped = textwrap.fill(self.extra, 80)
+            wrapped = html.escape(textwrap.fill(self.extra, 80))
             ret += f" title='{wrapped}'"
-        ret += f">{self.data}</td>"
+        ret += f">{html.escape(self.data)}</td>"
         return ret
 
     def as_text(self):
