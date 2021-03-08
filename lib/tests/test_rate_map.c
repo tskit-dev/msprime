@@ -414,6 +414,7 @@ test_fast_search_identity(void)
             got = fast_search_idx_strict_upper(&fastie, x);
             CU_ASSERT_EQUAL(expect, got);
         }
+        fast_search_free(&fastie);
     }
 }
 

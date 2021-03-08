@@ -76,6 +76,17 @@ jobs:
             codecov -X gcov -F C
 
       - run:
+          name: Valgrind for C tests.
+          command: |
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_core
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_ancestry
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_fenwick
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_likelihood
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_mutations
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_rate_map
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_sweeps
+
+      - run:
           name: Make sure we can build a distribution.
           command: |
             python setup.py sdist

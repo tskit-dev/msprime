@@ -567,6 +567,7 @@ test_mutation_time(void)
      * start_time */
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER);
+    mutgen_free(&mutgen);
 
     // should not error if ancestral mutations are allowed
     ret = tsk_mutation_table_clear(&tables.mutations);
@@ -582,6 +583,7 @@ test_mutation_time(void)
     ret = mutgen_generate(&mutgen,
         MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    mutgen_free(&mutgen);
 
     /* should not error out with discrete times and kept mutations older
      * end_time */
@@ -607,8 +609,8 @@ test_mutation_time(void)
     ret = mutgen_generate(&mutgen,
         MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNKNOWN_TIME_NOT_SUPPORTED);
-
     mutgen_free(&mutgen);
+
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
