@@ -22,7 +22,6 @@ Test that the documentation examples do what they are supposed to.
 import contextlib
 import io
 import sys
-from unittest import mock
 
 from docs import examples
 
@@ -54,11 +53,3 @@ class TestDocumentationExamples:
         assert len(output) == 2
         assert output[0].startswith("Observed")
         assert output[1].startswith("Predicted")
-
-    def test_logging_info(self):
-        with mock.patch("daiquiri.setup"):
-            examples.logging_info_example()
-
-    def test_logging_debug(self):
-        with mock.patch("daiquiri.setup"):
-            examples.logging_debug_example()
