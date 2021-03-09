@@ -24,10 +24,10 @@
   - file : notes_ms_users
   - file: development
   - file: legacy
+  - file: CITATION
 
   # Stuff we haven't converted to md yet.
   - file: changelog
-  - file: CITATION
 
   # This is going to be deleted once we get the remaining content
   # ported somewhere else.
