@@ -370,7 +370,7 @@ test_single_locus_multiple_historical_samples(void)
         CU_ASSERT_EQUAL(ret, 0);
 
         msp_print_state(&msp, _devnull);
-        ret = msp_run(&msp, 10, ULONG_MAX);
+        ret = msp_run(&msp, 10 - 1E-6, ULONG_MAX);
         CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
         CU_ASSERT_EQUAL(msp_get_num_ancestors(&msp), 1);
         msp_verify(&msp, 0);
@@ -486,7 +486,7 @@ test_single_locus_historical_sample_end_time(void)
         CU_ASSERT_EQUAL(ret, 0);
 
         msp_print_state(&msp, _devnull);
-        ret = msp_run(&msp, 10.0, ULONG_MAX);
+        ret = msp_run(&msp, 10.0 - 1E-6, ULONG_MAX);
         CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
         /* msp_verify(&msp); */
 

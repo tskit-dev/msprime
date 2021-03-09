@@ -30,6 +30,9 @@
 - The `msp` CLI has been stripped of all sub-commands except for
   `simulate` and `mutate`. These sub-commands are provided by the `tskit`
   CLI or the `TreeSequence` API in `tskit`.
+- The `end_time` option now allows events up to and including the specified
+  max time. Previously, events occurred strictly before the max time.
+  ({user}`apragsdale`, {issue}`1304`, {pr}`1521`)
 
 **Deprecations**:
 

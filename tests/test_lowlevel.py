@@ -2186,10 +2186,10 @@ class TestSimulator(LowLevelTestCase):
             ],
             migration_matrix=[[0, 0, 0], [0, 0, 0], [0, 0, 0]],
         )
-        sim.run(t)
+        sim.run(t - 1e-6)
         M = np.zeros((3, 3))
         assert np.array_equal(sim.migration_matrix, M)
-        sim.run(t + 1e-6)
+        sim.run(t)
         M[0, 1] = 1
         M[1, 0] = 1
         assert np.array_equal(sim.migration_matrix, M)
