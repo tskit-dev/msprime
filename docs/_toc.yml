@@ -25,9 +25,10 @@
   - file: development
   - file: legacy
   - file: CITATION
+  - file: CHANGELOG
 
   # Stuff we haven't converted to md yet.
-  - file: changelog
+  # - file: changelog
 
   # This is going to be deleted once we get the remaining content
   # ported somewhere else.
