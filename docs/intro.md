@@ -20,7 +20,12 @@ available for learning about tskit and msprime:
 
 - The [tskit tutorials](https://tskit.dev/tutorials) site contains
   in-depth tutorials on different aspects of msprime simulations
-  as well as how to analyse simulated tree sequences.
+  as well as how to analyse simulated tskit tree sequences.
+
+- Our [Discussions board](https://github.com/tskit-dev/msprime/discussions)
+  is a great place to ask questions like "how do I do X" or "what's the best
+  way to do Y". Please make questions as clear as possible, and be respectful,
+  helpful, and kind.
 
 - The book chapter
   [Coalescent simulation with msprime](https://link.springer.com/protocol/10.1007/978-1-0716-0199-0_9)
@@ -30,12 +35,19 @@ available for learning about tskit and msprime:
   the chapter uses the deprecated {ref}`legacy 0.x API<sec_legacy_0x>`,
   and so does not follow current best practices.
 
+- If you would like to understand more about the underlying algorithms
+  for msprime, please see the
+  [2016 PLoS Computational Biology paper](https://doi.org/10.1371/journal.pcbi.1004842).
+  For more information on the {ref}`sec_ancestry_models_dtwf` model,
+  please see the [2020 PLoS Genetics paper](https://doi.org/10.1371/journal.pgen.1008619).
 
-```{eval-rst}
-.. todo::
-    Some top level content
+```{important}
+If you use msprime in your work, please remember to
+cite it appropriately: see the {ref}`citations<sec_citation>` page
+for details.
 ```
+
+## Contents
 
 ```{tableofcontents}
 ```
-

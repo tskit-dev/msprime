@@ -1,4 +1,4 @@
-.. _sec-citation:
+.. _sec_citation:
 
 ==============
 Citing msprime
