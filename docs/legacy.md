@@ -1,9 +1,10 @@
 
+(sec_legacy_0x)=
 # Legacy (version 0.x) APIs
 
 
 ```{eval-rst}
-.. todo:: This page is under construction, and needs work to ensure 
+.. todo:: This page is under construction, and needs work to ensure
     that the target audiences are able to find the content they need.
 ```
 
@@ -14,13 +15,13 @@
 ```
 
 
-With a few exceptions, you **should not need to change your code** and 
+With a few exceptions, you **should not need to change your code** and
 it should remain working indefinitely.
 
 
-## Upgrading code 
+## Upgrading code
 
-This section is to help legacy 0.x users of msprime get up to speed quickly, summarising 
+This section is to help legacy 0.x users of msprime get up to speed quickly, summarising
 the new APIs and their main differences to what you are used to in the 0.x versions.
 
 The main change is that there are two new functions, {func}`.sim_ancestry` and
@@ -108,7 +109,7 @@ function and is very similar. There are some important differences though:
 * There are now also many new mutation models supported by {func}`.sim_mutations`;
   see {ref}`sec_mutations` for details. These are *not* supported in the deprecated
   {func}`.mutate` function.
-* The simulated mutations now have a simulated ``time`` value, which specifies the 
+* The simulated mutations now have a simulated ``time`` value, which specifies the
   precise time that the mutation occurred. Note that this value is also provided in the
   returned tables for the deprecated ``simulate()`` and ``mutate()`` functions,
   which may lead to some compatibility issues. (We considered removing the simulated
