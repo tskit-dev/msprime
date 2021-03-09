@@ -759,7 +759,7 @@ class TestSimAncestrySamples:
 
     def test_sample_sets_override_time(self):
         demography = msprime.Demography.isolated_model([1])
-        demography.populations[0].sampling_time = 10
+        demography.populations[0].default_sampling_time = 10
         samples = [
             msprime.SampleSet(1, ploidy=2, time=2),
             msprime.SampleSet(1, ploidy=3),  # No time, should use default
@@ -872,7 +872,10 @@ class TestSimAncestrySamples:
                 for _ in range(ploidy):
                     node = tables.nodes[node_id]
                     assert node.individual == ind_id
-                    assert node.time == demography.populations[pop_id].sampling_time
+                    assert (
+                        node.time
+                        == demography.populations[pop_id].default_sampling_time
+                    )
                     assert node.population == pop_id
                     assert node.flags == tskit.NODE_IS_SAMPLE
                     node_id += 1
@@ -896,8 +899,8 @@ class TestSimAncestrySamples:
 
     def test_sample_time_with_map(self):
         demography = msprime.Demography.stepping_stone_model([1, 1], 0)
-        demography.populations[0].sampling_time = 1
-        demography.populations[1].sampling_time = 2
+        demography.populations[0].default_sampling_time = 1
+        demography.populations[1].default_sampling_time = 2
         samples = {0: 5, 1: 5}
         self.verify_samples_map(samples, demography, ploidy=1)
         self.verify_samples_map(samples, demography, ploidy=2)

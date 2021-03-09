@@ -736,7 +736,11 @@ def _insert_sample_sets(sample_sets, demography, default_ploidy, tables):
     for sample_set in sample_sets:
         n = sample_set.num_samples
         population = demography[sample_set.population]
-        time = population.sampling_time if sample_set.time is None else sample_set.time
+        time = (
+            population.default_sampling_time
+            if sample_set.time is None
+            else sample_set.time
+        )
         ploidy = default_ploidy if sample_set.ploidy is None else sample_set.ploidy
         logger.info(
             f"Sampling {n} individuals with ploidy {ploidy} in population "
