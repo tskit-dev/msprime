@@ -55,48 +55,6 @@ _AMINO_ACIDS = [
 ]
 
 
-def mutation_model_factory(model):
-    """
-    Returns a mutation model corresponding to the specified model.
-    - If model is None, the default mutation model is returned.
-    - If model is a string, return the corresponding model instance.
-    - If model is an instance of MutationModel, return a copy of it.
-    - Otherwise raise a type error.
-    """
-
-    # String names here should match Seq-Gen where possible
-    model_map = {
-        # "slim": SLiMMutationModel(), Needs type argument so can't be string init'd
-        "infinite_alleles": InfiniteAllelesMutationModel(),
-        "binary": BinaryMutationModel(),
-        "jc69": JC69MutationModel(),
-        # "hky": HKYMutationModel(), Needs kappa argument
-        # "f84": F84MutationModel(), Needs kappa argument
-        # "gtr": GTRMutationModel(), Needs relative_rates argument
-        "blosum62": BLOSUM62MutationModel(),
-        "pam": PAMMutationModel(),
-    }
-
-    if model is None:
-        model_instance = JC69MutationModel()
-    elif isinstance(model, str):
-        lower_model = model.lower()
-        if lower_model not in model_map:
-            raise ValueError(
-                "Model '{}' unknown. Choose from {}".format(
-                    model, list(model_map.keys())
-                )
-            )
-        model_instance = model_map[lower_model]
-    elif not isinstance(model, MutationModel):
-        raise TypeError(
-            "Mutation model must be a string or an instance of MutationModel"
-        )
-    else:
-        model_instance = model
-    return model_instance
-
-
 class MutationModel:
     def asdict(self):
         # This version of asdict makes sure that we have sufficient parameters
@@ -1151,6 +1109,49 @@ def mutate(
         add_ancestral=True,
         discrete_genome=False,
     )
+
+
+# String names here should match Seq-Gen where possible
+MODEL_MAP = {
+    # "slim": SLiMMutationModel(), Needs type argument so can't be string init'd
+    "infinite_alleles": InfiniteAllelesMutationModel,
+    "binary": BinaryMutationModel,
+    "jc69": JC69MutationModel,
+    # "hky": HKYMutationModel(), Needs kappa argument
+    # "f84": F84MutationModel(), Needs kappa argument
+    # "gtr": GTRMutationModel(), Needs relative_rates argument
+    "blosum62": BLOSUM62MutationModel,
+    "pam": PAMMutationModel,
+}
+
+
+def mutation_model_factory(model):
+    """
+    Returns a mutation model corresponding to the specified model.
+    - If model is None, the default mutation model is returned.
+    - If model is a string, return the corresponding model instance.
+    - If model is an instance of MutationModel, return it.
+    - Otherwise raise a type error.
+    """
+
+    if model is None:
+        model_instance = JC69MutationModel()
+    elif isinstance(model, str):
+        lower_model = model.lower()
+        if lower_model not in MODEL_MAP:
+            raise ValueError(
+                "Model '{}' unknown. Choose from {}".format(
+                    model, sorted(MODEL_MAP.keys())
+                )
+            )
+        model_instance = MODEL_MAP[lower_model]()
+    elif isinstance(model, MutationModel):
+        model_instance = model
+    else:
+        raise TypeError(
+            "Mutation model must be a string or an instance of MutationModel"
+        )
+    return model_instance
 
 
 def sim_mutations(
