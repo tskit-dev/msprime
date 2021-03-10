@@ -4,6 +4,7 @@ codecov
 coverage
 daiquiri
 flake8
+matplotlib
 mock
 mypy
 numpy
