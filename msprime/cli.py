@@ -31,6 +31,7 @@ import tskit
 
 import msprime
 from . import ancestry
+from . import mutations
 
 
 def set_sigpipe_handler():
@@ -1021,10 +1022,11 @@ def run_mutate(args):
         tree_sequence=tree_sequence,
         rate=args.mutation_rate,
         random_seed=args.random_seed,
-        keep=args.keep,
+        keep=True,
         start_time=args.start_time,
         end_time=args.end_time,
-        discrete_genome=args.discrete_genome,
+        discrete_genome=True,
+        model=args.model,
     )
     tree_sequence.dump(args.output_tree_sequence)
 
@@ -1055,19 +1057,6 @@ def add_mutate_subcommand(subparsers):
         help="The tree sequence output file containing the new mutations",
     )
     parser.add_argument(
-        "--keep",
-        "-k",
-        action="store_true",
-        default=False,
-        help="Keep mutations in input tree sequence",
-    )
-    parser.add_argument(
-        "--discrete-genome",
-        action="store_true",
-        default=False,
-        help="Generate mutations at only integer positions along the genome. ",
-    )
-    parser.add_argument(
         "--start-time",
         type=float,
         default=None,
@@ -1078,6 +1067,14 @@ def add_mutate_subcommand(subparsers):
         type=float,
         default=None,
         help="The maximum time ago at which a mutation can occur.",
+    )
+    parser.add_argument(
+        "--model",
+        "-m",
+        type=str,
+        default="jc69",
+        choices=sorted(mutations.MODEL_MAP.keys()),
+        help="Mutation model.",
     )
     parser.set_defaults(runner=run_mutate)
 

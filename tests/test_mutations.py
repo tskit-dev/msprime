@@ -2024,7 +2024,6 @@ class TestMutationModelFactory:
             "pam": msprime.PAMMutationModel,
         }
         for name, model_class in mutation_models.items():
-
             model = msprime.mutation_model_factory(model=name.upper())
             assert isinstance(model, model_class)
             model = msprime.mutation_model_factory(model=name.title())
@@ -2037,7 +2036,7 @@ class TestMutationModelFactory:
             with pytest.raises(TypeError):
                 msprime.mutation_model_factory(model=bad_type)
 
-    def test_model_instances(self):
+    def test_returns_mutation_model_instances_without_copying(self):
         models = [
             msprime.SLiMMutationModel(0, 0),
             msprime.InfiniteAllelesMutationModel(),
