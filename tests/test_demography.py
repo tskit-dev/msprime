@@ -24,7 +24,6 @@ import itertools
 import json
 import math
 import random
-import textwrap
 import unittest
 import warnings
 import xml
@@ -1272,9 +1271,12 @@ class TestDemographyHtml(DebugOutputBase):
         assert len(rows) == demography.num_populations
         migration_matrix_table = list(children[1])[2]
         rows = list(migration_matrix_table.find("tbody"))
-        assert len(rows) == demography.num_populations
-        for row in rows:
-            assert len(row) == demography.num_populations + 1
+        if np.all(demography.migration_matrix == 0):
+            assert len(rows) == 0
+        else:
+            assert len(rows) == demography.num_populations
+            for row in rows:
+                assert len(row) == demography.num_populations + 1
         events_table = list(children[2])[2]
         rows = list(events_table.find("tbody"))
         assert len(rows) == len(demography.events)
@@ -1322,182 +1324,6 @@ class TestDemographyDebuggerText(DebugOutputBase):
         buff = io.StringIO()
         debugger.print_history(buff)
         assert text == buff.getvalue()
-
-
-class TestDemographyTextExamples:
-    def test_one_population(self):
-        demography = msprime.Demography.isolated_model([10])
-        out = textwrap.dedent(
-            """\
-        Demography
-        ╟  Populations
-        ║  ┌────────────────────────────────────────────────────────────────────────────────────────┐
-        ║  │ id │name   │description  │initial_size  │ growth_rate │  sampling_time│extra_metadata  │
-        ║  ├────────────────────────────────────────────────────────────────────────────────────────┤
-        ║  │ 0  │pop_0  │             │10.0          │    0.00     │              0│{}              │
-        ║  └────────────────────────────────────────────────────────────────────────────────────────┘
-        ╟  Migration Matrix
-        ║  ┌───────────────┐
-        ║  │       │ pop_0 │
-        ║  ├───────────────┤
-        ║  │  pop_0│   0   │
-        ║  └───────────────┘
-        ╟  Events
-        ║  ┌───────────────────────────────────┐
-        ║  │  time│type  │parameters  │effect  │
-        ║  ├───────────────────────────────────┤
-        ║  └───────────────────────────────────┘
-        """  # noqa: B950
-        )
-        assert out == str(demography)
-
-    def test_two_populations(self):
-        demography = msprime.Demography.isolated_model([10, 20], growth_rate=[1, 2])
-        demography.migration_matrix[0, 1] = 0.1
-        demography.migration_matrix[1, 0] = 0.2
-        out = textwrap.dedent(
-            """\
-        Demography
-        ╟  Populations
-        ║  ┌────────────────────────────────────────────────────────────────────────────────────────┐
-        ║  │ id │name   │description  │initial_size  │ growth_rate │  sampling_time│extra_metadata  │
-        ║  ├────────────────────────────────────────────────────────────────────────────────────────┤
-        ║  │ 0  │pop_0  │             │10.0          │    1.00     │              0│{}              │
-        ║  │ 1  │pop_1  │             │20.0          │    2.00     │              0│{}              │
-        ║  └────────────────────────────────────────────────────────────────────────────────────────┘
-        ╟  Migration Matrix
-        ║  ┌───────────────────────┐
-        ║  │       │ pop_0 │ pop_1 │
-        ║  ├───────────────────────┤
-        ║  │  pop_0│   0   │  0.1  │
-        ║  │  pop_1│  0.2  │   0   │
-        ║  └───────────────────────┘
-        ╟  Events
-        ║  ┌───────────────────────────────────┐
-        ║  │  time│type  │parameters  │effect  │
-        ║  ├───────────────────────────────────┤
-        ║  └───────────────────────────────────┘
-        """  # noqa: B950
-        )
-        assert out == str(demography)
-
-    def test_extra_metadata(self):
-        demography = msprime.Demography()
-        demography.add_population(
-            name="pop", description="desc", extra_metadata={"A": 1, "B": 2}
-        )
-        out = textwrap.dedent(
-            """\
-        Demography
-        ╟  Populations
-        ║  ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-        ║  │ id │name  │description  │initial_size  │ growth_rate │  sampling_time│extra_metadata    │
-        ║  ├─────────────────────────────────────────────────────────────────────────────────────────┤
-        ║  │ 0  │pop   │desc         │1.0           │    0.00     │              0│{'A': 1, 'B': 2}  │
-        ║  └─────────────────────────────────────────────────────────────────────────────────────────┘
-        ╟  Migration Matrix
-        ║  ┌───────────┐
-        ║  │     │ pop │
-        ║  ├───────────┤
-        ║  │  pop│  0  │
-        ║  └───────────┘
-        ╟  Events
-        ║  ┌───────────────────────────────────┐
-        ║  │  time│type  │parameters  │effect  │
-        ║  ├───────────────────────────────────┤
-        ║  └───────────────────────────────────┘
-        """  # noqa: B950
-        )
-        assert out == str(demography)
-
-    def test_all_events(self):
-        demography = all_events_example_demography(integer_ids=True)
-        out = textwrap.dedent(
-            """\
-        Demography
-        ╟  Populations
-        ║  ┌────────────────────────────────────────────────────────────────────────────────────────┐
-        ║  │ id │name   │description  │initial_size  │ growth_rate │  sampling_time│extra_metadata  │
-        ║  ├────────────────────────────────────────────────────────────────────────────────────────┤
-        ║  │ 0  │pop_0  │             │10.0          │    0.00     │              0│{}              │
-        ║  │ 1  │pop_1  │             │10.0          │    0.00     │              0│{}              │
-        ║  │ 2  │pop_2  │             │10.0          │    0.00     │              0│{}              │
-        ║  │ 3  │pop_3  │             │10.0          │    0.00     │              0│{}              │
-        ║  │ 4  │pop_4  │             │10.0          │    0.00     │              0│{}              │
-        ║  │ 5  │pop_5  │             │10.0          │    0.00     │            0.4│{}              │
-        ║  │ 6  │pop_6  │             │10.0          │    0.00     │              0│{}              │
-        ║  │ 7  │pop_7  │             │10.0          │    0.00     │              0│{}              │
-        ║  │ 8  │pop_8  │             │10.0          │    0.00     │              0│{}              │
-        ║  │ 9  │pop_9  │             │10.0          │    0.00     │              0│{}              │
-        ║  └────────────────────────────────────────────────────────────────────────────────────────┘
-        ╟  Migration Matrix
-        ║  ┌───────────────────────────────────────────────────────────────────────────────────────┐
-        ║  │       │ pop_0 │ pop_1 │ pop_2 │ pop_3 │ pop_4 │ pop_5 │ pop_6 │ pop_7 │ pop_8 │ pop_9 │
-        ║  ├───────────────────────────────────────────────────────────────────────────────────────┤
-        ║  │  pop_0│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
-        ║  │  pop_1│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
-        ║  │  pop_2│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
-        ║  │  pop_3│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
-        ║  │  pop_4│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
-        ║  │  pop_5│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
-        ║  │  pop_6│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
-        ║  │  pop_7│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
-        ║  │  pop_8│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
-        ║  │  pop_9│   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │   0   │
-        ║  └───────────────────────────────────────────────────────────────────────────────────────┘
-        ╟  Events
-        ║  ┌──────────────────────────────────────────────────────────────────────────────────────┐
-        ║  │  time│type            │parameters           │effect                                  │
-        ║  ├──────────────────────────────────────────────────────────────────────────────────────┤
-        ║  │   0.1│Population      │population=-1,       │initial_size → 2 for all populations    │
-        ║  │      │parameter       │initial_size=2       │                                        │
-        ║  │      │change          │                     │                                        │
-        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │   0.1│Population      │population=-1,       │growth_rate → 10 for all populations    │
-        ║  │      │parameter       │growth_rate=10       │                                        │
-        ║  │      │change          │                     │                                        │
-        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │   0.2│Migration rate  │source=0, dest=1,    │Backwards-time migration rate from 0    │
-        ║  │      │change          │rate=1               │to 1 → 1                                │
-        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │   0.3│Symmetric       │populations=[0, 1],  │Sets the symmetric migration rate       │
-        ║  │      │migration rate  │rate=0.5             │between 0 and 1 to 0.5 per generation   │
-        ║  │      │change          │                     │                                        │
-        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │   0.4│Migration rate  │source=-1, dest=-1,  │Backwards-time migration rate for all   │
-        ║  │      │change          │rate=0               │populations → 0                         │
-        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │   0.4│Mass Migration  │source=1, dest=0,    │Lineages currently in population 1      │
-        ║  │      │                │proportion=0.5       │move to 0 with probability 0.5          │
-        ║  │      │                │                     │(equivalent to individuals migrating    │
-        ║  │      │                │                     │from 0 to 1 forwards in time)           │
-        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │   0.4│Population      │derived=[3, 4],      │Moves all lineages from derived         │
-        ║  │      │Split           │ancestral=5          │populations '3' and '4' to the          │
-        ║  │      │                │                     │ancestral '5' population. Also set the  │
-        ║  │      │                │                     │derived populations to inactive, and    │
-        ║  │      │                │                     │all migration rates to and from the     │
-        ║  │      │                │                     │derived populations to zero.            │
-        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │  0.45│Admixture       │derived=7            │Moves all lineages from admixed         │
-        ║  │      │                │ancestral=[8, 9]     │population '7' to ancestral             │
-        ║  │      │                │proportions=[0.50,   │populations. Lineages move to '8' with  │
-        ║  │      │                │0.50]                │proba 0.5; '9' with proba 0.5. Set '7'  │
-        ║  │      │                │                     │to inactive, and all migration rates    │
-        ║  │      │                │                     │to and from '7' to zero.                │
-        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │   0.5│Instantaneous   │population=0,        │Equivalent to 100 generations of the    │
-        ║  │      │Bottleneck      │strength=100         │coalescent                              │
-        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │  0.55│Census          │                     │Insert census nodes to record the       │
-        ║  │      │                │                     │location of all lineages                │
-        ║  │┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈│
-        ║  │  0.56│Simple          │population=1,        │Lineages in population 1 coalesce with  │
-        ║  │      │Bottleneck      │proportion=0.1       │probability 0.1                         │
-        ║  └──────────────────────────────────────────────────────────────────────────────────────┘
-        """  # noqa: B950
-        )
-        assert out == str(demography)
 
 
 class TestDemographyTrajectories(unittest.TestCase):
@@ -2892,12 +2718,12 @@ class HistoricalSamplingMixin:
 
     def test_two_diploid_samples(self):
         N = 100
-        sampling_time = 1.01 * N
+        default_sampling_time = 1.01 * N
         ts = msprime.sim_ancestry(
             demography=msprime.Demography.island_model([N, N], migration_rate=1),
             samples=[
                 msprime.SampleSet(1, population=0),
-                msprime.SampleSet(1, population=1, time=sampling_time),
+                msprime.SampleSet(1, population=1, time=default_sampling_time),
             ],
             ploidy=2,
             model=self.model,
@@ -2906,44 +2732,55 @@ class HistoricalSamplingMixin:
         for t in ts.trees():
             assert t.get_time(0) == 0
             assert t.get_time(1) == 0
-            assert t.get_time(2) == sampling_time
-            assert t.get_time(3) == sampling_time
+            assert t.get_time(2) == default_sampling_time
+            assert t.get_time(3) == default_sampling_time
 
     def test_two_samples(self):
         N = 100
-        sampling_time = 1.01 * N
+        default_sampling_time = 1.01 * N
         for recombination_rate in [0, 1]:
             ts = msprime.simulate(
                 Ne=N,
                 model=self.model,
                 recombination_rate=recombination_rate,
                 length=1,
-                samples=[msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
+                samples=[
+                    msprime.Sample(0, 0),
+                    msprime.Sample(0, default_sampling_time),
+                ],
                 random_seed=3,
             )
             for t in ts.trees():
                 assert t.get_time(0) == 0
-                assert t.get_time(1) == sampling_time
+                assert t.get_time(1) == default_sampling_time
                 assert t.get_parent(0) == t.get_parent(1)
                 assert t.get_parent(1) == t.get_parent(0)
-                assert t.get_time(t.get_parent(0)) > sampling_time
+                assert t.get_time(t.get_parent(0)) > default_sampling_time
 
     def test_two_samples_start_time(self):
         N = 10
-        sampling_time = 10.01 * N
-        for start_time in [0, sampling_time / 2, sampling_time, 10000 * sampling_time]:
+        default_sampling_time = 10.01 * N
+        for start_time in [
+            0,
+            default_sampling_time / 2,
+            default_sampling_time,
+            10000 * default_sampling_time,
+        ]:
             ts = msprime.simulate(
                 Ne=N,
                 start_time=start_time,
                 model=self.model,
                 random_seed=3,
-                samples=[msprime.Sample(0, 0), msprime.Sample(0, sampling_time)],
+                samples=[
+                    msprime.Sample(0, 0),
+                    msprime.Sample(0, default_sampling_time),
+                ],
             )
             nodes = list(ts.nodes())
             assert ts.num_nodes == 3
             assert nodes[0].time == 0
-            assert nodes[1].time == sampling_time
-            assert nodes[2].time > sampling_time
+            assert nodes[1].time == default_sampling_time
+            assert nodes[2].time > default_sampling_time
             assert nodes[2].time > start_time
 
     def test_different_times(self):
@@ -2971,22 +2808,22 @@ class HistoricalSamplingMixin:
         assert t.get_time(t.get_parent(3)) > st3
         assert t.get_time(t.get_root()) > st3
 
-    def test_old_sampling_time(self):
+    def test_old_default_sampling_time(self):
         # This is an enormously long time in coalescent time, so we should
         # coalesce quickly after the samples are introduced.
         N = 100
-        sampling_time = N * 100.01
+        default_sampling_time = N * 100.01
         n = 5
-        samples = [msprime.Sample(0, sampling_time) for j in range(n - 1)] + [
+        samples = [msprime.Sample(0, default_sampling_time) for j in range(n - 1)] + [
             msprime.Sample(0, 0)
         ]
         ts = msprime.simulate(Ne=N, samples=samples, model=self.model, random_seed=4)
         time = [node.time for node in ts.nodes()]
         for j in range(n - 1):
-            assert time[j] == sampling_time
+            assert time[j] == default_sampling_time
         assert time[n - 1] == 0
         # Allow it to be within 10 coalescent time units.
-        assert time[-1] < sampling_time + 10 * N
+        assert time[-1] < default_sampling_time + 10 * N
 
     def test_start_time_invariance(self):
         for N in [10, 100, 128]:
@@ -3032,13 +2869,13 @@ class HistoricalSamplingMixin:
 
     def test_two_samples_mass_migration(self):
         N = 200
-        sampling_time = 2.01 * N
+        default_sampling_time = 2.01 * N
         migration_time = 4.33 * N
         ts = msprime.simulate(
             model=self.model,
             random_seed=10,
             Ne=N,
-            samples=[msprime.Sample(0, 0), msprime.Sample(1, sampling_time)],
+            samples=[msprime.Sample(0, 0), msprime.Sample(1, default_sampling_time)],
             population_configurations=[
                 msprime.PopulationConfiguration(),
                 msprime.PopulationConfiguration(),
@@ -3049,7 +2886,7 @@ class HistoricalSamplingMixin:
         )
         t = next(ts.trees())
         assert t.get_time(0) == 0
-        assert t.get_time(1) == sampling_time
+        assert t.get_time(1) == default_sampling_time
         assert t.get_time(2) >= migration_time
         assert t.get_population(0) == 0
         assert t.get_population(1) == 1
@@ -3121,23 +2958,26 @@ class HistoricalSamplingMixin:
 class TestHistoricalSamplingHudson(unittest.TestCase, HistoricalSamplingMixin):
     model = "hudson"
 
-    def test_sampling_time_invariance(self):
+    def test_default_sampling_time_invariance(self):
         for N in [10, 100, 128]:
             offset = None
             # The difference between the sampling time and the coalescence
             # should be invariant.
-            for sampling_time in [0, 10, 20, 50]:
-                samples = [msprime.Sample(0, sampling_time), msprime.Sample(0, 0)]
+            for default_sampling_time in [0, 10, 20, 50]:
+                samples = [
+                    msprime.Sample(0, default_sampling_time),
+                    msprime.Sample(0, 0),
+                ]
                 ts = msprime.simulate(
                     Ne=N, samples=samples, model=self.model, random_seed=2
                 )
                 time = [node.time for node in ts.nodes()]
-                assert time[0] == sampling_time
+                assert time[0] == default_sampling_time
                 assert time[1] == 0
                 if offset is None:
-                    offset = time[2] - sampling_time
+                    offset = time[2] - default_sampling_time
                 else:
-                    self.assertAlmostEqual(offset, time[2] - sampling_time)
+                    self.assertAlmostEqual(offset, time[2] - default_sampling_time)
 
 
 class TestHistoricalSamplingWrightFisher(unittest.TestCase, HistoricalSamplingMixin):
@@ -4054,7 +3894,7 @@ class TestLineageProbabilities:
         assert np.all(np.isclose(P_out[3], [[1, 0], [1, 0]]))
         self.verify_simulation(dd)
 
-    def test_sampling_time(self):
+    def test_default_sampling_time(self):
         mig_mat = [[0, 0.01], [0.02, 0]]
         dem_events = [
             msprime.MassMigration(time=100, source=1, destination=0, proportion=1),
@@ -4337,14 +4177,14 @@ class TestDemographyObject:
             growth_rate=123,
             name="XYZ",
             description="asdf",
-            sampling_time=0.1234,
+            default_sampling_time=0.1234,
             extra_metadata={"x": "y"},
         )
         assert pop.initial_size == 1234
         assert pop.growth_rate == 123
         assert pop.name == "XYZ"
         assert pop.description == "asdf"
-        assert pop.sampling_time == 0.1234
+        assert pop.default_sampling_time == 0.1234
         assert pop.extra_metadata == {"x": "y"}
 
     def test_sidestepping_add_population(self):
@@ -4572,16 +4412,16 @@ class TestDemographyObject:
         demography.add_population(name="C", initial_size=100)
         demography.set_symmetric_migration_rate(["A", "B"], 0.1)
         demography.add_population_split(10, derived=["A", "B"], ancestral="C")
-        assert demography["A"].sampling_time is None
-        assert demography["B"].sampling_time is None
-        assert demography["C"].sampling_time == 10
+        assert demography["A"].default_sampling_time is None
+        assert demography["B"].default_sampling_time is None
+        assert demography["C"].default_sampling_time == 10
         assert demography["A"].initially_active is None
         assert demography["B"].initially_active is None
         assert not demography["C"].initially_active
         validated = demography.validate()
-        assert validated["A"].sampling_time == 0
-        assert validated["B"].sampling_time == 0
-        assert validated["C"].sampling_time == 10
+        assert validated["A"].default_sampling_time == 0
+        assert validated["B"].default_sampling_time == 0
+        assert validated["C"].default_sampling_time == 10
         assert validated["A"].initially_active
         assert validated["B"].initially_active
         assert not validated["C"].initially_active
@@ -4773,9 +4613,9 @@ class TestPopulationSplit:
         demography.add_population(name="AB", initial_size=100)
         demography.set_symmetric_migration_rate(["A", "B"], 0.1)
         demography.add_population_split(10, derived=["A", "B"], ancestral="AB")
-        assert demography["A"].sampling_time is None
-        assert demography["B"].sampling_time is None
-        assert demography["AB"].sampling_time == 10
+        assert demography["A"].default_sampling_time is None
+        assert demography["B"].default_sampling_time is None
+        assert demography["AB"].default_sampling_time == 10
         dbg = demography.debug()
         assert len(dbg.epochs) == 2
         assert dbg.epochs[1].start_time == 10
@@ -4813,9 +4653,9 @@ class TestPopulationSplit:
         demography.add_population(name="AB", initial_size=100000, growth_rate=0.005)
         demography.set_symmetric_migration_rate(["A", "B"], 0.1)
         demography.add_population_split(2, derived=["A", "B"], ancestral="AB")
-        assert demography["A"].sampling_time is None
-        assert demography["B"].sampling_time is None
-        assert demography["AB"].sampling_time == 2
+        assert demography["A"].default_sampling_time is None
+        assert demography["B"].default_sampling_time is None
+        assert demography["AB"].default_sampling_time == 2
         dbg = demography.debug()
         assert len(dbg.epochs) == 2
         assert dbg.epochs[1].start_time == 2
@@ -5064,7 +4904,7 @@ class TestPopulationSplit:
         demography.add_population_split(time=1, ancestral=3, derived=[1, 2])
         demography.add_population_split(time=2, ancestral=0, derived=[3])
         dbg = demography.debug()
-        assert dbg.demography[0].sampling_time == 2
+        assert dbg.demography[0].default_sampling_time == 2
         assert dbg.num_epochs == 3
         assert not dbg.epochs[0].populations[0].active
         assert dbg.epochs[0].populations[1].active
@@ -5100,19 +4940,19 @@ class TestPopulationSplit:
         )
         assert ts.tables.nodes.population[-1] == 3
 
-    def test_sampling_time_not_overwritten_in_ancestral(self):
+    def test_default_sampling_time_not_overwritten_in_ancestral(self):
         demography = msprime.Demography()
         demography.add_population(name="A", initial_size=100)
         demography.add_population(name="B", initial_size=100)
-        demography.add_population(name="C", initial_size=100, sampling_time=12)
+        demography.add_population(name="C", initial_size=100, default_sampling_time=12)
         demography.add_population_split(10, derived=["A", "B"], ancestral="C")
-        assert demography["A"].sampling_time is None
-        assert demography["B"].sampling_time is None
-        assert demography["C"].sampling_time == 12
+        assert demography["A"].default_sampling_time is None
+        assert demography["B"].default_sampling_time is None
+        assert demography["C"].default_sampling_time == 12
         validated = demography.validate()
-        assert validated["A"].sampling_time == 0
-        assert validated["B"].sampling_time == 0
-        assert validated["C"].sampling_time == 12
+        assert validated["A"].default_sampling_time == 0
+        assert validated["B"].default_sampling_time == 0
+        assert validated["C"].default_sampling_time == 12
 
 
 class TestAdmixture:
@@ -5619,10 +5459,10 @@ class TestDemographyEquivalent:
         ):
             d1.assert_equivalent(d2)
 
-    def test_different_sampling_times(self):
+    def test_different_default_sampling_times(self):
         d1 = msprime.Demography.isolated_model([1, 1])
         d2 = msprime.Demography.isolated_model([1, 1])
-        d1[0].sampling_time = 0.01
+        d1[0].default_sampling_time = 0.01
         assert not d1.is_equivalent(d2)
         with pytest.raises(
             AssertionError, match="Sampling times not equal for pop_0: 0.01 ≠ 0"
@@ -6309,6 +6149,31 @@ class TestStdpopsimModels:
             {"YRI": 0, "OOA": 1},
             {"AMH": 0},
             {"ANC": 0},
+        ]
+
+        remapped_demog = msprime.Demography.from_old_style(
+            model_sps.population_configurations,
+            migration_matrix=model_sps.migration_matrix,
+            demographic_events=model_sps.demographic_events,
+            population_map=epoch_pop_map,
+        )
+        demog_local.assert_equivalent(remapped_demog)
+
+    def test_ooa_trunk(self):
+        # This test is temporary while we are updating stdpopsim to use the
+        # msprime APIs. See the notes in the _ooa_model() code.
+        demog_local = msprime.Demography._ooa_trunk_model()
+        model_sps = stdpopsim.get_species("HomSap").get_demographic_model(
+            "OutOfAfrica_3G09"
+        )
+
+        # Map from local population names into the equivalent in the stdpopsim
+        # model, per epoch.
+        epoch_pop_map = [
+            {"YRI": 0, "CEU": 1, "CHB": 2},
+            {"YRI": 0, "OOA": 1},
+            {"YRI": 0},
+            {"YRI": 0},
         ]
 
         remapped_demog = msprime.Demography.from_old_style(

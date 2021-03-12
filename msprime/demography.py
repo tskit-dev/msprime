@@ -90,10 +90,11 @@ class Population:
         stored in the associated tskit population object. This dictionary
         must not contain keys for any of the pre-defined metadata items.
     :vartype extra_metadata: dict
-    :ivar sampling_time: The default time at which samples are drawn from
-        this population. See the :ref:`sec_ancestry_samples_sampling_time`
+    :ivar default_sampling_time: The default time at which samples are drawn from
+        this population. See the
+        :ref:`sec_demography_populations_default_sampling_time`
         section for more details.
-    :vartype sampling_time: float
+    :vartype default_sampling_time: float
     :ivar id: The integer ID of this population within the parent
         :class:`.Demography`. This attribute is assigned by the Demography
         class and should not be set or changed by user code.
@@ -105,7 +106,7 @@ class Population:
     name: Union[str, None] = None
     description: str = ""
     extra_metadata: dict = dataclasses.field(default_factory=dict)
-    sampling_time: Union[float, None] = None
+    default_sampling_time: Union[float, None] = None
     initially_active: Union[bool, None] = None
 
     # Keeping this as something we can init because this stops us
@@ -171,7 +172,7 @@ class Demography:
         name=None,
         description=None,
         extra_metadata=None,
-        sampling_time=None,
+        default_sampling_time=None,
         initially_active=None,
     ) -> Population:
         """
@@ -185,7 +186,7 @@ class Demography:
         population.name = f"pop_{population.id}" if name is None else name
         population.description = "" if description is None else description
         population.extra_metadata = {} if extra_metadata is None else extra_metadata
-        population.sampling_time = sampling_time
+        population.default_sampling_time = default_sampling_time
         population.initially_active = initially_active
         self.populations.append(population)
         M = self.migration_matrix
@@ -305,9 +306,9 @@ class Demography:
         - All migration rates to and from the derived populations are set to 0.
         - Population sizes and growth rates for the derived populations are set
           to 0.
-        - The ``sampling_time`` of the ``ancestral`` :class:`.Population` is set
-          to the time of this event, **if** the ``sampling_time`` for the
-          ancestral population has not already been set.
+        - The ``default_sampling_time`` of the ``ancestral`` :class:`.Population`
+          is set to the time of this event, **if** the ``default_sampling_time``
+          for the ancestral population has not already been set.
 
         :param float time: The time at which this event occurs in generations.
         :param list(str, int) derived: The derived populations.
@@ -316,8 +317,8 @@ class Demography:
         pop = self[ancestral]
         if pop.initially_active is None:
             pop.initially_active = False
-            if pop.sampling_time is None:
-                pop.sampling_time = time
+            if pop.default_sampling_time is None:
+                pop.default_sampling_time = time
         return self.add_event(
             PopulationSplit(time=time, derived=derived, ancestral=ancestral)
         )
@@ -505,8 +506,8 @@ class Demography:
             ("name", ""),
             ("description", ""),
             ("initial_size", ".1f"),
-            ("growth_rate", ".2f"),
-            ("sampling_time", ".2g"),
+            ("growth_rate", ".2g"),
+            ("default_sampling_time", ".2g"),
             ("extra_metadata", ""),
         ]
         data = [
@@ -531,7 +532,9 @@ class Demography:
 
     def _populations_html(self):
         col_titles, data = self._populations_table()
-        return core.html_table("Populations", col_titles, data)
+        return core.html_table(
+            f"Populations ({len(self.populations)})", col_titles, data
+        )
 
     def _migration_rate_info(self, source, dest, rate):
         extra = None
@@ -573,8 +576,11 @@ class Demography:
         )
 
     def _migration_matrix_html(self):
-        col_titles, data = self._migration_matrix_table()
-        return core.html_table("Migration matrix", col_titles, data)
+        if np.all(self.migration_matrix == 0):
+            return core.html_table("Migration matrix (all zero)", [], [])
+        else:
+            col_titles, data = self._migration_matrix_table()
+            return core.html_table("Migration matrix", col_titles, data)
 
     def _events_text(self, events, title="Events"):
         col_titles = [["time"], ["type"], ["parameters"], ["effect"]]
@@ -590,7 +596,12 @@ class Demography:
             title, col_titles, alignments, data, internal_hlines=True
         )
 
-    def _events_html(self, events, title="Events"):
+    def _events_html(self, events, title=None):
+        if title is None:
+            title = f"Events ({len(events)})"
+        if len(self.events) == 0:
+            return core.html_table(title, [], [])
+
         col_titles = ["time", "type", "parameters", "effect"]
         data = []
         for event in events:
@@ -602,7 +613,7 @@ class Demography:
             )
             row = [f"{event.time:.4g}", type_html, event._parameters(), event._effect()]
             data.append(row)
-        return core.html_table(title, col_titles, data)
+        return core.html_table(title, col_titles, data, no_escape=[1])
 
     def _repr_html_(self):
         resolved = self.validate()
@@ -724,8 +735,8 @@ class Demography:
             last_event = event
         resolved = copy.deepcopy(self)
         for population in resolved.populations:
-            if population.sampling_time is None:
-                population.sampling_time = 0
+            if population.default_sampling_time is None:
+                population.default_sampling_time = 0
             if population.initially_active is None:
                 population.initially_active = True
         return resolved
@@ -874,12 +885,21 @@ class Demography:
                 raise AssertionError(
                     f"Population names differ: {self_pop.name} ≠ {other_pop.name}"
                 )
-            self_st = 0 if self_pop.sampling_time is None else self_pop.sampling_time
-            other_st = 0 if other_pop.sampling_time is None else other_pop.sampling_time
+            self_st = (
+                0
+                if self_pop.default_sampling_time is None
+                else self_pop.default_sampling_time
+            )
+            other_st = (
+                0
+                if other_pop.default_sampling_time is None
+                else other_pop.default_sampling_time
+            )
             if not math.isclose(self_st, other_st):
                 raise AssertionError(
                     f"Sampling times not equal for {self_pop.name}: "
-                    f"{self_pop.sampling_time} ≠ {other_pop.sampling_time}"
+                    f"{self_pop.default_sampling_time} ≠ "
+                    f"{other_pop.default_sampling_time}"
                 )
 
         if self_dbg.num_epochs != other_dbg.num_epochs:
@@ -1322,7 +1342,7 @@ class Demography:
                             )
                             pop = demography[ancestral[0]]
                             pop.initially_active = True
-                            pop.sampling_time = None
+                            pop.default_sampling_time = None
                             demography.add_population_split(
                                 time=epoch.start_time,
                                 derived=[derived],
@@ -1669,6 +1689,77 @@ class Demography:
         demography.add_population_split(time=T_ANC, derived=["AMH"], ancestral="ANC")
         return demography
 
+    def _ooa_trunk_model():
+        """
+        Returns the Gutenkunst et al three population out-of-Africa model,
+        rendered in a more "old-style" way where we merge the various
+        populations back into Africa.
+
+        This version is included here temporarily as a way to get some
+        test coverage on the model compared with stdpopsim. Because we
+        use this model in the documentation, we want make sure that it's
+        doing what we think. We compare the model defined here then with
+        the one presented in the docs, to ensure that no errors creep in.
+
+        Once the upstream code in stdpopsim is updated to use msprime 1.0
+        APIs we can remove this model and instead compare directly
+        to the stdpopsim model with .is_equivalent() or whatever.
+        """
+        # Times are provided in years, so we convert into generations.
+        generation_time = 25
+        T_OOA = 21.2e3 / generation_time
+        T_AMH = 140e3 / generation_time
+        T_ANC = 220e3 / generation_time
+        # We need to work out the starting (diploid) population sizes based on
+        # the growth rates provided for these two populations
+        r_CEU = 0.004
+        r_CHB = 0.0055
+        N_CEU = 1000 / math.exp(-r_CEU * T_OOA)
+        N_CHB = 510 / math.exp(-r_CHB * T_OOA)
+
+        demography = Demography()
+        # This is the "trunk" population that we merge other populations into
+        demography.add_population(
+            name="YRI",
+            description="Africa",
+            initial_size=12300,
+            initially_active=True,
+        )
+        demography.add_population(
+            name="CEU",
+            description="European",
+            initial_size=N_CEU,
+            growth_rate=r_CEU,
+        )
+        demography.add_population(
+            name="CHB",
+            description="East Asian",
+            initial_size=N_CHB,
+            growth_rate=r_CHB,
+        )
+        demography.add_population(
+            name="OOA",
+            description="Bottleneck out-of-Africa population",
+            initial_size=2100,
+        )
+
+        # Set the migration rates between extant populations
+        demography.set_symmetric_migration_rate(["CEU", "CHB"], 9.6e-5)
+        demography.set_symmetric_migration_rate(["YRI", "CHB"], 1.9e-5)
+        demography.set_symmetric_migration_rate(["YRI", "CEU"], 3e-5)
+
+        demography.add_population_split(
+            time=T_OOA, derived=["CEU", "CHB"], ancestral="OOA"
+        )
+        demography.add_symmetric_migration_rate_change(
+            time=T_OOA, populations=["YRI", "OOA"], rate=25e-5
+        )
+        demography.add_population_split(time=T_AMH, derived=["OOA"], ancestral="YRI")
+        demography.add_population_parameters_change(
+            time=T_ANC, population="YRI", initial_size=7300
+        )
+        return demography
+
     @staticmethod
     def _ooa_archaic_model():
         """
@@ -1789,18 +1880,16 @@ class Demography:
         r_ADMIX = 0.05
 
         demography = Demography()
-        demography.add_population(
-            name="AFR", description="African population", initial_size=14474
-        )
+        demography.add_population(name="AFR", description="African", initial_size=14474)
         demography.add_population(
             name="EUR",
-            description="European population",
+            description="European",
             initial_size=N_EUR,
             growth_rate=r_EUR,
         )
         demography.add_population(
             name="EAS",
-            description="East Asian population",
+            description="East Asian",
             initial_size=N_EAS,
             growth_rate=r_EAS,
         )
@@ -1818,7 +1907,7 @@ class Demography:
         )
         demography.add_population(
             name="OOA",
-            description="Bottleneck out-of-Africa population",
+            description="Bottleneck out-of-Africa",
             initial_size=1861,
         )
         demography.add_population(
@@ -1826,7 +1915,7 @@ class Demography:
         )
         demography.add_population(
             name="ANC",
-            description="Ancestral equilibrium population",
+            description="Ancestral equilibrium",
             initial_size=7310,
         )
         demography.set_symmetric_migration_rate(["AFR", "EUR"], 2.5e-5)
@@ -2923,7 +3012,7 @@ class DemographyDebugger:
         integer IDs or string names) or by a list of :class:`.SampleSet` objects,
         allowing sampling times to be specified explicitly. If the ``time`` field
         of the :class:`.SampleSet` is not specified (or population IDs are used)
-        samples are taken at the population's `sampling_time`. Only
+        samples are taken at the population's `default_sampling_time`. Only
         :class:`.SampleSet` objects with ``num_samples > 0`` are counted as
         contributing samples to a particular population.
 
@@ -2942,7 +3031,9 @@ class DemographyDebugger:
         """
         if samples is None:
             samples = [
-                pop.id for pop in self.demography.populations if pop.sampling_time == 0
+                pop.id
+                for pop in self.demography.populations
+                if pop.default_sampling_time == 0
             ]
 
         # get configuration of sampling times from samples ({time:[pops_sampled_from]})
@@ -2951,7 +3042,7 @@ class DemographyDebugger:
             if isinstance(sample, (ancestry.Sample, ancestry.SampleSet)):
                 pop_id = self.demography[sample.population].id
                 sample_time = (
-                    self.demography[pop_id].sampling_time
+                    self.demography[pop_id].default_sampling_time
                     if sample.time is None
                     else sample.time
                 )
@@ -2962,7 +3053,7 @@ class DemographyDebugger:
                 # Assume this is a population identifier.
                 pop = self.demography[sample]
                 pop_id = pop.id
-                sample_time = pop.sampling_time
+                sample_time = pop.default_sampling_time
             sampling_times[sample_time].append(pop_id)
         for t in sampling_times.keys():
             sampling_times[t] = list(set(sampling_times[t]))

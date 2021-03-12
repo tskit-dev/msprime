@@ -70,23 +70,23 @@ this.
 {class}`.StandardCoalescent`
 : Coalescent with recombination ("hudson")
 
-{class}`.SmcApproxCoalescent`             
-: Sequentially Markov Coalescent ("smc")    
+{class}`.SmcApproxCoalescent`
+: Sequentially Markov Coalescent ("smc")
 
-{class}`.SmcPrimeApproxCoalescent`        
-: SMC'("smc_prime")                         
+{class}`.SmcPrimeApproxCoalescent`
+: SMC'("smc_prime")
 
-{class}`.DiscreteTimeWrightFisher`        
-: Generation-by-generation Wright-Fisher    
+{class}`.DiscreteTimeWrightFisher`
+: Generation-by-generation Wright-Fisher
 
 {class}`.BetaCoalescent`
-: Beta coalescent multiple-merger           
+: Beta coalescent multiple-merger
 
-{class}`.DiracCoalescent`                 
-: Dirac coalescent multiple-merger          
+{class}`.DiracCoalescent`
+: Dirac coalescent multiple-merger
 
-{class}`.SweepGenicSelection`             
-: Selective sweep at a linked locus         
+{class}`.SweepGenicSelection`
+: Selective sweep at a linked locus
 
 ---
 
@@ -1267,8 +1267,8 @@ print(tree.tmrca(0,1))
 
 Msprime provides the option to perform coalescent approximations
 to selective sweeps, in which a beneficial mutation moves through
-the population. This is done through the use of a structured 
-coalescent model in the spirit of 
+the population. This is done through the use of a structured
+coalescent model in the spirit of
 [Braverman et al. (1995)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1206652/).
 
 Looking backwards in time the population enters a sweep phase where
@@ -1278,23 +1278,23 @@ those linked to the beneficial allele, call it {math}`B`, and those not,
 rates of coalescence and recombination on the {math}`B` and {math}`b`
 backgrounds.
 
-This implementation is reasonable general, althougth there are 
+This implementation is reasonable general, althougth there are
 current limitations (e.g., no change of population size during
 a sweep). The user supplies a final allele frequency and a starting
-allele frequency, between which msprime will simulate a stochastic 
+allele frequency, between which msprime will simulate a stochastic
 sweep trajectory according to a conditional diffusion model [(Coop
 and Griffiths, 2004](https://pubmed.ncbi.nlm.nih.gov/15465123/);
 [Kim and Stephan 2002](https://pubmed.ncbi.nlm.nih.gov/11861577/)).
 
 Beyond the start and end frequencies of the sweep trajectory, the user
-must specify the selection coefficient of the beneficial mutation 
+must specify the selection coefficient of the beneficial mutation
 {math}`s` the selective
 advantage of the {math}`B` homozygote over the {math}`b` homozygote
 and {math}`h=0.5`. The position represents the location along
 the chromosome where the beneficial allele occurs.
- All other parameters can be set as usual. 
+ All other parameters can be set as usual.
 
-As an example, let's perform 50 replicate hard sweep simulations using 
+As an example, let's perform 50 replicate hard sweep simulations using
 msprime and then plot mean {meth}`pairwise diversity<tskit.TreeSequence.diversity>` in windows across the simulated
 region. The position is set to the middle of the chromosome, so we
 expect to see the characteristic valley of diversity following our sweeps.
@@ -1305,7 +1305,7 @@ a {class}`SweepGenicSelection<.SweepGenicSelection>` model.
 from matplotlib import pyplot as plt
 
 Ne = 1e3
-s = 0.25 
+s = 0.25
 # define hard sweep model
 sweep = msprime.SweepGenicSelection(
     position=1e6 / 2,  # middle of chrom
@@ -1326,27 +1326,27 @@ reps = msprime.sim_ancestry(
 
 wins = np.linspace(0,int(1e6),21)
 mids = (wins[1:] + wins[:-1]) / 2
-    
+
 msp_pis = []
 for ts in reps:
 	mutated_ts = msprime.sim_mutations(ts, rate=1e-8)
 	msp_pis.append(mutated_ts.diversity(windows=wins))
 
-plt.plot(mids,np.array(msp_pis).mean(axis=0), label="msp")   
+plt.plot(mids,np.array(msp_pis).mean(axis=0), label="msp")
 plt.axhline(4 * Ne * 1e-8, linestyle=":", label=r'neutral $\pi$')
 plt.ylabel(r'$\pi$'); plt.ylabel('position (bp)')
 plt.legend()
 ```
 As we can see, the selective sweep has reduced variation in the region
 most closely linked to the beneficial allele and then heterozygosity
-increases with distance to each side. 
+increases with distance to each side.
 
 (sec_ancestry_models_sweep_types)=
 
 #### Sweep model examples
 
 ```{eval-rst}
-.. todo:: Need to add some examples to this section and build it out. 
+.. todo:: Need to add some examples to this section and build it out.
     want examples of hard sweeps, partial sweeps, and soft sweeps.
 ```
 
@@ -1398,3 +1398,26 @@ happened during the Wright-Fisher phase of the simulation, and as-of 500
 generations in the past, there were only two lineages left. The continuous
 time standard coalescent model was then used to simulate the ancient past of
 these two lineages.
+
+(sec_ancestry_errors)=
+
+## Common errors
+
+(sec_ancestry_errors_infinite_waiting_time)=
+
+### Infinite waiting time
+
+```{eval-rst}
+.. todo:: explain this, why it happens and give examples of when
+   we don't detect it. Mention the possible_lineage_locations method.
+```
+
+```{code-cell}
+:tags: [raises-exception]
+
+demography = msprime.Demography()
+demography.add_population(name="A")
+demography.add_population(name="B")
+msprime.sim_ancestry(samples={"A": 1, "B": 1}, demography=demography)
+```
+
