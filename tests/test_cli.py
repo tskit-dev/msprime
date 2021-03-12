@@ -1240,6 +1240,18 @@ class TestMspArgumentParser:
         assert args.random_seed == 123
         assert args.compress
 
+    def test_ancestry_default_values(self):
+        parser = cli.get_msp_parser()
+        args = parser.parse_args(["ancestry", "10", "out.trees"])
+        assert args.tree_sequence == "out.trees"
+        assert "mutation_rate" not in args
+        assert args.sample_size == 10
+        assert args.random_seed is None
+        assert args.population_size == 1.0
+        assert args.ploidy == 2
+        assert args.recombination_rate == 0
+        assert args.length == 1
+
     def test_mutate_default_values(self):
         parser = cli.get_msp_parser()
         cmd = "mutate"
@@ -1311,6 +1323,43 @@ class TestMspSimulateOutput:
             capture_output(cli.msp_main, [cmd, "10", tree_sequence_file, "--compress"])
         tree_sequence = tskit.load(tree_sequence_file)
         assert tree_sequence.get_sample_size() == 10
+
+    def test_default_warns(self, tmp_path):
+        tree_sequence_file = str(tmp_path / "out.ts")
+        with pytest.warns(UserWarning, match="The simulate command is deprecated"):
+            capture_output(cli.msp_main, ["simulate", "10", tree_sequence_file])
+
+
+class TestMspAncestryOutput:
+    """
+    Tests the output of msp to ensure it's correct.
+    """
+
+    def test_run_defaults(self, tmp_path):
+        tree_sequence_file = str(tmp_path / "out.ts")
+        stdout, stderr = capture_output(
+            cli.msp_main, ["ancestry", "10", tree_sequence_file]
+        )
+        assert len(stderr) == 0
+        assert len(stdout) == 0
+
+        tree_sequence = tskit.load(tree_sequence_file)
+        assert tree_sequence.get_sample_size() == 20
+        assert tree_sequence.get_sequence_length() == 1
+        assert tree_sequence.get_num_mutations() == 0
+
+    def test_short_args(self, tmp_path):
+        tree_sequence_file = str(tmp_path / "out.ts")
+        stdout, stderr = capture_output(
+            cli.msp_main,
+            ["ancestry", "100", tree_sequence_file, "-L", "1e2", "-r", "5", "-k", "2"],
+        )
+        tree_sequence = tskit.load(tree_sequence_file)
+        assert len(stderr) == 0
+        assert len(stdout) == 0
+        assert tree_sequence.get_sample_size() == 200
+        assert tree_sequence.get_sequence_length() == 100
+        assert tree_sequence.get_num_mutations() == 0
 
 
 @pytest.fixture
