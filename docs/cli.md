@@ -2,15 +2,11 @@
 
 # Command line interface
 
-```{eval-rst}
-.. todo:: This is out of date, needs a pass through to modernise.
-```
-
-Two command_line applications are provided with `msprime`: {ref}`sec_msp` and
-{ref}`sec_mspms`. The {command}`msp` program is an experimental interface for
-interacting with the library, and is a POSIX compliant command line
-interface. The {command}`mspms` program is a fully-{command}`ms` compatible
-interface. This is useful for those who wish to get started quickly with using
+Two command line applications are provided with `msprime`: {ref}`sec_msp` and
+{ref}`sec_mspms`. The {command}`msp` program is a POSIX compliant command line 
+interface to the library. The {command}`mspms` program is a fully-{command}`ms`
+compatible interface. This is useful for those who wish to get started quickly
+with using
 the library, and also as a means of plugging `msprime` into existing work
 flows. However, there is a substantial overhead involved in translating data
 from `msprime`'s native history file into legacy formats, and so new code
@@ -20,25 +16,63 @@ should use the Python API where possible.
 
 ## msp
 
-The `msp` program provides a convenient interface to the msprime API.
+The {command}`msp` program provides a convenient interface to the `msprime` API.
 It is based on subcommands that either generate or consume a
-tree sequence file. The `simulate` subcommand runs a
-simulation storing the results in a file. The other commands are concerned with
-converting this file into other formats.
+tree sequence file. The `ancestry` sub-command simulates tree sequences from the
+ coalescent with recombination. The `mutate` sub-command places 
+mutations onto an existing tree sequence. Several mutation models are available.
+The deprecated `simulate` sub-command simulates tree sequences from the
+ coalescent with recombination and mutations.
 
-:::{warning}
+(sec_msp_ancestry)=
 
-This tool is very new, and the interface may need to change
-over time. This should be considered an alpha feature!
+### msp ancestry
 
-:::
+{command}`msp ancestry` generates coalescent simulations with recombination 
+from a constant population size and stores the result as a tree sequence in
+an output file. This sub-command is an interface to the
+{func}`msprime.sim_ancestry` API function. 
+
+```{eval-rst}
+.. argparse:: 
+    :module: msprime.cli
+    :func: get_msp_parser
+    :prog: msp
+    :path: ancestry
+    :nodefault:
+```
+
+
+(sec_msp_mutate)=
+
+### msp mutate
+
+{command}`msp mutate` can be used to add mutations to a tree sequence and store
+a copy of the resulting tree sequence in a second file. This
+sub-command is an interface to the
+{func}`msprime.sim_mutations` API function. 
+
+```{eval-rst}
+.. argparse::
+    :module: msprime.cli
+    :func: get_msp_parser
+    :prog: msp
+    :path: mutate
+    :nodefault:
+```
+
+
 
 ### msp simulate
 
-{command}`msp simulate` provides a command line interface to the
-{func}`msprime.simulate` API function. Using the parameters provided at the
-command line, we run a simulation and then save the resulting tree sequence
-to the file provided as an argument.
+{command}`msp simulate` generates coalescent simulations with recombination 
+from a constant population size and stores the result as a tree sequence in
+an output file.
+{command}`msp simulate` is deprecated, but will be supported indefinitely. 
+{ref}`sec_msp_mutate` provides further mutation models.
+{command}`msp ancestry` will provide further demographic scenarios from 
+which to simulate tree sequences. {command}`msp simulate` is an
+interface to the deprecated {func}`msprime.simulate` API function. 
 
 ```{eval-rst}
 .. argparse:: 
@@ -48,17 +82,6 @@ to the file provided as an argument.
     :path: simulate
     :nodefault:
 ```
-
-:::{note}
-
-The way in which recombination and mutation rates are specified
-is different to {command}`ms`. In {command}`ms` these rates are scaled by the
-length of the simulated region, whereas we use rates per unit distance.
-The rationale for this change is to simplify running simulations on a
-variety of sequence lengths, so that we need to change only one parameter
-and not three simultaneously.
-
-:::
 
 (sec_mspms)=
 
@@ -95,7 +118,7 @@ the [documentation for ms](<http://thirteen-01.stat.iastate.edu/snoweye/phyclust
 for details on how these values should be interpreted.
 
 ```{eval-rst}
-.. argparse:: 
+.. argparse::
     :module: msprime.cli
     :func: get_mspms_parser
     :prog: mspms

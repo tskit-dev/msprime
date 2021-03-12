@@ -131,7 +131,7 @@ def add_random_seed_argument(parser):
         "-s",
         type=int,
         default=None,
-        help="The random seed. If not specified one is chosen randomly",
+        help="The random seed; If not specified, one is chosen randomly.",
     )
 
 
@@ -999,6 +999,12 @@ def mspms_main(arg_list=None):
 
 
 def run_simulate(args):
+    warnings.warn(
+        "The simulate command is deprecated but will continue to work "
+        "indefinitely. To simulate ancestries, please use the ancestry "
+        "command. To place mutations on a tree sequence, please use "
+        "the mutate command."
+    )
 
     if args.compress:
         warnings.warn(
@@ -1031,6 +1037,18 @@ def run_mutate(args):
     tree_sequence.dump(args.output_tree_sequence)
 
 
+def run_ancestry(args):
+    tree_sequence = msprime.sim_ancestry(
+        samples=int(args.sample_size),
+        population_size=args.population_size,
+        sequence_length=args.length,
+        ploidy=args.ploidy,
+        recombination_rate=args.recombination_rate,
+        random_seed=args.random_seed,
+    )
+    tree_sequence.dump(args.tree_sequence)
+
+
 def get_msp_parser():
     top_parser = argparse.ArgumentParser(
         description="Command line interface for msprime.", epilog=msprime_citation_text
@@ -1041,8 +1059,9 @@ def get_msp_parser():
     subparsers = top_parser.add_subparsers(dest="subcommand")
     subparsers.required = True
 
-    add_simulate_subcommand(subparsers)
+    add_ancestry_subcommand(subparsers)
     add_mutate_subcommand(subparsers)
+    add_simulate_subcommand(subparsers)
 
     return top_parser
 
@@ -1060,13 +1079,13 @@ def add_mutate_subcommand(subparsers):
         "--start-time",
         type=float,
         default=None,
-        help="The minimum time ago at which a mutation can occur.",
+        help="The minimum time ago at which a mutation can occur",
     )
     parser.add_argument(
         "--end-time",
         type=float,
         default=None,
-        help="The maximum time ago at which a mutation can occur.",
+        help="The maximum time ago at which a mutation can occur",
     )
     parser.add_argument(
         "--model",
@@ -1074,13 +1093,13 @@ def add_mutate_subcommand(subparsers):
         type=str,
         default="jc69",
         choices=sorted(mutations.MODEL_MAP.keys()),
-        help="Mutation model.",
+        help="The mutation model to use to generate mutations",
     )
     parser.set_defaults(runner=run_mutate)
 
 
 def add_simulate_subcommand(subparsers) -> None:
-    parser = subparsers.add_parser("simulate", help="Run the simulation")
+    parser = subparsers.add_parser("simulate", help="Run the simulation.")
     add_sample_size_argument(parser)
     add_tree_sequence_argument(parser)
     parser.add_argument(
@@ -1088,7 +1107,7 @@ def add_simulate_subcommand(subparsers) -> None:
         "-L",
         type=float,
         default=1,
-        help="The length of the simulated region in base pairs.",
+        help="The length of the simulated region in base pairs",
     )
     parser.add_argument(
         "--recombination-rate",
@@ -1113,6 +1132,47 @@ def add_simulate_subcommand(subparsers) -> None:
         help="Deprecated option with no effect; please use the tszip utility instead.",
     )
     parser.set_defaults(runner=run_simulate)
+
+
+def add_ancestry_subcommand(subparsers) -> None:
+    parser = subparsers.add_parser(
+        "ancestry", help="Simulate an ancestry from the coalescent."
+    )
+    parser.add_argument(
+        "sample_size", type=positive_int, help="The number of individuals in the sample"
+    )
+    add_tree_sequence_argument(parser)
+    add_random_seed_argument(parser)
+    parser.add_argument(
+        "--length",
+        "-L",
+        type=float,
+        default=1,
+        help="The length of the genome sequence to simulate",
+    )
+    parser.add_argument(
+        "--recombination-rate",
+        "-r",
+        type=float,
+        default=0,
+        help="The recombination rate per base per generation",
+    )
+    parser.add_argument(
+        "--population-size",
+        "-N",
+        type=float,
+        default=1,
+        help="The number of individuals in the population",
+    )
+    parser.add_argument(
+        "--ploidy",
+        "-k",
+        type=int,
+        default=2,
+        help="The number of monoploid genomes per sample individual",
+    )
+
+    parser.set_defaults(runner=run_ancestry)
 
 
 def msp_main(arg_list=None):
