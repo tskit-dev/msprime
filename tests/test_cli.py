@@ -1268,8 +1268,9 @@ class TestMspArgumentParser:
         parser = cli.get_msp_parser()
         cmd = "mutate"
         with pytest.raises(SystemExit):
-            parser.parse_args(
-                [cmd, "--model", "not-a-model", "out.trees", "out2.trees"]
+            capture_output(
+                parser.parse_args,
+                [cmd, "--model", "not-a-model", "out.trees", "out2.trees"],
             )
 
     def test_mutate_model_is_changeable(self):
@@ -1287,11 +1288,15 @@ class TestMspSimulateOutput:
     Tests the output of msp to ensure it's correct.
     """
 
+    def capture_output(self, *args, **kwargs):
+        with pytest.warns(UserWarning, match="The simulate command is deprecated"):
+            return capture_output(*args, **kwargs)
+
     def test_run_defaults(self, tmp_path):
         cmd = "simulate"
         sample_size = 10
         tree_sequence_file = str(tmp_path / "out.ts")
-        stdout, stderr = capture_output(
+        stdout, stderr = self.capture_output(
             cli.msp_main, [cmd, str(sample_size), tree_sequence_file]
         )
         assert len(stderr) == 0
@@ -1305,7 +1310,7 @@ class TestMspSimulateOutput:
     def test_simulate_short_args(self, tmp_path):
         cmd = "simulate"
         tree_sequence_file = str(tmp_path / "out.ts")
-        stdout, stderr = capture_output(
+        stdout, stderr = self.capture_output(
             cli.msp_main,
             [cmd, "100", tree_sequence_file, "-L", "1e2", "-r", "5", "-u", "2"],
         )
@@ -1323,11 +1328,6 @@ class TestMspSimulateOutput:
             capture_output(cli.msp_main, [cmd, "10", tree_sequence_file, "--compress"])
         tree_sequence = tskit.load(tree_sequence_file)
         assert tree_sequence.get_sample_size() == 10
-
-    def test_default_warns(self, tmp_path):
-        tree_sequence_file = str(tmp_path / "out.ts")
-        with pytest.warns(UserWarning, match="The simulate command is deprecated"):
-            capture_output(cli.msp_main, ["simulate", "10", tree_sequence_file])
 
 
 class TestMspAncestryOutput:
