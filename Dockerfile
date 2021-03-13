@@ -2,7 +2,7 @@
 #organization tskit-dev
 #application "Msprime: A reimplementation of Hudson's classical ms simulator for modern data sets."
 
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 # Set the working directory to /app
 WORKDIR /app
