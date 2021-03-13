@@ -163,7 +163,7 @@ histories in general, so it's worth the effort of getting used to it. For
 example, understanding how different patterns of lineages moving from one
 population to another backwards in time corresponds to
 {ref}`population splits<sec_demography_events_population_split>` and
-{ref}`admixtures<sec_demography_events_admixture>` events is a
+{ref}`admixture<sec_demography_events_admixture>` events is a
 great way deepen your understanding of the coalescent in general.
 
 Mostly it doesn't matter, and it's just a point of clarification
@@ -313,7 +313,7 @@ for more details.
 
 #### Growth rate
 
-Each population has an expoential growth rate so that the
+Each population has an exponential growth rate so that the
 size of a population with initial size {math}`s`
 and growth rate {math}`\alpha` is {math}`s e^{-\alpha t}`
 at time {math}`t` generations in the past (see the
@@ -423,7 +423,7 @@ Populations transition from ``ACTIVE`` → ``PREVIOUSLY_ACTIVE`` when they
 are ``derived`` in either population split or admixture events.
 
 Any attempts to move lineages into a population that is not ``ACTIVE``
-via sampling, continuous of pulse migration will result in an error
+via sampling, continuous or pulse migration will result in an error
 during the simulation.
 
 (sec_demography_populations_default_sampling_time)=
@@ -431,9 +431,9 @@ during the simulation.
 #### Default sampling time
 
 The ``default_sampling_time`` property of a {class}`.Population`
-defines the default time at samples will be drawn from a population
+defines the default time at which samples will be drawn from a population
 in {func}`.sim_ancestry`. See the
-{ref}`sec_ancestry_samples} section for details on how this time
+{ref}`sec_ancestry_samples` section for details on how this time
 is used when running simulations, and how sampling time can also
 be specified directly, overriding the population default.
 
@@ -516,7 +516,7 @@ that migration rates are confusing and come back to check the
 documentation whenever you need to work with them.
 :::
 
-Fortunately, asymmetric migration rates are rare in practise
+Fortunately, asymmetric migration rates are rare in practice
 and we can instead use the
 {meth}`.Demography.set_symmetric_migration_rate` and
 {meth}`.Demography.add_symmetric_migration_rate_change` methods
@@ -800,7 +800,7 @@ Creating demographic models is a difficult and
 and we need all the help we can get to avoid making mistakes.
 Msprime provides some basic debugging utilities to help understand
 and inspect the contents of {class}`.Demography` objects, as well
-as understand how the models over time.
+as understand how the model parameters change over time.
 
 ### Demography objects
 
@@ -817,7 +817,7 @@ demography
 ```
 
 If you prefer to work in a terminal or other non-notebook environment
-we can access the same information by converting the demography object
+the same information can be accessed by converting the demography object
 to a string, e.g., by calling ``print``:
 
 ```{code-cell}
@@ -970,7 +970,7 @@ populations. For convenience, we define the
 here, but technically those populations won't be
 {ref}`active <sec_demography_populations_life_cycle>` until later in the
 simulation (i.e., further back in time). To check that we have correctly
-set up the starting states of the populations, we can them look at its
+set up the starting states of the populations, we can look at the
 HTML representation using Jupyter magic.
 
 This sets up our populations, but there is no {ref}`sec_demography_migration`
@@ -994,7 +994,8 @@ appropriate rates between the extant populations.
 
 :::{tip}
 If you hover your mouse over an entry in the migration matrix
-it will tell what population involved are, and how this rate
+it will tell which populations are involved, and how the rate
+can be interpreted.
 :::
 
 The model still does not have any sense of how the modern
@@ -1021,13 +1022,14 @@ three effects:
 ``OOA`` population (remember, this is
 {ref}`backwards in time<sec_demography_direction_of_time>`).
 
-2. We mark the ``OOA`` population as
+2. It marks the ``OOA`` population as
 {ref}`inactive <sec_demography_populations_life_cycle>`
 "before"  the event, and sets its
 {ref}`sampling time<sec_demography_populations_default_sampling_time>`
 to the time of the population split (as can be seen in the Populations table
-above)
-3. We mark the ``CEU`` and ``CHB`` populations as
+above).
+
+3. It marks the ``CEU`` and ``CHB`` populations as
 {ref}`previously active <sec_demography_populations_life_cycle>`
 "after" the event. Any subsequent attempts to move lineages into these
 populations will result in an error.
@@ -1095,8 +1097,7 @@ from [Browning et al. 2011](https://doi.org/10.1371/journal.pgen.1007385).
 :::{important}
 If you want to use this precise model in your analyses
 we strongly recommend using the {ref}`stdpopsim <stdpopsim:sec_introduction>`
-{ref}`HomSap/AmericanAdmixture_4B11
-<stdpopsim:sec_catalog_homsap_models_americanadmixture_4b11>`
+{ref}`HomSap/AmericanAdmixture_4B11 <stdpopsim:sec_catalog_homsap_models_americanadmixture_4b11>`
 model.
 :::
 
@@ -1172,7 +1173,7 @@ ancestral populations.
 We can then add population split events, similar to the
 {ref}`out of Africa model<sec_demography_examples_population_tree>`.
 The {class}`.DemographyDebugger` output then shows how the
-populations time:
+populations change over time:
 
 ```{code-cell}
 demography.add_population_split(T_OOA, derived=["EUR", "EAS"], ancestral="OOA")
@@ -1293,7 +1294,7 @@ to label as ``YRI`` --- see the note below). This is the "trunk" population
 that we merge other populations into over time, which we do via
 {ref}`sec_demography_events_population_split` events. Because these events are
 intended to conveniently model "population trees", we assume that the ancestral
-population will be {ref}`inactive<sec_demography_populations_life_cycle>`before
+population will be {ref}`inactive<sec_demography_populations_life_cycle>` before
 the split (looking backwards). However, in this case, we will be merging the
 ``OOA`` population in to the ``YRI``, which we wish to also be
 {ref}`active<sec_demography_populations_life_cycle>` at the start of the
@@ -1320,7 +1321,7 @@ demography.assert_equal(msprime.Demography._ooa_trunk_model())
 
 :::{note}
 We do not recommend using "trunk" populations in this way as it is
-misleading to think of contempary populations like the Yoruba being
+misleading to think of contemporary populations like the Yoruba being
 in any way representative of the very ancient populations being
 modelled in the oldest epochs.
 :::
@@ -1348,7 +1349,7 @@ species tree in [Newick format](https://en.wikipedia.org/wiki/Newick_format)
 and returns a {class}`.Demography` object. These species trees do not contain
 any information on the sizes of the relevant populations, however, and so these
 must be specified separately using the ``initial_size`` argument
-(see `ref`{sec_demography_populations_initial_size}).
+(see {ref}`sec_demography_populations_initial_size`).
 When species trees are estimated with a program like
 [StarBEAST](<https://academic.oup.com/mbe/article/34/8/2101/3738283>) they can
 contain estimates on the population sizes of extant and ancestral species.
