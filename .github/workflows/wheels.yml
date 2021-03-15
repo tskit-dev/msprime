@@ -1,4 +1,4 @@
-name: Build and test wheels
+name: Binary wheels
 
 on:
   push:
