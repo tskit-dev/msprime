@@ -71,48 +71,63 @@ class Population:
     Define a :ref:`population <sec_demography_populations>` in a
     :class:`.Demography`.
 
-    :ivar initial_size: The absolute size of the population at time zero.
-    :vartype initial_size: float
-    :var growth_rate: The exponential growth rate of the
-        population per generation (forwards in time).
-        Growth rates can be negative. This is zero for a
-        constant population size, and positive for a population that has been
-        growing. Defaults to 0.
-    :vartype growth_rate: float
-    :ivar name: The name of the population. If specified this must be a uniquely
-        identifying string and must be a valid Python identifier (i.e., could be
-        used as a variable name in Python code).
-    :vartype name: str
-    :ivar description: A short description of the population. Defaults to the
-        empty string if not specified.
-    :vartype description: str
-    :ivar extra_metadata: A JSON-encodable dictionary of metadata items to be
-        stored in the associated tskit population object. This dictionary
-        must not contain keys for any of the pre-defined metadata items.
-    :vartype extra_metadata: dict
-    :ivar default_sampling_time: The default time at which samples are drawn from
-        this population. See the
-        :ref:`sec_demography_populations_default_sampling_time`
-        section for more details.
-    :vartype default_sampling_time: float
-    :ivar id: The integer ID of this population within the parent
-        :class:`.Demography`. This attribute is assigned by the Demography
-        class and should not be set or changed by user code.
-    :vartype id: int
     """
 
     initial_size: float = 0.0
-    growth_rate: float = 0.0
-    name: Union[str, None] = None
-    description: str = ""
-    extra_metadata: dict = dataclasses.field(default_factory=dict)
-    default_sampling_time: Union[float, None] = None
-    initially_active: Union[bool, None] = None
+    """
+    The absolute size of the population at time zero.
+    """
 
-    # Keeping this as something we can init because this stops us
-    # doing things like round-tripping through repr. The warning
-    # above should suffice.
+    growth_rate: float = 0.0
+    """
+    The exponential growth rate of the population per generation (forwards in time).
+    Growth rates can be negative. This is zero for a constant population size,
+    and positive for a population that has been growing. Defaults to 0.
+    """
+
+    name: Union[str, None] = None
+    """
+    The name of the population. If specified this must be a uniquely
+    identifying string and must be a valid Python identifier (i.e., could be
+    used as a variable name in Python code).
+    """
+
+    description: str = ""
+    """
+    A short description of the population. Defaults to the empty string if not
+    specified.
+    """
+
+    extra_metadata: dict = dataclasses.field(default_factory=dict)
+    """
+    A JSON-encodable dictionary of metadata items to be stored in the
+    associated tskit population object. This dictionary must not contain keys
+    for any of the pre-defined metadata items.
+    """
+
+    default_sampling_time: Union[float, None] = None
+    """
+    The default time at which samples are drawn from this population. See the
+    :ref:`sec_demography_populations_default_sampling_time` section for more
+    details.
+    """
+
+    initially_active: Union[bool, None] = None
+    """
+    If True, this population will always be initially active, regardless
+    of whether it participates in a :ref:`sec_demography_events_population_split`.
+    If not set, or None, the initial state of the population will be
+    set automatically depending on the events declared in the demography.
+    See the :ref:`sec_demography_populations_life_cycle` section for
+    more details.
+    """
+
     id: Union[int, None] = dataclasses.field(default=None)  # noqa: A003
+    """
+    The integer ID of this population within the parent :class:`.Demography`.
+    This attribute is assigned by the Demography class and should not be set
+    or changed by user code.
+    """
 
     def asdict(self):
         return dataclasses.asdict(self)
@@ -371,8 +386,9 @@ class Demography:
         )
 
     def add_mass_migration(self, time, *, source, dest, proportion):
-        # TODO document. Not clear whether we document this with a warning
-        # or we just leave it as population split, etc.
+        """
+        TODO
+        """
         return self.add_event(MassMigration(time, source, dest, proportion))
 
     def add_migration_rate_change(
@@ -844,7 +860,7 @@ class Demography:
         - The migration matrices are equal
         - The same sequence of lineage movements through population splits, etc.
 
-        All numerical comparisons are performed using :func:`py:math.isclose`.
+        All numerical comparisons are performed using :func:`python:math.isclose`.
 
         :param Demography other: The other demography to compare against.
         :param float rel_tol: The relative tolerance used by math.isclose.
@@ -1493,11 +1509,11 @@ class Demography:
         growth rates. Please see :ref:`sec_demography` for more details on
         population sizes and growth rates.
 
-        :param array_like initial_size: the ``initial_size`` value for each
+        :param list initial_size: the ``initial_size`` value for each
             of the :class:`.Population` in the returned model. The length
             of the array corresponds to the number of populations.
             model.
-        :param array_like growth_rate: The exponential growth rate for each
+        :param list growth_rate: The exponential growth rate for each
             population. Must be either None (the default, resulting a zero
             growth rate) or an array with the same length as ``initial_size``.
         :return: A Demography object representing this model, suitable as
@@ -1542,18 +1558,18 @@ class Demography:
         specified rate. Please see :ref:`sec_demography` for more details on
         population sizes and growth rates.
 
-        :param array_like initial_size: the ``initial_size`` value for each
+        :param list initial_size: the ``initial_size`` value for each
             of the :class:`.Population` in the returned model. The length
             of the array corresponds to the number of populations.
             model.
         :param float migration_rate: The migration rate between each pair of
             populations.
-        :param array_like growth_rate: The exponential growth rate for each
+        :param list growth_rate: The exponential growth rate for each
             population. Must be either None (the default, resulting a zero
             growth rate) or an array with the same length as ``initial_size``.
         :return: A Demography object representing this model, suitable as
             input to :func:`.simulate`.
-        :rtype: .Demography
+        :rtype: Demography
         """
         model = Demography.isolated_model(initial_size, growth_rate=growth_rate)
         check_migration_rate(migration_rate)
@@ -1576,12 +1592,12 @@ class Demography:
             stepping stone model, but higher dimensions could also be supported.
             Please open an issue on GitHub if this feature would be useful to you.
 
-        :param array_like initial_size: the ``initial_size`` value for each
+        :param list initial_size: the ``initial_size`` value for each
             of the :class:`.Population` in the returned model. The length
             of the array corresponds to the number of populations.
         :param float migration_rate: The migration rate between adjacent pairs
             of populations.
-        :param array_like growth_rate: The exponential growth rate for each
+        :param list growth_rate: The exponential growth rate for each
             population. Must be either None (the default, resulting a zero
             growth rate) or an array with the same length as ``initial_size``.
         :param bool boundaries: If True the stepping stone model has boundary
@@ -3113,19 +3129,21 @@ class DemographyDebugger:
         To compute this, an adequate time discretization must be arrived at
         by iteratively extending or refining the current discretization.
         Debugging information about numerical convergence of this procedure is
-        logged using the Python :mod:`logging` infrastructure. To make it appear, using
-        the :mod:`daiquiri` module, do for instance::
+        logged using the Python :mod:`logging` infrastructure.
+        The `daiquiri <https://pypi.org/project/daiquiri/>`_ module is a
+        convenient way to set up logging, and we can use it to make these
+        messages appear on stderr like this::
 
             import daiquiri
 
             daiquiri.setup(level="DEBUG")
             debugger.mean_coalescence_time([2])
 
-        will print this debugging information to stderr. Briefly, this outputs
-        iteration number, mean coalescence time, maximum difference in probabilty
-        of not having coalesced yet, difference to last coalescence time,
-        probability of not having coalesced by the final time point, and
-        whether the last iteration was an extension or refinement.
+        Briefly, this outputs iteration number, mean coalescence time, maximum
+        difference in probabilty of not having coalesced yet, difference to
+        last coalescence time, probability of not having coalesced by the final
+        time point, and whether the last iteration was an extension or
+        refinement.
 
         :param list num_samples: A list of the same length as the number
             of populations, so that `num_samples[j]` is the number of sampled
@@ -3284,7 +3302,7 @@ class DemographyDebugger:
             coalescence rate at the jth time point (denoted r(t[j]) above),
             and the probablility that a randomly chosen pair of lineages has
             not yet coalesced (denoted p(t[j]) above).
-        :rtype: (numpy.array, numpy.array)
+        :rtype: (numpy.ndarray, numpy.ndarray)
         """
         num_pops = self.num_populations
         if not len(num_samples) == num_pops:

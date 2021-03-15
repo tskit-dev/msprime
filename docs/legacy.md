@@ -151,6 +151,10 @@ and all rates are per-generation.
 ```
 
 ```{eval-rst}
+.. autoclass:: msprime.Sample
+```
+
+```{eval-rst}
 .. autoclass:: msprime.RecombinationMap
     :members:
 ```
@@ -166,3 +170,8 @@ and all rates are per-generation.
 ```{eval-rst}
 .. autofunction:: msprime.mutate
 ```
+
+```{eval-rst}
+.. autoclass:: msprime.InfiniteSites
+```
+
