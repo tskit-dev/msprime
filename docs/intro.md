@@ -12,7 +12,7 @@ range of different models and evolutionary processes. Msprime can
 also simulate {ref}`mutations <sec_mutations>` on a given ancestral
 history (which can be produced by msprime ancestry simulations
 or other programs supporting [tskit](https://tskit.dev)) under
-a variety of diffent {ref}`models <sec_mutations_models>`
+a variety of different {ref}`models <sec_mutations_models>`
 of genome sequence evolution.
 
 Besides this manual, there are a number of other resources
