@@ -9,26 +9,10 @@ ancestral histories for a sample of individuals
 (consistent with a given demographic model) under a
 range of different models and evolutionary processes. Msprime can
 also simulate mutations on a given ancestral
-history (which can be produced by msprime ancestry simulations
-or other programs supporting [tskit](https://tskit.dev)) under
-a variety of different models of genome sequence evolution.
+history (which can be produced by msprime or other programs 
+supporting [tskit](https://tskit.dev)) under
+a variety of genome sequence evolution models.
 
-See our [documentation](https://tskit.dev/msprime/docs/latest/) for
-more details.
-
-- Please see the
-[installation instructions](https://tskit.dev/msprime/docs/latest/installation.html)
-for help installing msprime.
-
-- If you would like to help make ``msprime`` better, please see the
-[developer documentation](https://tskit.dev/msprime/docs/latest/development.html)
-to get started.
-
-- If you have a specific question like "how do I do X" or
-"what's the best way to do Y" please use our
-[Discussions board](https://github.com/tskit-dev/msprime/discussions).
-(Please make questions as clear as possible, and be respectful,
-helpful, and kind)
-
-- If you use ``msprime`` in your work, please
-[cite us appropriately](https://tskit.dev/msprime/latest/CITATION.html).
+Please see the [documentation](https://tskit.dev/msprime/docs/latest/) for
+more details, including 
+[installation instructions](https://tskit.dev/msprime/docs/latest/installation.html).
