@@ -301,6 +301,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_SPLIT_DERIVED_NOT_ACTIVE:
             ret = "The derived population in a population split must be active";
             break;
+        case MSP_ERR_POP_SIZE_ZERO_SAMPLE:
+            ret = "Attempt to sample lineage in a population with size=0";
+            break;
         default:
             ret = "Error occurred generating error string. Please file a bug "
                   "report!";

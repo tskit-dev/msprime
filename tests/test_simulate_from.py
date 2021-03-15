@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018-2019 University of Oxford
+# Copyright (C) 2018-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -193,24 +193,26 @@ class TestBasicFunctionality:
     def test_from_wf_nonoverlapping(self):
         m = 100
         from_ts = get_wf_base(6, 4, num_loci=m)
-        final_ts = msprime.sim_ancestry(
-            initial_state=from_ts,
-            random_seed=2,
-            recombination_rate=1,
-            discrete_genome=True,
-        )
+        with pytest.warns(msprime.IncompletePopulationMetadataWarning):
+            final_ts = msprime.sim_ancestry(
+                initial_state=from_ts,
+                random_seed=2,
+                population_size=1,
+                recombination_rate=1,
+            )
         self.verify_from_tables(from_ts, final_ts)
         self.verify_simulation_completed(final_ts)
 
     def test_from_wf_overlapping(self):
         m = 100
         from_ts = get_wf_base(6, 14, survival=0.25, num_loci=m)
-        final_ts = msprime.sim_ancestry(
-            initial_state=from_ts,
-            random_seed=2,
-            recombination_rate=1,
-            discrete_genome=True,
-        )
+        with pytest.warns(msprime.IncompletePopulationMetadataWarning):
+            final_ts = msprime.sim_ancestry(
+                initial_state=from_ts,
+                random_seed=2,
+                population_size=1,
+                recombination_rate=1,
+            )
         self.verify_from_tables(from_ts, final_ts)
         self.verify_simulation_completed(final_ts)
 
@@ -882,18 +884,201 @@ class TestErrors:
                 msprime.simulate(from_ts=base_ts, start_time=start_time)
 
 
+class TestSimAncestryInterface:
+    def test_resume_two_population(self):
+        d1 = msprime.Demography()
+        d1.add_population(name="A")
+        d1.add_population(name="B")
+        # All lineages are in B, so we will coalesce
+        ts1 = msprime.sim_ancestry(
+            {"B": 100}, demography=d1, end_time=0.1, random_seed=2
+        )
+        assert ts1.first().num_roots > 1
+
+        ts2 = msprime.sim_ancestry(initial_state=ts1, demography=d1, random_seed=3)
+        assert ts2.first().num_roots == 1
+        assert ts2.tables.nodes.population[-1] == 1
+        assert ts1.tables.populations == ts2.tables.populations
+
+    def test_resume_two_population_infinite_waiting(self):
+        d1 = msprime.Demography()
+        d1.add_population(name="A")
+        d1.add_population(name="B")
+        ts1 = msprime.sim_ancestry(
+            {"A": 1, "B": 1}, demography=d1, end_time=0.1, random_seed=2
+        )
+        assert ts1.first().num_roots > 1
+        with pytest.raises(_msprime.LibraryError, match="Infinite waiting"):
+            msprime.sim_ancestry(initial_state=ts1, demography=d1, random_seed=3)
+
+    def test_incompatible_demography_name_mismatch(self):
+        d1 = msprime.Demography()
+        d1.add_population(name="A")
+        d1.add_population(name="B")
+        ts1 = msprime.sim_ancestry({"A": 1}, demography=d1, end_time=0.1, random_seed=2)
+        d2 = msprime.Demography()
+        d2.add_population(name="B")
+        d2.add_population(name="A")
+        with pytest.raises(ValueError, match="names in the input demography"):
+            msprime.sim_ancestry(initial_state=ts1, demography=d2, random_seed=3)
+
+    def test_incompatible_demography_insufficient_pops(self):
+        d1 = msprime.Demography()
+        d1.add_population(name="A")
+        d1.add_population(name="B")
+        ts1 = msprime.sim_ancestry({"A": 1}, demography=d1, end_time=0.1, random_seed=2)
+        d2 = msprime.Demography()
+        d2.add_population(name="A")
+        with pytest.raises(ValueError, match="at least as many populations"):
+            msprime.sim_ancestry(initial_state=ts1, demography=d2, random_seed=3)
+
+    def test_population_split(self):
+        d1 = msprime.Demography()
+        d1.add_population(name="A")
+        d1.add_population(name="B")
+        ts = msprime.sim_ancestry(
+            {"A": 1, "B": 1}, demography=d1, end_time=1, random_seed=2
+        )
+        d2 = msprime.Demography.from_tree_sequence(ts, initial_size=1)
+        assert d1 == d2
+        d2.add_population(name="C")
+        d2.add_population_split(time=10, derived=["A", "B"], ancestral="C")
+        ts = msprime.sim_ancestry(initial_state=ts, demography=d2, random_seed=1)
+        assert ts.num_populations == 3
+        assert ts.population(0).metadata["name"] == "A"
+        assert ts.population(1).metadata["name"] == "B"
+        assert ts.population(2).metadata["name"] == "C"
+        assert ts.tables.nodes[-1].population == 2
+
+    def test_extra_pops_no_metadata(self):
+        tables = tskit.TableCollection(1)
+        tables.populations.add_row()
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        d = msprime.Demography.from_tree_sequence(
+            tables.tree_sequence(), initial_size=1
+        )
+        d.add_population(name="x")
+        with pytest.warns(
+            msprime.IncompletePopulationMetadataWarning,
+            match="No metadata schema present",
+        ):
+            ts = msprime.sim_ancestry(initial_state=tables, demography=d, random_seed=1)
+        assert ts.num_populations == 2
+        assert ts.population(0).metadata == b""
+        assert ts.population(1).metadata == b""
+
+    def test_extra_pops_struct_metadata(self):
+        tables = tskit.TableCollection(1)
+        tables.populations.metadata_schema = tskit.MetadataSchema(
+            {
+                "codec": "struct",
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "binaryFormat": "10p"},
+                    "description": {"type": "string", "binaryFormat": "10p"},
+                },
+                "required": ["name", "description"],
+                "additionalProperties": False,
+            }
+        )
+        tables.populations.add_row(metadata={"name": "X", "description": "Y"})
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        d = msprime.Demography.from_tree_sequence(
+            tables.tree_sequence(), initial_size=1
+        )
+        d.add_population(name="Z", description="ZZ")
+        ts = msprime.sim_ancestry(initial_state=tables, demography=d, random_seed=1)
+        assert ts.num_populations == 2
+        assert (
+            ts.tables.populations.metadata_schema == tables.populations.metadata_schema
+        )
+        assert ts.population(0).metadata == {"name": "X", "description": "Y"}
+        assert ts.population(1).metadata == {"name": "Z", "description": "ZZ"}
+
+    def test_extra_pops_missing_name_metadata(self):
+        tables = tskit.TableCollection(1)
+        tables.populations.metadata_schema = tskit.MetadataSchema(
+            {
+                "codec": "json",
+                "type": "object",
+                "properties": {
+                    "description": {"type": "string"},
+                },
+                "required": ["description"],
+                "additionalProperties": False,
+            }
+        )
+        tables.populations.add_row(metadata={"description": "X"})
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        d = msprime.Demography.from_tree_sequence(
+            tables.tree_sequence(), initial_size=1
+        )
+        d.add_population(name="Z", description="ZZ")
+        with pytest.warns(
+            msprime.IncompletePopulationMetadataWarning,
+            match="schema does not have a 'name'",
+        ):
+            ts = msprime.sim_ancestry(initial_state=tables, demography=d, random_seed=1)
+        assert ts.num_populations == 2
+        assert ts.population(0).metadata == {"description": "X"}
+        assert ts.population(1).metadata == {"description": "ZZ"}
+
+    def test_extra_pops_missing_description_metadata(self):
+        tables = tskit.TableCollection(1)
+        tables.populations.metadata_schema = tskit.MetadataSchema(
+            {
+                "codec": "json",
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                },
+                "required": ["name"],
+                "additionalProperties": False,
+            }
+        )
+        tables.populations.add_row(metadata={"name": "X"})
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        d = msprime.Demography.from_tree_sequence(
+            tables.tree_sequence(), initial_size=1
+        )
+        d.add_population(name="Z", description="ZZ")
+        with pytest.warns(
+            msprime.IncompletePopulationMetadataWarning,
+            match="schema does not have a 'description'",
+        ):
+            ts = msprime.sim_ancestry(initial_state=tables, demography=d, random_seed=1)
+        assert ts.num_populations == 2
+        assert ts.population(0).metadata == {"name": "X"}
+        assert ts.population(1).metadata == {"name": "Z"}
+
+    def test_population_size_set(self):
+        ts1 = msprime.sim_ancestry(2, end_time=0, random_seed=1)
+        ts2 = msprime.sim_ancestry(
+            initial_state=ts1, population_size=100, random_seed=2
+        )
+        ts3 = msprime.sim_ancestry(2, population_size=100, random_seed=2)
+        assert ts2.equals(ts3, ignore_provenance=True)
+
+
 class TestSlimOutput:
     """
     Verify that we can successfully simulate from SLiM output.
     """
 
     def finish_simulation(self, from_ts, recombination_rate=0, seed=1):
-        return msprime.sim_ancestry(
-            initial_state=from_ts,
-            start_time=1,
-            recombination_rate=recombination_rate,
-            random_seed=seed,
-        )
+        demography = msprime.Demography.from_tree_sequence(from_ts, initial_size=1)
+        with pytest.warns(msprime.IncompletePopulationMetadataWarning):
+            return msprime.sim_ancestry(
+                initial_state=from_ts,
+                start_time=1,
+                demography=demography,
+                recombination_rate=recombination_rate,
+                random_seed=seed,
+            )
 
     def verify_completed(self, from_ts, final_ts):
         from_tables = from_ts.dump_tables()

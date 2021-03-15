@@ -958,58 +958,228 @@ not ancestral to these census nodes.
 
 ## Specifying the initial state
 
+By default `msprime` simulations are initialised by specifying a set of
+{ref}`samples<sec_ancestry_samples>`,
+which sets up the simulation with segments of ancestral material covering the
+whole sequence. Internally, this initial state is implemented by
+setting up a {class}`tskit.TableCollection` which contains the
+{ref}`population<tskit:sec_population_table_definition>`,
+{ref}`node<tskit:sec_node_table_definition>`,
+and {ref}`individual<tskit:sec_individual_table_definition>` information.
+The low-level simulation code then reads these tables and sets up the
+simulation accordingly. We can see what this initial state looks like
+by setting up a simple simulation and stopping it immediately:
 
 ```{code-cell}
-:tags: [remove-cell]
+initial_ts = msprime.sim_ancestry(1, end_time=0)
+initial_ts
+```
+We can see that the returned tree sequence has one population,
+two sample nodes and one individual (since sample individuals are
+{ref}`diploid<sec_ancestry_ploidy>` by default). There are no
+{ref}`edges<tskit:sec_edge_table_definition>` because the simulation
+didn't run for any period of time: we're essentially just returning
+the initial state used to start the simulation.
 
-    msprime.core.set_seed_rng_seed(42)
+Then, running a simulation in which the ``initial_state`` is equal to
+``initial_ts`` is *precisely* the same as running the simulation
+with the same arguments as we used above:
+```{code-cell}
+ts1 = msprime.sim_ancestry(initial_state=initial_ts, population_size=100, random_seed=2)
+ts2 = msprime.sim_ancestry(1, population_size=100, random_seed=2)
+assert ts1.equals(ts2, ignore_provenance=True)
 ```
 
-```{eval-rst}
-.. todo:: Go through an example where we specify the initial state
-    and explain that specifying the samples is actually the same thing.
+:::{warning}
+Note that the ``initial_state`` tree sequence only contains the
+information about the ancestral histories, and not any of the
+simulation parameters. In the previous example we used default
+parameters to keep things simple, but in general the full
+simulation model will need to be specified as well as the initial state.
+In particular, see the {ref}`sec_ancestry_initial_state_demography` section.
+:::
 
+While it is possible to specify the initial state manually by
+constructing the input tree sequence,
+it is an advanced topic and rarely necessary. More often we are
+interested in specifying the initial state of an ``msprime``
+simulation using the output of *another* simulation.
+
+:::{note}
+The ``initial_state`` tree sequence is quite literally the initial
+state of the tree sequence that is returned at the end of a simulation,
+and that any information present (including metadata) will not be
+altered.
+:::
+
+### Combining backward-time simulations
+
+Suppose that we wished to simulate a scenario
+in which we have recombination happening at some rate in the recent past,
+and in the more distant past there is no recombination.
+We can do this by combining the simulations,
+using one as the ``initial_state`` for the other.
+
+We first run the simulation of the recent past:
+
+```{code-cell}
+ts1 = msprime.sim_ancestry(
+    2, recombination_rate=0.01, sequence_length=10, end_time=10,
+    population_size=100, random_seed=1)
+SVG(ts1.draw_svg(y_axis=True))
 ```
 
-```{eval-rst}
-.. todo:: Port this old documentation to the new format. The sectioning
-    is definitely not right here also, as we've just pasted in the old
-    tutorial content directly in here.
+Some recombination and coalescence has happened and we have three
+marginal trees along the genome. None of these trees has fully coalesced,
+and so each of the trees has multiple roots.
+
+:::{important}
+The set of nodes at time 10 connecting to all the internal nodes in the
+trees are very important: without these nodes and unary edges, the
+statistical properties of the combined simulations would not be correct!
+(See also section below on
+{ref}`forward simulations<sec_ancestry_initial_state_forward_simulations>`.)
+:::
+
+We then run the next phase of the simulation in which there is
+*no* recombination by passing ``ts1`` as the argument to ``initial_state``:
+
+```{code-cell}
+ts2 = msprime.sim_ancestry(initial_state=ts1, population_size=100, random_seed=3)
+SVG(ts2.draw_svg(y_axis=True))
 ```
 
-By default `msprime` simulations are initialised by specifying a set of samples,
-using the `sample_size` or  `samples` parameters to {func}`.simulate`. This
-initialises the simulation with segments of ancestral material covering the
-whole sequence. Simulation then proceeds backwards in time until a most recent
-common ancestor has been found at all points along this sequence. We can
-also start simulations from different initial conditions by using the
-`from_ts` argument to {func}`.simulate`. Informally, we take an 'unfinished'
-tree sequence as a parameter to simulate, initialise the simulation
+Since there is no recombination in this more ancient simulation,
+node ``12`` is the MRCA in all three trees. The unary nodes
+``6``, ``7``, ``8``, and ``9`` marking the transition between the
+two simulation regimes are still present in the trees. If you
+wish to remove these, we can use the {meth}`tskit.TreeSequence.simplify`
+method:
+
+```{code-cell}
+ts_simplified = ts2.simplify()
+SVG(ts_simplified.draw_svg())
+```
+
+(sec_ancestry_initial_state_demography)=
+
+### Interaction with demography
+
+In the previous example we saw how to combine two single population simulations.
+We can also combine more complex simulations involving
+{ref}`demography<sec_demography>`, but care needs to be taken to ensure that
+the correct models are simulated in each part of the simulation.
+Suppose we have simple model with a
+{ref}`population split<sec_demography_events_population_split>`:
+
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", description="Contemporary population A", initial_size=100)
+demography.add_population(name="B", description="Contemporary population B", initial_size=200)
+demography.add_population(name="C", description="Ancestral population", initial_size=300)
+demography.add_population_split(time=100, ancestral="C", derived=["A", "B"])
+demography
+```
+Then, we run a simulation of this model for 50 generations:
+```{code-cell}
+ts1 = msprime.sim_ancestry(
+    samples={"A": 1, "B": 1}, demography=demography, end_time=50, random_seed=1234)
+node_labels = {
+    node.id: f"{node.id}:{ts1.population(node.population).metadata['name']}"
+    for node in ts1.nodes()}
+SVG(ts1.draw_svg(node_labels=node_labels, y_axis=True))
+```
+After 50 generations we can see there has been a coalescence in population ``A``
+but none in ``B`` and we therefore have three lineages left when the simulation
+finishes. We can then continue the simulation based on this initial state:
+
+```{code-cell}
+ts2 = msprime.sim_ancestry(
+    initial_state=ts1, demography=demography, random_seed=5678)
+node_labels = {
+    node.id: f"{node.id}:{ts2.population(node.population).metadata['name']}"
+    for node in ts2.nodes()}
+SVG(ts2.draw_svg(node_labels=node_labels, y_axis=True))
+```
+Note that we use the **same** demography object, and so the lineages
+migrate and ultimately coalesce in population ``C``, as we'd expect.
+This is the simplest case, in which we already have the demography
+object which we can use to model the entire simulation from end-to-end.
+
+In other cases (e.g. when working with simulations from a different
+program), we don't have the {class}`.Demography` object at hand
+and we need to create one that is both compatible with the
+``initial_state`` tree sequence and reflects the demographic
+model that we are interested in using. The best way to do this
+is to use the {meth}`.Demography.from_tree_sequence` method to
+first get a base demography that is based on the
+tree sequence {ref}`population table<tskit:sec_population_table_definition>`
+and {ref}`metadata<tskit:sec_metadata>`:
+
+```{code-cell}
+demography = msprime.Demography.from_tree_sequence(ts1)
+demography
+```
+
+We can see that the population names and descriptions have been recovered
+from the tree sequence metadata but **no other information**: the
+population sizes are all zero and we no longer have a population split
+event. If we try to run a simulation using this demography we get an
+error:
+
+```{code-cell}
+:tags: [raises-exception]
+
+ts = msprime.sim_ancestry(initial_state=ts1, demography=demography)
+```
+
+To recover the original model we must update the {class}`.Population`
+objects in place and add the
+{ref}`population split<sec_demography_events_population_split>` event:
+
+```{code-cell}
+demography["A"].initial_size = 100
+demography["B"].initial_size = 200
+demography["C"].initial_size = 300
+demography.add_population_split(time=100, ancestral="C", derived=["A", "B"])
+demography
+```
+
+:::{note}
+See the {class}`.Demography` documentation for details on how to access
+{class}`.Population` objects.
+:::
+
+The demography that we obtain from {meth}`.Demography.from_tree_sequence`
+is really just a template, which we update and elaborate as we need.
+In particular, we are free to add more populations as needed.
+
+(sec_ancestry_initial_state_forward_simulations)=
+
+### Continuing forwards-time simulations ("recapitating")
+
+The most common use for the ``initial_state`` argument is to
+start the simulation from the output of a forwards-time simulation.
+Informally, we take an 'unfinished'
+tree sequence as a parameter to {func}`.sim_ancestry`, initialise the simulation
 from the state of this tree sequence and then run the simulation until
 coalescence. The returned tree sequence is then the result of taking the
 input tree sequence and completing the trees using the coalescent.
 
 This is useful for forwards-time simulators such as
-[SLiM](<https://messerlab.org/slim/>) that can output tree sequences. By running
+[SLiM](https://messerlab.org/slim/) and
+[fwdpy11](https://pypi.org/project/fwdpy11/)
+that can output tree sequences. By running
 forward-time simulation for a certain number of generations we obtain a
 tree sequence, but these trees may not have had sufficient time to
-reach a most recent common ancestor. By using the `from_ts` argument
-to {func}`.simulate` we can combine the best of both forwards- and
+reach a most recent common ancestor. By using the `initial_state` argument
+to {func}`.sim_ancestry` we can combine the best of both forwards- and
 backwards-time simulators. The recent past can be simulated forwards
 in time and the ancient past by the coalescent. The coalescent
 simulation is initialised by the root segments of the
 input tree sequence, ensuring that the minimal amount of ancestral
 material possible is simulated.
-
-<!---
-Please see the :ref:`tutorial <sec_tutorial_simulate_from>` for an example of
--->
-
-<!---
-how to use this feature with a simple forwards-time Wright-Fisher simulator
--->
-
-### Input requirements
 
 Any tree sequence can be provided as input to this process, but there is a
 specific topological requirement that must be met for the simulations to be
@@ -1020,24 +1190,16 @@ corresponding to the initial generation. Furthermore, for every sample in the
 final generation (i.e. the extant population at the present time) there must be
 a path to one of the founder population nodes.
 
-<!---
-(Please see the :ref:`tutorial
--->
-
-<!---
-<sec_tutorial_simulate_from>` for further explanation of this point and an
--->
-
-<!---
-example.)
--->
+:::{seealso}
+See the {ref}`recapitation tutorial<pyslim:sec_tutorial_recapitation>`
+from the [pyslim](https://github.com/tskit-dev/pyslim) documentation
+for a detailed explanation of this process when
+using [SLiM](https://messerlab.org/slim/).
+:::
 
 (sec_ancestry_models)=
 
 ## Models
-
-
-
 
 ```{code-cell}
 :tags: [remove-cell]

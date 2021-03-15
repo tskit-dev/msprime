@@ -475,7 +475,7 @@ class TestZeroPopulationSize(unittest.TestCase):
             # Check ancient sampling.
             ([msprime.Sample(1, self.T), msprime.Sample(1, 0)], _msprime.LibraryError),
         ]:
-            with pytest.raises(err, match="Bad sample"):
+            with pytest.raises(err, match="population with size=0"):
                 msprime.simulate(
                     population_configurations=self.population_configurations,
                     demographic_events=self.demographic_events,
@@ -6010,6 +6010,76 @@ class TestFromOldStyleMap:
             )
         assert len(w) == 1
         assert str(w[0].message).startswith("Migration out of inactive")
+
+
+class TestFromTreeSequence:
+    def test_simple_round_trip(self):
+        d1 = msprime.Demography()
+        d1.add_population(name="A", description="X")
+        d1.add_population(name="B", description="Y")
+        ts = msprime.sim_ancestry({"A": 1}, demography=d1, random_seed=1)
+        d2 = msprime.Demography.from_tree_sequence(ts, initial_size=1)
+        assert d1 == d2
+
+    def test_no_metadata(self):
+        tables = tskit.TableCollection(1)
+        tables.populations.add_row()
+        d = msprime.Demography.from_tree_sequence(tables.tree_sequence())
+        assert d.num_populations == 1
+        assert d.populations[0].name == "pop_0"
+
+    def test_json_metadata(self):
+        tables = tskit.TableCollection(1)
+        tables.populations.metadata_schema = tskit.MetadataSchema(
+            {
+                "codec": "json",
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": True,
+            }
+        )
+        tables.populations.add_row(metadata={"name": "X"})
+        d = msprime.Demography.from_tree_sequence(tables.tree_sequence())
+        assert d.num_populations == 1
+        assert d.populations[0].name == "X"
+        assert d.populations[0].description == ""
+
+        tables.populations.add_row(metadata={"description": "Y"})
+        d = msprime.Demography.from_tree_sequence(tables.tree_sequence())
+        assert d.num_populations == 2
+        assert d.populations[0].name == "X"
+        assert d.populations[0].description == ""
+        assert d.populations[1].name == "pop_1"
+        assert d.populations[1].description == "Y"
+
+        tables.populations.add_row(metadata={"description": "Y"})
+        d = msprime.Demography.from_tree_sequence(tables.tree_sequence())
+        assert d.num_populations == 3
+        assert d.populations[0].name == "X"
+        assert d.populations[0].description == ""
+        assert d.populations[1].name == "pop_1"
+        assert d.populations[1].description == "Y"
+
+    def test_struct_metadata(self):
+        tables = tskit.TableCollection(1)
+        tables.populations.metadata_schema = tskit.MetadataSchema(
+            {
+                "codec": "struct",
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "binaryFormat": "10p"},
+                    "description": {"type": "string", "binaryFormat": "10p"},
+                },
+                "required": ["name", "description"],
+                "additionalProperties": False,
+            }
+        )
+        tables.populations.add_row(metadata={"name": "X", "description": "Y"})
+        d = msprime.Demography.from_tree_sequence(tables.tree_sequence())
+        assert d.num_populations == 1
+        assert d.populations[0].name == "X"
+        assert d.populations[0].description == "Y"
 
 
 class TestLineageMovementEvents:

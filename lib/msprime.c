@@ -3436,7 +3436,7 @@ msp_insert_sample(msp_t *self, tsk_id_t node)
         goto out;
     }
     if (pop.initial_size == 0) {
-        ret = MSP_ERR_BAD_SAMPLES;
+        ret = MSP_ERR_POP_SIZE_ZERO_SAMPLE;
         goto out;
     }
     ret = msp_insert_root_segments(self, root_seg);

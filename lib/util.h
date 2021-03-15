@@ -122,6 +122,7 @@
 #define MSP_ERR_ADMIX_ANCESTRAL_NOT_ACTIVE                          -78
 #define MSP_ERR_SPLIT_DERIVED_NOT_ACTIVE                            -79
 #define MSP_ERR_ADMIX_DERIVED_NOT_ACTIVE                            -80
+#define MSP_ERR_POP_SIZE_ZERO_SAMPLE                                -81
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */

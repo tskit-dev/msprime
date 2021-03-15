@@ -400,7 +400,10 @@ class TestParseSimAncestry:
         # If we have an initial_state this defines sequence_length
         initial_state = tskit.TableCollection(1234)
         initial_state.populations.add_row()
-        sim = ancestry._parse_sim_ancestry(initial_state=initial_state)
+        with pytest.warns(msprime.IncompletePopulationMetadataWarning):
+            sim = ancestry._parse_sim_ancestry(
+                initial_state=initial_state, population_size=1
+            )
         assert sim.sequence_length == 1234
         assert sim.copy_tables().sequence_length == sim.sequence_length
 
@@ -649,6 +652,14 @@ class TestParseSimAncestry:
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(10, demography=demography, population_size=1)
 
+        # Cannot specify a population_size and a initial state with > 1 pop.
+        demography = msprime.Demography.isolated_model([10, 10])
+        ts1 = msprime.sim_ancestry(
+            {0: 2}, demography=demography, end_time=0, random_seed=1
+        )
+        with pytest.raises(ValueError, match="Must specify demography"):
+            msprime.sim_ancestry(initial_state=ts1, population_size=100, random_seed=2)
+
     def test_demography(self):
         demography = msprime.Demography.stepping_stone_model([1] * 5, 0.1)
         samples = {0: 2}
@@ -694,12 +705,27 @@ class TestParseSimAncestry:
             with pytest.raises(TypeError):
                 ancestry._parse_sim_ancestry(initial_state=bad_type)
 
+        # Must have a demography if we have more than 1 pop.
+        demography = msprime.Demography.isolated_model([10, 10])
+        ts1 = msprime.sim_ancestry(
+            {0: 2}, demography=demography, end_time=0, random_seed=1
+        )
+        with pytest.raises(ValueError, match="Must specify either a demography"):
+            msprime.sim_ancestry(initial_state=ts1, random_seed=2)
+
+        demography = msprime.Demography.isolated_model([10])
+        ts1 = msprime.sim_ancestry(
+            {0: 2}, demography=demography, end_time=0, random_seed=1
+        )
+        with pytest.raises(ValueError, match="Must specify either a demography"):
+            msprime.sim_ancestry(initial_state=ts1, random_seed=2)
+
     def test_initial_state(self):
         ts = msprime.sim_ancestry(10, end_time=0.01, random_seed=2)
         # Same if we use either the tables or tree sequence object.
-        sim = ancestry._parse_sim_ancestry(initial_state=ts)
+        sim = ancestry._parse_sim_ancestry(initial_state=ts, population_size=1)
         assert sim.copy_tables() == ts.tables
-        sim = ancestry._parse_sim_ancestry(initial_state=ts.tables)
+        sim = ancestry._parse_sim_ancestry(initial_state=ts.tables, population_size=1)
         assert sim.copy_tables() == ts.tables
 
     def test_num_labels(self):
@@ -1618,12 +1644,16 @@ class TestSimAncestryInterface:
         # Simple recapitate scenario
         ts = msprime.sim_ancestry(5, end_time=0.5, random_seed=53)
         assert ts.first().num_roots > 1
-        recapitated1 = msprime.sim_ancestry(initial_state=ts, random_seed=234)
+        recapitated1 = msprime.sim_ancestry(
+            initial_state=ts, population_size=1, random_seed=234
+        )
         assert recapitated1.num_trees == 1
         assert recapitated1.first().num_roots == 1
 
         # We should get the same answer from the providing the tables argument.
-        recapitated2 = msprime.sim_ancestry(initial_state=ts.tables, random_seed=234)
+        recapitated2 = msprime.sim_ancestry(
+            initial_state=ts.tables, population_size=1, random_seed=234
+        )
         assert tree_sequences_equal(recapitated1, recapitated2)
 
     def test_replicate_index(self):

@@ -49,6 +49,13 @@ from . import species_trees
 logger = logging.getLogger(__name__)
 
 
+class IncompletePopulationMetadataWarning(UserWarning):
+    """
+    Warning raised when we don't have sufficient information to fill
+    out population metadata.
+    """
+
+
 def check_num_populations(num_populations):
     """
     Check if an input number of populations is valid.
@@ -133,7 +140,6 @@ class Population:
         return dataclasses.asdict(self)
 
     def validate(self):
-        # TODO more checks
         if self.initial_size < 0:
             raise ValueError("Negative population size")
         if self.name is None:
@@ -149,6 +155,9 @@ class Demography:
     consisting of a set of populations, a migration matrix, and a list
     of demographic events. See the :ref:`sec_demography_definitions`
     section for precise mathematical definitions of these concepts.
+
+    .. todo:: Add details of how we access individual populations.
+        Also note that using the constructor is not supported.
     """
 
     populations: List[Population] = dataclasses.field(default_factory=list)
@@ -804,6 +813,56 @@ class Demography:
                     )
                 metadata.update(population.extra_metadata)
             tables.populations.add_row(metadata=metadata)
+
+    def insert_extra_populations(self, tables):
+        """
+        Insert additional population definitions for this demography
+        into the specified set of tables. We assume that the populations
+        up to len(tables.populations) are identical, and append additional
+        populations to the tables for any remaining.
+
+        :meta private:
+        """
+        # TODO we should be accessing a higher-level API for querying
+        # the schema here, but there's none available right now.
+        schema = tables.populations.metadata_schema.schema
+        if schema is not None:
+            properties = schema["properties"]
+            name_in_metadata = "name" in properties
+            description_in_metadata = "description" in properties
+            if not name_in_metadata:
+                warnings.warn(
+                    "The metadata schema does not have a 'name' property; "
+                    "population names will not be recorded in the output "
+                    "tree sequence",
+                    IncompletePopulationMetadataWarning,
+                )
+            if not description_in_metadata:
+                warnings.warn(
+                    "The metadata schema does not have a 'description' property; "
+                    "population descriptions will not be recorded in the output "
+                    "tree sequence",
+                    IncompletePopulationMetadataWarning,
+                )
+            for population in self.populations[len(tables.populations) :]:
+                md = {}
+                if name_in_metadata:
+                    md["name"] = population.name
+                if description_in_metadata:
+                    md["description"] = population.description
+                # TODO we could also try to merge in the ``extra_metadata``
+                # depending on whether `additional_properties` is set,
+                # but it doesn't really seem worth it.
+                tables.populations.add_row(md)
+        else:
+            warnings.warn(
+                "No metadata schema present in population table, not recording "
+                "metadata",
+                IncompletePopulationMetadataWarning,
+            )
+            # No metadata schema, just add bare populations.
+            for _ in self.populations[len(tables.populations) :]:
+                tables.populations.add_row()
 
     def asdict(self):
         return {
@@ -1500,6 +1559,56 @@ class Demography:
                 demographic_events,
                 population_map,
             )
+
+    @staticmethod
+    def from_tree_sequence(
+        ts: tskit.TreeSequence, initial_size: float = 0
+    ) -> Demography:
+        """
+        Creates a :class:`.Demography` object based on the information in the
+        specified :class:`tskit.TreeSequence`. The returned demography will
+        contain a population for each of the populations in the tree sequence,
+        in the same order.
+
+        The metadata for each population in the tree sequence will be
+        inspected. If a schema is present and the metadata can be decoded, the
+        ``name`` and ``description`` properties of populations are set if the
+        corresponding keys are present.
+
+        If the metadata cannot be decoded, the default values for ``name``
+        and ``description`` are used.
+
+        The ``initial_size`` of each of the new populations is set to zero
+        by default, and all other :class:`.Population` attributes
+        are set to their default values. It is therefore essential to
+        update the ``initial_size`` and ``growth_rate`` values to reflect
+        the desired demography.
+
+        .. seealso:: See the
+            :ref:`initial state<sec_ancestry_initial_state_demography>`
+            section for examples of how this method can be used.
+
+        :param tskit.TreeSequence ts: The tree sequence
+            to extract population information from.
+        :param float initial_size: The default initial size for the newly
+            added populations (Default=0).
+        :return: A Demography object representing the populations in the
+            specified tree sequence.
+        :rtype: .Demography
+        """
+        demography = Demography()
+        for population in ts.populations():
+            name = None
+            description = None
+            if isinstance(population.metadata, collections.abc.Mapping):
+                # We have decoded metadata, extract some useful information
+                # from it.
+                name = population.metadata.get("name")
+                description = population.metadata.get("description")
+            demography.add_population(
+                initial_size=initial_size, name=name, description=description
+            )
+        return demography
 
     @staticmethod
     def isolated_model(initial_size, *, growth_rate=None) -> Demography:

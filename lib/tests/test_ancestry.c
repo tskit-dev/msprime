@@ -3478,8 +3478,8 @@ test_zero_population_size(void)
     check_zero_population_size(samples_good_1, n, N, T, 0, 0);
     check_zero_population_size(samples_good_2, n, N, T, 0, 0);
     check_zero_population_size(samples_good_3, n, N, T, 0, 0);
-    check_zero_population_size(samples_bad_1, n, N, T, MSP_ERR_BAD_SAMPLES, 0);
-    check_zero_population_size(samples_bad_2, n, N, T, 0, MSP_ERR_BAD_SAMPLES);
+    check_zero_population_size(samples_bad_1, n, N, T, MSP_ERR_POP_SIZE_ZERO_SAMPLE, 0);
+    check_zero_population_size(samples_bad_2, n, N, T, 0, MSP_ERR_POP_SIZE_ZERO_SAMPLE);
 }
 
 int
