@@ -67,5 +67,11 @@ class TestDeprecation:
             "FORWARD",
             "REVERSE",
         ]:
-            with pytest.warns(UserWarning):
+            with pytest.warns(FutureWarning):
                 getattr(msprime, name)
+
+    def test_missing_attr(self):
+        with pytest.raises(
+            AttributeError, match="module 'msprime' has no attribute 'foobar'"
+        ):
+            msprime.foobar

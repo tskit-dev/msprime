@@ -51,20 +51,61 @@ old_module = sys.modules["msprime"]
 
 # Many attributes were moved to tskit, we use a facade here so we don't break old
 # code, but do emit a warning
+msprime_names_now_in_tskit = [
+    "Edge",
+    "EdgeTable",
+    "Edgeset",
+    "FORWARD",
+    "Individual",
+    "IndividualTable",
+    "LdCalculator",
+    "Migration",
+    "MigrationTable",
+    "Mutation",
+    "MutationTable",
+    "NODE_IS_SAMPLE",
+    "Node",
+    "NodeTable",
+    "PopulationTable",
+    "Provenance",
+    "ProvenanceTable",
+    "REVERSE",
+    "Site",
+    "SiteTable",
+    "TableCollection",
+    "Tree",
+    "TreeSequence",
+    "Variant",
+    "load",
+    "load_text",
+    "parse_nodes",
+    "pack_bytes",
+    "pack_strings",
+    "parse_edges",
+    "parse_individuals",
+    "parse_mutations",
+    "parse_sites",
+    "unpack_bytes",
+    "unpack_strings",
+    "validate_provenance",
+]
+
+
 class DeprecationFacade(ModuleType):
     def __getattr__(self, name):
-        try:
-            # Tree used to be SparseTree
-            if name == "SparseTree":
-                name = "Tree"
+        # Tree used to be SparseTree
+        if name == "SparseTree":
+            name = "Tree"
+        if name in msprime_names_now_in_tskit:
             result = getattr(tskit, name)
             warnings.warn(
                 f"'{__name__}.{name}' is deprecated and will be removed"
-                f" in future versions. Use 'tskit.{name}'."
+                f" in future versions. Use 'tskit.{name}'.",
+                category=FutureWarning,
             )
-        except AttributeError:
+            return result
+        else:
             raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-        return result
 
 
 # Patch the facade into the dict of loaded modules
