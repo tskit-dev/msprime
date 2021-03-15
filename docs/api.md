@@ -208,7 +208,7 @@ specified.
 
 ```{data} msprime.NODE_IS_CEN_EVENT
 
-The node was created by a :class:`msprime.CensusEvent`.
+The node was created by a {class}`msprime.CensusEvent`.
 
 ```
 
@@ -242,14 +242,28 @@ The node was created by a :class:`msprime.CensusEvent`.
 ```{eval-rst}
 .. autoclass:: msprime.PopulationParametersChange
 
+```
+
+```{eval-rst}
 .. autoclass:: msprime.SymmetricMigrationRateChange
 
+```
+
+```{eval-rst}
 .. autoclass:: msprime.MigrationRateChange
 
+```
+
+```{eval-rst}
 .. autoclass:: msprime.PopulationSplit
 
-.. autoclass:: msprime.MassMigration
+```
 
+```{eval-rst}
+.. autoclass:: msprime.MassMigration
+```
+
+```{eval-rst}
 .. autoclass:: msprime.CensusEvent
 
 ```
@@ -275,3 +289,10 @@ The node was created by a :class:`msprime.CensusEvent`.
 ```{eval-rst}
 .. autofunction:: msprime.sim_mutations
 ```
+
+
+```{eval-rst}
+.. autoclass:: msprime.MutationModel
+```
+
+

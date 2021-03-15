@@ -35,6 +35,9 @@ sphinx:
     - sphinxarg.ext
 
     config:
+      myst_enable_extensions:
+      - colon_fence
+      - deflist
       issues_github_path: tskit-dev/msprime
       todo_include_todos: true
       intersphinx_mapping:
@@ -42,6 +45,12 @@ sphinx:
         tskit: ["https://tskit.readthedocs.io/en/stable", null]
         tutorials: ["https://tskit.dev/tutorials/", null]
         stdpopsim: ["https://stdpopsim.readthedocs.io/en/stable", null]
-      myst_enable_extensions:
-      - colon_fence
-      - deflist
+        numpy: ['https://numpy.org/doc/stable/', null]
+      nitpicky: true
+
+      # Without this option, autodoc tries to put links for all return types
+      # in terms of the fully-qualified classnames
+      # (e.g. msprime.demography.Demography) which we don't want, and also
+      # leads to broken links and nitpick failures. So, until we tackle
+      # typehints fully, this is the simplest approach.
+      autodoc_typehints: none

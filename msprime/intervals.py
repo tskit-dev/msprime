@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2020 University of Oxford
+# Copyright (C) 2020-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -197,7 +197,7 @@ class RateMap:
         :param numpy.ndarray x: The positions for which to return values.
 
         :return: An array of rates, the same length as ``x``.
-        :rtype: numpy.ndarray(dtype=np.float64)
+        :rtype: numpy.ndarray
         """
         loc = np.searchsorted(self.position, x, side="right") - 1
         loc = np.minimum(loc, len(self.rate) - 1)  # Return final rate if off the end
@@ -213,7 +213,7 @@ class RateMap:
         :param numpy.ndarray x: The positions for which to return values.
 
         :return: An array of cumulative rates, the same length as ``x``
-        :rtype: numpy.ndarray(dtype=np.float64)
+        :rtype: numpy.ndarray
         """
         if np.any(np.array(x) < 0) or np.any(np.array(x) > self.sequence_length):
             raise ValueError(

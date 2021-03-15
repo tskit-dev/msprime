@@ -17,7 +17,7 @@ kernelspec:
     import msprime
     from IPython.display import SVG
     import numpy as np
-    # Doing this to make the notebook outputs deterministic. 
+    # Doing this to make the notebook outputs deterministic.
     # DO NOT DO THIS IN YOUR CODE
     msprime.core.set_seed_rng_seed(42)
 ```
@@ -44,34 +44,34 @@ any outstanding TODOs before opening issues.
 
 **Models**
 
-{class}`.BinaryMutationModel`             
+{class}`.BinaryMutationModel`
 : Binary mutation model with two flip-flopping alleles: "0" and "1".
 
-{class}`.JC69MutationModel`               
+{class}`.JC69MutationModel`
 : Jukes & Cantor model ('69), equal probability of transitions between nucleotides
 
-{class}`.HKYMutationModel`                
+{class}`.HKYMutationModel`
 : Hasegawa, Kishino & Yano model ('85), different probabilities for transitions and transversions
 
-{class}`.F84MutationModel`                
+{class}`.F84MutationModel`
 : Felsenstein model ('84), different probabilities for transitions and transversions
 
-{class}`.GTRMutationModel`                
+{class}`.GTRMutationModel`
 : Generalised Time-Reversible nucleotide mutation model
 
-{class}`.BLOSUM62MutationModel`                
+{class}`.BLOSUM62MutationModel`
 : The BLOSUM62 model of time-reversible amino acid mutation
 
-{class}`.PAMMutationModel`              
+{class}`.PAMMutationModel`
 : The PAM model of time-reversible amino acid mutation
 
-{class}`.MatrixMutationModel`             
+{class}`.MatrixMutationModel`
 : Superclass of mutation models with a finite set of states
 
-{class}`.InfiniteAllelesMutationModel`    
-: A generic infinite-alleles mutation model          
+{class}`.InfiniteAllelesMutationModel`
+: A generic infinite-alleles mutation model
 
-{class}`.SLiMMutationModel`               
+{class}`.SLiMMutationModel`
 : An infinite-alleles model producing SLiM-style mutations
 
 ---
@@ -79,7 +79,7 @@ any outstanding TODOs before opening issues.
 {func}`.sim_mutations` adds mutations to a tree sequence simulated with
 {func}`.sim_ancestry`, or any other program that outputs tree sequence topologies.
 We can specify a uniform mutation rate or a
-{class}`.RateMap`, whether or not mutations should only occur at 
+{class}`.RateMap`, whether or not mutations should only occur at
 {ref}`discrete coordinates <sec_mutations_discrete>`,
 a {ref}`specific time span within which to add mutations <sec_mutations_time_span>`,
 as well as how to handle any
@@ -87,7 +87,7 @@ as well as how to handle any
 
 One of the most powerful features of `msprime` is the flexibility of specifying
 the model under which mutations are simulated. Select from among
-the many predefined {ref}`models <sec_mutations_models>`, such as the 
+the many predefined {ref}`models <sec_mutations_models>`, such as the
 {ref}`infinite alleles model <sec_mutations_mutation_infinite_alleles>`, or
 {ref}`define your own <sec_mutations_matrix_mutation_models_details>`.
 
@@ -117,7 +117,7 @@ mts.num_mutations
 ```
 
 It's also possible to provide a {class}`.RateMap` which specifies variable
-mutation rates over different stretches of the sequence. 
+mutation rates over different stretches of the sequence.
 
 In the following example, the mutation rate between positions 0 and 2 is 0.5,
 between positions 2 and 5 is 0, and between positions 5 and 10 is 0.1:
@@ -132,7 +132,7 @@ SVG(mts.draw_svg(node_labels={}, size=(400, 300)))
 ```
 
 As we can see from the output, there are three mutations at site 0 (position 0),
-three mutations at site 1 (position 1), no mutations between positions 2 and 5 
+three mutations at site 1 (position 1), no mutations between positions 2 and 5
 (where the mutation rate is zero) and one mutation at site 2 (position 5).
 This illustrates that as the rate increases, the probability of recurrent mutation
 (multiple mutations at a site) also increases.
@@ -153,7 +153,7 @@ position of the {class}`.RateMap` is the same as the
 As described in {ref}`sec_ancestry_random_seed`, ``msprime`` uses a
 [psuedorandom number generator](<https://en.wikipedia.org/wiki/Pseudorandom_number_generator>)
 from the [GNU Scientific Library](<https://www.gnu.org/software/gsl/doc/html/rng.html>) for
-random number generation. Passing an integer to the ``random_seed`` parameter 
+random number generation. Passing an integer to the ``random_seed`` parameter
 defines a trajectory for a call of {func}`.sim_mutations`, making output deterministic.
 
 ```{code-cell}
@@ -172,7 +172,7 @@ mts_3 = msprime.sim_mutations(ts, rate=1, random_seed=7)
 mts_1.tables.equals(mts_3.tables, ignore_timestamps=True)
 ```
 
-When we use the same seed, the resulting tree sequence is identical. 
+When we use the same seed, the resulting tree sequence is identical.
 
 
 (sec_mutations_discrete)=
@@ -185,7 +185,7 @@ discrete, integer coordinates or continously at floating point positions.
 `discrete_genome=True` is the default:
 
 ```{code-cell}
-ts = msprime.sim_ancestry(4, sequence_length=5, random_seed=1) 
+ts = msprime.sim_ancestry(4, sequence_length=5, random_seed=1)
 mts = msprime.sim_mutations(ts, rate=0.1, random_seed=5)
 mts.tables.sites.position
 ```
@@ -261,7 +261,7 @@ mts = msprime.sim_mutations(mts, rate=0.1, random_seed=5, add_ancestral=True)
 :::{note}
 
 Note that specifying `add_ancestral=True` means that "silent transitions" may occur.
-A silent transition is a mutation which causes a nucleotide to transition to 
+A silent transition is a mutation which causes a nucleotide to transition to
 itself, such as "A -> A".
 
 :::
@@ -529,7 +529,7 @@ to agree with the underlying mutation model in SLiM.
 As with the InfiniteAlleles model, it assigns each new mutation a unique integer,
 by keeping track of the `next_id` and incrementing it each time a new mutation appears.
 
-This differs from the {class}`.InfiniteAllelesMutationmodel` because mutations
+This differs from the {class}`.InfiniteAllelesMutationModel` because mutations
 in SLiM can "stack": new mutations can add to the existing state, rather than
 replacing the previous state. So, derived states are comma-separated lists of
 mutation IDs, and the ancestral state is always the empty string. For instance,

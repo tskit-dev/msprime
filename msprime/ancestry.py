@@ -534,7 +534,7 @@ def simulate(
         the populations to be simulated. If this is not specified,
         a single population with a sample of size ``sample_size``
         is assumed.
-    :type population_configurations: list or None.
+    :type population_configurations: list or None
     :param list migration_matrix: The matrix describing the rates of migration
         between all pairs of populations. If :math:`N` populations are defined
         in the ``population_configurations`` parameter, then the migration
@@ -596,7 +596,7 @@ def simulate(
         a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
         Please see the :ref:`sec_ancestry_models` section for more details
         on specifying ancestry models.
-    :type model: str or simulation model instance
+    :type model: str or AncestryModel
     :param bool record_provenance: If True, record all configuration and parameters
         required to recreate the tree sequence. These can be accessed
         via ``TreeSequence.provenances()``).
