@@ -4229,7 +4229,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         if (sampling_event_time < t_temp
             && sampling_event_time < demographic_event_time) {
             se = &self->sampling_events[self->next_sampling_event];
-            if (se->time >= max_time) {
+            if (se->time > max_time) {
                 ret = MSP_EXIT_MAX_TIME;
                 break;
             }
@@ -4252,7 +4252,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                 }
             }
         } else if (demographic_event_time < t_temp) {
-            if (demographic_event_time >= max_time) {
+            if (demographic_event_time > max_time) {
                 ret = MSP_EXIT_MAX_TIME;
                 break;
             }
@@ -4269,7 +4269,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                 goto out;
             }
         } else {
-            if (t_temp >= max_time) {
+            if (t_temp > max_time) {
                 ret = MSP_EXIT_MAX_TIME;
                 break;
             }
@@ -4664,7 +4664,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
             break;
         }
         events++;
-        if (self->time + 1 >= max_time) {
+        if (self->time + 1 > max_time) {
             ret = MSP_EXIT_MAX_TIME;
             goto out;
         }
@@ -4752,7 +4752,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
         cur_time = self->time;
         while (self->next_demographic_event != NULL
                && self->next_demographic_event->time <= cur_time) {
-            if (self->next_demographic_event->time >= max_time) {
+            if (self->next_demographic_event->time > max_time) {
                 ret = MSP_EXIT_MAX_TIME;
                 goto out;
             }

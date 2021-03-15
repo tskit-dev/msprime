@@ -3069,7 +3069,7 @@ class EndTimeMixin:
         )
         self.verify_incomplete_tree_sequence(2 * n, max_time, ts)
         assert ts.num_migrations > 0
-        assert np.all(ts.tables.migrations.time < max_time)
+        assert np.all(ts.tables.migrations.time <= max_time)
 
     def test_ancient_samples(self):
         n = 40
@@ -3125,7 +3125,9 @@ class EndTimeMixin:
             end_time=max_time,
             model=self.model,
             demographic_events=[
-                msprime.SimpleBottleneck(time=max_time, population=0, proportion=1)
+                msprime.SimpleBottleneck(
+                    time=max_time + 1e-6, population=0, proportion=1
+                )
             ],
             random_seed=1000,
         )

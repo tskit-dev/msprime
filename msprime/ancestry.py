@@ -582,8 +582,8 @@ def simulate(
         existing tree sequence (see the ``from_ts`` parameter).
     :param float end_time: If specified, terminate the simulation at the
         specified time. In the returned tree sequence, all rootward paths from
-        samples with time < end_time will end in a node with one child with
-        time equal to end_time. Sample nodes with time >= end_time will
+        samples with time <= end_time will end in a node with one child with
+        time equal to end_time. Sample nodes with time > end_time will
         also be present in the output tree sequence. If not specified or ``None``,
         run the simulation until all samples have an MRCA at all positions in
         the genome.
@@ -1112,8 +1112,8 @@ def sim_ancestry(
         See :ref:`sec_ancestry_start_time` for examples.
     :param float end_time: If specified, terminate the simulation at the
         specified time. In the returned tree sequence, all rootward paths from
-        samples with time < ``end_time`` will end in a node with one child with
-        time equal to end_time. Any sample nodes with time >= ``end_time`` will
+        samples with time <= ``end_time`` will end in a node with one child with
+        time equal to end_time. Any sample nodes with time > ``end_time`` will
         also be present in the output tree sequence. If not specified or ``None``,
         run the simulation until all samples have an MRCA at all positions in
         the genome. See :ref:`sec_ancestry_end_time` for examples.
