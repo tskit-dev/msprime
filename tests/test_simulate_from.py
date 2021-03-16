@@ -607,18 +607,7 @@ class BaseEquivalanceMixin:
             recombination_map=recombination_map,
             model=self.model,
         )
-        tables1 = ts1.dump_tables()
-        tables2 = ts2.dump_tables()
-        assert len(tables1.populations)
-        assert len(tables2.populations)
-        # TODO use updated tskit APIs for comparisons.
-        tables1.populations.clear()
-        tables2.populations.clear()
-        tables1.populations.metadata_schema = ""
-        tables2.populations.metadata_schema = ""
-        tables1.provenances.clear()
-        tables2.provenances.clear()
-        assert tables1 == tables2
+        assert ts1.equals(ts2, ignore_provenance=True)
 
     def test_single_locus_two_samples(self):
         for seed in range(1, 10):
@@ -681,18 +670,7 @@ class BaseEquivalanceMixin:
             migration_matrix=[[0, 1], [1, 0]],
             random_seed=seed,
         )
-        tables1 = ts1.dump_tables()
-        tables2 = ts2.dump_tables()
-        assert len(tables1.populations)
-        assert len(tables2.populations)
-        # TODO use updated tskit APIs for comparisons.
-        tables1.populations.clear()
-        tables2.populations.clear()
-        tables1.populations.metadata_schema = ""
-        tables2.populations.metadata_schema = ""
-        tables1.provenances.clear()
-        tables2.provenances.clear()
-        assert tables1 == tables2
+        assert ts1.equals(ts2, ignore_provenance=True)
 
 
 class TestBaseEquivalanceHudson(BaseEquivalanceMixin):

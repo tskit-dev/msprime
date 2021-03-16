@@ -12,7 +12,7 @@ pre-commit
 pytest
 pytest-cov
 pytest-xdist
-tskit>=0.3.3
+tskit>=0.3.5
 stdpopsim>=0.1.2 # Make sure we have correct version of OOA model
 scipy
 # TODO we're pinning the version here because of problems on Travis.

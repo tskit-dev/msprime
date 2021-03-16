@@ -5215,16 +5215,9 @@ msp_insert_uncoalesced_edges(msp_t *self)
     if (edge_start > 0) {
         bookmark.edges = (tsk_size_t) edge_start;
     }
-    /* FIXME!!! This is a *horrible* ugly hack to work around sort not accepting
-     * migrations. We know the migrations are sorted, so we shouldn't need to
-     * sort them anyway, so we should be able to set bookmark.migrations =
-     * tables.migrations.num_rows.
-     * See https://github.com/tskit-dev/tskit/issues/117
-     */
-    tsk_size_t tmp_count = self->tables->migrations.num_rows;
-    self->tables->migrations.num_rows = 0;
+    /* We know migrations are sorted already */
+    bookmark.migrations = self->tables->migrations.num_rows;
     ret = tsk_table_collection_sort(self->tables, &bookmark, 0);
-    self->tables->migrations.num_rows = tmp_count;
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
         goto out;

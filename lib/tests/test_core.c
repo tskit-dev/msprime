@@ -127,7 +127,7 @@ test_tskit_version(void)
     /* Make sure we don't have any accidental changes to the tskit submodule. */
     CU_ASSERT_EQUAL(TSK_VERSION_MAJOR, 0);
     CU_ASSERT_EQUAL(TSK_VERSION_MINOR, 99);
-    CU_ASSERT_EQUAL(TSK_VERSION_PATCH, 8);
+    CU_ASSERT_EQUAL(TSK_VERSION_PATCH, 11);
 }
 
 int
