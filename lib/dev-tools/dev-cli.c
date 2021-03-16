@@ -154,7 +154,7 @@ read_pedigree(tsk_table_collection_t *tables, config_t *config)
     for (j = 0; j < num_inds; j++) {
         ret = tsk_individual_table_add_row(&tables->individuals, 0, NULL, 0,
             /* encode the parents in the metadata */
-            (void *) (parents + j * ploidy), ploidy * sizeof(tsk_id_t));
+            NULL, 0, (void *) (parents + j * ploidy), ploidy * sizeof(tsk_id_t));
         if (ret < 0) {
             fatal_tskit_error(ret, __LINE__);
         }
