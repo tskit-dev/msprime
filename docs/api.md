@@ -52,22 +52,10 @@
 ```{eval-rst}
 .. autosummary::
 
-  Demography
   Population
+  Demography
   DemographyDebugger
 ```
-### Demographic events
-
-```{eval-rst}
-.. autosummary::
-
-  PopulationParametersChange
-  MigrationRateChange
-  SymmetricMigrationRateChange
-  PopulationSplit
-  MassMigration
-```
-
 
 ```{eval-rst}
 .. todo:: Section for utililies like RateMap
@@ -230,42 +218,13 @@ The node was created by a {class}`msprime.CensusEvent`.
 
 
 ```{eval-rst}
-.. autoclass:: msprime.Demography
+.. autoclass:: msprime.Demography()
     :members:
 ```
 
 ```{eval-rst}
 .. autoclass:: msprime.Population
     :members:
-```
-
-```{eval-rst}
-.. autoclass:: msprime.PopulationParametersChange
-
-```
-
-```{eval-rst}
-.. autoclass:: msprime.SymmetricMigrationRateChange
-
-```
-
-```{eval-rst}
-.. autoclass:: msprime.MigrationRateChange
-
-```
-
-```{eval-rst}
-.. autoclass:: msprime.PopulationSplit
-
-```
-
-```{eval-rst}
-.. autoclass:: msprime.MassMigration
-```
-
-```{eval-rst}
-.. autoclass:: msprime.CensusEvent
-
 ```
 
 ```{eval-rst}

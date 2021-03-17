@@ -939,7 +939,7 @@ class TestSimAncestrySamples:
                 ancestry._parse_sim_ancestry(samples=samples, demography=demography)
         for bad_pop in [1.1, ValueError]:
             samples = [msprime.SampleSet(2, time=0, population=bad_pop)]
-            with pytest.raises(TypeError):
+            with pytest.raises(KeyError):
                 ancestry._parse_sim_ancestry(samples=samples, demography=demography)
 
     def test_list_samples_no_population(self):

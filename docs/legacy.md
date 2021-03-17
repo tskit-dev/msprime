@@ -175,3 +175,22 @@ and all rates are per-generation.
 .. autoclass:: msprime.InfiniteSites
 ```
 
+
+```{eval-rst}
+.. autoclass:: msprime.PopulationParametersChange
+
+```
+
+```{eval-rst}
+.. autoclass:: msprime.MigrationRateChange
+
+```
+
+```{eval-rst}
+.. autoclass:: msprime.MassMigration
+```
+
+```{eval-rst}
+.. autoclass:: msprime.CensusEvent
+
+```
