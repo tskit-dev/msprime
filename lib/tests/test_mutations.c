@@ -529,7 +529,7 @@ test_single_tree_mutgen_keep_sites_many_mutations(void)
 
     ret = mutgen_generate(&mutgen,
         MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_ANCESTRAL_MUTATION);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     mutgen_free(&mutgen);
     mutation_model_free(&mut_model);

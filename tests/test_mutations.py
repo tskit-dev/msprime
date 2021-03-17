@@ -70,10 +70,33 @@ class TestDefaults:
         assert extra_mts.num_sites > 1
         assert extra_mts.num_mutations > mts.num_mutations
 
-        # If we turn up the mutation rate too high we get some
-        # bad ancestral mutations with silent state transitions.
-        with pytest.raises(_msprime.LibraryError, match="silent transition"):
-            msprime.sim_mutations(mts, rate=10, random_seed=2, add_ancestral=True)
+    def test_sim_mutations_existing_high_rate(self):
+        ts = msprime.sim_ancestry(10, sequence_length=2, random_seed=1)
+        mts = msprime.sim_mutations(ts, rate=1, random_seed=1)
+        assert mts.num_sites == 2
+        assert mts.num_mutations > 2
+        tables = mts.tables
+        tree = mts.first()
+        # Should have no silent mutations here
+        for site in tree.sites():
+            for mut in site.mutations:
+                if mut.parent != tskit.NULL:
+                    assert (
+                        mut.derived_state != tables.mutations[mut.parent].derived_state
+                    )
+        # Should have some here
+        mts = msprime.sim_mutations(mts, rate=10, random_seed=2, add_ancestral=True)
+        tables = mts.tables
+        tree = mts.first()
+        silent = 0
+        # Should have no silent mutations here
+        for site in tree.sites():
+            for mut in site.mutations:
+                if mut.parent != tskit.NULL:
+                    silent += (
+                        mut.derived_state == tables.mutations[mut.parent].derived_state
+                    )
+        assert silent > 0
 
     def test_mutate(self):
         ts = msprime.sim_ancestry(10, random_seed=1)
@@ -1230,8 +1253,12 @@ class TestKeep:
         ts_mut1 = msprime.sim_mutations(ts, rate=1, random_seed=1)
         assert ts_mut1.num_sites == 1
         assert ts_mut1.num_mutations > 1
-        with pytest.raises(_msprime.LibraryError, match="silent transition"):
-            msprime.sim_mutations(ts_mut1, rate=1, random_seed=1, add_ancestral=True)
+        ts_mut2 = msprime.sim_mutations(
+            ts_mut1, rate=1, random_seed=1, add_ancestral=True
+        )
+        assert set(ts_mut1.tables.sites.position) <= set(ts_mut2.tables.sites.position)
+        # Check that decoding variants succeeds
+        assert len(list(ts_mut2.variants())) == ts_mut2.num_sites
 
     def test_keep_ancestral_mutate(self):
         ts = msprime.sim_ancestry(5, random_seed=3)
