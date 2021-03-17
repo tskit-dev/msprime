@@ -5334,6 +5334,62 @@ class PyvolveTest(MutationTest):
         self._run_pyvolve_comparison("BLOSUM62")
 
 
+class SequentialMutations(MutationTest):
+    """
+    Verify that repeated rounds to running sim_mutations gives the same
+    results as running it once with a high rate.
+    """
+
+    def _run(self, model):
+        total_rate = 10
+        num_repeats = 10
+        num_replicates = 100
+        num_mutations_single = np.zeros(num_replicates)
+        num_sites_single = np.zeros(num_replicates)
+        num_mutations_repeat = np.zeros(num_replicates)
+        num_sites_repeat = np.zeros(num_replicates)
+
+        for j in range(num_replicates):
+            base_ts = msprime.sim_ancestry(10, sequence_length=1000)
+            single_ts = msprime.sim_mutations(base_ts, rate=total_rate, model=model)
+            num_mutations_single[j] = single_ts.num_mutations
+            num_sites_single[j] = single_ts.num_sites
+            repeat_ts = base_ts
+            for _ in range(num_repeats):
+                repeat_ts = msprime.sim_mutations(
+                    repeat_ts,
+                    rate=total_rate / num_repeats,
+                    add_ancestral=True,
+                    model=model,
+                )
+
+                num_mutations_repeat[j] = repeat_ts.num_mutations
+                num_sites_repeat[j] = repeat_ts.num_sites
+
+        df_single = pd.DataFrame(
+            {"num_sites": num_sites_single, "num_mutations": num_mutations_single}
+        )
+        df_repeat = pd.DataFrame(
+            {"num_sites": num_sites_repeat, "num_mutations": num_mutations_repeat}
+        )
+        self._plot_stats("", df_single, df_repeat, "single", "repeat")
+
+    def test_sequential_mutate_binary(self):
+        self._run(msprime.BinaryMutationModel())
+
+    def test_sequential_mutate_JC69(self):
+        self._run("JC69")
+
+    def test_sequential_mutate_HKY(self):
+        model = msprime.HKYMutationModel(
+            kappa=1.5, equilibrium_frequencies=[0.2, 0.3, 0.1, 0.4]
+        )
+        self._run(model)
+
+    def test_sequential_mutate_PAM(self):
+        self._run("PAM")
+
+
 class OlderMsprimeTest(Test):
     """
     Run tests against older versions of msprime.
