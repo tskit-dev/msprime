@@ -42,9 +42,11 @@ sphinx:
       todo_include_todos: true
       intersphinx_mapping:
         python: ["https://docs.python.org/3/", null]
-        tskit: ["https://tskit.readthedocs.io/en/stable", null]
+        tskit: ["https://tskit.dev/tskit/docs/stable", null]
         tutorials: ["https://tskit.dev/tutorials/", null]
         stdpopsim: ["https://stdpopsim.readthedocs.io/en/stable", null]
+        # Note: pyslim is moving to tskit.dev soon
+        pyslim: ["https://pyslim.readthedocs.io/en/stable", null]
         numpy: ['https://numpy.org/doc/stable/', null]
       nitpicky: true
 

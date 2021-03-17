@@ -390,7 +390,7 @@ def _parse_simulate(
             pedigree=pedigree,
         )
     else:
-        tables = from_ts.tables
+        tables = from_ts.dump_tables()
 
     # It's useful to call _parse_simulate outside the context of the main
     # entry point - so we want to get good seeds in this case too.
@@ -923,8 +923,7 @@ def _parse_sim_ancestry(
     is_dtwf = isinstance(model, DiscreteTimeWrightFisher)
 
     # Check the demography. If no demography is specified, we default to a
-    # single-population model with a given population size. If an initial
-    # state is provided, we default to using that number of populations.
+    # single-population model with a given population size.
     if demography is None:
         if is_dtwf:
             # A default size of 1 isn't so smart for DTWF and almost certainly
@@ -935,11 +934,18 @@ def _parse_sim_ancestry(
                     "explicitly, either using the population_size or demography "
                     "arguments."
                 )
-        num_populations = 1 if initial_state is None else len(initial_state.populations)
+        if initial_state is not None:
+            if population_size is None:
+                raise ValueError(
+                    "Must specify either a demography object or a population_size "
+                    "(for single population models) when providing an initial_state."
+                )
+            if len(initial_state.populations) > 1:
+                raise ValueError(
+                    "Must specify demography for initial_state with > 1 population"
+                )
         population_size = 1 if population_size is None else float(population_size)
-        demography = demog.Demography.isolated_model(
-            [population_size] * num_populations
-        )
+        demography = demog.Demography.isolated_model([population_size])
     elif isinstance(demography, demog.Demography):
         if population_size is not None:
             raise ValueError("Cannot specify demography and population size")
@@ -969,6 +975,24 @@ def _parse_sim_ancestry(
             raise ValueError(
                 "initial_state tables must define at least one population."
             )
+        # Make sure the names match-up in the input demography.
+        demography_check = demog.Demography.from_tree_sequence(
+            initial_state.tree_sequence()
+        )
+        if demography.num_populations < demography_check.num_populations:
+            raise ValueError(
+                "Input demography must have at least as many populations as the "
+                "initial state population table: "
+                f"{demography.num_populations} < {demography_check.num_populations}"
+            )
+
+        for pop1, pop2 in zip(demography.populations, demography_check.populations):
+            if pop1.name != pop2.name:
+                raise ValueError(
+                    "Population names in the input demography and the initial "
+                    f"state population table must be equal: {pop1.name} ≠ {pop2.name}"
+                )
+        demography.insert_extra_populations(initial_state)
 
     # It's useful to call _parse_sim_ancestry outside the context of the main
     # entry point - so we want to get good seeds in this case too.
@@ -1103,6 +1127,8 @@ def sim_ancestry(
         completed tree sequence. Please see
         :ref:`sec_ancestry_initial_state` for details of the required
         properties of this tree sequence and its interactions with other parameters.
+        All information in the ``initial_state`` tables is preserved
+        (including metadata) and included in the returned tree sequence.
         (Default: None).
     :param float start_time: If specified, set the initial time that the
         simulation starts to this value. If not specified, the start
