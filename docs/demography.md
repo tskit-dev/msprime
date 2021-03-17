@@ -30,8 +30,8 @@ for most purposes. To enable more realistic and complex simulations,
 msprime models population structure
 by defining a set of discrete {ref}`sec_demography_populations`,
 with {ref}`sec_demography_migration` between these populations occuring
-at different rates. Populations and their parameters can
-can change over time, via {ref}`demographic events<sec_demography_events>`.
+at different rates. Populations and their parameters can 
+change over time, via {ref}`demographic events<sec_demography_events>`.
 Please see the {ref}`sec_demography_definitions`
 section for mathematical details.
 
@@ -139,7 +139,7 @@ more detailed examples of models from the literature.
 ## Model
 
 In this section we define the model used to describe demography
-in msprime, as enacapsulated by a {class}`.Demography` object.
+in msprime, as encapsulated by a {class}`.Demography` object.
 
 (sec_demography_direction_of_time)=
 
@@ -164,7 +164,7 @@ example, understanding how different patterns of lineages moving from one
 population to another backwards in time corresponds to
 {ref}`population splits<sec_demography_events_population_split>` and
 {ref}`admixture<sec_demography_events_admixture>` events is a
-great way deepen your understanding of the coalescent in general.
+great way to deepen your understanding of the coalescent in general.
 
 Mostly it doesn't matter, and it's just a point of clarification
 for reading this documentation and understanding why the models
@@ -243,7 +243,7 @@ When used as part of the {class}`.Demography`, each population has an integer
 ID (its zero-based index in the `populations` list) and a ``name`` attribute.
 By default, msprime assigns the name `pop_j` to the population at index
 `j` in a demographic model. These default names can be overridden, and
-users should give populations more descriptive names when building complex models
+users should give populations more descriptive names when building complex models.
 
 :::{Attention}
 Population names must be unique within a single {class}`.Demography` and be valid
@@ -301,7 +301,7 @@ demography
 
 :::{warning}
 We use the {meth}`.Demography.isolated_model` function here as a
-convenient means of creating example demographies. However, it's
+convenient mean of creating example demographies. However, it's
 important to note that simulations in which we sample from
 multiple isolated populations will fail with an error because
 the lineages in question can never coalesce. See
@@ -406,14 +406,14 @@ ACTIVE → PREVIOUSLY_ACTIVE
 ```
 All populations are ``ACTIVE`` by default at the start of the simulation
 (looking {ref}`backwards in time<sec_demography_direction_of_time>`)
-except if they are they are ``ancestral`` in a
+except if they are ``ancestral`` in a
 {ref}`sec_demography_events_population_split`.
 In this case populations are initially ``INACTIVE``, by default.
 An ``ancestral`` population then transitions
 from ``INACTIVE`` → ``ACTIVE`` when the corresponding
 population split event occurs.
 
-It is possible override the default initial state of the population
+It is possible to override the default initial state of the population
 that is ancestral in a population split event using the ``initially_active``
 boolean flag in the {class}`.Population` class. This is to facilitate
 "trunk population" models, as shown in
