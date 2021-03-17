@@ -1222,7 +1222,9 @@ class DebugOutputBase:
     def test_funky_metadata(self):
         demography = msprime.Demography()
         # name is safe because it must be a Python identifier
-        demography.add_population(description="<>&", extra_metadata={"&": "</>"})
+        demography.add_population(
+            initial_size=1, description="<>&", extra_metadata={"&": "</>"}
+        )
         self.verify(demography)
 
     def test_no_events(self):
@@ -4170,7 +4172,7 @@ class TestDemographyObject:
     def test_add_population_error(self):
         model = msprime.Demography.isolated_model([1])
         with pytest.raises(ValueError, match="Duplicate population name"):
-            model.add_population(name="pop_0")
+            model.add_population(name="pop_0", initial_size=1)
 
     def test_add_population_properties(self):
         model = msprime.Demography()
@@ -5100,16 +5102,16 @@ class TestPopulationLoops:
 
     def test_ABA_loop(self):
         demography = msprime.Demography()
-        demography.add_population(name="A")
-        demography.add_population(name="B")
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
         demography.add_population_split(1, derived=["A"], ancestral="B")
         demography.add_population_split(2, derived=["B"], ancestral="A")
         self.verify_loop_error(demography)
 
     def test_ABA_admixture_loop(self):
         demography = msprime.Demography()
-        demography.add_population(name="A")
-        demography.add_population(name="B")
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
         demography.add_admixture(0.1, derived="A", ancestral=["B"], proportions=[1])
         demography.add_admixture(0.2, derived="B", ancestral=["A"], proportions=[1])
         msg = "All ancestral populations in admixture must already be active"
@@ -5122,9 +5124,9 @@ class TestPopulationLoops:
 
     def test_admixture_derived_inactive(self):
         demography = msprime.Demography()
-        demography.add_population(name="A")
-        demography.add_population(name="B")
-        demography.add_population(name="C")
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
         demography.add_population_split(0.1, derived=["A"], ancestral="B")
         demography.add_admixture(0.2, derived="A", ancestral=["C"], proportions=[1])
         msg = "derived population in an admixture must be active"
@@ -5137,9 +5139,9 @@ class TestPopulationLoops:
 
     def test_admixture_ancestral_inactive(self):
         demography = msprime.Demography()
-        demography.add_population(name="A")
-        demography.add_population(name="B")
-        demography.add_population(name="C")
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
         demography.add_population_split(0.1, derived=["A"], ancestral="B")
         demography.add_admixture(0.2, derived="C", ancestral=["A"], proportions=[1])
         msg = "ancestral populations in admixture must already be active"
@@ -5152,9 +5154,9 @@ class TestPopulationLoops:
 
     def test_ABCA_loop(self):
         demography = msprime.Demography()
-        demography.add_population(name="A")
-        demography.add_population(name="B")
-        demography.add_population(name="C")
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
         demography.add_population_split(1, derived=["A"], ancestral="B")
         demography.add_population_split(2, derived=["B"], ancestral="C")
         demography.add_population_split(3, derived=["C"], ancestral="A")
@@ -5172,10 +5174,10 @@ class TestPopulationLoops:
 
     def test_ABCDB_loop(self):
         demography = msprime.Demography()
-        demography.add_population(name="A")
-        demography.add_population(name="B")
-        demography.add_population(name="C")
-        demography.add_population(name="D")
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
+        demography.add_population(name="D", initial_size=1)
         demography.add_population_split(1, derived=["A"], ancestral="B")
         demography.add_population_split(2, derived=["B"], ancestral="C")
         demography.add_population_split(3, derived=["C"], ancestral="D")
@@ -5417,9 +5419,9 @@ class TestDemographyEquivalent:
 
     def test_different_names(self):
         d1 = msprime.Demography()
-        d1.add_population(name="x")
+        d1.add_population(name="x", initial_size=1)
         d2 = msprime.Demography()
-        d2.add_population(name="y")
+        d2.add_population(name="y", initial_size=1)
         with pytest.raises(AssertionError, match="names differ"):
             d1.assert_equivalent(d2)
 
@@ -6015,8 +6017,8 @@ class TestFromOldStyleMap:
 class TestFromTreeSequence:
     def test_simple_round_trip(self):
         d1 = msprime.Demography()
-        d1.add_population(name="A", description="X")
-        d1.add_population(name="B", description="Y")
+        d1.add_population(name="A", description="X", initial_size=1)
+        d1.add_population(name="B", description="Y", initial_size=1)
         ts = msprime.sim_ancestry({"A": 1}, demography=d1, random_seed=1)
         d2 = msprime.Demography.from_tree_sequence(ts, initial_size=1)
         assert d1 == d2

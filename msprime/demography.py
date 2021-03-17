@@ -191,7 +191,7 @@ class Demography:
     def add_population(
         self,
         *,
-        initial_size=None,
+        initial_size,
         growth_rate=None,
         name=None,
         description=None,
@@ -203,15 +203,16 @@ class Demography:
         TODO document
         """
         N = self.num_populations
-        population = Population()
-        population.id = N
-        population.growth_rate = 0 if growth_rate is None else growth_rate
-        population.initial_size = 1 if initial_size is None else initial_size
-        population.name = f"pop_{population.id}" if name is None else name
-        population.description = "" if description is None else description
-        population.extra_metadata = {} if extra_metadata is None else extra_metadata
-        population.default_sampling_time = default_sampling_time
-        population.initially_active = initially_active
+        population = Population(
+            id=N,
+            initial_size=initial_size,
+            growth_rate=0 if growth_rate is None else growth_rate,
+            name=f"pop_{N}" if name is None else name,
+            description="" if description is None else description,
+            extra_metadata={} if extra_metadata is None else extra_metadata,
+            default_sampling_time=default_sampling_time,
+            initially_active=initially_active,
+        )
         self.populations.append(population)
         M = self.migration_matrix
         self.migration_matrix = np.zeros((N + 1, N + 1))
