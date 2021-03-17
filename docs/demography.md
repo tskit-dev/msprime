@@ -301,7 +301,7 @@ demography
 
 :::{warning}
 We use the {meth}`.Demography.isolated_model` function here as a
-convenient mean of creating example demographies. However, it's
+way to create example demographies. However, it's
 important to note that simulations in which we sample from
 multiple isolated populations will fail with an error because
 the lineages in question can never coalesce. See
