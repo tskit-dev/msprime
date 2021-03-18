@@ -29,6 +29,7 @@ import inspect
 import itertools
 import logging
 import math
+import numbers
 import sys
 import textwrap
 import warnings
@@ -75,21 +76,28 @@ def check_migration_rate(migration_rate):
 @dataclasses.dataclass
 class Population:
     """
-    Define a :ref:`population <sec_demography_populations>` in a
-    :class:`.Demography`.
+    A single population in a :class:`.Demography`. See the
+    :ref:`sec_demography_populations` section for more information on
+    what populations represent, and how they can be used.
 
+    .. warning:: This class should not be instantiated directly. Please use
+        :meth:`.Demography.add_population` method instead.
     """
 
     initial_size: float = 0.0
     """
     The absolute size of the population at time zero.
+    See the :ref:`sec_demography_populations_initial_size` section
+    for more details and examples.
     """
 
     growth_rate: float = 0.0
     """
     The exponential growth rate of the population per generation (forwards in time).
     Growth rates can be negative. This is zero for a constant population size,
-    and positive for a population that has been growing. Defaults to 0.
+    and positive for a population that has been growing.
+    See the :ref:`sec_demography_populations_growth_rate` section for more
+    details and examples.
     """
 
     name: Union[str, None] = None
@@ -97,11 +105,13 @@ class Population:
     The name of the population. If specified this must be a uniquely
     identifying string and must be a valid Python identifier (i.e., could be
     used as a variable name in Python code).
+    See :ref:`sec_demography_population_identifiers` for more details
+    and recommendations on best practise.
     """
 
     description: str = ""
     """
-    A short description of the population. Defaults to the empty string if not
+    A concise description of the population. Defaults to the empty string if not
     specified.
     """
 
@@ -110,6 +120,8 @@ class Population:
     A JSON-encodable dictionary of metadata items to be stored in the
     associated tskit population object. This dictionary must not contain keys
     for any of the pre-defined metadata items.
+    See the :ref:`sec_demography_populations_metadata` section for more
+    details and examples.
     """
 
     default_sampling_time: Union[float, None] = None
@@ -149,15 +161,28 @@ class Population:
 
 
 @dataclasses.dataclass
-class Demography:
+class Demography(collections.abc.Mapping):
     """
     The definition of a demographic model for an msprime simulation,
     consisting of a set of populations, a migration matrix, and a list
-    of demographic events. See the :ref:`sec_demography_definitions`
-    section for precise mathematical definitions of these concepts.
+    of demographic events. See the :ref:`sec_demography` section for
+    detailed documentation on how to define, debug and simulate with
+    demography in msprime.
 
-    .. todo:: Add details of how we access individual populations.
-        Also note that using the constructor is not supported.
+    Please see the :ref:`sec_demography_demography_objects` section
+    for details of how to access and update population information
+    within a model.
+
+    Demography objects implement the Python
+    :class:`python:collections.abc.Mapping` protocol, in which the
+    keys are **either** the population ``name`` or
+    integer ``id`` values (see the :ref:`sec_demography_population_identifiers`
+    section for more information) and the values are :class:`.Population`
+    objects.
+
+    In general, population references in methods such as
+    :meth:`.Demography.add_population_split` can either be string names
+    or integer IDs, and the two forms can be used interchangeably.
     """
 
     populations: List[Population] = dataclasses.field(default_factory=list)
@@ -191,28 +216,73 @@ class Demography:
     def add_population(
         self,
         *,
-        initial_size=None,
-        growth_rate=None,
-        name=None,
-        description=None,
-        extra_metadata=None,
-        default_sampling_time=None,
-        initially_active=None,
+        initial_size: float,
+        growth_rate: Union[float, None] = None,
+        name: Union[str, None] = None,
+        description: Union[str, None] = None,
+        extra_metadata: Union[dict, None] = None,
+        default_sampling_time: Union[float, None] = None,
+        initially_active: Union[bool, None] = None,
     ) -> Population:
         """
-        TODO document
+        Adds a new :class:`.Population` to this :class:`.Demography` with the
+        specified parameters. The new population will have ID equal to the
+        the number of populations immediately before ``add_population``
+        is called, such that the first population added has ID 0, the next
+        ID 1 and so on. If the ``name`` is not specified, this defaults
+        to ``"pop_{id}"``. An :ref:`sec_demography_populations_initial_size`
+        value must be specified (but may be zero).
+
+        :param float initial_size: The size of the population at time zero.
+            See the :ref:`sec_demography_populations_initial_size` section
+            for more details and examples.
+        :param float growth_rate: The exponential growth rate of the
+            population. See the :ref:`sec_demography_populations_growth_rate`
+            section for more details and examples.
+        :param str name: The human-readable identifier for this population.
+            If not specified, defaults to the string ``"pop_{id}"`` where
+            ``id`` is the population's integer ID. See
+            :ref:`sec_demography_population_identifiers` for more details
+            and recommendations on best practise.
+        :param str description: A concise but informative description of
+            what this population represents within the wider model. Defaults
+            to the empty strings.
+        :param dict extra_metadata: Extra metadata to associate with
+            this population that will be stored tree sequences output
+            by :func:`.sim_ancestry`. See the
+            :ref:`sec_demography_populations_metadata` section for more
+            details and examples.
+        :param float default_sampling_time: The time at which samples
+            will be taken from this population, if a time in not otherwise
+            specified. By default this is determined by the details
+            of the model, and whether populations are ancestral in
+            :ref:`sec_demography_events_population_split` events. See the
+            :ref:`sec_demography_populations_default_sampling_time` section
+            for more details.
+        :param bool initially_active: Whether this population is initially
+            :ref:`active<sec_demography_populations_life_cycle>`.
+            By default this is determined by the details
+            of the model, and whether populations are ancestral in
+            :ref:`sec_demography_events_population_split` events. See the
+            :ref:`sec_demography_populations_life_cycle` section
+            for more details.
+        :returns: The new :class:`.Population` instance.
+        :rtype: Population
         """
         N = self.num_populations
-        population = Population()
-        population.id = N
-        population.growth_rate = 0 if growth_rate is None else growth_rate
-        population.initial_size = 1 if initial_size is None else initial_size
-        population.name = f"pop_{population.id}" if name is None else name
-        population.description = "" if description is None else description
-        population.extra_metadata = {} if extra_metadata is None else extra_metadata
-        population.default_sampling_time = default_sampling_time
-        population.initially_active = initially_active
+        population = Population(
+            id=N,
+            initial_size=initial_size,
+            growth_rate=0 if growth_rate is None else growth_rate,
+            name=f"pop_{N}" if name is None else name,
+            description="" if description is None else description,
+            extra_metadata={} if extra_metadata is None else extra_metadata,
+            default_sampling_time=default_sampling_time,
+            initially_active=initially_active,
+        )
         self.populations.append(population)
+        # TODO this is inefficient - we should probably store the migration
+        # matrix in a sparse dictionary form internally.
         M = self.migration_matrix
         self.migration_matrix = np.zeros((N + 1, N + 1))
         self.migration_matrix[:N, :N] = M
@@ -253,13 +323,15 @@ class Demography:
 
     def set_migration_rate(
         self, source: Union[str, int], dest: Union[str, int], rate: float
-    ):
+    ) -> None:
         """
         Sets the backwards-time rate of migration from the specified ``source``
         population to ``dest`` to the specified value. This has the effect of
         setting ``demography.migration_matrix[source, dest] = rate``.
 
-        .. warning:: Note this is the **backwards time** migration rate and that
+        .. important:: Note this is the
+            :ref:`backwards in time<sec_demography_direction_of_time>`;
+            migration rate and that
             ``source`` and ``dest`` are from the perspective of lineages in the
             coalescent process. See :ref:`sec_demography_migration` for more
             details and clarification on this vital point.
@@ -283,7 +355,7 @@ class Demography:
         self,
         populations: List[Union[str, int]],
         rate: float,
-    ):
+    ) -> None:
         """
         Sets the symmetric migration rate between all pairs of populations in
         the specified list to the specified value. For a given pair of population
@@ -320,13 +392,15 @@ class Demography:
         this corresponds to the ancestral population splitting into the
         derived populations.
 
-        .. todo:: Add some links here, to the documentation and to the
-            other types of events we might want to support.
+        See the :ref:`sec_demography_events_population_split` section
+        for more details and examples.
 
         In addition to moving lineages from the derived population(s) into the
         ancestral population, a population split has the following additional
         effects:
 
+        - All derived populations are set to
+          :ref:`inactive<sec_demography_populations_life_cycle>`.
         - All migration rates to and from the derived populations are set to 0.
         - Population sizes and growth rates for the derived populations are set
           to 0.
@@ -366,13 +440,15 @@ class Demography:
         the specified ``time`` being composed of individuals from the
         specified ``ancestral`` populations in the specified ``proportions``.
 
-        .. todo:: Add some links here, to the documentation and to the
-            other types of events we might want to support.
+        See the :ref:`sec_demography_events_admixture` section
+        for more details and examples.
 
         In addition to moving lineages from the derived population into the
         ancestral population(s), an admixture has the following additional
         effects:
 
+        - All derived populations are set to
+          :ref:`inactive<sec_demography_populations_life_cycle>`.
         - All migration rates to and from the derived population are set to 0.
         - Population sizes and growth rates for the derived population are set
           to 0, and the poulation is marked as inactive.
@@ -394,9 +470,41 @@ class Demography:
             )
         )
 
-    def add_mass_migration(self, time, *, source, dest, proportion):
+    def add_mass_migration(
+        self,
+        time: float,
+        *,
+        source: Union[str, int],
+        dest: Union[str, int],
+        proportion: float,
+    ) -> MassMigration:
         """
-        TODO
+        Adds a mass migration (or "pulse migration") event at the specified
+        time. In a mass migration event, lineages in the ``source`` population
+        are moved to the ``dest`` population with probability ``proportion``.
+        Forwards-in-time, this corresponds to individuals migrating
+        **from** population ``dest`` **to** population ``source``.
+
+        Please see the :ref:`sec_demography_events_mass_migration` section
+        for more details and examples.
+
+        .. warning:: Mass migrations are an advanced feature and should
+            only be used if the required population dynamics cannot be
+            modelled by :ref:`sec_demography_events_population_split`
+            or :ref:`sec_demography_events_admixture` events.
+
+        .. important::
+            Note that ``source`` and ``dest`` are from the perspective of the
+            coalescent process, i.e.
+            :ref:`backwards in time<sec_demography_direction_of_time>`;
+            please see the
+            :ref:`sec_demography_migration` section for more details.
+
+        :param float time: The time at which this event occurs in generations.
+        :param str, int source: The population **from** which lineages are moved.
+        :param str, int dest: The population **to** which lineages are moved.
+        :param float proportion: For each lineage in the ``source`` population,
+            this is the probability that it moves to the ``dest`` population.
         """
         return self.add_event(MassMigration(time, source, dest, proportion))
 
@@ -414,11 +522,12 @@ class Demography:
         lineages move from population ``source`` to ``dest`` during the progress of
         the simulation.
 
-        .. warning::
+        .. important::
             Note that ``source`` and ``dest`` are from the perspective of the
-            coalescent process, i.e. **backwards in time**; please see the
-            :ref:`sec_demography_migration` section for more details on the
-            interpretation of this migration model.
+            coalescent process, i.e.
+            :ref:`backwards in time<sec_demography_direction_of_time>`;
+            please see the
+            :ref:`sec_demography_migration` section for more details.
 
         By default, ``source=None`` and ``dest=None``, which results in all
         non-diagonal elements of the migration matrix being changed to the new
@@ -446,6 +555,8 @@ class Demography:
         IDs ``j`` and ``k``, this sets ``migration_matrix[j, k] = rate``
         and ``migration_matrix[k, j] = rate``.
 
+        Please see the :ref:`sec_demography_migration` section for more details.
+
         Populations may be specified either by their integer IDs or by
         their string names.
 
@@ -469,6 +580,8 @@ class Demography:
         """
         Changes the size parameters of a population (or all populations)
         at a given time.
+
+        Please see the :ref:`sec_demography_populations` section for more details.
 
         :param float time: The length of time ago at which this event
             occurred.
@@ -511,7 +624,7 @@ class Demography:
 
     def add_census(self, time: float) -> CensusEvent:
         """
-        Add a "census" event at the specified time. In a census we add a node
+        Adds a "census" event at the specified time. In a census we add a node
         to each branch of every tree, thus recording the population that each
         lineage is in at the specified time.
 
@@ -671,6 +784,13 @@ class Demography:
         )
         return s
 
+    def __len__(self):
+        return len(self.populations)
+
+    def __iter__(self):
+        for pop in self.populations:
+            yield pop.name
+
     def __getitem__(self, identifier):
         """
         Returns the population with the specified ID or name.
@@ -681,7 +801,7 @@ class Demography:
                     return population
             else:
                 raise KeyError(f"Population with name '{identifier}' not found")
-        elif core.isinteger(identifier):
+        elif isinstance(identifier, numbers.Integral):
             # We don't support negative indexing here because -1 is used as
             # way to refer to *all* populations in demographic events, and
             # it would be too easy to introduce bugs in old code if we changed
@@ -689,20 +809,10 @@ class Demography:
             if identifier < 0 or identifier >= self.num_populations:
                 raise KeyError(f"Population id {identifier} out of bounds")
             return self.populations[identifier]
-        raise TypeError(
+        raise KeyError(
             "Keys must be either string population names or integer IDs:"
             f"identifier '{identifier}' is of type {type(identifier)}"
         )
-
-    def __contains__(self, identifier):
-        """
-        Support "in" lookups, i.e. ``if "YRI" in demography``.
-        """
-        try:
-            self.__getitem__(identifier)
-        except KeyError:
-            return False
-        return True
 
     @property
     def num_populations(self):
@@ -865,6 +975,9 @@ class Demography:
                 tables.populations.add_row()
 
     def asdict(self):
+        # NOTE: this slightly contradicts the interpretation of the
+        # Demography object as a mapping storing populations. But
+        # this is an internal undocumented method, so seems OK.
         return {
             "populations": [pop.asdict() for pop in self.populations],
             "events": [event.asdict() for event in self.events],
@@ -1160,7 +1273,8 @@ class Demography:
         the list. Leaf populations are first in the list, and added in
         left-to-right order. Populations corresponding to the internal nodes
         are then added in a postorder traversal of the species tree. For each
-        internal node a :class:`.PopulationSplit` event is added so that
+        internal node a :ref:`sec_demography_events_population_split`
+        event is added so that
         lineages move from its child populations at the appropriate time
         and rates of continuous migration to and from the child populations is
         set to zero. See the :ref:`sec_demography_events_population_split`
@@ -1242,7 +1356,8 @@ class Demography:
         the list. Leaf populations are first in the list, and added in
         left-to-right order. Populations corresponding to the internal nodes
         are then added in a postorder traversal of the species tree. For each
-        internal node a :class:`.PopulationSplit` event is added so that
+        internal node a :ref:`sec_demography_events_population_split`
+        event is added so that
         lineages move from its child populations at the appropriate time and
         rates of continuous migration to and from the child populations is set
         to zero. See the :ref:`sec_demography_events_population_split` section

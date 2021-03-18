@@ -30,7 +30,7 @@ for most purposes. To enable more realistic and complex simulations,
 msprime models population structure
 by defining a set of discrete {ref}`sec_demography_populations`,
 with {ref}`sec_demography_migration` between these populations occuring
-at different rates. Populations and their parameters can 
+at different rates. Populations and their parameters can
 change over time, via {ref}`demographic events<sec_demography_events>`.
 Please see the {ref}`sec_demography_definitions`
 section for mathematical details.
@@ -239,6 +239,14 @@ Populations essentially have two purposes:
     associated with the corresponding {class}`tskit.Population` objects
     in simulated tree sequences.
 
+Populations additionally have a "state" which determines whether lineages
+can be present within them or not at a given time, as described in
+the {ref}`sec_demography_populations_life_cycle` section.
+
+(sec_demography_population_identifiers)=
+
+#### Identifying populations
+
 When used as part of the {class}`.Demography`, each population has an integer
 ID (its zero-based index in the `populations` list) and a ``name`` attribute.
 By default, msprime assigns the name `pop_j` to the population at index
@@ -263,10 +271,6 @@ to interpret the resulting tree sequence files (since detailed metadata
 about the populations in which coalescences occured is maintained)
 and makes it easier to avoid
 [modelling errors](http://dx.doi.org/10.1016/j.ajhg.2020.08.017).
-
-Populations additionally have a "state" which determines whether lineages
-can be present within them or not at a given time, as described in
-the {ref}`sec_demography_populations_life_cycle` section.
 
 (sec_demography_populations_initial_size)=
 
@@ -365,10 +369,10 @@ For example,
 
 ```{code-cell}
 demography = msprime.Demography.stepping_stone_model([100, 100], migration_rate=0.01)
-demography.populations[0].name = "awesome_pop"
-demography.populations[0].description = "This population is totally awesome"
-demography.populations[1].name = "more_awesome_pop"
-demography.populations[1].description = "This population is even more awesome"
+demography[0].name = "awesome_pop"
+demography[0].description = "This population is totally awesome"
+demography[1].name = "more_awesome_pop"
+demography[1].description = "This population is even more awesome"
 ts = msprime.sim_ancestry({0: 1, 1: 1}, demography=demography)
 for population in ts.populations():
     print(f"id={population.id}: {population.metadata}")
@@ -381,10 +385,10 @@ object. For example,
 
 ```{code-cell}
 demography = msprime.Demography.stepping_stone_model([100, 100], migration_rate=0.01)
-demography.populations[0].name = "awesome_pop"
-demography.populations[0].extra_metadata = {"emoji": "👍"}
-demography.populations[1].name = "more_awesome_pop"
-demography.populations[1].extra_metadata = {"emoji": "🤘"}
+demography[0].name = "awesome_pop"
+demography[0].extra_metadata = {"emoji": "👍"}
+demography[1].name = "more_awesome_pop"
+demography[1].extra_metadata = {"emoji": "🤘"}
 ts = msprime.sim_ancestry({0: 1, 1: 1}, demography=demography)
 for pop in ts.populations():
     print(pop.id, "\t", pop.metadata["emoji"], pop.metadata["name"])
@@ -789,6 +793,59 @@ The effect of mass migration events are summarised in the
 demography = msprime.Demography.island_model([100, 100], migration_rate=0.1)
 demography.add_mass_migration(time=10, source=0, dest=1, proportion=0.5)
 demography.debug()
+```
+
+(sec_demography_demography_objects)=
+
+## Demography objects
+
+{class}`.Demography` objects provide a number of convenient ways of
+accessing individual population data. Consider the following three
+population example:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=1)
+demography.add_population(name="B", initial_size=2)
+demography.add_population(name="C", initial_size=3)
+demography
+```
+
+Demography objects are essentially a mapping from population identifiers
+to the corresponding population objects, and behave like
+a {class}`python:dict` with some extra methods. The additional
+feature provided by the {class}`.Demography` class is that populations
+can be found either by their integer ID their string names
+(see the {ref}`sec_demography_population_identifiers` section for more
+details):
+
+```{code-cell}
+print(demography["B"])
+print(demography[1])
+```
+
+Note that the ``keys`` for a Demography are the names:
+```{code-cell}
+list(demography.keys())
+```
+
+The values for population objects can be updated in-place. For example,
+suppose we wanted to change the {ref}`sec_demography_populations_growth_rate`
+for ``A`` to 0.001:
+
+```{code-cell}
+demography["A"].growth_rate = 0.001
+demography
+```
+
+We can also loop over all populations using the standard dict protocols.
+For example, if we wanted to multiply all population sizes by 100 we
+could do:
+
+```{code-cell}
+for pop in demography.values():
+    pop.initial_size *= 100
+demography
 ```
 
 (sec_demography_debugging_tools)=

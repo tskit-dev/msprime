@@ -887,8 +887,8 @@ class TestErrors:
 class TestSimAncestryInterface:
     def test_resume_two_population(self):
         d1 = msprime.Demography()
-        d1.add_population(name="A")
-        d1.add_population(name="B")
+        d1.add_population(name="A", initial_size=1)
+        d1.add_population(name="B", initial_size=1)
         # All lineages are in B, so we will coalesce
         ts1 = msprime.sim_ancestry(
             {"B": 100}, demography=d1, end_time=0.1, random_seed=2
@@ -902,8 +902,8 @@ class TestSimAncestryInterface:
 
     def test_resume_two_population_infinite_waiting(self):
         d1 = msprime.Demography()
-        d1.add_population(name="A")
-        d1.add_population(name="B")
+        d1.add_population(name="A", initial_size=1)
+        d1.add_population(name="B", initial_size=1)
         ts1 = msprime.sim_ancestry(
             {"A": 1, "B": 1}, demography=d1, end_time=0.1, random_seed=2
         )
@@ -913,35 +913,35 @@ class TestSimAncestryInterface:
 
     def test_incompatible_demography_name_mismatch(self):
         d1 = msprime.Demography()
-        d1.add_population(name="A")
-        d1.add_population(name="B")
+        d1.add_population(name="A", initial_size=1)
+        d1.add_population(name="B", initial_size=1)
         ts1 = msprime.sim_ancestry({"A": 1}, demography=d1, end_time=0.1, random_seed=2)
         d2 = msprime.Demography()
-        d2.add_population(name="B")
-        d2.add_population(name="A")
+        d2.add_population(name="B", initial_size=1)
+        d2.add_population(name="A", initial_size=1)
         with pytest.raises(ValueError, match="names in the input demography"):
             msprime.sim_ancestry(initial_state=ts1, demography=d2, random_seed=3)
 
     def test_incompatible_demography_insufficient_pops(self):
         d1 = msprime.Demography()
-        d1.add_population(name="A")
-        d1.add_population(name="B")
+        d1.add_population(name="A", initial_size=1)
+        d1.add_population(name="B", initial_size=1)
         ts1 = msprime.sim_ancestry({"A": 1}, demography=d1, end_time=0.1, random_seed=2)
         d2 = msprime.Demography()
-        d2.add_population(name="A")
+        d2.add_population(name="A", initial_size=1)
         with pytest.raises(ValueError, match="at least as many populations"):
             msprime.sim_ancestry(initial_state=ts1, demography=d2, random_seed=3)
 
     def test_population_split(self):
         d1 = msprime.Demography()
-        d1.add_population(name="A")
-        d1.add_population(name="B")
+        d1.add_population(name="A", initial_size=1)
+        d1.add_population(name="B", initial_size=1)
         ts = msprime.sim_ancestry(
             {"A": 1, "B": 1}, demography=d1, end_time=1, random_seed=2
         )
         d2 = msprime.Demography.from_tree_sequence(ts, initial_size=1)
         assert d1 == d2
-        d2.add_population(name="C")
+        d2.add_population(name="C", initial_size=1)
         d2.add_population_split(time=10, derived=["A", "B"], ancestral="C")
         ts = msprime.sim_ancestry(initial_state=ts, demography=d2, random_seed=1)
         assert ts.num_populations == 3
@@ -958,7 +958,7 @@ class TestSimAncestryInterface:
         d = msprime.Demography.from_tree_sequence(
             tables.tree_sequence(), initial_size=1
         )
-        d.add_population(name="x")
+        d.add_population(name="x", initial_size=1)
         with pytest.warns(
             msprime.IncompletePopulationMetadataWarning,
             match="No metadata schema present",
@@ -988,7 +988,7 @@ class TestSimAncestryInterface:
         d = msprime.Demography.from_tree_sequence(
             tables.tree_sequence(), initial_size=1
         )
-        d.add_population(name="Z", description="ZZ")
+        d.add_population(name="Z", description="ZZ", initial_size=1)
         ts = msprime.sim_ancestry(initial_state=tables, demography=d, random_seed=1)
         assert ts.num_populations == 2
         assert (
@@ -1016,7 +1016,7 @@ class TestSimAncestryInterface:
         d = msprime.Demography.from_tree_sequence(
             tables.tree_sequence(), initial_size=1
         )
-        d.add_population(name="Z", description="ZZ")
+        d.add_population(name="Z", description="ZZ", initial_size=1)
         with pytest.warns(
             msprime.IncompletePopulationMetadataWarning,
             match="schema does not have a 'name'",
@@ -1045,7 +1045,7 @@ class TestSimAncestryInterface:
         d = msprime.Demography.from_tree_sequence(
             tables.tree_sequence(), initial_size=1
         )
-        d.add_population(name="Z", description="ZZ")
+        d.add_population(name="Z", description="ZZ", initial_size=1)
         with pytest.warns(
             msprime.IncompletePopulationMetadataWarning,
             match="schema does not have a 'description'",

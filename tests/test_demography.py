@@ -1222,7 +1222,9 @@ class DebugOutputBase:
     def test_funky_metadata(self):
         demography = msprime.Demography()
         # name is safe because it must be a Python identifier
-        demography.add_population(description="<>&", extra_metadata={"&": "</>"})
+        demography.add_population(
+            initial_size=1, description="<>&", extra_metadata={"&": "</>"}
+        )
         self.verify(demography)
 
     def test_no_events(self):
@@ -4085,6 +4087,61 @@ class TestDemographicEventBase:
             de._effect()
 
 
+class TestDemographyMapping:
+    """
+    Tests that we implement the mapping protocol correctly.
+    """
+
+    def test_basic_properties(self):
+        d = msprime.Demography()
+        d.add_population(name="A", initial_size=1)
+        d.add_population(name="B", initial_size=2)
+        assert len(d) == 2
+        d.add_population(name="C", initial_size=2)
+        assert len(d) == 3
+        assert d["A"] is d.populations[0]
+        assert d.get("A") is d.populations[0]
+        assert d.get("D", None) is None
+        assert d.get(None, None) is None
+
+    def test_keys_string_or_integer(self):
+        d = msprime.Demography.isolated_model([1, 1])
+        assert list(d.keys()) == ["pop_0", "pop_1"]
+        assert list(d.values()) == d.populations
+        assert list(d.items()) == [(pop.name, pop) for pop in d.populations]
+        assert d["pop_0"] is d[0]
+        assert d["pop_1"] is d[1]
+        assert d[0] is d["pop_0"]
+        assert d[1] is d["pop_1"]
+        for bad_integer in [-1, 2, 1000]:
+            assert bad_integer not in d
+        for bad_string in ["pop_", "pop_2", ""]:
+            assert bad_string not in d
+
+    def test_pops_mutable(self):
+        d = msprime.Demography()
+        d.add_population(name="A", initial_size=1)
+        d.add_population(name="B", initial_size=2)
+        assert d["A"].initial_size == 1
+        assert d["B"].initial_size == 2
+        d["A"].initial_size = 100
+        assert d["A"].initial_size == 100
+        assert d[0].initial_size == 100
+        for pop in d.values():
+            pop.initial_size = 1234
+        assert d["A"].initial_size == 1234
+        assert d["B"].initial_size == 1234
+
+    def test_immutable(self):
+        d = msprime.Demography()
+        d.add_population(name="A", initial_size=1)
+        d.add_population(name="B", initial_size=2)
+        with pytest.raises(TypeError, match="does not support item deletion"):
+            del d["A"]
+        with pytest.raises(TypeError, match="does not support item assignment"):
+            d["C"] = 2134
+
+
 class TestDemographyObject:
     """
     Basic tests for the demography object.
@@ -4170,7 +4227,7 @@ class TestDemographyObject:
     def test_add_population_error(self):
         model = msprime.Demography.isolated_model([1])
         with pytest.raises(ValueError, match="Duplicate population name"):
-            model.add_population(name="pop_0")
+            model.add_population(name="pop_0", initial_size=1)
 
     def test_add_population_properties(self):
         model = msprime.Demography()
@@ -4239,24 +4296,23 @@ class TestDemographyObject:
                 demography[bad_pop]
             assert bad_pop not in demography
         for bad_type in [b"sdf", 1.0]:
-            with pytest.raises(TypeError):
+            with pytest.raises(KeyError):
                 demography[bad_type]
-            with pytest.raises(TypeError):
-                bad_type in demography
+            assert bad_type not in demography
         # String name lookup works
-        assert demography["pop_0"] == demography.populations[0]
+        assert demography["pop_0"] is demography.populations[0]
         assert "pop_0" in demography
-        assert demography["pop_1"] == demography.populations[1]
+        assert demography["pop_1"] is demography.populations[1]
         assert "pop_1" in demography
         # As does integer lookup
-        assert demography[0] == demography.populations[0]
+        assert demography[0] is demography.populations[0]
         assert 0 in demography
-        assert demography[1] == demography.populations[1]
+        assert demography[1] is demography.populations[1]
         assert 1 in demography
         # Numpy integer types are OK too.
         int_array = np.array([0, 1], dtype=np.int8)
-        assert demography[int_array[0]] == demography.populations[0]
-        assert demography[int_array[1]] == demography.populations[1]
+        assert demography[int_array[0]] is demography.populations[0]
+        assert demography[int_array[1]] is demography.populations[1]
 
     def test_set_migration_rate(self):
         demography = msprime.Demography.isolated_model([10] * 5)
@@ -5100,16 +5156,16 @@ class TestPopulationLoops:
 
     def test_ABA_loop(self):
         demography = msprime.Demography()
-        demography.add_population(name="A")
-        demography.add_population(name="B")
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
         demography.add_population_split(1, derived=["A"], ancestral="B")
         demography.add_population_split(2, derived=["B"], ancestral="A")
         self.verify_loop_error(demography)
 
     def test_ABA_admixture_loop(self):
         demography = msprime.Demography()
-        demography.add_population(name="A")
-        demography.add_population(name="B")
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
         demography.add_admixture(0.1, derived="A", ancestral=["B"], proportions=[1])
         demography.add_admixture(0.2, derived="B", ancestral=["A"], proportions=[1])
         msg = "All ancestral populations in admixture must already be active"
@@ -5122,9 +5178,9 @@ class TestPopulationLoops:
 
     def test_admixture_derived_inactive(self):
         demography = msprime.Demography()
-        demography.add_population(name="A")
-        demography.add_population(name="B")
-        demography.add_population(name="C")
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
         demography.add_population_split(0.1, derived=["A"], ancestral="B")
         demography.add_admixture(0.2, derived="A", ancestral=["C"], proportions=[1])
         msg = "derived population in an admixture must be active"
@@ -5137,9 +5193,9 @@ class TestPopulationLoops:
 
     def test_admixture_ancestral_inactive(self):
         demography = msprime.Demography()
-        demography.add_population(name="A")
-        demography.add_population(name="B")
-        demography.add_population(name="C")
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
         demography.add_population_split(0.1, derived=["A"], ancestral="B")
         demography.add_admixture(0.2, derived="C", ancestral=["A"], proportions=[1])
         msg = "ancestral populations in admixture must already be active"
@@ -5152,9 +5208,9 @@ class TestPopulationLoops:
 
     def test_ABCA_loop(self):
         demography = msprime.Demography()
-        demography.add_population(name="A")
-        demography.add_population(name="B")
-        demography.add_population(name="C")
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
         demography.add_population_split(1, derived=["A"], ancestral="B")
         demography.add_population_split(2, derived=["B"], ancestral="C")
         demography.add_population_split(3, derived=["C"], ancestral="A")
@@ -5172,10 +5228,10 @@ class TestPopulationLoops:
 
     def test_ABCDB_loop(self):
         demography = msprime.Demography()
-        demography.add_population(name="A")
-        demography.add_population(name="B")
-        demography.add_population(name="C")
-        demography.add_population(name="D")
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
+        demography.add_population(name="D", initial_size=1)
         demography.add_population_split(1, derived=["A"], ancestral="B")
         demography.add_population_split(2, derived=["B"], ancestral="C")
         demography.add_population_split(3, derived=["C"], ancestral="D")
@@ -5417,9 +5473,9 @@ class TestDemographyEquivalent:
 
     def test_different_names(self):
         d1 = msprime.Demography()
-        d1.add_population(name="x")
+        d1.add_population(name="x", initial_size=1)
         d2 = msprime.Demography()
-        d2.add_population(name="y")
+        d2.add_population(name="y", initial_size=1)
         with pytest.raises(AssertionError, match="names differ"):
             d1.assert_equivalent(d2)
 
@@ -6015,8 +6071,8 @@ class TestFromOldStyleMap:
 class TestFromTreeSequence:
     def test_simple_round_trip(self):
         d1 = msprime.Demography()
-        d1.add_population(name="A", description="X")
-        d1.add_population(name="B", description="Y")
+        d1.add_population(name="A", description="X", initial_size=1)
+        d1.add_population(name="B", description="Y", initial_size=1)
         ts = msprime.sim_ancestry({"A": 1}, demography=d1, random_seed=1)
         d2 = msprime.Demography.from_tree_sequence(ts, initial_size=1)
         assert d1 == d2
