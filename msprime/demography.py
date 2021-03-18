@@ -938,8 +938,11 @@ class Demography(collections.abc.Mapping):
         schema = tables.populations.metadata_schema.schema
         if schema is not None:
             properties = schema["properties"]
-            name_in_metadata = "name" in properties
-            description_in_metadata = "description" in properties
+            additional_properties = schema["additionalProperties"]
+            name_in_metadata = "name" in properties or additional_properties
+            description_in_metadata = (
+                "description" in properties or additional_properties
+            )
             if not name_in_metadata:
                 warnings.warn(
                     "The metadata schema does not have a 'name' property; "
@@ -954,16 +957,26 @@ class Demography(collections.abc.Mapping):
                     "tree sequence",
                     IncompletePopulationMetadataWarning,
                 )
+            left_out = []
             for population in self.populations[len(tables.populations) :]:
                 md = {}
                 if name_in_metadata:
                     md["name"] = population.name
                 if description_in_metadata:
                     md["description"] = population.description
-                # TODO we could also try to merge in the ``extra_metadata``
-                # depending on whether `additional_properties` is set,
-                # but it doesn't really seem worth it.
-                tables.populations.add_row(md)
+                for k in population.extra_metadata:
+                    if k in properties or additional_properties:
+                        md[k] = population.extra_metadata[k]
+                    else:
+                        left_out.append(k)
+                tables.populations.add_row(metadata=md)
+            if len(left_out) > 0:
+                warnings.warn(
+                    "The metadata schema does not allow for all properties specified "
+                    "in extra_metadata: these keys have not been recorded in the "
+                    f"output tree sequence: {', '.join(left_out)}",
+                    IncompletePopulationMetadataWarning,
+                )
         else:
             warnings.warn(
                 "No metadata schema present in population table, not recording "

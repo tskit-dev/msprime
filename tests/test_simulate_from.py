@@ -1055,6 +1055,91 @@ class TestSimAncestryInterface:
         assert ts.population(0).metadata == {"name": "X"}
         assert ts.population(1).metadata == {"name": "Z"}
 
+    def test_extra_pops_missing_extra_metadata(self):
+        tables = tskit.TableCollection(1)
+        tables.populations.metadata_schema = tskit.MetadataSchema(
+            {
+                "codec": "json",
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "x": {"type": "number"},
+                },
+                "required": ["name"],
+                "additionalProperties": False,
+            }
+        )
+        tables.populations.add_row(metadata={"name": "X"})
+        tables.populations.add_row(metadata={"name": "Y", "description": "pop y"})
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        d = msprime.Demography.from_tree_sequence(
+            tables.tree_sequence(), initial_size=1
+        )
+        d.add_population(
+            name="Z",
+            description="ZZ",
+            extra_metadata={"z": "zzz", "x": 123},
+            initial_size=1,
+        )
+        with pytest.warns(
+            msprime.IncompletePopulationMetadataWarning,
+            match="schema does not allow",
+        ):
+            ts = msprime.sim_ancestry(initial_state=tables, demography=d, random_seed=1)
+        assert ts.num_populations == 3
+        assert ts.population(0).metadata == {"name": "X"}
+        assert ts.population(1).metadata == {"name": "Y", "description": "pop y"}
+        assert ts.population(2).metadata == {"name": "Z", "description": "ZZ", "x": 123}
+
+    def test_extra_pops_set_extra_metadata(self):
+        tables = tskit.TableCollection(1)
+        tables.populations.metadata_schema = tskit.MetadataSchema(
+            {
+                "codec": "json",
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "x": {"type": "number"},
+                },
+                "required": ["name", "x"],
+                "additionalProperties": True,
+            }
+        )
+        tables.populations.add_row(metadata={"name": "X", "x": 4})
+        tables.populations.add_row(
+            metadata={"name": "Y", "description": "pop y", "x": 5}
+        )
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        d = msprime.Demography.from_tree_sequence(
+            tables.tree_sequence(), initial_size=1
+        )
+        d.add_population(
+            name="Z",
+            description="ZZ",
+            extra_metadata={"x": 6, "z": "zzz"},
+            initial_size=1,
+        )
+        d.add_population(name="A", extra_metadata={"x": 7}, initial_size=1)
+        ts = msprime.sim_ancestry(initial_state=tables, demography=d, random_seed=1)
+        assert ts.num_populations == 4
+        assert ts.population(0).metadata == {"name": "X", "x": 4}
+        assert ts.population(1).metadata == {
+            "name": "Y",
+            "description": "pop y",
+            "x": 5,
+        }
+        assert ts.population(2).metadata == {
+            "name": "Z",
+            "description": "ZZ",
+            "x": 6,
+            "z": "zzz",
+        }
+        assert ts.population(3).metadata == {"name": "A", "description": "", "x": 7}
+
     def test_population_size_set(self):
         ts1 = msprime.sim_ancestry(2, end_time=0, random_seed=1)
         ts2 = msprime.sim_ancestry(
