@@ -4909,7 +4909,7 @@ msp_run_sweep(msp_t *self)
 {
     int ret = 0;
     simulation_model_t *model = &self->model;
-    size_t curr_step = 0;
+    size_t curr_step = 1;
     size_t num_steps;
     double *allele_frequency = NULL;
     double *time = NULL;
@@ -4924,7 +4924,7 @@ msp_run_sweep(msp_t *self)
     double event_prob, event_rand, tmp_rand, e_sum, pop_size;
     double p_coal_b, p_coal_B, total_rate, sweep_pop_tot_rate;
     double p_rec_b, p_rec_B;
-    double t_start;
+    double t_start, t_unscaled;
     bool sweep_over;
 
     if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
@@ -4951,8 +4951,10 @@ msp_run_sweep(msp_t *self)
 
     ret = model->params.sweep.generate_trajectory(
         &model->params.sweep, self, &num_steps, &time, &allele_frequency);
+
     t_start = self->time;
     sweep_dt = model->params.sweep.trajectory_params.genic_selection_trajectory.dt;
+    tsk_bug_assert(sweep_dt > 0);
     if (ret != 0) {
         goto out;
     }
@@ -4961,7 +4963,7 @@ msp_run_sweep(msp_t *self)
         goto out;
     }
 
-    curr_step = 0;
+    curr_step = 1;
     while (msp_get_num_ancestors(self) > 0 && curr_step < num_steps) {
         events++;
         /* Set pop sizes & rec_rates */
@@ -5018,7 +5020,10 @@ msp_run_sweep(msp_t *self)
         e_sum = p_coal_b;
         /* convert time scale */
         pop_size = get_population_size(&self->populations[0], self->time);
-        self->time = t_start + (time[curr_step - 1] * self->ploidy * pop_size);
+        t_unscaled = time[curr_step - 1] * self->ploidy * pop_size;
+        tsk_bug_assert(t_unscaled > 0);
+        self->time = t_start + t_unscaled;
+        /* printf("event time: %g\n", self->time); */
         if (tmp_rand < e_sum / sweep_pop_tot_rate) {
             /* coalescent in b background */
             ret = self->common_ancestor_event(self, 0, 0);
