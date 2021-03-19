@@ -28,10 +28,6 @@
 #include <gsl/gsl_statistics_int.h>
 #include <gsl/gsl_sf.h>
 
-#include "util.h"
-#include "avl.h"
-#include "object_heap.h"
-#include "fenwick.h"
 #include "msprime.h"
 
 /* State machine for the simulator object. */

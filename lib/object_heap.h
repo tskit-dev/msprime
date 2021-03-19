@@ -24,8 +24,6 @@
 #include <string.h>
 #include <assert.h>
 
-/* #include "msprime.h" */
-
 typedef struct {
     size_t object_size;
     size_t block_size; /* number of objects in a block */

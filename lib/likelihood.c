@@ -24,8 +24,8 @@
 #include <float.h>
 #include <math.h>
 #include <stdlib.h>
-#include "likelihood.h"
 #include "msprime.h"
+#include "likelihood.h"
 
 static double
 get_total_material(tsk_treeseq_t *ts)
