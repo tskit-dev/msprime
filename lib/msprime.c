@@ -1647,7 +1647,8 @@ msp_print_state(msp_t *self, FILE *out)
         fprintf(out, "=====\nLabel %d\n=====\n", k);
         if (self->recomb_mass_index != NULL) {
             fprintf(out, "**Recomb mass**\n");
-            fprintf(out, "numerical drift = %.17g\n",
+            fprintf(out, "size=%d numerical drift = %.17g\n",
+                (int) fenwick_get_size(&self->recomb_mass_index[k]),
                 fenwick_get_numerical_drift(&self->recomb_mass_index[k]));
             for (j = 1; j <= (uint32_t) fenwick_get_size(&self->recomb_mass_index[k]);
                  j++) {
@@ -2528,11 +2529,14 @@ msp_choose_uniform_breakpoint(msp_t *self, int label, rate_map_t *rate_map,
     segment_t *x, *y;
     fenwick_t *tree = &mass_index_array[label];
     int num_breakpoint_resamplings = 0;
+    size_t segment_id;
+
     do {
         /* Choose a recombination mass uniformly from the total and find the
          * segment y that is associated with this *cumulative* value. */
         random_mass = gsl_ran_flat(self->rng, 0, fenwick_get_total(tree));
-        y = msp_get_segment(self, fenwick_find(tree, random_mass), label);
+        segment_id = fenwick_find(tree, random_mass);
+        y = msp_get_segment(self, segment_id, label);
         tsk_bug_assert(fenwick_get_value(tree, y->id) > 0);
         x = y->prev;
         y_cumulative_mass = fenwick_get_cumulative_sum(tree, y->id);
