@@ -1496,7 +1496,7 @@ for ts in reps:
 
 plt.plot(mids,np.array(msp_pis).mean(axis=0), label="msp")
 plt.axhline(4 * Ne * 1e-8, linestyle=":", label=r'neutral $\pi$')
-plt.ylabel(r'$\pi$'); plt.ylabel('position (bp)')
+plt.ylabel(r'$\pi$'); plt.xlabel('position (bp)')
 plt.legend()
 ```
 As we can see, the selective sweep has reduced variation in the region
