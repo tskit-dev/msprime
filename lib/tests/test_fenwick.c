@@ -120,8 +120,8 @@ test_fenwick_zero_values(void)
     for (j = 5; j <= n; j++) {
         fenwick_set_value(&t, j, 0);
     }
-    CU_ASSERT_EQUAL(fenwick_find(&t, 1), n + 1);
-    CU_ASSERT_EQUAL(fenwick_find(&t, 0), n + 1);
+    CU_ASSERT_EQUAL(fenwick_find(&t, 1), 0);
+    CU_ASSERT_EQUAL(fenwick_find(&t, 0), 0);
 
     fenwick_free(&t);
     gsl_rng_free(rng);
