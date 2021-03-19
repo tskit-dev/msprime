@@ -20,7 +20,6 @@
 #ifndef __LIKELIHOOD_H__
 #define __LIKELIHOOD_H__
 
-#include <stdio.h>
 #include <tskit.h>
 
 int msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double mu, double *lik);

@@ -24,6 +24,10 @@
 #include <stdbool.h>
 
 #include <gsl/gsl_rng.h>
+
+#define TSK_BUG_ASSERT_MESSAGE                                                          \
+    "Please report this issue on GitHub, ideally with a reproducible example."          \
+    " (https://github.com/tskit-dev/msprime/issues)"
 #include <tskit.h>
 
 #include "util.h"
