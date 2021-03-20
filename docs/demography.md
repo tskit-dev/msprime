@@ -22,7 +22,7 @@ from IPython.display import SVG
 
 (sec_demography)=
 
-# Demography
+# Demographic models
 
 By default, msprime assumes a single randomly mating population of a fixed
 size for {ref}`ancestry simulations <sec_ancestry>`, which is unrealistic

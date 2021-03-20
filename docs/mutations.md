@@ -24,15 +24,40 @@ kernelspec:
 
 (sec_mutations)=
 
-# Mutations
+# Mutation simulations
 
+{ref}`Ancestry simulations<sec_ancestry>` in msprime simulate a random
+ancestral history of a set of sampled genomes. While the trees representing
+this history are very useful (and often all we need, for many purposes),
+they do not include any information about what the actual genome **sequences**
+would look like for these samples. To produce genetic variation data
+(as represented by a [VCF file](https://samtools.github.io/hts-specs/VCFv4.2.pdf),
+for example), we need to simulate some extra information: we need
+*mutations*. Msprime provides a powerful and efficient way of superimposing
+neutral mutations from a range of sequence evolution
+{ref}`models <sec_mutations_models>` using the {func}`.sim_mutations`
+function.
 
-:::{warning}
+For example, here we simulate the ancestry of two diploids (and therefore
+four sample genomes) and store the resulting :class:`tskit.TreeSequence`
+object in the ``ts`` variable. We then simulate some mutations on
+that tree sequence, and show the resulting tree with mutations:
+```{code-cell}
+ts = msprime.sim_ancestry(2, sequence_length=100, random_seed=1234)
+mts = msprime.sim_mutations(ts, rate=0.01, random_seed=5678)
+SVG(mts.draw_svg())
+```
+We can see the variation data produced by these mutations most simply
+via the {meth}`tskit.TreeSequence.variants` method:
+```{code-cell}
+for var in mts.variants():
+    print(var.site.position, var.alleles, var.genotypes, sep="\t")
+```
 
-This documentation is under heavy construction. Please note
-any outstanding TODOs before opening issues.
-
-:::
+The [tskit](https://tskit.dev/tskit) library has many powerful
+methods for working with mutation data --- see the
+{ref}`tutorials:sec_tskit_getting_started` tutorial
+for more information.
 
 ---
 
@@ -75,22 +100,6 @@ any outstanding TODOs before opening issues.
 : An infinite-alleles model producing SLiM-style mutations
 
 ---
-
-{func}`.sim_mutations` adds mutations to a tree sequence simulated with
-{func}`.sim_ancestry`, or any other program that outputs tree sequence topologies.
-We can specify a uniform mutation rate or a
-{class}`.RateMap`, whether or not mutations should only occur at
-{ref}`discrete coordinates <sec_mutations_discrete>`,
-a {ref}`specific time span within which to add mutations <sec_mutations_time_span>`,
-as well as how to handle any
-{ref}`existing mutations in a tree sequence <sec_mutations_existing>`.
-
-One of the most powerful features of `msprime` is the flexibility of specifying
-the model under which mutations are simulated. Select from among
-the many predefined {ref}`models <sec_mutations_models>`, such as the
-{ref}`infinite alleles model <sec_mutations_mutation_infinite_alleles>`, or
-{ref}`define your own <sec_mutations_matrix_mutation_models_details>`.
-
 
 (sec_mutations_rate)=
 
