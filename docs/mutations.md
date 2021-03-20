@@ -24,7 +24,7 @@ kernelspec:
 
 (sec_mutations)=
 
-# Mutations
+# Mutation simulations
 
 
 :::{warning}

@@ -25,7 +25,7 @@ kernelspec:
 
 (sec_ancestry)=
 
-# Ancestry
+# Ancestry simulations
 
 Msprime simulates the ancestry of sampled genomes under a number of
 different backwards-in-time population genetic
