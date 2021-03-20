@@ -30,6 +30,7 @@ import itertools
 import logging
 import math
 import numbers
+import re
 import sys
 import textwrap
 import warnings
@@ -744,10 +745,12 @@ class Demography(collections.abc.Mapping):
         data = []
         for event in events:
             class_name = event.__class__.__name__
+            camel_case = re.sub(r"(?<!^)(?=[A-Z])", "_", class_name).lower()
+            add_method = f"msprime.Demography.add_{camel_case}"
             # TODO change this to stable when 1.0 is released.
             type_html = (
-                "<a href='https://tskit.dev/msprime/docs/latest/api.html#msprime."
-                f"{class_name}'>{event._type_str}</a>"
+                "<a href='https://tskit.dev/msprime/docs/latest/api.html#"
+                f"{add_method}'>{event._type_str}</a>"
             )
             row = [f"{event.time:.4g}", type_html, event._parameters(), event._effect()]
             data.append(row)
