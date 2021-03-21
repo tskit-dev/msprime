@@ -39,7 +39,7 @@ neutral mutations from a range of sequence evolution
 function.
 
 For example, here we simulate the ancestry of two diploids (and therefore
-four sample genomes) and store the resulting :class:`tskit.TreeSequence`
+four sample genomes) and store the resulting {class}`tskit.TreeSequence`
 object in the ``ts`` variable. We then simulate some mutations on
 that tree sequence, and show the resulting tree with mutations:
 ```{code-cell}
@@ -69,34 +69,34 @@ for more information.
 
 **Models**
 
-{class}`.BinaryMutationModel`
-: Binary mutation model with two flip-flopping alleles: "0" and "1".
-
-{class}`.JC69MutationModel`
+{class}`.JC69MutationModel` (Nucleotides)
 : Jukes & Cantor model ('69), equal probability of transitions between nucleotides
 
-{class}`.HKYMutationModel`
+{class}`.HKYMutationModel` (Nucleotides)
 : Hasegawa, Kishino & Yano model ('85), different probabilities for transitions and transversions
 
-{class}`.F84MutationModel`
+{class}`.F84MutationModel` (Nucleotides)
 : Felsenstein model ('84), different probabilities for transitions and transversions
 
-{class}`.GTRMutationModel`
+{class}`.GTRMutationModel` (Nucleotides)
 : Generalised Time-Reversible nucleotide mutation model
 
-{class}`.BLOSUM62MutationModel`
+{class}`.BLOSUM62MutationModel` (Amino acids)
 : The BLOSUM62 model of time-reversible amino acid mutation
 
-{class}`.PAMMutationModel`
+{class}`.PAMMutationModel` (Amino acids)
 : The PAM model of time-reversible amino acid mutation
 
-{class}`.MatrixMutationModel`
+{class}`.BinaryMutationModel` (Binary ancestral/derived)
+: Binary mutation model with two flip-flopping alleles: "0" and "1".
+
+{class}`.MatrixMutationModel` (General finite state model)
 : Superclass of mutation models with a finite set of states
 
-{class}`.InfiniteAllelesMutationModel`
+{class}`.InfiniteAllelesMutationModel` (Integers)
 : A generic infinite-alleles mutation model
 
-{class}`.SLiMMutationModel`
+{class}`.SLiMMutationModel` (Integers)
 : An infinite-alleles model producing SLiM-style mutations
 
 ---

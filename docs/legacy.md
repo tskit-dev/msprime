@@ -194,3 +194,5 @@ and all rates are per-generation.
 .. autoclass:: msprime.CensusEvent
 
 ```
+
+

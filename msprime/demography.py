@@ -106,7 +106,7 @@ class Population:
     The name of the population. If specified this must be a uniquely
     identifying string and must be a valid Python identifier (i.e., could be
     used as a variable name in Python code).
-    See :ref:`sec_demography_population_identifiers` for more details
+    See :ref:`sec_demography_populations_identifiers` for more details
     and recommendations on best practise.
     """
 
@@ -177,7 +177,7 @@ class Demography(collections.abc.Mapping):
     Demography objects implement the Python
     :class:`python:collections.abc.Mapping` protocol, in which the
     keys are **either** the population ``name`` or
-    integer ``id`` values (see the :ref:`sec_demography_population_identifiers`
+    integer ``id`` values (see the :ref:`sec_demography_populations_identifiers`
     section for more information) and the values are :class:`.Population`
     objects.
 
@@ -243,7 +243,7 @@ class Demography(collections.abc.Mapping):
         :param str name: The human-readable identifier for this population.
             If not specified, defaults to the string ``"pop_{id}"`` where
             ``id`` is the population's integer ID. See
-            :ref:`sec_demography_population_identifiers` for more details
+            :ref:`sec_demography_populations_identifiers` for more details
             and recommendations on best practise.
         :param str description: A concise but informative description of
             what this population represents within the wider model. Defaults

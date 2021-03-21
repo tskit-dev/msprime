@@ -24,15 +24,10 @@ import warnings
 import numpy as np
 
 
-# TODO this is a minimal implementation of the functionality we need to get
-# varying-rates-of-things-along the genome into msprime. It's deliberately
-# lightweight, and unencumbered by any backing classes from the low-level
-# model. The intention would be to add a bunch of useful functionality here
-# using numpy APIs.
 class RateMap:
     """
-    A class mapping a numeric value to a set of adjacent intervals along the
-    genome.
+    A class mapping a non-negative rate value to a set of adjacent intervals
+    along the genome.
 
     :param list position: A list of :math:`n+1` positions, starting at 0, and ending
         in the sequence length over which the RateMap will apply.
