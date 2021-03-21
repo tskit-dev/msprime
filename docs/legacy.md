@@ -29,7 +29,7 @@ The main change is that there are two new functions, {func}`.sim_ancestry` and
 and {func}`.mutate`. The 0.x functions are **deprecated** but **will continue
 to be supported indefinitely**.
 
-## Backwards compatibility
+### Backwards compatibility
 
 All existing simulations should work as before, *except* for simulations relying on
 the detailed properties of RecombinationMaps. If your code uses the `num_loci`
@@ -44,7 +44,7 @@ convert your code to use the new {func}`.sim_ancestry` method. If you were follo
 a recipe to simulate multiple chromosomes under the DTWF model, please see
 the {ref}`updated recipe <sec_ancestry_multiple_chromosomes>`.
 
-## Ancestry
+### Ancestry
 
 The new {func}`.sim_ancestry` function replaces the 0.x {func}`.simulate`
 function and is very similar. There are some important differences though:
@@ -89,7 +89,7 @@ function and is very similar. There are some important differences though:
   parameters have been replace with a single parameter `demography`, which must take
   a {class}`.Demography` instance. (See the next section for more details.)
 
-## Demography
+### Demography
 
 * A new {class}`.Demography` object has been added for version 1.0 which
   encapsulates the functionality needed to define and debug demographic models
@@ -101,7 +101,7 @@ function and is very similar. There are some important differences though:
 * The {class}`.DemographyDebugger` class should no longer be instantiated
   directly; instead use the {meth}`.Demography.debug` method.
 
-## Mutations
+### Mutations
 
 * For symmetry with the {func}`.sim_ancestry` function, there is now a {func}`.sim_mutations`
   function. The 0.x {func}`.mutate` function is **deprecated**.
@@ -116,7 +116,7 @@ function and is very similar. There are some important differences though:
   mutation times for these 0.x functions for strict compatibility, but this would
   have broken any code using the ``keep`` option in mutate.)
 
-## Utilities
+### Utilities
 
 * The 0.x class {class}`.RecombinationMap` has been **deprecated** in favour of the new
   {class}`.RateMap`. This was to (a) generalise the interface to accomodate varying
@@ -126,55 +126,16 @@ function and is very similar. There are some important differences though:
 
 ## API Reference
 
-Population structure is modelled in `msprime` by specifying a fixed number of
-subpopulations, with the migration rates between those subpopulations defined
-by a migration matrix. Each subpopulation has an `initial_size` that defines
-its absolute diploid size at time zero and a per-generation `growth_rate` which
-specifies the exponential growth rate of the sub-population. We must also
-define the number of genomes to sample from each subpopulation. The number of
-populations and their initial configuration is defined using the
-`population_configurations` parameter to {func}`.simulate`, which takes a list
-of {class}`.PopulationConfiguration` instances. Population IDs are zero
-indexed, and correspond to their position in the list.
 
-Demographic events change some aspect of the population configuration
-at some time in the past, and are specified using the `demographic_events`
-parameter to {func}`.simulate`. Each element of this list must be an
-instance of one of the following demographic events
-that are currently supported. Note that all times are measured in
-generations, all sizes are absolute (i.e., *not* relative to {math}`N_e`),
-and all rates are per-generation.
-
-
-```{eval-rst}
-.. autoclass:: msprime.PopulationConfiguration
-```
-
-```{eval-rst}
-.. autoclass:: msprime.Sample
-```
-
-```{eval-rst}
-.. autoclass:: msprime.RecombinationMap
-    :members:
-```
+### Ancestry
 
 ```{eval-rst}
 .. autofunction:: msprime.simulate()
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.SimulationModelChange
+.. autoclass:: msprime.PopulationConfiguration
 ```
-
-```{eval-rst}
-.. autofunction:: msprime.mutate
-```
-
-```{eval-rst}
-.. autoclass:: msprime.InfiniteSites
-```
-
 
 ```{eval-rst}
 .. autoclass:: msprime.PopulationParametersChange
@@ -192,7 +153,31 @@ and all rates are per-generation.
 
 ```{eval-rst}
 .. autoclass:: msprime.CensusEvent
+```
 
+```{eval-rst}
+.. autoclass:: msprime.Sample
+```
+
+```{eval-rst}
+.. autoclass:: msprime.SimulationModelChange
+```
+
+### Recombination maps
+
+```{eval-rst}
+.. autoclass:: msprime.RecombinationMap
+    :members:
+```
+
+### Mutations
+
+```{eval-rst}
+.. autofunction:: msprime.mutate
+```
+
+```{eval-rst}
+.. autoclass:: msprime.InfiniteSites
 ```
 
 

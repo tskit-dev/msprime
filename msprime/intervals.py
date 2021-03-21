@@ -451,9 +451,6 @@ class RateMap:
 # The RecombinationMap class is deprecated since 1.0. We maintain the
 # functionality where it is possible to do so.
 
-# TODO update the documentation to make it clear that this is a legacy
-# interface and is deprecated.
-
 
 class RecombinationMap:
     """
@@ -466,8 +463,9 @@ class RecombinationMap:
     position must be zero, and by convention the last rate value
     is also required to be zero (although it is not used).
 
-    .. warning::
-        The ``num_loci`` parameter is deprecated.
+    .. important::
+        This class is deprecated (but supported indefinitely);
+        please use the :class:`.RateMap` class in new code.
 
     :param list positions: The positions (in bases) denoting the
         distinct intervals where recombination rates change. These can

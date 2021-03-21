@@ -1,38 +1,32 @@
 (sec_notes_ms_users)=
 # Notes for ms users
 
-```{eval-rst}
-.. todo:: This is copied from the old api.rst page and needs some updating.
-```
+Msprime began as an efficient reimplementation of the classical ``ms``
+program, and therefore largely follows the same underlying models
+as ``ms``. If you wish to use ``msprime`` as a direct replacement
+for ``ms``, please use the {ref}`mspms<sec_mspms>` program. This
+aims to be 100% compatible with ``ms``, and should be substantially
+faster when simulating large regions.
 
-The simulation model in `msprime` closely follows the classical `ms`
-program. Unlike `ms`, however, time is measured in generations rather than
-in units of {math}`4 N_e` generations, i.e., "coalescent units".
-This means that when simulating a population with diploid effective size {math}`N_e`,
-the mean time to coalescence between two samples
-in an `msprime` simulation will be around {math}`2 N_e`,
-while in an `ms` simulation, the mean time will be around {math}`0.5`.
-Internally, `msprime` uses the same algorithm as `ms`,
-and so the `Ne` parameter to the {func}`.simulate` function
-still acts as a time scaling, and can be set to `0.5` to match many theoretical results,
-or to `0.25` to match `ms`. Population sizes for each
-subpopulation and for past demographic events are also defined as absolute values, **not**
-scaled by `Ne`. All migration rates and growth rates are also per generation.
+However, simulations using ``mspms`` will still be hampered by the
+text output of ``ms``, which is very inefficient for large
+simulations. For larger simulations the [tskit](https://tskit.dev/tskit)
+output produced by ``msprime``'s Python API will be many times
+smaller and faster to process than text based formats.
 
-:::{warning}
+The Python APIs for {ref}`describing demographic models<sec_demography>`,
+running {ref}`ancestry<sec_ancestry>` and
+{ref}`mutation<sec_mutations>` simulations are extensively documented.
+There are a few basic differences to ``ms`` that are worth keeping
+in mind:
 
-This parameterisation of recombination, mutation and
-migration rates is different to {program}`ms`, which states these
-rates over the entire region and in coalescent time units. The
-motivation for this is to allow the user: 1) to change the size of the simulated
-region without having to rescale the recombination, gene conversion, and mutation rates,
-and 2) to directly state times and rates in units of
-generations. However, the `mspms` command line application is
-fully {program}`ms` compatible.
-If recombination and gene conversion are combined the gene conversion
-rate in {program}`ms` is determined by the ratio {math}`f`, which corresponds to
-setting {math}`g = f r`. In `msprime` the gene conversion rate {math}`g` is
-set independently and does not depend on the recombination rate. However,
-`mspms` mimics the {program}`ms` behaviour.
-
-:::
+- Time is measured in generations rather than coalescent units.
+- Population sizes are defined as absolute values, not scaled relative to Ne.
+- All rates are absolute rates per generation (i.e., not scaled)
+- Recombination rates are per unit of sequence length (not total rates
+  along the genome)
+- Gene conversion rates are absolute, and do not depend on the recombination
+  rate.
+- Mutations are at finite discrete sites by default, following the Jukes-Cantor
+  nucleotide model (but infinite sites 0/1 mutations at continuous locations
+  can be produced, if required).

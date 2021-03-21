@@ -2194,7 +2194,10 @@ class PopulationConfiguration:
     """
     The initial configuration of a population (or deme) in a simulation.
 
-    .. todo:: This is deprecated. Document as such.
+    .. important::
+        This class is deprecated (but supported indefinitely);
+        please use the msprime 1.0 :ref:`demography API<sec_demography>`
+        in new code.
 
     :param int sample_size: The number of initial samples that are drawn
         from this population.
@@ -2308,6 +2311,11 @@ class PopulationParametersChange(ParameterChangeEvent):
     options from ``ms``. Note that unlike ``ms`` we do not automatically
     set growth rates to zero when the population size is changed.
 
+    .. important::
+        This class is deprecated (but supported indefinitely);
+        please use the :meth:`.Demography.add_population_parameters_change`
+        method in new code.
+
     :param float time: The length of time ago at which this event
         occurred.
     :param float initial_size: The absolute diploid size of the population
@@ -2399,6 +2407,11 @@ class MigrationRateChange(ParameterChangeEvent):
     rate. If ``source`` and ``dest`` are specified, they must refer to valid
     population IDs.
 
+    .. important::
+        This class is deprecated (but supported indefinitely);
+        please use the :meth:`.Demography.add_migration_rate_change`
+        method in new code.
+
     :param float time: The time at which this event occurs in generations.
     :param float rate: The new per-generation migration rate.
     :param int source: The ID of the source population.
@@ -2449,22 +2462,11 @@ class MigrationRateChange(ParameterChangeEvent):
         return ret
 
 
-# TODO not clear we want to document this as part of the external API.
 @dataclasses.dataclass
 class SymmetricMigrationRateChange(ParameterChangeEvent):
     """
-    Sets the symmetric migration rate between all pairs of populations in
-    the specified list to the specified value. For a given pair of population
-    IDs ``j`` and ``k``, this sets ``migration_matrix[j, k] = rate``
-    and ``migration_matrix[k, j] = rate``.
-
-    Populations may be specified either by their integer IDs or by
-    their string names.
-
-    :param float time: The time at which this event occurs in generations.
-    :param list populations: An iterable of population identifiers (integer
-        IDs or string names).
-    :param float rate: The new migration rate.
+    Class representing a SymmetricMigrationRateChange. Not part of the
+    external API as it was added after 1.0.
     """
 
     populations: List[Union[int, str]]
@@ -2537,6 +2539,13 @@ class MassMigration(LineageMovementEvent):
     This event class generalises the population split (``-ej``) and
     admixture (``-es``) events from ``ms``. Note that MassMigrations
     do *not* have any side effects on the migration matrix.
+
+    .. important::
+        This class is deprecated (but supported indefinitely);
+        please use the :meth:`.Demography.add_mass_migration`
+        method in new code. In addition, please see the new
+        higher-level :ref:`sec_demography_events_population_split`
+        and :ref:`sec_demography_events_admixture` events.
 
     :param float time: The time at which this event occurs in generations.
     :param int source: The ID of the source population.
@@ -2797,6 +2806,11 @@ class CensusEvent(DemographicEvent):
     has coalesced more recently than the census time.
 
     See :ref:`sec_ancestry_census_events` for more details.
+
+    .. important::
+        This class is deprecated (but supported indefinitely);
+        please use the :meth:`.Demography.add_census`
+        method in new code.
 
     :param float time: The time at which this event occurs in generations.
     """

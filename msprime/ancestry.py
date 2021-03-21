@@ -503,6 +503,10 @@ def simulate(
     of genomes in the population is 2*Ne), but ``sample_size`` is the
     number of (monoploid) genomes sampled.
 
+    .. important::
+        This function is deprecated (but supported indefinitely);
+        please use :func:`.sim_ancestry` in new code.
+
     :param int sample_size: The number of sampled monoploid genomes.  If not
         specified or None, this defaults to the sum of the subpopulation sample
         sizes. Either ``sample_size``, ``population_configurations`` or
@@ -1493,7 +1497,12 @@ class AncestryModelChange:
 
 class SimulationModelChange(AncestryModelChange):
     """
-    Deprecated 0.x way to specify a change in ancestry model.
+    Demographic event denoting an change in ancestry model.
+
+    .. important::
+        This class is deprecated (but supported indefinitely);
+        please use the ``model`` argument in :func:`sim_ancestry`
+        to specify multiple models in new code.
     """
 
 
