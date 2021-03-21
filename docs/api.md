@@ -1,26 +1,25 @@
 # API Reference
 
+This lists the detailed reference documentation for the msprime Python API.
+The reference documentation aims to be concise, precise and exhaustive;
+as such, it is not the best place to start if you are new to
+a particular piece of functionality. Please see the top-level documentation
+for {ref}`sec_ancestry`, {ref}`sec_mutations` or {ref}`sec_demography`
+for discussion and examples of individual features.
 
 ## Summary
 
-### Simulation functions
-
 ```{eval-rst}
 .. currentmodule:: msprime
+```
+### Ancestry
 
+
+```{eval-rst}
 .. autosummary::
 
   sim_ancestry
-  sim_mutations
-
-```
-
-### Ancestry Models
-
-
-```{eval-rst}
-.. autosummary::
-
+  SampleSet
   StandardCoalescent
   SmcApproxCoalescent
   SmcPrimeApproxCoalescent
@@ -30,11 +29,12 @@
   SweepGenicSelection
 ```
 
-### Mutation Models
+### Mutations
 
 ```{eval-rst}
 .. autosummary::
 
+  sim_mutations
   BinaryMutationModel
   JC69MutationModel
   HKYMutationModel
@@ -47,7 +47,7 @@
   SLiMMutationModel
 ```
 
-### Defining demography
+### Demography
 
 ```{eval-rst}
 .. autosummary::
@@ -57,15 +57,18 @@
   DemographyDebugger
 ```
 
-```{eval-rst}
-.. todo:: Section for utililies like RateMap
-```
-
-## Ancestry
+### Utilities
 
 ```{eval-rst}
-.. autoclass:: msprime.AncestryModel
+.. autosummary::
+
+  RateMap
+
 ```
+
+## Reference documentation
+
+### Ancestry
 
 ```{eval-rst}
 .. autofunction:: msprime.sim_ancestry
@@ -73,13 +76,14 @@
 
 ```{eval-rst}
 .. autoclass:: msprime.SampleSet
+    :members:
 ```
+
+#### Models
 
 ```{eval-rst}
-.. autoclass:: msprime.AncestryModelChange
+.. autoclass:: msprime.AncestryModel
 ```
-
-### Models
 
 ```{eval-rst}
 .. autoclass:: msprime.StandardCoalescent
@@ -110,10 +114,23 @@
 .. autoclass:: msprime.SweepGenicSelection
 ```
 
-## Mutations
+### Mutations
 
 
-### Models
+```{eval-rst}
+.. autofunction:: msprime.sim_mutations
+```
+
+#### Models
+
+```{eval-rst}
+.. autoclass:: msprime.MutationModel
+```
+
+```{eval-rst}
+.. autoclass:: msprime.MatrixMutationModel()
+```
+
 ```{eval-rst}
 .. autoclass:: msprime.BinaryMutationModel()
 ```
@@ -144,10 +161,6 @@
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.MatrixMutationModel()
-```
-
-```{eval-rst}
 .. autoclass:: msprime.InfiniteAllelesMutationModel()
 ```
 
@@ -158,14 +171,15 @@
 
 (sec_api_node_flags)=
 
-## Node flags
+### Node flags
 
-For standard coalescent simulations, all samples are marked with the
-{data}`tskit.NODE_IS_SAMPLE` flag; internal nodes all have a flags value of 0.
+In the tskit {ref}`tskit:sec_node_table_definition` node flags specify
+particular properties about nodes. Msprime follows the standard approach
+of setting the {data}`tskit.NODE_IS_SAMPLE` flag for all sample nodes,
+with all other nodes having a flags value of 0.
 
-<!---
-todo link these up with the examples sections below where they are used.
--->
+Msprime defines some extra flags that help us to identify particular
+nodes in some situations:
 
 ```{data} msprime.NODE_IS_RE_EVENT
 
@@ -188,7 +202,7 @@ specified.
 ```{data} msprime.NODE_IS_MIG_EVENT
 
 The node is an ARG migration event identifying the individual that migrated.
-Can be used in combination with the ``record_migrations``.
+Can be used in combination with the ``record_migrations`` option.
 Only present if the ``record_full_arg`` option is
 specified.
 
@@ -196,25 +210,20 @@ specified.
 
 ```{data} msprime.NODE_IS_CEN_EVENT
 
-The node was created by a {class}`msprime.CensusEvent`.
+The node was created by a census event. Please see the
+{ref}`sec_ancestry_census_events` section for more details.
 
 ```
-
-## Utilities
-
 
 ### Rate maps
 
-```{eval-rst}
-.. todo:: Add some high-level content here.
-```
 
 ```{eval-rst}
 .. autoclass:: msprime.RateMap
     :members:
 ```
 
-## Demography
+### Demography
 
 
 ```{eval-rst}
@@ -233,7 +242,7 @@ The node was created by a {class}`msprime.CensusEvent`.
 
 ```
 
-## Likelihoods
+### Likelihoods
 
 ```{eval-rst}
 .. autofunction:: msprime.log_arg_likelihood
@@ -242,16 +251,4 @@ The node was created by a {class}`msprime.CensusEvent`.
 ```{eval-rst}
 .. autofunction:: msprime.log_mutation_likelihood
 ```
-
-## Mutations
-
-```{eval-rst}
-.. autofunction:: msprime.sim_mutations
-```
-
-
-```{eval-rst}
-.. autoclass:: msprime.MutationModel
-```
-
 

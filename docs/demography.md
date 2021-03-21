@@ -243,7 +243,7 @@ Populations additionally have a "state" which determines whether lineages
 can be present within them or not at a given time, as described in
 the {ref}`sec_demography_populations_life_cycle` section.
 
-(sec_demography_population_identifiers)=
+(sec_demography_populations_identifiers)=
 
 #### Identifying populations
 
@@ -816,7 +816,7 @@ to the corresponding population objects, and behave like
 a {class}`python:dict` with some extra methods. The additional
 feature provided by the {class}`.Demography` class is that populations
 can be found either by their integer ID their string names
-(see the {ref}`sec_demography_population_identifiers` section for more
+(see the {ref}`sec_demography_populations_identifiers` section for more
 details):
 
 ```{code-cell}

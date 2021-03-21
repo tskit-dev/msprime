@@ -56,6 +56,10 @@ _AMINO_ACIDS = [
 
 
 class MutationModel:
+    """
+    Abstract superclass of msprime mutation models.
+    """
+
     def asdict(self):
         # This version of asdict makes sure that we have sufficient parameters
         # to call the constructor and recreate the class. However, this means
@@ -149,7 +153,8 @@ class InfiniteAllelesMutationModel(
     _msprime.InfiniteAllelesMutationModel, MutationModel
 ):
     """
-    An *infinite alleles* model of mutation. This works by keeping track of a "next
+    An *infinite alleles* model of mutation in which each allele is a
+    unique positive integer. This works by keeping track of a "next
     allele": each time the model is asked to produce a new allele (either for an
     ancestral or derived state), the "next allele" is provided, and then
     incremented.
@@ -1179,18 +1184,19 @@ def sim_mutations(
     """
     Simulates mutations on the specified ancestry and returns the resulting
     :class:`tskit.TreeSequence`. Mutations are generated at the specified rate
-    per unit of sequence length, per generation. By default, mutations are
+    per unit of sequence length, per unit of time. By default, mutations are
     generated at discrete sites along the genome and multiple mutations
     can occur at any given site. A continuous sequence, infinite-sites model
     can also be specified by setting the ``discrete_genome`` parameter to
     False.
 
-    If the ``model`` parameter is specified, this determines the model under
-    which mutations are generated. The default mutation model is
-    :class:`msprime.JC69MutationModel` a symmetrical mutation model among
-    the ACGT alleles. See :ref:`sec_mutations_models` for details of available models.
+    If the ``model`` parameter is specified, this determines the model
+    of sequence evolution under which mutations are generated.
+    The default mutation model is the :class:`msprime.JC69MutationModel`,
+    a symmetrical mutation model among the ACGT alleles.
+    See the :ref:`sec_mutations_models` section for details of available models.
 
-    If a random seed is specified, this is used to seed the random number
+    If a ``random_seed`` is specified, this is used to seed the random number
     generator. If the same seed is specified and all other parameters are equal
     then the same mutations will be generated. If no random seed is specified
     then one is generated automatically.
@@ -1227,10 +1233,10 @@ def sim_mutations(
         are required for us to guarantee the statistical properties of the
         process of sequentially adding mutations to a tree sequence.
 
-    :param tskit.TreeSequence tree_sequence: The tree sequence onto which we
-        wish to throw mutations.
-    :param float rate: The rate of mutation per generation, as either a
-        single number (for a uniform rate) or as a
+    :param tskit.TreeSequence tree_sequence: The tree sequence we
+        wish to throw mutations onto.
+    :param float rate: The rate of mutation per unit of sequence length
+        per unit time, as either a single number (for a uniform rate) or as a
         :class:`.RateMap`. (Default: 0).
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated. Valid random
@@ -1239,7 +1245,7 @@ def sim_mutations(
         mutations. This can either be a string (e.g., ``"jc69"``) or
         an instance of a simulation model class
         e.g, ``msprime.F84MutationModel(kappa=0.5)``.
-        If not specified or None, the :class:`.BinaryMutationModel`
+        If not specified or None, the :class:`.JC69MutationModel`
         mutation model is used. Please see the
         :ref:`sec_mutations_models` section for more details
         on specifying mutation models.

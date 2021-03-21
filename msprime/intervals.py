@@ -24,15 +24,10 @@ import warnings
 import numpy as np
 
 
-# TODO this is a minimal implementation of the functionality we need to get
-# varying-rates-of-things-along the genome into msprime. It's deliberately
-# lightweight, and unencumbered by any backing classes from the low-level
-# model. The intention would be to add a bunch of useful functionality here
-# using numpy APIs.
 class RateMap:
     """
-    A class mapping a numeric value to a set of adjacent intervals along the
-    genome.
+    A class mapping a non-negative rate value to a set of adjacent intervals
+    along the genome.
 
     :param list position: A list of :math:`n+1` positions, starting at 0, and ending
         in the sequence length over which the RateMap will apply.
@@ -456,9 +451,6 @@ class RateMap:
 # The RecombinationMap class is deprecated since 1.0. We maintain the
 # functionality where it is possible to do so.
 
-# TODO update the documentation to make it clear that this is a legacy
-# interface and is deprecated.
-
 
 class RecombinationMap:
     """
@@ -471,8 +463,9 @@ class RecombinationMap:
     position must be zero, and by convention the last rate value
     is also required to be zero (although it is not used).
 
-    .. warning::
-        The ``num_loci`` parameter is deprecated.
+    .. important::
+        This class is deprecated (but supported indefinitely);
+        please use the :class:`.RateMap` class in new code.
 
     :param list positions: The positions (in bases) denoting the
         distinct intervals where recombination rates change. These can

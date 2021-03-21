@@ -503,6 +503,10 @@ def simulate(
     of genomes in the population is 2*Ne), but ``sample_size`` is the
     number of (monoploid) genomes sampled.
 
+    .. important::
+        This function is deprecated (but supported indefinitely);
+        please use :func:`.sim_ancestry` in new code.
+
     :param int sample_size: The number of sampled monoploid genomes.  If not
         specified or None, this defaults to the sum of the subpopulation sample
         sizes. Either ``sample_size``, ``population_configurations`` or
@@ -571,7 +575,7 @@ def simulate(
         resulting :class:`tskit.TreeSequence` objects returned.
     :param tskit.TreeSequence from_ts: If specified, initialise the simulation
         from the root segments of this tree sequence and return the
-        completed tree sequence. Please see :ref:`here
+        updated tree sequence. Please see :ref:`here
         <sec_ancestry_initial_state>` for details on the required properties
         of this tree sequence and its interactions with other parameters.
         (Default: None).
@@ -597,9 +601,8 @@ def simulate(
         Please see the :ref:`sec_ancestry_models` section for more details
         on specifying ancestry models.
     :type model: str or AncestryModel
-    :param bool record_provenance: If True, record all configuration and parameters
-        required to recreate the tree sequence. These can be accessed
-        via ``TreeSequence.provenances()``).
+    :param bool record_provenance: If True, record all input parameters
+        in the tree sequence :ref:`tskit:sec_provenance`.
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -1042,7 +1045,7 @@ def sim_ancestry(
     record_provenance=None,
 ):
     """
-    Simulates an ancestral process described by a given model, demography and
+    Simulates an ancestral process described by the specified model, demography and
     samples, and return a :class:`tskit.TreeSequence` (or a sequence of
     replicate tree sequences).
 
@@ -1055,7 +1058,8 @@ def sim_ancestry(
         population at its default sampling time. It is important to note that
         samples correspond to *individuals* here, and each sampled individual
         is usually associated with :math:`k` sample *nodes* (or genomes) when
-        ``ploidy`` = :math:`k`. See :ref:`sec_ancestry_samples` for further details.
+        ``ploidy`` = :math:`k`. See the :ref:`sec_ancestry_samples` section
+        for further details.
         Either ``samples`` or ``initial_state`` must be specified.
     :param demography: The demographic model to simulate, describing the
         extant and ancestral populations, their population sizes and growth
@@ -1067,9 +1071,9 @@ def sim_ancestry(
         default to a single population with constant size 1
         (see also the ``population_size`` parameter).
     :param int ploidy: The number of monoploid genomes per sample individual
-        (Default=2). See :ref:`sec_ancestry_ploidy` for usage examples.
+        (Default=2). See the :ref:`sec_ancestry_ploidy` section for usage examples.
     :param float sequence_length: The length of the genome sequence to simulate.
-        See :ref:`sec_ancestry_genome_length` for usage examples
+        See the :ref:`sec_ancestry_sequence_length` section for usage examples
         for this parameter and how it interacts with other parameters.
     :param bool discrete_genome: If True (the default) simulation occurs
         in discrete genome coordinates such that recombination and
@@ -1079,18 +1083,17 @@ def sim_ancestry(
         are performed using continuous genome coordinates. In this
         case multiple events at precisely the same genome location are very
         unlikely (but technically possible).
-        See :ref:`sec_ancestry_discrete_genome` for usage examples.
+        See the :ref:`sec_ancestry_discrete_genome` section for usage examples.
     :param recombination_rate: The rate of recombination along the sequence;
         can be either a single value (specifying a single rate over the entire
         sequence) or an instance of :class:`RateMap`.
-        See :ref:`sec_ancestry_recombination` for usage examples
+        See the :ref:`sec_ancestry_recombination` section for usage examples
         for this parameter and how it interacts with other parameters.
-    :param gene_conversion_rate: The rate of gene conversion along the sequence;
-        can be a single value (specifying a single rate over the entire
-        sequence). Currently an instance of :class:`RateMap` is not supported.
+    :param gene_conversion_rate: The rate of gene conversion along the sequence.
         If provided, a value for ``gene_conversion_tract_length`` must also be
-        specified. See :ref:`sec_ancestry_gene_conversion` for usage examples
-        for this parameter and how it interacts with other parameters.
+        specified. See the :ref:`sec_ancestry_gene_conversion` section
+        for usage examples for this parameter and how it interacts with
+        other parameters.
     :param gene_conversion_tract_length: The mean length of the gene conversion
         tracts. For discrete genomes the tract lengths are geometrically
         distributed with mean ``gene_conversion_tract_length``, which must be
@@ -1105,23 +1108,23 @@ def sim_ancestry(
     :param int random_seed: The random seed. If this is not specified or `None`,
         a high-quality random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
-        See :ref:`sec_ancestry_random_seed` for usage examples.
+        See the :ref:`sec_ancestry_random_seed` section for usage examples.
     :param int num_replicates: The number of replicates of the specified
         parameters to simulate. If this is not specified or `None`,
         no replication is performed and a :class:`tskit.TreeSequence` object
         returned. If `num_replicates` is provided, the specified
         number of replicates is performed, and an iterator over the
         resulting :class:`tskit.TreeSequence` objects returned.
-        See :ref:`sec_ancestry_replication` for examples.
+        See the :ref:`sec_ancestry_replication` section for examples.
     :param bool record_full_arg: If True, record all intermediate nodes
         arising from common ancestor and recombination events in the output
         tree sequence. This will result in unary nodes (i.e., nodes in marginal
         trees that have only one child). Defaults to False.
-        See :ref:`sec_ancestry_full_arg` for examples.
+        See the :ref:`sec_ancestry_full_arg` section for examples.
     :param bool record_migrations: If True, record all migration events
         that occur in the :ref:`tskit:sec_migration_table_definition` of
         the output tree sequence. Defaults to False.
-        See :ref:`sec_ancestry_record_migrations` for examples.
+        See the :ref:`sec_ancestry_record_migrations` section for examples.
     :param tskit.TreeSequence initial_state: If specified, initialise the
         simulation from the root segments of this tree sequence and return the
         completed tree sequence. Please see
@@ -1135,14 +1138,16 @@ def sim_ancestry(
         time is zero if performing a simulation of a set of samples,
         or is the time of the oldest node if simulating from an
         existing tree sequence (see the ``initial_state`` parameter).
-        See :ref:`sec_ancestry_start_time` for examples.
+        See the :ref:`sec_ancestry_start_time` section for examples.
     :param float end_time: If specified, terminate the simulation at the
         specified time. In the returned tree sequence, all rootward paths from
-        samples with time <= ``end_time`` will end in a node with one child with
-        time equal to end_time. Any sample nodes with time > ``end_time`` will
+        samples with time < ``end_time`` will end in a node with one child with
+        time equal to end_time. Any sample nodes with time >= ``end_time`` will
         also be present in the output tree sequence. If not specified or ``None``,
         run the simulation until all samples have an MRCA at all positions in
-        the genome. See :ref:`sec_ancestry_end_time` for examples.
+        the genome. See the :ref:`sec_ancestry_end_time` section for examples.
+    :param bool record_provenance: If True (the default), record all input
+        parameters in the tree sequence :ref:`tskit:sec_provenance`.
     :param model: The ancestry model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
         an ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
@@ -1412,6 +1417,7 @@ class Simulator(_msprime.Simulator):
             tables = tskit.TableCollection.fromdict(self.tables.asdict())
             replicate_provenance = None
             if encoded_provenance is not None:
+
                 replicate_provenance = encoded_provenance.replace(
                     f'"{placeholder}"', str(replicate_index)
                 )
@@ -1423,13 +1429,32 @@ class Simulator(_msprime.Simulator):
 @dataclasses.dataclass
 class SampleSet:
     """
-    TODO document
+    Specify a set of exchangable sample individuals with a given ploidy
+    value from a population at a given time. See the
+    :ref:`sec_ancestry_samples` section for details and examples.
     """
 
     num_samples: int
+    """
+    The number of k-ploid sample **individuals** to draw.
+    """
     population: Union[int, str, None] = None
+    """
+    The population in which the samples are drawn. May be either a
+    string name or integer ID (see
+    :ref:`sec_demography_populations_identifiers` details).
+    """
     time: Union[float, None] = None
+    """
+    The time at which these samples are drawn. If not specified or None,
+    defaults to the :attr:`.Population.default_sampling_time`.
+    """
     ploidy: Union[int, None] = None
+    """
+    The number of monoploid genomes to sample for each sample individual.
+    See the :ref:`sec_ancestry_ploidy` section for more details and
+    examples.
+    """
 
     def asdict(self):
         return dataclasses.asdict(self)
@@ -1442,26 +1467,29 @@ class AncestryModelChange:
     """
     An event representing a change of underlying :ref:`ancestry model
     <sec_ancestry_models>`.
-
-    :param float time: The time at which the ancestry model changes
-        to the new model, in generations. After this time, all internal
-        tree nodes, edges and migrations are the result of the new model.
-        If time is set to None (the default), the model change will occur
-        immediately after the previous model has completed. If time is a
-        callable, the time at which the model changes is the result
-        of calling this function with the time that the previous model
-        started with as a parameter.
-    :param model: The new ancestry model to use.
-        This can either be a string (e.g., ``"smc_prime"``) or an instance of
-        an ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
-        Please see the :ref:`sec_ancestry_models` section for more details
-        on specifying these models. If this is None (the default) the model is
-        changed to the standard coalescent.
-    :type model: str or .AncestryModel
     """
 
     time: Union[float, None] = None
+    """
+    The time at which the ancestry model changes
+    to the new model, in generations. After this time, all internal
+    tree nodes, edges and migrations are the result of the new model.
+    If time is set to None (the default), the model change will occur
+    immediately after the previous model has completed. If time is a
+    callable, the time at which the model changes is the result
+    of calling this function with the time that the previous model
+    started with as a parameter.
+    """
+
     model: Union[str, AncestryModel, None] = None
+    """
+    The new ancestry model to use.
+    This can either be a string (e.g., ``"smc_prime"``) or an instance of
+    an ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
+    Please see the :ref:`sec_ancestry_models` section for more details
+    on specifying these models. If this is None (the default) the model is
+    changed to the standard coalescent.
+    """
 
     def asdict(self):
         return dataclasses.asdict(self)
@@ -1469,7 +1497,12 @@ class AncestryModelChange:
 
 class SimulationModelChange(AncestryModelChange):
     """
-    Deprecated 0.x way to describe an :class:`AncestryModelChange`.
+    Demographic event denoting an change in ancestry model.
+
+    .. important::
+        This class is deprecated (but supported indefinitely);
+        please use the ``model`` argument in :func:`sim_ancestry`
+        to specify multiple models in new code.
     """
 
 
@@ -1742,8 +1775,8 @@ class SweepGenicSelection(ParametricAncestryModel):
     Thus fitness of the heterozygote is intermediate to the
     two homozygotes.
 
-    The model is one of a
-    a structured coalescent where selective backgrounds are defined as in
+    The model is one of a structured coalescent where selective backgrounds are
+    defined as in
     `Braverman et al. (1995) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1206652/>`_
     The implementation details here follow closely to those in discoal,
     `Kern and Schrider (2016)
@@ -1752,13 +1785,6 @@ class SweepGenicSelection(ParametricAncestryModel):
     See :ref:`sec_ancestry_models_selective_sweeps` for a basic usage and example and
     :ref:`sec_ancestry_models_sweep_types` for details on how to specify different
     types of sweeps.
-
-    .. warning::
-        If the effective strength of selection (:math:`2Ns`) is sufficiently large
-        the time difference between successive events can be smaller than
-        the finite precision available, leading to zero length branches
-        in the output trees. As this is not allowed by tskit, an error
-        will be raised.
 
     .. warning::
         Currently models with more than one population and a selective sweep
