@@ -313,7 +313,7 @@ six sample *nodes*.
 ## Population size
 
 ```{eval-rst}
-.. todo:: Some nodes on population size and the common gotchas, especially
+.. todo:: Some notes on population size and the common gotchas, especially
     how this relates to ploidy. Should link to the demography page and
     model sections for more details.
 ```
@@ -322,113 +322,206 @@ six sample *nodes*.
 
 ## Genome properties
 
-```{eval-rst}
-.. todo:: This is text taken from the old api.rst. Reuse/adapt as appropriate.
-```
+(sec_ancestry_sequence_length)=
 
-(sec_ancestry_genome_length)=
-
-### Genome length
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
+### Sequence length
 
 There are a number of different ways to specify the length of the
 chromosome that we want to simulate. In the absence of recombination
 and gene conversion, we assume a genome of length 1:
 
 ```{code-cell}
-
-    ts = msprime.sim_ancestry(3)
-    ts.sequence_length
-
+ts = msprime.sim_ancestry(2, random_seed=1)
+SVG(ts.draw_svg())
 ```
 
-If a recombination or gene conversion rate is specified, though, we
-must define a `sequence_length`:
+The ``sequence_length`` parameter determines the length of the
+simulated sequence:
 
 ```{code-cell}
+ts = msprime.sim_ancestry(2, sequence_length=100, random_seed=1)
+SVG(ts.draw_svg())
+```
 
-    ts = msprime.sim_ancestry(
-        3, recombination_rate=0.1, sequence_length=10, random_seed=2)
-    ts.sequence_length, ts.num_trees
+By default there is no recombination or gene conversion, and so we
+therefore still have only one tree defining the ancestry of the
+samples. The sequence length makes little difference if we are
+considering only the ancestry of a non-recombining sequence, however,
+this will be important if we are interested in adding
+{ref}`mutations<sec_mutations>` later.
+
+(sec_ancestry_recombination)=
+
+### Recombination
+
+As we trace the ancestry of a sample of genomes backwards in time,
+recombination has the effect of creating segments of genome
+that have different (but highly correlated) genealogical trees.
+The {func}`.sim_ancestry` function has a ``recombination_rate``
+argument that allows us to flexibly specify both uniform and
+non-uniform rates of recombination along the genome.
+
+The simplest way to run simulations with recombination is to
+use the ``recombination_rate`` and ``sequence_length`` parameters:
+```{code-cell}
+ts = msprime.sim_ancestry(
+    3, recombination_rate=0.1, sequence_length=10, random_seed=2)
+SVG(ts.draw_svg())
+```
+Here, we we have four distinct trees along the genome,
+created by recombination events.
+
+```{code-cell}
+:tags: [remove-cell]
+assert 1 < ts.num_trees < 5
+```
+
+We can also provide a {class}`.RateMap` argument to ``recombination_rate``:
+
+```{code-cell}
+rate_map = msprime.RateMap.uniform(sequence_length=10, rate=0.1)
+other_ts = msprime.sim_ancestry(3, recombination_rate=rate_map, random_seed=2)
+assert ts.equals(other_ts, ignore_provenance=True)
+```
+
+There are two things to note here:
+
+1. We didn't need to specify a ``sequence_length`` argument to
+{func}`.sim_ancestry`, as this information is encapsulated by the ``rate_map``
+instance. (We can provide a value for ``sequence_length`` if we wish, but
+it must be equal to the {attr}`~.RateMap.sequence_length` property of the
+{class}`.RateMap`).
+2. The result of the simulation for a {ref}`sec_rate_maps_creating_uniform`
+rate map with the same rate and ``sequence_length`` is identical to
+the first simulation above.
+
+We can simulate non-uniform recombination by defining our {class}`.RateMap`
+appropriately. For example, here we define a map in which the
+rate over the first half of the sequence is one tenth of the second half:
+
+```{code-cell}
+rate_map = msprime.RateMap(position=[0, 10, 20], rate=[0.01, 0.1])
+ts = msprime.sim_ancestry(3, recombination_rate=rate_map, random_seed=2)
+SVG(ts.draw_svg())
+```
+
+Because the recombination rate in from position 10 to 20 is so much
+higher than the rate from 0 to 10, we can see that all the recombinations
+have fallen in the high recombination region.
+
+:::{seealso}
+- See the {ref}`sec_rate_maps_creating` section for more examples of
+creating {class}`.RateMap` instances.
+
+- See the {meth}`.RateMap.read_hapmap` method for reading in
+genetic maps from text files.
+:::
+
+(sec_ancestry_gene_conversion)=
+
+### Gene conversion
+
+Gene conversion events are defined by two parameters: the rate at which gene
+conversion events are initiated and the distribution of tract lengths.
+In the default case of discrete genome coordinates, tract lengths are drawn
+from a geometric distribution with mean ``gene_conversion_tract_length`` (which
+must be at least 1). Note that if we specify a tract length of 1, then all
+gene conversion tracts will have length exactly 1.
+In the following example one gene conversion event of length 1 has occurred:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    3, gene_conversion_rate=0.02, gene_conversion_tract_length=1,
+    sequence_length=10, random_seed=3)
+SVG(ts.draw_svg())
+```
+:::{note}
+We can see the specific effect of gene conversion here in this simple
+example, because the trees at either side of the event are identical.
+However, this will not be true in general.
+:::
+
+```{code-cell}
+:tags: [remove-cell]
+assert ts.num_trees == 3
+assert ts.at(0).parent_dict == ts.at(2).parent_dict
+```
+
+Continuous genomes can also be used. In this case the parameters define
+the rate at which gene conversion events are initiated per unit of sequence
+length and the mean of the exponentially distributed gene conversion tract
+lengths. The following example shows the same simulation as above but for a
+continuous genome:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    3, gene_conversion_rate=0.02, gene_conversion_tract_length=1,
+    sequence_length=10, random_seed=3, discrete_genome=False)
+SVG(ts.draw_svg())
 ```
 
 ```{code-cell}
-
-
-    assert ts.num_trees > 1
+:tags: [remove-cell]
+assert ts.num_trees == 3
 ```
 
-In this example we have a uniform recombination rate between all
-positions along the genome. We can also simulate variable
-recombination rates along the genome using a {class}`.RateMap`.
+Recombination and gene conversion at constant rates can be simulated alongside.
+In the following example recombinations at site 60 and 97 have occurred in addition
+to a gene conversion event covering the tract from site 76 to site 80.
 
 ```{code-cell}
-
-    rate_map = msprime.RateMap(
-        position=[0, 10, 12, 20],
-        rate=[0.1, 0.5, 0.1])
-    ts = msprime.sim_ancestry(3, recombination_rate=rate_map, random_seed=2)
-    ts.sequence_length, ts.num_trees
+ts = msprime.sim_ancestry(
+    3, sequence_length = 100, recombination_rate=0.003,
+    gene_conversion_rate=0.002, gene_conversion_tract_length=5,
+    random_seed=6)
+SVG(ts.draw_svg())
 ```
 
-Here we specify varying recombination rates for a genome of length 20,
-and there's a hotspot from position 10 to 12. In this case we don't
-need to specify the `sequence_length` in the call to `sim_ancestry`
-because it's already defined by the {class}`.RateMap`.
+```{code-cell}
+:tags: [remove-cell]
+assert 1 < ts.num_trees < 6
+```
+
+Variable recombination rates and constant gene conversion rates
+can also be combined.
+
+:::{note}
+Variable rates of gene conversion breakpoint initiation are not currently
+supported, but are planned for a future release. If you are interested
+in this feature please let us know!
+:::
 
 (sec_ancestry_discrete_genome)=
 
 ### Discrete or continuous?
 
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
 By default, we assume that the genome we are simulating is *discrete*
 so that genome coordinates are at integer positions:
 
 ```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, recombination_rate=0.1, sequence_length=10, random_seed=2)
-    ts.sequence_length
+ts = msprime.sim_ancestry(
+    3, recombination_rate=0.1, sequence_length=10, random_seed=2)
+SVG(ts.draw_svg())
 ```
 
 ```{code-cell}
-
-
-    assert 1 < ts.num_trees < 5
-
-```
-
-```{code-cell}
-
-    SVG(ts.draw_svg())
+:tags: [remove-cell]
+assert 1 < ts.num_trees < 5
 ```
 
 We can also simulate a continous genome by setting
 `discrete_genome=False`:
 
 ```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, recombination_rate=0.25, sequence_length=1, discrete_genome=False,
-        random_seed=33)
-    SVG(ts.draw_svg())
+ts = msprime.sim_ancestry(
+    3, recombination_rate=0.25, sequence_length=1, discrete_genome=False,
+    random_seed=33)
+SVG(ts.draw_svg())
 ```
 
 ```{code-cell}
-
-
-    assert 1 < ts.num_trees < 5
+:tags: [remove-cell]
+assert 1 < ts.num_trees < 5
 ```
 
 Here we see that the breakpoints along the genome occur at floating point
@@ -436,240 +529,107 @@ positions. Simulating a continuous genome sequence can be useful for
 theoretical work, but we recommend using discrete coordinates for most
 purposes.
 
-(sec_ancestry_recombination)=
-
-### Recombination
-
-```{eval-rst}
-.. todo:: This is old text taken from api.rst. Reuse as appropriate.
-    Note that some of this is specific to the Hudson model and so
-    should perhaps be moved in there.
-```
-
-Similarly, recombination rates are per unit of sequence length and per
-generation in `msprime`. Thus, given the per generation crossover rate
-{math}`r`, the overall rate of recombination between the ends of the sequence
-in coalescent time units is {math}`\rho = 4 N_e r L`. Although breakpoints do
-not necessarily occur at integer locations, the underlying recombination model
-is finite, and the behaviour of a small number of loci can be modelled using
-the {class}`.RecombinationMap` class. However, this is considered an advanced
-feature and the majority of cases should be well served with the default
-recombination model and number of loci.
-
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
-```{eval-rst}
-.. todo:: Examples of the different ways we can specify recombination
-    rates. Ideally we'd start with an
-    example with one GC event where we could explain what happened.
-    This might be tricky to finesse.
-
-```
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, recombination_rate=0.1, sequence_length=10, random_seed=2)
-    ts.sequence_length
-```
-
-```{code-cell}
-
-
-    assert 1 < ts.num_trees < 5
-```
-
-(sec_ancestry_gene_conversion)=
-
-### Gene conversion
-
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
-Gene conversion events are defined by two parameters: the rate at which gene
-conversion events are initiated and the distribution of tract lengths.
-In the default case of discrete genome coordinates, tract lengths are drawn
-from a geometric distribution with mean gene_conversion_tract_length (which
-must be at least 1). Note that if we specify a tract length of 1, then all
-gene conversion tracts will have length exactly 1.
-In the following example one gene conversion event of length 1 has occured.
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, gene_conversion_rate=0.02, gene_conversion_tract_length=1,
-        sequence_length=10, random_seed=3)
-    ts.sequence_length
-    SVG(ts.draw_svg())
-```
-
-```{code-cell}
-
-
-    assert 1 < ts.num_trees < 5
-```
-
-Continous genomes can also be used. In this case the parameters define
-the rate at which gene conversion events are initiated per unit of sequence
-length and the mean of the exponentially distributed gene conversion tract
-lengths. The following example shows the same simulation as above but for a
-continuous genome of length 1 and scaled gene conversion parameters.
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, gene_conversion_rate=0.2, gene_conversion_tract_length=0.1,
-        sequence_length=1, random_seed=3, discrete_genome=False)
-    ts.sequence_length
-    SVG(ts.draw_svg())
-```
-
-```{code-cell}
-
-
-    assert 1 < ts.num_trees < 5
-```
-
-Recombination and gene conversion at constant rates can be simulated alongside.
-In the following example recombinations at site 60 and 97 have occured in addition
-to a gene conversion event covering the tract from site 76 to site 80.
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, sequence_length = 100, recombination_rate=0.003,
-        gene_conversion_rate=0.002, gene_conversion_tract_length=5,
-        random_seed=6)
-    ts.sequence_length
-    SVG(ts.draw_svg())
-```
-
-```{code-cell}
-
-
-    assert 1 < ts.num_trees < 6
-```
-
-Variable recombination rates and constant gene conversion rates can be combined.
-In the next example we define a recombination map with a high recombination rate between
-site 10 and site 11 and a constant gene conversion rate with a mean tract length of 3.
-
-```{code-cell}
-
-    rate_map = msprime.RateMap(
-        position=[0, 10, 11, 20],
-        rate=[0.01, 0.5, 0.01])
-    ts = msprime.sim_ancestry(
-        3, recombination_rate=rate_map,
-        gene_conversion_rate=0.01, gene_conversion_tract_length=3,
-        random_seed=8)
-    ts.sequence_length
-    SVG(ts.draw_svg())
-```
-
-```{code-cell}
-
-
-    assert 1 < ts.num_trees < 5
-
-```
-
 (sec_ancestry_multiple_chromosomes)=
 
 ### Multiple chromosomes
 
-Multiple chromosomes can be simulated by specifying a recombination map with
-single-bp segments with recombination probability 1/2 separating adjacent
-chromosomes. By simulating using `sim_ancestry` and `discrete_genome=True`
-(the default setting), we set the recombination rate so that chromosomes
-separated by such "hotspots" have a 50% chance of being inherited from the
-same parent.
-
-The probability that a recombination breakpoint occurs at a given base pair
+Msprime does not directly support simulating multiple chromosomes simultaneously,
+but we can emulate it using a single linear genome split into chromosome
+segments. Multiple chromosomes are modelled by specifying a recombination map with
+single base-pair segments with recombination probability 1/2 separating adjacent
+chromosomes. The probability that a recombination breakpoint occurs
+at a given base pair
 that has recombination rate {math}`r` is {math}`1-e^{-r}`. Thus, we set the
 recombination rate in the base pair segments separating chromosomes to
-{math}`\log(2)`. This ensures that the recombination probility each generation
+{math}`\log(2)`. This ensures that the recombination probability each generation
 is 1/2.
 
+:::{todo}
+Tie this next bit of information here into the derivation above.
+:::
+
+:::{note}
+With a discrete genome and a recombination rate of {math}`r`,
+the expected number of recombinations per unit time and per unit
+length is {math}`1-e^{-r}`. Therefore the total map length for a
+segment of length {math}`L` and recombination rate {math}`r`
+is {math}`L (1 - e^{-r})`
+and so {math}`Lr (1 - r/2) < L (1 - e^{-r}) < Lr`.
+:::
+
 For example, the following defines a recombination map for three chromosomes
-each 1 cM in length:
+each 1 centiMorgan in length:
 
 ```{code-cell}
+import math
 
-    import msprime
-    import numpy as np
-
-    r_chrom = 1e-8
-    r_break = np.log(2)
-    positions = [0, 1e6, 1e6 + 1, 2e6, 2e6 + 1, 3e6]
-    rates = [r_chrom, r_break, r_chrom, r_break, r_chrom]
-    rate_map = msprime.RateMap(positions, rates)
+r_chrom = 1e-8
+r_break = math.log(2)
+positions = [0, 1e6, 1e6 + 1, 2e6, 2e6 + 1, 3e6]
+rates = [r_chrom, r_break, r_chrom, r_break, r_chrom]
+rate_map = msprime.RateMap(positions, rates)
 ```
 
 The main purpose of simulating multiple chromosomes together (instead of
 running independent simulations for each chromosome) is to capture the correct
-correlation between trees on distinct chromosomes. (Note that for many purposes,
-this may not be necessary, and simulating chromosomes independently may be
-preferred for efficiency.)
-To get the correct correlation between chromosomes, we must use the
-{ref}`discrete-time Wright-Fisher <sec_ancestry_models_dtwf>` model in the
-recent past. Because correlations between chromosomes break down very rapidly,
-we only need to simulate using `dtwf` for roughly 10-20 generations, after which
-we can switch to the `hudson` model to finish the simulation more efficiently.
+correlation between trees on distinct chromosomes.
 
-{ref}`Multiple merger coalescents <sec_ancestry_models_multiple_mergers>`
-result in positively correlated ancestries between unlinked chromosomes. The
-correlations do not break down in time so that multiple chromosomes should not
+:::{important}
+For many purposes simulating multiple chromosomes like this is not necessary
+and independent simulations may be preferable as they will be much more efficient.
+However, {ref}`Multiple merger coalescents <sec_ancestry_models_multiple_mergers>`
+result in positively correlated ancestries between unlinked chromosomes; the
+correlations do not break down in time and multiple chromosomes should not
 be simulated independently.
+:::
 
-For example, simulating 10 sampled diploid individuals using the recombination
-map defined above for three chromosomes and switching from the `dtwf` to
-`hudson` model 20 generations ago, we run
+We cannot use the default {class}`.StandardCoalescent` model to
+run simulations of multiple chromosomes; doing so would be equivalent
+to running independent replicate simulations and **much** less efficient.
+To get the correct correlation between chromosomes,
+we must use a model like {ref}`discrete-time Wright-Fisher <sec_ancestry_models_dtwf>`.
+However, because correlations between chromosomes break down very rapidly,
+we only need to simulate using `dtwf` for roughly 10-20 generations, after which
+we can switch to the `hudson` model to finish the simulation more efficiently
+(see the {ref}`sec_ancestry_multiple_models` section for more information
+on switching between ancestry models).
+
+In this example, we simulate 10 sampled diploid individuals using
+the recombination map defined above for three chromosomes
+and switching from the `dtwf` to `hudson` model 20 generations ago:
 
 ```{code-cell}
-
-    tree_sequence = msprime.sim_ancestry(
-        10,
-        population_size=1000,
-        recombination_rate=rate_map,
-        model=["dtwf", (20, "hudson")]
-    )
+ts = msprime.sim_ancestry(
+    10,
+    population_size=1000,
+    recombination_rate=rate_map,
+    model=["dtwf", (20, "hudson")],
+    random_seed=1234,
+)
+ts
 ```
 
 To isolate tree sequences for each chromosome, we can trim the full tree sequence
 for each chromosome by defining the end points of each chromosome and using
-the `keep_intervals` fuction. It is important to specify `simplify=False` so
-that node indices remain consistent across chromosomes. The function `trim()`
+the {meth}`~tskit.TreeSequence.keep_intervals` method.
+It is important to specify `simplify=False` so
+that node indices remain consistent across chromosomes. The
+{meth}`~tskit.TreeSequence.trim` method
 is then used to trim the tree sequences to the focal chromosome, so that position
 indices begin at 0 within each chromosome tree sequence.
 
 ```{code-cell}
-
-    chrom_positions = [0, 1e6, 2e6, 3e6]
-    ts_chroms = []
-    for j in range(len(chrom_positions) - 1):
-        start, end = chrom_positions[j: j + 2]
-        chrom_ts = tree_sequence.keep_intervals([[start, end]], simplify=False)
-        ts_chroms.append(chrom_ts.trim())
+chrom_positions = [0, 1e6, 2e6, 3e6]
+ts_chroms = []
+for j in range(len(chrom_positions) - 1):
+    start, end = chrom_positions[j: j + 2]
+    chrom_ts = ts.keep_intervals([[start, end]], simplify=False).trim()
+    ts_chroms.append(chrom_ts)
+    print(chrom_ts.sequence_length)
 ```
 
 This gives us a list of tree sequences, one for each chromosome, in the order that
 they were stitched together in the initial recombination map.
-
-```{eval-rst}
-.. todo:: Add a section to the Tutorial showing how to access tree sequences across
-    chromosomes and showing the correlation of trees on different chromosomes
-    using the ``dtwf`` model.
-```
 
 (sec_ancestry_controlling_randomness)=
 
@@ -1512,9 +1472,9 @@ increases with distance to each side.
     want examples of hard sweeps, partial sweeps, and soft sweeps.
 ```
 
-(sec_ancestry_models_multiple_models)=
+(sec_ancestry_multiple_models)=
 
-### Multiple models
+## Multiple models
 
 ```{eval-rst}
 .. todo:: This is copied from the old tutorial and is out of date now.

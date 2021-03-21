@@ -1073,7 +1073,7 @@ def sim_ancestry(
     :param int ploidy: The number of monoploid genomes per sample individual
         (Default=2). See the :ref:`sec_ancestry_ploidy` section for usage examples.
     :param float sequence_length: The length of the genome sequence to simulate.
-        See the :ref:`sec_ancestry_genome_length` section for usage examples
+        See the :ref:`sec_ancestry_sequence_length` section for usage examples
         for this parameter and how it interacts with other parameters.
     :param bool discrete_genome: If True (the default) simulation occurs
         in discrete genome coordinates such that recombination and

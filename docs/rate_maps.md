@@ -8,21 +8,30 @@
 ```
 
 {class}`.RateMap`
-: Vary rates along a genome                
+: Vary rates along a genome
 
-**Creating RateMaps**                                                                
+**Creating RateMaps**
 
-{meth}`.RateMap.uniform`                   
-: A RateMap with one rate                  
+{meth}`.RateMap.uniform`
+: A RateMap with one rate
 
-{meth}`.RateMap.slice`                     
-: Slice out a portion of a RateMap         
+{meth}`.RateMap.slice`
+: Slice out a portion of a RateMap
 
-**Computing rates**                                                                  
+**Computing rates**
 
-{meth}`.RateMap.mean_rate`                 
-: Weighted average rate                    
+{meth}`.RateMap.mean_rate`
+: Weighted average rate
 
-{meth}`.RateMap.get_rate`                  
-: Compute rate at a position               
+{meth}`.RateMap.get_rate`
+: Compute rate at a position
 
+
+(sec_rate_maps_creating)=
+## Creating rate maps
+
+(sec_rate_maps_creating_uniform)=
+### Uniform rate maps
+
+(sec_rate_maps_creating_hotspots)=
+### Hotspots

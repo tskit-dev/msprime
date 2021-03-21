@@ -18,9 +18,8 @@
 - part: Utilities
   chapters:
   - file: rate_maps
-  - file: logging
   - file: likelihoods
-
+  - file: logging
 - part: Miscellaneous
   chapters:
   - file: legacy
