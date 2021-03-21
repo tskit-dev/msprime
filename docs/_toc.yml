@@ -27,7 +27,3 @@
   - file: development
   - file: CITATION
   - file: CHANGELOG
-
-  # This is going to be deleted once we get the remaining content
-  # ported somewhere else.
-  - file: tutorial
