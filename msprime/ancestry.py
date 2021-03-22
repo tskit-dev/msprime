@@ -1805,14 +1805,13 @@ class SweepGenicSelection(ParametricAncestryModel):
     `Kern and Schrider (2016)
     <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5167068/>`_
 
-    See :ref:`sec_ancestry_models_selective_sweeps` for a basic usage and example and
-    :ref:`sec_ancestry_models_sweep_types` for details on how to specify different
-    types of sweeps.
+    See :ref:`sec_ancestry_models_selective_sweeps` for examples and
+    details on how to specify different types of sweeps.
 
     .. warning::
         Currently models with more than one population and a selective sweep
-        are not implemented. Further population size change during the sweep
-        is not yet possible in msprime.
+        are not implemented. Population size changes during the sweep
+        are not yet possible in msprime.
 
     :param float position: the location of the beneficial allele along the
         chromosome.

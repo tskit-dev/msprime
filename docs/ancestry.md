@@ -60,6 +60,8 @@ this.
 
 ---
 
+(sec_ancestry_quickref)=
+
 ## Quick reference
 
 {func}`.sim_ancestry`
@@ -1161,11 +1163,27 @@ using [SLiM](https://messerlab.org/slim/).
 
 ## Models
 
-```{eval-rst}
-.. todo:: quick overview of what a model *is* and also an example of
-  how to use it.
+The ancestry model determines the model under which the ancestral
+history of the sample is generated. It is concerned with the
+the basic processes of how (for example) common ancestor and
+recombination events occur. For example, the default
+"standard" or {ref}`sec_ancestry_models_hudson` is an
+efficient continuous time model, and the
+{ref}`sec_ancestry_models_dtwf` model allows
+for more detailed (if less efficient) simulations by
+making fewer mathematical approximations.
+{ref}`sec_ancestry_multiple_models` can be specified
+in a single simulation using a flexible notation.
 
-```
+:::{seealso}
+See the {ref}`sec_ancestry_quickref` for a summary of the available
+ancestry models
+:::
+
+:::{important}
+The ancestry model is distinct from the {ref}`demographic model<sec_demography>`,
+which is mostly independent of the chosen ancestry model.
+:::
 
 (sec_ancestry_models_hudson)=
 
@@ -1475,23 +1493,20 @@ print(tree.tmrca(0,1))
 
 ### Selective sweeps
 
-Msprime provides the option to perform coalescent approximations
-to selective sweeps, in which a beneficial mutation moves through
-the population. This is done through the use of a structured
-coalescent model in the spirit of
+Although the coalescent assumes that lineages are exchangable, (and therefore
+evolving nuetrally), approximations to some forms of selective sweep
+(beneficial mutation moves through the population), have been derived. This is
+done through the use of a structured coalescent model in the spirit of
 [Braverman et al. (1995)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1206652/).
 
-Looking backwards in time the population enters a sweep phase where
+In the {class}`.SweepGenicSelection` model,
 the population is split between two classes of selective backgrounds,
 those linked to the beneficial allele, call it {math}`B`, and those not,
-{math}`b`. During this portion of the simulation we track competing
+{math}`b`. In this model we track competing
 rates of coalescence and recombination on the {math}`B` and {math}`b`
 backgrounds.
-
-This implementation is reasonable general, althougth there are
-current limitations (e.g., no change of population size during
-a sweep). The user supplies a final allele frequency and a starting
-allele frequency, between which msprime will simulate a stochastic
+The user supplies a final allele frequency and a starting
+allele frequency, between which msprime simulates a stochastic
 sweep trajectory according to a conditional diffusion model [(Coop
 and Griffiths, 2004](https://pubmed.ncbi.nlm.nih.gov/15465123/);
 [Kim and Stephan 2002](https://pubmed.ncbi.nlm.nih.gov/11861577/)).
@@ -1502,96 +1517,127 @@ must specify the selection coefficient of the beneficial mutation
 advantage of the {math}`B` homozygote over the {math}`b` homozygote
 and {math}`h=0.5`. The position represents the location along
 the chromosome where the beneficial allele occurs.
- All other parameters can be set as usual.
+All other parameters can be set as usual.
 
-As an example, let's perform 50 replicate hard sweep simulations using
-msprime and then plot mean {meth}`pairwise diversity<tskit.TreeSequence.diversity>` in windows across the simulated
-region. The position is set to the middle of the chromosome, so we
-expect to see the characteristic valley of diversity following our sweeps.
-The key step here is to build a list of models which includes
-a {class}`SweepGenicSelection<.SweepGenicSelection>` model.
+:::{warning}
+The implementation of the structured coalescent is quite general, but there are
+some limitations in the current implementation of the sweeps model (e.g., no
+change of population size during a sweep). Please let us know if there are
+related features you would like to see (or if you would be interested in
+helping to create this functionality!)
+:::
+
+
+#### Hard sweeps
+
+:::{todo}
+What's a hard sweep? Some intro sentences here.
+:::
+
+In this example we run some replicate hard sweep simulations
+and plot the mean
+{meth}`pairwise diversity<tskit.TreeSequence.diversity>` in windows
+across the simulated region, showing the characteristic
+valley of diversity.
+
+First we set up some basic parameters, and define the sweep model:
+
+```{code-cell}
+Ne = 1e3
+L = 1e6  # Length of simulated region
+num_reps = 100
+
+# define hard sweep model
+sweep_model = msprime.SweepGenicSelection(
+    position=L / 2,  # middle of chrom
+    start_frequency=1.0 / (2 * Ne),
+    end_frequency=1.0 - (1.0 / (2 * Ne)),
+    s=0.25,
+    dt=1e-6,
+)
+```
+
+:::{todo}
+Explain why these parameters give a hard sweep.
+:::
+
+Next we set up the replicate simulations. The ``model`` parameter
+here is a list: the first element is the ``sweep_model`` we
+just defined, and the second is a tuple ``(None, "hudson")``.
+This means "Run the sweep model until it finishes, **then**
+run the ``"hudson"`` model.
+
+:::{todo}
+This could be simpler: why not just ``[sweep_model, "hudson"]``?
+https://github.com/tskit-dev/msprime/issues/1571
+:::
+
+```{code-cell}
+reps = msprime.sim_ancestry(
+    5,
+    model=[sweep_model, (None, "hudson")],
+    population_size=Ne,
+    recombination_rate=1e-7,
+    sequence_length=L,
+    num_replicates=num_reps,
+)
+```
+
+Once we've set up the replicate simulations we can compute the
+windows for plotting, run the actual simulations
+(see the {ref}`sec_ancestry_replication` section for more details)
+and compute the
+{meth}`pairwise diversity<tskit.TreeSequence.diversity>`.
+
+```{code-cell}
+wins = np.linspace(0, L, 21)
+mids = (wins[1:] + wins[:-1]) / 2
+diversity = np.zeros((num_reps, mids.shape[0]))
+for j, ts in enumerate(reps):
+    diversity[j] = ts.diversity(windows=wins, mode="branch")
+```
+
+Finally, we can plot the observed mean diversity across the replicates
+and compare it to the neutral expectation:
 
 ```{code-cell}
 from matplotlib import pyplot as plt
 
-Ne = 1e3
-s = 0.25
-# define hard sweep model
-sweep = msprime.SweepGenicSelection(
-    position=1e6 / 2,  # middle of chrom
-    start_frequency=1.0 / (2 * Ne),
-    end_frequency=1.0 - (1.0 / (2 * Ne)),
-    s=s,
-    dt=1e-6,
-)
-
-reps = msprime.sim_ancestry(
-    5,
-    population_size=Ne,
-    model=[sweep, (None, 'hudson')],
-    recombination_rate=1e-7,
-    sequence_length = 1e6,
-    num_replicates=50,
-    )
-
-wins = np.linspace(0,int(1e6),21)
-mids = (wins[1:] + wins[:-1]) / 2
-
-msp_pis = []
-for ts in reps:
-	mutated_ts = msprime.sim_mutations(ts, rate=1e-8)
-	msp_pis.append(mutated_ts.diversity(windows=wins))
-
-plt.plot(mids,np.array(msp_pis).mean(axis=0), label="msp")
-plt.axhline(4 * Ne * 1e-8, linestyle=":", label=r'neutral $\pi$')
-plt.ylabel(r'$\pi$'); plt.xlabel('position (bp)')
-plt.legend()
+plt.plot(mids, diversity.mean(axis=0), label="Simulations")
+plt.axhline(4 * Ne, linestyle=":", label=r'Neutral expectation')
+plt.ylabel(r'Branch $\pi$');
+plt.xlabel('Position (bp)')
+plt.legend();
 ```
+
+:::{note}
+We use the "branch" measure of pairwise diversity which is
+defined in terms of the trees rather than nucleotide sequences. See
+[Ralph et al. 2020](https://doi.org/10.1534/genetics.120.303253)
+for more information.
+:::
+
 As we can see, the selective sweep has reduced variation in the region
-most closely linked to the beneficial allele and then heterozygosity
+most closely linked to the beneficial allele and then diversity
 increases with distance to each side.
 
-(sec_ancestry_models_sweep_types)=
+#### Multiple sweeps
 
-#### Sweep model examples
+:::{todo}
+Give an example where multiple sweeps happen
+:::
 
-```{eval-rst}
-.. todo:: Need to add some examples to this section and build it out.
-    want examples of hard sweeps, partial sweeps, and soft sweeps.
-```
 
 (sec_ancestry_multiple_models)=
 
 ## Multiple models
 
-In some situations we wish to simulate under different ancestry models during
-different time periods of the simulation. For example, we may want to use
-{class}`.DiscreteTimeWrightFisher` (DTWF) simulations for the recent past (when some
-assumptions of the {class}`.StandardCoalescent` can be badly wrong), and using
-the standard coalescent for the more distant past (where it is an excellent
-approximation of more complex population models). Hybrid simulations
-of this type provide the best of computational efficiency and accuracy.
 
-:::{seealso}
-See [Nelson et al. 2020](https://doi.org/10.1371/journal.pgen.1008619) for
-more details and examples where the DTWF model is more realistic than
-the coalescent, and an assessment of the accuracy of hybrid simulations.
-:::
+(sec_ancestry_multiple_models_notation)=
+### Notation
 
-In this example we simulate with the DTWF model for 500 generations,
-before switching to the standard (Hudson) coalescent:
 
-```{code-cell}
-ts = msprime.sim_ancestry(
-    2, population_size=1000, model=["dtwf", (500, "hudson")], random_seed=2)
-ts.tables.nodes
-```
-
-Because of the integer node times, we can see here that most of the coalescent
-happened during the Wright-Fisher phase of the simulation, and as-of 500
-generations in the past, there were only two lineages left. The continuous
-time standard coalescent model was then used to simulate the ancient past of
-these two lineages.
+### Fixed time
 
 :::{note}
 Switching models at a fixed time point like this is equivalent to
