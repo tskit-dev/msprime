@@ -326,7 +326,7 @@ at time {math}`t` generations in the past (see the
 Growth rates for functions like {meth}`.Demography.island_model`
 that construct a {class}`.Demography` are specified in a similar
 way to {ref}`sec_demography_populations_initial_size`: we provide
-a list of size equal to the number of populations. For
+a list of sizes equal to the number of populations. For
 example, here we define 2 populations with different
 population sizes and growth rates:
 
