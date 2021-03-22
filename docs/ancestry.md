@@ -1161,12 +1161,6 @@ using [SLiM](https://messerlab.org/slim/).
 
 ## Models
 
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
 ```{eval-rst}
 .. todo:: quick overview of what a model *is* and also an example of
   how to use it.
@@ -1177,53 +1171,147 @@ using [SLiM](https://messerlab.org/slim/).
 
 ### Hudson coalescent
 
-The default simulation model in `msprime` is the coalescent
-with recombination, based on the classical `ms` program.
-Please see the {class}`API documentation<.StandardCoalescent>`
-for a formal description of the model.
+The {class}`standard coalescent<.StandardCoalescent>`
+is the default model in msprime. The algorithm
+for simulating the coalescent with recombination was developed
+by [Hudson (1983)](https://doi.org/10.1016/0040-5809(83)90013-8),
+and so we refer to it as the "Hudson" coalescent.
 
-The standard coalescent is the default model of ancestry used
-in msprime if we don't specify any value for the `model` parameter.
+Running a simulation without specifying a ``model`` is the
+same as running with ``model="hudson"``:
 
 ```{code-cell}
-    ts1 = msprime.sim_ancestry(5, random_seed=2)
-    ts2 = msprime.sim_ancestry(5, model="hudson", random_seed=2)
-    # This is the same simulation so we should get the same
-    # node and edge tables.
-    assert ts1.tables.nodes == ts2.tables.nodes
-    assert ts1.tables.edges == ts2.tables.edges
-
+ts1 = msprime.sim_ancestry(5, random_seed=2)
+ts2 = msprime.sim_ancestry(5, model="hudson", random_seed=2)
+# This is the same simulation so tree sequences are equal
+assert ts1.equals(ts2, ignore_provenance=True)
 ```
+
+Time is measured in units of generations ago. This is a continuous time
+model, in which the simulation moves event-by-event backwards
+in time (contrasting with the {ref}`sec_ancestry_models_dtwf` model, which
+works generation-by-generation). Thus, we can have fractional
+generations, as in this example where the MRCA of the sample
+occurs 10.59 "generations" ago:
+
+```{code-cell}
+ts = msprime.sim_ancestry(3, random_seed=234)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+This occurs because time is scaled to be proportional to
+the population size; if we run the same simulation with a
+different {ref}`sec_ancestry_population_size`, we can see that
+the time values are simply scaled up accordingly
+(the default ``population_size`` is 1):
+
+```{code-cell}
+ts = msprime.sim_ancestry(3, population_size=100, random_seed=234)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+:::{seealso}
+The {ref}`ploidy<sec_ancestry_ploidy>` parameter also controls
+the time scale; the
+default here is the diploid time scale where time is measured
+in units of 4N generations.
+:::
 
 (sec_ancestry_models_smc)=
 
 ### SMC approximations
 
+The {class}`SMC <.SmcApproxCoalescent>` and {class}`SMC' <.SmcPrimeApproxCoalescent>`
+are approximations of the continuous time
+{ref}`Hudson coalescent<sec_ancestry_models_hudson>` model. These were originally
+motivated largely by the need to simulate coalescent processes more efficiently
+than was possible using the software available at the time; however,
+[improved algorithms](https://doi.org/10.1371/journal.pcbi.1004842)
+mean that such approximations are now mostly unnecessary for simulations.
 
-```{eval-rst}
-.. todo:: Write this section, including a simple example ideally showing
-    a property of an SMC simulation
+The SMC and SMC' are however very important for inference, as the approximations
+have made many analytical advances possible.
 
-```
+Since the SMC approximations are not required for simulation efficiency, these
+models are implemented using a naive rejection sampling approach in msprime.
+The implementation is intended to facilitate the study of the
+SMC approximations, rather than to be used in a general-purpose way.
 
 (sec_ancestry_models_dtwf)=
 
 ### Discrete Time Wright-Fisher
 
-Msprime provides the option to perform discrete-time Wright-Fisher simulations
-for scenarios when the coalescent model is not appropriate, including large
+Msprime provides the option to perform discrete-time Wright-Fisher (DTWF)
+simulations for scenarios when the coalescent model is not appropriate, including large
 sample sizes, multiple chromosomes, or recent migration.
 Please see the {class}`API documentation<.DiscreteTimeWrightFisher>`
-for a formal description of the model.
+for a formal description of the model,
+and [Nelson et al. 2020](https://doi.org/10.1371/journal.pgen.1008619) for
+more details and background information.
 
-All other parameters can be set as usual. Note that for discrete-time
-Wright-Fisher simulations with population structure, each row of the migration
-matrix must sum to one or less.
+To run DTWF simulations, we need to provide the ``model="dtwf"`` argument
+to {func}`.sim_ancestry`:
 
-```{eval-rst}
-.. todo:: An example of the DTWF. Show the discrete with an example of a
-    non-binary tree.
+```{code-cell}
+ts = msprime.sim_ancestry(4, population_size=10, model="dtwf", random_seed=7)
+SVG(ts.draw_svg(y_axis=True, tree_height_scale="rank"))
 ```
+
+There are a few important points to note here:
+
+1. All node times are integers (this is discrete time counted in generations);
+2. We can have **non-binary** nodes (see node 10);
+3. We can have **simultaneous** events (see nodes 8 and 9).
+
+Most features can be used with the DTWF model, and an error will be raised if
+you attempt to use a feature that is not implemented for DTWF. (Please let
+us know if this feature is important to you!)
+
+:::{important}
+For DTWF simulations with population structure, each row of the migration
+matrix must sum to one or less.
+:::
+
+Because DTWF simulations trace the history of a sample by going backwards
+in time generation-by-generation rather than event-by-event like the
+continuous time models, it is significantly slower to simulate than
+the standard coalescent.
+
+"Hybrid" simulations can be a good solution if DTWF simulations are
+slow. In this case we can use DTWF simulations for the recent past, and using
+the standard coalescent for the more distant past (where it is an excellent
+approximation of the discrete time model). Hybrid simulations
+of this type provide the best of computational efficiency and accuracy.
+
+:::{seealso}
+See [Nelson et al. 2020](https://doi.org/10.1371/journal.pgen.1008619) for
+more details and examples where the DTWF model is more realistic than
+the coalescent, and an assessment of the accuracy of hybrid simulations.
+:::
+
+For example, here we simulate with the DTWF model for 500 generations,
+before switching to the standard (Hudson) coalescent:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    2, population_size=1000, model=["dtwf", (500, "hudson")], random_seed=2)
+SVG(ts.draw_svg(y_axis=True, tree_height_scale="rank"))
+```
+
+Because of the integer node times, we can see here that most of the coalescent
+happened during the Wright-Fisher phase of the simulation, and as-of 500
+generations in the past, there were only two lineages left. The continuous
+time standard coalescent model was then used to simulate the ancient past of
+these two lineages.
+
+See the {ref}`sec_ancestry_multiple_models` section for more details on
+how the use the ``model`` argument to {func}`.sim_ancestry` to run
+multiple models.
+
+:::{seealso}
+See the {ref}`sec_ancestry_multiple_chromosomes` section for information
+on how to simulate multiple chromosomes using the DTWF.
+:::
 
 (sec_ancestry_models_multiple_mergers)=
 
@@ -1274,7 +1362,7 @@ SVG(ts.draw_svg())
 
 ```
 
-Multiple mergers still take place in a haploid simulaton, but only one merger
+Multiple mergers still take place in a haploid simulation, but only one merger
 can take place at a given time:
 
 ```{code-cell}
@@ -1476,43 +1564,27 @@ increases with distance to each side.
 
 ## Multiple models
 
-```{eval-rst}
-.. todo:: This is copied from the old tutorial and is out of date now.
-    Update the to use the new model=[(time, model)]`` syntax.
-    It's also too focused on the DTWF model.
-```
+In some situations we wish to simulate under different ancestry models during
+different time periods of the simulation. For example, we may want to use
+{class}`.DiscreteTimeWrightFisher` (DTWF) simulations for the recent past (when some
+assumptions of the {class}`.StandardCoalescent` can be badly wrong), and using
+the standard coalescent for the more distant past (where it is an excellent
+approximation of more complex population models). Hybrid simulations
+of this type provide the best of computational efficiency and accuracy.
 
-In some situations Wright-Fisher simulations are desireable but less
-computationally efficient than coalescent simulations, for example simulating a
-small sample in a recently admixed population. In these cases, a hybrid model
-offers an excellent tradeoff between simulation accuracy and performance.
+:::{seealso}
+See [Nelson et al. 2020](https://doi.org/10.1371/journal.pgen.1008619) for
+more details and examples where the DTWF model is more realistic than
+the coalescent, and an assessment of the accuracy of hybrid simulations.
+:::
 
-This is done through a {class}`.SimulationModelChange` event, which is a special type of
-demographic event.
+In this example we simulate with the DTWF model for 500 generations,
+before switching to the standard (Hudson) coalescent:
 
-For example, here we switch from the discrete-time Wright-Fisher model to the
-standard Hudson coalescent 500 generations in the past:
-
-```{code-cell} python
-
-ts = msprime.simulate(
-    sample_size=6, Ne=1000, model="dtwf", random_seed=2,
-    demographic_events=[
-        msprime.SimulationModelChange(time=500, model="hudson")])
-print(ts.tables.nodes)
-# id      flags   population      individual      time    metadata
-# 0       1       0       -1      0.00000000000000
-# 1       1       0       -1      0.00000000000000
-# 2       1       0       -1      0.00000000000000
-# 3       1       0       -1      0.00000000000000
-# 4       1       0       -1      0.00000000000000
-# 5       1       0       -1      0.00000000000000
-# 6       0       0       -1      78.00000000000000
-# 7       0       0       -1      227.00000000000000
-# 8       0       0       -1      261.00000000000000
-# 9       0       0       -1      272.00000000000000
-#10      0       0       -1      1629.06982528980075
-
+```{code-cell}
+ts = msprime.sim_ancestry(
+    2, population_size=1000, model=["dtwf", (500, "hudson")], random_seed=2)
+ts.tables.nodes
 ```
 
 Because of the integer node times, we can see here that most of the coalescent
@@ -1520,6 +1592,16 @@ happened during the Wright-Fisher phase of the simulation, and as-of 500
 generations in the past, there were only two lineages left. The continuous
 time standard coalescent model was then used to simulate the ancient past of
 these two lineages.
+
+:::{note}
+Switching models at a fixed time point like this is equivalent to
+first running the DTWF phase of the simulation with ``end_time=500``
+and then using the output as the
+{ref}`initial state<sec_ancestry_initial_state>` for the simulation
+of the Hudson phase. The model switching syntax here is a little
+more convenient and efficient, however.
+:::
+
 
 (sec_ancestry_errors)=
 
