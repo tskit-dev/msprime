@@ -30,6 +30,7 @@ import logging
 import math
 import struct
 import sys
+from typing import Any
 from typing import ClassVar
 from typing import Union
 
@@ -1149,10 +1150,13 @@ def sim_ancestry(
     :param bool record_provenance: If True (the default), record all input
         parameters in the tree sequence :ref:`tskit:sec_provenance`.
     :param model: The ancestry model to use.
-        This can either be a string (e.g., ``"smc_prime"``) or an instance of
-        an ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
-        Please see the :ref:`sec_ancestry_models` section for more details
-        on specifying ancestry models.
+        This must be either (a) a value that can be interpreted as a simulation
+        model (a string or :class:`.AncestryModel` instance); or (b) a list in
+        which the first element is a model and the remaining elements are model
+        change events. These can either be described by a ``(time, model)``
+        tuple or :class:`.AncestryModelChange` instances. Please see the
+        :ref:`sec_ancestry_models` section for more details on specifying
+        ancestry models.
     :type model: str or .AncestryModel
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
@@ -1460,35 +1464,36 @@ class SampleSet:
         return dataclasses.asdict(self)
 
 
-# TODO update the documentation here to state that using this class is
-# deprecated, and users should use the model=[...] notation instead.
 @dataclasses.dataclass
 class AncestryModelChange:
     """
-    An event representing a change of underlying :ref:`ancestry model
-    <sec_ancestry_models>`.
+    A change of :ref:`ancestry model <sec_ancestry_models>` occuring
+    at a given time. Can be provided in the ``model`` parameter
+    to :func:`.sim_ancestry`.
     """
 
     time: Union[float, None] = None
     """
-    The time at which the ancestry model changes
-    to the new model, in generations. After this time, all internal
-    tree nodes, edges and migrations are the result of the new model.
-    If time is set to None (the default), the model change will occur
-    immediately after the previous model has completed. If time is a
-    callable, the time at which the model changes is the result
-    of calling this function with the time that the previous model
-    started with as a parameter.
+    The time at which the ancestry model changes to the new model, in
+    generations. After this time, all internal tree nodes, edges and migrations
+    are the result of the new model. If time is set to None (the default), the
+    model change will occur immediately after the previous model has completed.
+    If time is a callable, the time at which the model changes is the result of
+    calling this function with the time that the previous model started with as
+    a parameter.
     """
 
-    model: Union[str, AncestryModel, None] = None
+    # Can't use typehints here because having a reference to AncestryModel
+    # breaks autodoc, which wants to call it msprime.ancestry.AncestryModel
+    # whereas we have it documented as msprime.AncestryModel. Annoying.
+    model: Any = None
     """
-    The new ancestry model to use.
-    This can either be a string (e.g., ``"smc_prime"``) or an instance of
-    an ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
-    Please see the :ref:`sec_ancestry_models` section for more details
-    on specifying these models. If this is None (the default) the model is
-    changed to the standard coalescent.
+    The new ancestry model to use. This can either be a string (e.g.,
+    ``"smc_prime"``) or an instance of an ancestry model class (e.g,
+    ``msprime.DiscreteTimeWrightFisher()``. Please see the
+    :ref:`sec_ancestry_models` section for more details on specifying these
+    models. If this is None (the default) the model is changed to the standard
+    coalescent.
     """
 
     def asdict(self):
@@ -1526,7 +1531,12 @@ class StandardCoalescent(AncestryModel):
     The classical coalescent with recombination model (i.e., Hudson's algorithm).
     The string ``"hudson"`` can be used to refer to this model.
 
-    This is the default simulation model.
+    This is a continuous time model in which the time to the next event
+    is exponentially distributed with rates depending on the population size(s),
+    migration rates, numbers of extant lineages and the amount of ancestral
+    material currently present. See
+    `Kelleher et al. (2016) <https://doi.org/10.1371/journal.pcbi.1004842>`_ for a
+    detailed description of the model and further references.
     """
 
     name = "hudson"
@@ -1534,10 +1544,16 @@ class StandardCoalescent(AncestryModel):
 
 class SmcApproxCoalescent(AncestryModel):
     """
-    The original SMC model defined by McVean and Cardin. This
-    model is implemented using a naive rejection sampling approach
-    and so it may not be any more efficient to simulate than the
-    standard Hudson model.
+    The Sequentially Markov Coalescent (SMC) model defined by
+    `McVean and Cardin (2005) <https://dx.doi.org/10.1098%2Frstb.2005.1673>`_.
+    In the SMC only common ancestor events that result in marginal coalescences
+    are possible. Under this approximation, the marginal trees along the
+    genome depend only on the immediately previous tree (i.e., are Markovian).
+
+    .. important::
+        This model is implemented using a naive rejection sampling approach
+        and so it may not be any more efficient to simulate than the
+        standard Hudson model.
 
     The string ``"smc"`` can be used to refer to this model.
     """
@@ -1547,10 +1563,17 @@ class SmcApproxCoalescent(AncestryModel):
 
 class SmcPrimeApproxCoalescent(AncestryModel):
     """
-    The SMC' model defined by Marjoram and Wall as an improvement on the
-    original SMC. model is implemented using a naive rejection sampling
-    approach and so it may not be any more efficient to simulate than the
-    standard Hudson model.
+    The SMC' model defined by
+    `Marjoram and Wall (2006) <https://doi.org/10.1186/1471-2156-7-16>`_
+    as a refinement of the :class:`SMC<SmcApproxCoalescent>`. The SMC'
+    extends the SMC by additionally allowing common ancestor events that
+    join contiguous tracts of ancestral material (as well as events that
+    result in marginal coalescences).
+
+    .. important::
+        This model is implemented using a naive rejection sampling approach
+        and so it may not be any more efficient to simulate than the
+        standard Hudson model.
 
     The string ``"smc_prime"`` can be used to refer to this model.
     """
@@ -1782,14 +1805,13 @@ class SweepGenicSelection(ParametricAncestryModel):
     `Kern and Schrider (2016)
     <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5167068/>`_
 
-    See :ref:`sec_ancestry_models_selective_sweeps` for a basic usage and example and
-    :ref:`sec_ancestry_models_sweep_types` for details on how to specify different
-    types of sweeps.
+    See :ref:`sec_ancestry_models_selective_sweeps` for examples and
+    details on how to specify different types of sweeps.
 
     .. warning::
         Currently models with more than one population and a selective sweep
-        are not implemented. Further population size change during the sweep
-        is not yet possible in msprime.
+        are not implemented. Population size changes during the sweep
+        are not yet possible in msprime.
 
     :param float position: the location of the beneficial allele along the
         chromosome.

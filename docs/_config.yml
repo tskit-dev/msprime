@@ -50,6 +50,8 @@ sphinx:
         numpy: ['https://numpy.org/doc/stable/', null]
       nitpicky: true
 
+      autodoc_member_order: bysource
+
       # Without this option, autodoc tries to put links for all return types
       # in terms of the fully-qualified classnames
       # (e.g. msprime.demography.Demography) which we don't want, and also

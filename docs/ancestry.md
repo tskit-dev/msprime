@@ -60,6 +60,8 @@ this.
 
 ---
 
+(sec_ancestry_quickref)=
+
 ## Quick reference
 
 {func}`.sim_ancestry`
@@ -1161,69 +1163,173 @@ using [SLiM](https://messerlab.org/slim/).
 
 ## Models
 
-```{code-cell}
-:tags: [remove-cell]
+The ancestry model determines the model under which the ancestral
+history of the sample is generated. It is concerned with the
+the basic processes of how (for example) common ancestor and
+recombination events occur. For example, the default
+"standard" or {ref}`sec_ancestry_models_hudson` is an
+efficient continuous time model, and the
+{ref}`sec_ancestry_models_dtwf` model allows
+for more detailed (if less efficient) simulations by
+making fewer mathematical approximations.
+{ref}`sec_ancestry_multiple_models` can be specified
+in a single simulation using a flexible notation.
 
-    msprime.core.set_seed_rng_seed(42)
-```
+:::{seealso}
+See the {ref}`sec_ancestry_quickref` for a summary of the available
+ancestry models
+:::
 
-```{eval-rst}
-.. todo:: quick overview of what a model *is* and also an example of
-  how to use it.
-
-```
+:::{important}
+The ancestry model is distinct from the {ref}`demographic model<sec_demography>`,
+which is mostly independent of the chosen ancestry model.
+:::
 
 (sec_ancestry_models_hudson)=
 
 ### Hudson coalescent
 
-The default simulation model in `msprime` is the coalescent
-with recombination, based on the classical `ms` program.
-Please see the {class}`API documentation<.StandardCoalescent>`
-for a formal description of the model.
+The {class}`standard coalescent<.StandardCoalescent>`
+is the default model in msprime. The algorithm
+for simulating the coalescent with recombination was developed
+by [Hudson (1983)](https://doi.org/10.1016/0040-5809(83)90013-8),
+and so we refer to it as the "Hudson" coalescent.
 
-The standard coalescent is the default model of ancestry used
-in msprime if we don't specify any value for the `model` parameter.
+Running a simulation without specifying a ``model`` is the
+same as running with ``model="hudson"``:
 
 ```{code-cell}
-    ts1 = msprime.sim_ancestry(5, random_seed=2)
-    ts2 = msprime.sim_ancestry(5, model="hudson", random_seed=2)
-    # This is the same simulation so we should get the same
-    # node and edge tables.
-    assert ts1.tables.nodes == ts2.tables.nodes
-    assert ts1.tables.edges == ts2.tables.edges
-
+ts1 = msprime.sim_ancestry(5, random_seed=2)
+ts2 = msprime.sim_ancestry(5, model="hudson", random_seed=2)
+# This is the same simulation so tree sequences are equal
+assert ts1.equals(ts2, ignore_provenance=True)
 ```
+
+Time is measured in units of generations ago. This is a continuous time
+model, in which the simulation moves event-by-event backwards
+in time (contrasting with the {ref}`sec_ancestry_models_dtwf` model, which
+works generation-by-generation). Thus, we can have fractional
+generations, as in this example where the MRCA of the sample
+occurs 10.59 "generations" ago:
+
+```{code-cell}
+ts = msprime.sim_ancestry(3, random_seed=234)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+This occurs because time is scaled to be proportional to
+the population size; if we run the same simulation with a
+different {ref}`sec_ancestry_population_size`, we can see that
+the time values are simply scaled up accordingly
+(the default ``population_size`` is 1):
+
+```{code-cell}
+ts = msprime.sim_ancestry(3, population_size=100, random_seed=234)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+:::{seealso}
+The {ref}`ploidy<sec_ancestry_ploidy>` parameter also controls
+the time scale; the
+default here is the diploid time scale where time is measured
+in units of 4N generations.
+:::
 
 (sec_ancestry_models_smc)=
 
 ### SMC approximations
 
+The {class}`SMC <.SmcApproxCoalescent>` and {class}`SMC' <.SmcPrimeApproxCoalescent>`
+are approximations of the continuous time
+{ref}`Hudson coalescent<sec_ancestry_models_hudson>` model. These were originally
+motivated largely by the need to simulate coalescent processes more efficiently
+than was possible using the software available at the time; however,
+[improved algorithms](https://doi.org/10.1371/journal.pcbi.1004842)
+mean that such approximations are now mostly unnecessary for simulations.
 
-```{eval-rst}
-.. todo:: Write this section, including a simple example ideally showing
-    a property of an SMC simulation
+The SMC and SMC' are however very important for inference, as the approximations
+have made many analytical advances possible.
 
-```
+Since the SMC approximations are not required for simulation efficiency, these
+models are implemented using a naive rejection sampling approach in msprime.
+The implementation is intended to facilitate the study of the
+SMC approximations, rather than to be used in a general-purpose way.
 
 (sec_ancestry_models_dtwf)=
 
 ### Discrete Time Wright-Fisher
 
-Msprime provides the option to perform discrete-time Wright-Fisher simulations
-for scenarios when the coalescent model is not appropriate, including large
+Msprime provides the option to perform discrete-time Wright-Fisher (DTWF)
+simulations for scenarios when the coalescent model is not appropriate, including large
 sample sizes, multiple chromosomes, or recent migration.
 Please see the {class}`API documentation<.DiscreteTimeWrightFisher>`
-for a formal description of the model.
+for a formal description of the model,
+and [Nelson et al. 2020](https://doi.org/10.1371/journal.pgen.1008619) for
+more details and background information.
 
-All other parameters can be set as usual. Note that for discrete-time
-Wright-Fisher simulations with population structure, each row of the migration
-matrix must sum to one or less.
+To run DTWF simulations, we need to provide the ``model="dtwf"`` argument
+to {func}`.sim_ancestry`:
 
-```{eval-rst}
-.. todo:: An example of the DTWF. Show the discrete with an example of a
-    non-binary tree.
+```{code-cell}
+ts = msprime.sim_ancestry(4, population_size=10, model="dtwf", random_seed=7)
+SVG(ts.draw_svg(y_axis=True, tree_height_scale="rank"))
 ```
+
+There are a few important points to note here:
+
+1. All node times are integers (this is discrete time counted in generations);
+2. We can have **non-binary** nodes (see node 10);
+3. We can have **simultaneous** events (see nodes 8 and 9).
+
+Most features can be used with the DTWF model, and an error will be raised if
+you attempt to use a feature that is not implemented for DTWF. (Please let
+us know if this feature is important to you!)
+
+:::{important}
+For DTWF simulations with population structure, each row of the migration
+matrix must sum to one or less.
+:::
+
+Because DTWF simulations trace the history of a sample by going backwards
+in time generation-by-generation rather than event-by-event like the
+continuous time models, it is significantly slower to simulate than
+the standard coalescent.
+
+"Hybrid" simulations can be a good solution if DTWF simulations are
+slow. In this case we can use DTWF simulations for the recent past, and using
+the standard coalescent for the more distant past (where it is an excellent
+approximation of the discrete time model). Hybrid simulations
+of this type provide the best of computational efficiency and accuracy.
+
+:::{seealso}
+See [Nelson et al. 2020](https://doi.org/10.1371/journal.pgen.1008619) for
+more details and examples where the DTWF model is more realistic than
+the coalescent, and an assessment of the accuracy of hybrid simulations.
+:::
+
+For example, here we simulate with the DTWF model for 500 generations,
+before switching to the standard (Hudson) coalescent:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    2, population_size=1000, model=["dtwf", (500, "hudson")], random_seed=2)
+SVG(ts.draw_svg(y_axis=True, tree_height_scale="rank"))
+```
+
+Because of the integer node times, we can see here that most of the coalescent
+happened during the Wright-Fisher phase of the simulation, and as-of 500
+generations in the past, there were only two lineages left. The continuous
+time standard coalescent model was then used to simulate the ancient past of
+these two lineages.
+
+See the {ref}`sec_ancestry_multiple_models` section for more details on
+how the use the ``model`` argument to {func}`.sim_ancestry` to run
+multiple models.
+
+:::{seealso}
+See the {ref}`sec_ancestry_multiple_chromosomes` section for information
+on how to simulate multiple chromosomes using the DTWF.
+:::
 
 (sec_ancestry_models_multiple_mergers)=
 
@@ -1274,7 +1380,7 @@ SVG(ts.draw_svg())
 
 ```
 
-Multiple mergers still take place in a haploid simulaton, but only one merger
+Multiple mergers still take place in a haploid simulation, but only one merger
 can take place at a given time:
 
 ```{code-cell}
@@ -1387,23 +1493,20 @@ print(tree.tmrca(0,1))
 
 ### Selective sweeps
 
-Msprime provides the option to perform coalescent approximations
-to selective sweeps, in which a beneficial mutation moves through
-the population. This is done through the use of a structured
-coalescent model in the spirit of
+Although the coalescent assumes that lineages are exchangable, (and therefore
+evolving nuetrally), approximations to some forms of selective sweep
+(beneficial mutation moves through the population), have been derived. This is
+done through the use of a structured coalescent model in the spirit of
 [Braverman et al. (1995)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1206652/).
 
-Looking backwards in time the population enters a sweep phase where
+In the {class}`.SweepGenicSelection` model,
 the population is split between two classes of selective backgrounds,
 those linked to the beneficial allele, call it {math}`B`, and those not,
-{math}`b`. During this portion of the simulation we track competing
+{math}`b`. In this model we track competing
 rates of coalescence and recombination on the {math}`B` and {math}`b`
 backgrounds.
-
-This implementation is reasonable general, althougth there are
-current limitations (e.g., no change of population size during
-a sweep). The user supplies a final allele frequency and a starting
-allele frequency, between which msprime will simulate a stochastic
+The user supplies a final allele frequency and a starting
+allele frequency, between which msprime simulates a stochastic
 sweep trajectory according to a conditional diffusion model [(Coop
 and Griffiths, 2004](https://pubmed.ncbi.nlm.nih.gov/15465123/);
 [Kim and Stephan 2002](https://pubmed.ncbi.nlm.nih.gov/11861577/)).
@@ -1414,112 +1517,137 @@ must specify the selection coefficient of the beneficial mutation
 advantage of the {math}`B` homozygote over the {math}`b` homozygote
 and {math}`h=0.5`. The position represents the location along
 the chromosome where the beneficial allele occurs.
- All other parameters can be set as usual.
+All other parameters can be set as usual.
 
-As an example, let's perform 50 replicate hard sweep simulations using
-msprime and then plot mean {meth}`pairwise diversity<tskit.TreeSequence.diversity>` in windows across the simulated
-region. The position is set to the middle of the chromosome, so we
-expect to see the characteristic valley of diversity following our sweeps.
-The key step here is to build a list of models which includes
-a {class}`SweepGenicSelection<.SweepGenicSelection>` model.
+:::{warning}
+The implementation of the structured coalescent is quite general, but there are
+some limitations in the current implementation of the sweeps model (e.g., no
+change of population size during a sweep). Please let us know if there are
+related features you would like to see (or if you would be interested in
+helping to create this functionality!)
+:::
+
+
+#### Hard sweeps
+
+:::{todo}
+What's a hard sweep? Some intro sentences here.
+:::
+
+In this example we run some replicate hard sweep simulations
+and plot the mean
+{meth}`pairwise diversity<tskit.TreeSequence.diversity>` in windows
+across the simulated region, showing the characteristic
+valley of diversity.
+
+First we set up some basic parameters, and define the sweep model:
+
+```{code-cell}
+Ne = 1e3
+L = 1e6  # Length of simulated region
+num_reps = 100
+
+# define hard sweep model
+sweep_model = msprime.SweepGenicSelection(
+    position=L / 2,  # middle of chrom
+    start_frequency=1.0 / (2 * Ne),
+    end_frequency=1.0 - (1.0 / (2 * Ne)),
+    s=0.25,
+    dt=1e-6,
+)
+```
+
+:::{todo}
+Explain why these parameters give a hard sweep.
+:::
+
+Next we set up the replicate simulations. The ``model`` parameter
+here is a list: the first element is the ``sweep_model`` we
+just defined, and the second is a tuple ``(None, "hudson")``.
+This means "Run the sweep model until it finishes, **then**
+run the ``"hudson"`` model.
+
+:::{todo}
+This could be simpler: why not just ``[sweep_model, "hudson"]``?
+https://github.com/tskit-dev/msprime/issues/1571
+:::
+
+```{code-cell}
+reps = msprime.sim_ancestry(
+    5,
+    model=[sweep_model, (None, "hudson")],
+    population_size=Ne,
+    recombination_rate=1e-7,
+    sequence_length=L,
+    num_replicates=num_reps,
+)
+```
+
+Once we've set up the replicate simulations we can compute the
+windows for plotting, run the actual simulations
+(see the {ref}`sec_ancestry_replication` section for more details)
+and compute the
+{meth}`pairwise diversity<tskit.TreeSequence.diversity>`.
+
+```{code-cell}
+wins = np.linspace(0, L, 21)
+mids = (wins[1:] + wins[:-1]) / 2
+diversity = np.zeros((num_reps, mids.shape[0]))
+for j, ts in enumerate(reps):
+    diversity[j] = ts.diversity(windows=wins, mode="branch")
+```
+
+Finally, we can plot the observed mean diversity across the replicates
+and compare it to the neutral expectation:
 
 ```{code-cell}
 from matplotlib import pyplot as plt
 
-Ne = 1e3
-s = 0.25
-# define hard sweep model
-sweep = msprime.SweepGenicSelection(
-    position=1e6 / 2,  # middle of chrom
-    start_frequency=1.0 / (2 * Ne),
-    end_frequency=1.0 - (1.0 / (2 * Ne)),
-    s=s,
-    dt=1e-6,
-)
-
-reps = msprime.sim_ancestry(
-    5,
-    population_size=Ne,
-    model=[sweep, (None, 'hudson')],
-    recombination_rate=1e-7,
-    sequence_length = 1e6,
-    num_replicates=50,
-    )
-
-wins = np.linspace(0,int(1e6),21)
-mids = (wins[1:] + wins[:-1]) / 2
-
-msp_pis = []
-for ts in reps:
-	mutated_ts = msprime.sim_mutations(ts, rate=1e-8)
-	msp_pis.append(mutated_ts.diversity(windows=wins))
-
-plt.plot(mids,np.array(msp_pis).mean(axis=0), label="msp")
-plt.axhline(4 * Ne * 1e-8, linestyle=":", label=r'neutral $\pi$')
-plt.ylabel(r'$\pi$'); plt.xlabel('position (bp)')
-plt.legend()
+plt.plot(mids, diversity.mean(axis=0), label="Simulations")
+plt.axhline(4 * Ne, linestyle=":", label=r'Neutral expectation')
+plt.ylabel(r'Branch $\pi$');
+plt.xlabel('Position (bp)')
+plt.legend();
 ```
+
+:::{note}
+We use the "branch" measure of pairwise diversity which is
+defined in terms of the trees rather than nucleotide sequences. See
+[Ralph et al. 2020](https://doi.org/10.1534/genetics.120.303253)
+for more information.
+:::
+
 As we can see, the selective sweep has reduced variation in the region
-most closely linked to the beneficial allele and then heterozygosity
+most closely linked to the beneficial allele and then diversity
 increases with distance to each side.
 
-(sec_ancestry_models_sweep_types)=
+#### Multiple sweeps
 
-#### Sweep model examples
+:::{todo}
+Give an example where multiple sweeps happen
+:::
 
-```{eval-rst}
-.. todo:: Need to add some examples to this section and build it out.
-    want examples of hard sweeps, partial sweeps, and soft sweeps.
-```
 
 (sec_ancestry_multiple_models)=
 
 ## Multiple models
 
-```{eval-rst}
-.. todo:: This is copied from the old tutorial and is out of date now.
-    Update the to use the new model=[(time, model)]`` syntax.
-    It's also too focused on the DTWF model.
-```
 
-In some situations Wright-Fisher simulations are desireable but less
-computationally efficient than coalescent simulations, for example simulating a
-small sample in a recently admixed population. In these cases, a hybrid model
-offers an excellent tradeoff between simulation accuracy and performance.
+(sec_ancestry_multiple_models_notation)=
+### Notation
 
-This is done through a {class}`.SimulationModelChange` event, which is a special type of
-demographic event.
 
-For example, here we switch from the discrete-time Wright-Fisher model to the
-standard Hudson coalescent 500 generations in the past:
+### Fixed time
 
-```{code-cell} python
+:::{note}
+Switching models at a fixed time point like this is equivalent to
+first running the DTWF phase of the simulation with ``end_time=500``
+and then using the output as the
+{ref}`initial state<sec_ancestry_initial_state>` for the simulation
+of the Hudson phase. The model switching syntax here is a little
+more convenient and efficient, however.
+:::
 
-ts = msprime.simulate(
-    sample_size=6, Ne=1000, model="dtwf", random_seed=2,
-    demographic_events=[
-        msprime.SimulationModelChange(time=500, model="hudson")])
-print(ts.tables.nodes)
-# id      flags   population      individual      time    metadata
-# 0       1       0       -1      0.00000000000000
-# 1       1       0       -1      0.00000000000000
-# 2       1       0       -1      0.00000000000000
-# 3       1       0       -1      0.00000000000000
-# 4       1       0       -1      0.00000000000000
-# 5       1       0       -1      0.00000000000000
-# 6       0       0       -1      78.00000000000000
-# 7       0       0       -1      227.00000000000000
-# 8       0       0       -1      261.00000000000000
-# 9       0       0       -1      272.00000000000000
-#10      0       0       -1      1629.06982528980075
-
-```
-
-Because of the integer node times, we can see here that most of the coalescent
-happened during the Wright-Fisher phase of the simulation, and as-of 500
-generations in the past, there were only two lineages left. The continuous
-time standard coalescent model was then used to simulate the ancient past of
-these two lineages.
 
 (sec_ancestry_errors)=
 
