@@ -24,6 +24,7 @@ from __future__ import annotations
 import collections.abc
 import copy
 import dataclasses
+import enum
 import inspect
 import json
 import logging
@@ -47,12 +48,13 @@ from msprime import _msprime
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-def _model_factory(model):
+def _model_factory(model: Union[None, str, AncestryModel]) -> AncestryModel:
     """
-    Returns a simulation model corresponding to the specified model.
+    Returns an AncestryModel corresponding to the specified model
+    description.
     - If model is None, the default simulation model is returned.
     - If model is a string, return the corresponding model instance.
-    - If model is an instance of AncestryModel, return a copy of it.
+    - If model is an instance of AncestryModel, return it unchanged.
     - Otherwise raise a type error.
     """
     model_map = {
@@ -75,88 +77,57 @@ def _model_factory(model):
         model_instance = model_map[lower_model]
     elif not isinstance(model, AncestryModel):
         raise TypeError(
-            "Simulation model must be a string or an instance of AncestryModel"
+            "Ancestry model must be a string or an instance of AncestryModel"
         )
     else:
         model_instance = model
     return model_instance
 
 
-def _parse_model_change_events(events):
-    """
-    Parses the specified list of events provided in model_arg[1:] into
-    AncestryModelChange events. There are two different forms supported,
-    and model descriptions are anything supported by model_factory.
-    """
-    err = (
-        "Simulation model change events must be either a two-tuple "
-        "(time, model), describing the time of the model change and "
-        "the new model or be an instance of AncestryModelChange."
-    )
-    model_change_events = []
-    for event in events:
-        if isinstance(event, (tuple, list)):
-            if len(event) != 2:
-                raise ValueError(err)
-            t = event[0]
-            if t is not None:
-                try:
-                    t = float(t)
-                except (TypeError, ValueError):
-                    raise ValueError(
-                        "Model change times must be either a floating point "
-                        "value or None"
-                    )
-            event = AncestryModelChange(t, _model_factory(event[1]))
-        elif isinstance(event, AncestryModelChange):
-            # We don't want to modify our inputs, so take a deep copy.
-            event = copy.copy(event)
-            event.model = _model_factory(event.model)
-        else:
-            raise TypeError(err)
-        model_change_events.append(event)
-    return model_change_events
-
-
 def _parse_model_arg(model_arg):
     """
-    Parses the specified model argument from the simulate function,
-    returning the initial model and any model change events.
+    Parses the specified model argument from the sim_ancestry function,
+    returning the list of models.
     """
-    err = (
-        "The model argument must be either (a) a value that can be "
-        "interpreted as a simulation model or (b) a list in which "
-        "the first element is a model description and the remaining "
-        "elements are model change events. These can either be described "
-        "by a (time, model) tuple or AncestryModelChange instances."
-    )
+    # TODO be more lenient about what we accept as input here. Ideally
+    # we'd like to support generators and consume them during the
+    # actual simulation, but that would raise complications for how
+    # to deal with replication.
     if isinstance(model_arg, (list, tuple)):
         if len(model_arg) < 1:
-            raise ValueError(err)
-        model = _model_factory(model_arg[0])
-        model_change_events = _parse_model_change_events(model_arg[1:])
+            raise ValueError("Must specify at least one AncestryModel")
+        models = [_model_factory(model_desc) for model_desc in model_arg]
     else:
-        model = _model_factory(model_arg)
-        model_change_events = []
-    return model, model_change_events
+        models = [_model_factory(model_arg)]
+    return models
+
+
+def _resolve_models(events):
+    model_change_events = []
+    for event in events:
+        assert isinstance(event, SimulationModelChange)
+        # We don't want to modify our inputs, so take a deep copy.
+        event = copy.copy(event)
+        event.model = _model_factory(event.model)
+        model_change_events.append(event)
+    return model_change_events
 
 
 def _filter_events(demographic_events):
     """
     Returns a tuple (demographic_events, model_change_events) which separates
-    out the AncestryModelChange events from the list. This is to support the
+    out the SimulationModelChange events from the list. This is to support the
     pre-1.0 syntax for model changes, where they were included in the
     demographic_events parameter.
     """
     filtered_events = []
     model_change_events = []
     for event in demographic_events:
-        if isinstance(event, AncestryModelChange):
+        if isinstance(event, SimulationModelChange):
             model_change_events.append(event)
         else:
             filtered_events.append(event)
-    # Make sure any model references are resolved.
-    model_change_events = _parse_model_change_events(model_change_events)
+    model_change_events = _resolve_models(model_change_events)
     return filtered_events, model_change_events
 
 
@@ -307,18 +278,14 @@ def _parse_simulate(
         )
     samples = _samples_factory(sample_size, samples, population_configurations)
 
-    model, model_change_events = _parse_model_arg(model)
+    models = [_model_factory(model)]
     if demographic_events is not None:
-        demographic_events, old_style_model_change_events = _filter_events(
-            demographic_events
-        )
-        if len(old_style_model_change_events) > 0:
-            if len(model_change_events) > 0:
-                raise ValueError(
-                    "Cannot specify AncestryModelChange events using both new-style "
-                    "and pre 1.0 syntax"
-                )
-            model_change_events = old_style_model_change_events
+        demographic_events, model_change_events = _filter_events(demographic_events)
+        current_time = 0 if start_time is None else start_time
+        for mce in model_change_events:
+            models[-1].duration = mce.time - current_time
+            models.append(mce.model)
+            current_time = mce.time
 
     demography = _demography_factory(
         Ne, population_configurations, migration_matrix, demographic_events
@@ -401,14 +368,13 @@ def _parse_simulate(
     sim = Simulator(
         tables=tables,
         recombination_map=recombination_map,
-        model=model,
+        models=models,
         store_migrations=record_migrations,
         store_full_arg=record_full_arg,
         start_time=start_time,
         end_time=end_time,
         num_labels=num_labels,
         demography=demography,
-        model_change_events=model_change_events,
         # Defaults for the values that are not supported through simulate()
         gene_conversion_map=intervals.RateMap.uniform(
             recombination_map.sequence_length, 0
@@ -598,7 +564,7 @@ def simulate(
         trees that have only one child). Defaults to False.
     :param model: The simulation model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
-        a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
+        a ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
         Please see the :ref:`sec_ancestry_models` section for more details
         on specifying ancestry models.
     :type model: str or AncestryModel
@@ -923,8 +889,8 @@ def _parse_sim_ancestry(
     if ploidy < 1:
         raise ValueError("ploidy must be >= 1")
 
-    model, model_change_events = _parse_model_arg(model)
-    is_dtwf = isinstance(model, DiscreteTimeWrightFisher)
+    models = _parse_model_arg(model)
+    is_dtwf = isinstance(models[0], DiscreteTimeWrightFisher)
 
     # Check the demography. If no demography is specified, we default to a
     # single-population model with a given population size.
@@ -1011,8 +977,7 @@ def _parse_sim_ancestry(
         discrete_genome=discrete_genome,
         ploidy=ploidy,
         demography=demography,
-        model=model,
-        model_change_events=model_change_events,
+        models=models,
         store_migrations=record_migrations,
         store_full_arg=record_full_arg,
         start_time=start_time,
@@ -1149,15 +1114,17 @@ def sim_ancestry(
         the genome. See the :ref:`sec_ancestry_end_time` section for examples.
     :param bool record_provenance: If True (the default), record all input
         parameters in the tree sequence :ref:`tskit:sec_provenance`.
-    :param model: The ancestry model to use.
-        This must be either (a) a value that can be interpreted as a simulation
-        model (a string or :class:`.AncestryModel` instance); or (b) a list in
-        which the first element is a model and the remaining elements are model
-        change events. These can either be described by a ``(time, model)``
-        tuple or :class:`.AncestryModelChange` instances. Please see the
-        :ref:`sec_ancestry_models` section for more details on specifying
-        ancestry models.
-    :type model: str or .AncestryModel
+    :param model: The ancestry model to use. This can be either a
+        single instance of :class:`.AncestryModel` (or a string that can be
+        interpreted as an ancestry model), or a list of :class:`.AncestryModel`
+        instances. If the ``duration`` attribute of any of these models is
+        set, the simulation will be run until at most :math:`t + t_m`, where
+        :math:`t` is the simulation time when the model starts and :math:`t_m`
+        is the model's ``duration``. If the ``duration`` is not set, the
+        simulation will continue until the model completes, the overall
+        ``end_time`` is reached, or overall coalescence. See
+        the :ref:`sec_ancestry_models` for more details and examples.
+    :type model: str or .AncestryModel or list
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -1203,6 +1170,35 @@ def sim_ancestry(
     )
 
 
+class ExitReason(enum.IntEnum):
+    """
+    The different reasons that the low-level simulation exits.
+    """
+
+    MAX_EVENTS = _msprime.EXIT_MAX_EVENTS
+    """
+    We ran for the specified maximum number of events. We usually
+    run for a maximum number of events so that we return to Python
+    regularly, to update logs and to check if CTRL-C has been hit, etc.
+    """
+
+    MAX_TIME = _msprime.EXIT_MAX_TIME
+    """
+    The simulation is equal to the specified maximum time.
+    """
+
+    COALESCENCE = _msprime.EXIT_COALESCENCE
+    """
+    The simulation is complete, and we have fully coalesced.
+    """
+
+    MODEL_COMPLETE = _msprime.EXIT_MODEL_COMPLETE
+    """
+    The model we have specified has run to completion **without**
+    resulting in coalescence.
+    """
+
+
 class Simulator(_msprime.Simulator):
     """
     Class to simulate trees under a variety of population models.
@@ -1222,9 +1218,8 @@ class Simulator(_msprime.Simulator):
         discrete_genome,
         ploidy,
         demography,
-        model_change_events,
         random_generator,
-        model=None,
+        models=None,
         store_migrations=False,
         store_full_arg=False,
         start_time=None,
@@ -1240,11 +1235,10 @@ class Simulator(_msprime.Simulator):
         node_mapping_block_size = block_size
 
         if num_labels is None:
-            num_labels = self._choose_num_labels(model, model_change_events)
+            num_labels = self._choose_num_labels(models)
 
         # Now, convert the high-level values into their low-level
         # counterparts.
-        ll_simulation_model = model.get_ll_representation()
         ll_population_configuration = [pop.asdict() for pop in demography.populations]
         ll_demographic_events = [
             event.get_ll_representation() for event in demography.events
@@ -1264,7 +1258,6 @@ class Simulator(_msprime.Simulator):
             recombination_map=ll_recomb_map,
             start_time=start_time,
             random_generator=random_generator,
-            model=ll_simulation_model,
             migration_matrix=demography.migration_matrix,
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
@@ -1279,9 +1272,9 @@ class Simulator(_msprime.Simulator):
             discrete_genome=discrete_genome,
             ploidy=ploidy,
         )
-        # highlevel attributes used externally that have no lowlevel equivalent
-        self.end_time = end_time
-        self.model_change_events = model_change_events
+        # Highlevel attributes used externally that have no lowlevel equivalent
+        self.end_time = np.inf if end_time is None else end_time
+        self.models = models
         self.demography = demography
         # Temporary, until we add the low-level infrastructure for the gc map
         # when we'll take the same approach as the recombination map.
@@ -1311,13 +1304,12 @@ class Simulator(_msprime.Simulator):
     def recombination_map(self):
         return intervals.RateMap(**super().recombination_map)
 
-    def _choose_num_labels(self, model, model_change_events):
+    def _choose_num_labels(self, models):
         """
-        Choose the number of labels appropriately, given the simulation
+        Choose the number of labels appropriately, given the ancestry
         models that will be simulated.
         """
         num_labels = 1
-        models = [model] + [event.model for event in model_change_events]
         for model in models:
             if isinstance(model, SweepGenicSelection):
                 num_labels = 2
@@ -1334,51 +1326,47 @@ class Simulator(_msprime.Simulator):
         if event_chunk <= 0:
             raise ValueError("Must have at least 1 event per chunk")
         logger.info("Running model %s until max time: %f", self.model, end_time)
-        while super().run(end_time, event_chunk) == _msprime.EXIT_MAX_EVENTS:
-            logger.debug("time=%g ancestors=%d", self.time, self.num_ancestors)
+        ret = ExitReason.MAX_EVENTS
+        while ret == ExitReason.MAX_EVENTS:
+            ret = ExitReason(super().run(end_time, event_chunk))
+            if self.time > end_time:
+                # Currently the Pedigree and Sweeps models are "non-rentrant"
+                # We can change this to an assertion once these have been fixed.
+                raise RuntimeError(
+                    f"Model {self.model['name']} does not support interruption. "
+                    "Please open an issue on GitHub"
+                )
+            logger.debug(
+                "time=%g ancestors=%d ret=%s", self.time, self.num_ancestors, ret
+            )
             if debug_func is not None:
                 debug_func(self)
+        return ret
 
     def run(self, event_chunk=None, debug_func=None):
         """
-        Runs the simulation until complete coalescence has occurred.
+        Runs the simulation until complete coalescence has occurred,
+        end_time has been reached, or all model durations have
+        elapsed.
         """
-        for event in self.model_change_events:
-            # If the event time is a callable, we compute the end_time
-            # as a function of the current simulation time.
-            current_time = self.time
-            model_start_time = event.time
-            if callable(event.time):
-                model_start_time = event.time(current_time)
-            # If model_start_time is None, we run until the current
-            # model completes. Note that when event.time is a callable
-            # it can also return None for this behaviour.
-            if model_start_time is None:
-                model_start_time = np.inf
-            if model_start_time < current_time:
-                raise ValueError(
-                    "Model start times out of order or not computed correctly. "
-                    f"current time = {current_time}; start_time = {model_start_time}"
-                )
-            self._run_until(model_start_time, event_chunk, debug_func)
+        for j, model in enumerate(self.models):
+            self.model = model._as_lowlevel()
             logger.info(
-                "model %s ended at time=%g nodes=%d edges=%d",
+                "model[%d] %s started at time=%g nodes=%d edges=%d",
+                j,
                 self.model,
                 self.time,
                 self.num_nodes,
                 self.num_edges,
             )
-            if self.time > model_start_time:
-                raise NotImplementedError(
-                    "The previously running model does not support ending early "
-                    "and the requested model change cannot be performed. Please "
-                    "open an issue on GitHub if this functionality is something "
-                    "you require"
-                )
-            ll_new_model = event.model.get_ll_representation()
-            self.model = ll_new_model
-        end_time = np.inf if self.end_time is None else self.end_time
-        self._run_until(end_time, event_chunk, debug_func)
+            model_duration = np.inf if model.duration is None else model.duration
+            if model_duration < 0:
+                raise ValueError("Model durations must be >= 0")
+            end_time = min(self.time + model_duration, self.end_time)
+            exit_reason = self._run_until(end_time, event_chunk, debug_func)
+            if exit_reason == ExitReason.COALESCENCE or self.time == self.end_time:
+                logger.debug("Skipping remaining %d models", len(self.models) - j - 1)
+                break
         self.finalise_tables()
         logger.info(
             "Completed at time=%g nodes=%d edges=%d",
@@ -1408,6 +1396,7 @@ class Simulator(_msprime.Simulator):
                 provenance_dict, num_replicates
             )
         for replicate_index in range(num_replicates):
+            logger.info("Starting replicate %d", replicate_index)
             self.run()
             if mutation_rate is not None:
                 # This is only called from simulate() or the ms interface,
@@ -1465,11 +1454,14 @@ class SampleSet:
 
 
 @dataclasses.dataclass
-class AncestryModelChange:
+class SimulationModelChange:
     """
-    A change of :ref:`ancestry model <sec_ancestry_models>` occuring
-    at a given time. Can be provided in the ``model`` parameter
-    to :func:`.sim_ancestry`.
+    Demographic event denoting an change in ancestry model.
+
+    .. important::
+        This class is deprecated (but supported indefinitely);
+        please use the ``model`` argument in :func:`sim_ancestry`
+        to specify multiple models in new code.
     """
 
     time: Union[float, None] = None
@@ -1478,9 +1470,6 @@ class AncestryModelChange:
     generations. After this time, all internal tree nodes, edges and migrations
     are the result of the new model. If time is set to None (the default), the
     model change will occur immediately after the previous model has completed.
-    If time is a callable, the time at which the model changes is the result of
-    calling this function with the time that the previous model started with as
-    a parameter.
     """
 
     # Can't use typehints here because having a reference to AncestryModel
@@ -1500,27 +1489,26 @@ class AncestryModelChange:
         return dataclasses.asdict(self)
 
 
-class SimulationModelChange(AncestryModelChange):
-    """
-    Demographic event denoting an change in ancestry model.
-
-    .. important::
-        This class is deprecated (but supported indefinitely);
-        please use the ``model`` argument in :func:`sim_ancestry`
-        to specify multiple models in new code.
-    """
-
-
-@dataclasses.dataclass
+@dataclasses.dataclass(init=False)
 class AncestryModel:
     """
     Abstract superclass of all ancestry models.
     """
 
+    duration: Union[float, None]
     name: ClassVar[str]
 
-    def get_ll_representation(self):
-        return {"name": self.name}
+    # We have to define an __init__ to enfore keyword-only behaviour
+    def __init__(self, *, duration=None):
+        self.duration = duration
+
+    # We need to have a separate _as_lowlevel and asdict because the
+    # asdict form can't have the name in the dictionary for the
+    # provenance code.
+    def _as_lowlevel(self):
+        d = {"name": self.name}
+        d.update(self.asdict())
+        return d
 
     def asdict(self):
         return dataclasses.asdict(self)
@@ -1630,11 +1618,6 @@ class ParametricAncestryModel(AncestryModel):
     The superclass of ancestry models that require extra parameters.
     """
 
-    def get_ll_representation(self):
-        d = super().get_ll_representation()
-        d.update(self.__dict__)
-        return d
-
 
 @dataclasses.dataclass
 class BetaCoalescent(ParametricAncestryModel):
@@ -1739,8 +1722,16 @@ class BetaCoalescent(ParametricAncestryModel):
 
     name = "beta"
 
-    alpha: Union[float, None] = None
-    truncation_point: float = sys.float_info.max
+    alpha: Union[float, None]
+    truncation_point: float
+
+    # We have to define an __init__ to enfore keyword-only behaviour
+    def __init__(
+        self, *, duration=None, alpha=None, truncation_point=sys.float_info.max
+    ):
+        self.duration = duration
+        self.alpha = alpha
+        self.truncation_point = truncation_point
 
 
 @dataclasses.dataclass
@@ -1781,8 +1772,14 @@ class DiracCoalescent(ParametricAncestryModel):
 
     name = "dirac"
 
-    psi: Union[float, None] = None
-    c: Union[float, None] = None
+    psi: Union[float, None]
+    c: Union[float, None]
+
+    # We have to define an __init__ to enfore keyword-only behaviour
+    def __init__(self, *, duration=None, psi=None, c=None):
+        self.duration = duration
+        self.psi = psi
+        self.c = c
 
 
 @dataclasses.dataclass
@@ -1829,8 +1826,26 @@ class SweepGenicSelection(ParametricAncestryModel):
 
     name = "sweep_genic_selection"
 
-    position: Union[float, None] = None
-    start_frequency: Union[float, None] = None
-    end_frequency: Union[float, None] = None
-    s: Union[float, None] = None
-    dt: Union[float, None] = None
+    position: Union[float, None]
+    start_frequency: Union[float, None]
+    end_frequency: Union[float, None]
+    s: Union[float, None]
+    dt: Union[float, None]
+
+    # We have to define an __init__ to enfore keyword-only behaviour
+    def __init__(
+        self,
+        *,
+        duration=None,
+        position=None,
+        start_frequency=None,
+        end_frequency=None,
+        s=None,
+        dt=None,
+    ):
+        self.duration = duration
+        self.position = position
+        self.start_frequency = start_frequency
+        self.end_frequency = end_frequency
+        self.s = s
+        self.dt = dt

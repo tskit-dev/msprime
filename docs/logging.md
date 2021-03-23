@@ -31,7 +31,15 @@ import daiquiri
 import msprime
 
 daiquiri.setup(level="INFO")
-ts = msprime.simulate(10, Ne=1000, model=["dtwf", (100, "hudson")], random_seed=2)
+ts = msprime.sim_ancestry(
+    10,
+    population_size=1000,
+    model=[
+        msprime.DiscreteTimeWrightFisher(duration=100),
+        "hudson"
+    ],
+    random_seed=1234
+)
 ```
 
 When running larger simulations and trying to figure out when
@@ -41,8 +49,12 @@ For example:
 ```{code-cell}
 
 daiquiri.setup(level="DEBUG")
-ts = msprime.simulate(
-    10 ** 5, Ne=10000, recombination_rate=2e-8, length=1e6, random_seed=32
+ts = msprime.sim_ancestry(
+    10 ** 5,
+    population_size=10000,
+    recombination_rate=2e-8,
+    sequence_length=1e6,
+    random_seed=32
 )
 ```
 

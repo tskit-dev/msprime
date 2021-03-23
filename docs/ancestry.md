@@ -605,7 +605,10 @@ ts = msprime.sim_ancestry(
     10,
     population_size=1000,
     recombination_rate=rate_map,
-    model=["dtwf", (20, "hudson")],
+    model=[
+        msprime.DiscreteTimeWrightFisher(duration=20),
+        "hudson"
+    ],
     random_seed=1234,
 )
 ts
@@ -1312,7 +1315,14 @@ before switching to the standard (Hudson) coalescent:
 
 ```{code-cell}
 ts = msprime.sim_ancestry(
-    2, population_size=1000, model=["dtwf", (500, "hudson")], random_seed=2)
+    2,
+    population_size=1000,
+    model=[
+        msprime.DiscreteTimeWrightFisher(duration=500),
+        "hudson"
+    ],
+    random_seed=2
+)
 SVG(ts.draw_svg(y_axis=True, tree_height_scale="rank"))
 ```
 
@@ -1575,7 +1585,7 @@ https://github.com/tskit-dev/msprime/issues/1571
 ```{code-cell}
 reps = msprime.sim_ancestry(
     5,
-    model=[sweep_model, (None, "hudson")],
+    model=[sweep_model, "hudson"],
     population_size=Ne,
     recombination_rate=1e-7,
     sequence_length=L,

@@ -4423,7 +4423,7 @@ msp_pedigree_climb(msp_t *self)
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
-    ret = 0;
+    ret = MSP_EXIT_MODEL_COMPLETE;
 out:
     return ret;
 }
@@ -5069,6 +5069,7 @@ msp_run_sweep(msp_t *self)
     if (ret != 0) {
         goto out;
     }
+    ret = MSP_EXIT_MODEL_COMPLETE;
 out:
     msp_safe_free(time);
     msp_safe_free(allele_frequency);

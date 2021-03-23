@@ -252,39 +252,38 @@ class TestSimulator:
         sim.random_generator.seed = 42
         with caplog.at_level(logging.INFO):
             sim.run()
-        assert len(caplog.records) == 2
+        assert len(caplog.records) == 3
+        assert caplog.messages[0].startswith("model[0] {'name': 'hudson'}")
         assert (
-            caplog.messages[0] == "Running model {'name': 'hudson'}"
+            caplog.messages[1] == "Running model {'name': 'hudson'}"
             " until max time: inf"
         )
-
-        assert caplog.messages[1].startswith("Completed at time")
+        assert caplog.messages[-1].startswith("Completed at time")
 
     def test_debug_logging(self, caplog):
         sim = ancestry._parse_simulate(3)
         sim.random_generator.seed = 42
         with caplog.at_level(logging.DEBUG):
             sim.run(event_chunk=1)
-        assert len(caplog.records) == 3
-        assert (
-            caplog.messages[0] == "Running model {'name': 'hudson'}"
-            " until max time: inf"
-        )
+        assert len(caplog.records) == 6
+        assert caplog.messages[0].startswith("model[0] {'name': 'hudson'}")
         assert caplog.messages[-1].startswith("Completed at time")
-        assert caplog.messages[1] == "time=0.312845 ancestors=2"
+        assert (
+            caplog.messages[2] == "time=0.312845 ancestors=2 ret=ExitReason.MAX_EVENTS"
+        )
 
     def test_debug_logging_dtwf(self, caplog):
         sim = ancestry._parse_simulate(3, Ne=10, model="dtwf")
         sim.random_generator.seed = 42
         with caplog.at_level(logging.DEBUG):
             sim.run(event_chunk=1)
-            assert len(caplog.records) == 5
+            assert len(caplog.records) == 8
             assert (
-                caplog.messages[0] == "Running model {'name': 'dtwf'}"
+                caplog.messages[1] == "Running model {'name': 'dtwf'}"
                 " until max time: inf"
             )
             assert caplog.messages[-1].startswith("Completed at time")
-            assert caplog.messages[1] == "time=1 ancestors=3"
+            assert caplog.messages[2] == "time=1 ancestors=3 ret=ExitReason.MAX_EVENTS"
 
 
 class TestParseRandomSeed:
@@ -680,11 +679,18 @@ class TestParseSimAncestry:
     def test_model(self):
         # Extensive testing of the model parsing is done elsewhere.
         sim = ancestry._parse_sim_ancestry(10, model="smc")
-        assert sim.model["name"] == "smc"
-        sim = ancestry._parse_sim_ancestry(10, model=("smc", (10, "hudson")))
-        assert sim.model["name"] == "smc"
-        assert len(sim.model_change_events) == 1
-        assert sim.model_change_events[0].time == 10
+        assert len(sim.models) == 1
+        assert isinstance(sim.models[0], msprime.SmcApproxCoalescent)
+        assert sim.models[0].duration is None
+
+        sim = ancestry._parse_sim_ancestry(
+            10, model=(msprime.SmcPrimeApproxCoalescent(duration=10), "hudson")
+        )
+        assert len(sim.models) == 2
+        assert isinstance(sim.models[0], msprime.SmcPrimeApproxCoalescent)
+        assert sim.models[0].duration == 10
+        assert isinstance(sim.models[1], msprime.StandardCoalescent)
+        assert sim.models[1].duration is None
 
     def test_dtwf_population_size(self):
         # It's an error to not specify a pop size for dtwf.
@@ -1244,34 +1250,7 @@ class TestParseSimulate:
         assert s.time == 2
         assert s == (1, 2)
 
-    def test_new_old_style_model_changes_equal(self):
-        models = [
-            msprime.SweepGenicSelection(
-                position=j, start_frequency=j, end_frequency=j, s=j, dt=j
-            )
-            for j in range(1, 10)
-        ]
-        # Old style
-        sim = ancestry._parse_simulate(
-            sample_size=2,
-            Ne=10,
-            demographic_events=[
-                msprime.SimulationModelChange(None, model) for model in models
-            ],
-        )
-        assert len(sim.model_change_events) == len(models)
-        for event, model in zip(sim.model_change_events, models):
-            assert event.model == model
-
-        sim2 = ancestry._parse_simulate(
-            sample_size=2,
-            Ne=10,
-            model=[None]
-            + [msprime.SimulationModelChange(None, model) for model in models],
-        )
-        assert sim.model_change_events == sim2.model_change_events
-
-    def test_model_change_old_style(self):
+    def test_model_change_events(self):
         main_model = msprime.SmcApproxCoalescent()
         sim = ancestry._parse_simulate(
             Ne=100,
@@ -1282,21 +1261,28 @@ class TestParseSimulate:
                 msprime.SimulationModelChange(2, None),
             ],
         )
-        assert len(sim.model_change_events) == 2
-        assert sim.model_change_events[0].time == 1
+        assert len(sim.models) == 3
+        assert sim.models[0].duration == 1
+        assert isinstance(sim.models[0], msprime.SmcApproxCoalescent)
+        assert sim.models[1].duration == 1
+        assert isinstance(sim.models[1], msprime.DiscreteTimeWrightFisher)
         # When model=None we change to the standard coalescent
-        assert sim.model_change_events[1].time == 2
-        assert sim.model_change_events[1].model.name == "hudson"
+        assert sim.models[2].duration is None
+        assert isinstance(sim.models[2], msprime.StandardCoalescent)
 
-        # This should be the same in new notation
-        sim = ancestry._parse_simulate(
-            Ne=100, sample_size=2, model=[main_model, (1, "dtwf"), (2, None)]
-        )
-        assert len(sim.model_change_events) == 2
-        assert sim.model_change_events[0].time == 1
-        # When model=None we change to the standard coalescent
-        assert sim.model_change_events[1].time == 2
-        assert sim.model_change_events[1].model.name == "hudson"
+    def test_model_change_events_error(self):
+        with pytest.raises(ValueError, match="durations must be >= 0"):
+            msprime.simulate(
+                Ne=100,
+                sample_size=2,
+                model=None,
+                demographic_events=[
+                    msprime.SimulationModelChange(
+                        1, msprime.DiscreteTimeWrightFisher()
+                    ),
+                    msprime.SimulationModelChange(0.5, None),
+                ],
+            )
 
     def test_bad_sample_population_reference(self):
         # What happens when we reference a population that doesn't exist?
@@ -1597,6 +1583,38 @@ class TestSimAncestryInterface:
         ts = msprime.sim_ancestry(10, random_seed=42, end_time=0.01)
         assert np.all(ts.tables.nodes.time <= 0.01)
         assert ts.first().num_roots > 1
+
+    def test_end_time_model_duration(self):
+        # Should take the min of the model duration and end_time
+        ts = msprime.sim_ancestry(
+            10,
+            random_seed=42,
+            end_time=1,
+            model=msprime.StandardCoalescent(duration=0.01),
+        )
+        assert np.all(ts.tables.nodes.time <= 0.01)
+        assert ts.tables.nodes.time[-1] == 0.01
+        assert ts.first().num_roots > 1
+
+        ts = msprime.sim_ancestry(
+            10,
+            random_seed=42,
+            end_time=0.01,
+            model=msprime.StandardCoalescent(duration=1),
+        )
+        assert np.all(ts.tables.nodes.time <= 0.01)
+        assert ts.first().num_roots > 1
+
+    def test_model_durations_accumulate(self):
+        dt = 0.125
+        n = 8
+        t = dt * n
+        ts = msprime.sim_ancestry(
+            10, random_seed=42, model=[msprime.StandardCoalescent(duration=dt)] * n
+        )
+        assert np.all(ts.tables.nodes.time <= t)
+        assert ts.first().num_roots > 1
+        assert ts.tables.nodes.time[-1] == t
 
     def test_record_migrations(self):
         demography = msprime.Demography.stepping_stone_model([1, 1], 0.1)

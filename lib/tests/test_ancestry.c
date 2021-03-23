@@ -1170,7 +1170,7 @@ test_pedigree_single_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
     msp_verify(&msp, 0);
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_STATE);
@@ -1226,7 +1226,7 @@ test_pedigree_multi_locus_simulation(void)
     ret = msp_initialise(&msp);
 
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
     msp_verify(&msp, 0);
     /* TODO put in some meaningful tests of the pedigree */
     ret = msp_set_simulation_model_dtwf(&msp);

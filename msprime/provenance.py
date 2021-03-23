@@ -90,6 +90,11 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
     """
 
     def default(self, obj):
+        # NOTE: this is more complicated than it needs to be now because the
+        # SimulationModelChange is simpler than it was when this was developed.
+        # We no longer have to deal with function arguments. The version we
+        # worked against here was never released.
+
         # TODO it's a bit ugly and brittle that we have to have these
         # special cases, but this needed so that we can recursively
         # process the SimulationModelChange below.

@@ -361,7 +361,7 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
 
     msp_verify(&msp, 0);
 
