@@ -1584,6 +1584,18 @@ class TestSimAncestryInterface:
         assert np.all(ts.tables.nodes.time <= 0.01)
         assert ts.first().num_roots > 1
 
+    def test_start_time_model_duration(self):
+        ts = msprime.sim_ancestry(
+            10,
+            random_seed=42,
+            population_size=100,
+            start_time=5,
+            model=msprime.DiscreteTimeWrightFisher(duration=10),
+        )
+        assert ts.first().num_roots > 1
+        assert np.all(ts.tables.nodes.time <= 15)
+        assert ts.tables.nodes.time[-1] == 15
+
     def test_end_time_model_duration(self):
         # Should take the min of the model duration and end_time
         ts = msprime.sim_ancestry(

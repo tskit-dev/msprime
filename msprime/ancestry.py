@@ -565,8 +565,6 @@ def simulate(
     :param model: The simulation model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
         a ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
-        Please see the :ref:`sec_ancestry_models` section for more details
-        on specifying ancestry models.
     :type model: str or AncestryModel
     :param bool record_provenance: If True, record all input parameters
         in the tree sequence :ref:`tskit:sec_provenance`.
@@ -1123,7 +1121,9 @@ def sim_ancestry(
         is the model's ``duration``. If the ``duration`` is not set, the
         simulation will continue until the model completes, the overall
         ``end_time`` is reached, or overall coalescence. See
-        the :ref:`sec_ancestry_models` for more details and examples.
+        the :ref:`sec_ancestry_models_specifying` section for more details,
+        and the :ref:`sec_ancestry_models` section for the available models
+        and examples.
     :type model: str or .AncestryModel or list
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
@@ -1496,6 +1496,13 @@ class AncestryModel:
     """
 
     duration: Union[float, None]
+    """
+    The time duration that this model should run for. If None, the model
+    will run until completion (i.e., until the simulation coalesces
+    or the model itself completes). Otherwise, this defines the maximum
+    time duration which the model can run. See the
+    :ref:`sec_ancestry_models_specifying` section for more details.
+    """
     name: ClassVar[str]
 
     # We have to define an __init__ to enfore keyword-only behaviour

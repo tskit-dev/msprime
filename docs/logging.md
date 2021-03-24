@@ -11,6 +11,9 @@ kernelspec:
   name: python3
 ---
 
+
+(sec_logging)=
+
 # Logging
 
 Msprime uses the Python {mod}`logging` infrastructure to help debugging complex
@@ -36,7 +39,7 @@ ts = msprime.sim_ancestry(
     population_size=1000,
     model=[
         msprime.DiscreteTimeWrightFisher(duration=100),
-        "hudson"
+        msprime.StandardCoalescent(),
     ],
     random_seed=1234
 )

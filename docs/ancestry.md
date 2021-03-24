@@ -593,7 +593,7 @@ we must use a model like {ref}`discrete-time Wright-Fisher <sec_ancestry_models_
 However, because correlations between chromosomes break down very rapidly,
 we only need to simulate using `dtwf` for roughly 10-20 generations, after which
 we can switch to the `hudson` model to finish the simulation more efficiently
-(see the {ref}`sec_ancestry_multiple_models` section for more information
+(see the {ref}`sec_ancestry_models_specifying` section for more information
 on switching between ancestry models).
 
 In this example, we simulate 10 sampled diploid individuals using
@@ -607,7 +607,7 @@ ts = msprime.sim_ancestry(
     recombination_rate=rate_map,
     model=[
         msprime.DiscreteTimeWrightFisher(duration=20),
-        "hudson"
+        msprime.StandardCoalescent(),
     ],
     random_seed=1234,
 )
@@ -1164,6 +1164,7 @@ using [SLiM](https://messerlab.org/slim/).
 
 (sec_ancestry_models)=
 
+
 ## Models
 
 The ancestry model determines the model under which the ancestral
@@ -1175,8 +1176,8 @@ efficient continuous time model, and the
 {ref}`sec_ancestry_models_dtwf` model allows
 for more detailed (if less efficient) simulations by
 making fewer mathematical approximations.
-{ref}`sec_ancestry_multiple_models` can be specified
-in a single simulation using a flexible notation.
+We can combine multiple ancestry models in a simulation
+using a flexible {ref}`notation<sec_ancestry_models_specifying>`.
 
 :::{seealso}
 See the {ref}`sec_ancestry_quickref` for a summary of the available
@@ -1186,6 +1187,223 @@ ancestry models
 :::{important}
 The ancestry model is distinct from the {ref}`demographic model<sec_demography>`,
 which is mostly independent of the chosen ancestry model.
+:::
+
+(sec_ancestry_models_specifying)=
+
+### Specifying ancestry models
+
+The ancestry models used during a simulation are specified using
+the ``model`` parameter to {func}`.sim_ancestry`. Each model is a
+subclass of the {class}`.AncestryModel` class (see the following
+subsections for the available models, and examples of their usage).
+
+#### Single models
+
+Most of the time we want to run a simulation under a single
+ancestry model. By default, we run simulations under the
+{class}`.StandardCoalescent` model. If we wish to run
+under a different model, we use the ``model`` argument to
+{func}`.sim_ancestry`. For example, here we use the
+{class}`SMC<.SmcApproxCoalescent>` model instead of the
+standard coalescent:
+
+```{code-cell}
+ts1 = msprime.sim_ancestry(
+    10,
+    sequence_length=10,
+    recombination_rate=0.1,
+    model=msprime.SmcApproxCoalescent(),
+    random_seed=1234)
+```
+
+We specify the model as an instance of one of the ancestry model classes.
+For nonparametric models, there is also a useful shorthand
+of the model name:
+
+```{code-cell}
+ts2 = msprime.sim_ancestry(
+    10,
+    sequence_length=10,
+    recombination_rate=0.1,
+    model="smc",
+    random_seed=1234)
+assert ts1.equals(ts2, ignore_provenance=True)
+```
+
+This string form is useful for single model simulations;
+however, when working with
+{ref}`sec_ancestry_models_specifying_multiple` it is better to use
+the explicit class form so that the
+{ref}`sec_ancestry_models_specifying_duration` can be set.
+
+(sec_ancestry_models_specifying_duration)=
+#### Model duration
+
+Each ancestry model instance has a {attr}`~.AncestryModel.duration` associated
+with it. This is the maximum amount of time that this model can run for. Thus,
+if we wanted to run 10 generations of the {class}`.DiscreteTimeWrightFisher`
+model we could write:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    3,
+    population_size=10,
+    model=msprime.DiscreteTimeWrightFisher(duration=10),
+    random_seed=1234)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+:::{note}
+Using the duration value for a single model like this is identical to
+specifying an ``end_time`` value: see the {ref}`sec_ancestry_end_time`
+section for more information.
+:::
+
+It is vital to understand that the ``duration`` value here is **not**
+an absolute time at which the simulation must stop, but rather
+the number of generations that the model should run for. To illustrate
+this we can use the {ref}`start_time<sec_ancestry_start_time>` parameter:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    3,
+    population_size=10,
+    start_time=5,
+    model=msprime.DiscreteTimeWrightFisher(duration=10),
+    random_seed=1234)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+We can see that the simulation continued until 15 generations ago,
+because it didn't start until 5 generations ago and we then specified
+that the model should run for at most 10 generations.
+
+The model activity time is specified as a duration in this way
+as this is a natural way to specify
+{ref}`sec_ancestry_models_specifying_multiple`, in which
+some of the models may run for random periods of time.
+
+
+(sec_ancestry_models_specifying_completion)=
+
+#### Model completion
+
+Most ancestry models will run until the overall simulation has
+completed; that is, when we have simulated back to the most
+recent common ancestor at every position along the sequence.
+For example, the {class}`.StandardCoalescent` and
+{class}`.DiscreteTimeWrightFisher` models will simulate
+until coalescence, unless we explicitly indicate that we wish
+to stop the simulation early via the
+{ref}`model duration<sec_ancestry_models_specifying_duration>`
+or the {ref}`end_time<sec_ancestry_end_time>` parameter.
+
+Models such as {class}`.SweepGenicSelection` are different though:
+they are only defined for a limited amount of time and
+may not run until coalescence (see the
+{ref}`sec_ancestry_models_selective_sweeps`
+for more information on the model itself).
+
+```{code-cell}
+sweep = msprime.SweepGenicSelection(
+    position=5,
+    start_frequency=0.1,
+    end_frequency=0.9,
+    s=0.25,
+    dt=1e-6,
+)
+ts = msprime.sim_ancestry(
+    3,
+    sequence_length=10,
+    population_size=100,
+    model=sweep,
+    random_seed=1234)
+SVG(ts.draw_svg(y_axis=True))
+```
+Here, we see that even though we didn't
+a {ref}`model duration<sec_ancestry_models_specifying_duration>`
+or {ref}`end_time<sec_ancestry_end_time>` parameter the simulation
+has ended before we reached coalescence. In addition, the
+model duration is **random**:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    3,
+    sequence_length=10,
+    population_size=100,
+    model=sweep,
+    random_seed=12345)
+SVG(ts.draw_svg(y_axis=True))
+```
+Here we ran the same simulation with a different random seed, and
+we can see that the time the model completed was different in
+the two cases (30.22 vs 28.15 generations ago).
+
+:::{note}
+Models such as {class}`.SweepGenicSelection` can complete due to
+full coalescence also.
+:::
+
+(sec_ancestry_models_specifying_multiple)=
+
+#### Multiple models
+
+We are often interested in combining different models in a simulation.
+To do this we provide a **list** of ancestry model instances as the
+``model`` argument to {func}`.sim_ancestry`. The models
+are run in the order they are specified. For each model, if its
+{attr}`~.AncestryModel.duration` is set, then the simulation will run
+for at most that additional time duration. If the ``duration`` is
+not set (or ``None``), then the model will run until
+{ref}`completion<sec_ancestry_models_specifying_completion>`.
+
+
+For example, here we run a hybrid DTWF and coalescent
+simulation (see the {ref}`sec_ancestry_models_dtwf` section for more
+details):
+
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    2,
+    population_size=1000,
+    model=[
+        msprime.DiscreteTimeWrightFisher(duration=500),
+        msprime.StandardCoalescent(),
+    ],
+    random_seed=2
+)
+```
+
+:::{warning}
+It is very imporant to remember to set a ``duration`` value in the first
+model here! Otherwise, the entire simulation will under the DTWF model.
+:::
+
+In this example we've run the {class}`.DiscreteTimeWrightFisher`
+model for the first 500 generations, and then switched to the
+{class}`.StandardCoalescent`. Because we did not specify a
+``duration`` second model, it will run until coalescence.
+
+:::{note}
+Switching models at a fixed time point like this is equivalent to
+first running the DTWF phase of the simulation with ``end_time=500``
+and then using the output as the
+{ref}`initial state<sec_ancestry_initial_state>` for the simulation
+of the Hudson phase. The model switching syntax here is a little
+more convenient and efficient, however.
+:::
+
+:::{seealso}
+See the {ref}`sec_ancestry_models_selective_sweeps_multiple` section for
+an example of running many models with random durations.
+:::
+
+:::{tip}
+The logging output of msprime can be very useful when working with
+multiple models. See the {ref}`sec_logging` section for more
+details.
 :::
 
 (sec_ancestry_models_hudson)=
@@ -1275,7 +1493,7 @@ to {func}`.sim_ancestry`:
 
 ```{code-cell}
 ts = msprime.sim_ancestry(4, population_size=10, model="dtwf", random_seed=7)
-SVG(ts.draw_svg(y_axis=True, tree_height_scale="rank"))
+SVG(ts.draw_svg(y_axis=True, tree_height_scale="log_time"))
 ```
 
 There are a few important points to note here:
@@ -1319,11 +1537,11 @@ ts = msprime.sim_ancestry(
     population_size=1000,
     model=[
         msprime.DiscreteTimeWrightFisher(duration=500),
-        "hudson"
+        msprime.StandardCoalescent(),
     ],
-    random_seed=2
+    random_seed=4
 )
-SVG(ts.draw_svg(y_axis=True, tree_height_scale="rank"))
+SVG(ts.draw_svg(y_axis=True, tree_height_scale="log_time"))
 ```
 
 Because of the integer node times, we can see here that most of the coalescent
@@ -1332,7 +1550,7 @@ generations in the past, there were only two lineages left. The continuous
 time standard coalescent model was then used to simulate the ancient past of
 these two lineages.
 
-See the {ref}`sec_ancestry_multiple_models` section for more details on
+See the {ref}`sec_ancestry_models_specifying` section for more details on
 how the use the ``model`` argument to {func}`.sim_ancestry` to run
 multiple models.
 
@@ -1571,27 +1789,31 @@ sweep_model = msprime.SweepGenicSelection(
 Explain why these parameters give a hard sweep.
 :::
 
-Next we set up the replicate simulations. The ``model`` parameter
-here is a list: the first element is the ``sweep_model`` we
-just defined, and the second is a tuple ``(None, "hudson")``.
-This means "Run the sweep model until it finishes, **then**
-run the ``"hudson"`` model.
-
-:::{todo}
-This could be simpler: why not just ``[sweep_model, "hudson"]``?
-https://github.com/tskit-dev/msprime/issues/1571
-:::
+Next we set up the replicate simulations. As described
+in the {ref}`sec_ancestry_models_specifying_multiple` section,
+the ``model`` parameter is a list when we want to run multiple
+ancestry models. In this example, we have a sweep that occurs
+in the immediate past, and is then followed by the
+standard coalescent for the rest of time:
 
 ```{code-cell}
 reps = msprime.sim_ancestry(
     5,
-    model=[sweep_model, "hudson"],
+    model=[sweep_model, msprime.StandardCoalescent()],
     population_size=Ne,
     recombination_rate=1e-7,
     sequence_length=L,
     num_replicates=num_reps,
 )
 ```
+
+:::{note}
+Because the {class}`.SweepGenicSelection` model has a random
+{ref}`duration<sec_ancestry_models_specifying_duration>` we do
+not set this value in the model. Please see the
+{ref}`sec_ancestry_models_specifying_completion` section for
+more discussion on this important point.
+:::
 
 Once we've set up the replicate simulations we can compute the
 windows for plotting, run the actual simulations
@@ -1631,33 +1853,72 @@ As we can see, the selective sweep has reduced variation in the region
 most closely linked to the beneficial allele and then diversity
 increases with distance to each side.
 
+(sec_ancestry_models_selective_sweeps_multiple)=
+
 #### Multiple sweeps
 
 :::{todo}
-Give an example where multiple sweeps happen
+This example is very artificial; it would be much better to illustrate
+with a meaningful example from the literature. Pull requests welcome!
 :::
 
+To illustrate the idea that we can simulate large numbers of different
+models, in this example we create a simulation in which we have
+sweeps happening at random points along the genome, which
+are separated by a random duration of the standard coalescent.
 
-(sec_ancestry_multiple_models)=
+First we set up our models:
 
-## Multiple models
+```{code-cell}
+import random
+random.seed(1234)
+L = 100
 
+models = []
+for _ in range(100):
+    models.append(msprime.StandardCoalescent(duration=random.uniform(0, 1)))
+    models.append(
+        msprime.SweepGenicSelection(
+            position=random.randint(1, L - 1),
+            start_frequency=0.4,
+            end_frequency=0.5,
+            s=0.01,
+            dt=1e-6,
+        )
+    )
+models.append(msprime.StandardCoalescent())
+models[:5]
+```
+We've created a list of models that have random parameters using the
+standard Python tools. There are lots of sweeps (many more than we
+will actually run, in all probability), each at a random position
+on the genome and each separated by a random amount of time running
+the standard coalescent. Finally, we add an instance of the standard
+coalescent without a {ref}`duration<sec_ancestry_models_specifying_duration>`
+to guarantee that our simulation will always coalesce fully
+(See the {ref}`sec_ancestry_models_specifying_completion` section
+for more information.) Finally, we print out the first 5 models
+so we can inspect them.
 
-(sec_ancestry_multiple_models_notation)=
-### Notation
+Then, we can run our simulation as usual:
 
+```{code-cell}
+ts = msprime.sim_ancestry(
+    10,
+    population_size=100,
+    sequence_length=L,
+    recombination_rate=0.01,
+    model=models,
+    random_seed=6789
+)
+ts
+```
 
-### Fixed time
-
-:::{note}
-Switching models at a fixed time point like this is equivalent to
-first running the DTWF phase of the simulation with ``end_time=500``
-and then using the output as the
-{ref}`initial state<sec_ancestry_initial_state>` for the simulation
-of the Hudson phase. The model switching syntax here is a little
-more convenient and efficient, however.
+:::{tip}
+The logging output of msprime can be very useful when working with
+multiple models. See the {ref}`sec_logging` section for more
+details.
 :::
-
 
 (sec_ancestry_errors)=
 
