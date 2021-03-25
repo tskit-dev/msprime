@@ -53,7 +53,7 @@ parameters.
 :::{note}
 It's important to note that {func}`.sim_ancestry` only simulates
 the ancestral trees for samples: if we want actual sequence data
-then we need to additionally simulate mutations on these trees.
+then we also need to simulate mutations on these trees.
 See the {ref}`sec_mutations` section for more information on how to do
 this.
 :::
@@ -97,18 +97,18 @@ this.
 ## Specifying samples
 
 The `samples` argument to {func}`.sim_ancestry` defines the number
-of sample individuals we simulate the history of. There are three different
+of sampled individuals whose history will be simulated. There are three different
 forms; the `samples` argument can be:
 
-- an **integer**, interpreted as the number of samples to draw in a single
-  population model;
+- an **integer**, interpreted as the number of sampled individuals to draw in
+  a single population model;
 - a **dictionary** mapping population references (either integer IDs or
-  names) to the number of samples for that population;
+  names) to the number of sampled individuals for that population;
 - a list of {class}`.SampleSet` objects, which provide more flexibility
   in how groups of similar samples are drawn from populations.
 
 
-In the simplest case provide a single integer which defines the number
+In the simplest case, provide a single integer which defines the number
 of samples:
 
 ```{code-cell}
