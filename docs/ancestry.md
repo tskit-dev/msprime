@@ -895,32 +895,92 @@ not ancestral to these census nodes.
 
 ### Stopping simulations early
 
+In most simulations we want to simulate a complete history for our samples:
+that is, to when we have a common ancestor at every point along the
+sequence. For example, here we generate a complete ancestral history
+for two diploid samples:
+
 ```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
+ts = msprime.sim_ancestry(2, sequence_length=10, recombination_rate=0.1, random_seed=42)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
+Sometimes we would like to stop the simulation early, **before** complete
+coalescence has occured; perhaps we would like to
+{ref}`combine several simulations<sec_ancestry_initial_state_combining>`
+with different properties, or we are really only interested in the
+recent past and simulating more ancient processes would be a waste
+of computational resources.
 
-```{eval-rst}
-.. todo:: Go through an example of using the end time.
+We can do this by specifying a ``end_time`` value.
+Let's repeat the same simulation as above with an ``end_time`` of 2:
 
+```{code-cell}
+ts = msprime.sim_ancestry(
+    2, sequence_length=10, recombination_rate=0.1, end_time=2, random_seed=42)
+SVG(ts.draw_svg(y_axis=True))
 ```
+
+There are a number of important things to observe about this
+tree sequence:
+
+1. The history up until time 2 is **identical** to the original simulation.
+2. The first tree has not fully coalesced, and we therefore have **multiple
+roots**. Trees with multiple roots are fully supported in tskit.
+3. The nodes 8 and 9 are at time 2 (our ``end_time`` value), and these
+connect to the uncoalesced portions of the tree. These "unary" nodes
+are very important for ensuring the correct statistical properties
+when we
+{ref}`combine multiple simulations<sec_ancestry_initial_state_combining>`.
+
+:::{seealso}
+The ancestry model {ref}`duration<sec_ancestry_models_specifying_duration>`
+can also be used to stop simulations before coalescence.
+:::
+
+For discrete time models, the exact interpretation
+of the ``end_time`` is important --- we continue to simulate
+the process while the time is <= ``end_time``. For example here
+we use an ``end_time`` of 1 generation in a {ref}`sec_ancestry_models_dtwf`
+simulation:
+
+```{code-cell}
+ts = msprime.sim_ancestry(3, population_size=10, model="dtwf", end_time=1, random_seed=42)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+We have run 1 generation of the DTWF, resulting in the coalescence
+at node 9.
+
 
 (sec_ancestry_start_time)=
 
 ### Setting the start time
 
+:::{important}
+Setting simulation start time is an advanced feature which is rarely
+needed in practise.
+:::
+
+Sometimes we need control when the simulation process starts. For
+example, given the initial configuration of at time zero we want to
+"jump ahead" to a later time point before we start generating
+waiting times and events. Consider the following example:
+
 ```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
+ts = msprime.sim_ancestry(2, random_seed=42)
+ts.tables.nodes
 ```
 
-```{eval-rst}
-.. todo:: Go through an example of using the start time.
+Now we run the same simulation with a ``start_time`` of 10:
 
+```{code-cell}
+ts = msprime.sim_ancestry(2, start_time=10, random_seed=42)
+ts.tables.nodes
 ```
+
+We can see that the results are identical except that 10 has
+been added to all of the internal node times.
 
 (sec_ancestry_initial_state)=
 
@@ -979,6 +1039,8 @@ state of the tree sequence that is returned at the end of a simulation,
 and that any information present (including metadata) will not be
 altered.
 :::
+
+(sec_ancestry_initial_state_combining)=
 
 ### Combining backward-time simulations
 
