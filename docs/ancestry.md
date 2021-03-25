@@ -153,7 +153,7 @@ ts
 ```
 
 The keys in the dictionary can also be the string names of the
-population (see the :ref:`sec_demography_populations_identifiers` section
+population (see the {ref}`sec_demography_populations_identifiers` section
 ), which is useful when we are simulating from empirically
 estimated models. For example, here create a {class}`.Demography` object
 based on a species tree, and then draw samples using the species names.
