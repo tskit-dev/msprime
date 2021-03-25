@@ -801,10 +801,13 @@ the other identifying the individuals providing the genetic material to the
 right. The effect of this extra node can be seen in the trees: node 9 is
 present as a 'unary' node in the left hand tree and node 10 in the right.
 
-Node 11 has a flags value of 262144 ({data}`.NODE_IS_CA_EVENT`), which
-tells us that it is an ARG common ancestor event that *did not* result
-in marginal coalescence. This class of event also results in unary nodes
-in the trees, which we can see in the example.
+In this particular case, the first thing that happens to these two lineages
+as we go up the tree sequence is that they coalesce straight back together again
+at node 11, forming a (normally undetectable) "diamond event" in the ARG, and
+explaining why the topology of both these trees appears the same. In a full ARG,
+this is one of many ways that a coalescent event can occur without resulting in a
+marginal coalescence, and which instead results in an additional unary node in the
+trees. Such nodes are given a flags value of 262144 ({data}`.NODE_IS_CA_EVENT`).
 
 If we wish to reduce these trees down to the minimal representation, we can
 use {meth}`tskit.TreeSequence.simplify`. The resulting tree sequence will have
