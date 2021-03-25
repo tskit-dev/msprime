@@ -1545,7 +1545,7 @@ class SmcApproxCoalescent(AncestryModel):
     are possible. Under this approximation, the marginal trees along the
     genome depend only on the immediately previous tree (i.e. are Markovian).
 
-    .. important::
+    .. note::
         This model is implemented using a naive rejection sampling approach
         and so it may not be any more efficient to simulate than the
         standard Hudson model.
@@ -1565,7 +1565,7 @@ class SmcPrimeApproxCoalescent(AncestryModel):
     join contiguous tracts of ancestral material (as well as events that
     result in marginal coalescences).
 
-    .. important::
+    .. note::
         This model is implemented using a naive rejection sampling approach
         and so it may not be any more efficient to simulate than the
         standard Hudson model.
