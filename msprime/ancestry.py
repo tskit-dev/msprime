@@ -1068,7 +1068,7 @@ def sim_ancestry(
         :class:`.Demography`. If not specified, defaults to 1. Cannot be specified
         along with the ``demography`` parameter. See the :ref:`sec_demography`
         section for more details on demographic models and population sizes
-        and the :ref:`sec_ancestry_population_size` section for usage examples.
+        and the :ref:`sec_ancestry_demography` section for usage examples.
     :param int random_seed: The random seed. If this is not specified or `None`,
         a high-quality random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
