@@ -313,7 +313,7 @@ class Test:
         return df
 
     def _build_filename(self, *args):
-        return self.output_dir / "_".join(args[1:])
+        return self.output_dir / ("_".join(args[1:]) + ".png")
 
     def _plot_stats(self, stats_type, df1, df2, df1_name, df2_name):
         assert set(df1.columns.values) == set(df2.columns.values)
@@ -332,9 +332,12 @@ class Test:
                 f = self._build_filename(stats_type, stat)
                 pyplot.savefig(f, dpi=72)
                 pyplot.close("all")
+                # Put the histograms in their own directory to avoid
+                # cluttering up the qqplots.
                 plot_stat_hist(v1, v2, df1_name, df2_name)
-                f = self._build_filename(stats_type, stat)
-                f = str(f) + ".hist.png"
+                histdir = self.output_dir / "histograms"
+                histdir.mkdir(exist_ok=True)
+                f = histdir / f.name
                 pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
@@ -4162,6 +4165,7 @@ class SimulateFrom(Test):
             reps = msprime.sim_ancestry(
                 n,
                 recombination_rate=recomb_rate,
+                population_size=1,
                 sequence_length=m,
                 num_replicates=num_replicates,
             )
@@ -4182,6 +4186,7 @@ class SimulateFrom(Test):
                 for j, ts in enumerate(reps):
                     final_ts = msprime.sim_ancestry(
                         initial_state=ts,
+                        population_size=1,
                         recombination_rate=recomb_rate,
                         start_time=np.max(ts.tables.nodes.time),
                     )
