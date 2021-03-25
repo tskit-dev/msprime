@@ -847,7 +847,7 @@ This means we use much less memory that we would if we stored each
 of the replicate simulations in a list.
 
 :::{note}
-The return type of {func}{sim_ancestry} changes when we use the
+The return type of {func}`.sim_ancestry` changes when we use the
 `num_replicates` argument. If `num_replicates` is not specified
 or `None`, we return an instance of {class}`tskit.TreeSequence`.
 If it is specified, we return an *iterator* over
@@ -1048,7 +1048,7 @@ at node 9.
 
 :::{important}
 Setting simulation start time is an advanced feature which is rarely
-needed in practise.
+needed in practice.
 :::
 
 Sometimes we need control when the simulation process starts. For
