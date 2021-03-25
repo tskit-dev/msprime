@@ -195,7 +195,9 @@ samples argument.
 In this example we create two diploid sample individuals,
 one at the present time
 and one taken 50 generations ago, representing one modern
-and one ancient individual.
+and one ancient individual. By default, when we draw the
+trees, the nodes that belong to samples are drawn as squares
+whereas nodes that are not samples are drawn as circles.
 
 ```{code-cell}
 ts = msprime.sim_ancestry(
