@@ -139,7 +139,7 @@ the values are the number of samples to draw.
 the ``demography`` argument to {func}`.sim_ancestry`.)
 We first create a {class}`.Demography` object representing
 a 10 deme linear stepping stone model. Then, we run the simulation
-with 1 diploid sample each drawn from the first and last demes in this
+with 3 diploid samples each drawn from the first and last demes in this
 linear habitat.
 
 ```{code-cell}
@@ -148,7 +148,7 @@ demography = msprime.Demography.stepping_stone_model(
     [100] * N,
     migration_rate=0.1,
     boundaries=True)
-ts = msprime.sim_ancestry({0: 1, N - 1: 1}, demography=demography)
+ts = msprime.sim_ancestry({0: 3, N - 1: 3}, demography=demography)
 ts
 ```
 
