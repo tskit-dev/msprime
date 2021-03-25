@@ -56,6 +56,7 @@ import argparse
 import ast
 import collections
 import concurrent.futures
+import functools
 import inspect
 import itertools
 import json
@@ -796,7 +797,7 @@ class DiscoalTest(Test):
                 theta = float(tokens[i + 1])
             if tokens[i] == "-r":
                 rho = float(tokens[i + 1])
-        mod_list = [("hudson")]
+        mod_list = []
         if alpha is not None:
             # sweep model
             s = alpha / (2 * refsize)
@@ -807,7 +808,8 @@ class DiscoalTest(Test):
                 s=s * 2,  # discoal fitness model is 1, 1+s, 1+2s
                 dt=1e-6,
             )
-            mod_list.append((sweep_mod_time, mod))
+            mod_list.append(msprime.StandardCoalescent(duration=sweep_mod_time))
+            mod_list.append(mod)
             # if an event is defined from discoal line
             # best thing to do is rescale to Ne=0.25
             # so that time scale are consistent
@@ -817,21 +819,23 @@ class DiscoalTest(Test):
                 refsize = 0.25
                 mod.s = alpha / refsize
         # append final model
-        mod_list.append((None, "hudson"))
-        # scale theta and rho and create recomb_map
-        recomb_map = msprime.RecombinationMap.uniform_map(
-            seq_length, rho / 4 / refsize / (seq_length - 1)
-        )
-        mu = theta / 4 / refsize / seq_length
-        replicates = msprime.simulate(
-            sample_size,
-            Ne=refsize,
+        mod_list.append("hudson")
+        # scale theta and rho
+        recomb_rate = rho / (4 * refsize * (seq_length - 1))
+        mu = theta / (4 * refsize * seq_length)
+        replicates = msprime.sim_ancestry(
+            [msprime.SampleSet(sample_size, ploidy=1)],
+            population_size=refsize,
             model=mod_list,
-            recombination_map=recomb_map,
-            mutation_rate=mu,
+            recombination_rate=recomb_rate,
+            sequence_length=seq_length,
+            discrete_genome=False,
             num_replicates=nreps,
         )
-        return replicates
+        mutate = functools.partial(
+            msprime.sim_mutations, discrete_genome=False, rate=mu
+        )
+        return map(mutate, replicates)
 
 
 class DiscoalCompatibility(DiscoalTest):
@@ -940,12 +944,19 @@ def sample_recap_simplify(slim_ts, sample_size, Ne, r, mu):
     """
     takes a ts from slim and samples, recaps, simplifies
     """
-    recap = msprime.sim_ancestry(
-        initial_state=slim_ts,
-        population_size=Ne,
-        recombination_rate=r,
-        start_time=slim_ts.metadata["SLiM"]["generation"],
-    )
+    demography = msprime.Demography.from_tree_sequence(slim_ts)
+    demography[1].initial_size = Ne
+    with warnings.catch_warnings():
+        warnings.simplefilter(
+            "ignore", category=msprime.IncompletePopulationMetadataWarning
+        )
+        recap = msprime.sim_ancestry(
+            initial_state=slim_ts,
+            demography=demography,
+            recombination_rate=r,
+            # TODO is this needed now? Shouldn't be, right?
+            start_time=slim_ts.metadata["SLiM"]["generation"],
+        )
     rts = pyslim.SlimTreeSequence(recap)
     logging.debug(f"pyslim: slim generation:{slim_ts.metadata['SLiM']['generation']}")
     alive_inds = rts.individuals_alive_at(0)
@@ -987,7 +998,7 @@ class SweepVsSlim(Test):
         replicates = msprime.sim_ancestry(
             sample_size,
             population_size=pop_size,
-            model=[None, (tau, sweep), (None, "hudson")],
+            model=[msprime.StandardCoalescent(duration=tau), sweep, "hudson"],
             recombination_rate=recombination_rate,
             sequence_length=seq_length,
             num_replicates=num_replicates,
@@ -1518,7 +1529,7 @@ class SweepAnalytical(Test):
             replicates = msprime.simulate(
                 10,
                 Ne=refsize,
-                model=[mod],
+                model=mod,
                 length=seqlen,
                 num_labels=2,
                 recombination_rate=rho,
@@ -1569,7 +1580,7 @@ class SweepAnalytical(Test):
             replicates = msprime.simulate(
                 10,
                 Ne=n,
-                model=[mod],
+                model=mod,
                 length=seqlen,
                 num_labels=2,
                 recombination_rate=rho,
@@ -1825,7 +1836,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
 
     def test_dtwf_vs_coalescent_2_pops_massmigration(self):
         demography = msprime.Demography.isolated_model([1000, 1000])
-        demography.events.add_mass_migration(source=1, destination=0, proportion=1.0)
+        demography.add_mass_migration(time=10, source=1, dest=0, proportion=1.0)
         self._run(
             samples={0: 10, 1: 10},
             demography=demography,
@@ -2552,15 +2563,8 @@ class KnownSFS(Test):
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
         tot_bl_sum = [0]
-        # Because we have input cases which sample_size % ploidy != 0 we can't
-        # use the standard approach for specifying the samples. Sidestep this
-        # by setting the initial state directly.
-        tables = tskit.TableCollection(1)
-        tables.populations.add_row()
-        for _ in range(sample_size):
-            tables.nodes.add_row(tskit.NODE_IS_SAMPLE, time=0, population=0)
         replicates = msprime.sim_ancestry(
-            initial_state=tables,
+            [msprime.SampleSet(sample_size, ploidy=1, population=0)],
             ploidy=ploidy,
             model=model,
             num_replicates=num_replicates,
