@@ -92,14 +92,9 @@ this.
 
 ---
 
+
 (sec_ancestry_samples)=
 ## Specifying samples
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
 
 The `samples` argument to {func}`.sim_ancestry` defines the number
 of sample individuals we simulate the history of. There are three different
@@ -117,9 +112,12 @@ In the simplest case provide a single integer which defines the number
 of samples:
 
 ```{code-cell}
-ts = msprime.sim_ancestry(2)
+ts = msprime.sim_ancestry(2, random_seed=1234)
 ts
 ```
+
+Here we specify two sample **individuals**, which at the default
+ploidy of two, gives us four sample **nodes**.
 
 :::{warning}
 It is important to note that the number of samples
@@ -128,14 +126,18 @@ refers to the number of *individuals* not the number of *nodes*
 section for details.
 :::
 
+This integer form for the ``samples`` argument can only be used
+when the ``demography`` is a single population model.
+
 ### Populations
 
-```{eval-rst}
-.. todo:: Some text here that refers to the demography section.
-```
-
 The next example illustrates one usage of the dictionary form of the `samples`
-argument. We first create a {class}`.Demography` object representing
+argument, in which the keys refer to populations in the
+{ref}`demographic model<sec_demography>` and
+the values are the number of samples to draw.
+(See the {ref}`sec_ancestry_demography` section for more details on
+the ``demography`` argument to {func}`.sim_ancestry`.)
+We first create a {class}`.Demography` object representing
 a 10 deme linear stepping stone model. Then, we run the simulation
 with 1 diploid sample each drawn from the first and last demes in this
 linear habitat.
@@ -151,7 +153,8 @@ ts
 ```
 
 The keys in the dictionary can also be the string names of the
-population, which is useful when we are simulating from empirically
+population (see the :ref:`sec_demography_populations_identifiers` section
+), which is useful when we are simulating from empirically
 estimated models. For example, here create a {class}`.Demography` object
 based on a species tree, and then draw samples using the species names.
 
@@ -165,35 +168,48 @@ ts = msprime.sim_ancestry({"gorilla": 2, "human": 4}, demography=demography)
 ts
 ```
 
+When samples are drawn using this dictionary form it is always
+at the population's {ref}`sec_demography_populations_default_sampling_time`.
+If you wish to draw samples at a different time, then you must use the
+more general form of a list of {class}`.SampleSet` objects.
+
+:::{seealso}
+See the {ref}`sec_ancestry_demography` section for more information
+on how to specify demographic models in a simulation.
+:::
+
 (sec_ancestry_samples_sampling_time)=
 
 ### Sampling time
 
-By default the samples that we draw from a {class}`.Population` are the
-population's `sampling_time`. This is usually zero, representing the
-present, but in some demographic models representing (for example)
-with populations representing archaic individuals the default sampling
-time might be older. We can manually control the time at which samples
+By default the samples that we draw from a {class}`.Population` are
+at the population's {attr}`~.Population.default_sampling_time`.
+See the {ref}`sec_demography_populations_default_sampling_time`
+section for more information about how this is
+set for populations in a demographic model.
+
+We can manually control the time at which samples
 are drawn using list of {class}`.SampleSet` objects form for the
 samples argument.
 
-```{code-cell}
+In this example we create two diploid sample individuals,
+one at the present time
+and one taken 50 generations ago, representing one modern
+and one ancient individual.
 
+```{code-cell}
+ts = msprime.sim_ancestry(
     samples = [
         msprime.SampleSet(1),
-        msprime.SampleSet(1, time=1.0)
-    ]
-    ts = msprime.sim_ancestry(samples)
-    print(ts.tables.nodes)
-    SVG(ts.draw_svg())
+        msprime.SampleSet(1, time=50)
+    ],
+    population_size=100,
+    random_seed=42
+)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
-In this example we create two diploid sample individuals, one at the present time
-and one taken 5 generations in the past, representing one modern
-and one ancient diploid individual. Running this example, we get:
-
-Because nodes `0` and `1` were sampled at time 0, their times in the
-node table are both 0; likewise, nodes `2` and `3` are at time 1.0.
+(sec_ancestry_samples_sampling_details)=
 
 ### Sample details
 
@@ -214,7 +230,8 @@ print(ts.tables.nodes)
 
 (Because we're only interested in the sampled nodes and individuals we
 stopped the simulation from actually doing anything by setting
-`end_time=0`.) Here we define three sample individuals,
+`end_time=0` --- see the {ref}`sec_ancestry_start_time` section
+for more information.) Here we define three sample individuals,
 and we therefore have three rows in the individual table.
 Because these are diploid individuals, the node table contains
 six sample nodes. If we look at the `individual` column in the
@@ -248,77 +265,176 @@ but in this they are mixed ploidy: the first individual is triploid
 and the other two are haploid.
 
 :::{warning}
-
 It is vital to note that setting the `ploidy` value
 of {class}`.SampleSet` objects only affects sampling and does
 not affect the actual simulation. In this case, the simulation
-will be run on the haploid time scale. Some models may not
-support mixing of ploidy at all.
-
+will be run on the haploid time scale.  See the
+{ref}`sec_ancestry_ploidy` section for more details.
 :::
 
 If you wish to set up the node and individual IDs in some other way,
-the {ref}`sec_ancestry_samples_advanced_sampling` section shows how
-to fully control how sample individuals and nodes are defined. However,
-this level of control should not be needed for the vast majority of
-applications.
+it is possible to do so by using the ``initial_state`` parameter.
+See the  {ref}`sec_ancestry_initial_state` for more information
+on how to use this (advanced) feature.
 
-(sec_ancestry_samples_advanced_sampling)=
+(sec_ancestry_demography)=
+## Demography
 
-### Advanced sampling
+A {ref}`demographic model<sec_demography>` is a description of a
+set of populations, the migration rates between then and the
+events that modify the populations over time. Ancestry simulations
+can take one of these models as input via the ``demography``
+parameter to {func}`.sim_ancestry`.
 
-```{eval-rst}
-.. todo:: This section should describe how to define samples directly in
-    terms of the ``initial_state`` tables and give an example of how to
-    use it.
+:::{seealso}
+Please see the {ref}`sec_demography` section for details on how
+to create and debug demographic models, and the
+{ref}`sec_ancestry_samples` section for help on how to
+define the locations and times of sampled individuals.
+:::
 
+We don't need to explicitly specify a {class}`.Demography`
+for every ancestry simulation, however. By default, we assume a
+single fixed-size population. For the default
+{ref}`standard coalescent<sec_ancestry_models_hudson>` ancestry
+model we assume a population size of 1, so that time is measured
+in "coalescent units". This is useful for theoretical work where
+we usually work in scaled coalescent time.
+
+:::{important}
+By default msprime uses the **diploid** coalescent time scale;
+see the {ref}`sec_ancestry_ploidy` section for more details.
+:::
+
+Outside of theoretical analysis, working with scaled
+coalescent time can be confusing and it's usually better to
+explicitly set the population size so that the output
+times are directly interpretable in generations.
+The ``population_size`` parameter to {func}`.sim_ancestry`
+allows us to set the size of the single constant
+sized population in the default demography.
+
+For example, here we run the same simulation twice, one with
+the default population size and one with a population size
+of 100:
+
+```{code-cell}
+ts = msprime.sim_ancestry(2, random_seed=1234)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
+```{code-cell}
+ts = msprime.sim_ancestry(2, population_size=100, random_seed=1234)
+SVG(ts.draw_svg(y_axis=True))
+```
+We can see that the results are identical, except the node times have
+been scaled by the population size.
+
+The {ref}`sec_ancestry_models_dtwf` model is different. Because it
+explicitly works with a population of N individuals we get an
+error if we don't specify a population size:
+
+```{code-cell}
+:tags: [raises-exception]
+msprime.sim_ancestry(2, model="dtwf", random_seed=1234)
+```
+
+:::{note}
+Because the DTWF models populations of individuals rather than
+using continuous
+time approximations, simulations with different population sizes
+will yield entirely different results; we are **not** simply
+rescaling time by using different population sizes. Furthermore,
+simulations with large population sizes will take relatively
+more CPU time and memory.
+:::
 
 ---
 
 (sec_ancestry_ploidy)=
 ## Ploidy
 
-```{eval-rst}
-.. todo:: This section is pretty much superseded by the previous discussion
-    and we don't actually discuss the important point about timescales
-    anywhere. We need to have a top-level section about this somewhere.
-```
+The ``ploidy`` argument to {func}`.sim_ancestry` has two effects:
 
-The samples argument for {func}`.sim_ancestry` is flexible, and allows us
-to provide samples in a number of different forms. In single-population
-models we can use the numeric form, which gives us {math}`n` samples:
+1. It sets the default ploidy (i.e., number sample nodes) of sample
+individuals.
+2. For continuous time coalescent models, it sets the time scale.
 
-```{code-cell}
+Both of these are somewhat confusing, so let's look at them one at a time.
 
-    ts = msprime.sim_ancestry(3)
-    SVG(ts.first().draw_svg())
+(sec_ancestry_ploidy_default_num_nodes)=
 
-```
+### Default number of nodes per sample individual
 
-It's important to note that the number of samples refers to the number
-of {math}`k`-ploid *individuals*, not the number of sample nodes
-in the trees. The `ploidy` argument determines the number of sample
-nodes per individual, and is `2` by default; hence, when we asked
-for 3 sample individuals in the example above, we got a tree with
-six sample *nodes*.
+As discussed in the {ref}`sec_ancestry_samples_sampling_details` section,
+the number of nodes (i.e., monoploid genomes) that we allocate per
+sample individual is determined by the ploidy. Here, we specify
+2 sample individuals with a ploidy of 3:
 
 ```{code-cell}
-
-    ts = msprime.sim_ancestry(3, ploidy=1)
-    SVG(ts.first().draw_svg())
+ts = msprime.sim_ancestry(samples=2, ploidy=3, end_time=0)
+print(ts.tables.individuals)
+print(ts.tables.nodes)
 ```
 
-(sec_ancestry_population_size)=
+:::{note}
+Because we're only interested in the initial conditions here we
+set the ``end_time`` to zero: see the {ref}`sec_ancestry_start_time`
+section for more details.
+:::
 
-## Population size
+Our individual table has two rows (the number of ``samples``)
+and node table has 6 rows: three for each of the sampled
+individuals.
 
-```{eval-rst}
-.. todo:: Some notes on population size and the common gotchas, especially
-    how this relates to ploidy. Should link to the demography page and
-    model sections for more details.
+Note that this is the **default**, and can be overridden by the
+{attr}`.SampleSet.ploidy` value, as described in the
+{ref}`sec_ancestry_samples_sampling_details` section.
+
+### Coalescent time scales
+
+The ploidy argument also affects the time scales of
+coalescent models, in a similar way to
+{ref}`population size<sec_ancestry_demography>`.
+For example, consider the following two simulations, which
+are identical except for different ``ploidy`` values
+(note we use the {class}`.SampleSet` object to make
+sure we allocate the same number of **nodes**, as discussed
+in the {ref}`sec_ancestry_ploidy_default_num_nodes` section):
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    samples=[msprime.SampleSet(4, ploidy=1)],
+    population_size=1,
+    ploidy=1,
+    random_seed=1234
+)
+SVG(ts.draw_svg(y_axis=True))
 ```
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    samples=[msprime.SampleSet(4, ploidy=1)],
+    population_size=1,
+    ploidy=2,
+    random_seed=1234
+)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+The resulting tree sequences are identical, except for the node
+times, which differ by a factor of 2.
+
+:::{todo}
+Add a discussion here here about the Lambda coalescents an how
+things are more complicated for them.
+:::
+
+:::{important}
+The {ref}`sec_ancestry_models_dtwf` model is an explicitly diploid model
+and it is therefore
+an error to run it with any ``ploidy`` value other than 2.
+:::
 
 (sec_ancestry_genome_properties)=
 
@@ -640,16 +756,17 @@ they were stitched together in the initial recombination map.
 
 ## Controlling randomness
 
+:::{important}
+There is usually not much reason for setting a random seed when
+running simulations for statistical analysis. Msprime will generate
+high-quality random seeds by default. If you are concerned about
+reproducibility, the tree sequence provenance contains all the
+information required to reproduce any simulation.
+:::
+
 (sec_ancestry_random_seed)=
 
 ### Random seeds
-
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
 
 Stochastic simulations depend on a source of randomness, provided
 by a [psuedorandom number generator](<https://en.wikipedia.org/wiki/Pseudorandom_number_generator>).
@@ -667,70 +784,59 @@ seeds by default.
 Thus, if we run two simulations with the same parameters, we will get different
 results, as we can see from the different times of the last node:
 
-```{code-cell} python
 
-ts = msprime.sim_ancestry(1)
-ts.tables.nodes[-1].time
+```{code-cell}
+:tags: [remove-cell]
 
-0.13313422084255794
-
+# Make this deterministic. DON'T DO THIS IN YOUR CODE.
+msprime.core.set_seed_rng_seed(412343)
 ```
 
-```{code-cell} python
+```{code-cell}
+ts = msprime.sim_ancestry(2)
+SVG(ts.draw_svg(y_axis=True))
+```
 
-ts = msprime.sim_ancestry(1)
-ts.tables.nodes
-
-3.2090602418210956
-
+```{code-cell}
+ts = msprime.sim_ancestry(2)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
 The `random_seed` argument to {func}`.sim_ancestry` allows us specify
 seeds explicitly, making the output of the simulation fully deterministic:
 
-```{code-cell}
 
-    ts = msprime.sim_ancestry(1, random_seed=42)
-    ts.tables.nodes
+```{code-cell}
+ts = msprime.sim_ancestry(2, random_seed=42)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
 ```{code-cell}
-
-    ts = msprime.sim_ancestry(1, random_seed=42)
-    ts.tables.nodes
-
+ts = msprime.sim_ancestry(2, random_seed=42)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
 (sec_ancestry_replication)=
 
 ### Running replicate simulations
 
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
 Simulations are random, and we will therefore usually want to have
-many independant replicates for a particular set of parameters.
+many independent replicates for a particular set of parameters.
 The `num_replicates` parameter provides a convenient and efficient
 way to iterate over a number of replicate simulations. For example,
 this is a good way to compute the mean and variance of the time to the most
 recent common ancestor in a set of simulations:
 
 ```{code-cell}
+import numpy as np
 
-    import numpy as np
-
-    num_replicates = 100
-    tmrca = np.zeros(num_replicates)
-    replicates = msprime.sim_ancestry(10, num_replicates=num_replicates, random_seed=42)
-    for replicate_index, ts in enumerate(replicates):
-        tree = ts.first()
-        tmrca[replicate_index] = tree.time(tree.root)
-    np.mean(tmrca), np.var(tmrca)
-
+num_replicates = 100
+tmrca = np.zeros(num_replicates)
+replicates = msprime.sim_ancestry(10, num_replicates=num_replicates, random_seed=42)
+for replicate_index, ts in enumerate(replicates):
+    tree = ts.first()
+    tmrca[replicate_index] = tree.time(tree.root)
+np.mean(tmrca), np.var(tmrca)
 ```
 
 It's important to note that the replicate simulations are generated
@@ -739,13 +845,11 @@ This means we use much less memory that we would if we stored each
 of the replicate simulations in a list.
 
 :::{note}
-
-The return type of `sim_ancestry` changes when we use the
+The return type of {func}{sim_ancestry} changes when we use the
 `num_replicates` argument. If `num_replicates` is not specified
 or `None`, we return an instance of {class}`tskit.TreeSequence`.
 If it is specified, we return an *iterator* over
 a set of {class}`tskit.TreeSequence` instances.
-
 :::
 
 ## Recording more information
@@ -759,13 +863,6 @@ of options that allow us to do this.
 
 ### Ancestral recombination graph
 
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
 In `msprime` we usually want to simulate the coalescent with recombination
 and represent the output as efficiently as possible. As a result, we don't
 store individual recombination events, but rather their effects on the output
@@ -777,16 +874,15 @@ representation of its outcome. The `record_full_arg` option to
 following example:
 
 ```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, recombination_rate=0.1, sequence_length=2,
-        record_full_arg=True, random_seed=42)
-    print(ts.tables.nodes)
-    SVG(ts.draw_svg())
-
+ts = msprime.sim_ancestry(
+    3, recombination_rate=0.1, sequence_length=2,
+    record_full_arg=True, random_seed=42)
+print(ts.tables.nodes)
+SVG(ts.draw_svg())
 ```
 
-After running the simulation we first print out the [node table](<https://tskit.readthedocs.io/en/stable/data-model.html#node-table>), which
+After running the simulation we first print out the
+[node table](<https://tskit.readthedocs.io/en/stable/data-model.html#node-table>), which
 contains information on all the nodes in the tree sequence. Note that `flags`
 column contains several different values: all of the sample nodes (at time 0)
 have a flag value of `1` ({data}`tskit.NODE_IS_SAMPLE`). Most other
@@ -823,13 +919,6 @@ section for more details.
 
 ### Migration events
 
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
 ```{eval-rst}
 .. todo:: examples of using the record_migrations
 
@@ -844,22 +933,23 @@ during the simulation. This can be useful when you wish to study haplotypes that
 ancestral to your simulated sample, or when you wish to know which lineages were present in
 which populations at specified times.
 
-For instance, the following code specifies a simulation with two samples drawn from each of
-two populations. There are two demographic events: a migration rate change and a census
-event. At generation 100 and earlier, the two populations exchange migrants at a rate of
-0.05. At generation 5000, a census is performed:
+For instance, the following example creates a two population island
+model {class}`.Demography`, with the populations exchanging migrants
+at rate 0.05. At generation 5000, we add a census event using the
+{meth}`.Demography.add_census` method
+to determine where each of the lineages is at that time:
 
 ```{code-cell}
-
-    pop_config = msprime.PopulationConfiguration(sample_size=2, initial_size=1000)
-    mig_rate_change = msprime.MigrationRateChange(time=100, rate=0.05)
-    ts = msprime.simulate(
-                population_configurations=[pop_config, pop_config],
-                length=1000,
-                demographic_events=[mig_rate_change, msprime.CensusEvent(time=5000)],
-                recombination_rate=1e-7,
-                random_seed=141)
-    SVG(ts.draw_svg())
+demography = msprime.Demography.island_model([1000, 1000], migration_rate=0.05)
+demography.add_census(time=5000)
+ts = msprime.sim_ancestry(
+    {0: 1, 1: 1},
+    demography=demography,
+    recombination_rate=1e-7,
+    sequence_length=1000,
+    random_seed=141
+)
+SVG(ts.draw_svg())
 ```
 
 The resulting tree sequence has nodes on each tree at the specified census time.
@@ -871,8 +961,7 @@ these haplotypes (nodes 8, 9, 10 and 11) were in population 0 at this time, and
 two of these haplotypes (nodes 12 and 13) were in population 1 at this time.
 
 ```{code-cell}
-
-    print(ts.tables.nodes)
+print(ts.tables.nodes)
 ```
 
 If we wish to study these ancestral haplotypes further, we can simplify the tree sequence
@@ -883,10 +972,8 @@ In this example, `ts_anc` is a tree sequence obtained from the original tree seq
 not ancestral to these census nodes.
 
 ```{code-cell}
-
-    nodes = [i.id for i in ts.nodes() if i.flags==msprime.NODE_IS_CEN_EVENT]
-    ts_anc = ts.simplify(samples=nodes)
-
+nodes = [i.id for i in ts.nodes() if i.flags==msprime.NODE_IS_CEN_EVENT]
+ts_anc = ts.simplify(samples=nodes)
 ```
 
 ## Manipulating simulation time
@@ -1505,7 +1592,7 @@ SVG(ts.draw_svg(y_axis=True))
 
 This occurs because time is scaled to be proportional to
 the population size; if we run the same simulation with a
-different {ref}`sec_ancestry_population_size`, we can see that
+different {ref}`population size<sec_ancestry_demography>`, we can see that
 the time values are simply scaled up accordingly
 (the default ``population_size`` is 1):
 
@@ -2002,8 +2089,8 @@ details.
 :tags: [raises-exception]
 
 demography = msprime.Demography()
-demography.add_population(name="A")
-demography.add_population(name="B")
+demography.add_population(name="A", initial_size=1)
+demography.add_population(name="B", initial_size=1)
 msprime.sim_ancestry(samples={"A": 1, "B": 1}, demography=demography)
 ```
 
