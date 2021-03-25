@@ -1512,11 +1512,15 @@ class SweepAnalytical(Test):
         return 4.0 / s * inner
 
     def test_sojourn_time(self):
-        alphas = np.arange(5e-3, 5e-2, 5e-3)
+        """
+        testing against expected sojourn time of a
+        beneficial mutation over a range of selection
+        coefficients
+        """
+        alphas = np.linspace(100, 5000, 20)
         refsize = 1e4
-        nreps = 500
+        nreps = 50
         seqlen = 1e4
-        mu = 2.5e-8
         rho = 0
         p0 = 1.0 / (2 * refsize)
         p1 = 1 - p0
@@ -1525,18 +1529,17 @@ class SweepAnalytical(Test):
         df = pd.DataFrame()
         data = collections.defaultdict(list)
         for a in alphas:
-            mod = msprime.SweepGenicSelection(
-                start_frequency=p0, end_frequency=p1, s=a, dt=dt, position=pos
-            )
             s = a / 2 / refsize
-            replicates = msprime.simulate(
-                10,
-                Ne=refsize,
+            mod = msprime.SweepGenicSelection(
+                start_frequency=p0, end_frequency=p1, s=s, dt=dt, position=pos
+            )
+            replicates = msprime.sim_ancestry(
+                5,
+                population_size=refsize,
                 model=mod,
-                length=seqlen,
+                sequence_length=seqlen,
                 num_labels=2,
                 recombination_rate=rho,
-                mutation_rate=mu,
                 num_replicates=nreps,
             )
 
@@ -1551,6 +1554,10 @@ class SweepAnalytical(Test):
                 reptimes[i] = np.max(tree_times)
                 i += 1
             data["alpha_means"].append(np.mean(reptimes))
+            logging.debug(
+                f"mean time for alpha={a} / s={s} -- \
+                          {np.mean(reptimes)}"
+            )
             data["exp_means"].append(self.charlesworth_exp_sojourn(a, s))
         df = pd.DataFrame.from_dict(data)
         df = df.fillna(0)
@@ -1562,32 +1569,32 @@ class SweepAnalytical(Test):
         pyplot.close("all")
 
     def test_sojourn_time2(self):
+        """
+        testing against expected sojourn time of a
+        beneficial mutation over a range of population
+        sizes but keeping 2Ns constant
+        """
         alpha = 1000
-        refsizes = [0.25, 0.5, 1.0]
-        selrefsize = 1000
-        nreps = 500
+        refsizes = np.linspace(1e2, 1e4, 10)
+        nreps = 50
         seqlen = 1e4
-        mu = 2.5e-8
-        rho = 0
-        p0 = 1.0 / (2 * selrefsize)
-        p1 = 1 - p0
-        dt = 1.0 / (400 * selrefsize)
+        dt = 1e-6
         pos = np.floor(seqlen / 2)
         df = pd.DataFrame()
         data = collections.defaultdict(list)
         for n in refsizes:
             s = alpha / (2 * n)
+            p0 = 1.0 / (2 * n)
+            p1 = 1 - p0
             mod = msprime.SweepGenicSelection(
                 start_frequency=p0, end_frequency=p1, s=s, dt=dt, position=pos
             )
-            replicates = msprime.simulate(
-                10,
-                Ne=n,
+            replicates = msprime.sim_ancestry(
+                5,
+                population_size=n,
                 model=mod,
-                length=seqlen,
+                sequence_length=seqlen,
                 num_labels=2,
-                recombination_rate=rho,
-                mutation_rate=mu,
                 num_replicates=nreps,
             )
 
@@ -1603,6 +1610,10 @@ class SweepAnalytical(Test):
                 i += 1
             data["alpha_means"].append(np.mean(reptimes))
             data["exp_means"].append(self.hermissonPennings_exp_sojourn(alpha) * 2 * n)
+            logging.debug(
+                f"mean time for N={n} -- \
+                          {np.mean(reptimes)}"
+            )
         df = pd.DataFrame.from_dict(data)
         df = df.fillna(0)
         sm.qqplot_2samples(df["exp_means"], df["alpha_means"], line="45")
