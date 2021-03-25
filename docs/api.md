@@ -87,11 +87,6 @@ for discussion and examples of individual features.
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.AncestryModelChange
-    :members:
-```
-
-```{eval-rst}
 .. autoclass:: msprime.StandardCoalescent
 ```
 

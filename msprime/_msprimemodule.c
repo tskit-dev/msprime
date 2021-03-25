@@ -3278,6 +3278,7 @@ PyInit__msprime(void)
     PyModule_AddIntConstant(module, "EXIT_COALESCENCE", MSP_EXIT_COALESCENCE);
     PyModule_AddIntConstant(module, "EXIT_MAX_EVENTS", MSP_EXIT_MAX_EVENTS);
     PyModule_AddIntConstant(module, "EXIT_MAX_TIME", MSP_EXIT_MAX_TIME);
+    PyModule_AddIntConstant(module, "EXIT_MODEL_COMPLETE", MSP_EXIT_MODEL_COMPLETE);
 
     /* The function unset_gsl_error_handler should be called at import time,
      * ensuring we capture the value of the handler. However, just in case
