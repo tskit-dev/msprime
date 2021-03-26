@@ -1503,7 +1503,7 @@ to full coalescence.
 
 #### Multiple models
 
-We are often interested in combining different models in a simulation.
+Sometimes we are interested in combining different models in a simulation.
 To do this we provide a **list** of ancestry model instances as the
 ``model`` argument to {func}`.sim_ancestry`. The models
 are run in the order they are specified. For each model, if its
@@ -1538,7 +1538,7 @@ model here! Otherwise, the entire simulation will run under the DTWF model.
 In this example we've run the {class}`.DiscreteTimeWrightFisher`
 model for the first 500 generations, and then switched to the
 {class}`.StandardCoalescent`. Because we did not specify a
-``duration`` second model, it will run until coalescence.
+``duration`` in the second model, it will run until coalescence.
 
 :::{note}
 Switching models at a fixed time point like this is equivalent to
