@@ -1495,8 +1495,8 @@ we can see that the time the model completed was different in
 the two cases (30.22 vs 28.15 generations ago).
 
 :::{note}
-Models such as {class}`.SweepGenicSelection` can complete due to
-full coalescence also.
+Models such as {class}`.SweepGenicSelection` can also complete due
+to full coalescence.
 :::
 
 (sec_ancestry_models_specifying_multiple)=
@@ -1532,7 +1532,7 @@ ts = msprime.sim_ancestry(
 
 :::{warning}
 It is very imporant to remember to set a ``duration`` value in the first
-model here! Otherwise, the entire simulation will under the DTWF model.
+model here! Otherwise, the entire simulation will run under the DTWF model.
 :::
 
 In this example we've run the {class}`.DiscreteTimeWrightFisher`
