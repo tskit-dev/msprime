@@ -649,25 +649,6 @@ positions. Simulating a continuous genome sequence can be useful for
 theoretical work, but we recommend using discrete coordinates for most
 purposes.
 
-(sec_ancestry_multiple_chromosomes)=
-
-### Multiple chromosomes
-
-Msprime does not directly support simulating multiple chromosomes simultaneously,
-but we can emulate it using a single linear genome split into chromosome
-segments. Multiple chromosomes are modelled by specifying a recombination map with
-single base-pair segments with recombination probability 1/2 separating adjacent
-chromosomes. The probability that a recombination breakpoint occurs
-at a given base pair
-that has recombination rate {math}`r` is {math}`1-e^{-r}`. Thus, we set the
-recombination rate in the base pair segments separating chromosomes to
-{math}`\log(2)`. This ensures that the recombination probability each generation
-is 1/2.
-
-:::{todo}
-Tie this next bit of information here into the derivation above.
-:::
-
 :::{note}
 With a discrete genome and a recombination rate of {math}`r`,
 the expected number of recombinations per unit time and per unit
@@ -677,46 +658,91 @@ is {math}`L (1 - e^{-r})`
 and so {math}`Lr (1 - r/2) < L (1 - e^{-r}) < Lr`.
 :::
 
-For example, the following defines a recombination map for three chromosomes
-each 1 centiMorgan in length:
+(sec_ancestry_multiple_chromosomes)=
+
+### Multiple chromosomes
+
+Msprime does not directly support simulating multiple chromosomes
+simultaneously, but we can emulate it using a single linear genome split into
+chromosome segments. Multiple chromosomes are modelled by specifying
+a recombination map with single base-pair segments with recombination
+probability 1/2 separating adjacent chromosomes. The probability that
+a recombination breakpoint occurs over one unit of time at a given base pair
+that has recombination rate {math}`r` is {math}`1-e^{-r}`. Thus, we set the
+recombination rate in the base pair segments separating chromosomes to
+{math}`\log(2)`. This ensures that the recombination probability each
+generation is 1/2.
+
+#### Do I need to do this?
+
+The main purpose of simulating multiple chromosomes together (instead of
+running independent simulations for each chromosome) is to capture
+correlations between trees on distinct chromosomes. In many scenarios,
+**simulating multiple chromosomes may not be necessary**, and independent
+simulations may be preferable as they will be much more efficient.
+
+[Nelson et al. 2020](https://doi.org/10.1371/journal.pgen.1008619) describes
+a few cases where simulating multiple chromosomes using the DTWF is important
+for accurately modeling shared patterns of variation between samples.
+In large simulated cohorts, where many samples can be close
+relatives, we need the DTWF model and multiple chromosomes to obtain the
+correct distribution of the number and total length of shared IBD segments. We
+similarly require multiple chromosomes and the DTWF model to get the correct
+ancestry patterns for very recently admixed populations.
+
+Additionally,
+{ref}`Multiple merger coalescents <sec_ancestry_models_multiple_mergers>`
+result in positively correlated ancestries between unlinked chromosomes.
+This correlation does not break down in time and multiple chromosomes should
+not be simulated independently under the multiple merger models.
+
+:::{important}
+Simulations of multiple chromosomes under either DTWF or the multiple merger
+models should use a {ref}`discrete genome <sec_ancestry_discrete_genome>`. 
+While it is possible to set up such a simulation using a continuous genome,
+we *strongly* recommend against it, as chromosome divisions cannot be defined
+as discrete break points and the simulation will be very inefficient.
+:::
+
+#### Example
+
+We first set up the chromosome coordinates, recombination rates, and the
+corresponding recombination map. The following defines a recombination map for
+three chromosomes each 1 cM in length:
 
 ```{code-cell}
 import math
 
 r_chrom = 1e-8
 r_break = math.log(2)
-positions = [0, 1e6, 1e6 + 1, 2e6, 2e6 + 1, 3e6]
+chrom_positions = [0, 1e6, 2e6, 3e6]
+map_positions = [
+    chrom_positions[0], 
+    chrom_positions[1],
+    chrom_positions[1] + 1,
+    chrom_positions[2],
+    chrom_positions[2] + 1, 
+    chrom_positions[3]
+]
 rates = [r_chrom, r_break, r_chrom, r_break, r_chrom]
-rate_map = msprime.RateMap(positions, rates)
+rate_map = msprime.RateMap(map_positions, rates)
 ```
 
-The main purpose of simulating multiple chromosomes together (instead of
-running independent simulations for each chromosome) is to capture the correct
-correlation between trees on distinct chromosomes.
+We cannot use the default {class}`.StandardCoalescent` model to run simulations
+of multiple chromosomes; doing so would be equivalent to running independent
+replicate simulations and **much** less efficient. To get the correct
+correlation between chromosomes, we must use a model like
+{ref}`discrete-time Wright-Fisher <sec_ancestry_models_dtwf>`.
+However, because correlations
+between chromosomes break down very rapidly, we only need to simulate using
+`dtwf` for roughly 10-20 generations, after which we can switch to the `hudson`
+model to finish the simulation more efficiently (see the
+{ref}`sec_ancestry_models_specifying` section for more information on switching
+between ancestry models).
 
-:::{important}
-For many purposes simulating multiple chromosomes like this is not necessary
-and independent simulations may be preferable as they will be much more efficient.
-However, {ref}`Multiple merger coalescents <sec_ancestry_models_multiple_mergers>`
-result in positively correlated ancestries between unlinked chromosomes; the
-correlations do not break down in time and multiple chromosomes should not
-be simulated independently.
-:::
-
-We cannot use the default {class}`.StandardCoalescent` model to
-run simulations of multiple chromosomes; doing so would be equivalent
-to running independent replicate simulations and **much** less efficient.
-To get the correct correlation between chromosomes,
-we must use a model like {ref}`discrete-time Wright-Fisher <sec_ancestry_models_dtwf>`.
-However, because correlations between chromosomes break down very rapidly,
-we only need to simulate using `dtwf` for roughly 10-20 generations, after which
-we can switch to the `hudson` model to finish the simulation more efficiently
-(see the {ref}`sec_ancestry_models_specifying` section for more information
-on switching between ancestry models).
-
-In this example, we simulate 10 sampled diploid individuals using
-the recombination map defined above for three chromosomes
-and switching from the `dtwf` to `hudson` model 20 generations ago:
+In this example, we simulate 10 sampled diploid individuals using the
+recombination map defined above for three chromosomes and switching from the
+`dtwf` to `hudson` model 20 generations ago:
 
 ```{code-cell}
 ts = msprime.sim_ancestry(
@@ -732,27 +758,28 @@ ts = msprime.sim_ancestry(
 ts
 ```
 
-To isolate tree sequences for each chromosome, we can trim the full tree sequence
-for each chromosome by defining the end points of each chromosome and using
-the {meth}`~tskit.TreeSequence.keep_intervals` method.
-It is important to specify `simplify=False` so
-that node indices remain consistent across chromosomes. The
-{meth}`~tskit.TreeSequence.trim` method
-is then used to trim the tree sequences to the focal chromosome, so that position
-indices begin at 0 within each chromosome tree sequence.
+To place each chromosome in its own separate tree sequence, we can trim the full tree
+sequence for each chromosome by defining the end points of each chromosome and
+using the {meth}`~tskit.TreeSequence.keep_intervals` method. It is important to
+specify `simplify=False` so that node indices remain consistent across
+chromosomes. The {meth}`~tskit.TreeSequence.trim` method is then used to trim
+the tree sequences to the focal chromosome, so that position indices begin at
+0 within each chromosome tree sequence.
 
 ```{code-cell}
-chrom_positions = [0, 1e6, 2e6, 3e6]
 ts_chroms = []
 for j in range(len(chrom_positions) - 1):
     start, end = chrom_positions[j: j + 2]
     chrom_ts = ts.keep_intervals([[start, end]], simplify=False).trim()
     ts_chroms.append(chrom_ts)
     print(chrom_ts.sequence_length)
+
+# the third chromosome
+chrom_ts
 ```
 
-This gives us a list of tree sequences, one for each chromosome, in the order that
-they were stitched together in the initial recombination map.
+This gives us a list of tree sequences, one for each chromosome, in the order
+that they were stitched together in the initial recombination map.
 
 (sec_ancestry_controlling_randomness)=
 
