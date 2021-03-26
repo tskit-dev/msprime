@@ -1475,7 +1475,7 @@ ts = msprime.sim_ancestry(
     random_seed=1234)
 SVG(ts.draw_svg(y_axis=True))
 ```
-Here, we see that even though we didn't
+Here, we see that even though we didn't specify
 a {ref}`model duration<sec_ancestry_models_specifying_duration>`
 or {ref}`end_time<sec_ancestry_end_time>` parameter the simulation
 has ended before we reached coalescence. In addition, the
