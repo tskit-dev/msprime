@@ -1128,13 +1128,7 @@ class SweepVsSlim(Test):
         self._run(10, 1e6, 1e3, 1e-7, 0.25, 5000, num_replicates=10)
 
 
-# FIXME disabling these for now because they are unreliable and result in
-# errors (root: EXCEPTION:No columns to parse from file). This is probably
-# harmless as it means there's no data simulated, but it stops the rest
-# of the tests from running so we need to deal with it somehow.
-
-
-class MsmsSweeps:
+class MsmsSweeps(Test):
     """
     Compare msms with msprime/discoal for selective sweeps.
 
@@ -1277,36 +1271,53 @@ class MsmsSweeps:
         samples.
         """
         if params["num_sweeps"] > 0:
-            model = [None]
+            model = []
+            t_start = params["end_time_lst"][0] * 4 * params["refsize"]
+            model.append(msprime.StandardCoalescent(duration=(t_start - 0)))
             for i in range(params["num_sweeps"]):
                 temp_model = msprime.SweepGenicSelection(
-                    position=params["sel_pos"],
+                    position=params["sel_pos"] * params["num_sites"],
                     end_frequency=params["end_frequency_lst"][i],
                     start_frequency=0.5 / params["refsize"],
-                    alpha=params["alpha"],
+                    s=params["alpha"] / params["refsize"],  # alpha=saA, s=sAA/(2N)
                     dt=1.0 / (40 * params["refsize"]),
                 )
-                t_start = params["end_time_lst"][i]
-                model.append((t_start, temp_model))
-            model.append((None, None))
+                model.append(temp_model)
+                # Before the Sweep model is made interruptable and support multiple
+                # sweeps, we just use a single sweep for now.
+                break
+            model.append("hudson")
 
         else:
             model = "hudson"
 
-        scale_factor = params["num_sites"]
-        recombination_rate = params["rho"] / (scale_factor - 1)
+        scale_factor = 4.0 * params["refsize"] * (params["num_sites"] - 1)
+        recombination_rate = params["rho"] / scale_factor
+        scale_factor = 4.0 * params["refsize"] * params["num_sites"]
         mutation_rate = params["theta"] / scale_factor
 
-        ts = msprime.simulate(
-            sample_size=params["nsam"],
-            Ne=0.25,
-            length=params["num_sites"],
-            mutation_rate=mutation_rate,
-            recombination_rate=recombination_rate,
+        repeats = msprime.sim_ancestry(
+            samples=params["nsam"] / 2,  # use sample size of diploids
+            population_size=params["refsize"],
             model=model,
+            recombination_rate=recombination_rate,
+            discrete_genome=False,
+            sequence_length=params["num_sites"],
+            num_replicates=params["nrep"],
         )
 
-        return ts
+        # Critical to use BinaryMutationModel and get ancestral and derived alleles
+        mutated_repeats = [
+            msprime.sim_mutations(
+                ts,
+                rate=mutation_rate,
+                model=msprime.BinaryMutationModel(),
+                discrete_genome=False,
+            )
+            for ts in repeats
+        ]
+
+        return mutated_repeats
 
     def _run_msp_sample_stats(self, msms_cmd):
         """
@@ -1319,12 +1330,12 @@ class MsmsSweeps:
 
         # run simulation and print ms format data into a file
         msms_params = self._msms_str_to_parameters(msms_cmd)
-        num_replicates = msms_params["nrep"]
         print("ms " + msms_cmd, file=output)  # needed by sample_stat tools
         self._ms_random_seeds = msms_params["rand_seed"] = self.get_ms_seeds()
 
-        for _ in range(num_replicates):
-            tree_sequence = self._msms_params_to_run_msp(msms_params)
+        mutated_ts_repeats = self._msms_params_to_run_msp(msms_params)
+
+        for tree_sequence in mutated_ts_repeats:
             print(file=output)
             print("//", file=output)
             if msms_params["theta"] > 0:
@@ -1428,12 +1439,15 @@ class MsmsSweeps:
             "100 300 -t 200 -r 200 500000 -SF 0 0.9 -Sp 0.5 -SaA 1 -SAA 2 -N 10000"
         )
 
-    def test_selective_msms_vs_msp_multiple_sweeps(self):
+    """ Not implemented
+    def _test_selective_msms_vs_msp_multiple_sweeps(self):
+
         self._cmp_msms_vs_msp(
             "100 300 -t 200 -r 200 500000"
             " -SF 0 0.9 -Sp 0.5"
             " -SF 0.1 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
         )
+    """
 
     def _test_selective_msp_50Mb(self):
         """
