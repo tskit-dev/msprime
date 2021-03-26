@@ -1541,11 +1541,11 @@ class SmcApproxCoalescent(AncestryModel):
     """
     The Sequentially Markov Coalescent (SMC) model defined by
     `McVean and Cardin (2005) <https://dx.doi.org/10.1098%2Frstb.2005.1673>`_.
-    In the SMC only common ancestor events that result in marginal coalescences
+    In the SMC, only common ancestor events that result in marginal coalescences
     are possible. Under this approximation, the marginal trees along the
-    genome depend only on the immediately previous tree (i.e., are Markovian).
+    genome depend only on the immediately previous tree (i.e. are Markovian).
 
-    .. important::
+    .. note::
         This model is implemented using a naive rejection sampling approach
         and so it may not be any more efficient to simulate than the
         standard Hudson model.
@@ -1565,7 +1565,7 @@ class SmcPrimeApproxCoalescent(AncestryModel):
     join contiguous tracts of ancestral material (as well as events that
     result in marginal coalescences).
 
-    .. important::
+    .. note::
         This model is implemented using a naive rejection sampling approach
         and so it may not be any more efficient to simulate than the
         standard Hudson model.
@@ -1805,8 +1805,8 @@ class SweepGenicSelection(ParametricAncestryModel):
     The model is one of a structured coalescent where selective backgrounds are
     defined as in
     `Braverman et al. (1995) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1206652/>`_
-    The implementation details here follow closely to those in discoal,
-    `Kern and Schrider (2016)
+    The implementation details here follow closely those in discoal
+    `(Kern and Schrider, 2016)
     <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5167068/>`_
 
     See :ref:`sec_ancestry_models_selective_sweeps` for examples and
