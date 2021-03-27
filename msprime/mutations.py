@@ -178,19 +178,26 @@ class InfiniteAllelesMutationModel(
 
 class BinaryMutationModel(MatrixMutationModel):
     """
-    Basic binary mutation model with two alleles: ``"0"`` and ``"1"``. The ancestral
-    allele is always ``"0"`` and the transition probabilities are set such that each
-    mutation always transitions to the other state.
+    Basic binary mutation model with two alleles: ``"0"`` and ``"1"``, and ancestral
+    allele always ``"0"``.
 
     This is a :class:`.MatrixMutationModel` with alleles ``["0", "1"]``,
-    root distribution ``[1.0, 0.0]``, and transition matrix
-    ``[[0.0, 1.0], [1.0, 0.0]]``.
+    root distribution ``[1.0, 0.0]``, and transition matrix that is either
+    ``[[0.0, 1.0], [1.0, 0.0]]`` (by default), or
+    ``[[0.5, 0.5], [0.5, 0.5]]`` (if ``state_independent=True``).
+
+    :param bool state_independent: Whether mutations will be generated in a way
+        independent of the previous allelic state, which includes silent mutations.
+        See :ref:`sec_mutations_existing` for more details.
     """
 
-    def __init__(self):
+    def __init__(self, state_independent=False):
         alleles = ["0", "1"]
         root_distribution = [1, 0]
-        transition_matrix = [[0, 1], [1, 0]]
+        if state_independent:
+            transition_matrix = [[0.5, 0.5], [0.5, 0.5]]
+        else:
+            transition_matrix = [[0.0, 1.0], [1.0, 0.0]]
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
@@ -198,22 +205,33 @@ class JC69MutationModel(MatrixMutationModel):
     """
     Jukes-Cantor mutation model (Jukes and Cantor 1969). Based on the standard ACGT
     nucleotides as alleleic states, this model assumes equal probabilities for
-    ancestral state and equal probabilities for transitions to other alleles.
+    ancestral state and equal probabilities for all possible transitions.
 
     This is a :class:`.MatrixMutationModel` with alleles ``["A", "C", "G", "T"]``,
-    root distribution ``[1/4, 1/4, 1/4, 1/4]``, and transition matrix
-    ``[[0, 1/3, 1/3, 1/3], [1/3, 0, 1/3, 1/3], [1/3, 1/3, 0, 1/3], [1/3, 1/3, 1/3, 0]]``.
+    root distribution ``[1/4, 1/4, 1/4, 1/4]``, and default transition matrix
+    ``[[0, 1/3, 1/3, 1/3], [1/3, 0, 1/3, 1/3],
+    [1/3, 1/3, 0, 1/3], [1/3, 1/3, 1/3, 0]]``.
     It has no free parameters.
 
+    If ``state_independent`` is True, then instead all entries of the
+    transition matrix will be 1/4, so one-quarter of the mutations will be
+    silent. See :ref:`sec_mutations_existing` for more details.
+
     Citation: *Jukes TH, Cantor CR (1969). Evolution of Protein Molecules. pp. 21-132.*
+
+    :param bool state_independent: Whether mutations will be generated in a way
+        independent of the previous allelic state.
     """
 
-    def __init__(self):
+    def __init__(self, state_independent=False):
         alleles = _ACGT_ALLELES
         root_distribution = [0.25, 0.25, 0.25, 0.25]
         transition_matrix = np.zeros((4, 4))
-        transition_matrix[:] = 1 / 3
-        np.fill_diagonal(transition_matrix, 0)
+        if state_independent:
+            transition_matrix[:] = 1 / 4
+        else:
+            transition_matrix[:] = 1 / 3
+            np.fill_diagonal(transition_matrix, 0)
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
@@ -244,16 +262,21 @@ class HKYMutationModel(MatrixMutationModel):
     \\end{bmatrix}`
 
     Here :math:`M` is an overall scaling factor on the mutation rate that can
-    be computed as follows: let :math:`q_{i,j} = \\pi_j` if i<->j is a transversion,
-    and :math:`q_{ij} = \\kappa \\pi_j` otherwise. Set :math:`q_{ii} = 0`, and
-    then let :math:`M` be the largest row sum of :math:`q`, i.e.,
-    :math:`M = \\max_i \\left( \\sum_{j \\neq i} q_{ij} \\right)`.
+    be computed as follows: let :math:`q_{ij} = \\pi_j` if i<->j is a transversion,
+    and :math:`q_{ij} = \\kappa \\pi_j` otherwise. Set :math:`q_{ii} = 0`,
+    and then let :math:`M` be the largest row sum of :math:`q`, i.e.,
+    :math:`M = \\max_i \\left( \\sum_j q_{ij} \\right)`.
     Then, this implementation as a :class:`.MatrixMutationModel` has the transition
-    matrix :math:`P_{ij} = q_{ij} / M`, and :math:`P_{ii}` chosen so rows sum to one.
+    matrix :math:`P_{ij} = q_{ij} / M`, and :math:`P_{ii} = 1 - \\sum_{j\\neq i} P_{ij}`.
 
     Note also that :math:`\\kappa` is the ratio of *individual* mutation rates,
     not the ratio of *total* transition to transversion rates, which would
     be :math:`\\kappa/2`, as is used in some parameterizations.
+
+    If ``state_independent`` is true, then the above is modified by setting
+    :math:`q_{ii} = \\kappa \\pi_i`. This makes the model completely state-independent
+    only if :math:`\\kappa = 1` by adding additional silent mutations.
+    See :ref:`sec_mutations_existing` for more details.
 
     Citation: *Hasegawa M, Kishino H, Yano T (1985).  "Dating of the human-ape
     splitting by a molecular clock of mitochondrial DNA". Journal of Molecular
@@ -276,26 +299,42 @@ class HKYMutationModel(MatrixMutationModel):
     :param list[float] root_distribution: An array of float values of length 4
         which should sum to 1. These values are used to determine the ancestral state of
         each mutational site. Defaults to the value of ``equilibrium_frequencies``.
+    :param bool state_independent: Whether to include a higher rate of silent mutations
+        that makes the model closer to state-independent.
     """
 
-    def __init__(self, kappa, equilibrium_frequencies=None, root_distribution=None):
+    def __init__(
+        self,
+        kappa,
+        equilibrium_frequencies=None,
+        root_distribution=None,
+        state_independent=False,
+    ):
         alleles = _ACGT_ALLELES
         if equilibrium_frequencies is None:
             equilibrium_frequencies = np.array(
                 [0.25, 0.25, 0.25, 0.25], dtype="float64"
             )
+        else:
+            equilibrium_frequencies = np.array(equilibrium_frequencies, dtype="float64")
         if root_distribution is None:
             root_distribution = equilibrium_frequencies.copy()
 
         transition_matrix = np.full((4, 4), 1.0)
-        np.fill_diagonal(transition_matrix, 0.0)
         # positions in transition matrix for transitions
         transition_pos = ((0, 1, 2, 3), (2, 3, 0, 1))
         transition_matrix[transition_pos] = kappa
         transition_matrix *= equilibrium_frequencies
+        if state_independent:
+            np.fill_diagonal(transition_matrix, kappa * equilibrium_frequencies)
+        else:
+            np.fill_diagonal(transition_matrix, 0.0)
         row_sums = transition_matrix.sum(axis=1, dtype="float64")
         transition_matrix /= max(row_sums)
-        np.fill_diagonal(transition_matrix, 1.0 - row_sums / max(row_sums))
+        row_sums = transition_matrix.sum(axis=1, dtype="float64")
+        np.fill_diagonal(
+            transition_matrix, 1.0 - (row_sums - np.diag(transition_matrix))
+        )
 
         super().__init__(alleles, root_distribution, transition_matrix)
 
@@ -332,14 +371,19 @@ class F84MutationModel(MatrixMutationModel):
 
     Here :math:`M` is an overall scaling factor on the mutation rate that can be
     computed as follows: let :math:`q_{ij} = \\pi_j` if i<->j is a transversion,
-    :math:`q_{ij} = (1 + (\\kappa-1)/(\\pi_A + \\pi_G)) \\pi_j` if i and j are A and
-    G in some order, and :math:`q_{ij} = (1 + (\\kappa-1)/(\\pi_C + \\pi_T)) \\pi_j`
-    if i and j are C and T in some order. Set :math:`q_{ii} = 0`, and then let
-    :math:`M` be the largest row sum of :math:`q`, i.e.,
-    :math:`M = \\max_i \\left( \\sum_{j \\neq i} q_{ij} \\right)`.
+    :math:`q_{ij} = (1 + (\\kappa-1)/(\\pi_A + \\pi_G)) \\pi_j` if i and j are
+    A and G in some order,
+    :math:`q_{ij} = (1 + (\\kappa-1)/(\\pi_C + \\pi_T)) \\pi_j` if i and j are
+    C and T in some order, and :math:`q_{ii} = 0`. Let :math:`M` be the largest
+    row sum of :math:`q`, i.e., :math:`M = \\max_i \\left( \\sum_j q_{ij} \\right)`.
     Then, this implementation as a :class:`.MatrixMutationModel` has the
-    transition matrix :math:`P_{ij} = q_{ij} / M`, and :math:`P_{ii}` chosen so
-    rows sum to one.
+    transition matrix :math:`P_{ij} = q_{ij} / M`,
+    and :math:`P_{ii} = 1 - \\sum_{j\\neq i} P_{ij}`.
+
+    If ``state_independent`` is true, then the above is modified by setting
+    :math:`q_{ii} = \\kappa \\pi_i`. This makes the model completely state-independent
+    only if :math:`\\kappa = 1` by adding additional silent mutations.
+    See :ref:`sec_mutations_existing` for more details.
 
     Citation: *Felsenstein J, Churchill GA (January 1996). "A Hidden Markov
     Model approach to variation among sites in rate of evolution". Molecular
@@ -362,10 +406,17 @@ class F84MutationModel(MatrixMutationModel):
     :param list[float] root_distribution: An array of float values of length 4
         which should sum to 1. These values are used to determine the ancestral state of
         each mutational site. Defaults to the value of ``equilibrium_frequencies``.
-
+    :param bool state_independent: Whether to include a higher rate of silent mutations
+        that makes the model closer to state-independent.
     """
 
-    def __init__(self, kappa, equilibrium_frequencies=None, root_distribution=None):
+    def __init__(
+        self,
+        kappa,
+        equilibrium_frequencies=None,
+        root_distribution=None,
+        state_independent=False,
+    ):
         alleles = _ACGT_ALLELES
         if equilibrium_frequencies is None:
             equilibrium_frequencies = [0.25, 0.25, 0.25, 0.25]
@@ -373,20 +424,28 @@ class F84MutationModel(MatrixMutationModel):
             root_distribution = equilibrium_frequencies.copy()
 
         transition_matrix = np.full((4, 4), 1.0, dtype="float64")
-        np.fill_diagonal(transition_matrix, 0.0)
         # positions in transition matrix for transitions
         transition_pos_AG = ((0, 2), (2, 0))
         transition_pos_CT = ((1, 3), (3, 1))
         p_AG = equilibrium_frequencies[0] + equilibrium_frequencies[2]
         p_CT = equilibrium_frequencies[1] + equilibrium_frequencies[3]
-        gamma = kappa - 1
-        transition_matrix[transition_pos_AG] = np.float64(1 + gamma / p_AG)
-        transition_matrix[transition_pos_CT] = np.float64(1 + gamma / p_CT)
+        gamma = np.float64(1 + (kappa - 1) / np.array([p_AG, p_CT]))
+        transition_matrix[transition_pos_AG] = gamma[0]
+        transition_matrix[transition_pos_CT] = gamma[1]
         transition_matrix *= equilibrium_frequencies
+        if state_independent:
+            np.fill_diagonal(
+                transition_matrix,
+                equilibrium_frequencies * np.concatenate([gamma, gamma]),
+            )
+        else:
+            np.fill_diagonal(transition_matrix, 0.0)
         row_sums = transition_matrix.sum(axis=1)
         transition_matrix = transition_matrix / max(row_sums)
         row_sums = transition_matrix.sum(axis=1, dtype="float64")
-        np.fill_diagonal(transition_matrix, 1.0 - row_sums)
+        np.fill_diagonal(
+            transition_matrix, 1.0 - (row_sums - np.diag(transition_matrix))
+        )
 
         super().__init__(alleles, root_distribution, transition_matrix)
 
@@ -415,12 +474,18 @@ class GTRMutationModel(MatrixMutationModel):
     \\end{bmatrix}`
 
     Here :math:`M` is an overall scaling factor on the mutation rate that can be
-    computed as follows: let :math:`q_{ij} = r_{ij} \\pi_j`,
-    and :math:`q_{ii} = 0`, and then let :math:`M` be the largest row sum of
-    :math:`q`, i.e., :math:`M = \\max_i \\left( \\sum_{j \\neq i} q_{ij}
-    \\right)`. Then, this implementation as a :class:`.MatrixMutationModel` has
+    computed as follows: let :math:`q_{ij} = r_{ij} \\pi_j`
+    and :math:`q_{ii} = 0`,
+    and then let :math:`M` be the largest row sum of :math:`q`,
+    i.e., :math:`M = \\max_i \\left( \\sum_j q_{ij} \\right)`.
+    Then, this implementation as a :class:`.MatrixMutationModel` has
     the transition matrix :math:`P_{ij} = q_{ij} / M`, and :math:`P_{ii}`
     chosen so rows sum to one.
+
+    If ``state_independent`` is true, then the above is modified by setting
+    :math:`q_{ii} = \\pi_i`. This makes the model completely state-independent
+    only if all :math:`r_{ij} = 1` by adding additional silent mutations.
+    See :ref:`sec_mutations_existing` for more details.
 
     Citation: *Tavaré S (1986). "Some Probabilistic and Statistical Problems in the
     Analysis of DNA Sequences". Lectures on Mathematics in the Life Sciences. 17:
@@ -441,11 +506,16 @@ class GTRMutationModel(MatrixMutationModel):
     :param list[float] root_distribution: An array of float values of length 4
         which should sum to 1. These values are used to determine the ancestral state of
         each mutational site. Defaults to the value of ``equilibrium_frequencies``.
-
+    :param bool state_independent: Whether to include a higher rate of silent mutations
+        that makes the model closer to state-independent.
     """
 
     def __init__(
-        self, relative_rates, equilibrium_frequencies=None, root_distribution=None
+        self,
+        relative_rates,
+        equilibrium_frequencies=None,
+        root_distribution=None,
+        state_independent=False,
     ):
         alleles = _ACGT_ALLELES
         assert len(relative_rates) == 6
@@ -459,11 +529,13 @@ class GTRMutationModel(MatrixMutationModel):
         tri_upper = np.triu_indices_from(transition_matrix, k=1)
         transition_matrix[tri_upper] = relative_rates
         transition_matrix += transition_matrix.T
+        if state_independent:
+            np.fill_diagonal(transition_matrix, 1.0)
         transition_matrix *= equilibrium_frequencies
         row_sums = transition_matrix.sum(axis=1)
         transition_matrix = transition_matrix / max(row_sums)
         row_sums = transition_matrix.sum(axis=1, dtype="float64")
-        np.fill_diagonal(transition_matrix, 1.0 - row_sums)
+        np.fill_diagonal(transition_matrix, np.diag(transition_matrix) + 1.0 - row_sums)
 
         super().__init__(alleles, root_distribution, transition_matrix)
 
@@ -499,7 +571,7 @@ class BLOSUM62MutationModel(MatrixMutationModel):
     `Seq-Gen <http://tree.bio.ed.ac.uk/software/seqgen/>`_.
     The original citation is: *Henikoff, S., and J. G. Henikoff. 1992. PNAS USA
     89:10915-10919,* and the numerical values were provided in: *Yu,Y.-K.,
-    Wootton,J.C. and Altschul,S.F. (2003) The compositional adjustment of amino
+    Wootton, J.C. and Altschul, S.F. (2003) The compositional adjustment of amino
     acid substitution matrices. Proc. Natl Acad. Sci., USA, 100, 15688–15693.*
     """
 
