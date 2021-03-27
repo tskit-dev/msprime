@@ -1,3 +1,16 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.12
+    jupytext_version: 1.9.1
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 
 (sec_legacy_0x)=
 # Legacy (version 0.x) APIs
@@ -116,13 +129,66 @@ function and is very similar. There are some important differences though:
   mutation times for these 0.x functions for strict compatibility, but this would
   have broken any code using the ``keep`` option in mutate.)
 
-### Utilities
+(sec_legacy_0x_genome_discretisation)=
+### Genome discretisation
 
-* The 0.x class {class}`.RecombinationMap` has been **deprecated** in favour of the new
-  {class}`.RateMap`. This was to (a) generalise the interface to accomodate varying
-  rates of mutation and gene conversion along the genome; and (b) convert to a
-  more modern numpy-based API.
+In msprime 0.x, recombination was implemented internally using a discrete
+number of genetic loci. That is, the simulation was performed in
+*genetic* coordinates, which were then mapped back to *physical* coordinates
+at the end of simulation. This had the significant advantage that
+recombination could be implemented during the simulation as a uniform process
+over these discrete loci. However, it led to
+a number of different numerical issues encountered when mapping back and
+forth between genetic and physical coordinates as well as limiting
+what could be done in terms of gene converion and other processes.
+We therefore changed to using physical coordinates throughout the simulation
+for msprime 1.0.
 
+The simulations in 0.x and 1.x are almost entirely compatible and everything
+should work as expected when running 0.x code on msprime 1.0 or later. However,
+there is one (hopefully obscure) case in which code written for msprime 0.x
+will no longer work.
+
+The ``num_loci`` argument to the 0.x class {class}`.RecombinationMap`
+was used to control the number of discrete genetic loci in the simulation. By
+default, this was set to a large number ({math}`\sim 2^{32}`), effectively
+giving a continuous coordinate space when mapped back into physical units.
+By setting the ``num_loci`` equal
+to the sequence length of the RecombinationMap, we could also specify
+discrete physical loci. Specifying whether we simulate in discrete or continuous
+genome coordinates is now done using the ``discrete_genome`` argument
+to {func}`.sim_ancestry` (see the {ref}`sec_ancestry_discrete_genome`
+section for more details). The {class}`.RateMap` class is now used to
+specify varying rates of recombination along the genome and no longer
+has any concept of genetic "loci" --- the choice of coordinate space
+is now decoupled from our specification of the recombination process.
+
+Both the cases of discrete and fully continuous genomes are well
+supported in msprime 1.x  and so nearly all existing code
+should continue to work as expected.
+What is no longer supported is specifying the "granularity" of the
+continuous space via the ``num_loci`` parameter, and if we try
+to set ``num_loci`` to anything other than the sequence length
+we get an error:
+
+```{code-cell}
+:tags: [raises-exception]
+import msprime
+
+# Here we try to make a sequence length of 10 with 5 discrete loci
+recomb_map = msprime.RecombinationMap(positions=[0, 10], rates=[0.1, 0], num_loci=5)
+```
+
+If you get this error, please check whether specifying a
+number of loci like this was actually what you intended. Almost
+certainly you actually wanted to simulate a continuous genome
+(omit the ``num_loci`` parameter) or a discrete genome
+with the breaks occurring integer boundaries (set ``num_loci``
+equal to the sequence length).
+
+If not, please let us know your use case and we may be able
+to accommodate it in the new code. Until then, you will need
+to downgrade msprime to 0.7.x for your simulations to run.
 
 ## API Reference
 

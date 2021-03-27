@@ -448,10 +448,6 @@ class RateMap:
         )
 
 
-# The RecombinationMap class is deprecated since 1.0. We maintain the
-# functionality where it is possible to do so.
-
-
 class RecombinationMap:
     """
     A RecombinationMap represents the changing rates of recombination
@@ -466,6 +462,10 @@ class RecombinationMap:
     .. important::
         This class is deprecated (but supported indefinitely);
         please use the :class:`.RateMap` class in new code.
+        In particular, note that when specifying ``rates`` in the
+        the :class:`.RateMap` class we now require an array
+        of length :math:`n - 1` (this class requires an array
+        of length :math:`n` in which the last entry is zero).
 
     :param list positions: The positions (in bases) denoting the
         distinct intervals where recombination rates change. These can
@@ -473,12 +473,12 @@ class RecombinationMap:
     :param list rates: The list of rates corresponding to the supplied
         ``positions``. Recombination rates are specified per base,
         per generation.
-    :param int num_loci: **This parameter is deprecated**.
-        The maximum number of non-recombining loci
-        in the underlying simulation. By default this is set to
-        the largest possible value, allowing the maximum resolution
-        in the recombination process. However, for a finite sites
-        model this can be set to smaller values.
+    :param int num_loci: **This parameter is no longer supported.**
+        Must be either None (meaning a continuous genome of the
+        finest possible resolution) or be equal to ``positions[-1]``
+        (meaning a discrete genome). Any other value will result in
+        an error. Please see the :ref:`sec_legacy_0x_genome_discretisation`
+        section for more information.
     """
 
     def __init__(self, positions, rates, num_loci=None, map_start=0):
@@ -519,8 +519,8 @@ class RecombinationMap:
         Parses the specified file in HapMap format.
 
         .. warning::
-            This method is deprecated, use the module-level
-            :func:`read_hapmap` function instead.
+            This method is deprecated, use the :meth:`.RateMap.read_hapmap`
+            method instead.
 
         :param str filename: The name of the file to be parsed. This may be
             in plain text or gzipped plain text.
