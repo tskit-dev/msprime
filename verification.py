@@ -5393,7 +5393,6 @@ class SequentialMutations(MutationTest):
                 repeat_ts = msprime.sim_mutations(
                     repeat_ts,
                     rate=total_rate / num_repeats,
-                    add_ancestral=True,
                     model=model,
                 )
 

@@ -1121,7 +1121,6 @@ def mutate(
         keep=keep,
         start_time=start_time,
         end_time=end_time,
-        add_ancestral=True,
         discrete_genome=False,
     )
 
@@ -1179,7 +1178,6 @@ def sim_mutations(
     end_time=None,
     discrete_genome=None,
     keep=None,
-    add_ancestral=None,
 ):
     """
     Simulates mutations on the specified ancestry and returns the resulting
@@ -1216,22 +1214,14 @@ def sim_mutations(
     that X->Y and X->Z are allowable transitions, but Y->Z is not. If a branch
     already has an X->Y mutation on it, then calling `sim_mutations(...,
     keep=True)` might insert an X->Z mutation above the existing mutation, thus
-    implying the impossible chain X->Y->Z.)  For this reason, if this method
-    attempts to add a new mutation ancestral to any existing mutation, an error
-    will occur, unless ``add_ancestral=True``.
-    The ``add_ancestral`` parameter has no effect if ``keep=False``.
+    implying the impossible chain X->Y->Z.)  However, the effect on nucleotide
+    models of mutation are generally very small.
 
-    In summary, to add more mutations to a tree sequence with existing
-    mutations, you need to either ensure that no new mutations are ancestral to
-    existing ones (e.g., using the ``end_time`` parameter), or set
-    ``add_ancestral=True`` and ensure that the mutational processes involved
-    are compatible.
-
-    .. note:: when ``add_ancestral=True`` there is the possibility of
-        mutations that result in a silent transition (e.g., placing a mutation
-        to A above an existing mutation to A). Such mutations are harmless and
-        are required for us to guarantee the statistical properties of the
-        process of sequentially adding mutations to a tree sequence.
+    .. note:: Many mutation models will insert silent transitions (e.g.,
+        placing a mutation to A above an existing mutation to A). Such mutations
+        are harmless and are required for us to guarantee the statistical
+        properties of the process of sequentially adding mutations to a tree
+        sequence.
 
     :param tskit.TreeSequence tree_sequence: The tree sequence we
         wish to throw mutations onto.
@@ -1256,8 +1246,6 @@ def sim_mutations(
     :param bool discrete_genome: Whether to generate mutations at only integer positions
         along the genome (Default=True).
     :param bool keep: Whether to keep existing mutations. (default: True)
-    :param bool add_ancestral: Whether to allow the addition of new mutations
-        ancestral to existing ones. (default: False)
     :return: The :class:`tskit.TreeSequence` object resulting from overlaying
         mutations on the input tree sequence.
     :rtype: :class:`tskit.TreeSequence`
@@ -1288,7 +1276,6 @@ def sim_mutations(
         raise ValueError("start_time must be <= end_time")
     discrete_genome = core._parse_flag(discrete_genome, default=True)
     keep = core._parse_flag(keep, default=True)
-    add_ancestral = core._parse_flag(add_ancestral, default=False)
 
     model = mutation_model_factory(model)
 
@@ -1312,7 +1299,6 @@ def sim_mutations(
         model=model,
         discrete_genome=discrete_genome,
         keep=keep,
-        kept_mutations_before_end_time=add_ancestral,
         start_time=start_time,
         end_time=end_time,
     )

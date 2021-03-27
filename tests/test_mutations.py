@@ -59,13 +59,11 @@ class TestDefaults:
         mts = msprime.sim_mutations(ts, rate=0.1, random_seed=1)
         assert mts.num_sites > 1
         assert mts.num_mutations > 1
-        # By default trying to put mutations on top of existing ones
-        # raises an error.
-        with pytest.raises(_msprime.LibraryError):
-            msprime.sim_mutations(mts, rate=1, random_seed=1)
-        # But it's OK if we set add_ancestral to True.
+        # It should be OK to put mutations on top of existing ones
         extra_mts = msprime.sim_mutations(
-            mts, rate=0.1, random_seed=2, add_ancestral=True
+            mts,
+            rate=0.1,
+            random_seed=2,
         )
         assert extra_mts.num_sites > 1
         assert extra_mts.num_mutations > mts.num_mutations
@@ -85,7 +83,7 @@ class TestDefaults:
                         mut.derived_state != tables.mutations[mut.parent].derived_state
                     )
         # Should have some here
-        mts = msprime.sim_mutations(mts, rate=10, random_seed=2, add_ancestral=True)
+        mts = msprime.sim_mutations(mts, rate=10, random_seed=2)
         tables = mts.tables
         tree = mts.first()
         silent = 0
@@ -600,8 +598,6 @@ class TestSimMutations(MutateMixin):
             msprime.sim_mutations(ts, rate=10, discrete_genome=[])
         with pytest.raises(TypeError):
             msprime.sim_mutations(ts, rate=10, keep=[])
-        with pytest.raises(TypeError):
-            msprime.sim_mutations(ts, rate=10, add_ancestral=[])
 
 
 class TestFiniteSites(MutateMixin):
@@ -738,24 +734,6 @@ class TestFiniteSites(MutateMixin):
                 assert t1.mutations == t2.mutations
             else:
                 assert t2.sites.num_rows == 0
-
-    def test_bad_mutate_order(self):
-        ts = msprime.sim_ancestry(
-            10, random_seed=1, recombination_rate=1, sequence_length=10
-        )
-        mutated = msprime.sim_mutations(
-            ts, 3, random_seed=5, start_time=0.0, end_time=0.5, discrete_genome=True
-        )
-        with pytest.raises(_msprime.LibraryError):
-            msprime.sim_mutations(
-                mutated,
-                3,
-                random_seed=6,
-                start_time=0.5,
-                end_time=1.0,
-                discrete_genome=True,
-                keep=True,
-            )
 
     def test_one_way_mutation(self):
         for discrete_genome in (True, False):
@@ -1205,28 +1183,7 @@ class TestKeep:
                 ts, rate=1, random_seed=1, keep=True, discrete_genome=False
             )
 
-    def test_add_ancestral(self):
-        ts = msprime.sim_ancestry(
-            12, recombination_rate=3, random_seed=3, sequence_length=10
-        )
-        ts_mut = msprime.sim_mutations(ts, rate=0.1, random_seed=1)
-        assert ts_mut.num_sites > 0
-        with pytest.raises(_msprime.LibraryError):
-            msprime.sim_mutations(
-                ts_mut, rate=1, random_seed=1, keep=True, discrete_genome=True
-            )
-        ts_2mut = msprime.sim_mutations(
-            ts_mut,
-            rate=0.1,
-            random_seed=3,
-            discrete_genome=True,
-            add_ancestral=True,
-        )
-        assert ts_2mut.num_mutations > ts_mut.num_mutations
-
-    def test_keep_only_ancestral(self):
-        # if timespan where mutations will be generated is younger than all
-        # kept mutations, it shouldn't error out
+    def test_keep_overlapping_times(self):
         ts = msprime.sim_ancestry(
             12, recombination_rate=3, random_seed=3, sequence_length=10
         )
@@ -1244,7 +1201,7 @@ class TestKeep:
             random_seed=3,
             discrete_genome=True,
             start_time=0.0,
-            end_time=1.0,
+            end_time=1.5,
         )
         assert ts_2mut.num_mutations > ts_mut.num_mutations
 
@@ -1254,7 +1211,9 @@ class TestKeep:
         assert ts_mut1.num_sites == 1
         assert ts_mut1.num_mutations > 1
         ts_mut2 = msprime.sim_mutations(
-            ts_mut1, rate=1, random_seed=1, add_ancestral=True
+            ts_mut1,
+            rate=1,
+            random_seed=1,
         )
         assert set(ts_mut1.tables.sites.position) <= set(ts_mut2.tables.sites.position)
         # Check that decoding variants succeeds
@@ -1576,7 +1535,6 @@ class TestInfiniteAllelesMutationModel:
             random_seed=1,
             keep=True,
             discrete_genome=True,
-            add_ancestral=True,
         )
         self.validate_unique_alleles(ts)
 
@@ -1597,7 +1555,6 @@ class TestPythonMutationGenerator:
                 rate=rate,
                 keep=keep,
                 discrete_genome=discrete_genome,
-                add_ancestral=True,
                 **kwargs,
             )
             ts2 = py_sim_mutations(
@@ -1646,7 +1603,6 @@ def py_sim_mutations(
     model=None,
     keep=False,
     discrete_genome=False,
-    sequential_only=True,
 ):
     """
     Same interface as mutations.sim_mutations() and should provide identical results.
@@ -1671,7 +1627,6 @@ def py_sim_mutations(
         random_seed,
         keep=keep,
         discrete_genome=discrete_genome,
-        sequential_only=sequential_only,
     )
 
 
@@ -1941,7 +1896,7 @@ class PythonMutationGenerator:
                 index += 1
                 left = right
 
-    def choose_alleles(self, tree_parent, site, mutation_id_offset, sequential_only):
+    def choose_alleles(self, tree_parent, site, mutation_id_offset):
         if site.new:
             site.ancestral_state = self.model.root_allele(self.rng)
         # sort mutations by (increasing id if both are not null,
@@ -1963,15 +1918,6 @@ class PythonMutationGenerator:
                 parent_mut = bottom_mutation[u]
                 mut.parent = parent_mut
                 assert mut.time <= parent_mut.time, "Parent after child mutation."
-                if sequential_only and (
-                    mut.time > parent_mut.time or (parent_mut.new and not mut.new)
-                ):
-                    raise ValueError(
-                        "Generated mutation appears above "
-                        "an existing mutation: cannot apply "
-                        "finite sites mutations to a earlier "
-                        "time period than where they already exist."
-                    )
                 if mut.new:
                     pa = parent_mut.derived_state
 
@@ -1984,7 +1930,7 @@ class PythonMutationGenerator:
             if mut.keep:
                 bottom_mutation[mut.node] = mut
 
-    def apply_mutations(self, tables, sequential_only):
+    def apply_mutations(self, tables):
         ts = tables.tree_sequence()
         positions = sorted(self.sites.keys())
         j = 0
@@ -1998,14 +1944,20 @@ class PythonMutationGenerator:
             while j < len(positions) and positions[j] < tree_right:
                 site = self.sites[positions[j]]
                 self.choose_alleles(
-                    tree_parent, site, mutation_id_offset, sequential_only
+                    tree_parent,
+                    site,
+                    mutation_id_offset,
                 )
                 num_mutations = len(site.mutations)
                 mutation_id_offset += num_mutations
                 j += 1
 
     def generate(
-        self, tables, seed, keep=False, discrete_genome=False, sequential_only=True
+        self,
+        tables,
+        seed,
+        keep=False,
+        discrete_genome=False,
     ):
         self.rng = _msprime.RandomGenerator(seed)
         if keep:
@@ -2013,7 +1965,7 @@ class PythonMutationGenerator:
         tables.sites.clear()
         tables.mutations.clear()
         self.place_mutations(tables, discrete_genome=discrete_genome)
-        self.apply_mutations(tables, sequential_only=sequential_only)
+        self.apply_mutations(tables)
         self.populate_tables(tables)
         self.record_provenance(tables, seed, keep, discrete_genome)
         return tables.tree_sequence()

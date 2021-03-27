@@ -188,8 +188,7 @@ test_mutgen_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     /* we shouldn't error the first time since existing site is nucleotide
      * but not at an integer loction*/
-    ret = mutgen_generate(&mutgen,
-        MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutgen_free(&mutgen);
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
@@ -198,8 +197,7 @@ test_mutgen_errors(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_rate(&mutgen, 20);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen,
-        MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNKNOWN_ALLELE);
 
     mutgen_free(&mutgen);
@@ -224,7 +222,7 @@ test_mutgen_errors(void)
 }
 
 static void
-test_mutgen_bad_mutation_order(void)
+test_mutgen_backwards_mutation_order(void)
 {
     int ret = 0;
     mutgen_t mutgen;
@@ -239,20 +237,19 @@ test_mutgen_bad_mutation_order(void)
     ret = matrix_mutation_model_factory(&mut_model, ALPHABET_NUCLEOTIDE);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    /* bad mutation generation order */
+    /* check can add mutations in backwards order */
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_time_interval(&mutgen, 0.0, 0.5);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_rate(&mutgen, 20);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen,
-        MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_time_interval(&mutgen, 0.5, 1.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     mutgen_free(&mutgen);
     mutation_model_free(&mut_model);
@@ -366,8 +363,7 @@ test_single_tree_mutgen_keep_sites(void)
     /* and, with discrete sites */
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen,
-        MSP_KEEP_SITES | MSP_DISCRETE_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy, 0));
     mutgen_free(&mutgen);
@@ -399,8 +395,7 @@ test_single_tree_mutgen_keep_sites(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_rate(&mutgen, 10);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen,
-        MSP_KEEP_SITES | MSP_DISCRETE_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
     CU_ASSERT_TRUE(tables.sites.num_rows > copy2.sites.num_rows);
     CU_ASSERT_TRUE(tables.mutations.num_rows > copy2.mutations.num_rows);
     mutgen_free(&mutgen);
@@ -423,8 +418,7 @@ test_single_tree_mutgen_keep_sites(void)
     ret = mutgen_generate(&mutgen, MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_DUPLICATE_SITE_POSITION);
     /* and, discrete sites */
-    ret = mutgen_generate(&mutgen,
-        MSP_KEEP_SITES | MSP_DISCRETE_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_DUPLICATE_SITE_POSITION);
 
     mutgen_free(&mutgen);
@@ -490,8 +484,7 @@ test_single_tree_mutgen_discrete_sites(void)
     ret = tsk_mutation_table_add_row(&tables.mutations, 0, 4, 1, 1.0, "G", 1, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 2);
 
-    ret = mutgen_generate(&mutgen,
-        MSP_KEEP_SITES | MSP_DISCRETE_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    ret = mutgen_generate(&mutgen, MSP_KEEP_SITES | MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(tables.sites.num_rows, 2);
     CU_ASSERT_FATAL(tables.mutations.num_rows > 3);
@@ -527,8 +520,7 @@ test_single_tree_mutgen_keep_sites_many_mutations(void)
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = mutgen_generate(&mutgen,
-        MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     mutgen_free(&mutgen);
@@ -558,16 +550,6 @@ test_mutation_time(void)
     CU_ASSERT_FATAL(ret >= 1);
 
     gsl_rng_set(rng, 2);
-    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_set_rate(&mutgen, 1);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    /* should error out with discrete sites and keeping mutations older
-     * start_time */
-    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER);
-    mutgen_free(&mutgen);
 
     // should not error if ancestral mutations are allowed
     ret = tsk_mutation_table_clear(&tables.mutations);
@@ -580,13 +562,12 @@ test_mutation_time(void)
     CU_ASSERT_FATAL(ret >= 0);
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen,
-        MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutgen_free(&mutgen);
 
     /* should not error out with discrete times and kept mutations older
-     * end_time */
+     * than end_time */
     ret = tsk_mutation_table_clear(&tables.mutations);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_site_table_clear(&tables.sites);
@@ -606,8 +587,7 @@ test_mutation_time(void)
     ret = tsk_mutation_table_add_row(
         &tables.mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "1", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = mutgen_generate(&mutgen,
-        MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_UNKNOWN_TIME_NOT_SUPPORTED);
     mutgen_free(&mutgen);
 
@@ -707,8 +687,7 @@ test_single_tree_mutgen_empty_site(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_rate(&mutgen, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen,
-        MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     mutgen_free(&mutgen);
@@ -748,8 +727,7 @@ test_single_tree_mutgen_do_nothing_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_rate(&mutgen, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = mutgen_generate(&mutgen,
-        MSP_DISCRETE_SITES | MSP_KEEP_SITES | MSP_KEPT_MUTATIONS_BEFORE_END_TIME);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_TRUE(tsk_table_collection_equals(&tables, &copy, 0));
     mutgen_free(&mutgen);
@@ -793,7 +771,7 @@ test_single_tree_mutgen_many_mutations(void)
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     mutgen_free(&mutgen);
 
     mutation_model_free(&mut_model);
@@ -1276,7 +1254,7 @@ main(int argc, char **argv)
     CU_TestInfo tests[] = {
         { "test_mutgen_simple_map", test_mutgen_simple_map },
         { "test_mutgen_errors", test_mutgen_errors },
-        { "test_mutgen_bad_mutation_order", test_mutgen_bad_mutation_order },
+        { "test_mutgen_backwards_mutation_order", test_mutgen_backwards_mutation_order },
         { "test_single_tree_mutgen", test_single_tree_mutgen },
         { "test_single_tree_mutgen_keep_sites", test_single_tree_mutgen_keep_sites },
         { "test_single_tree_mutgen_discrete_sites",

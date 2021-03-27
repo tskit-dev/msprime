@@ -63,7 +63,6 @@
 /* Flags for mutgen */
 #define MSP_KEEP_SITES (1 << 0)
 #define MSP_DISCRETE_SITES (1 << 1)
-#define MSP_KEPT_MUTATIONS_BEFORE_END_TIME (1 << 2)
 
 /* Pedigree states */
 #define MSP_PED_STATE_UNCLIMBED 0
