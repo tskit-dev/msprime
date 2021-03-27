@@ -33,6 +33,10 @@
 - The `end_time` option now allows events up to and including the specified
   max time. Previously, events occurred strictly before the max time.
   ({user}`apragsdale`, {issue}`1304`, {pr}`1521`)
+- The class msprime.Population now refers to the new demography API. This
+  may break old code that depends on the tskit table entities being
+  exported from msprime (other classes are now formally deprecated and
+  will raise a warning; see the deprecations section).
 
 **Deprecations**:
 

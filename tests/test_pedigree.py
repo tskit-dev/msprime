@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import msprime
+from msprime import pedigrees
 
 
 class TestPedigree(unittest.TestCase):
@@ -30,7 +31,9 @@ class TestPedigree(unittest.TestCase):
         is_sample = np.array([1, 1, 0, 0])
 
         model = msprime.WrightFisherPedigree()
-        ped = msprime.Pedigree(individual, parents, time, is_sample, sex=None, ploidy=2)
+        ped = pedigrees.Pedigree(
+            individual, parents, time, is_sample, sex=None, ploidy=2
+        )
         replicates = msprime.simulate(
             2, pedigree=ped, model=model, recombination_rate=1, num_replicates=100
         )
@@ -42,7 +45,7 @@ class TestPedigree(unittest.TestCase):
         parents = np.array([2, 3, 2, 3, -1, -1, -1, -1]).reshape(-1, 2)
         time = np.array([0, 0, 1, 1])
 
-        ped = msprime.Pedigree(individual, parents, time)
+        ped = pedigrees.Pedigree(individual, parents, time)
         # This interface is pretty poor - what we want is for the
         # samples argument to simulate to be interpreted as individual
         # IDs. For now, let's just leave it as it is, though.
@@ -69,38 +72,40 @@ class TestPedigree(unittest.TestCase):
         time = np.array([0, 0, 1, 1])
         is_sample = np.array([1, 1, 0, 0])
 
-        ped = msprime.Pedigree(individual, parents, time, is_sample, sex=None, ploidy=2)
+        ped = pedigrees.Pedigree(
+            individual, parents, time, is_sample, sex=None, ploidy=2
+        )
 
         ped.save_txt(self.temp_pedigree_text_file)
         with pytest.raises(NotImplementedError):
-            msprime.Pedigree.read_txt(
+            pedigrees.Pedigree.read_txt(
                 self.temp_pedigree_text_file,
                 sex_col=4,
             )
         # FIXME
         # The compute_times should be done automatically in this case .
-        # ped_from_txt = msprime.Pedigree.read_txt(
+        # ped_from_txt = pedigrees.Pedigree.read_txt(
         #     self.temp_pedigree_text_file, time_col=None
         # )
         # ts = msprime.simulate(2, pedigree=ped_from_txt, model="wf_ped")
         # self.assertTrue(ts is not None)
-        # ped_from_txt = msprime.Pedigree.read_txt(
+        # ped_from_txt = pedigrees.Pedigree.read_txt(
         #     self.temp_pedigree_text_file, time_col=3
         # )
         # ts = msprime.simulate(2, pedigree=ped_from_txt, model="wf_ped")
         # self.assertTrue(ts is not None)
 
         ped.save_npy(self.temp_pedigree_array_file)
-        ped_from_npy = msprime.Pedigree.read_npy(self.temp_pedigree_array_file)
+        ped_from_npy = pedigrees.Pedigree.read_npy(self.temp_pedigree_array_file)
         # TODO compre this to the file above.
-        assert isinstance(ped_from_npy, msprime.Pedigree)
+        assert isinstance(ped_from_npy, pedigrees.Pedigree)
 
     def test_pedigree_times(self):
         individual = np.array([1, 2, 3, 4])
         time = np.array([0, 0, 1, 1])
 
         parent_IDs = np.array([3, 4, 3, 4, 0, 0, 0, 0]).reshape(-1, 2)
-        estimated_times = msprime.Pedigree.get_times(
+        estimated_times = pedigrees.Pedigree.get_times(
             individual, parent_IDs=parent_IDs, check=True
         )
         assert (time == estimated_times).all()
@@ -112,12 +117,12 @@ class TestPedigree(unittest.TestCase):
 
         bad_individual = np.array([0, 1, 2, 3])
         with pytest.raises(ValueError):
-            msprime.Pedigree.parent_ID_to_index(bad_individual, parent_IDs)
+            pedigrees.Pedigree.parent_ID_to_index(bad_individual, parent_IDs)
         assert (
-            msprime.Pedigree.parent_ID_to_index(individual, parent_IDs) == parents
+            pedigrees.Pedigree.parent_ID_to_index(individual, parent_IDs) == parents
         ).all()
         assert (
-            msprime.Pedigree.parent_index_to_ID(individual, parents) == parent_IDs
+            pedigrees.Pedigree.parent_index_to_ID(individual, parents) == parent_IDs
         ).all()
 
     def test_pedigree_sanity_checks(self):
@@ -127,7 +132,7 @@ class TestPedigree(unittest.TestCase):
         is_sample = np.array([1, 1, 0, 0])
 
         with pytest.raises(NotImplementedError):
-            msprime.Pedigree(
+            pedigrees.Pedigree(
                 individual=individual,
                 parents=parents,
                 time=time,
@@ -135,21 +140,21 @@ class TestPedigree(unittest.TestCase):
             )
         bad_parents = np.array([2, 3, 2, 3, -1, -1, -1, -1]).reshape(-1, 4)
         with pytest.raises(ValueError):
-            msprime.Pedigree(
+            pedigrees.Pedigree(
                 individual=individual,
                 parents=bad_parents,
                 time=time,
             )
         bad_individual = np.array([-1, 2, 3, 4])
         with pytest.raises(ValueError):
-            msprime.Pedigree(
+            pedigrees.Pedigree(
                 individual=bad_individual,
                 parents=parents,
                 time=time,
             )
 
         bad_times = np.array([1, 1, 1, 1])
-        ped = msprime.Pedigree(
+        ped = pedigrees.Pedigree(
             individual, parents, bad_times, is_sample, sex=None, ploidy=2
         )
         with pytest.raises(ValueError):
@@ -159,7 +164,7 @@ class TestPedigree(unittest.TestCase):
                 time=ped.time,
             )
 
-        ped = msprime.Pedigree(individual, parents, time, sex=None, ploidy=2)
+        ped = pedigrees.Pedigree(individual, parents, time, sex=None, ploidy=2)
         with pytest.raises(ValueError):
             ped.set_samples()
         with pytest.raises(ValueError):

@@ -36,6 +36,7 @@ import stdpopsim
 import tskit
 
 import msprime
+import msprime.demography as demog_mod
 from msprime import _msprime
 
 
@@ -267,7 +268,9 @@ class TestIntrospectionInterface:
         assert str(event) == repr_s
 
     def test_symmetric_migration_rate_change(self):
-        event = msprime.SymmetricMigrationRateChange(time=1, populations=[0, 1], rate=2)
+        event = demog_mod.SymmetricMigrationRateChange(
+            time=1, populations=[0, 1], rate=2
+        )
         repr_s = "SymmetricMigrationRateChange(time=1, populations=[0, 1], rate=2)"
         assert repr(event) == repr_s
         assert str(event) == repr_s
@@ -279,25 +282,25 @@ class TestIntrospectionInterface:
         assert str(event) == repr_s
 
     def test_population_split(self):
-        event = msprime.PopulationSplit(time=1, derived=[0], ancestral=1)
+        event = demog_mod.PopulationSplit(time=1, derived=[0], ancestral=1)
         repr_s = "PopulationSplit(time=1, derived=[0], ancestral=1)"
         assert repr(event) == repr_s
         assert str(event) == repr_s
 
     def test_simple_bottleneck(self):
-        event = msprime.SimpleBottleneck(time=1, population=1, proportion=0.5)
+        event = demog_mod.SimpleBottleneck(time=1, population=1, proportion=0.5)
         repr_s = "SimpleBottleneck(time=1, population=1, proportion=0.5)"
         assert repr(event) == repr_s
         assert str(event) == repr_s
 
     def test_instantaneous_bottleneck(self):
-        event = msprime.InstantaneousBottleneck(time=1, population=1, strength=1.5)
+        event = demog_mod.InstantaneousBottleneck(time=1, population=1, strength=1.5)
         repr_s = "InstantaneousBottleneck(time=1, population=1, strength=1.5)"
         assert repr(event) == repr_s
         assert str(event) == repr_s
 
     def test_census(self):
-        event = msprime.CensusEvent(time=1)
+        event = demog_mod.CensusEvent(time=1)
         repr_s = "CensusEvent(time=1)"
         assert repr(event) == repr_s
         assert str(event) == repr_s
@@ -341,10 +344,10 @@ class TestTimeTravelErrors:
                     model=model,
                     sample_size=100,
                     demographic_events=[
-                        msprime.SimpleBottleneck(
+                        demog_mod.SimpleBottleneck(
                             time=0.1, population=0, proportion=0.75
                         ),
-                        msprime.SimpleBottleneck(
+                        demog_mod.SimpleBottleneck(
                             time=0.1, population=0, proportion=1.0
                         ),
                     ],
@@ -407,7 +410,7 @@ class TestBadDemographicParameters:
             msprime.simulate(
                 sample_size=2,
                 model="dtwf",
-                demographic_events=[msprime.SimpleBottleneck(time=0.1, population=0)],
+                demographic_events=[demog_mod.SimpleBottleneck(time=0.1, population=0)],
                 random_seed=1,
             )
 
@@ -556,7 +559,7 @@ class TestEventsWithoutDemography:
     """
 
     def test_convert_id(self):
-        event = msprime.DemographicEvent(0.0)
+        event = demog_mod.DemographicEvent(0.0)
         for j in range(5):
             assert event._convert_id(j) == j
             numpy_val = np.array([j])[0]
@@ -1112,12 +1115,14 @@ class TestDemographicEventMessages:
         assert event._effect() == "Backwards-time migration rate from 0 to 1 → 6"
 
     def test_symmetric_migration_rate_change(self):
-        event = msprime.SymmetricMigrationRateChange(time=1, populations=[0, 1], rate=2)
+        event = demog_mod.SymmetricMigrationRateChange(
+            time=1, populations=[0, 1], rate=2
+        )
         assert event._parameters() == "populations=[0, 1], rate=2"
         assert event._effect() == (
             "Sets the symmetric migration rate between 0 and 1 to 2 per generation"
         )
-        event = msprime.SymmetricMigrationRateChange(
+        event = demog_mod.SymmetricMigrationRateChange(
             time=1, populations=[0, 1, 2], rate=2
         )
         assert event._parameters() == "populations=[0, 1, 2], rate=2"
@@ -1127,7 +1132,7 @@ class TestDemographicEventMessages:
         )
 
     def test_population_split(self):
-        event = msprime.PopulationSplit(time=1, derived=[0], ancestral=2)
+        event = demog_mod.PopulationSplit(time=1, derived=[0], ancestral=2)
         assert event._parameters() == "derived=[0], ancestral=2"
         assert event._effect() == (
             "Moves all lineages from the '0' derived population to the "
@@ -1135,7 +1140,7 @@ class TestDemographicEventMessages:
             "all migration rates to and from the derived population to zero."
         )
 
-        event = msprime.PopulationSplit(time=1, derived=[0, 1], ancestral=2)
+        event = demog_mod.PopulationSplit(time=1, derived=[0, 1], ancestral=2)
         assert event._parameters() == "derived=[0, 1], ancestral=2"
         assert event._effect() == (
             "Moves all lineages from derived populations '0' and '1' to the "
@@ -1143,7 +1148,7 @@ class TestDemographicEventMessages:
             "and all migration rates to and from the derived populations to zero."
         )
 
-        event = msprime.PopulationSplit(time=1, derived=[0, 1, 2], ancestral=3)
+        event = demog_mod.PopulationSplit(time=1, derived=[0, 1, 2], ancestral=3)
         assert event._parameters() == "derived=[0, 1, 2], ancestral=3"
         assert event._effect() == (
             "Moves all lineages from derived populations [0, 1, 2] to the "
@@ -1152,14 +1157,14 @@ class TestDemographicEventMessages:
         )
 
     def test_admixture(self):
-        event = msprime.Admixture(time=1, derived=0, ancestral=[1], proportions=[1])
+        event = demog_mod.Admixture(time=1, derived=0, ancestral=[1], proportions=[1])
         assert event._parameters() == "derived=0 ancestral=[1] proportions=[1.00]"
         assert event._effect() == (
             "Moves all lineages from admixed population '0' to ancestral population. "
             "Lineages move to '1' with proba 1. Set '0' to inactive, and all "
             "migration rates to and from '0' to zero."
         )
-        event = msprime.Admixture(
+        event = demog_mod.Admixture(
             time=1, derived=0, ancestral=[1, 2], proportions=[1 / 4, 3 / 4]
         )
         assert (
@@ -1189,19 +1194,19 @@ class TestDemographicEventMessages:
         assert event._effect() == effect
 
     def test_simple_bottleneck(self):
-        event = msprime.SimpleBottleneck(time=1, population=1, proportion=0.5)
+        event = demog_mod.SimpleBottleneck(time=1, population=1, proportion=0.5)
         assert event._parameters() == "population=1, proportion=0.5"
         assert event._effect() == (
             "Lineages in population 1 coalesce with probability 0.5"
         )
 
     def test_instantaneous_bottleneck(self):
-        event = msprime.InstantaneousBottleneck(time=1, population=1, strength=1.5)
+        event = demog_mod.InstantaneousBottleneck(time=1, population=1, strength=1.5)
         assert event._parameters() == "population=1, strength=1.5"
         assert event._effect() == "Equivalent to 1.5 generations of the coalescent"
 
     def test_census(self):
-        event = msprime.CensusEvent(time=1)
+        event = demog_mod.CensusEvent(time=1)
         assert event._parameters() == ""
         assert event._effect() == (
             "Insert census nodes to record the location of all lineages"
@@ -2304,9 +2309,9 @@ class TestCoalescenceLocations:
         t3 = 0.0003
         t4 = 0.0004
         demographic_events = [
-            msprime.InstantaneousBottleneck(time=t1, population=0, strength=strength),
-            msprime.InstantaneousBottleneck(time=t2, population=1, strength=strength),
-            msprime.InstantaneousBottleneck(time=t3, population=2, strength=strength),
+            demog_mod.InstantaneousBottleneck(time=t1, population=0, strength=strength),
+            demog_mod.InstantaneousBottleneck(time=t2, population=1, strength=strength),
+            demog_mod.InstantaneousBottleneck(time=t3, population=2, strength=strength),
             msprime.MassMigration(time=t4, source=2, dest=0),
             msprime.MassMigration(time=t4, source=1, dest=0),
         ]
@@ -2694,7 +2699,7 @@ class TestTimeUnitsHudson(unittest.TestCase, TimeUnitsMixin):
         # coalescence.
         demographic_events = [
             msprime.MassMigration(time=t, source=1, dest=0),
-            msprime.InstantaneousBottleneck(time=t, population=0, strength=100),
+            demog_mod.InstantaneousBottleneck(time=t, population=0, strength=100),
         ]
         reps = msprime.simulate(
             Ne=Ne,
@@ -3127,7 +3132,7 @@ class EndTimeMixin:
             end_time=max_time,
             model=self.model,
             demographic_events=[
-                msprime.SimpleBottleneck(
+                demog_mod.SimpleBottleneck(
                     time=max_time + 1e-6, population=0, proportion=1
                 )
             ],
@@ -3397,7 +3402,7 @@ class TestCensusEvent:
         ts = msprime.simulate(
             sample_size=5,
             random_seed=1,
-            demographic_events=[msprime.CensusEvent(time=census_time)],
+            demographic_events=[demog_mod.CensusEvent(time=census_time)],
         )
         self.verify(ts, census_time)
 
@@ -3407,7 +3412,7 @@ class TestCensusEvent:
             sample_size=5,
             random_seed=1,
             recombination_rate=0.4,
-            demographic_events=[msprime.CensusEvent(time=census_time)],
+            demographic_events=[demog_mod.CensusEvent(time=census_time)],
         )
         self.verify(ts, census_time)
 
@@ -3418,7 +3423,10 @@ class TestCensusEvent:
         ts = msprime.simulate(
             population_configurations=[pop, pop],
             length=1000,
-            demographic_events=[msprime.CensusEvent(time=census_time), mig_rate_change],
+            demographic_events=[
+                demog_mod.CensusEvent(time=census_time),
+                mig_rate_change,
+            ],
             recombination_rate=1e-5,
             random_seed=142,
         )
@@ -3436,7 +3444,7 @@ class TestCensusEvent:
             msprime.simulate(
                 sample_size=2,
                 random_seed=3,
-                demographic_events=[msprime.CensusEvent(time=0)],
+                demographic_events=[demog_mod.CensusEvent(time=0)],
             )
 
     def test_migration_time_equals_census_time(self):
@@ -3448,7 +3456,10 @@ class TestCensusEvent:
         ts = msprime.simulate(
             population_configurations=[pop, pop],
             length=1000,
-            demographic_events=[msprime.CensusEvent(time=census_time), mig_rate_change],
+            demographic_events=[
+                demog_mod.CensusEvent(time=census_time),
+                mig_rate_change,
+            ],
             recombination_rate=1e-5,
             random_seed=142,
         )
@@ -3466,7 +3477,7 @@ class TestCensusEvent:
         ts = msprime.simulate(
             population_configurations=[pop, pop],
             length=1000,
-            demographic_events=[divergence, msprime.CensusEvent(time=census_time)],
+            demographic_events=[divergence, demog_mod.CensusEvent(time=census_time)],
             recombination_rate=1e-5,
             random_seed=12,
         )
@@ -3483,7 +3494,7 @@ class TestCensusEvent:
         tsc = msprime.simulate(
             sample_size=2,
             random_seed=525,
-            demographic_events=[msprime.CensusEvent(time=2000)],
+            demographic_events=[demog_mod.CensusEvent(time=2000)],
         )
         assert ts.tables.nodes == tsc.tables.nodes
 
@@ -4080,7 +4091,7 @@ class TestSteppingStoneModel(TestPreCannedModels):
 
 class TestDemographicEventBase:
     def test_str_methods_not_implemented(self):
-        de = msprime.DemographicEvent(0)
+        de = demog_mod.DemographicEvent(0)
         with pytest.raises(NotImplementedError):
             de._parameters()
         with pytest.raises(NotImplementedError):
@@ -4170,9 +4181,9 @@ class TestDemographyObject:
         assert m1 != msprime.Demography.isolated_model([1, 1])
         assert m1 != msprime.Demography.island_model([2, 1], 1 / 3)
 
-        m1.add_event(msprime.SymmetricMigrationRateChange(1, [0, 1], 0.1))
+        m1.add_event(demog_mod.SymmetricMigrationRateChange(1, [0, 1], 0.1))
         assert m1 != m2
-        m2.add_event(msprime.SymmetricMigrationRateChange(1, [0, 1], 0.1))
+        m2.add_event(demog_mod.SymmetricMigrationRateChange(1, [0, 1], 0.1))
         assert m1 == m2
         m1.events[0].rate = 0.01
         assert m1 != m2
@@ -4886,7 +4897,7 @@ class TestPopulationSplit:
             else:
                 assert not epoch.populations[u].active
 
-        sm = msprime.PopulationStateMachine
+        sm = demog_mod.PopulationStateMachine
         for epoch in dbg.epochs[1:]:
             ancestral = epoch.events[0].ancestral
             assert tree.time(ancestral) == epoch.start_time
@@ -5253,49 +5264,49 @@ class TestNormaliseLineageMovements:
         demography = msprime.Demography.isolated_model([10] * 10)
         mm = msprime.MassMigration(time=1, source=1, dest=0, proportion=0.2)
         assert demography._normalise_lineage_movements([mm]) == {
-            1: [msprime.LineageMovement(1, 0, 0.2)]
+            1: [demog_mod.LineageMovement(1, 0, 0.2)]
         }
 
     def test_filter_other_events(self):
         demography = msprime.Demography.isolated_model([10] * 10)
         events = [
-            msprime.CensusEvent(0.1),
-            msprime.PopulationParametersChange(0.1, growth_rate=10, initial_size=1),
-            msprime.MigrationRateChange(0.1, rate=0),
-            msprime.SymmetricMigrationRateChange(0.1, [0, 1], rate=0),
-            msprime.InstantaneousBottleneck(0.1, population=0, strength=100),
-            msprime.SimpleBottleneck(0.1, population=1, proportion=0.1),
+            demog_mod.CensusEvent(0.1),
+            demog_mod.PopulationParametersChange(0.1, growth_rate=10, initial_size=1),
+            demog_mod.MigrationRateChange(0.1, rate=0),
+            demog_mod.SymmetricMigrationRateChange(0.1, [0, 1], rate=0),
+            demog_mod.InstantaneousBottleneck(0.1, population=0, strength=100),
+            demog_mod.SimpleBottleneck(0.1, population=1, proportion=0.1),
             # Just include the mass migration here.
-            msprime.MassMigration(time=0.1, source=1, dest=0, proportion=0.2),
+            demog_mod.MassMigration(time=0.1, source=1, dest=0, proportion=0.2),
         ]
         # Only lineage movements are included.
         assert demography._normalise_lineage_movements(events) == {
-            1: [msprime.LineageMovement(1, 0, 0.2)]
+            1: [demog_mod.LineageMovement(1, 0, 0.2)]
         }
 
     def test_convert_population_split(self):
         demography = msprime.Demography.isolated_model([10] * 10)
-        events = [msprime.PopulationSplit(0.1, [0], 2)]
+        events = [demog_mod.PopulationSplit(0.1, [0], 2)]
         equiv = {
-            0: [msprime.LineageMovement(0, 2, 1.0)],
+            0: [demog_mod.LineageMovement(0, 2, 1.0)],
         }
         assert equiv == demography._normalise_lineage_movements(events)
 
-        events = [msprime.PopulationSplit(0.1, [0, 1], 2)]
+        events = [demog_mod.PopulationSplit(0.1, [0, 1], 2)]
         equiv = {
-            0: [msprime.LineageMovement(0, 2, 1.0)],
-            1: [msprime.LineageMovement(1, 2, 1.0)],
+            0: [demog_mod.LineageMovement(0, 2, 1.0)],
+            1: [demog_mod.LineageMovement(1, 2, 1.0)],
         }
         assert equiv == demography._normalise_lineage_movements(events)
 
-        events = [msprime.PopulationSplit(0.1, [1, 0], 2)]
+        events = [demog_mod.PopulationSplit(0.1, [1, 0], 2)]
         assert equiv == demography._normalise_lineage_movements(events)
 
-        events = [msprime.PopulationSplit(0.1, [1, 0, 3], 2)]
+        events = [demog_mod.PopulationSplit(0.1, [1, 0, 3], 2)]
         equiv = {
-            0: [msprime.LineageMovement(0, 2, 1.0)],
-            1: [msprime.LineageMovement(1, 2, 1.0)],
-            3: [msprime.LineageMovement(3, 2, 1.0)],
+            0: [demog_mod.LineageMovement(0, 2, 1.0)],
+            1: [demog_mod.LineageMovement(1, 2, 1.0)],
+            3: [demog_mod.LineageMovement(3, 2, 1.0)],
         }
         assert equiv == demography._normalise_lineage_movements(events)
 
@@ -5303,7 +5314,7 @@ class TestNormaliseLineageMovements:
         demography = msprime.Demography.isolated_model([10] * 10)
         demography.add_admixture(time=0.1, derived=0, ancestral=[1], proportions=[1])
         equiv = {
-            0: [msprime.LineageMovement(0, 1, 1.0)],
+            0: [demog_mod.LineageMovement(0, 1, 1.0)],
         }
         assert equiv == demography._normalise_lineage_movements(demography.events)
 
@@ -5312,7 +5323,10 @@ class TestNormaliseLineageMovements:
             time=0.1, derived=0, ancestral=[1, 2], proportions=[0, 1]
         )
         equiv = {
-            0: [msprime.LineageMovement(0, 1, 0.0), msprime.LineageMovement(0, 2, 1.0)]
+            0: [
+                demog_mod.LineageMovement(0, 1, 0.0),
+                demog_mod.LineageMovement(0, 2, 1.0),
+            ]
         }
         assert equiv == demography._normalise_lineage_movements(demography.events)
 
@@ -5322,9 +5336,9 @@ class TestNormaliseLineageMovements:
         )
         equiv = {
             0: [
-                msprime.LineageMovement(0, 1, 0.25),
-                msprime.LineageMovement(0, 2, 1 / 3),
-                msprime.LineageMovement(0, 3, 1),
+                demog_mod.LineageMovement(0, 1, 0.25),
+                demog_mod.LineageMovement(0, 2, 1 / 3),
+                demog_mod.LineageMovement(0, 3, 1),
             ]
         }
         assert equiv == demography._normalise_lineage_movements(demography.events)
@@ -5336,9 +5350,9 @@ class TestNormaliseLineageMovements:
         )
         equiv = {
             0: [
-                msprime.LineageMovement(0, 1, 0.25),
-                msprime.LineageMovement(0, 2, 1 / 3),
-                msprime.LineageMovement(0, 3, 1),
+                demog_mod.LineageMovement(0, 1, 0.25),
+                demog_mod.LineageMovement(0, 2, 1 / 3),
+                demog_mod.LineageMovement(0, 3, 1),
             ]
         }
         assert equiv == demography._normalise_lineage_movements(demography.events)
@@ -5350,8 +5364,8 @@ class TestNormaliseLineageMovements:
         )
         equiv = {
             0: [
-                msprime.LineageMovement(0, 1, 0),
-                msprime.LineageMovement(0, 2, 1),
+                demog_mod.LineageMovement(0, 1, 0),
+                demog_mod.LineageMovement(0, 2, 1),
             ]
         }
         assert equiv == demography._normalise_lineage_movements(demography.events)
@@ -5362,8 +5376,8 @@ class TestNormaliseLineageMovements:
         )
         equiv = {
             0: [
-                msprime.LineageMovement(0, 1, 1),
-                msprime.LineageMovement(0, 2, 0),
+                demog_mod.LineageMovement(0, 1, 1),
+                demog_mod.LineageMovement(0, 2, 0),
             ]
         }
         assert equiv == demography._normalise_lineage_movements(demography.events)
@@ -6023,9 +6037,9 @@ class TestFromOldStyleMap:
 
     def test_unsupported_events(self):
         unsupported_events = [
-            msprime.SimpleBottleneck(time=1, population=0, proportion=1),
-            msprime.InstantaneousBottleneck(time=1, population=0, strength=1),
-            msprime.CensusEvent(time=1),
+            demog_mod.SimpleBottleneck(time=1, population=0, proportion=1),
+            demog_mod.InstantaneousBottleneck(time=1, population=0, strength=1),
+            demog_mod.CensusEvent(time=1),
         ]
         for event in unsupported_events:
             with pytest.raises(ValueError, match="Only MassMigration"):
@@ -6140,7 +6154,7 @@ class TestFromTreeSequence:
 
 class TestLineageMovementEvents:
     def test_as_lineage_movement_abstract(self):
-        e = msprime.LineageMovementEvent(1234)
+        e = demog_mod.LineageMovementEvent(1234)
         with pytest.raises(NotImplementedError):
             e._as_lineage_movements()
 

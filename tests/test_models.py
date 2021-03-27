@@ -26,6 +26,7 @@ import pytest
 import msprime
 from msprime import _msprime
 from msprime import ancestry
+from msprime import pedigrees
 
 
 nonparametric_model_classes = [
@@ -512,7 +513,7 @@ class TestMultipleMergerModels:
         is_sample = np.array([1, 1, 0, 0])
 
         model = msprime.WrightFisherPedigree()
-        ped = msprime.Pedigree(
+        ped = pedigrees.Pedigree(
             inds, parent_indices, times, is_sample, sex=None, ploidy=2
         )
         ts = msprime.simulate(2, pedigree=ped, model=model)
@@ -595,7 +596,7 @@ class TestMixedModels:
         t = max(times)
 
         model = msprime.WrightFisherPedigree()
-        ped = msprime.Pedigree(
+        ped = pedigrees.Pedigree(
             inds, parent_indices, times, is_sample, sex=None, ploidy=2
         )
         ts = msprime.simulate(
@@ -623,7 +624,7 @@ class TestMixedModels:
         is_sample = np.array([1, 1, 1, 1, 0, 0])
         t = max(times)
 
-        ped = msprime.Pedigree(
+        ped = pedigrees.Pedigree(
             inds, parent_indices, times, is_sample, sex=None, ploidy=2
         )
 
@@ -656,7 +657,7 @@ class TestMixedModels:
         t = max(times)
 
         model = msprime.WrightFisherPedigree()
-        ped = msprime.Pedigree(
+        ped = pedigrees.Pedigree(
             inds, parent_indices, times, is_sample, sex=None, ploidy=2
         )
         ts = msprime.simulate(

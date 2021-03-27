@@ -20,6 +20,7 @@
 Test cases for deprecating legacy functionality
 """
 import pytest
+import tskit
 
 import msprime
 
@@ -39,7 +40,6 @@ class TestDeprecation:
             "Edgeset",
             "Provenance",
             "Tree",
-            "SparseTree",
             "TreeSequence",
             "IndividualTable",
             "NodeTable",
@@ -68,10 +68,26 @@ class TestDeprecation:
             "REVERSE",
         ]:
             with pytest.warns(FutureWarning):
-                getattr(msprime, name)
+                msp_version = getattr(msprime, name)
+            assert msp_version is getattr(tskit, name)
+
+    def test_sparse_tree(self):
+        with pytest.warns(FutureWarning):
+            tree_class = msprime.SparseTree
+        assert tree_class is tskit.Tree
 
     def test_missing_attr(self):
         with pytest.raises(
             AttributeError, match="module 'msprime' has no attribute 'foobar'"
         ):
             msprime.foobar
+
+    def test_old_constants(self):
+        with pytest.warns(FutureWarning):
+            assert msprime.NULL_NODE == tskit.NULL
+        with pytest.warns(FutureWarning):
+            assert msprime.NULL_POPULATION == tskit.NULL
+        with pytest.warns(FutureWarning):
+            assert msprime.NULL_INDIVIDUAL == tskit.NULL
+        with pytest.warns(FutureWarning):
+            assert msprime.NULL_MUTATION == tskit.NULL
