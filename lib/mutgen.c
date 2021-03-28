@@ -988,7 +988,7 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_initialise_sites(mutgen_t *self, bool check_kept_times)
+mutgen_initialise_sites(mutgen_t *self)
 {
     int ret = 0;
     tsk_site_table_t *sites = &self->tables->sites;
@@ -996,7 +996,6 @@ mutgen_initialise_sites(mutgen_t *self, bool check_kept_times)
     tsk_id_t site_id;
     site_t *site;
     double time;
-    const double end_time = self->end_time;
     char *state, *metadata;
     tsk_size_t j, length, metadata_length;
 
@@ -1020,12 +1019,6 @@ mutgen_initialise_sites(mutgen_t *self, bool check_kept_times)
             time = mutations->time[j];
             if (tsk_is_unknown_time(time)) {
                 ret = MSP_ERR_UNKNOWN_TIME_NOT_SUPPORTED;
-                goto out;
-            }
-            // check if any kept mutations are younger than
-            // the time period where new mutations can be added
-            if (check_kept_times && time < end_time) {
-                ret = MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER;
                 goto out;
             }
             state = mutations->derived_state + mutations->derived_state_offset[j];
@@ -1340,7 +1333,6 @@ mutgen_generate(mutgen_t *self, int flags)
 {
     int ret = 0;
     bool discrete_sites = flags & MSP_DISCRETE_SITES;
-    bool kept_mutations_before_end_time = flags & MSP_KEPT_MUTATIONS_BEFORE_END_TIME;
 
     avl_clear_tree(&self->sites);
 
@@ -1354,8 +1346,7 @@ mutgen_generate(mutgen_t *self, int flags)
         goto out;
     }
     if (flags & MSP_KEEP_SITES) {
-        ret = mutgen_initialise_sites(
-            self, discrete_sites && !kept_mutations_before_end_time);
+        ret = mutgen_initialise_sites(self);
         if (ret != 0) {
             goto out;
         }

@@ -257,28 +257,25 @@ controls whether existing mutations are kept or discarded (the default is `keep=
 For instance, in final code block in {ref}`sec_mutations_time_span`, mutations were
 progressively added to a simulated tree sequence, beginninng with the oldest time period.
 
-While it is simple to add younger mutations to a tree sequence which already contains
-mutations, adding a mutation ancestral to an existing mutation will result in
-an error unless `add_ancestral=True` is specified, as in the following code block:
+While it is more natural to add younger mutations to a tree sequence which already contains
+mutations, you can also add mutations ancestral to an existing mutations,
+as in the following code block:
 
 ```{code-cell}
 ts = msprime.sim_ancestry(5, random_seed=1)
 mts = msprime.sim_mutations(ts, rate=1, random_seed=1)
-mts = msprime.sim_mutations(mts, rate=0.1, random_seed=5, add_ancestral=True)
+mmts = msprime.sim_mutations(mts, rate=0.1, random_seed=5)
+print(f"Before: {mts.num_mutations} mutations.\n"
+      f"After: {mmts.num_mutations} mutations.")
 ```
 
-:::{note}
-
-Note that specifying `add_ancestral=True` means that "silent transitions" may occur.
-A silent transition is a mutation which causes a nucleotide to transition to
-itself, such as "A -> A".
-
-:::
-
-Adding ancestral mutations can be problematic, so `add_ancestral` should be specified
-with care. For instance, if mutations are added to
-a tree sequence under two different models, impossible transitions may result. See
-{func}`.sim_mutations` for further explanation.
+Adding ancestral mutations can result in confusing situations, so should be
+done with care. For instance, new mutations added to an already mutated site
+will not assign a new ancestral state. Furthermore, if mutations are added to
+a tree sequence under two different models, impossible transitions may result.
+See {func}`.sim_mutations` for further explanation. However, typical usage
+with low per-base pair mutation rates and nucleotide models will result
+in very few of these cases.
 
 
 (sec_mutations_models)=
@@ -560,7 +557,7 @@ For instance,
 
 model = msprime.SLiMMutationModel(type=1)
 mts = msprime.sim_mutations(
-    ts, rate=1, random_seed=1, model=model, add_ancestral=True)
+    ts, rate=1, random_seed=1, model=model)
 t = mts.first()
 ml = {m.id: m.derived_state for m in mts.mutations()}
 SVG(t.draw_svg(mutation_labels=ml, node_labels={}, size=(400, 300)))
@@ -588,14 +585,12 @@ These we assign starting from ID 100,
 to make it easy to see which are which:
 in general just need to make sure that we start at an ID greater than any
 previously assigned.
-Note that without the `add_ancestral=True` parameter
-this would cause an error, because we are adding mutations above existing ones.
 
 ```{code-cell} python
 
 model_2 = msprime.SLiMMutationModel(type=2, next_id=100)
 mts = msprime.sim_mutations(
-    mts_1, rate=0.5, random_seed=3, model=model_2, add_ancestral=True, keep=True)
+    mts_1, rate=0.5, random_seed=3, model=model_2, keep=True)
 t = mts.first()
 ml = {m.id: m.derived_state for m in mts.mutations()}
 SVG(t.draw_svg(mutation_labels=ml, node_labels={}, size=(400, 300)))
