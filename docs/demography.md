@@ -943,7 +943,7 @@ we strongly recommend using {ref}`stdpopsim <stdpopsim:sec_introduction>`,
 which provides a community maintained {ref}`catalog <stdpopsim:sec_catalog>`
 of species information and demographic models for simulation. The
 model given here is equivalent to the
-{ref}`HomSam/OutOfAfrica_3G09 <stdpopsim:sec_catalog_homsap_models_outofafrica_3g09>`
+{ref}`HomSap/OutOfAfrica_3G09 <stdpopsim:sec_catalog_homsap_models_outofafrica_3g09>`
 model.
 :::
 
