@@ -28,6 +28,18 @@ import pytest
 
 import msprime
 
+hapmap_example = """\
+    chr pos        rate                    cM
+    1   4283592    3.79115663174456        0
+    1   4361401    0.0664276817058413      0.294986106359414
+    1   7979763   10.9082897515584         0.535345505591925
+    1   8007051    0.0976780648822495      0.833010916332456
+    1   8762788    0.0899929572085616      0.906829844052373
+    1   9477943    0.0864382908650907      0.971188757364862
+    1   9696341    4.76495005895746        0.990066707213216
+    1   9752154    0.0864316558730679      1.25601286485381
+    1   9881751    0.0                     1.26721414815999"""
+
 
 class TestRateMap:
     """
@@ -116,6 +128,35 @@ class TestRateMap:
             rate_map.start_position = 1
         with pytest.raises(NotImplementedError, match="slice"):
             rate_map.end_position = 1
+
+    def test_repr_html_uniform(self):
+        end_pos = 1
+        rate = 10
+        rm = msprime.RateMap.uniform(end_pos, rate)
+        assert len(rm.rate) == 1
+        html = rm._repr_html_()
+        assert "Rate Map (1 rate," in html
+        assert "between positions" not in html
+        assert "<th>from</th><th>to</th><th>rate</th>" in html
+        assert f"<td>0</td><td>{end_pos}</td><td>{rate}</td>" in html
+        assert html.count("<tr>") == len(rm.rate) + 1
+
+    def test_repr_html_simple(self):
+        end_pos = 5
+        rm = msprime.RateMap(position=[0, 10], rate=[0], end_position=5)
+        assert len(rm.rate) == 1
+        html = rm._repr_html_()
+        assert "Rate Map (1 rate," in html
+        assert f"between positions 0 and {end_pos}" in html
+        assert html.count("<tr>") == len(rm.rate) + 1
+
+    def test_repr_html_complex(self):
+        hapfile = io.StringIO(hapmap_example)
+        rm = msprime.RateMap.read_hapmap(hapfile)
+        html = rm._repr_html_()
+        assert f"Rate Map ({len(rm.rate)} rates," in html
+        assert f"between positions {rm.start_position} and {rm.end_position}" in html
+        assert html.count("<tr>") == len(rm.rate) + 1
 
 
 class TestGetIntermediates:
@@ -536,19 +577,7 @@ class TestReadHapmap:
         assert np.array_equal(rm1.position, rm2.position)
 
     def test_hapmap_fragment(self):
-        hapfile = io.StringIO(
-            """\
-            chr pos        rate                    cM
-            1   4283592    3.79115663174456        0
-            1   4361401    0.0664276817058413      0.294986106359414
-            1   7979763   10.9082897515584         0.535345505591925
-            1   8007051    0.0976780648822495      0.833010916332456
-            1   8762788    0.0899929572085616      0.906829844052373
-            1   9477943    0.0864382908650907      0.971188757364862
-            1   9696341    4.76495005895746        0.990066707213216
-            1   9752154    0.0864316558730679      1.25601286485381
-            1   9881751    0.0                     1.26721414815999"""
-        )
+        hapfile = io.StringIO(hapmap_example)
         rm1 = msprime.RateMap.read_hapmap(hapfile)
         hapfile.seek(0)
         rm2 = msprime.RateMap.read_hapmap(hapfile, rate_col=2)
