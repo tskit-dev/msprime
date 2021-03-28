@@ -1243,7 +1243,8 @@ class Simulator(_msprime.Simulator):
         ll_demographic_events = [
             event.get_ll_representation() for event in demography.events
         ]
-        ll_recomb_map = recombination_map.asdict()
+        ll_recomb_map = self._resolve_unknown_intervals(recombination_map)
+
         ll_tables = _msprime.LightweightTableCollection(tables.sequence_length)
         ll_tables.fromdict(tables.asdict())
 
@@ -1314,6 +1315,40 @@ class Simulator(_msprime.Simulator):
             if isinstance(model, SweepGenicSelection):
                 num_labels = 2
         return num_labels
+
+    def _resolve_unknown_intervals(self, recombination_map):
+        """
+        Inspect the recombination map for unknown intervals, resolve
+        the appropriate recombination rate to use in the actual simulation,
+        and return the low-level recombination map representation.
+
+        Also store the set of unknown_intervals for later use in delete_intervals.
+
+        For now we only support unknown values in the flanking regions,
+        and insist that we can have at most two of them (so, no attempt to
+        coalesce adjacent unknown intervals at the ends of the map).
+        See https://github.com/tskit-dev/msprime/issues/1604 for plans
+        and discussion for how to simulate chromosomes with unknown
+        regions in the middle.
+        """
+        self.unknown_intervals = recombination_map.unknown_intervals()
+        error_msg = (
+            "Unknown regions of the genome other than the flanks are currently "
+            "not supported. Please see "
+            "https://github.com/tskit-dev/msprime/issues/1604"
+        )
+        if self.unknown_intervals.shape[0] > 2:
+            raise ValueError(error_msg)
+        for left, right in self.unknown_intervals:
+            if not (left == 0 or right == recombination_map.sequence_length):
+                raise ValueError(error_msg)
+
+        ll_recomb_map = recombination_map.asdict()
+        unknown = recombination_map._unknown
+        rate = recombination_map.rate.copy()
+        rate[unknown] = 0
+        ll_recomb_map["rate"] = rate
+        return ll_recomb_map
 
     def _run_until(self, end_time, event_chunk=None, debug_func=None):
         # This is a pretty big default event chunk so that we don't spend
@@ -1395,6 +1430,7 @@ class Simulator(_msprime.Simulator):
             encoded_provenance = provenance.json_encode_provenance(
                 provenance_dict, num_replicates
             )
+
         for replicate_index in range(num_replicates):
             logger.info("Starting replicate %d", replicate_index)
             self.run()
@@ -1408,6 +1444,8 @@ class Simulator(_msprime.Simulator):
                     rate=mutation_rate,
                 )
             tables = tskit.TableCollection.fromdict(self.tables.asdict())
+            if len(self.unknown_intervals) > 0:
+                tables.delete_intervals(self.unknown_intervals, record_provenance=False)
             replicate_provenance = None
             if encoded_provenance is not None:
 

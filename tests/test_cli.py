@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 University of Oxford
+# Copyright (C) 2015-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -567,7 +567,7 @@ class TestMspmsCreateSimulationRunner:
 
     def test_recomb_map(self):
         runner = self.create_runner("15 1000 -t 10.04 -r 100.0 2501")
-        uniform = msprime.RateMap([0, 2501], [0.04])
+        uniform = msprime.RateMap(position=[0, 2501], rate=[0.04])
         actual = runner.simulator.recombination_map
         assert np.array_equal(actual.position, uniform.position)
         assert np.array_equal(actual.rate, uniform.rate)
