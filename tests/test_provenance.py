@@ -31,6 +31,7 @@ import tskit
 import msprime
 from msprime import _msprime
 from msprime import ancestry
+from msprime import pedigrees
 
 
 class TestProvenance:
@@ -337,7 +338,7 @@ class TestSimulateRoundTrip(TestRoundTrip):
         is_sample = np.array([1, 1, 1, 1, 0, 0])
         t = max(times)
         model = msprime.WrightFisherPedigree()
-        ped = msprime.Pedigree(
+        ped = pedigrees.Pedigree(
             inds, parent_indices, times, is_sample, sex=None, ploidy=2
         )
         ts = msprime.simulate(

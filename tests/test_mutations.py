@@ -1992,7 +1992,7 @@ class TestMutationModelFactory:
     def test_bad_model_names(self):
         for bad_model in ["NOT", "", "MODEL", "gtr", "slim"]:
             with pytest.raises(ValueError):
-                msprime.mutation_model_factory(bad_model)
+                msprime.mutations.mutation_model_factory(bad_model)
 
     def test_named_model_variants(self):
         mutation_models = {
@@ -2003,17 +2003,17 @@ class TestMutationModelFactory:
             "pam": msprime.PAMMutationModel,
         }
         for name, model_class in mutation_models.items():
-            model = msprime.mutation_model_factory(model=name.upper())
+            model = msprime.mutations.mutation_model_factory(model=name.upper())
             assert isinstance(model, model_class)
-            model = msprime.mutation_model_factory(model=name.title())
+            model = msprime.mutations.mutation_model_factory(model=name.title())
             assert isinstance(model, model_class)
-            model = msprime.mutation_model_factory(model=name)
+            model = msprime.mutations.mutation_model_factory(model=name)
             assert isinstance(model, model_class)
 
     def test_bad_models(self):
         for bad_type in [1234, {}]:
             with pytest.raises(TypeError):
-                msprime.mutation_model_factory(model=bad_type)
+                msprime.mutations.mutation_model_factory(model=bad_type)
 
     def test_returns_mutation_model_instances_without_copying(self):
         models = [
@@ -2028,7 +2028,7 @@ class TestMutationModelFactory:
             msprime.PAMMutationModel(),
         ]
         for model in models:
-            new_model = msprime.mutation_model_factory(model=model)
+            new_model = msprime.mutations.mutation_model_factory(model=model)
             assert new_model is model
             assert new_model.__dict__ == model.__dict__
 
