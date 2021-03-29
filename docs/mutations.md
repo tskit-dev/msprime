@@ -207,9 +207,13 @@ mts = msprime.sim_mutations(ts, rate=0.1, random_seed=5, discrete_genome=False)
 mts.tables.sites.position
 ```
 
-Note that using `discrete_genome=False` is equivalent to specifying an infinite sites
-model.
+:::{note}
 
+Using `discrete_genome=False` means that the mutation model will conform
+to the classic _infinite sites_ assumption, where each mutation in the simulation
+occurs at a new site.
+
+:::
 
 (sec_mutations_time_span)=
 
