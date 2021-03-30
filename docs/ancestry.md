@@ -2101,6 +2101,16 @@ multiple models. See the {ref}`sec_logging` section for more
 details.
 :::
 
+(sec_ancestry_missing_data)=
+
+## Missing data
+
+:::{todo}
+Give an example of doing a simulation with unknown rates on the flanks
+and show that the resulting tree sequence has missing data in these
+regions.
+:::
+
 (sec_ancestry_errors)=
 
 ## Common errors

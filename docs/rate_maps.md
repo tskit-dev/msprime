@@ -14,9 +14,10 @@ kernelspec:
 ```{code-cell}
 :tags: [remove-cell]
 
-    import msprime
-    from IPython.display import SVG
-    from matplotlib import pyplot as plt
+import msprime
+import numpy as np
+from IPython.display import SVG
+from matplotlib import pyplot as plt
 ```
 
 (sec_rate_maps)=
@@ -26,28 +27,33 @@ It is often useful to express a variable rate of some sort along the chromosome.
 For example, most organisms have mutation rates and recombination rates which vary
 depending on genomic position. Rates of this sort can be stored as an instance
 of a {class}`.RateMap`, and then passed as a parameter to the relevant `msprime`
-method. For instance, {func}`.sim_ancestry` accepts a {class}`.RateMap` as the
-`recombination_rate` parameter and {func}`.sim_mutations` accepts a {class}`.RateMap`
-as the `rate` parameter.
+method. For instance, {func}`.sim_ancestry` accepts a {class}`.RateMap`
+for the {ref}`recombination_rate<sec_ancestry_recombination>`
+parameter and {func}`.sim_mutations` accepts a {class}`.RateMap`
+for the {ref}`rate<sec_mutations_rate>` parameter.
 
 A rate map is defined as a set of constant rates which apply piecewise
-over contiguous regions of the chromosome. An example is shown below, both as a
-table and as a plot of the rate at different genomic positions.
+over contiguous regions of the genome.
+For example, here we create a simple rate map over a 30kb genome:
+
+```{code-cell}
+rate_map = msprime.RateMap(
+    position=[0, 4000, 9000, 11000, 20000, 30000],
+    rate=[0, 0.1, 0.6, 0.2, 0.1]
+)
+rate_map
+```
+See the {ref}`sec_rate_maps_basics` section for details on these columns.
+We can see how these rates vary along the genome by plotting:
 
 ```{code-cell}
 :tags: [hide-input]
-ratemap = msprime.RateMap(
-    position=[0, 4000, 9000, 11000, 20000, 30000],
-    rate=[0, 1, 6, 2, 1]
-    )
-display(ratemap)
-
 plt.figure(figsize=(10, 4))
-plt.stairs(ratemap.rate, ratemap.position)
+plt.stairs(rate_map.rate, rate_map.position)
 plt.title("Example RateMap with 5 rates, and a hotspot around position 10000")
 plt.xlabel("Genome position")
 plt.ylabel("Rate")
-plt.xlim(0,ratemap.sequence_length)
+plt.xlim(0, rate_map.sequence_length)
 plt.show()
 ```
 
@@ -58,7 +64,7 @@ plt.show()
 ## Quick reference
 
 {class}`.RateMap`
-: The RateMap class: an instance can be created from provided data
+: Represent the varying rate of processes along the genome as a piecewise function.
 
 **Creating rate maps**
 
@@ -66,7 +72,7 @@ plt.show()
 : Create a RateMap with a single rate over the entire chromosome
 
 {meth}`.RateMap.read_hapmap`
-: Read in a RateMap from a file in "hapmap" format (common in recombination maps)
+: Read in a RateMap from a file in "HapMap" format (common in recombination maps)
 
 {meth}`.RateMap.slice`
 : Create a new RateMap by slicing out a portion of an existing RateMap
@@ -80,11 +86,132 @@ plt.show()
 : The cumulative sum of rates over the entire map
 
 {meth}`.RateMap.get_rate`
-: Compute rate at a set of user-specified positions
+: Compute rate at a set of positions
 
 {meth}`.RateMap.get_cumulative_mass`
-: Compute the cumulative rate at a set of user-specified positions
+: Compute the cumulative rate at a set of positions
 
+
+(sec_rate_maps_basics)=
+## Working with RateMaps
+
+In this section we illustrate the ways in which we can interact
+with a {class}`.RateMap` object. Throughout we'll use the example
+map from the introduction, defined over a 30kb genome:
+
+```{code-cell}
+rate_map = msprime.RateMap(
+    position=[0, 4000, 9000, 11000, 20000, 30000],
+    rate=[0, 0.1, 0.6, 0.2, 0.1]
+)
+rate_map
+```
+
+:::{seealso}
+See the {ref}`sec_rate_maps_creating` section for different ways of
+creating {class}`.RateMap` instances with various properties.
+:::
+
+To create the {class}`.RateMap` instance we called the constructor
+with two lists, ``position`` and ``rate``. These define the
+intervals along the genome and the rates in each interval. Because
+we are interested in nonoverlapping contiguous intervals, we can
+define all the {math}`n` intervals with {math}`n + 1` positions
+and corresponding {math}`n` rate values.
+
+:::{important}
+All intervals are **open-closed**; that is, the left coordinate
+is inclusive and the right coordinate exclusive.
+:::
+
+Information about each of the intervals is shown in the summary
+table above, one interval per row. So, the last interval has a
+``left`` coordinate of 20000, a ``right`` coordinate of 30000,
+a midpoint of 25000 (``mid``), has a ``span`` of 10000 base pairs
+and maps to a rate of 0.1.
+
+:::{seealso}
+See the {ref}`sec_rate_maps_basics_array` for examples of how to
+access the columns efficiently as numpy arrays.
+:::
+
+(sec_rate_maps_basics_mapping)=
+### Mapping interface
+
+The easiest way to access the rate information from a rate map is
+via the *mapping interface*. We can use the Python square bracket
+notation to get the rate at a particular point:
+
+```{code-cell}
+print("rate at position 4500 = ", rate_map[4500])
+```
+
+:::{seealso}
+The {meth}`.RateMap.get_rate` method is a more efficient way to
+compute the rate values at an array of locations along the genome.
+:::
+
+We can also iterate over the intervals in the map, much
+as if it was a Python dictionary:
+
+```{code-cell}
+for midpoint, rate in rate_map.items():
+    print(midpoint, rate, sep="\t")
+```
+
+Note that the key here is the **midpoint** of each interval.
+
+Operations such as ``in`` tell us whether the a give position is
+in the rate map:
+
+```{code-cell}
+print("Is position 10000 in the map?", 10000 in rate_map)
+print("Is position -1 in the map?", -1 in rate_map)
+```
+
+:::{seealso}
+See the {ref}`sec_rate_maps_missing` section for information on
+how missing data is handled using this interface.
+:::
+
+
+(sec_rate_maps_basics_array)=
+### Array interface
+
+We can also access the information from the rate map using numpy
+arrays. This is usually the preferred option when working with
+rate maps, since they can be quite large.
+
+```{code-cell}
+print("interval left position :", rate_map.left)
+print("interval right position:", rate_map.right)
+print("interval midpoint      :", rate_map.mid)
+print("interval span          :", rate_map.span)
+print("interval rate          :", rate_map.rate)
+```
+
+Please see the documentation for
+{attr}`~.RateMap.left`,
+{attr}`~.RateMap.right`,
+{attr}`~.RateMap.mid`,
+{attr}`~.RateMap.span`,
+and {attr}`~.RateMap.rate` for more information.
+
+The {attr}`~.RateMap.position` array is also defined, which is
+equal to the ``left`` array with last element of the ``right``
+array (i.e., the {attr}`~.RateMap.sequence_length`) appended to
+it.
+
+
+:::{seealso}
+See the {ref}`sec_rate_maps_missing` section for information on
+how missing data is handled using this interface.
+:::
+
+:::{todo}
+Give an example of how we might do something useful with these
+arrays, like plotting something, e.g.
+:::
 
 (sec_rate_maps_creating)=
 ## Creating rate maps
@@ -102,29 +229,140 @@ The most basic rate map is a uniform rate over the entire sequence. This can sim
 generated by {meth}`.RateMap.uniform`:
 
 ```{code-cell}
-msprime.RateMap.uniform(length=1e8, rate=0.5)
+msprime.RateMap.uniform(sequence_length=1e8, rate=0.5)
 ```
 
-### Reading from a file
+### Reading from a text file
 
-Describe read_hapmap briefly here.
+:::{todo}
+Give an example of working with the {meth}`.RateMap.read_hapmap` method
+:::
+
+(sec_rate_maps_creating_hotspots)=
+### Hotspots
+
+:::{todo}
+Give an example of making a RateMap with some recurrent hotspots.
+:::
+
+(sec_rate_maps_missing)=
+
+## Missing data
+
+There are often times when we do not know what the rate of a particular
+process is along the genome. For example, in telomeric regions, we don't
+really know what the rate of recombination is, and we need some way
+of encoding this information.
+
+:::{seealso}
+See the {ref}`sec_ancestry_missing_data` section for an example
+of running an ancestry simulation with unknown recombination rates,
+and the properties of the resulting tree sequence.
+:::
+
+Following the standard convention in Python numerical libraries,
+we encode missing data using [NaN values](https://en.wikipedia.org/wiki/NaN).
+Here, for example we create a rate map in which we have a
+uniform rate except for the 10 base pairs at either end,
+which are unknown:
+
+```{code-cell}
+rate_map = msprime.RateMap(position=[0, 10, 90, 100], rate=[np.nan, 0.1, np.nan])
+rate_map
+```
+
+Values that we compute such as {attr}`~.RateMap.mean_rate` correctly ignore
+the regions of missing data:
+
+```{code-cell}
+print("mean rate = ", rate_map.mean_rate)
+```
+
+The {ref}`sec_rate_maps_basics_mapping` and {ref}`sec_rate_maps_basics_array` have
+different semantics for dealing with missing data: the mapping interface
+filters out intervals that are missing, whereas the array interface
+leaves them in.
+
+### Array interface
+
+The array interface in the {class}`.RateMap` is an efficient way of directly
+accessing the underlying array data. To give the user the maximum flexibility,
+the per-interval arrays like {attr}`~.RateMap.left` are always defined
+over both missing **and** non-missing intervals:
+
+```{code-cell}
+print("left  = ", rate_map.left)
+print("right = ", rate_map.right)
+print("mid   = ", rate_map.mid)
+print("span  = ", rate_map.span)
+```
+
+We can use the {attr}`~.RateMap.missing` and {attr}`~.RateMap.non_missing`
+arrays to get access to the missing and non-missing portions of the map.
+These are numpy boolean arrays, which we can use to index into the other
+per-interval arrays. For example, we can compare the total span of
+missing and non-missing intervals:
+
+```{code-cell}
+print("Total missing span      = ", np.sum(rate_map.span[rate_map.missing]))
+print("Total non-missing span  = ", np.sum(rate_map.span[rate_map.non_missing]))
+```
+
+### Mapping interace
+
+The {ref}`sec_rate_maps_basics_mapping` takes the opposite
+approach to missing data to the {ref}`sec_rate_maps_basics_array`: missing
+intervals are automatically **filtered** out. Consider what we get when
+we iterate over the ``items()`` in the map:
+
+```{code-cell}
+for key, value in rate_map.items():
+    print(f"{key} -> {value}")
+```
+
+As far as the mapping interface is concerned, we have **one** interval
+in this map, **not three**. This logic is reflected by the ``in`` operation:
+we only consider a position to be "in" the map if it's in a non-missing
+interval:
+
+```{code-cell}
+print("Is position 5 in the map? ", 5 in rate_map)
+print("Is position 50 in the map? ", 50 in rate_map)
+```
+
+An important consequence of this definition is that the ``len()`` of a
+{class}`.RateMap` is the **number of non-empty intervals**:
+
+```{code-cell}
+print("len                       = ", len(rate_map))
+print("num_intervals             = ", rate_map.num_intervals)
+print("num_non_missing_intervals = ", rate_map.num_non_missing_intervals)
+```
+
+:::{important}
+Because the ``len()`` of a RateMap is defined as the number of
+non-empty intervals we recommend using the {attr}`~.RateMap.num_intervals`
+and {attr}`~.RateMap.num_non_missing_intervals` for clarity.
+:::
 
 (sec_rate_maps_masking_and_slicing)=
-### Masking and creating new maps via slicing
+### Slicing
 
-Often, the rates at the start and end of the chromosome (i.e. in the telomeric regions)
-are unknown, and treated as zero. Therefore if there is a zero-rate region at the start
-or end of the list of provided rates, an alternative start position and/or end position
-can be defined when creating the map such that some or all of these terminal zero-rate
-regions are "masked out" (i.e. not counted) when calculating the mean rate over the
-entire map.
+Sometimes we are interested in running a simulation for a small portion
+of a map, for example when we want to focus on a small region of a much
+larger chromosome. We can do this using the
+{meth}`~.RateMap.slice` method, which extracts a target region from a
+given map and marks the flanking regions as {ref}`missing data<sec_rate_maps_missing>`,
+so that the original coordinate system is maintained.
 
-This sort of zeroing-out can also be handy if only a small region of the rate map is
-needed, for instance, because simulation is focussed on a small region of a larger
-chromosome. The {meth}`.RateMap.slice` method does this by setting user-specified
-start and end positions, overwriting the rate to the left of the start and to the right
-of the end with zero. The benefit to doing this is that the original coordinate system
-is still used. For example, if you wish to simulate a 40 kb section of human chromosome
+:::{todo}
+Example of the slice method and slice notation on small maps
+so we can illustrate them.
+:::
+
+#### Simulation example
+
+For example, if you wish to simulate a 40 kb section of human chromosome
 1 from position 0.7Mb, but keep the standard chromosome 1 genomic coordinates, you could
 do this:
 
@@ -132,7 +370,8 @@ do this:
 import io
 # First and last sections of human chr 1 build 36 genetic map taken from
 # https://ftp.ncbi.nlm.nih.gov/hapmap/recombination/latest/rates/
-hapmap_chr1_snippet = io.StringIO("""chr position COMBINED_rate(cM/Mb) Genetic_Map(cM)
+hapmap_chr1_snippet = io.StringIO("""\
+chr position COMBINED_rate(cM/Mb) Genetic_Map(cM)
 1 72434 0.0015000000 0
 1 78032 0.0015000000 0.0000083970
 1 554461 0.0015000000 0.0007230405
@@ -154,21 +393,16 @@ hapmap_chr1_snippet = io.StringIO("""chr position COMBINED_rate(cM/Mb) Genetic_M
 1 247185273 0 278.0910717585""")
 large_ratemap = msprime.RateMap.read_hapmap(hapmap_chr1_snippet)
 sliced_ratemap = large_ratemap.slice(700e3, 740e3)
-# Simulate only 40kb
-ts = msprime.sim_ancestry(10, recombination_rate=sliced_ratemap)
-# Only keep the trees in the sliced region. Then if we then mutate, we will not
-# create mutations in the flanking regions
-ts = ts.keep_intervals([[700e3, 740e3]])
+ts = msprime.sim_ancestry(10, recombination_rate=sliced_ratemap, random_seed=1)
 ```
 
-Because the recombination rate is 0 in regions below position 700 000 and above position
+Because the recombination rate is marked as unknown in regions below
+position 700 000 and above position
 740 000, `msprime` has not had to put effort into simulating recombination (and its
 effect on ancestry) in these regions, so the simulation completes very quickly, even
 though the resulting tree sequence has a `sequence_length` of 247 megabases.
 
-(sec_rate_maps_creating_hotspots)=
-### Hotspots
-
-### Extracting values at specific positions
-
-Document the used of `get_cumulative_mass` to convert physical to genetic coordinates.
+:::{seealso}
+See the {ref}`sec_ancestry_missing_data` section for more information
+about how ancestry simulations with missing rate data are performed.
+:::

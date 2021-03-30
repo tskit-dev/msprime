@@ -1,5 +1,4 @@
 #
-# Copyright (C) 2020-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -24,6 +23,7 @@ import fractions
 import gzip
 import io
 import os
+import pickle
 import textwrap
 import xml
 
@@ -34,28 +34,25 @@ from numpy.testing import assert_array_equal
 import msprime
 
 
-class TestRateMap:
-    """
-    Test the underlying RateMap class.
-
-    NB: some of the RateMap class is tested in test_recombination_map.py,
-    as msprime.RecombinationMap contains a RateMap within it. We should probably move
-    some of that testing into this class.
-    """
-
-    def test_bad_input(self):
-        bad_inputs = [
+class TestRateMapErrors:
+    @pytest.mark.parametrize(
+        ("position", "rate"),
+        [
             ([], []),
             ([0], []),
             ([0], [0]),
             ([1, 2], [0]),
             ([0, -1], [0]),
             ([0, 1], [-1]),
-        ]
+        ],
+    )
+    def test_bad_input(self, position, rate):
+        with pytest.raises(ValueError):
+            msprime.RateMap(position=position, rate=rate)
 
-        for pos, rate in bad_inputs:
-            with pytest.raises(ValueError):
-                msprime.RateMap(position=pos, rate=rate)
+    def test_zero_length_interval(self):
+        with pytest.raises(ValueError, match=r"at indexes \[2 4\]"):
+            msprime.RateMap(position=[0, 1, 1, 2, 2, 3], rate=[0, 0, 0, 0, 0])
 
     def test_bad_length(self):
         positions = np.array([0, 1, 2])
@@ -75,17 +72,11 @@ class TestRateMap:
         with pytest.raises(ValueError, match="negative.*1"):
             msprime.RateMap(position=positions, rate=rates)
 
-    def test_nan_at_start_mean_rate(self):
-        positions = np.array([0, 0.5, 1, 2])
-        rates = np.array([np.nan, 0, 1])
-        rate_map = msprime.RateMap(position=positions, rate=rates)
-        assert np.isclose(rate_map.mean_rate, 1 / (1 + 0.5))
-
-    def test_nan_at_end_mean_rate(self):
-        positions = np.array([0, 1, 1.5, 2])
-        rates = np.array([1, 0, np.nan])
-        rate_map = msprime.RateMap(position=positions, rate=rates)
-        assert np.isclose(rate_map.mean_rate, 1 / (1 + 0.5))
+    def test_bad_rate_with_missing(self):
+        positions = np.array([0, 1, 2])
+        rates = np.array([np.nan, -1])
+        with pytest.raises(ValueError, match="negative.*1"):
+            msprime.RateMap(position=positions, rate=rates)
 
     def test_read_only(self):
         positions = np.array([0, 0.25, 0.5, 0.75, 1])
@@ -97,8 +88,6 @@ class TestRateMap:
             rate_map.rate = 2 * rate_map.rate
         with pytest.raises(AttributeError):
             rate_map.position = 2 * rate_map.position
-        with pytest.raises(AttributeError):
-            rate_map.cumulative_mass = 2 * rate_map.cumulative_mass
         with pytest.raises(AttributeError):
             rate_map.left = 1234
         with pytest.raises(AttributeError):
@@ -115,14 +104,116 @@ class TestRateMap:
             rate_map.mid[0] = 1
         with pytest.raises(ValueError):
             rate_map.right[0] = 1
-        with pytest.raises(ValueError):
-            rate_map.cumulative_mass[0] = 1
 
-    def test_interval_properties_all_known(self):
-        rate_map = msprime.RateMap(position=[0, 1, 2, 3], rate=[0.1, 0.2, 0.3])
-        assert list(rate_map.left) == [0, 1, 2]
-        assert list(rate_map.right) == [1, 2, 3]
-        assert list(rate_map.mid) == [0.5, 1.5, 2.5]
+
+class TestGetRateAllKnown:
+    examples = [
+        msprime.RateMap(position=[0, 1], rate=[0]),
+        msprime.RateMap(position=[0, 1], rate=[0.1]),
+        msprime.RateMap(position=[0, 1, 2], rate=[0.1, 0.2]),
+        msprime.RateMap(position=[0, 1, 2], rate=[0, 0.2]),
+        msprime.RateMap(position=[0, 1, 2], rate=[0.1, 1e-6]),
+        msprime.RateMap(position=range(100), rate=range(99)),
+    ]
+
+    @pytest.mark.parametrize("rate_map", examples)
+    def test_get_rate_mid(self, rate_map):
+        rate = rate_map.get_rate(rate_map.mid)
+        assert len(rate) == len(rate_map)
+        for j in range(len(rate_map)):
+            assert rate[j] == rate_map[rate_map.mid[j]]
+
+    @pytest.mark.parametrize("rate_map", examples)
+    def test_get_rate_left(self, rate_map):
+        rate = rate_map.get_rate(rate_map.left)
+        assert len(rate) == len(rate_map)
+        for j in range(len(rate_map)):
+            assert rate[j] == rate_map[rate_map.left[j]]
+
+    @pytest.mark.parametrize("rate_map", examples)
+    def test_get_rate_right(self, rate_map):
+        rate = rate_map.get_rate(rate_map.right[:-1])
+        assert len(rate) == len(rate_map) - 1
+        for j in range(len(rate_map) - 1):
+            assert rate[j] == rate_map[rate_map.right[j]]
+
+
+class TestOperations:
+    examples = [
+        msprime.RateMap(position=[0, 1], rate=[0]),
+        msprime.RateMap(position=[0, 1], rate=[0.1]),
+        msprime.RateMap(position=[0, 1, 2], rate=[0.1, 0.2]),
+        msprime.RateMap(position=[0, 1, 2], rate=[0, 0.2]),
+        msprime.RateMap(position=[0, 1, 2], rate=[0.1, 1e-6]),
+        msprime.RateMap(position=range(100), rate=range(99)),
+        # Missing data
+        msprime.RateMap(position=[0, 1, 2], rate=[np.nan, 0]),
+        msprime.RateMap(position=[0, 1, 2], rate=[0, np.nan]),
+        msprime.RateMap(position=[0, 1, 2, 3], rate=[0, np.nan, 1]),
+    ]
+
+    @pytest.mark.parametrize("rate_map", examples)
+    def test_num_intervals(self, rate_map):
+        assert rate_map.num_intervals == len(rate_map.rate)
+        assert rate_map.num_missing_intervals == np.sum(np.isnan(rate_map.rate))
+        assert rate_map.num_non_missing_intervals == np.sum(~np.isnan(rate_map.rate))
+
+    @pytest.mark.parametrize("rate_map", examples)
+    def test_mask_arrays(self, rate_map):
+        assert_array_equal(rate_map.missing, np.isnan(rate_map.rate))
+        assert_array_equal(rate_map.non_missing, ~np.isnan(rate_map.rate))
+
+    @pytest.mark.parametrize("rate_map", examples)
+    def test_missing_intervals(self, rate_map):
+        missing = []
+        for left, right, rate in zip(rate_map.left, rate_map.right, rate_map.rate):
+            if np.isnan(rate):
+                missing.append([left, right])
+        if len(missing) == 0:
+            assert len(rate_map.missing_intervals()) == 0
+        else:
+            assert_array_equal(missing, rate_map.missing_intervals())
+
+    @pytest.mark.parametrize("rate_map", examples)
+    def test_mean_rate(self, rate_map):
+        total_span = 0
+        total_mass = 0
+        for span, mass in zip(rate_map.span, rate_map.mass):
+            if not np.isnan(mass):
+                total_span += span
+                total_mass += mass
+        assert total_mass / total_span == rate_map.mean_rate
+
+    @pytest.mark.parametrize("rate_map", examples)
+    def test_total_mass(self, rate_map):
+        assert rate_map.total_mass == np.nansum(rate_map.mass)
+
+    @pytest.mark.parametrize("rate_map", examples)
+    def test_get_cumulative_mass(self, rate_map):
+        assert list(rate_map.get_cumulative_mass([0])) == [0]
+        assert list(rate_map.get_cumulative_mass([rate_map.sequence_length])) == [
+            rate_map.total_mass
+        ]
+        assert_array_equal(
+            rate_map.get_cumulative_mass(rate_map.right), np.nancumsum(rate_map.mass)
+        )
+
+    @pytest.mark.parametrize("rate_map", examples)
+    def test_get_rate(self, rate_map):
+        assert_array_equal(rate_map.get_rate([0]), rate_map.rate[0])
+        assert_array_equal(
+            rate_map.get_rate([rate_map.sequence_length - 1e-9]), rate_map.rate[-1]
+        )
+        assert_array_equal(rate_map.get_rate(rate_map.left), rate_map.rate)
+
+    @pytest.mark.parametrize("rate_map", examples)
+    def test_map_semantics(self, rate_map):
+        assert len(rate_map) == rate_map.num_non_missing_intervals
+        assert_array_equal(list(rate_map.keys()), rate_map.mid[rate_map.non_missing])
+        for x in rate_map.left[rate_map.missing]:
+            assert x not in rate_map
+        for x in rate_map.mid[rate_map.missing]:
+            assert x not in rate_map
 
 
 class TestFindIndex:
@@ -168,6 +259,66 @@ class TestFindIndex:
         assert rate_map.find_index(0) == 0
         assert rate_map.find_index(0.0) == 0
         assert rate_map.find_index(np.zeros(1)[0]) == 0
+
+
+class TestSimpleExamples:
+    def test_all_missing_one_interval(self):
+        with pytest.raises(ValueError, match="missing data"):
+            msprime.RateMap(position=[0, 10], rate=[np.nan])
+
+    def test_all_missing_two_intervals(self):
+        with pytest.raises(ValueError, match="missing data"):
+            msprime.RateMap(position=[0, 5, 10], rate=[np.nan, np.nan])
+
+    def test_count(self):
+        rate_map = msprime.RateMap(position=[0, 5, 10], rate=[np.nan, 1])
+        assert rate_map.num_intervals == 2
+        assert rate_map.num_missing_intervals == 1
+        assert rate_map.num_non_missing_intervals == 1
+
+    def test_missing_arrays(self):
+        rate_map = msprime.RateMap(position=[0, 5, 10], rate=[np.nan, 1])
+        assert list(rate_map.missing) == [True, False]
+        assert list(rate_map.non_missing) == [False, True]
+
+    def test_missing_at_start_mean_rate(self):
+        positions = np.array([0, 0.5, 1, 2])
+        rates = np.array([np.nan, 0, 1])
+        rate_map = msprime.RateMap(position=positions, rate=rates)
+        assert np.isclose(rate_map.mean_rate, 1 / (1 + 0.5))
+
+    def test_missing_at_end_mean_rate(self):
+        positions = np.array([0, 1, 1.5, 2])
+        rates = np.array([1, 0, np.nan])
+        rate_map = msprime.RateMap(position=positions, rate=rates)
+        assert np.isclose(rate_map.mean_rate, 1 / (1 + 0.5))
+
+    def test_interval_properties_all_known(self):
+        rate_map = msprime.RateMap(position=[0, 1, 2, 3], rate=[0.1, 0.2, 0.3])
+        assert list(rate_map.left) == [0, 1, 2]
+        assert list(rate_map.right) == [1, 2, 3]
+        assert list(rate_map.mid) == [0.5, 1.5, 2.5]
+        assert list(rate_map.span) == [1, 1, 1]
+        assert list(rate_map.mass) == [0.1, 0.2, 0.3]
+
+    def test_pickle_non_missing(self):
+        r1 = msprime.RateMap(position=[0, 1, 2, 3], rate=[0.1, 0.2, 0.3])
+        r2 = pickle.loads(pickle.dumps(r1))
+        assert r1 == r2
+
+    def test_pickle_missing(self):
+        r1 = msprime.RateMap(position=[0, 1, 2, 3], rate=[0.1, np.nan, 0.3])
+        r2 = pickle.loads(pickle.dumps(r1))
+        assert r1 == r2
+
+    def test_get_cumulative_mass_all_known(self):
+        rate_map = msprime.RateMap(position=[0, 10, 20, 30], rate=[0.1, 0.2, 0.3])
+        assert list(rate_map.mass) == [1, 2, 3]
+        assert list(rate_map.get_cumulative_mass([10, 20, 30])) == [1, 3, 6]
+
+    def test_cumulative_mass_missing(self):
+        rate_map = msprime.RateMap(position=[0, 10, 20, 30], rate=[0.1, np.nan, 0.3])
+        assert list(rate_map.get_cumulative_mass([10, 20, 30])) == [1, 1, 4]
 
 
 class TestDisplay:
@@ -299,6 +450,25 @@ class TestRateMapIsMapping:
             r1[0:3:1]
 
 
+class TestMappingMissingData:
+    def test_get_missing(self):
+        rate_map = msprime.RateMap(position=[0, 1, 2], rate=[np.nan, 0.2])
+        with pytest.raises(KeyError, match="within a missing interval"):
+            rate_map[0]
+        with pytest.raises(KeyError, match="within a missing interval"):
+            rate_map[0.999]
+
+    def test_in_missing(self):
+        rate_map = msprime.RateMap(position=[0, 1, 2], rate=[np.nan, 0.2])
+        assert 0 not in rate_map
+        assert 0.999 not in rate_map
+        assert 1 in rate_map
+
+    def test_keys_missing(self):
+        rate_map = msprime.RateMap(position=[0, 1, 2], rate=[np.nan, 0.2])
+        assert list(rate_map.keys()) == [1.5]
+
+
 class TestGetIntermediates:
     def test_get_rate(self):
         positions = np.array([0, 1, 2])
@@ -393,9 +563,8 @@ class TestSlice:
         assert_array_equal([0, 150, 160, 400], b.position)
         assert_array_equal([np.nan, 1, np.nan], b.rate)
 
-    def test_slice_right_unknown(self):
-
-        # If we take a right-slice into a trailing zero-rate region,
+    def test_slice_right_missing(self):
+        # If we take a right-slice into a trailing missing region,
         # we should recover the same map.
         a = msprime.RateMap(position=[0, 100, 200, 300, 400], rate=[0, 1, 2, np.nan])
         b = a.slice(right=350)
@@ -408,7 +577,7 @@ class TestSlice:
         assert_array_equal(a.position, b.position)
         assert_array_equal(a.rate, b.rate)
 
-    def test_slice_left_unknown(self):
+    def test_slice_left_missing(self):
         a = msprime.RateMap(position=[0, 100, 200, 300, 400], rate=[np.nan, 1, 2, 3])
         b = a.slice(left=50)
         assert a.sequence_length == b.sequence_length

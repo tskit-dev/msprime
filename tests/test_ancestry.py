@@ -1986,12 +1986,12 @@ class TestUnknownGenomeRegions:
 
     def test_sim_ancestry_unknown_mid(self):
         rate_map = msprime.RateMap(position=[0, 1, 9, 10], rate=[0, np.nan, 0])
-        with pytest.raises(ValueError, match="Unknown regions of the genome"):
+        with pytest.raises(ValueError, match="Missing regions of the genome"):
             msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)
 
     def test_sim_ancestry_unknown_mid_plus_flanks(self):
         rate_map = msprime.RateMap(
             position=[0, 1, 5, 6, 7, 10], rate=[np.nan, 0, np.nan, 0, np.nan]
         )
-        with pytest.raises(ValueError, match="Unknown regions of the genome"):
+        with pytest.raises(ValueError, match="Missing regions of the genome"):
             msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)
