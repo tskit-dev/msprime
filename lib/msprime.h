@@ -344,7 +344,6 @@ typedef struct mutation_t {
     struct mutation_t *parent;
     struct mutation_t *next;
     bool new;
-    bool keep;
 } mutation_t;
 
 typedef struct {

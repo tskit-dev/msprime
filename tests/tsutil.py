@@ -21,6 +21,7 @@ A collection of utilities to edit and construct tree sequences.
 """
 import json
 import random
+import struct
 
 import numpy as np
 import tskit
@@ -147,7 +148,7 @@ def insert_random_ploidy_individuals(ts, max_ploidy=5, max_dimension=3, seed=1):
 def add_random_metadata(ts, seed=1, max_length=10):
     """
     Returns a copy of the specified tree sequence with random metadata assigned
-    to the nodes, sites and mutations.
+    to the populations, individuals, nodes, sites and mutations.
     """
     tables = ts.dump_tables()
     np.random.seed(seed)
@@ -215,3 +216,46 @@ def add_random_metadata(ts, seed=1, max_length=10):
     add_provenance(tables.provenances, "add_random_metadata")
     ts = tables.tree_sequence()
     return ts
+
+
+def insert_unique_metadata(tables, table=None, offset=0):
+    if isinstance(tables, tskit.TreeSequence):
+        tables = tables.dump_tables()
+    else:
+        tables = tables.copy()
+    if table is None:
+        table = [
+            "populations",
+            "individuals",
+            "nodes",
+            "edges",
+            "sites",
+            "mutations",
+            "migrations",
+        ]
+    for t in table:
+        getattr(tables, t).packset_metadata(
+            [struct.pack("I", offset + i) for i in range(getattr(tables, t).num_rows)]
+        )
+    return tables.tree_sequence()
+
+
+def metadata_map(tables):
+    # builds a mapping from metadata (as produced by insert_unique_metadata)
+    # to ID for all the tables (except provenance)
+    if isinstance(tables, tskit.TreeSequence):
+        tables = tables.dump_tables()
+    out = {}
+    for t in [
+        "populations",
+        "individuals",
+        "nodes",
+        "edges",
+        "sites",
+        "mutations",
+        "migrations",
+    ]:
+        out[t] = {}
+        for j, x in enumerate(getattr(tables, t)):
+            out[t][x.metadata] = j
+    return out
