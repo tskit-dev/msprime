@@ -2602,7 +2602,7 @@ class KnownSFS(Test):
                 tot_bl = 0.0
                 tbl = [0] * (sample_size - 1)
                 for node in tree.nodes():
-                    if tree.parent(node) != msprime.NULL_NODE:
+                    if tree.parent(node) != tskit.NULL:
                         tbl[tree.num_samples(node) - 1] = tbl[
                             tree.num_samples(node) - 1
                         ] + tree.branch_length(node)

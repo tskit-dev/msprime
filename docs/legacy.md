@@ -15,52 +15,59 @@ kernelspec:
 (sec_legacy_0x)=
 # Legacy (version 0.x) APIs
 
+Msprime 1.0 involved major changes to the internal details of
+how simulations are performed and the addition of a new set of
+APIs, which solve some long-standing issues and provide
+more sensible defaults.
 
-```{eval-rst}
-.. todo:: This page is under construction, and needs work to ensure
-    that the target audiences are able to find the content they need.
-```
+**Short version:**
 
+- Your old simulations will still work and the msprime 0.x APIs will
+be supported **indefinitely**. We're not going to break your code.
+The only situation in which your simulation might break is if you've
+been doing some obscure things with genome discretisation. Please
+see {ref}`this section<sec_legacy_0x_genome_discretisation>` for
+more information.
 
-```{eval-rst}
-.. todo:: An overview of why we added the new APIs, what they are
-  and some reassurance that old code will continue to work.
-```
-
-
-With a few exceptions, you **should not need to change your code** and
-it should remain working indefinitely.
-
+- The new APIs are **much better**, and support several features
+that are not available for the legacy API. In general, new features
+will only be added to the 1.x APIs and 0.x legacy APIs are
+in **maintenance mode**.
 
 ## Upgrading code
 
 This section is to help legacy 0.x users of msprime get up to speed quickly, summarising
-the new APIs and their main differences to what you are used to in the 0.x versions.
+the new APIs and their main differences to the 0.x versions.
 
 The main change is that there are two new functions, {func}`.sim_ancestry` and
 {func}`.sim_mutations` which correspond to the 0.x functions {func}`.simulate`
 and {func}`.mutate`. The 0.x functions are **deprecated** but **will continue
 to be supported indefinitely**.
 
-### Backwards compatibility
+One major change is that {ref}`ancestry<sec_ancestry>` and
+{ref}`mutations<sec_mutations>` must be simulated **separately**.
+A good pattern for this when performing
+{ref}`replicate simulations<sec_ancestry_replication>` is
 
-All existing simulations should work as before, *except* for simulations relying on
-the detailed properties of RecombinationMaps. If your code uses the `num_loci`
-property, then it may need to be updated. The reason for this is that `msprime`
-has changed to simulate directly in physical coordinates internally (which has
-greatly simplified the code and solved many thorny issues) and this is fundamentally
-incompatible with the approach taken in 0.x. In the vast majority of cases, this
-will have no effect.
+```{code-cell}
+import msprime
 
-If you are using `num_loci` to simulate a discrete genome, it may be simplest to
-convert your code to use the new {func}`.sim_ancestry` method. If you were following
-a recipe to simulate multiple chromosomes under the DTWF model, please see
-the {ref}`updated recipe <sec_ancestry_multiple_chromosomes>`.
+ancestry_replicates = msprime.sim_ancestry(10, num_replicates=10)
+for ts in ancestry_replicates:
+    ts = msprime.sim_mutations(ts, rate=0.1)
+    # Do something with your mutated tree sequence now.
+```
+
+This approach is memory efficient and uses high-quality random seeds.
 
 ### Ancestry
 
 The new {func}`.sim_ancestry` function replaces the 0.x {func}`.simulate`
-function and is very similar. There are some important differences though:
+function and is very similar. See the {ref}`sec_ancestry` page for
+details and extensive examples using this function.
+
+There are some important differences between {func}`.simulate`
+and {func}`.sim_ancestry`:
 
 * The `samples` parameter now refers to the **number of individuals**
   rather than **the number of nodes** (i.e. monoploid genomes).
@@ -75,15 +82,14 @@ function and is very similar. There are some important differences though:
   two effects:
 
   1. Sets the default number of sample nodes per *individual*
-  2. Changes the timescale of the coalescent process (TODO link to a section
-     that explains this effect.) By default `ploidy` is 2 and
-     time is scaled scaled in units of 4N generations, which is the same as
-     msprime 0.x.
+  2. Changes the {ref}`timescale<sec_ancestry_ploidy_coalescent_time_scales>`
+     over which coalescence occurs.  By default `ploidy` is 2 and
+     so mean time to common ancestor in a population of size `N` is `2N` generations,
+     which is the same as msprime 0.x.
 * Rather than two parameters `num_samples` and `samples`, the
   {func}`.sim_ancestry` function has a single parameter `samples` which
   has different behaviour depending on the type of parameters provided.
   See {ref}`sec_ancestry_samples` for details.
-
   Note in particular that a list of `Sample` objects is **not** supported.
 * Similarly, there is now one parameter `recombination_rate` which can
   be either a single value or a {class}`.RateMap` object. Note that the
@@ -92,10 +98,10 @@ function and is very similar. There are some important differences though:
   details.
 * Simulations are peformed on a **discrete** genome by default. To get the
   0.x behaviour of a continuous genome, set `discrete_genome=False`.
-  See {ref}`sec_ancestry_discrete_genome` for more details.
+  See the {ref}`sec_ancestry_discrete_genome` section for more details.
 * The `from_ts` parameter used has been renamed to `initial_state` and
   accepts either a {class}`tskit.TableCollection` or {class}`tskit.TreeSequence`
-  parameter. See {ref}`sec_ancestry_initial_state` for details.
+  parameter. See the {ref}`sec_ancestry_initial_state` section for details.
 * There is **no** `mutation_rate` parameter to {func}`.sim_ancestry`: use
   {func}`.sim_mutations` instead.
 * The `population_configurations`, `migration_matrix` and `demographic_events`
@@ -104,30 +110,20 @@ function and is very similar. There are some important differences though:
 
 ### Demography
 
-* A new {class}`.Demography` object has been added for version 1.0 which
-  encapsulates the functionality needed to define and debug demographic models
-  in msprime. Demographic models can only be specified to `sim_ancestry`
-  using an instance of this class.
+A new {class}`.Demography` object has been added for version 1.0 which
+encapsulates the functionality needed to define and debug demographic models
+in msprime. Demographic models can only be specified to `sim_ancestry`
+using an instance of this class.
+
+See the {ref}`sec_demography` section for detailed documentation on this
+new interface.
+
 * It is easy to create a {class}`.Demography` from the 0.x
-  `population_configurations`, `migration_matrix` and `demographic_events`
-  values using the {meth}`.Demography.from_old_style` method.
+`population_configurations`, `migration_matrix` and `demographic_events`
+values using the {meth}`.Demography.from_old_style` method.
+
 * The {class}`.DemographyDebugger` class should no longer be instantiated
-  directly; instead use the {meth}`.Demography.debug` method.
-
-### Mutations
-
-* For symmetry with the {func}`.sim_ancestry` function, there is now a {func}`.sim_mutations`
-  function. The 0.x {func}`.mutate` function is **deprecated**.
-* The {func}`.sim_mutations` function works on a **discrete** genome by default.
-* There are now also many new mutation models supported by {func}`.sim_mutations`;
-  see {ref}`sec_mutations` for details. These are *not* supported in the deprecated
-  {func}`.mutate` function.
-* The simulated mutations now have a simulated ``time`` value, which specifies the
-  precise time that the mutation occurred. Note that this value is also provided in the
-  returned tables for the deprecated ``simulate()`` and ``mutate()`` functions,
-  which may lead to some compatibility issues. (We considered removing the simulated
-  mutation times for these 0.x functions for strict compatibility, but this would
-  have broken any code using the ``keep`` option in mutate.)
+directly; instead use the {meth}`.Demography.debug` method.
 
 (sec_legacy_0x_genome_discretisation)=
 ### Genome discretisation
@@ -189,6 +185,32 @@ equal to the sequence length).
 If not, please let us know your use case and we may be able
 to accommodate it in the new code. Until then, you will need
 to downgrade msprime to 0.7.x for your simulations to run.
+
+### Mutations
+
+Msprime 1.0 provides powerful new methods for simulating mutational
+processes, adding support for finite-sites mutations and a
+range of different {ref}`mutation models<sec_mutations_models>`.
+Similarly to the approach for ancestry simulations, we introduce
+a new function {func}`.sim_mutations` which allows us to provide
+new, more appropriate defaults while still supporting older code.
+
+Differences between the 1.x {func}`.sim_mutations` and 0.x {func}`.mutate`
+functions:
+
+* The {func}`.sim_mutations` function works on a **discrete** genome by default.
+
+* There are now also many new mutation models supported by {func}`.sim_mutations`;
+  see {ref}`sec_mutations` for details. These are *not* supported in the deprecated
+  {func}`.mutate` function.
+
+* The simulated mutations now have a simulated ``time`` value, which specifies the
+  precise time that the mutation occurred. Note that this value is also provided in the
+  returned tables for the deprecated ``simulate()`` and ``mutate()`` functions,
+  which may lead to some compatibility issues. (We considered removing the simulated
+  mutation times for these 0.x functions for strict compatibility, but this would
+  have broken any code using the ``keep`` option in mutate.)
+
 
 ## API Reference
 
