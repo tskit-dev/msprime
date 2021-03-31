@@ -1160,7 +1160,7 @@ class TestParseSimulate:
             assert list(other_map.rate) == rates
             assert sim.sequence_length == other_map.sequence_length
             # Use the new-form RateMap
-            rate_map = msprime.RateMap(positions, rates)
+            rate_map = msprime.RateMap(position=positions, rate=rates)
             sim = ancestry._parse_simulate(10, recombination_map=rate_map)
             other_map = sim.recombination_map
             assert list(other_map.position) == positions
@@ -1945,3 +1945,53 @@ class TestReprRoundTrip:
             ),
         ]
         self.assert_repr_round_trip(examples)
+
+
+class TestUnknownGenomeRegions:
+    def test_sim_ancestry_unknown_flanks(self):
+        rate_map = msprime.RateMap(position=[0, 1, 9, 10], rate=[np.nan, 0, np.nan])
+        ts = msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)
+        assert ts.num_trees == 3
+        tree = ts.first()
+        assert tree.interval == (0, 1)
+        assert tree.num_roots == ts.num_samples
+        tree.next()  # noqa: B305
+        assert tree.interval == (1, 9)
+        assert tree.num_roots == 1
+        tree.next()  # noqa: B305
+        assert tree.interval == (9, 10)
+        assert tree.num_roots == ts.num_samples
+
+    def test_sim_ancestry_unknown_left(self):
+        rate_map = msprime.RateMap(position=[0, 1, 10], rate=[np.nan, 0])
+        ts = msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)
+        assert ts.num_trees == 2
+        tree = ts.first()
+        assert tree.interval == (0, 1)
+        assert tree.num_roots == ts.num_samples
+        tree.next()  # noqa: B305
+        assert tree.interval == (1, 10)
+        assert tree.num_roots == 1
+
+    def test_sim_ancestry_unknown_right(self):
+        rate_map = msprime.RateMap(position=[0, 9, 10], rate=[0, np.nan])
+        ts = msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)
+        assert ts.num_trees == 2
+        tree = ts.first()
+        assert tree.interval == (0, 9)
+        assert tree.num_roots == 1
+        tree.next()  # noqa: B305
+        assert tree.interval == (9, 10)
+        assert tree.num_roots == ts.num_samples
+
+    def test_sim_ancestry_unknown_mid(self):
+        rate_map = msprime.RateMap(position=[0, 1, 9, 10], rate=[0, np.nan, 0])
+        with pytest.raises(ValueError, match="Missing regions of the genome"):
+            msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)
+
+    def test_sim_ancestry_unknown_mid_plus_flanks(self):
+        rate_map = msprime.RateMap(
+            position=[0, 1, 5, 6, 7, 10], rate=[np.nan, 0, np.nan, 0, np.nan]
+        )
+        with pytest.raises(ValueError, match="Missing regions of the genome"):
+            msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)

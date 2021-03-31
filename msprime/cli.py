@@ -194,7 +194,7 @@ def hotspots_to_recomb_map(hotspots, background_rate, seq_length):
     if positions[-1] != seq_length:
         positions.append(seq_length)
 
-    return msprime.RateMap(positions, rates)
+    return msprime.RateMap(position=positions, rate=rates)
 
 
 class SimulationRunner:

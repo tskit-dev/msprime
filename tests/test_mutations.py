@@ -1732,7 +1732,7 @@ def py_sim_mutations(
             transition_matrix=model.transition_matrix,
         )
     tables = ts.dump_tables()
-    mutmap = msprime.RateMap([0, ts.sequence_length], [rate])
+    mutmap = msprime.RateMap(position=[0, ts.sequence_length], rate=[rate])
     mutgen = PythonMutationGenerator(mutmap, py_model)
     return mutgen.generate(
         tables,

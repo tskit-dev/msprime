@@ -698,7 +698,7 @@ not be simulated independently under the multiple merger models.
 
 :::{important}
 Simulations of multiple chromosomes under either DTWF or the multiple merger
-models should use a {ref}`discrete genome <sec_ancestry_discrete_genome>`. 
+models should use a {ref}`discrete genome <sec_ancestry_discrete_genome>`.
 While it is possible to set up such a simulation using a continuous genome,
 we *strongly* recommend against it, as chromosome divisions cannot be defined
 as discrete break points and the simulation will be very inefficient.
@@ -717,15 +717,15 @@ r_chrom = 1e-8
 r_break = math.log(2)
 chrom_positions = [0, 1e6, 2e6, 3e6]
 map_positions = [
-    chrom_positions[0], 
+    chrom_positions[0],
     chrom_positions[1],
     chrom_positions[1] + 1,
     chrom_positions[2],
-    chrom_positions[2] + 1, 
+    chrom_positions[2] + 1,
     chrom_positions[3]
 ]
 rates = [r_chrom, r_break, r_chrom, r_break, r_chrom]
-rate_map = msprime.RateMap(map_positions, rates)
+rate_map = msprime.RateMap(position=map_positions, rate=rates)
 ```
 
 We cannot use the default {class}`.StandardCoalescent` model to run simulations
@@ -2099,6 +2099,16 @@ ts
 The logging output of msprime can be very useful when working with
 multiple models. See the {ref}`sec_logging` section for more
 details.
+:::
+
+(sec_ancestry_missing_data)=
+
+## Missing data
+
+:::{todo}
+Give an example of doing a simulation with unknown rates on the flanks
+and show that the resulting tree sequence has missing data in these
+regions.
 :::
 
 (sec_ancestry_errors)=

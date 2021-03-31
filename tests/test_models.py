@@ -539,7 +539,7 @@ class TestDtwf:
         assert ts.num_trees == 1
 
     def test_single_recombination(self):
-        recombination_map = msprime.RateMap([0, 100, 101, 200], [0, 1, 0])
+        recombination_map = msprime.RateMap(position=[0, 100, 101, 200], rate=[0, 1, 0])
         ts = msprime.sim_ancestry(
             10,
             population_size=10,
