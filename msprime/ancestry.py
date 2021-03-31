@@ -1452,7 +1452,20 @@ class Simulator(_msprime.Simulator):
                     f'"{placeholder}"', str(replicate_index)
                 )
                 tables.provenances.add_row(replicate_provenance)
-            yield tables.tree_sequence()
+
+            # There are rare cases when we are simulating from
+            # awkward initial states where the tables we produce in the
+            # simulation are not correctly sorted. The simplest course
+            # of action here to just let it fail and sort.
+            # https://github.com/tskit-dev/msprime/issues/1606
+            try:
+                ts = tables.tree_sequence()
+            except tskit.LibraryError:
+                # TODO add a warning? This is probably badly formed input
+                # so it seems reasonable to issue a warning.
+                tables.sort()
+                ts = tables.tree_sequence()
+            yield ts
             self.reset()
 
 
