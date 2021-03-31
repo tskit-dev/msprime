@@ -393,6 +393,8 @@ Note that this is the **default**, and can be overridden by the
 {attr}`.SampleSet.ploidy` value, as described in the
 {ref}`sec_ancestry_samples_sampling_details` section.
 
+(sec_ancestry_ploidy_coalescent_time_scales)=
+
 ### Coalescent time scales
 
 The ploidy argument also affects the time scales of
