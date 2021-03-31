@@ -35,15 +35,15 @@ for discussion and examples of individual features.
 .. autosummary::
 
   sim_mutations
+  JC69
+  HKY
+  F84
+  GTR
+  BLOSUM62
+  PAM
   BinaryMutationModel
-  JC69MutationModel
-  HKYMutationModel
-  F84MutationModel
-  GTRMutationModel
-  BLOSUM62MutationModel
-  PAMMutationModel
   MatrixMutationModel
-  InfiniteAllelesMutationModel
+  InfiniteAlleles
   SLiMMutationModel
 ```
 
@@ -137,32 +137,32 @@ for discussion and examples of individual features.
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.JC69MutationModel()
+.. autoclass:: msprime.JC69()
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.HKYMutationModel()
+.. autoclass:: msprime.HKY()
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.F84MutationModel()
+.. autoclass:: msprime.F84()
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.GTRMutationModel()
+.. autoclass:: msprime.GTR()
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.BLOSUM62MutationModel()
+.. autoclass:: msprime.BLOSUM62()
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.PAMMutationModel()
+.. autoclass:: msprime.PAM()
 
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.InfiniteAllelesMutationModel()
+.. autoclass:: msprime.InfiniteAlleles()
 ```
 
 ```{eval-rst}

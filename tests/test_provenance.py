@@ -216,10 +216,7 @@ class TestBuildObjects:
         assert decoded.parameters.start_time == 0
         assert decoded.parameters.end_time == 100
         assert not decoded.parameters.keep
-        assert (
-            decoded.parameters.model["__class__"]
-            == "msprime.mutations.JC69MutationModel"
-        )
+        assert decoded.parameters.model["__class__"] == "msprime.mutations.JC69"
 
     def test_mutate_model(self):
         ts = msprime.simulate(5, random_seed=1)
@@ -227,10 +224,7 @@ class TestBuildObjects:
         decoded = self.decode(ts.provenance(1).record)
         assert decoded.schema_version == "1.0.0"
         assert decoded.parameters.command == "sim_mutations"
-        assert (
-            decoded.parameters.model["__class__"]
-            == "msprime.mutations.PAMMutationModel"
-        )
+        assert decoded.parameters.model["__class__"] == "msprime.mutations.PAM"
 
     def test_mutate_map(self):
         ts = msprime.simulate(5, random_seed=1)

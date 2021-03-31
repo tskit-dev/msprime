@@ -46,7 +46,7 @@ def test_sim_mutations():
 
 def test_sim_mutation_model():
     ts = sim_ancestry(2, random_seed=1)
-    ts = sim_mutations(ts, rate=1, model=JC69MutationModel(), random_seed=1)
+    ts = sim_mutations(ts, rate=1, model=JC69(), random_seed=1)
     assert ts.num_mutations > 0
 
 
