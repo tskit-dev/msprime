@@ -1,12 +1,33 @@
 # Changelog
 
-## [1.0.0b0] - 2021-XX-XX
+## [1.0.0b1] - 2021-03-31
 
-** This changelog is incomplete and needs to be reviewed and updated **
+Msprime 1.0 is a major update, recommended for all users. It introduces
+new APIs and many new features, which still retaining compatibility
+with nearly all existing code.
 
 **New features**:
 
-- Add functions to parse species trees and set up simulation models according
+- Add new top-level functions `sim_ancestry` and `sim_mutations`, intended
+  as long term replacements for `simulate` and `mutate`.
+- Add new `Demography` class as a replacement for the 0.x
+  ``population_configurations``, ``migration_matrix`` and ``demographic_events``
+  parameters to simulate. Many new features to improve ease of use and to
+  help avoid errors.
+- Change the underlying simulation from working in discrete genetic coordinates
+  and translating to physical coordinates, to simulating directly in physical
+  coordinates. This fixes some long standing bugs and makes it far simpler
+  to add features such as gene conversion. ({user}`daniel-goldstein`)
+- Support discrete or continuous genomes in simulations directly.
+- Add an modern array oriented RateMap class as to replace the RecombinationMap
+  class ({user}`jeromekelleher`, {user}`grahamgower`, {user}`hyanwong`).
+- Gene conversion ({user}`fbaumdicker`)
+- Selective sweeps and low-level infrastructure for the structured coalescent
+  ({user}`andrewkern`, {user}`gbinux`)
+- Multiple merger coalescent models ({user}`jerekoskela`, {user}`shajoezhu`,
+  {user}`TPPSellinger`)
+- Different ploidy levels for coalescent models ({user}`jerekoskela`)
+- Functions to parse species trees and set up simulation models according
   to the species tree. ({user}`mmatschiner` {issue}`893` {issue}`929` {issue}`931`)
 - Complete provenance recording of all arguments to simulate and mutate.
   Adds argument record_provenance to simulate, which allows recording of
@@ -14,17 +35,29 @@
   ({user}`benjeffery` {pr}`914`).
 - Add replicate_index to simulate, allowing output of a single tree sequence
   from a set of replicates. ({user}`benjeffery` {pr}`914`).
-- Much better simulation performance for models with large numbers
-  of populations ({user}`jeromekelleher`, {pr}`1069`).
 - Details of the simulation are written to the DEBUG log periodically.
   This can help debug long-running simulations. ({user}`jeromekelleher`,
   {pr}`1080`).
+- Functions to compute the likelihood of a particular ARG realisation
+  under the coalescent with recombination ({user}`jerekoskela`).
+- Finite sites mutations ({user}`petrelharp`)
+- Several instances of matrix mutation models: JC69, GTR, HKY, F84, BLOSUM62,
+  PAM. ({user}`GertjanBisschop`, {user}`petrelharp`).
+- An implementation of the SLiM mutation model ({user}`petrelharp`)
+- An infinite alleles mutation model ({user}`jeromekelleher`)
+- Methods to track the possible location of lineages, and compute the
+  coalescence rates over time ({user}`apragsdale`, {user}`petrelharp`
+  {user}`grahamgower`).
+- Improved command line interface features ({user}`winni2k`)
+- Binary wheels for PyPI ({user}`benjeffery`)
+- Mutations are assigned times ({user}`petrelharp`)
 
 **Breaking changes**:
 
+- Require Python 3.7+.
 - The class form for specifying models (e.g., `msprime.StandardCoalescent()`)
-  no longer take a `reference_size` argument.
-  (TODO add paper trail for this)
+  no longer take a `reference_size` argument. ({user}`jeromekelleher`,
+  {pr}`1028`).
 - The `simulate` function only takes one positional argument, and all other
   arguments are keyword-only.
 - The `msp` CLI has been stripped of all sub-commands except for
@@ -38,33 +71,17 @@
   exported from msprime (other classes are now formally deprecated and
   will raise a warning; see the deprecations section).
 
+**Performance improvements**
+
+- Much better simulation performance for models with large numbers
+  of populations ({user}`jeromekelleher`, {pr}`1069`).
+- Significant performance improvements for simulating from recombination
+  maps ({user}`ivan-krukov`, {user}`castedo`)
+
 **Deprecations**:
 
 - Deprecate module attributes that were moved to tskit.
   ({user}`benjeffery`, {issue}`991`, {pr}`1158`)
-
-## [1.0.0a5] - 2021-03-02
-
-Fifth alpha release of 1.0 for early testing and evaluation.
-
-- Fixes bug in rate map for mutations ({issue}`1470`)
-- Add draft of new Demography API.
-
-## [1.0.0a4] - 2021-02-01
-
-Fourth alpha release of 1.0 for early testing and evaluation.
-
-## [1.0.0a3] - 2021-01-18
-
-Fix some issues with alpha2.
-
-## [1.0.0a2] - 2021-01-18
-
-Second alpha release of 1.0 for early testing and evaluation.
-
-## [1.0.0a1] - 2021-01-15
-
-Alpha release of 1.0 for early testing and evaluation.
 
 ## [0.7.4] - 2019-12-05
 

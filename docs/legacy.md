@@ -83,9 +83,9 @@ and {func}`.sim_ancestry`:
 
   1. Sets the default number of sample nodes per *individual*
   2. Changes the {ref}`timescale<sec_ancestry_ploidy_coalescent_time_scales>`
-     of the coalescent process.  By default `ploidy` is 2 and
-     time is scaled scaled in units of 4N generations, which is the same as
-     msprime 0.x.
+     over which coalescence occurs.  By default `ploidy` is 2 and
+     so mean time to common ancestor in a population of size `N` is `2N` generations,
+     which is the same as msprime 0.x.
 * Rather than two parameters `num_samples` and `samples`, the
   {func}`.sim_ancestry` function has a single parameter `samples` which
   has different behaviour depending on the type of parameters provided.

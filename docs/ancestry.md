@@ -397,9 +397,10 @@ Note that this is the **default**, and can be overridden by the
 
 ### Coalescent time scales
 
-The ploidy argument also affects the time scales of
-coalescent models, in a similar way to
-{ref}`population size<sec_ancestry_demography>`.
+The ploidy argument also
+affects the time scale on which coalescence occurs,
+since it affects the total number of genomes in the population
+(see also {ref}`population size<sec_ancestry_demography>`).
 For example, consider the following two simulations, which
 are identical except for different ``ploidy`` values
 (note we use the {class}`.SampleSet` object to make
@@ -426,8 +427,9 @@ ts = msprime.sim_ancestry(
 SVG(ts.draw_svg(y_axis=True))
 ```
 
-The resulting tree sequences are identical, except for the node
-times, which differ by a factor of 2.
+The resulting tree sequences are identical, except that node time differ by a
+factor of 2, because in the underlying coalescent algorithm the total number of
+genomes in the population acts as a time scaling.
 
 :::{todo}
 Add a discussion here here about the Lambda coalescents an how
