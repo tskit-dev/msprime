@@ -328,7 +328,9 @@ class Demography(collections.abc.Mapping):
         """
         Sets the backwards-time rate of migration from the specified ``source``
         population to ``dest`` to the specified value. This has the effect of
-        setting ``demography.migration_matrix[source, dest] = rate``.
+        setting ``demography.migration_matrix[source, dest] = rate``. It is
+        the rate at which a lineage currently in ``source`` moves to ``dest``
+        as one follows the lineage back through time.
 
         .. important:: Note this is the
             :ref:`backwards in time<sec_demography_direction_of_time>`;
