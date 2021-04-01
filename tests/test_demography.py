@@ -23,6 +23,7 @@ import io
 import itertools
 import json
 import math
+import platform
 import random
 import unittest
 import warnings
@@ -38,6 +39,9 @@ import tskit
 import msprime
 import msprime.demography as demog_mod
 from msprime import _msprime
+
+
+IS_WINDOWS = platform.system() == "Windows"
 
 
 def all_events_example_demography(*, integer_ids=False):
@@ -1593,15 +1597,11 @@ class TestDemographyTrajectories(unittest.TestCase):
     def test_constant_sizes(self):
         # With constant population sizes, results should not depend on the steps
         N_A = 1e2
-        ddb = msprime.DemographyDebugger(
-            population_configurations=[
-                msprime.PopulationConfiguration(initial_size=N_A)
-            ],
-            demographic_events=[
-                msprime.PopulationParametersChange(time=100, initial_size=200),
-                msprime.PopulationParametersChange(time=300, initial_size=100),
-            ],
-        )
+        model = msprime.Demography()
+        model.add_population(initial_size=N_A, name="A")
+        model.add_population_parameters_change(time=100, initial_size=200)
+        model.add_population_parameters_change(time=300, initial_size=100)
+        ddb = model.debug()
         steps = np.linspace(0, 400, 21)
         rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2])
         steps2 = self.subdivide(steps)
@@ -1622,14 +1622,11 @@ class TestDemographyTrajectories(unittest.TestCase):
         #     population.
         N_A = 1e2
         N_B = 1e3
-        ddb = msprime.DemographyDebugger(
-            population_configurations=[
-                msprime.PopulationConfiguration(initial_size=N_A),
-                msprime.PopulationConfiguration(initial_size=N_B),
-            ],
-            demographic_events=[],
-            migration_matrix=[[0, 0.5], [0.25, 0]],
-        )
+        model = msprime.Demography()
+        model.add_population(initial_size=N_A, name="A")
+        model.add_population(initial_size=N_B, name="B")
+        model.migration_matrix = [[0, 0.5], [0.25, 0]]
+        ddb = model.debug()
         steps = np.linspace(0, 400, 401)
         rates, PP = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
         rates1, PP = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[0, 2])
@@ -1651,21 +1648,16 @@ class TestDemographyTrajectories(unittest.TestCase):
         # given 1/ 2*coalescent rates for the respective sampled population.
         N_A = 1e7
         N_B = 1e6
-        ddb = msprime.DemographyDebugger(
-            population_configurations=[
-                msprime.PopulationConfiguration(initial_size=N_A),
-                msprime.PopulationConfiguration(initial_size=N_B),
-            ],
-            demographic_events=[
-                msprime.PopulationParametersChange(
-                    time=100, initial_size=1e5, population_id=0, growth_rate=3e-3
-                ),
-                msprime.PopulationParametersChange(
-                    time=300, initial_size=1e6, population_id=0, growth_rate=7e-4
-                ),
-            ],
-            migration_matrix=[[0, 0], [0, 0]],
+        model = msprime.Demography()
+        model.add_population(initial_size=N_A, name="A")
+        model.add_population(initial_size=N_B, name="B")
+        model.add_population_parameters_change(
+            time=100, initial_size=1e5, population="A", growth_rate=3e-3
         )
+        model.add_population_parameters_change(
+            time=300, initial_size=1e6, population="A", growth_rate=7e-4
+        )
+        ddb = model.debug()
         steps = np.linspace(0, 400, 1001)
         rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
         pop_sizes = ddb.population_size_trajectory(steps=steps)
@@ -1675,60 +1667,92 @@ class TestDemographyTrajectories(unittest.TestCase):
         for r, p in zip(rates, pop_sizes[:, 1]):
             self.assertAlmostEqual(r, 1 / (2 * p))
 
-    def test_rate_size_equality_with_population_merge(self):
-        # Test equality between two population that split with continued
-        # migration
+    def test_rate_size_equality_with_mass_migration(self):
+        # Test for equality of population size and coalescence rates
+        # in one population that merges with others prior to the merge time
         N_A = 1e7
         N_B = 1e6
-
-        ddb = msprime.DemographyDebugger(
-            population_configurations=[
-                msprime.PopulationConfiguration(initial_size=N_A),
-                msprime.PopulationConfiguration(initial_size=N_B),
-            ],
-            demographic_events=[
-                msprime.PopulationParametersChange(
-                    time=100, initial_size=1e5, population_id=0, growth_rate=0
-                ),
-                msprime.PopulationParametersChange(
-                    time=100, initial_size=1e5, population_id=1, growth_rate=7e-4
-                ),
-                msprime.MassMigration(time=100, source=1, dest=0),
-                msprime.PopulationParametersChange(
-                    time=200, initial_size=1e6, population_id=0, growth_rate=-1e-2
-                ),
-                msprime.PopulationParametersChange(
-                    time=300, initial_size=1e6, population_id=0, growth_rate=0
-                ),
-            ],
-            migration_matrix=[[0, 0], [0, 0]],
+        N_C = 1e5
+        T = 100
+        model = msprime.Demography()
+        model.add_population(name="A", initial_size=N_A)
+        model.add_population(name="B", initial_size=N_B)
+        model.add_population(name="C", initial_size=N_C)
+        model.migration_matrix = np.array(
+            [[0.0, 1e-5, 1e-5], [1e-6, 0.0, 1e-6], [1e-5, 1e-5, 0.0]]
         )
-        steps = np.linspace(0, 400, 401)
-        rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
+        model.add_population_parameters_change(time=T, initial_size=1e5, population="A")
+        model.add_population_parameters_change(
+            time=T, initial_size=1e5, population="B", growth_rate=7e-4
+        )
+        model.add_mass_migration(time=T, source="B", dest="A", proportion=1.0)
+        model.add_mass_migration(time=T, source="C", dest="A", proportion=1.0)
+        for p1, p2 in [("A", "B"), ("A", "C"), ("B", "C")]:
+            model.add_migration_rate_change(time=T, rate=0.0, source=p1, dest=p2)
+            model.add_migration_rate_change(time=T, rate=0.0, source=p2, dest=p1)
+        model.add_population_parameters_change(
+            time=2 * T, initial_size=1e6, population="A", growth_rate=-1e-2
+        )
+        model.add_population_parameters_change(
+            time=3 * T, initial_size=1e6, population="A", growth_rate=0
+        )
+        ddb = model.debug()
+        steps = np.linspace(0, 4 * T, 401)
+        post_split = steps > T
+        rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0, 0])
         pop_sizes = ddb.population_size_trajectory(steps=steps)
-        for r, p in zip(rates[301:], pop_sizes[:, 0][301:]):
-            self.assertAlmostEqual(1 / (2 * r), p)
+        assert np.allclose(
+            1 / (2 * rates[post_split]), pop_sizes[post_split, 0], rtol=0.0001
+        )
+
+    def test_rate_size_equality_with_population_split(self):
+        # as in test_rate_size_equality_with_mass_migration but with a population split
+        N_A = 1e7
+        N_B = 1e6
+        N_C = 3e5
+        T = 100
+        model = msprime.Demography()
+        model.add_population(name="A", initial_size=N_A)
+        model.add_population(name="B", initial_size=N_B)
+        model.add_population(name="C", initial_size=N_C)
+        model.migration_matrix = np.array(
+            [[0.0, 1e-5, 0.0], [1e-6, 0.0, 0.0], [0.0, 0.0, 0.0]]
+        )
+        model.add_population_parameters_change(time=T, initial_size=1e5, population="A")
+        model.add_population_parameters_change(
+            time=T, initial_size=1e5, population="B", growth_rate=7e-4
+        )
+        model.add_population_split(time=T, derived=["A", "B"], ancestral="C")
+        model.add_population_parameters_change(
+            time=2 * T, initial_size=1e6, population="C", growth_rate=-1e-2
+        )
+        model.add_population_parameters_change(
+            time=3 * T, initial_size=1e6, population="C", growth_rate=0
+        )
+        ddb = model.debug()
+        steps = np.linspace(0, 4 * T, 401)
+        post_split = steps > T
+        rates, P = ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0, 0])
+        pop_sizes = ddb.population_size_trajectory(steps=steps)
+        assert np.allclose(
+            1 / (2 * rates[post_split]), pop_sizes[post_split, 2], rtol=0.0001
+        )
 
     def test_double_step_validation(self):
         # Test that the double step validation throws a warning
         # with small step sizes
         N_A = 1e3
         N_B = 1e4
-        ddb = msprime.DemographyDebugger(
-            population_configurations=[
-                msprime.PopulationConfiguration(initial_size=N_A),
-                msprime.PopulationConfiguration(initial_size=N_B),
-            ],
-            demographic_events=[
-                msprime.PopulationParametersChange(
-                    time=100, initial_size=1e2, population_id=0, growth_rate=3e-3
-                ),
-                msprime.PopulationParametersChange(
-                    time=300, initial_size=1e3, population_id=0, growth_rate=7e-4
-                ),
-            ],
-            migration_matrix=[[0, 0], [0, 0]],
+        model = msprime.Demography()
+        model.add_population(name="A", initial_size=N_A)
+        model.add_population(name="B", initial_size=N_B)
+        model.add_population_parameters_change(
+            time=100, initial_size=1e2, population="A", growth_rate=3e-3
         )
+        model.add_population_parameters_change(
+            time=300, initial_size=1e3, population="A", growth_rate=7e-4
+        )
+        ddb = model.debug()
         steps = np.linspace(0, 400, 2)
         with pytest.warns(UserWarning):
             ddb.coalescence_rate_trajectory(steps=steps, num_samples=[2, 0])
@@ -1739,14 +1763,10 @@ class TestDemographyTrajectories(unittest.TestCase):
         )
 
     def test_value_errors(self):
-        # test all user input domains which should raise ValuErrors.
-        ddb = msprime.DemographyDebugger(
-            population_configurations=[
-                msprime.PopulationConfiguration(initial_size=1e2),
-            ],
-            demographic_events=[],
-            migration_matrix=[[0]],
-        )
+        # test all user input domains which should raise ValueErrors.
+        model = msprime.Demography()
+        model.add_population(name="A", initial_size=1e2)
+        ddb = model.debug()
         steps = np.linspace(0, 10, 11)
         # Test when num_pops != len(num_samples), we throw error
         with pytest.raises(ValueError):
@@ -1769,56 +1789,42 @@ class TestDemographyTrajectories(unittest.TestCase):
         random.seed(23)
         Ne = 100
         N = 4
+        names = ["A", "B", "C", "D"]
         pop_sizes = [random.uniform(0.01, 10) * Ne for _ in range(N)]
         growth_rates = [random.uniform(-0.01, 0.01) for _ in range(N)]
-        migration_matrix = [
+        model = msprime.Demography()
+        for k, n, r in zip(pop_sizes, names, growth_rates):
+            model.add_population(initial_size=k, name=n, growth_rate=r)
+        model.migration_matrix = [
             [random.random() * (i != j) for j in range(N)] for i in range(N)
         ]
-        sample_sizes = [random.randint(2, 10) for _ in range(N)]
-        population_configurations = [
-            msprime.PopulationConfiguration(
-                initial_size=k, sample_size=n, growth_rate=r
-            )
-            for k, n, r in zip(pop_sizes, sample_sizes, growth_rates)
-        ]
-        demographic_events = []
         for i in [0, 1]:
             n = random.uniform(0.01, 10)
             r = 0
-            demographic_events.append(
-                msprime.PopulationParametersChange(
-                    time=100, initial_size=n, growth_rate=r, population_id=i
-                )
+            model.add_population_parameters_change(
+                time=100, initial_size=n, growth_rate=r, population=names[i]
             )
-        for ij in [(0, 1), (2, 3), (0, 3)]:
-            demographic_events.append(
-                msprime.MigrationRateChange(180, random.random(), matrix_index=ij)
+        for i, j in [(0, 1), (2, 3), (0, 3)]:
+            model.add_migration_rate_change(
+                time=180, rate=random.random(), source=names[i], dest=names[j]
             )
-        demographic_events.append(
-            msprime.MassMigration(time=200, source=3, dest=0, proportion=0.3)
+        model.add_mass_migration(
+            time=200, source=names[3], dest=names[0], proportion=0.3
         )
         for i in [1, 3]:
             n = random.uniform(0.01, 10)
             r = random.uniform(-0.01, 0.01)
-            demographic_events.append(
-                msprime.PopulationParametersChange(
-                    time=210, initial_size=n, growth_rate=r, population_id=i
-                )
+            model.add_population_parameters_change(
+                time=210, initial_size=n, growth_rate=r, population=names[i]
             )
-
-        ddb = msprime.DemographyDebugger(
-            population_configurations=population_configurations,
-            demographic_events=demographic_events,
-            migration_matrix=migration_matrix,
-        )
-        return ddb
+        return model.debug()
 
     @pytest.mark.slow
     def test_random_example(self):
         ddb = self.get_random_example()
         num_samples = list(range(ddb.num_populations))
         rates, P = ddb.coalescence_rate_trajectory(
-            steps=np.linspace(0, 200, 2001), num_samples=num_samples
+            steps=np.linspace(0, 300, 401), num_samples=num_samples
         )
         assert np.all(rates >= 0)
         assert np.all(P >= 0)
@@ -1830,6 +1836,20 @@ class TestDemographyTrajectories(unittest.TestCase):
             num_samples=num_samples, steps=np.linspace(0, 200, 501)
         )
         assert abs(coaltime - coaltime2) < 2
+
+    @pytest.mark.slow
+    @pytest.mark.skipif(IS_WINDOWS, reason="windows gives nans?!?")
+    def test_ooa(self):
+        # let us know if these values change
+        ddb = msprime.Demography._ooa_model().debug()
+        T = np.concatenate(
+            [np.linspace(0, 1000, 2001), np.linspace(1000, 1e4, 401)[1:]]
+        )
+        R, _ = ddb.coalescence_rate_trajectory(T, [0, 2, 0, 0, 0, 0])
+        assert np.allclose(0.5 / R[-10:], 7300, rtol=1e-3)
+        assert np.allclose(0.5 / R[2021], 2985.125, rtol=1e-3)
+        assert np.allclose(0.5 / R[608], 9500, rtol=1e-3)
+        assert np.allclose(0.5 / R[0], 29725.3435, rtol=1e-3)
 
 
 class TestMatrixExponential:
@@ -3855,15 +3875,35 @@ class TestLineageProbabilities:
         demography.add_population(name="B", initial_size=100, initially_active=True)
         demography.add_population(name="C", initial_size=100, initially_active=True)
         demography.add_population(name="D", initial_size=100)
-        demography.add_population_split(time=50, derived=["D"], ancestral="C")
+        demography.add_population(name="E", initial_size=100, initially_active=True)
+        demography.add_population_split(time=50, derived=["D", "E"], ancestral="C")
         demography.add_population_split(time=100, derived=["C"], ancestral="B")
         demography.add_population_split(time=150, derived=["B"], ancestral="A")
         dd = demography.debug()
         P_out = dd.lineage_probabilities([10, 50, 60, 100, 101, 200])
-        assert np.all([np.sum(P) == demography.num_populations for P in P_out])
-        assert np.all(np.diag(P_out[0]) == [1, 1, 1, 1])
-        assert np.all(np.diag(P_out[1]) == [1, 1, 1, 1])
-        assert np.all(probs == [1, 0, 0, 0] for probs in P_out[5])
+        for P in P_out:
+            for row in P:
+                assert np.sum(row) == 1.0
+        assert np.all(np.diag(P_out[0]) == [1, 1, 1, 1, 1])
+        assert np.all(np.diag(P_out[1]) == [1, 1, 1, 1, 1])
+        PP = [
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 1, 0, 0],
+            [0, 0, 1, 0, 0],
+        ]
+        assert np.all(P_out[2] == PP)
+        assert np.all(P_out[3] == PP)
+        PP = [
+            [1, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+            [0, 1, 0, 0, 0],
+        ]
+        assert np.all(P_out[4] == PP)
+        assert np.all(probs == [1, 0, 0, 0, 0] for probs in P_out[5])
         self.verify_simulation(dd)
 
     def test_lineage_probabilities_tree_old_style(self):
