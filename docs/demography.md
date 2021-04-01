@@ -16,6 +16,9 @@ kernelspec:
 :tags: [remove-cell]
 
 import msprime
+import numpy as np
+import matplotlib.pyplot as plt
+
 from IPython.display import SVG
 
 ```
@@ -921,6 +924,12 @@ converting the debugger object to string:
 print(demography.debug())
 ```
 
+:::{seealso}
+The {class}`.DemographyDebugger` has a number of methods to
+perform calculations based on a given demography. See the
+{ref}`sec_demography_numerical` section for details and examples.
+:::
+
 (sec_demography_examples)=
 
 ## Example models
@@ -1484,8 +1493,168 @@ for population in ts.populations():
     print(population.metadata)
 ```
 
-## Numerical predictions
+(sec_demography_numerical)=
 
-```{eval-rst}
-.. todo:: Add a section explaining how to use
-    :meth:`.DemographyDebugger.lineage_probabilities` and friends.
+## Numerical utilities
+
+### Population sizes over time
+
+When working with exponential growth models it is useful to be able to compute
+the sizes of the populations at given times. The
+{meth}`.DemographyDebugger.population_size_trajectory` gives a straightforward
+way of doing this. For example, here we create two exponentially growing populations
+and show how their sizes change over time:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=10000, growth_rate=0.01)
+demography.add_population(name="B", initial_size=10000, growth_rate=0.03)
+
+debug = demography.debug()
+
+t = np.linspace(0, 100, num=20)
+S = debug.population_size_trajectory(t)
+plt.plot(t, S, label=["A", "B"])
+plt.xlabel("Time ago")
+plt.ylabel("Population size")
+plt.legend();
+```
+
+### Possible locations of lineages
+
+When debugging a demographic model it can be helpful to track the possible
+location of ancestral lineages over time, as determined by the model
+structure and the initial composition of the sample. For example,
+here we create a simple model involving a
+{ref}`population split<sec_demography_events_population_split>`, and then
+use the {meth}`~.DemographyDebugger.possible_lineage_locations` method:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=100)
+demography.add_population(name="B", initial_size=100)
+demography.add_population(name="C", initial_size=100)
+demography.add_population_split(time=500, derived=["A", "B"], ancestral="C")
+
+debug = demography.debug()
+debug.possible_lineage_locations()
+```
+
+The method returns a mapping of time intervals to numpy boolean arrays.
+The keys are ``(start, end]`` intervals during which the possible location
+of samples are the same, and the values are arrays telling us whether
+a given population can have lineages present during this epoch or not.
+By default,
+{meth}`~.DemographyDebugger.possible_lineage_locations` assumes that we
+draw samples from all populations that have a
+{ref}`default sampling time<sec_demography_populations_default_sampling_time>`
+of zero, and so for the initial period between time 0 and 500 we
+can have samples in population "A" and "B", but not in "C". The next time
+slice, from 500 generations ago onwards, we can only
+have lineages in population "C" (because after the population split all
+lineages will be in the ancestral population).
+
+We can also specify that we are interested in sampling from specific
+populations at particular times. Suppose we take samples from "A" at
+time 0 and from "B" at time 20:
+
+```{code-cell}
+debug.possible_lineage_locations([
+    msprime.SampleSet(1, population="A", time=0),
+    msprime.SampleSet(1, population="B", time=20),
+])
+```
+Now, we can have lineages in "A" from 0 to 20 generations ago, but not
+in "B".
+
+:::{note}
+The number of samples we supply per population isn't important
+(once it's greater than 0).
+:::
+
+The effects of migration are also taken into account by this method.
+For example, consider a different model in which we have two initially
+isolated populations, with migration between then introduced 50
+generations ago:
+
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=100)
+demography.add_population(name="B", initial_size=100)
+demography.add_symmetric_migration_rate_change(
+    time=50, populations=["A", "B"], rate=0.01)
+
+debug = demography.debug()
+debug.possible_lineage_locations(["A"])
+```
+
+Because we only sampled lineages in "A", we cannot have
+any lineages in "B" until after the migration between the
+the two after 50 generations ago.
+
+### Lineage probabilities
+
+The {meth}`~.DemographyDebugger.lineage_probabilities` method computes
+the probability that a lineage sampled at a given time in a each population
+is present in any other population at a set of times in the past.
+Consider a simple
+{ref}`population split<sec_demography_events_population_split>` model:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=100)
+demography.add_population(name="B", initial_size=100)
+demography.add_population(name="C", initial_size=100)
+demography.add_population_split(time=500, derived=["A", "B"], ancestral="C")
+
+debug = demography.debug()
+debug.lineage_probabilities([250, 750])
+```
+
+Here we ask to compute the matrix of lineage probabilities 250 and
+750 generations ago, before and after the population split. Before the
+split, any lineages sampled in a population can only still be in
+that population so the diagonal of the matrix is 1. After the
+split, all lineages must be in population "C", and so the
+corresponding column is 1.
+
+Migration is taken into account in these calculations, and we
+can see a more interesting by looking at a
+1D {meth}`~.Demography.stepping_stone_model`:
+
+```{code-cell}
+N = 32
+demography = msprime.Demography().stepping_stone_model(
+    initial_size=[100] * N, migration_rate=0.01)
+
+debug = demography.debug()
+T = [10, 100, 1000]
+X = debug.lineage_probabilities(T)
+
+for t, x in zip(T, X):
+    plt.plot(x[N // 2], label=f"{t} generations ago")
+plt.legend()
+plt.xlabel("Population ID");
+plt.ylabel("Probability of being in population");
+```
+
+Here we create a 32 population stepping stone model, and
+compute the matrix of lineage probabilities at 10, 100
+and 1000 generations ago. We then plot the probability
+of lineages sampled in the middle population
+being present in the linearly-connected populations.
+As we can see, 10 generations ago, the probability
+of lineages being present falls off quickly with
+distance, but as we go further back into the past
+the possible location of lineages becomes more evenly
+distributed in space.
+
+### Coalescence rates and mean times
+
+:::{todo}
+Give an example of computing something interesting using
+{meth}`.DemographyDebugger.coalescence_rate_trajectory`.
+and
+{meth}`.DemographyDebugger.mean_coalescence_time`.
+:::

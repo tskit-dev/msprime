@@ -1350,18 +1350,15 @@ class TestDemographyTrajectories(unittest.TestCase):
         # - population size today is 100
         # - size change to 200 at t=100 generations ago
         # - population 1 has a size change to 100 at t=300 generations ago
-        ddb = msprime.DemographyDebugger(
-            population_configurations=[
-                msprime.PopulationConfiguration(initial_size=100)
-            ],
-            demographic_events=[
-                msprime.PopulationParametersChange(
-                    time=100, initial_size=200, population_id=0
-                ),
-                msprime.PopulationParametersChange(time=300, initial_size=100),
-            ],
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=100)
+        demography.add_population_parameters_change(
+            time=100, population="A", initial_size=200
         )
-        return ddb
+        demography.add_population_parameters_change(
+            time=300, population="A", initial_size=100
+        )
+        return demography.debug()
 
     def test_one_pop(self):
         # a) The coalescence rates through time of two samples are:
@@ -3787,16 +3784,19 @@ class TestLineageProbabilities:
 
     def verify_simulation(self, dd):
         samples = []
-        for pop_id in range(dd.num_populations):
-            for time in dd.epoch_times:
-                samples.append(
-                    msprime.SampleSet(1, population=pop_id, ploidy=1, time=time)
-                )
+        for epoch in dd.epochs:
+            for pop in epoch.populations:
+                if pop.active:
+                    samples.append(
+                        msprime.SampleSet(
+                            1, population=pop.id, ploidy=1, time=epoch.start_time
+                        )
+                    )
         reps = msprime.sim_ancestry(
             samples=samples,
             demography=dd.demography,
             end_time=max(dd.epoch_times + 1),
-            num_replicates=100,
+            num_replicates=10,
             random_seed=42,
         )
         for ts in reps:
@@ -3833,8 +3833,24 @@ class TestLineageProbabilities:
                     assert np.allclose(P[j, :, :], f(t))
             self.verify_simulation(dd)
 
-    @pytest.mark.slow
     def test_lineage_probabilities_tree(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=100, initially_active=True)
+        demography.add_population(name="B", initial_size=100, initially_active=True)
+        demography.add_population(name="C", initial_size=100, initially_active=True)
+        demography.add_population(name="D", initial_size=100)
+        demography.add_population_split(time=50, derived=["D"], ancestral="C")
+        demography.add_population_split(time=100, derived=["C"], ancestral="B")
+        demography.add_population_split(time=150, derived=["B"], ancestral="A")
+        dd = demography.debug()
+        P_out = dd.lineage_probabilities([10, 50, 60, 100, 101, 200])
+        assert np.all([np.sum(P) == demography.num_populations for P in P_out])
+        assert np.all(np.diag(P_out[0]) == [1, 1, 1, 1])
+        assert np.all(np.diag(P_out[1]) == [1, 1, 1, 1])
+        assert np.all(probs == [1, 0, 0, 0] for probs in P_out[5])
+        self.verify_simulation(dd)
+
+    def test_lineage_probabilities_tree_old_style(self):
         dem_events = [
             msprime.MassMigration(time=50, source=3, destination=2),
             msprime.MassMigration(time=100, source=2, destination=1),
