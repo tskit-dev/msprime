@@ -3152,9 +3152,35 @@ class DemographyDebugger:
             out += indent(self._populations_text(epoch))
         return out
 
+    @property
+    def population_size_history(self):
+        """
+        Returns a (num_pops, num_epochs) numpy array giving the starting population size
+        for each population in each epoch.
+        """
+        pop_size = np.zeros((self.num_populations, self.num_epochs))
+        for j, epoch in enumerate(self.epochs):
+            for k, pop in enumerate(epoch.populations):
+                pop_size[k, j] = pop.start_size
+        return pop_size
+
+    @property
+    def epoch_times(self):
+        """
+        Returns array of epoch times defined by the demographic model
+        """
+        return np.array([x.start_time for x in self.epochs])
+
+    @property
+    def num_epochs(self):
+        """
+        Returns the number of epochs defined by the demographic model.
+        """
+        return len(self.epochs)
+
     def population_size_trajectory(self, steps):
         """
-        This function returns an array of per-population effective population sizes,
+        Return an array of per-population population sizes,
         as defined by the demographic model. These are the `initial_size`
         parameters of the model, modified by any population growth rates.
         The sizes are computed at the time points given by `steps`.
@@ -3371,13 +3397,11 @@ class DemographyDebugger:
         """
         Compute the mean time until coalescence between lineages of two samples drawn
         from the sample configuration specified in `num_samples`. This is done using
-        :meth:`coalescence_rate_trajectory
-        <.DemographyDebugger.coalescence_rate_trajectory>`
+        :meth:`~.DemographyDebugger.coalescence_rate_trajectory`
         to compute the probability that the lineages have not yet coalesced by time `t`,
         and using these to approximate :math:`E[T] = \\int_t^\\infty P(T > t) dt`,
         where :math:`T` is the coalescence time. See
-        :meth:`coalescence_rate_trajectory
-        <.DemographyDebugger.coalescence_rate_trajectory>`
+        :meth:`~.DemographyDebugger.coalescence_rate_trajectory`
         for more details.
 
         To compute this, an adequate time discretization must be arrived at
@@ -3402,8 +3426,8 @@ class DemographyDebugger:
         :param list num_samples: A list of the same length as the number
             of populations, so that `num_samples[j]` is the number of sampled
             chromosomes in subpopulation `j`.
-        :param int min_pop_size: See :meth:`coalescence_rate_trajectory
-            <.DemographyDebugger.coalescence_rate_trajectory>`.
+        :param int min_pop_size: See
+            :meth:`~.DemographyDebugger.coalescence_rate_trajectory`.
         :param list steps: The time discretization to start out with (by default,
             picks something based on epoch times).
         :param float rtol: The relative tolerance to determine mean coalescence time
@@ -3513,7 +3537,7 @@ class DemographyDebugger:
         self, steps, num_samples, min_pop_size=1, double_step_validation=True
     ):
         """
-        This function will calculate the mean coalescence rates and proportions
+        Calculate the mean coalescence rates and proportions
         of uncoalesced lineages between the lineages of the sample
         configuration provided in `num_samples`, at each of the times ago
         listed by steps, in this demographic model. The coalescence rate at
@@ -3612,9 +3636,14 @@ class DemographyDebugger:
         mass_migration_objects = []
         mass_migration_times = []
         for demo in self.demography.events:
-            if type(demo) == MassMigration:
-                mass_migration_objects.append(demo)
-                mass_migration_times.append(demo.time)
+            if isinstance(demo, LineageMovementEvent):
+                # Convert higher-level lineage movement events like Admixtures
+                # and PopulationSplits into LineageMovement instances. These are
+                # equivalent to MassMigrations
+                for lm in demo._as_lineage_movements():
+                    mass_migration_objects.append(lm)
+                    mass_migration_times.append(demo.time)
+
         num_steps = len(steps_b)
         # recall that steps_b[0] = 0.0
         r = np.zeros(num_steps)
@@ -3680,30 +3709,3 @@ class DemographyDebugger:
             g = pop.growth_rate
             N[i] *= np.exp(-1 * g * s)
         return N, self.epochs[j].migration_matrix
-
-    @property
-    def population_size_history(self):
-        """
-        Returns a (num_pops, num_epochs) numpy array giving the starting population size
-        for each population in each epoch.
-        """
-        num_pops = len(self.epochs[0].populations)
-        pop_size = np.zeros((num_pops, len(self.epochs)))
-        for j, epoch in enumerate(self.epochs):
-            for k, pop in enumerate(epoch.populations):
-                pop_size[k, j] = pop.start_size
-        return pop_size
-
-    @property
-    def epoch_times(self):
-        """
-        Returns array of epoch times defined by the demographic model
-        """
-        return np.array([x.start_time for x in self.epochs])
-
-    @property
-    def num_epochs(self):
-        """
-        Returns the number of epochs defined by the demographic model.
-        """
-        return len(self.epochs)
