@@ -1198,3 +1198,23 @@ class TestSlimOutput:
         from_ts = tskit.load("tests/data/SLiM/single-locus-example.trees")
         ts = self.finish_simulation(from_ts, recombination_rate=0.1, seed=1)
         self.verify_completed(from_ts, ts)
+
+
+class TestBugExamples:
+    def test_unordered_tables_on_output(self):
+        # https://github.com/tskit-dev/msprime/issues/1606
+        t = tskit.TableCollection(sequence_length=2)
+        t.populations.add_row()
+        t.nodes.add_row(time=0, flags=tskit.NODE_IS_SAMPLE, population=0)
+        t.nodes.add_row(time=1, flags=tskit.NODE_IS_SAMPLE, population=0)
+        t.nodes.add_row(time=2, population=0)
+        t.edges.add_row(left=0, right=1, parent=2, child=0)
+        ts = t.tree_sequence()
+
+        with pytest.warns(msprime.IncompletePopulationMetadataWarning):
+            ts = msprime.sim_ancestry(
+                initial_state=ts, population_size=1, random_seed=5
+            )
+        assert ts.num_trees == 2
+        for tree in ts.trees():
+            assert tree.num_roots == 1
