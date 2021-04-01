@@ -70,22 +70,22 @@ for more information.
 
 **Models**
 
-{class}`.JC69MutationModel` (Nucleotides)
+{class}`.JC69` (Nucleotides)
 : Jukes & Cantor model ('69), equal probability of transitions between nucleotides
 
-{class}`.HKYMutationModel` (Nucleotides)
+{class}`.HKY` (Nucleotides)
 : Hasegawa, Kishino & Yano model ('85), different probabilities for transitions and transversions
 
-{class}`.F84MutationModel` (Nucleotides)
+{class}`.F84` (Nucleotides)
 : Felsenstein model ('84), different probabilities for transitions and transversions
 
-{class}`.GTRMutationModel` (Nucleotides)
+{class}`.GTR` (Nucleotides)
 : Generalised Time-Reversible nucleotide mutation model
 
-{class}`.BLOSUM62MutationModel` (Amino acids)
+{class}`.BLOSUM62` (Amino acids)
 : The BLOSUM62 model of time-reversible amino acid mutation
 
-{class}`.PAMMutationModel` (Amino acids)
+{class}`.PAM` (Amino acids)
 : The PAM model of time-reversible amino acid mutation
 
 {class}`.BinaryMutationModel` (Binary ancestral/derived)
@@ -94,7 +94,7 @@ for more information.
 {class}`.MatrixMutationModel` (General finite state model)
 : Superclass of mutation models with a finite set of states
 
-{class}`.InfiniteAllelesMutationModel` (Integers)
+{class}`.InfiniteAlleles` (Integers)
 : A generic infinite-alleles mutation model
 
 {class}`.SLiMMutationModel` (Integers)
@@ -259,7 +259,7 @@ lines will result in an error, as older mutations must be added first.
 Some of these mutation models produce *silent mutations*,
 that do not change the allelic state.
 For instance, here are all the mutations in a small simulation
-using the {class}`.HKYMutationModel`:
+using the {class}`.HKY`:
 
 ```{code-cell}
 def count_transitions(ts, alleles):
@@ -276,7 +276,7 @@ def count_transitions(ts, alleles):
     for j, a in enumerate(alleles):
         print(f"{a}\t", "\t".join(map(str, counts[j])))
 
-model = msprime.HKYMutationModel(kappa=0.75, equilibrium_frequencies=[0.2, 0.3, 0.3, 0.2])
+model = msprime.HKY(kappa=0.75, equilibrium_frequencies=[0.2, 0.3, 0.3, 0.2])
 ts = msprime.sim_ancestry(5, random_seed=1, sequence_length=1e7, recombination_rate=1e-8, population_size=1000)
 mts = msprime.sim_mutations(ts, rate=1e-8, model=model, random_seed=1)
 count_transitions(mts, model.alleles)
@@ -362,7 +362,7 @@ Although it is possible to add new mutations ancestrally to
 existing mutations, doing so can produce confusing situations.
 For instance, new mutations added to an already mutated site
 will not assign a new ancestral state: for instance, with the
-{class}`.PAMMutationModel` of amino acid mutation,
+{class}`.PAM` of amino acid mutation,
 if a site has ancestral state ``V`` and a mutation with derived state ``I``,
 and a new mutation is added ancestral to the existing one,
 the derived state of the new mutation will be randomly assigned
@@ -372,7 +372,7 @@ the new mutation in this example might be a ``G``,
 since mutations from ``V`` to ``G`` and ``V`` to ``I`` are both reasonably likely.
 However, a mutation from ``G`` to ``I`` is impossible under this model,
 and we now have the chain V->G->I
-(the chain is possible under the {class}`.BLOSUM62MutationModel`, but unlikely).
+(the chain is possible under the {class}`.BLOSUM62`, but unlikely).
 In practice this is more confusing than concerning,
 since it can only happen when the same site is mutated more than once,
 which affects only a small proportion of sites.
@@ -385,7 +385,7 @@ and then adding mutations at rate {math}`\beta`
 is *equivalent* to adding mutations once, at rate {math}`\alpha + \beta`.
 A mutation model has this property if rows of its transition matrix are the same,
 and is called *state independent* (or, *parent independent*).
-For instance, mutations under the {class}`.JC69MutationModel`
+For instance, mutations under the {class}`.JC69`
 choose *any* derived allele with equal probability.
 This means that the *result* of a mutation can be chosen without knowing
 what the previous state at that site was ("state independence"),
@@ -400,7 +400,7 @@ whose rows give the probability that each allele mutates into each other allele
 
 
 ```{code-cell}
-jc69 = msprime.JC69MutationModel()
+jc69 = msprime.JC69()
 jc69.transition_matrix
 ```
 
@@ -421,11 +421,11 @@ To make it state-independent, we have to choose the derived state
 uniformly from *all* nucleotides:
 
 ```{code-cell}
-pi_jc69 = msprime.JC69MutationModel(state_independent=True)
+pi_jc69 = msprime.JC69(state_independent=True)
 pi_jc69.transition_matrix
 ```
 
-With this change, mutating twice with {class}`.JC69MutationModel`
+With this change, mutating twice with {class}`.JC69`
 is *equivalent* to mutating once with rate equal to the sum of the rates.
 In other words, these two operations are equivalent:
 
@@ -491,18 +491,18 @@ Here's the takeaways from this section:
 Mutation models are specified using the `model` parameter to
 {func}`.sim_mutations`. This parameter can either take the form of a
 string describing the model (e.g. `model="jc69"`) or an instance of a
-model definition class (e.g `model=msprime.JC69MutationModel()`).
+model definition class (e.g `model=msprime.JC69()`).
 Here are the available models; they are documented in more detail below.
 
 - {class}`.BinaryMutationModel`: Basic binary mutation model with two flip-flopping alleles: "0" and "1".
-- {class}`.JC69MutationModel`: Jukes & Cantor model ('69), equal probability of transitions between nucleotides
-- {class}`.HKYMutationModel`: Hasegawa, Kishino & Yano model ('85), different probabilities for transitions and transversions
-- {class}`.F84MutationModel`: Felsenstein model ('84), different probabilities for transitions and transversions
-- {class}`.GTRMutationModel`: The Generalised Time-Reversible nucleotide mutation model, a general parameterization of a time-reversible mutation process
-- {class}`.BLOSUM62MutationModel`: The BLOSUM62 model of time-reversible amino acid mutation
-- {class}`.PAMMutationModel`: The PAM model of time-reversible amino acid mutation
+- {class}`.JC69`: Jukes & Cantor model ('69), equal probability of transitions between nucleotides
+- {class}`.HKY`: Hasegawa, Kishino & Yano model ('85), different probabilities for transitions and transversions
+- {class}`.F84`: Felsenstein model ('84), different probabilities for transitions and transversions
+- {class}`.GTR`: The Generalised Time-Reversible nucleotide mutation model, a general parameterization of a time-reversible mutation process
+- {class}`.BLOSUM62`: The BLOSUM62 model of time-reversible amino acid mutation
+- {class}`.PAM`: The PAM model of time-reversible amino acid mutation
 - {class}`.MatrixMutationModel`: Superclass of the specific mutation models with a finite set of states
-- {class}`.InfiniteAllelesMutationModel`: A generic infinite-alleles mutation model
+- {class}`.InfiniteAlleles`: A generic infinite-alleles mutation model
 - {class}`.SLiMMutationModel`: An infinite-alleles model of mutation producing SLiM-style mutations
 
 (sec_mutations_matrix_mutations_models)=
@@ -669,7 +669,7 @@ solving for {math}`\mu` gives us:
 
 ```{code-cell}
 pi = np.array([0.1, 0.2, 0.3, 0.4])
-hky = msprime.HKYMutationModel(kappa=0.75, equilibrium_frequencies=pi)
+hky = msprime.HKY(kappa=0.75, equilibrium_frequencies=pi)
 P = hky.transition_matrix
 u = 2.5e-7
 mu = u / (1 - np.sum(pi * np.diag(P)))
@@ -708,7 +708,7 @@ and print the resulting tree, labeling each mutation with its derived state:
 ```{code-cell} python
 
 ts = msprime.sim_ancestry(6, random_seed=2, sequence_length=1)
-model = msprime.InfiniteAllelesMutationModel()
+model = msprime.InfiniteAlleles()
 mts = msprime.sim_mutations(ts, rate=2, random_seed=1, model=model)
 t = mts.first()
 ml = {m.id: m.derived_state for m in mts.mutations()}
@@ -740,7 +740,7 @@ to agree with the underlying mutation model in SLiM.
 As with the InfiniteAlleles model, it assigns each new mutation a unique integer,
 by keeping track of the `next_id` and incrementing it each time a new mutation appears.
 
-This differs from the {class}`.InfiniteAllelesMutationModel` because mutations
+This differs from the {class}`.InfiniteAlleles` because mutations
 in SLiM can "stack": new mutations can add to the existing state, rather than
 replacing the previous state. So, derived states are comma-separated lists of
 mutation IDs, and the ancestral state is always the empty string. For instance,

@@ -265,70 +265,64 @@ class TestMatrixMutationModel:
         self.validate_model(model)
 
     def test_jukes_cantor(self):
-        model = msprime.JC69MutationModel()
+        model = msprime.JC69()
         self.validate_model(model)
         self.validate_stationary(model)
 
     def test_HKY_default(self):
-        model = msprime.HKYMutationModel(
+        model = msprime.HKY(
             kappa=0.75,
             equilibrium_frequencies=[0.1, 0.2, 0.3, 0.4],
         )
         self.validate_model(model)
         self.validate_stationary(model)
-        self.verify_models_equivalent(
-            msprime.HKYMutationModel(1.0), msprime.JC69MutationModel()
-        )
+        self.verify_models_equivalent(msprime.HKY(1.0), msprime.JC69())
 
     def test_F84_default(self):
         eqfreqs = [0.1, 0.2, 0.3, 0.4]
-        model = msprime.F84MutationModel(kappa=0.75, equilibrium_frequencies=eqfreqs)
+        model = msprime.F84(kappa=0.75, equilibrium_frequencies=eqfreqs)
         self.validate_model(model)
         self.validate_stationary(model)
         self.verify_models_equivalent(
-            msprime.F84MutationModel(1.0, equilibrium_frequencies=eqfreqs),
-            msprime.HKYMutationModel(1.0, equilibrium_frequencies=eqfreqs),
+            msprime.F84(1.0, equilibrium_frequencies=eqfreqs),
+            msprime.HKY(1.0, equilibrium_frequencies=eqfreqs),
         )
-        self.verify_models_equivalent(
-            msprime.F84MutationModel(1.0), msprime.JC69MutationModel()
-        )
+        self.verify_models_equivalent(msprime.F84(1.0), msprime.JC69())
 
     def test_GTR_default(self):
-        model = msprime.GTRMutationModel([1] * 6)
+        model = msprime.GTR([1] * 6)
         self.validate_model(model)
         self.validate_stationary(model)
         eqfreqs = [0.1, 0.2, 0.3, 0.4]
         self.verify_models_equivalent(
-            msprime.GTRMutationModel([1.0] * 6, equilibrium_frequencies=eqfreqs),
-            msprime.HKYMutationModel(1.0, equilibrium_frequencies=eqfreqs),
+            msprime.GTR([1.0] * 6, equilibrium_frequencies=eqfreqs),
+            msprime.HKY(1.0, equilibrium_frequencies=eqfreqs),
         )
-        self.verify_models_equivalent(
-            msprime.GTRMutationModel([1] * 6), msprime.JC69MutationModel()
-        )
+        self.verify_models_equivalent(msprime.GTR([1] * 6), msprime.JC69())
 
     def test_state_independent(self):
         eqfreqs = [0.1, 0.2, 0.3, 0.4]
         self.validate_state_independent(msprime.BinaryMutationModel)
-        self.validate_state_independent(msprime.JC69MutationModel)
+        self.validate_state_independent(msprime.JC69)
         self.validate_state_independent(
-            msprime.HKYMutationModel, kappa=1.0, equilibrium_frequencies=eqfreqs
+            msprime.HKY, kappa=1.0, equilibrium_frequencies=eqfreqs
         )
         self.validate_state_independent(
-            msprime.F84MutationModel, kappa=1.0, equilibrium_frequencies=eqfreqs
+            msprime.F84, kappa=1.0, equilibrium_frequencies=eqfreqs
         )
         self.validate_state_independent(
-            msprime.GTRMutationModel,
+            msprime.GTR,
             relative_rates=[1] * 6,
             equilibrium_frequencies=eqfreqs,
         )
 
     def test_PAM(self):
-        model = msprime.PAMMutationModel()
+        model = msprime.PAM()
         self.validate_model(model)
         self.validate_stationary(model)
 
     def test_BLOSUM62(self):
-        model = msprime.BLOSUM62MutationModel()
+        model = msprime.BLOSUM62()
         self.validate_model(model)
         self.validate_stationary(model)
 
@@ -506,7 +500,7 @@ class TestMutate(MutateMixin):
     def test_new_models_unsupported(self):
         ts = msprime.sim_ancestry(2, random_seed=2)
         for model in [
-            msprime.PAMMutationModel(),
+            msprime.PAM(),
             "jc69",
             msprime.BinaryMutationModel(),
         ]:
@@ -1542,7 +1536,7 @@ class TestInfiniteAllelesMutationModel:
 
     def run_mutate(self, ts, rate=1, random_seed=42, start_allele=0):
 
-        model = msprime.InfiniteAllelesMutationModel(start_allele=start_allele)
+        model = msprime.InfiniteAlleles(start_allele=start_allele)
         mts1 = msprime.sim_mutations(
             ts, rate=rate, random_seed=random_seed, model=model, discrete_genome=True
         )
@@ -1600,7 +1594,7 @@ class TestInfiniteAllelesMutationModel:
     def test_allele_overflow(self):
         ts = msprime.sim_ancestry(4, sequence_length=2, random_seed=5)
         start_allele = 2 ** 64 - 1
-        model = msprime.InfiniteAllelesMutationModel(start_allele=start_allele)
+        model = msprime.InfiniteAlleles(start_allele=start_allele)
         mts = msprime.sim_mutations(
             ts, rate=1, random_seed=32, model=model, discrete_genome=True
         )
@@ -1621,7 +1615,7 @@ class TestInfiniteAllelesMutationModel:
 
     def test_non_discrete_sites(self):
         ts = msprime.sim_ancestry(4, sequence_length=2, random_seed=5)
-        model = msprime.InfiniteAllelesMutationModel()
+        model = msprime.InfiniteAlleles()
         mts = msprime.sim_mutations(
             ts, rate=1, random_seed=32, model=model, discrete_genome=False
         )
@@ -1638,7 +1632,7 @@ class TestInfiniteAllelesMutationModel:
         t.sites.add_row(ancestral_state="0", position=0)
         t.mutations.add_row(derived_state="1", node=1, site=0, time=10)
         t.edges.add_row(parent=1, child=0, left=0, right=1)
-        model = msprime.InfiniteAllelesMutationModel(start_allele=2)
+        model = msprime.InfiniteAlleles(start_allele=2)
         ts = msprime.sim_mutations(
             t.tree_sequence(),
             rate=1,
@@ -1722,7 +1716,7 @@ def py_sim_mutations(
     if rate is None:
         rate = 0
     if model is None:
-        model = msprime.JC69MutationModel()
+        model = msprime.JC69()
     if isinstance(model, PythonMutationModel):
         py_model = model
     else:
@@ -2101,11 +2095,11 @@ class TestMutationModelFactory:
 
     def test_named_model_variants(self):
         mutation_models = {
-            "infinite_alleles": msprime.InfiniteAllelesMutationModel,
+            "infinite_alleles": msprime.InfiniteAlleles,
             "binary": msprime.BinaryMutationModel,
-            "jc69": msprime.JC69MutationModel,
-            "blosum62": msprime.BLOSUM62MutationModel,
-            "pam": msprime.PAMMutationModel,
+            "jc69": msprime.JC69,
+            "blosum62": msprime.BLOSUM62,
+            "pam": msprime.PAM,
         }
         for name, model_class in mutation_models.items():
             model = msprime.mutations.mutation_model_factory(model=name.upper())
@@ -2123,14 +2117,14 @@ class TestMutationModelFactory:
     def test_returns_mutation_model_instances_without_copying(self):
         models = [
             msprime.SLiMMutationModel(0, 0),
-            msprime.InfiniteAllelesMutationModel(),
+            msprime.InfiniteAlleles(),
             msprime.BinaryMutationModel(),
-            msprime.JC69MutationModel(),
-            msprime.HKYMutationModel(0.75),
-            msprime.F84MutationModel(0.75),
-            msprime.GTRMutationModel([1 / 6] * 6),
-            msprime.BLOSUM62MutationModel(),
-            msprime.PAMMutationModel(),
+            msprime.JC69(),
+            msprime.HKY(0.75),
+            msprime.F84(0.75),
+            msprime.GTR([1 / 6] * 6),
+            msprime.BLOSUM62(),
+            msprime.PAM(),
         ]
         for model in models:
             new_model = msprime.mutations.mutation_model_factory(model=model)
@@ -2148,7 +2142,7 @@ class TestModelClasses:
         )
 
     def test_infinite_alleles(self):
-        m = msprime.InfiniteAllelesMutationModel(start_allele=1)
+        m = msprime.InfiniteAlleles(start_allele=1)
         assert (
             str(m) == "Infinite alleles mutation model, beginning with"
             " allele 1\n    next allele: 1\n"

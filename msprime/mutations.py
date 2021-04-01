@@ -149,9 +149,7 @@ class SLiMMutationModel(_msprime.SLiMMutationModel, MutationModel):
 # seems best to just avoid using ivars. The correct approach going forward
 # would appear to be to use dataclasses and to document each variable
 # independently (e.g., Population class).
-class InfiniteAllelesMutationModel(
-    _msprime.InfiniteAllelesMutationModel, MutationModel
-):
+class InfiniteAlleles(_msprime.InfiniteAllelesMutationModel, MutationModel):
     """
     An *infinite alleles* model of mutation in which each allele is a
     unique positive integer. This works by keeping track of a "next
@@ -201,7 +199,7 @@ class BinaryMutationModel(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class JC69MutationModel(MatrixMutationModel):
+class JC69(MatrixMutationModel):
     """
     Jukes-Cantor mutation model (Jukes and Cantor 1969). Based on the standard ACGT
     nucleotides as alleleic states, this model assumes equal probabilities for
@@ -235,14 +233,14 @@ class JC69MutationModel(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class HKYMutationModel(MatrixMutationModel):
+class HKY(MatrixMutationModel):
     """
     The Hasegawa, Kishino and Yano mutation model (Hasegawa et al. 1985). Based on the
     standard ACGT nucleotides as alleleic states, this model allows different rates for
     transitions and transversions, and sets an equilibrium frequency for each nucleotide.
     In addition a custom ancestral frequency (``root_distribution``) can be specified.
     With ``kappa=1.0`` and the default values of the other arguments this model is equal
-    to :class:`JC69MutationModel`. This model is similar to :class:`F84MutationModel`
+    to :class:`.JC69`. This model is similar to :class:`.F84`
     but with a differing parametrisation for ``kappa``.
 
     This model is parameterized by :math:`\\kappa` (``kappa``), the ratio of
@@ -339,14 +337,14 @@ class HKYMutationModel(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class F84MutationModel(MatrixMutationModel):
+class F84(MatrixMutationModel):
     """
     The F84 mutation model (Felsenstein and Churchill, 1996). Based on the
     standard ACGT nucleotides as alleleic states, this model takes into account
     transitions and transversions, and sets an equilibrium frequency for each nucleotide.
     In addition a custom ancestral frequency (``root_distribution``) can be specified.
     With ``kappa=1.0`` and the default values of the other arguments this model is equal
-    to :class:`JC69MutationModel`. This model is similar to :class:`HKYMutationModel`
+    to :class:`.JC69`. This model is similar to :class:`.HKY`
     but with a differing parametrisation for ``kappa``.
 
     This model is parameterized by :math:`\\kappa` (``kappa``), the ratio of
@@ -450,7 +448,7 @@ class F84MutationModel(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class GTRMutationModel(MatrixMutationModel):
+class GTR(MatrixMutationModel):
     """
     The Generalised Time-Reversible nucleotide mutation model, a general
     parameterization of a time-reversible mutation process (Tavaré et al.
@@ -540,7 +538,7 @@ class GTRMutationModel(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class BLOSUM62MutationModel(MatrixMutationModel):
+class BLOSUM62(MatrixMutationModel):
     """
     The BLOSUM62 model of time-reversible amino acid mutation. This model has
     no free parameters.
@@ -804,7 +802,7 @@ class BLOSUM62MutationModel(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
-class PAMMutationModel(MatrixMutationModel):
+class PAM(MatrixMutationModel):
     """
     The PAM model of time-reversible amino acid mutation. This model has no
     free parameters.
@@ -1082,7 +1080,7 @@ class InfiniteSites(MatrixMutationModel):
     # of an earlier design.
     def __init__(self, alphabet=BINARY):
         self.alphabet = alphabet
-        models = {BINARY: BinaryMutationModel(), NUCLEOTIDES: JC69MutationModel()}
+        models = {BINARY: BinaryMutationModel(), NUCLEOTIDES: JC69()}
         if alphabet not in models:
             raise ValueError("Bad alphabet")
         model = models[alphabet]
@@ -1199,15 +1197,15 @@ def mutate(
 
 # String names here should match Seq-Gen where possible
 MODEL_MAP = {
-    # "slim": SLiMMutationModel(), Needs type argument so can't be string init'd
-    "infinite_alleles": InfiniteAllelesMutationModel,
+    "infinite_alleles": InfiniteAlleles,
     "binary": BinaryMutationModel,
-    "jc69": JC69MutationModel,
-    # "hky": HKYMutationModel(), Needs kappa argument
-    # "f84": F84MutationModel(), Needs kappa argument
-    # "gtr": GTRMutationModel(), Needs relative_rates argument
-    "blosum62": BLOSUM62MutationModel,
-    "pam": PAMMutationModel,
+    "jc69": JC69,
+    "blosum62": BLOSUM62,
+    "pam": PAM,
+    # "slim": SLiMMutationModel(), Needs type argument so can't be string init'd
+    # "hky": HKY(), Needs kappa argument
+    # "f84": F84(), Needs kappa argument
+    # "gtr": GTR(), Needs relative_rates argument
 }
 
 
@@ -1221,7 +1219,7 @@ def mutation_model_factory(model):
     """
 
     if model is None:
-        model_instance = JC69MutationModel()
+        model_instance = JC69()
     elif isinstance(model, str):
         lower_model = model.lower()
         if lower_model not in MODEL_MAP:
@@ -1262,7 +1260,7 @@ def sim_mutations(
 
     If the ``model`` parameter is specified, this determines the model
     of sequence evolution under which mutations are generated.
-    The default mutation model is the :class:`msprime.JC69MutationModel`,
+    The default mutation model is the :class:`msprime.JC69`,
     a symmetrical mutation model among the ACGT alleles.
     See the :ref:`sec_mutations_models` section for details of available models.
 
@@ -1306,8 +1304,8 @@ def sim_mutations(
     :param MutationModel model: The mutation model to use when generating
         mutations. This can either be a string (e.g., ``"jc69"``) or
         an instance of a simulation model class
-        e.g, ``msprime.F84MutationModel(kappa=0.5)``.
-        If not specified or None, the :class:`.JC69MutationModel`
+        e.g, ``msprime.F84(kappa=0.5)``.
+        If not specified or None, the :class:`.JC69`
         mutation model is used. Please see the
         :ref:`sec_mutations_models` section for more details
         on specifying mutation models.

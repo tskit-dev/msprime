@@ -4766,22 +4766,20 @@ class MutationStatsTest(Test):
         self.verify_stacking(model, name="binary")
 
     def test_jukes_cantor_stats(self):
-        model = msprime.JC69MutationModel()
+        model = msprime.JC69()
         self.verify_model(
             model,
             name="jukes_cantor",
         )
-        model = msprime.JC69MutationModel(state_independent=True)
+        model = msprime.JC69(state_independent=True)
         self.verify_stacking(model, name="jukes_cantor")
 
     def test_HKY_stats(self):
         equilibrium_frequencies = [0.3, 0.2, 0.3, 0.2]
-        model = msprime.HKYMutationModel(
-            kappa=0.75, equilibrium_frequencies=equilibrium_frequencies
-        )
+        model = msprime.HKY(kappa=0.75, equilibrium_frequencies=equilibrium_frequencies)
         self.verify_model(model, name="HKY")
         # now the state-independent version
-        model = msprime.HKYMutationModel(
+        model = msprime.HKY(
             kappa=1.0,
             equilibrium_frequencies=equilibrium_frequencies,
             state_independent=True,
@@ -4790,12 +4788,10 @@ class MutationStatsTest(Test):
 
     def test_F84_stats(self):
         equilibrium_frequencies = [0.4, 0.1, 0.1, 0.4]
-        model = msprime.F84MutationModel(
-            kappa=0.75, equilibrium_frequencies=equilibrium_frequencies
-        )
+        model = msprime.F84(kappa=0.75, equilibrium_frequencies=equilibrium_frequencies)
         self.verify_model(model, name="F84")
         # now the parent-independent version
-        model = msprime.F84MutationModel(
+        model = msprime.F84(
             kappa=1.0,
             equilibrium_frequencies=equilibrium_frequencies,
             state_independent=True,
@@ -4805,12 +4801,12 @@ class MutationStatsTest(Test):
     def test_GTR_stats(self):
         relative_rates = [0.2, 0.1, 0.7, 0.5, 0.3, 0.4]
         equilibrium_frequencies = [0.3, 0.4, 0.2, 0.1]
-        model = msprime.GTRMutationModel(
+        model = msprime.GTR(
             relative_rates=relative_rates,
             equilibrium_frequencies=equilibrium_frequencies,
         )
         self.verify_model(model, name="GTR")
-        model = msprime.GTRMutationModel(
+        model = msprime.GTR(
             relative_rates=[1] * 6,
             equilibrium_frequencies=equilibrium_frequencies,
             state_independent=True,
@@ -4818,11 +4814,11 @@ class MutationStatsTest(Test):
         self.verify_stacking(model, name="GTR")
 
     def test_PAM_stats(self):
-        model = msprime.PAMMutationModel()
+        model = msprime.PAM()
         self.verify_model(model, name="PAM")
 
     def test_BLOSUM62_stats(self):
-        model = msprime.BLOSUM62MutationModel()
+        model = msprime.BLOSUM62()
         self.verify_model(model, name="BLOSUM62")
 
     def test_arbitrary_model_stats(self):
@@ -5101,21 +5097,21 @@ class SeqGenTest(MutationTest):
         for plotting.
         """
         model_dict = {
-            "JC69": {"model_id": msprime.JC69MutationModel(), "par": ["-m", "HKY"]},
+            "JC69": {"model_id": msprime.JC69(), "par": ["-m", "HKY"]},
             "HKY": {
-                "model_id": msprime.HKYMutationModel(
+                "model_id": msprime.HKY(
                     kappa=1.5, equilibrium_frequencies=[0.2, 0.3, 0.1, 0.4]
                 ),
                 "par": ["-m", "HKY", "-t", "0.75", "-f", "0.2,0.3,0.1,0.4"],
             },
             "F84": {
-                "model_id": msprime.F84MutationModel(
+                "model_id": msprime.F84(
                     kappa=1.0, equilibrium_frequencies=[0.3, 0.25, 0.2, 0.25]
                 ),
                 "par": ["-m", "F84", "-t", "0.5", "-f", "0.3,0.25,0.2,0.25"],
             },
             "GTR": {
-                "model_id": msprime.GTRMutationModel(
+                "model_id": msprime.GTR(
                     relative_rates=[0.4, 0.1, 0.4, 0.2, 0.4, 0.4],
                     equilibrium_frequencies=[0.3, 0.2, 0.3, 0.2],
                 ),
@@ -5128,9 +5124,9 @@ class SeqGenTest(MutationTest):
                     "0.3,0.2,0.3,0.2",
                 ],
             },
-            "PAM": {"model_id": msprime.PAMMutationModel(), "par": ["-m", "PAM"]},
+            "PAM": {"model_id": msprime.PAM(), "par": ["-m", "PAM"]},
             "BLOSUM62": {
-                "model_id": msprime.BLOSUM62MutationModel(),
+                "model_id": msprime.BLOSUM62(),
                 "par": ["-m", "BLOSUM"],
             },
         }
@@ -5314,11 +5310,11 @@ class PyvolveTest(MutationTest):
 
         model_dict = {
             "JC69": {
-                "model_id": msprime.JC69MutationModel(),
+                "model_id": msprime.JC69(),
                 "pyvolve_model": pyvolve.Model("nucleotide"),
             },
             "HKY": {
-                "model_id": msprime.HKYMutationModel(
+                "model_id": msprime.HKY(
                     kappa=1.5, equilibrium_frequencies=[0.2, 0.3, 0.1, 0.4]
                 ),
                 "pyvolve_model": pyvolve.Model(
@@ -5326,11 +5322,11 @@ class PyvolveTest(MutationTest):
                 ),
             },
             "PAM": {
-                "model_id": msprime.PAMMutationModel(),
+                "model_id": msprime.PAM(),
                 "pyvolve_model": pyvolve.Model("DAYHOFFDCMUT"),
             },
             "BLOSUM62": {
-                "model_id": msprime.BLOSUM62MutationModel(),
+                "model_id": msprime.BLOSUM62(),
                 "pyvolve_model": pyvolve.Model("BLOSUM62"),
             },
         }
@@ -5492,9 +5488,7 @@ class SequentialMutations(MutationTest):
         self._run("JC69")
 
     def test_sequential_mutate_HKY(self):
-        model = msprime.HKYMutationModel(
-            kappa=1.5, equilibrium_frequencies=[0.2, 0.3, 0.1, 0.4]
-        )
+        model = msprime.HKY(kappa=1.5, equilibrium_frequencies=[0.2, 0.3, 0.1, 0.4])
         self._run(model)
 
     def test_sequential_mutate_PAM(self):
