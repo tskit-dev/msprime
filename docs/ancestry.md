@@ -696,9 +696,18 @@ ancestry patterns for very recently admixed populations.
 
 Additionally,
 {ref}`Multiple merger coalescents <sec_ancestry_models_multiple_mergers>`
-result in positively correlated ancestries between unlinked chromosomes.
+result in positively correlated ancestries between unlinked chromosomes
+(see [Birkner et al. 2013](https://www.genetics.org/content/193/1/255)).
 This correlation does not break down in time and multiple chromosomes should
-not be simulated independently under the multiple merger models.
+not be simulated independently under the multiple merger models. Unlinked
+chromosomes should scatter into distinct ancestors instantaneously under
+multiple merger coalescents, not with probability 1/2 per generation
+as in discrete population models. In msprime, this waiting time of length zero
+is approximated by an exponential distribution with rate {math}`r`, i.e. the
+recombination rate at the base pair separating the chromosomes, which
+should be set to a high enough value to obtain an acceptable approximation.
+We recommend considering in particular the relative error in comparison to
+the magnitudes other waiting times which are likely to arise in the simulation.
 
 :::{important}
 Simulations of multiple chromosomes under either DTWF or the multiple merger
