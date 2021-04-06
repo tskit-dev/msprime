@@ -1,10 +1,11 @@
+docutils==0.15  # issue with 0.17, https://github.com/tskit-dev/msprime/issues/1625
 asv
 bintrees
 codecov
 coverage
 daiquiri
 flake8
-matplotlib
+matplotlib>=3.4.0
 mock
 mypy
 numpy
