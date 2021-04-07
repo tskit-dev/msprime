@@ -22,6 +22,7 @@ Utilities for working with intervals and interval maps.
 from __future__ import annotations
 
 import collections.abc
+import itertools
 import numbers
 import warnings
 
@@ -330,18 +331,36 @@ class RateMap(collections.abc.Mapping):
         raise KeyError("Key {key} not in map")
 
     def _display_table(self):
-        data = [
-            [
+        def format_row(left, right, mid, span, rate):
+            return [
                 f"{left:.10g}",
                 f"{right:.10g}",
                 f"{mid:.10g}",
                 f"{span:.10g}",
                 f"{rate:.2f}",
             ]
-            for left, right, mid, span, rate in zip(
-                self.left, self.right, self.mid, self.span, self.rate
+
+        def format_slice(start, end):
+            return list(
+                itertools.starmap(
+                    format_row,
+                    zip(
+                        self.left[start:end],
+                        self.right[start:end],
+                        self.mid[start:end],
+                        self.span[start:end],
+                        self.rate[start:end],
+                    ),
+                )
             )
-        ]
+
+        if self.num_intervals < 40:
+            data = format_slice(0, None)
+        else:
+            data = format_slice(0, 10)
+            data.append(["⋯"] * 5)
+            data += format_slice(-10, None)
+
         return ["left", "right", "mid", "span", "rate"], data
 
     def __str__(self):
