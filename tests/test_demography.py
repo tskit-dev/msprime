@@ -4512,6 +4512,72 @@ class TestDemographyObject:
         assert not validated["C"].initially_active
 
 
+class TestMissingPopulation:
+    def test_add_population_split(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        with pytest.raises(KeyError, match="B"):
+            demography.add_population_split(time=0, ancestral="A", derived=["B"])
+        with pytest.raises(KeyError, match="B"):
+            demography.add_population_split(time=0, ancestral="B", derived=["A"])
+
+    def test_add_admixture(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        with pytest.raises(KeyError, match="B"):
+            demography.add_admixture(
+                time=0, ancestral=["A"], derived=["B"], proportions=[1]
+            )
+        with pytest.raises(KeyError, match="B"):
+            demography.add_admixture(
+                time=0, ancestral=["B"], derived=["A"], proportions=[1]
+            )
+
+    def test_add_mass_migration(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        with pytest.raises(KeyError, match="B"):
+            demography.add_mass_migration(time=0, source="A", dest="B", proportion=1)
+        with pytest.raises(KeyError, match="B"):
+            demography.add_mass_migration(time=0, source="B", dest="A", proportion=1)
+
+    def test_add_migration_rate_change(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        with pytest.raises(KeyError, match="B"):
+            demography.add_migration_rate_change(time=0, source="A", dest="B", rate=1)
+        with pytest.raises(KeyError, match="B"):
+            demography.add_migration_rate_change(time=0, source="B", dest="A", rate=1)
+
+    def test_add_symmetric_migration_rate_change(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        with pytest.raises(KeyError, match="B"):
+            demography.add_symmetric_migration_rate_change(
+                time=0, populations=["A", "B"], rate=0
+            )
+
+    def test_add_population_parameters_change(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        with pytest.raises(KeyError, match="B"):
+            demography.add_population_parameters_change(
+                time=0, population="B", initial_size=1
+            )
+
+    def test_add_simple_bottleneck(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        with pytest.raises(KeyError, match="B"):
+            demography.add_simple_bottleneck(time=0, population="B", proportion=1)
+
+    def test_add_instantaneous_bottleneck(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        with pytest.raises(KeyError, match="B"):
+            demography.add_instantaneous_bottleneck(time=0, population="B", strength=1)
+
+
 class TestDemographyFromOldStyle:
     """
     Tests the method for creating a demography object from the old
