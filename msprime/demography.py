@@ -3298,7 +3298,7 @@ class DemographyDebugger:
             t_j = all_steps[jj]
 
             # apply any mass migration events to P
-            # so if we sample at this time, we do no account for the instantaneous
+            # so if we sample at this time, we do not account for the instantaneous
             # mass migration events that occur at the same time. that will show up
             # at the next step
             if t_j > sample_time:
@@ -3687,21 +3687,21 @@ class DemographyDebugger:
             for idx in range(num_pops):
                 C[IA[idx, idx], IA[idx, idx]] = 1 / (2 * max(min_pop_size, N[idx]))
             dM = np.diag([sum(s) for s in M])
-            if time in mass_migration_times:
-                idx = mass_migration_times.index(time)
-                a = mass_migration_objects[idx].source
-                b = mass_migration_objects[idx].dest
-                p = mass_migration_objects[idx].proportion
-                S = np.eye(num_pops ** 2, num_pops ** 2)
-                for x in range(num_pops):
-                    if x == a:
-                        S[IA[a, a], IA[a, b]] = S[IA[a, a], IA[b, a]] = p * (1 - p)
-                        S[IA[a, a], IA[b, b]] = p ** 2
-                        S[IA[a, a], IA[a, a]] = (1 - p) ** 2
-                    else:
-                        S[IA[x, a], IA[x, b]] = S[IA[a, x], IA[b, x]] = p
-                        S[IA[x, a], IA[x, a]] = S[IA[a, x], IA[a, x]] = 1 - p
-                P = np.matmul(P, S)
+            for mmt, mmo in zip(mass_migration_times, mass_migration_objects):
+                if mmt == time:
+                    a = mmo.source
+                    b = mmo.dest
+                    p = mmo.proportion
+                    S = np.eye(num_pops ** 2, num_pops ** 2)
+                    for x in range(num_pops):
+                        if x == a:
+                            S[IA[a, a], IA[a, b]] = S[IA[a, a], IA[b, a]] = p * (1 - p)
+                            S[IA[a, a], IA[b, b]] = p ** 2
+                            S[IA[a, a], IA[a, a]] = (1 - p) ** 2
+                        else:
+                            S[IA[x, a], IA[x, b]] = S[IA[a, x], IA[b, x]] = p
+                            S[IA[x, a], IA[x, a]] = S[IA[a, x], IA[a, x]] = 1 - p
+                    P = np.matmul(P, S)
             p_notcoal = np.sum(P)
             p_t[j] = p_notcoal
             if p_notcoal > 0:
