@@ -659,6 +659,14 @@ class Demography(collections.abc.Mapping):
         coalesced more recently than the census time.
 
         See :ref:`sec_ancestry_census_events` for more details.
+
+        .. warning:: When used in the conjunction with the DTWF model
+            non-integer census times should be used to guarantee that
+            the census nodes don't coincide with coalescences (and
+            therefore zero branch length errors).
+            See :ref:`sec_ancestry_census_events_dtwf` for more details.
+
+        :param float time: The time at which the census should occur.
         """
         return self.add_event(CensusEvent(time))
 
