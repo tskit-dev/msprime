@@ -385,6 +385,13 @@ class Demography(collections.abc.Mapping):
 
     # Demographic events.
 
+    def _check_population_references(self, populations: List[Union[str, int]]):
+        for pop_ref in populations:
+            # Slightly unsure whether this call can get optimised out, but
+            # there doesn't seem to be a better way to do it without duplicating
+            # the KeyError message
+            self[pop_ref]
+
     def add_population_split(
         self, time: float, *, derived: List[Union[str, int]], ancestral: Union[str, int]
     ) -> PopulationSplit:
@@ -415,6 +422,7 @@ class Demography(collections.abc.Mapping):
         :param list(str, int) derived: The derived populations.
         :param str, int ancestral: The ancestral population.
         """
+        self._check_population_references(list(derived) + [ancestral])
         pop = self[ancestral]
         if pop.initially_active is None:
             pop.initially_active = False
@@ -462,6 +470,7 @@ class Demography(collections.abc.Mapping):
         :param list(float) proportions: The proportion of the derived population
             from each of the ancestral populations at the time of the event.
         """
+        self._check_population_references(list(ancestral) + [derived])
         # Useful feature here might be to support taking n - 1 proportion values
         # and computing 1 - sum for the last value. Could be tedious for users to
         # do this manually.
@@ -509,6 +518,7 @@ class Demography(collections.abc.Mapping):
         :param float proportion: For each lineage in the ``source`` population,
             this is the probability that it moves to the ``dest`` population.
         """
+        self._check_population_references([source, dest])
         return self.add_event(MassMigration(time, source, dest, proportion))
 
     def add_migration_rate_change(
@@ -543,8 +553,14 @@ class Demography(collections.abc.Mapping):
         :param str, int dest: The ID of the destination population.
         :param int source: The source population ID.
         """
-        source = -1 if source is None else source
-        dest = -1 if dest is None else dest
+        if source is None:
+            source = -1
+        else:
+            self._check_population_references([source])
+        if dest is None:
+            dest = -1
+        else:
+            self._check_population_references([dest])
         return self.add_event(
             MigrationRateChange(time=time, source=source, dest=dest, rate=rate)
         )
@@ -568,6 +584,7 @@ class Demography(collections.abc.Mapping):
             IDs or string names).
         :param float rate: The new migration rate.
         """
+        self._check_population_references(populations)
         return self.add_event(
             SymmetricMigrationRateChange(time=time, populations=populations, rate=rate)
         )
@@ -599,6 +616,8 @@ class Demography(collections.abc.Mapping):
             ``population`` is None, the changes affect all populations
             simultaneously.
         """
+        if population is not None:
+            self._check_population_references([population])
         event = PopulationParametersChange(
             time,
             initial_size=initial_size,
@@ -614,6 +633,7 @@ class Demography(collections.abc.Mapping):
         proportion: Union[float, None] = None,
     ) -> SimpleBottleneck:
         proportion = 1.0 if proportion is None else proportion
+        self._check_population_references([population])
         return self.add_event(
             SimpleBottleneck(time=time, population=population, proportion=proportion)
         )
@@ -621,6 +641,7 @@ class Demography(collections.abc.Mapping):
     def add_instantaneous_bottleneck(
         self, time: float, *, population: Union[str, int], strength: float
     ) -> InstantaneousBottleneck:
+        self._check_population_references([population])
         return self.add_event(
             InstantaneousBottleneck(time=time, population=population, strength=strength)
         )
