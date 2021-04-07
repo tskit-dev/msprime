@@ -1286,7 +1286,7 @@ class MsmsSweeps(Test):
                 # Before the Sweep model is made interruptable and support multiple
                 # sweeps, we just use a single sweep for now.
                 break
-            model.append("hudson")
+            model.append(msprime.StandardCoalescent())
 
         else:
             model = "hudson"
