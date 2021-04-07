@@ -347,6 +347,26 @@ class TestDisplay:
         rows = list(table.find("tbody"))
         assert len(rows) == 1
 
+    def test_long_table(self):
+        n = 100
+        rate_map = msprime.RateMap(position=range(n + 1), rate=[0.1] * n)
+        headers, data = rate_map._display_table()
+        assert len(headers) == 5
+        assert len(data) == 21
+        # check some left values
+        assert int(data[0][0]) == 0
+        assert int(data[-1][0]) == n - 1
+
+    def test_short_table(self):
+        n = 10
+        rate_map = msprime.RateMap(position=range(n + 1), rate=[0.1] * n)
+        headers, data = rate_map._display_table()
+        assert len(headers) == 5
+        assert len(data) == n
+        # check some left values.
+        assert int(data[0][0]) == 0
+        assert int(data[-1][0]) == n - 1
+
 
 class TestRateMapIsMapping:
     def test_items(self):
