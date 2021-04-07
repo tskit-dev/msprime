@@ -3495,6 +3495,22 @@ class TestCensusEvent:
         )
         assert ts.tables.nodes == tsc.tables.nodes
 
+    def test_dtwf_census_nodes_coincide_with_coalescence(self):
+        demography = msprime.Demography.isolated_model([10])
+        demography.add_census(time=1)
+        with pytest.raises(_msprime.LibraryError, match="<= to its child"):
+            msprime.sim_ancestry(
+                samples=5, demography=demography, random_seed=1, model="dtwf"
+            )
+
+    def test_dtwf_census_nodes_intermediate_time_ok(self):
+        demography = msprime.Demography.isolated_model([10])
+        demography.add_census(time=1.1)
+        ts = msprime.sim_ancestry(
+            samples=5, demography=demography, random_seed=1, model="dtwf"
+        )
+        self.verify(ts, 1.1)
+
 
 class TestPossibleLineagesOldStyle:
     """

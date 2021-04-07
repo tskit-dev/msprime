@@ -1018,6 +1018,52 @@ nodes = [i.id for i in ts.nodes() if i.flags==msprime.NODE_IS_CEN_EVENT]
 ts_anc = ts.simplify(samples=nodes)
 ```
 
+(sec_ancestry_census_events_dtwf)=
+
+#### Using the DTWF model
+
+Census events assume that they are being used as part of a continuous time
+simulation process, in which multiple events are guaranteed not to happen
+at the same time. However, the {class}`.DiscreteTimeWrightFisher` model does
+not meet these assumptions, and allows multiple events (such as coalescences,
+migrations etc) to all occur at the same time. This includes census events,
+which can lead to errors when used in conjunction with the DTWF model.
+
+Consider the following example:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=10)
+ts = msprime.sim_ancestry({"A": 3}, demography=demography, model="dtwf", random_seed=1)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+We can see that a coalescence happens at time 21, giving node 9. Now, let's
+try to perform a census at time 21:
+
+```{code-cell}
+:tags: [raises-exception]
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=10)
+demography.add_census(time=21)
+ts = msprime.sim_ancestry({"A": 3}, demography=demography, model="dtwf", random_seed=1)
+```
+
+We got an error from msprime about a parent node having a time value <= to its child,
+which occured because we tried to add set of census nodes at time 21, but node 9 was
+already at time 21, giving a zero branch length (which is disallowed by tskit).
+
+The solution is to use non-integer time values when performing a census
+under the DTWF:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=10)
+demography.add_census(time=21.5)
+ts = msprime.sim_ancestry({"A": 3}, demography=demography, model="dtwf", random_seed=1)
+SVG(ts.draw_svg(y_axis=True))
+```
+
 ## Manipulating simulation time
 
 (sec_ancestry_end_time)=
