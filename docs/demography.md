@@ -18,9 +18,9 @@ kernelspec:
 import msprime
 import numpy as np
 import matplotlib.pyplot as plt
-
 from IPython.display import SVG
 
+plt.rcParams["figure.figsize"] = (10,7)
 ```
 
 (sec_demography)=
@@ -32,7 +32,7 @@ size for {ref}`ancestry simulations <sec_ancestry>`, which is unrealistic
 for most purposes. To enable more realistic and complex simulations,
 msprime models population structure
 by defining a set of discrete {ref}`sec_demography_populations`,
-with {ref}`sec_demography_migration` between these populations occuring
+with {ref}`sec_demography_migration` between these populations occurring
 at different rates. Populations and their parameters can
 change over time, via {ref}`demographic events<sec_demography_events>`.
 Please see the {ref}`sec_demography_definitions`
@@ -271,7 +271,7 @@ events to explicitly name and describe the different phases of a demographic
 history rather than use anonymous population size changes (as encouraged
 by the {ref}`legacy 0.x API<sec_legacy_0x>`). This makes it easier
 to interpret the resulting tree sequence files (since detailed metadata
-about the populations in which coalescences occured is maintained)
+about the populations in which coalescences occurred is maintained)
 and makes it easier to avoid
 [modelling errors](http://dx.doi.org/10.1016/j.ajhg.2020.08.017).
 
@@ -722,7 +722,7 @@ In the first epoch (from 0 to 10 generations ago) we have three active
 populations: ``A``, ``B`` and ``ADMIX``. Then the admixture event
 happens: {ref}`backwards in time<sec_demography_direction_of_time>`
 we take all the lineages that are in ``ADMIX``, and for each one
-we move it to ``A`` with probability 1/4 and to ``B`` with probablility
+we move it to ``A`` with probability 1/4 and to ``B`` with probability
 3/4. In the next epoch (10 to 20 generations ago), we just have
 populations ``A`` and ``B`` active because the derived ``ADMIX``
 population is now inactive.
@@ -1117,8 +1117,8 @@ guaranteed to be executed in the order that they are specified.
 
 The remaining events are then both population splits: 5600 generations
 ago, the ``OOA`` and ``YRI`` split from the ``AMH`` population,
-and finally 8800 generation ago the ``AMH`` population "split" from the
-the ``ANC`` population. This last population split may seem unnessary,
+and finally 8800 generation ago the ``AMH`` population "split" from
+the ``ANC`` population. This last population split may seem unnecessary,
 since we could have achieved the same effect by a population
 {ref}`size change<sec_demography_events_population_parameters_change>`,
 but from an interpretation perspective it is much better to explicitly
@@ -1280,7 +1280,7 @@ of the Gutenkunst et. al paper):
 :alt: Schematic of Gutenkunst et al. (2009) out-of-Africa model.
 ```
 :::{warning}
-The version of this model in this documentatino from 31 May 2016 to 29 May 2020
+The version of this model in this documentation from 31 May 2016 to 29 May 2020
 (on the stable branch) was **incorrect**. Specifically, it mistakenly
 allowed for migration to continue beyond the merger of the African and
 Eurasian bottleneck populations. This has now been fixed, but if you had
@@ -1619,9 +1619,42 @@ that population so the diagonal of the matrix is 1. After the
 split, all lineages must be in population "C", and so the
 corresponding column is 1.
 
-Migration is taken into account in these calculations, and we
-can see a more interesting by looking at a
-1D {meth}`~.Demography.stepping_stone_model`:
+Migration is taken into account in these calculations.
+If we add some migration between "A" and "B",
+we can see how lineages equilibrate between the two:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=100)
+demography.add_population(name="B", initial_size=100)
+demography.set_migration_rate(source="A", dest="B", rate=0.005)
+demography.set_migration_rate(source="B", dest="A", rate=0.02)
+
+debug = demography.debug()
+T = np.linspace(0, 500, 51)
+X = debug.lineage_probabilities(T)
+
+for j, pop in enumerate(demography.populations):
+    plt.subplot(1, 2, j + 1)
+    for k, dest_pop in enumerate(demography.populations):
+        plt.plot(T, X[:, j, k], label=dest_pop.name)
+    plt.legend()
+    plt.xlabel("Time ago")
+    plt.title(f"Sample from {pop.name}")
+    if j == 0:
+        plt.ylabel("Probability of being in population");
+```
+
+Since migration is asymmetric, lineages are more likely
+to be found in population "A".
+We've set the migration rate for *lineages*
+to be higher from "B" to "A", so lineages tend to spend more time in "A".
+Since the two populations have the same size,
+this corresponds (in forwards time) to a higher flux of migrants from "A" to "B",
+as would happen if mean fecundity in "A" is higher than in "B".
+
+We can also use this to see how lineages spread out over discrete
+space in a 1D {meth}`~.Demography.stepping_stone_model`:
 
 ```{code-cell}
 N = 32
@@ -1652,9 +1685,170 @@ distributed in space.
 
 ### Coalescence rates and mean times
 
-:::{todo}
-Give an example of computing something interesting using
-{meth}`.DemographyDebugger.coalescence_rate_trajectory`.
-and
+Lineage probabilities tell us where lineages might possibly be,
+which uses only information about migration rates and population splits.
+Using information about population sizes,
+we can also compute the *coalescence rates*,
+using {meth}`.DemographyDebugger.coalescence_rate_trajectory`.
+For instance, here are the three pairwise coalescence rate trajectories
+in the two-population model with migration above:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=100)
+demography.add_population(name="B", initial_size=100)
+demography.set_migration_rate(source="A", dest="B", rate=0.005)
+demography.set_migration_rate(source="B", dest="A", rate=0.02)
+
+debug = demography.debug()
+T = np.linspace(0, 500, 51)
+RAA, _ = debug.coalescence_rate_trajectory(T, [2, 0])
+RBB, _ = debug.coalescence_rate_trajectory(T, [0, 2])
+RAB, _ = debug.coalescence_rate_trajectory(T, [1, 1])
+
+plt.plot(T, RAA, label="two A samples")
+plt.plot(T, RBB, label="two B samples")
+plt.plot(T, RAB, label="one of each")
+plt.legend()
+plt.xlabel("time ago")
+plt.ylabel("coalecence rate")
+```
+
+The coalescence rate of lineages sampled from different populations begins at zero,
+and increases as the chance of them migrating to the same population increases.
+Interestingly, the coalescence rate of two lineages in population "B"
+is nonmonotonic, due to the asymmetric migration rates.
+
+Many properties of genomes (e.g., mean genetic diversity) are determined
+by mean coalescence times, which we can compute with
 {meth}`.DemographyDebugger.mean_coalescence_time`.
-:::
+For instance, we might want to know how the three pairwise mean coalescence times
+change as we make the migration rate less asymmetric:
+
+```{code-cell}
+def get_mean_coaltimes(m):
+    demography.set_migration_rate(source="A", dest="B", rate=m)
+    debug = demography.debug()
+    TAA = debug.mean_coalescence_time([2, 0])
+    TBB = debug.mean_coalescence_time([0, 2])
+    TAB = debug.mean_coalescence_time([1, 1])
+    return [TAA, TBB, TAB]
+
+M = np.linspace(0.001, 0.02, 11)
+T = np.zeros((len(M), 3))
+for j, m in enumerate(M):
+    T[j, :] = get_mean_coaltimes(m)
+
+plt.plot(M, T[:,0], label="two A samples")
+plt.plot(M, T[:,1], label="two B samples")
+plt.plot(M, T[:,2], label="one of each")
+plt.legend()
+plt.xlabel("A→B migration rate")
+plt.ylabel("coalecence rate");
+```
+
+From this, we can see that genetic diversity increases as the migration rate increases,
+that divergence between the populations is always greater than diversity within either,
+and that diversity within "B" goes from a level close to that found between populations
+to that within "A", as the "A→B" migration rate approaches the "B→A" rate.
+
+
+### Inverse instantaneous coalescence rates
+
+Coalescence rates are analogous to effective population sizes,
+in that if {math}`r(t)` is the coalescence rate at time {math}`t` ago
+between two lineages from a population in *any* population model,
+then a single population of changing size,
+with {math}`2 N(t) = 1/r(t)` genomes at time {math}`t` ago,
+has exactly the same distribution of coalescence times.
+(The factor of two assumes the organisms are diploid,
+and this assumes a continuous-time model.)
+One reason this is helpful is because we often fit simplified demographic models
+to more complex reality,
+and we might expect models that fit a single population-size-over-time
+to infer something closer to the inverse coalescence rate.
+For more discussion, see
+[Chikhi et al., 2018](https://doi.org/10.1038/s41437-017-0005-6) and
+[Adrion et al., 2020](https://doi.org/10.7554/eLife.54967).
+
+For instance, let's take the Gutenkunst et al 2009 "Out of Africa" model
+we used above in the {ref}`sec_demography_examples_population_tree` section,
+and compare inverse coalescence rates to actual population sizes.
+To follow along, first you should define ``demography`` as in the section above.
+Next we make a grid of times, ``T``,  spanning the last 10,000 generations,
+and calculate coalescence rates at these times:
+
+```{code-cell}
+:tags: [remove-cell]
+
+demography = msprime.Demography._ooa_model()
+```
+
+```{code-cell}
+# first define Gutenkunst et al model as above
+debug = demography.debug()
+
+T = np.concatenate([
+        np.linspace(0, 1000, 2001),
+        np.linspace(1000, 1e4, 401)[1:]
+])
+
+R = np.zeros((len(T), 3))
+R[:,0], _ = debug.coalescence_rate_trajectory(T, [2, 0, 0, 0, 0, 0])
+R[:,1], _ = debug.coalescence_rate_trajectory(T, [0, 2, 0, 0, 0, 0])
+R[:,2], _ = debug.coalescence_rate_trajectory(T, [0, 0, 2, 0, 0, 0])
+```
+
+The time values look a bit weird because when at first we set them to have
+equal spacing across the whole time period
+we got a warning about possible numerical inaccuracy
+(and inaccurate trajectories).
+This is because {meth}`.DemographyDebugger.coalescence_rate_trajectory`
+uses the provided time steps to calculate a discrete approximation
+to the trajectory, and for this to be a good approximation
+we need to take small time steps when the population is changing in size rapidly.
+In this model, the rapid growth occurs recently, so we need a finer grid
+of time steps in the last 1,000 generations.
+
+Next we compute the "census sizes", and plot these
+along with the inverse instantaneous coalescence rates.
+Since {meth}`.DemographyDebugger.population_size_trajectory`
+gives us population sizes for each of the six populations
+(three modern and three ancient),
+we need to do some work to copy the right population sizes over
+(e.g., prior to the most recent split we should use sizes for the
+shared "OOA" population for both the non-African populations).
+
+
+```{code-cell}
+N = debug.population_size_trajectory(T)
+# CEU-CHB merge
+which_T = (T >= debug.epoch_times[1])
+for j in (1, 2):
+    N[which_T, j] = N[which_T, 3]
+# OOA-Afr merge
+which_T = (T >= debug.epoch_times[2])
+for j in (0, 1, 2):
+    N[which_T, j] = N[which_T, 4]
+which_T = (T >= debug.epoch_times[3])
+for j in (0, 1, 2):
+    N[which_T, j] = N[which_T, 5]
+
+plt.plot(T, 1/(2*R), label=[demography.populations[j].name for j in range(3)])
+plt.plot(T, N[:,:3], ":", label=["actual population sizes", None, None])
+plt.legend()
+plt.xlabel("time ago (generations)")
+plt.ylabel("population size");
+```
+
+We can see that the inverse instantaneous coalescence rates
+do not respond instantly to population size changes,
+when there's more than one population with migration between them.
+(If we had a *single* population, the inverse coalescence rates
+would exactly match the population size.)
+So, if the true history matched this model
+and we inferred the population-size-through-time using only "CEU" samples,
+we might expect the inferred history to have a gradual increase back towards the out-of-Africa bottleneck,
+instead of the actual sudden change at the bottleneck,
+which is due to subsequent population structure.
+
