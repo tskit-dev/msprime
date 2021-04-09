@@ -1218,3 +1218,16 @@ class TestBugExamples:
         assert ts.num_trees == 2
         for tree in ts.trees():
             assert tree.num_roots == 1
+
+    def test_segments_in_inactive_population(self):
+        # https://github.com/tskit-dev/msprime/issues/1608
+        T = 10
+        ts = msprime.sim_ancestry(2, population_size=100, end_time=T)
+        assert np.max(ts.tables.nodes.time) == 10
+
+        d = msprime.Demography()
+        d.add_population(initial_size=1.0)
+        d.add_population(initial_size=1.0)
+        d.add_population_split(T - 1, derived=[0], ancestral=1)
+        with pytest.raises(_msprime.InputError, match="from an inactive"):
+            msprime.sim_ancestry(initial_state=ts, demography=d)

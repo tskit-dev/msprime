@@ -286,6 +286,11 @@ If the population's
 the population will have the same size for all time (unless there are
 some {ref}`sec_demography_events` that change these parameters).
 
+:::{note}
+The ``initial_size`` of a population refers to its size at time zero,
+and is **not** affected by the simulation {ref}`start_time<sec_ancestry_start_time>`.
+:::
+
 When using methods like {meth}`.Demography.island_model` to describe
 simple multipopulation models, the ``initial_size`` parameter takes
 a **list** of size values which defines both the number of
@@ -552,6 +557,7 @@ of the simulation.
 The {class}`.DemographyDebugger` is very useful for inspecting the
 state of the simulation at each of the epochs defined by these
 events---see the {ref}`sec_demography_debugging_tools` for examples.
+
 
 (sec_demography_events_population_parameters_change)=
 

@@ -1902,28 +1902,46 @@ class TestEventTimes:
     Tests that demographic events occur when they should.
     """
 
-    def test_event_at_start_time(self):
-        for start_time in [0, 10, 20]:
-            ts = msprime.simulate(
-                population_configurations=[
-                    msprime.PopulationConfiguration(2),
-                    msprime.PopulationConfiguration(0),
-                ],
-                demographic_events=[
-                    msprime.MassMigration(time=start_time, source=0, dest=1),
-                ],
-                random_seed=1,
-                start_time=start_time,
-                record_migrations=True,
-            )
-            migrations = list(ts.migrations())
-            assert len(migrations) == 2
-            assert migrations[0].time == start_time
-            assert migrations[1].time == start_time
-            nodes = list(ts.nodes())
-            assert nodes[0].population == 0
-            assert nodes[1].population == 0
-            assert nodes[2].population == 1
+    @pytest.mark.parametrize("start_time", [0.001, 10, 20])
+    def test_event_at_start_time(self, start_time):
+        ts = msprime.simulate(
+            population_configurations=[
+                msprime.PopulationConfiguration(2),
+                msprime.PopulationConfiguration(0),
+            ],
+            demographic_events=[
+                msprime.MassMigration(time=start_time, source=0, dest=1),
+            ],
+            random_seed=1,
+            start_time=start_time,
+            record_migrations=True,
+        )
+        migrations = list(ts.migrations())
+        assert len(migrations) == 2
+        assert migrations[0].time == start_time
+        assert migrations[1].time == start_time
+        nodes = list(ts.nodes())
+        assert nodes[0].population == 0
+        assert nodes[1].population == 0
+        assert nodes[2].population == 1
+
+    @pytest.mark.parametrize("time", [0, 0.001, 10])
+    def test_event_at_sampling_time(self, time):
+        demography = msprime.Demography.isolated_model([1, 1])
+        demography.add_mass_migration(time=time, source=0, dest=1, proportion=1)
+        ts = msprime.sim_ancestry(
+            samples=[msprime.SampleSet(2, time=time, ploidy=1, population=0)],
+            random_seed=1,
+            start_time=time,
+            record_migrations=True,
+        )
+        migrations = list(ts.migrations())
+        assert len(migrations) == 0
+        nodes = list(ts.nodes())
+        assert nodes[0].population == 0
+        assert nodes[1].population == 0
+        # The mass migration happens *before* sampling
+        assert nodes[2].population == 0
 
     def test_negative_times(self):
         with pytest.raises(ValueError):
@@ -3457,11 +3475,17 @@ class TestCensusEvent:
                 assert nodes.population[row.parent] == nodes.population[row.child]
 
     def test_census_at_existing_node_time(self):
+        ts = msprime.simulate(
+            sample_size=3,
+            random_seed=3,
+        )
         with pytest.raises(_msprime.LibraryError):
             msprime.simulate(
-                sample_size=2,
+                sample_size=3,
                 random_seed=3,
-                demographic_events=[demog_mod.CensusEvent(time=0)],
+                demographic_events=[
+                    demog_mod.CensusEvent(time=ts.tables.nodes.time[3])
+                ],
             )
 
     def test_migration_time_equals_census_time(self):
@@ -5296,9 +5320,7 @@ class TestAdmixture:
 class TestPopulationLoops:
     def verify_loop_error(self, demography):
         msg = "derived population in a population split must be active"
-        with pytest.raises(
-            _msprime.InputError, match="sample a lineage from an inactive"
-        ):
+        with pytest.raises(_msprime.InputError, match=msg):
             msprime.sim_ancestry({0: 1}, demography=demography)
         with pytest.raises(_msprime.LibraryError, match=msg):
             demography.debug()
@@ -5377,17 +5399,17 @@ class TestPopulationLoops:
 
     def test_ABCDB_loop(self):
         demography = msprime.Demography()
-        demography.add_population(name="A", initial_size=1)
-        demography.add_population(name="B", initial_size=1)
-        demography.add_population(name="C", initial_size=1)
-        demography.add_population(name="D", initial_size=1)
+        demography.add_population(name="A", initial_size=100)
+        demography.add_population(name="B", initial_size=100)
+        demography.add_population(name="C", initial_size=100)
+        demography.add_population(name="D", initial_size=100)
         demography.add_population_split(1, derived=["A"], ancestral="B")
         demography.add_population_split(2, derived=["B"], ancestral="C")
         demography.add_population_split(3, derived=["C"], ancestral="D")
         demography.add_population_split(3, derived=["D"], ancestral="B")
         msg = "Attempt to set a previously active population to active"
         with pytest.raises(_msprime.LibraryError, match=msg):
-            msprime.sim_ancestry({0: 1, 2: 1}, demography=demography, random_seed=1)
+            msprime.sim_ancestry({0: 1, 2: 1}, demography=demography, random_seed=10)
         with pytest.raises(_msprime.LibraryError, match=msg):
             demography.debug()
 

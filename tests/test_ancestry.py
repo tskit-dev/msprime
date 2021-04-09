@@ -285,6 +285,11 @@ class TestSimulator:
             assert caplog.messages[-1].startswith("Completed at time")
             assert caplog.messages[2] == "time=1 ancestors=3 ret=ExitReason.MAX_EVENTS"
 
+    def test_str(self):
+        sim = ancestry._parse_simulate(3)
+        s = str(sim)
+        assert len(s) > 0
+
 
 class TestParseRandomSeed:
     """
@@ -970,6 +975,87 @@ class TestSimAncestrySamples:
         for bad_sample_type in bad_sample_types:
             with pytest.raises(TypeError, match="different forms"):
                 ancestry._parse_sim_ancestry(bad_sample_type)
+
+
+class TestStartTime:
+    """
+    Test the detailed semantics of start_time in terms of how
+    it interacts with demographic events, sampling, etc.
+    """
+
+    def test_ancient_sample_before_start_time(self):
+        ts = msprime.sim_ancestry(
+            [
+                msprime.SampleSet(1, time=0, ploidy=1),
+                msprime.SampleSet(1, time=1, ploidy=1),
+            ],
+            start_time=2,
+        )
+        assert ts.num_nodes == 3
+        time = ts.tables.nodes.time
+        assert time[0] == 0
+        assert time[1] == 1
+        assert time[2] > 2
+
+    def test_all_ancient_sample_before_start_time(self):
+        ts = msprime.sim_ancestry(
+            [
+                msprime.SampleSet(1, time=1, ploidy=1),
+                msprime.SampleSet(1, time=2, ploidy=1),
+            ],
+            start_time=3,
+        )
+        assert ts.num_nodes == 3
+        time = ts.tables.nodes.time
+        assert time[0] == 1
+        assert time[1] == 2
+        assert time[2] > 3
+
+    def test_population_size_change_before_start_time(self):
+        demography = msprime.Demography()
+        # Effectively zero size.
+        demography.add_population(initial_size=1e-200)
+        with pytest.raises(_msprime.LibraryError, match="<= to its child"):
+            msprime.sim_ancestry(2, demography=demography, start_time=5, random_seed=1)
+        demography.add_population_parameters_change(time=4.999, initial_size=1)
+        msprime.sim_ancestry(2, demography=demography, start_time=5, random_seed=1)
+
+    def test_population_split_before_start_time(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
+        demography.add_population_split(time=3, ancestral="C", derived=["A", "B"])
+        # Here we sample lineages at time 0 and the these get moved to "C" at
+        # time 3. Only when we reach "start_time" do we start generating
+        # events.
+        ts = msprime.sim_ancestry(
+            {"A": 1, "B": 1},
+            ploidy=1,
+            demography=demography,
+            start_time=15,
+            random_seed=1,
+        )
+        nodes = ts.tables.nodes
+        assert nodes.time[-1] > 15
+        assert nodes.population[-1] == 2
+
+    def test_population_sample_inactive_before_start_time(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.add_population(name="C", initial_size=1)
+        demography.add_population_split(time=3, ancestral="C", derived=["A", "B"])
+        with pytest.raises(_msprime.InputError, match="from an inactive population"):
+            msprime.sim_ancestry(
+                [
+                    msprime.SampleSet(1, population="B", time=0),
+                    msprime.SampleSet(1, population="A", time=4),
+                ],
+                demography=demography,
+                start_time=15,
+                random_seed=1,
+            )
 
 
 class TestParseSimulate:

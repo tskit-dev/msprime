@@ -3571,14 +3571,7 @@ static int
 msp_reset_population_state(msp_t *self)
 {
     int ret = 0;
-    tsk_id_t root;
-    segment_t *seg;
-    const size_t num_nodes = self->input_position.nodes;
-    const double *restrict node_time = self->tables->nodes.time;
-
-    overlap_count_t *overlap;
-
-    overlap = self->initial_overlaps;
+    overlap_count_t *overlap = self->initial_overlaps;
     while (true) {
         ret = msp_insert_overlap_count(self, overlap->left, overlap->count);
         if (ret != 0) {
@@ -3589,39 +3582,22 @@ msp_reset_population_state(msp_t *self)
         }
         overlap++;
     }
-
-    /* Insert the segment chains into the algorithm state */
-    for (root = 0; root < (tsk_id_t) num_nodes; root++) {
-        seg = self->root_segments[root];
-        if (seg != NULL) {
-            if (node_time[root] <= self->start_time) {
-                ret = msp_insert_sample(self, root);
-                if (ret != 0) {
-                    goto out;
-                }
-            }
-        }
-    }
 out:
     return ret;
 }
 
+/* Apply all demographic events at the specified time
+ */
 static int MSP_WARN_UNUSED
-msp_apply_demographic_events(msp_t *self)
+msp_apply_demographic_events(msp_t *self, double time)
 {
     int ret = 0;
     demographic_event_t *event;
 
-    tsk_bug_assert(self->next_demographic_event != NULL);
-    /* Process all events with equal time in one block. */
-    self->time = self->next_demographic_event->time;
     while (self->next_demographic_event != NULL
-           && self->next_demographic_event->time == self->time) {
-        /* We skip ahead to the start time for the next demographic
-         * event, and use its change_state method to update the
-         * state of the simulation.
-         */
+           && self->next_demographic_event->time == time) {
         event = self->next_demographic_event;
+        self->time = time;
         tsk_bug_assert(event->change_state != NULL);
         ret = event->change_state(self, event);
         if (ret != 0) {
@@ -3633,11 +3609,71 @@ out:
     return ret;
 }
 
+static int MSP_WARN_UNUSED
+msp_apply_sampling_events(msp_t *self, double time)
+{
+    int ret = 0;
+    sampling_event_t *se;
+
+    /* Add in all samples with this time */
+    while (self->next_sampling_event < self->num_sampling_events
+           && self->sampling_events[self->next_sampling_event].time == time) {
+        se = &self->sampling_events[self->next_sampling_event];
+        self->time = time;
+        ret = msp_insert_sample(self, se->sample);
+        if (ret != 0) {
+            goto out;
+        }
+        self->next_sampling_event++;
+        /* To keep things simple, just insert the population
+         * unconditionally for each sample. */
+        ret = msp_insert_non_empty_population(self, se->population);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+static double
+msp_get_next_fixed_event_time(msp_t *self)
+{
+    double sampling_event_time = DBL_MAX;
+    double demographic_event_time = DBL_MAX;
+
+    if (self->next_sampling_event < self->num_sampling_events) {
+        sampling_event_time = self->sampling_events[self->next_sampling_event].time;
+    }
+    if (self->next_demographic_event != NULL) {
+        demographic_event_time = self->next_demographic_event->time;
+    }
+    return GSL_MIN(sampling_event_time, demographic_event_time);
+}
+
+static int MSP_WARN_UNUSED
+msp_apply_fixed_events(msp_t *self, double time)
+{
+    int ret = 0;
+
+    ret = msp_apply_demographic_events(self, time);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = msp_apply_sampling_events(self, time);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
+
 int
 msp_reset(msp_t *self)
 {
     int ret = 0;
     size_t N = self->num_populations;
+    double event_time;
     population_id_t population_id;
     population_t *pop, *initial_pop;
 
@@ -3653,14 +3689,13 @@ msp_reset(msp_t *self)
         goto out;
     }
     /* Set up the initial segments and algorithm state */
-    self->time = self->start_time;
     for (population_id = 0; population_id < (population_id_t) N; population_id++) {
         pop = self->populations + population_id;
         /* Set the initial population parameters */
         initial_pop = &self->initial_populations[population_id];
         pop->growth_rate = initial_pop->growth_rate;
         pop->initial_size = initial_pop->initial_size;
-        pop->start_time = self->time;
+        pop->start_time = 0;
         pop->state = initial_pop->state;
     }
     /* Reset the tables to their correct position for replication */
@@ -3690,6 +3725,16 @@ msp_reset(msp_t *self)
     self->num_trapped_re_events = 0;
     self->num_multiple_re_events = 0;
     memset(self->num_migration_events, 0, N * N * sizeof(size_t));
+
+    if (self->start_time < DBL_MAX) {
+        while ((event_time = msp_get_next_fixed_event_time(self)) <= self->start_time) {
+            ret = msp_apply_fixed_events(self, event_time);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+    self->time = self->start_time;
     self->state = MSP_STATE_INITIALISED;
 out:
     return ret;
@@ -3699,17 +3744,16 @@ static int MSP_WARN_UNUSED
 msp_initialise_simulation_state(msp_t *self)
 {
     int ret = 0;
-    tsk_size_t num_ancient_samples;
+    tsk_size_t num_samples;
     size_t j;
     double min_root_time;
     segment_t *head;
     tsk_id_t root;
     const double *restrict node_time = self->tables->nodes.time;
     const tsk_id_t *restrict node_population = self->tables->nodes.population;
-    tsk_id_t *ancient_samples
-        = malloc(self->tables->nodes.num_rows * sizeof(*ancient_samples));
+    tsk_id_t *samples = malloc(self->tables->nodes.num_rows * sizeof(*samples));
 
-    if (ancient_samples == NULL) {
+    if (samples == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -3719,8 +3763,7 @@ msp_initialise_simulation_state(msp_t *self)
         goto out;
     }
 
-    /* Process the root segments to split up the samples into the initial set and
-     * ancients */
+    /* Process the root segments */
     min_root_time = DBL_MAX;
     for (j = 0; j < self->input_position.nodes; j++) {
         head = self->root_segments[j];
@@ -3738,23 +3781,18 @@ msp_initialise_simulation_state(msp_t *self)
         self->start_time = GSL_MAX(self->start_time, min_root_time);
     }
 
-    /* Anything that has min_root_time is an initial sample, otherwise we
-     * register them as sampling events */
-    num_ancient_samples = 0;
-
+    num_samples = 0;
     for (j = 0; j < self->input_position.nodes; j++) {
         head = self->root_segments[j];
         if (head != NULL) {
             root = head->value;
-            if (node_time[root] > self->start_time) {
-                ancient_samples[num_ancient_samples] = root;
-                num_ancient_samples++;
-            }
+            samples[num_samples] = root;
+            num_samples++;
         }
     }
 
-    /* Set up the historical sampling events */
-    self->num_sampling_events = num_ancient_samples;
+    /* Set up the sampling events */
+    self->num_sampling_events = num_samples;
     self->sampling_events = NULL;
     if (self->num_sampling_events > 0) {
         self->sampling_events
@@ -3763,20 +3801,20 @@ msp_initialise_simulation_state(msp_t *self)
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        for (j = 0; j < num_ancient_samples; j++) {
-            root = ancient_samples[j];
+        for (j = 0; j < num_samples; j++) {
+            root = samples[j];
             self->sampling_events[j].sample = root;
             self->sampling_events[j].time = node_time[root];
             self->sampling_events[j].population = node_population[root];
         }
-        /* Now we must sort the sampling events by time. */
+        /* Sort the sampling events by time. */
         qsort(self->sampling_events, self->num_sampling_events, sizeof(sampling_event_t),
             cmp_sampling_event);
     }
 
     /* ret = msp_compress_overlap_counts(self, 0, self->sequence_length); */
 out:
-    msp_safe_free(ancient_samples);
+    msp_safe_free(samples);
     return ret;
 }
 
@@ -4123,14 +4161,13 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
 {
     int ret = 0;
     double lambda, t_temp, t_wait, ca_t_wait, re_t_wait, gc_t_wait, gc_left_t_wait,
-        mig_t_wait, sampling_event_time, demographic_event_time;
+        mig_t_wait, random_event_time, fixed_event_time;
     uint32_t n;
     tsk_id_t i, pop_id, pop_id_j, pop_id_k, ca_pop_id, mig_source_pop, mig_dest_pop;
     const tsk_id_t N = (tsk_id_t) self->num_populations;
     population_t *pop;
     unsigned long events = 0;
     avl_node_t *avl_node;
-    sampling_event_t *se;
     /* Only support a single label for now. */
     label_id_t label = 0;
 
@@ -4205,63 +4242,30 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             }
         }
 
+        fixed_event_time = msp_get_next_fixed_event_time(self);
         t_wait = GSL_MIN(mig_t_wait,
             GSL_MIN(gc_t_wait, GSL_MIN(gc_left_t_wait, GSL_MIN(re_t_wait, ca_t_wait))));
-        if (self->next_demographic_event == NULL
-            && self->next_sampling_event == self->num_sampling_events
-            && t_wait == DBL_MAX) {
+
+        if (fixed_event_time == DBL_MAX && t_wait == DBL_MAX) {
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
         }
-        t_temp = self->time + t_wait;
+        random_event_time = self->time + t_wait;
 
-        sampling_event_time = DBL_MAX;
-        if (self->next_sampling_event < self->num_sampling_events) {
-            sampling_event_time = self->sampling_events[self->next_sampling_event].time;
-        }
-        demographic_event_time = DBL_MAX;
-        if (self->next_demographic_event != NULL) {
-            demographic_event_time = self->next_demographic_event->time;
-        }
         /* The simulation state is can only changed from this point on. If
          * any of the events would cause the time to be >= max_time, we exit
          */
-        if (sampling_event_time < t_temp
-            && sampling_event_time < demographic_event_time) {
-            se = &self->sampling_events[self->next_sampling_event];
-            if (se->time > max_time) {
+        if (fixed_event_time < random_event_time) {
+            if (fixed_event_time > max_time) {
                 ret = MSP_EXIT_MAX_TIME;
                 break;
             }
-            self->time = se->time;
-            /* Add in all samples with this time */
-            while (self->next_sampling_event < self->num_sampling_events
-                   && self->sampling_events[self->next_sampling_event].time
-                          == sampling_event_time) {
-                se = self->sampling_events + self->next_sampling_event;
-                ret = msp_insert_sample(self, se->sample);
-                if (ret != 0) {
-                    goto out;
-                }
-                self->next_sampling_event++;
-                /* To keep things simple, just insert the population
-                 * unconditionally for each sample. */
-                ret = msp_insert_non_empty_population(self, se->population);
-                if (ret != 0) {
-                    goto out;
-                }
-            }
-        } else if (demographic_event_time < t_temp) {
-            if (demographic_event_time > max_time) {
-                ret = MSP_EXIT_MAX_TIME;
-                break;
-            }
-            ret = msp_apply_demographic_events(self);
+            ret = msp_apply_fixed_events(self, fixed_event_time);
             if (ret != 0) {
                 goto out;
             }
             /* Rather than try to reason about the changes that have occured
-             * during the demographic event, just recompute the indexes
+             * during any demographic events, just recompute the indexes
              * used to track nonempty populations and migration destinations
              */
             ret = msp_compute_population_indexes(self);
@@ -4269,11 +4273,11 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
                 goto out;
             }
         } else {
-            if (t_temp > max_time) {
+            if (random_event_time > max_time) {
                 ret = MSP_EXIT_MAX_TIME;
                 break;
             }
-            self->time = t_temp;
+            self->time = random_event_time;
             if (re_t_wait == t_wait) {
                 ret = msp_recombination_event(self, label, NULL, NULL);
             } else if (gc_t_wait == t_wait) {
@@ -4416,6 +4420,8 @@ msp_pedigree_climb(msp_t *self)
     }
     self->pedigree->state = MSP_PED_STATE_CLIMB_COMPLETE;
 
+    /* TODO we should probably support fixed events here using
+     * msp_apply_fixed_events() like we do in the coalescent models. */
     if (self->next_demographic_event != NULL
         && self->next_demographic_event->time <= self->time) {
         /* We can't have demographic events happening during the
@@ -4756,7 +4762,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
                 ret = MSP_EXIT_MAX_TIME;
                 goto out;
             }
-            ret = msp_apply_demographic_events(self);
+            ret = msp_apply_demographic_events(self, self->next_demographic_event->time);
             if (ret != 0) {
                 goto out;
             }
@@ -5050,6 +5056,12 @@ msp_run_sweep(msp_t *self)
         }
         /* msp_print_state(self, stdout); */
     }
+
+    /* TODO we should probably support fixed events here using
+     * msp_apply_fixed_events() like we do in the coalescent models.
+     * The point below about computing population sizes should be easily
+     * worked around using msp_compute_population_size(). */
+
     /* Check if any demographic events should have happened during the
      * event and raise an error if so. This is to keep computing population
      * sizes simple */
@@ -5058,8 +5070,8 @@ msp_run_sweep(msp_t *self)
         ret = MSP_ERR_EVENTS_DURING_SWEEP;
         goto out;
     }
-    /* We could implement sampling events during a sweep if we wanted
-     * to easily enough. Is this a sensible feature? */
+    /* Rule out sampling events for now, but there's no reason we can't
+     * support them. */
     if (self->next_sampling_event < self->num_sampling_events
         && self->sampling_events[self->next_sampling_event].time <= self->time) {
         ret = MSP_ERR_EVENTS_DURING_SWEEP;
@@ -5278,7 +5290,7 @@ msp_debug_demography(msp_t *self, double *end_time)
             self->next_sampling_event++;
         }
 
-        ret = msp_apply_demographic_events(self);
+        ret = msp_apply_demographic_events(self, de->time);
         if (ret != 0) {
             goto out;
         }
