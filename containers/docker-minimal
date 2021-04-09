@@ -1,7 +1,8 @@
 #maintainer Ariella Gladstein
 #organization tskit-dev
-#application "Msprime: A reimplementation of Hudson's classical ms simulator for modern data sets."
+#application "Msprime: a population genetics simulator of ancestry and DNA sequence evolution"
 
+# TODO change this to a minimal Python image
 FROM jupyter/scipy-notebook:latest
 
 # Set the working directory to /app
