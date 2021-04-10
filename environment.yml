@@ -1,9 +1,0 @@
-name: msprime
-channels:
-- conda-forge
-- defaults
-dependencies:
-- python=3.8
-- msprime
-# Needed to open myst-markdown files as notebooks.
-- jupytext

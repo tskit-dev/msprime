@@ -10,6 +10,9 @@ only_build_toc_files: true
 execute:
   execute_notebooks: cache
 
+launch_buttons:
+  binderhub_url: ""
+
 repository:
   url: https://github.com/tskit-dev/msprime
   branch: main
