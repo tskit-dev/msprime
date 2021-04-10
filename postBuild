@@ -1,3 +1,0 @@
-#!/bin/bash
-# Rebuild jupyterlab with the jupytext extension.
-jupyter lab build
