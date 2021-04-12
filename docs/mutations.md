@@ -340,7 +340,7 @@ This could also be used to add mutations with different mutation models to diffe
 of the genome.
 
 While it is more natural to add younger mutations to a tree sequence which already contains
-older mutations, you can also add mutations ancestral to an existing mutations,
+older mutations, you can also add mutations ancestral to existing mutations,
 as in the following code block:
 
 ```{code-cell}
