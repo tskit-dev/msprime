@@ -865,10 +865,144 @@ section for more details.
 
 ### Migration events
 
-```{eval-rst}
-.. todo:: examples of using the record_migrations
 
+```{code-cell}
+:tags: [remove-cell]
+
+    msprime.core.set_seed_rng_seed(42)
 ```
+
+When running simulations with {ref}`demography <sec_demography>`, by
+default, migration events are not recorded in the resulting tree sequence.
+While the population associated with each node is determined by the simulated migration
+events, knowledge of the
+precise sequence of migrations is useful in a number of situations: for example see
+the `tskit`
+[tutorial on introgression.](<https://tskit-dev.github.io/tutorials/introgression.html>)
+
+The `record_migrations` parameter allows us to record these events in the
+simulated tree sequence outputted by {func}`.sim_ancestry`. Briefly, a migration record
+encodes the node associated with the migration, the time of the event, the source and
+destination populations (backwards in time), and the left and right coordinates of the
+migrating segement. For more details on migration records, see the
+{ref}`migration table definition.<tskit:sec_migration_table_definition>`
+
+Here, we provide a simple example of the effect of setting `record_migrations=True`
+using the {meth}`stepping stone model<msprime.Demography.stepping_stone_model>`
+where migration is permitted between adjacent populations. Additionally, we
+set `record_full_arg=True` (see {ref}`previous section <sec_ancestry_full_arg>`)
+to record nodes corresponding to migration events. This is not necessary, but will be
+helpful to visualise the result.
+
+```{code-cell}
+N = 10
+demography = msprime.Demography.stepping_stone_model(
+    [20] * N, migration_rate=0.1, boundaries=True
+)
+ts = msprime.sim_ancestry(
+    {0: 1, N - 1: 1},
+    demography=demography,
+    record_migrations=True,
+    record_full_arg=True,
+    random_seed=6,
+)
+```
+
+In the following visualisation, we trace the migration history of two samples backwards
+in time to their most recent common ancestor. Each one of the ten populations in the
+model is assigned a 
+colour and a position on the x axis. The time of migration events is recorded on the y
+axis.
+
+```{code-cell}
+import tskit
+import numpy as np
+import matplotlib
+
+cmap = matplotlib.cm.get_cmap('viridis')
+tree = ts.first()
+mig_color_dict = {}
+for u, linestyle in zip(ts.samples()[::2], ["dotted", "dashdot"]):
+    mig = ts.tables.migrations
+    loc = []
+    time = []
+    while u != tskit.NULL:
+        migs = np.where(mig.node == u)[0]
+        for cur_mig in migs:
+            cur_mig = mig[cur_mig]
+            loc.append(cur_mig.dest + 0.5)
+            time.append(cur_mig.time)
+        u = tree.parent(u)
+    plt.plot(loc, time, linestyle=linestyle, color="black")
+for i in range(N):
+    rgba = cmap(i / N)
+    mig_color_dict[i] = np.array(rgba)*255
+    plt.axvspan(i, i+1, facecolor=rgba, alpha=0.5)
+plt.ylabel("Time of migration event")
+plt.xlabel("Population")
+plt.show()
+```
+
+Note also how many migration events occurred before the two
+samples coalesced, even in this small example.
+
+The next visualisation shows where each of these migrations fall on the edges
+of the simulated tree. We show the nodes associated with each migration
+event, colouring nodes and edges by the population with which they are associated
+(using the same colour scheme as the previous visualisation).
+
+```{code-cell}
+mig_color_dict = {}
+cmap = matplotlib.cm.get_cmap("viridis")
+for i in range(N):
+    rgba = cmap(i / N)
+    mig_color_dict[i] = np.array(rgba) * 255
+
+edge_colors = {}
+string = ".tree .edge {stroke-width:4px}"
+pop = ts.tables.nodes.population
+for node in ts.nodes():
+    node = node.id
+    edge_colors[node] = mig_color_dict[pop[node]]
+    string += (
+        ".node.n"
+        + str(node)
+        + "> .sym {fill: rgb"
+        + str(tuple(mig_color_dict[pop[node]][0:3]))
+        + "}"
+    )
+    string += (
+        ".node.n"
+        + str(node)
+        + " > .edge {stroke: rgb"
+        + str(tuple(mig_color_dict[pop[node]][0:3]))
+        + "}"
+    )
+for mig in ts.migrations():
+    edge_colors[mig.node] = mig_color_dict[mig.source]
+    string += (
+        ".node.n"
+        + str(mig.node)
+        + "> .sym {fill: rgb"
+        + str(tuple(mig_color_dict[pop[mig.node]][0:3]))
+        + "}"
+    )
+    string += (
+        ".node.n"
+        + str(mig.node)
+        + " > .edge {stroke: rgb"
+        + str(tuple(mig_color_dict[mig.dest][0:3]))
+        + "}"
+    )
+node_labels = {node.id: "" for node in ts.nodes()}
+SVG(
+    ts.first().draw_svg(
+        size=(500, 400), style=string, node_labels=node_labels, symbol_size=10
+    )
+)
+```
+
+
 
 (sec_ancestry_census_events)=
 
