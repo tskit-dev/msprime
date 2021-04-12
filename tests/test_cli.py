@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015 University of Oxford
+# Copyright (C) 2015-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -567,7 +567,7 @@ class TestMspmsCreateSimulationRunner:
 
     def test_recomb_map(self):
         runner = self.create_runner("15 1000 -t 10.04 -r 100.0 2501")
-        uniform = msprime.RateMap([0, 2501], [0.04])
+        uniform = msprime.RateMap(position=[0, 2501], rate=[0.04])
         actual = runner.simulator.recombination_map
         assert np.array_equal(actual.position, uniform.position)
         assert np.array_equal(actual.rate, uniform.rate)
@@ -1240,75 +1240,149 @@ class TestMspArgumentParser:
         assert args.random_seed == 123
         assert args.compress
 
+    def test_ancestry_default_values(self):
+        parser = cli.get_msp_parser()
+        args = parser.parse_args(["ancestry", "10", "out.trees"])
+        assert args.tree_sequence == "out.trees"
+        assert "mutation_rate" not in args
+        assert args.sample_size == 10
+        assert args.random_seed is None
+        assert args.population_size == 1.0
+        assert args.ploidy == 2
+        assert args.recombination_rate == 0
+        assert args.length == 1
 
-class TestMspSimulateOutput(unittest.TestCase):
+    def test_mutate_default_values(self):
+        parser = cli.get_msp_parser()
+        cmd = "mutate"
+        args = parser.parse_args([cmd, "out.trees", "out2.trees"])
+        assert args.tree_sequence == "out.trees"
+        assert args.output_tree_sequence == "out2.trees"
+        assert args.mutation_rate == 0
+        assert args.random_seed is None
+        assert args.start_time is None
+        assert args.end_time is None
+        assert args.model == "jc69"
+
+    def test_mutate_raises_with_invalid_model_name(self):
+        parser = cli.get_msp_parser()
+        cmd = "mutate"
+        with pytest.raises(SystemExit):
+            capture_output(
+                parser.parse_args,
+                [cmd, "--model", "not-a-model", "out.trees", "out2.trees"],
+            )
+
+    def test_mutate_model_is_changeable(self):
+        parser = cli.get_msp_parser()
+        cmd = "mutate"
+        for model_arg in ["--model", "-m"]:
+            args = parser.parse_args(
+                [cmd, "out.trees", "out2.trees", model_arg, "blosum62"]
+            )
+            assert args.model == "blosum62"
+
+
+class TestMspSimulateOutput:
     """
     Tests the output of msp to ensure it's correct.
     """
 
-    def setUp(self):
-        fd, self._tree_sequence = tempfile.mkstemp(prefix="msp_cli", suffix=".trees")
-        os.close(fd)
+    def capture_output(self, *args, **kwargs):
+        with pytest.warns(UserWarning, match="The simulate command is deprecated"):
+            return capture_output(*args, **kwargs)
 
-    def tearDown(self):
-        os.unlink(self._tree_sequence)
-
-    def test_run_defaults(self):
+    def test_run_defaults(self, tmp_path):
         cmd = "simulate"
         sample_size = 10
-        stdout, stderr = capture_output(
-            cli.msp_main, [cmd, str(sample_size), self._tree_sequence]
+        tree_sequence_file = str(tmp_path / "out.ts")
+        stdout, stderr = self.capture_output(
+            cli.msp_main, [cmd, str(sample_size), tree_sequence_file]
         )
         assert len(stderr) == 0
         assert len(stdout) == 0
 
-        tree_sequence = tskit.load(self._tree_sequence)
+        tree_sequence = tskit.load(tree_sequence_file)
         assert tree_sequence.get_sample_size() == sample_size
         assert tree_sequence.get_sequence_length() == 1
         assert tree_sequence.get_num_mutations() == 0
 
-    def test_simulate_short_args(self):
+    def test_simulate_short_args(self, tmp_path):
         cmd = "simulate"
-        stdout, stderr = capture_output(
+        tree_sequence_file = str(tmp_path / "out.ts")
+        stdout, stderr = self.capture_output(
             cli.msp_main,
-            [cmd, "100", self._tree_sequence, "-L", "1e2", "-r", "5", "-u", "2"],
+            [cmd, "100", tree_sequence_file, "-L", "1e2", "-r", "5", "-u", "2"],
         )
-        tree_sequence = tskit.load(self._tree_sequence)
+        tree_sequence = tskit.load(tree_sequence_file)
         assert len(stderr) == 0
         assert len(stdout) == 0
         assert tree_sequence.get_sample_size() == 100
         assert tree_sequence.get_sequence_length() == 100
         assert tree_sequence.get_num_mutations() > 0
 
-    def test_compress_warns(self):
+    def test_compress_warns(self, tmp_path):
         cmd = "simulate"
+        tree_sequence_file = str(tmp_path / "out.ts")
         with pytest.warns(UserWarning):
-            capture_output(cli.msp_main, [cmd, "10", self._tree_sequence, "--compress"])
-        tree_sequence = tskit.load(self._tree_sequence)
+            capture_output(cli.msp_main, [cmd, "10", tree_sequence_file, "--compress"])
+        tree_sequence = tskit.load(tree_sequence_file)
         assert tree_sequence.get_sample_size() == 10
 
 
-class TestMspConversionOutput(unittest.TestCase):
+class TestMspAncestryOutput:
     """
     Tests the output of msp to ensure it's correct.
     """
 
-    @classmethod
-    def setUpClass(cls):
-        cls._tree_sequence = msprime.simulate(
-            10, length=10, recombination_rate=10, mutation_rate=10, random_seed=1
+    def test_run_defaults(self, tmp_path):
+        tree_sequence_file = str(tmp_path / "out.ts")
+        stdout, stderr = capture_output(
+            cli.msp_main, ["ancestry", "10", tree_sequence_file]
         )
-        fd, cls._tree_sequence_file = tempfile.mkstemp(
-            prefix="msp_cli", suffix=".trees"
+        assert len(stderr) == 0
+        assert len(stdout) == 0
+
+        tree_sequence = tskit.load(tree_sequence_file)
+        assert tree_sequence.get_sample_size() == 20
+        assert tree_sequence.get_sequence_length() == 1
+        assert tree_sequence.get_num_mutations() == 0
+
+    def test_short_args(self, tmp_path):
+        tree_sequence_file = str(tmp_path / "out.ts")
+        stdout, stderr = capture_output(
+            cli.msp_main,
+            ["ancestry", "100", tree_sequence_file, "-L", "1e2", "-r", "5", "-k", "2"],
         )
-        os.close(fd)
-        cls._tree_sequence.dump(cls._tree_sequence_file)
+        tree_sequence = tskit.load(tree_sequence_file)
+        assert len(stderr) == 0
+        assert len(stdout) == 0
+        assert tree_sequence.get_sample_size() == 200
+        assert tree_sequence.get_sequence_length() == 100
+        assert tree_sequence.get_num_mutations() == 0
 
-    @classmethod
-    def tearDownClass(cls):
-        os.unlink(cls._tree_sequence_file)
 
-    def test_mutate_keep(self):
+@pytest.fixture
+def tree_sequence():
+    return msprime.simulate(
+        10, length=10, recombination_rate=0, mutation_rate=10, random_seed=1
+    )
+
+
+@pytest.fixture
+def tree_sequence_file(tmp_path, tree_sequence):
+    tree_path = tmp_path / "msp_cli.trees"
+    tree_sequence.dump(tree_path)
+    return str(tree_path)
+
+
+class TestMspMutateOutput:
+    """
+    Tests the output of msp mutate to ensure it's correct.
+    """
+
+    @pytest.mark.xfail(reason="Issue #1440 unresolved")
+    def test_mutate_keep(self, tree_sequence_file):
         fd, out_tree_sequence_file = tempfile.mkstemp(
             prefix="msp_cli_mutate", suffix=".trees"
         )
@@ -1321,42 +1395,36 @@ class TestMspConversionOutput(unittest.TestCase):
             cli.msp_main,
             [
                 cmd,
-                self._tree_sequence_file,
+                tree_sequence_file,
                 out_tree_sequence_file,
                 "-u",
                 str(mutation_rate),
                 "-s",
                 str(seed),
-                "--keep",
             ],
         )
         assert len(stderr) == 0
 
-        previous_ts = tskit.load(self._tree_sequence_file)
+        previous_ts = tskit.load(tree_sequence_file)
         tree_sequence = tskit.load(out_tree_sequence_file)
 
         assert tree_sequence.get_num_mutations() > previous_ts.get_num_mutations()
 
-    def test_mutate_discrete_start_end_time(self):
-        fd, out_tree_sequence_file = tempfile.mkstemp(
-            prefix="msp_cli_mutate", suffix=".trees"
-        )
-        os.close(fd)
+    @pytest.mark.xfail(reason="Issue #1440 unresolved")
+    def test_mutate_discrete_start_end_time(self, tree_sequence_file, tmp_path):
+        out_tree_sequence_file = str(tmp_path / "out.ts")
 
         cmd = "mutate"
-        mutation_rate = 10
-        seed = 1
         stdout, stderr = capture_output(
             cli.msp_main,
             [
                 cmd,
-                self._tree_sequence_file,
+                tree_sequence_file,
                 out_tree_sequence_file,
                 "-u",
-                str(mutation_rate),
+                "10",
                 "-s",
-                str(seed),
-                "--discrete",
+                "1",
                 "--start-time",
                 "0",
                 "--end-time",
@@ -1372,3 +1440,55 @@ class TestMspConversionOutput(unittest.TestCase):
         assert min(tables.nodes.time[tables.mutations.node]) >= 0
         assert set(tables.sites.position) <= set(range(10))
         assert tree_sequence.get_num_mutations() > 0
+
+
+class TestMspMutateModelOutput:
+    @pytest.mark.xfail(reason="Issue #1440 unresolved")
+    def test_binary_uses_0_or_1_states(self, tree_sequence_file, tmp_path):
+        cmd = "mutate"
+        out_tree_sequence_file = str(tmp_path / "out.ts")
+        stdout, stderr = capture_output(
+            cli.msp_main,
+            [
+                cmd,
+                tree_sequence_file,
+                out_tree_sequence_file,
+                "--mutation-rate",
+                "10",
+                "--random-seed",
+                "1",
+                "--model",
+                "binary",
+            ],
+        )
+        assert len(stderr) == 0
+
+        tree_sequence = tskit.load(out_tree_sequence_file)
+        tables = tree_sequence.dump_tables()
+
+        assert set(tables.sites.ancestral_state) == {ord("0")}
+        assert set(tables.mutations.derived_state) <= {ord("0"), ord("1")}
+
+    @pytest.mark.xfail(reason="Issue #1440 unresolved")
+    def test_default_jc69_uses_ACGT_states(self, tree_sequence_file, tmp_path):
+        cmd = "mutate"
+        out_tree_sequence_file = str(tmp_path / "out.ts")
+        stdout, stderr = capture_output(
+            cli.msp_main,
+            [
+                cmd,
+                tree_sequence_file,
+                out_tree_sequence_file,
+                "--mutation-rate",
+                "10",
+                "--random-seed",
+                "1",
+            ],
+        )
+        assert len(stderr) == 0
+
+        tree_sequence = tskit.load(out_tree_sequence_file)
+        tables = tree_sequence.dump_tables()
+
+        assert set(tables.sites.ancestral_state) <= {ord(x) for x in "ACGT"}
+        assert set(tables.mutations.derived_state) <= {ord(x) for x in "ACGT"}

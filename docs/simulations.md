@@ -1,6 +1,0 @@
-# Running simulations
-
-
-```{tableofcontents}
-```
-

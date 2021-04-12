@@ -14,6 +14,7 @@ import numpy as np
 import tskit
 
 import msprime
+from msprime import pedigrees
 
 
 logger = daiquiri.getLogger()
@@ -2244,7 +2245,7 @@ def run_simulate(args):
             )
 
         num_diploid_individuals = n // 2
-        py_pedigree = msprime.Pedigree.read_txt(args.pedigree_file)
+        py_pedigree = pedigrees.Pedigree.read_txt(args.pedigree_file)
         py_pedigree.set_samples(num_diploid_individuals)
         ll_pedigree = py_pedigree.get_ll_representation()
         pedigree = Pedigree(py_pedigree.num_individuals, py_pedigree.ploidy)

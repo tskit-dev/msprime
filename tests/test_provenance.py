@@ -19,11 +19,9 @@
 """
 Tests for the provenance information attached to tree sequences.
 """
-import base64
 import inspect
 import json
 import logging
-import marshal
 
 import numpy as np
 import pytest
@@ -33,6 +31,7 @@ import tskit
 import msprime
 from msprime import _msprime
 from msprime import ancestry
+from msprime import pedigrees
 
 
 class TestProvenance:
@@ -143,135 +142,31 @@ class TestBuildObjects:
         ts = msprime.sim_ancestry(5, record_provenance=False)
         assert len(list(ts.provenances())) == 0
 
-    def verify_simulation_models(self, sim_func):
-        simple_model = ["hudson", [10, "dtwf"], [20, "smc"], [None, None]]
-        ts = sim_func(10, model=simple_model)
-        decoded = self.decode(ts.provenance(0).record)
-        parameters = decoded.parameters
-        assert list(parameters.model) == simple_model
-
-        model_instances = [
+    def test_encode_simulation_models(self):
+        models = [
+            msprime.StandardCoalescent(duration=10),
+            msprime.DiscreteTimeWrightFisher(duration=10),
+            msprime.SmcApproxCoalescent(duration=10),
             msprime.StandardCoalescent(),
-            msprime.SimulationModelChange(10, msprime.DiscreteTimeWrightFisher()),
-            msprime.SimulationModelChange(20, msprime.SmcApproxCoalescent()),
-            msprime.SimulationModelChange(
-                30, msprime.BetaCoalescent(alpha=1.1, truncation_point=1)
-            ),
         ]
-        ts = sim_func(10, model=model_instances)
+        ts = msprime.sim_ancestry(10, model=models, random_seed=1234)
         decoded = self.decode(ts.provenance(0).record)
         parameters = decoded.parameters
         assert parameters.model[0] == {
-            "__class__": "msprime.ancestry.StandardCoalescent"
+            "__class__": "msprime.ancestry.StandardCoalescent",
+            "duration": 10,
         }
         assert parameters.model[1] == {
-            "__class__": "msprime.ancestry.SimulationModelChange",
-            "model": {"__class__": "msprime.ancestry.DiscreteTimeWrightFisher"},
-            "time": 10,
+            "__class__": "msprime.ancestry.DiscreteTimeWrightFisher",
+            "duration": 10,
         }
         assert parameters.model[2] == {
-            "__class__": "msprime.ancestry.SimulationModelChange",
-            "model": {"__class__": "msprime.ancestry.SmcApproxCoalescent"},
-            "time": 20,
+            "__class__": "msprime.ancestry.SmcApproxCoalescent",
+            "duration": 10,
         }
         assert parameters.model[3] == {
-            "__class__": "msprime.ancestry.SimulationModelChange",
-            "model": {
-                "__class__": "msprime.ancestry.BetaCoalescent",
-                "alpha": 1.1,
-                "truncation_point": 1.0,
-            },
-            "time": 30,
-        }
-
-    def test_encode_simulation_models_simulate(self):
-        self.verify_simulation_models(msprime.simulate)
-
-    def test_encode_simulation_models_sim_ancestry(self):
-        self.verify_simulation_models(msprime.sim_ancestry)
-
-    def test_encode_numpy_functions_and_classes(self, caplog):
-        seeds = np.ones(1, dtype=int)
-        pop_configs = [msprime.PopulationConfiguration(5) for _ in range(2)]
-
-        def time(t):
-            return t + 0.01
-
-        def bad_func(t):
-            if msprime:
-                pass
-            return t
-
-        with caplog.at_level(logging.WARNING):
-            ts = msprime.simulate(
-                random_seed=seeds[0],
-                population_configurations=pop_configs,
-                migration_matrix=[[0, 1], [1, 0]],
-                demographic_events=[
-                    msprime.SimulationModelChange(time=time),
-                    msprime.SimulationModelChange(time=bad_func),
-                    msprime.SimulationModelChange(time=lambda t: t + seeds[0]),
-                ],
-            )
-        assert (
-            "Configuration function bad_func refers"
-            " to global variables ('msprime',) which are not currently"
-            " serialized" in caplog.text
-        )
-        assert (
-            "Configuration function <lambda> refers"
-            " to outer scope variables which are not currently serialized"
-            in caplog.text
-        )
-        prov = ts.provenance(0).record
-        decoded = self.decode(prov)
-        assert decoded.schema_version == "1.0.0"
-        assert decoded.parameters.command == "simulate"
-        parameters = decoded.parameters
-        assert parameters.random_seed == 1
-        assert parameters.population_configurations == [
-            {
-                "sample_size": 5,
-                "initial_size": None,
-                "growth_rate": 0.0,
-                "metadata": None,
-                "__class__": "msprime.demography.PopulationConfiguration",
-            },
-            {
-                "sample_size": 5,
-                "initial_size": None,
-                "growth_rate": 0.0,
-                "metadata": None,
-                "__class__": "msprime.demography.PopulationConfiguration",
-            },
-        ]
-        assert parameters.migration_matrix == [[0, 1], [1, 0]]
-        assert parameters.demographic_events[0] == {
-            "time": {
-                "__function__": base64.b64encode(marshal.dumps(time.__code__)).decode(
-                    "utf-8"
-                ),
-                "defaults": None,
-            },
-            "model": None,
-            "__class__": "msprime.ancestry.SimulationModelChange",
-        }
-        assert parameters.demographic_events[1] == {
-            "time": {
-                "__error__": "Configuration function bad_func "
-                "refers to global variables"
-                " ('msprime',) which are not currently serialized"
-            },
-            "model": None,
-            "__class__": "msprime.ancestry.SimulationModelChange",
-        }
-        assert parameters.demographic_events[2] == {
-            "time": {
-                "__error__": "Configuration function <lambda> refers to outer scope"
-                " variables which are not currently serialized"
-            },
-            "model": None,
-            "__class__": "msprime.ancestry.SimulationModelChange",
+            "__class__": "msprime.ancestry.StandardCoalescent",
+            "duration": None,
         }
 
     def test_unencodable_function(self):
@@ -321,10 +216,7 @@ class TestBuildObjects:
         assert decoded.parameters.start_time == 0
         assert decoded.parameters.end_time == 100
         assert not decoded.parameters.keep
-        assert (
-            decoded.parameters.model["__class__"]
-            == "msprime.mutations.JC69MutationModel"
-        )
+        assert decoded.parameters.model["__class__"] == "msprime.mutations.JC69"
 
     def test_mutate_model(self):
         ts = msprime.simulate(5, random_seed=1)
@@ -332,10 +224,7 @@ class TestBuildObjects:
         decoded = self.decode(ts.provenance(1).record)
         assert decoded.schema_version == "1.0.0"
         assert decoded.parameters.command == "sim_mutations"
-        assert (
-            decoded.parameters.model["__class__"]
-            == "msprime.mutations.PAMMutationModel"
-        )
+        assert decoded.parameters.model["__class__"] == "msprime.mutations.PAM"
 
     def test_mutate_map(self):
         ts = msprime.simulate(5, random_seed=1)
@@ -430,22 +319,8 @@ class TestSimulateRoundTrip(TestRoundTrip):
         ts = msprime.simulate(
             population_configurations=pop_configs,
             migration_matrix=[[0, 1], [1, 0]],
-            demographic_events=[msprime.SimulationModelChange(time=lambda t: t + 0.1)],
+            demographic_events=[msprime.SimulationModelChange(time=10)],
         )
-        self.verify(ts)
-
-    def test_simulation_models(self):
-        simple_model = ["hudson", [10, "dtwf"], [20, "smc"]]
-        ts = msprime.simulate(10, model=simple_model)
-        self.verify(ts)
-
-        model_instances = [
-            msprime.StandardCoalescent(),
-            msprime.SimulationModelChange(10, msprime.DiscreteTimeWrightFisher()),
-            msprime.SimulationModelChange(20, msprime.SmcApproxCoalescent()),
-            msprime.SimulationModelChange(30, msprime.BetaCoalescent(alpha=1.1)),
-        ]
-        ts = msprime.simulate(10, model=model_instances)
         self.verify(ts)
 
     def test_pedigree(self):
@@ -457,7 +332,7 @@ class TestSimulateRoundTrip(TestRoundTrip):
         is_sample = np.array([1, 1, 1, 1, 0, 0])
         t = max(times)
         model = msprime.WrightFisherPedigree()
-        ped = msprime.Pedigree(
+        ped = pedigrees.Pedigree(
             inds, parent_indices, times, is_sample, sex=None, ploidy=2
         )
         ts = msprime.simulate(

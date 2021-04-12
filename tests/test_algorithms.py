@@ -13,6 +13,7 @@ import tskit
 import algorithms
 import msprime
 import tests.test_cli as test_cli
+from msprime import pedigrees
 
 
 IS_WINDOWS = platform.system() == "Windows"
@@ -174,7 +175,7 @@ class TestAlgorithms:
             parents = np.array([2, 3, 2, 3, -1, -1, -1, -1], dtype=int).reshape(-1, 2)
             time = np.array([0, 0, 1, 1])
             is_sample = np.array([1, 1, 0, 0], dtype=int)
-            ped = msprime.Pedigree(
+            ped = pedigrees.Pedigree(
                 individual, parents, time, is_sample, sex=None, ploidy=2
             )
             ped.save_txt(ped_path)

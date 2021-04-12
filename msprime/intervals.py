@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2020 University of Oxford
+# Copyright (C) 2020-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -19,149 +19,184 @@
 """
 Utilities for working with intervals and interval maps.
 """
+from __future__ import annotations
+
+import collections.abc
+import itertools
+import numbers
 import warnings
 
 import numpy as np
 
+from msprime import core
 
-# TODO this is a minimal implementation of the functionality we need to get
-# varying-rates-of-things-along the genome into msprime. It's deliberately
-# lightweight, and unencumbered by any backing classes from the low-level
-# model. The intention would be to add a bunch of useful functionality here
-# using numpy APIs.
-class RateMap:
+
+class RateMap(collections.abc.Mapping):
     """
-    A class mapping a numeric value to a set of adjacent intervals along the
-    genome.
+    A class mapping a non-negative rate value to a set of non-overlapping intervals
+    along the genome. Intervals for which the rate is unknown (i.e., missing data)
+    are encoded by NaN values in the ``rate`` array.
 
     :param list position: A list of :math:`n+1` positions, starting at 0, and ending
         in the sequence length over which the RateMap will apply.
     :param list rate: A list of :math:`n` positive rates that apply between each
-        position.
-    :param float start_position: When returning a mean_rate over the genome, ignore the
-        part of the map from zero up to ``start_position``, as long as the rate is 0 in
-        that region. If ``None`` (default), the ``start_position`` is 0.
-    :param float end_position: When returning a mean_rate over the genome, ignore the
-        part of the map from ``end_position`` onwards, as long as the rate is 0 in that
-        region. If ``None`` (default), the ``end_position`` is the end of the map.
+        position. Intervals with missing data are encoded by NaN values.
     """
 
+    # The args are marked keyword only to give us some flexibility in how we
+    # create class this in the future.
     def __init__(
         self,
+        *,
         position,
         rate,
-        *,
-        start_position=None,
-        end_position=None,
     ):
         # Making the arrays read-only guarantees rate and cumulative mass stay in sync
+        # We prevent the arrays themselves being overwritten by making self.position,
+        # etc properties.
+
+        # TODO we always coerce the position type to float here, but we may not
+        # want to do this. int32 is a perfectly good choice a lot of the time.
         self._position = np.array(position, dtype=float)
         self._position.flags.writeable = False
+        self._rate = np.array(rate, dtype=float)
+        self._rate.flags.writeable = False
         size = len(self._position)
         if size < 2:
             raise ValueError("Must have at least two positions")
-        if self._position[0] != 0:
-            raise ValueError("First position must be zero")
-        if np.any(np.diff(self._position) <= 0):
-            bad_pos = np.where(np.diff(self._position) <= 0)[0] + 1
-            raise ValueError(
-                f"Position values not strictly increasing at indexes {bad_pos}"
-            )
-
-        self._rate = np.array(rate, dtype=float)
-        self._rate.flags.writeable = False
         if len(self._rate) != size - 1:
             raise ValueError(
                 "Rate array must have one less entry than the position array"
             )
+        if self._position[0] != 0:
+            raise ValueError("First position must be zero")
+
+        span = self.span
+        if np.any(span <= 0):
+            bad_pos = np.where(span <= 0)[0] + 1
+            raise ValueError(
+                f"Position values not strictly increasing at indexes {bad_pos}"
+            )
         if np.any(self._rate < 0):
             bad_rates = np.where(self._rate < 0)[0]
             raise ValueError(f"Rate values negative at indexes {bad_rates}")
-
-        self._cumulative_mass = np.insert(
-            np.cumsum(np.diff(self._position) * self._rate), 0, 0
-        )
+        self._missing = np.isnan(self.rate)
+        self._num_missing_intervals = np.sum(self._missing)
+        if self._num_missing_intervals == len(self.rate):
+            raise ValueError("All intervals are missing data")
+        # We don't expose the cumulative mass array as a part of the array
+        # API is it's not quite as obvious how it lines up for each interval.
+        # It's really the sum of the mass up to but not including the current
+        # interval, which is a bit confusing. Probably best to just leave
+        # it as a function, so that people can sample at regular positions
+        # along the genome anyway, empasising that it's a continuous function,
+        # not a step function like the other interval attributes.
+        self._cumulative_mass = np.insert(np.nancumsum(self.mass), 0, 0)
+        assert self._cumulative_mass[0] == 0
         self._cumulative_mass.flags.writeable = False
 
-        if start_position is None:
-            start_position = 0
-        elif self.get_cumulative_mass(start_position) > 0:
-            raise ValueError("Rates before the start_position must all be zero")
-        self._start_position = start_position
+    @property
+    def left(self):
+        """
+        The left position of each interval (inclusive).
+        """
+        return self._position[:-1]
 
-        if end_position is None:
-            end_position = self.sequence_length
-        elif self.get_cumulative_mass(end_position) < self.total_mass:
-            raise ValueError("Rates after the end_position must all be zero")
-        self._end_position = end_position
+    @property
+    def right(self):
+        """
+        The right position of each interval (exclusive).
+        """
+        return self._position[1:]
 
-        # Make all of the internal arrays read-only, so they can't get out of sync
+    @property
+    def mid(self):
+        """
+        Returns the midpoint of each interval.
+        """
+        mid = self.left + self.span / 2
+        mid.flags.writeable = False
+        return mid
+
+    @property
+    def span(self):
+        """
+        Returns the span (i.e., ``right - left``) of each of the intervals.
+        """
+        span = self.right - self.left
+        span.flags.writeable = False
+        return span
 
     @property
     def position(self):
         """
-        The positions between which a constant rate applies. There will be
-        one more position than the number of rates, with the first position being 0
-        and the last being the :attr:`sequence_length`.
+        The breakpoint positions between intervals. This is equal to the
+        :attr:`~.RateMap.left` array with the :attr:`sequence_length`
+        appended.
         """
         return self._position
 
     @property
     def rate(self):
         """
-        The array of constant rates that apply between each :attr:`position`.
+        The rate associated with each interval. Missing data is encoded
+        by NaN values.
         """
         return self._rate
 
     @property
-    def cumulative_mass(self):
+    def mass(self):
+        r"""
+        The "mass" of each interval, defined as the :attr:`~.RateMap.rate`
+        :math:`\times` :attr:`~.RateMap.span`. This is NaN for intervals
+        containing missing data.
         """
-        The integral of the rates along the genome, one value for each
-        :attr:`position`. The first value will be 0 and the last will be the
-        :attr:`total_mass`.
-        """
-        return self._cumulative_mass
+        return self._rate * self.span
 
     @property
-    def start_position(self):
+    def missing(self):
         """
-        The physical start of the map. This position can be greater than 0 for maps
-        which have no recorded rate at the start of a chromosome (often the telomeric
-        region). It primarily affects the :attr:`mean_rate` returned for this rate map.
+        A boolean array encoding whether each interval contains missing data.
+        Equivalent to ``np.isnan(rate_map.rate)``
         """
-        return self._start_position
-
-    @start_position.setter
-    def start_position(self, val):
-        raise NotImplementedError(
-            "Cannot change a RateMap start_position: use ratemap.slice(... trim=False)"
-        )
+        return self._missing
 
     @property
-    def end_position(self):
+    def non_missing(self):
         """
-        The physical end of the map. This position can be less than the
-        :attr:`sequence_length` for maps which have no recorded rate at the end of a
-        chromosome (often the telomeric region). It primarily affects the
-        :attr:`mean_rate` returned for this rate map.
+        A boolean array encoding whether each interval contains non-missing data.
+        Equivalent to ``np.logical_not(np.isnan(rate_map.rate))``
         """
-        return self._end_position
+        return ~self._missing
 
-    @end_position.setter
-    def end_position(self, val):
-        raise NotImplementedError(
-            "Cannot change a RateMap end_position: use ratemap.slice(... trim=False)"
-        )
+    #
+    # Interval counts
+    #
 
-    @staticmethod
-    def uniform(sequence_length, rate):
+    @property
+    def num_intervals(self) -> int:
         """
-        Create a uniform rate map
+        The total number of intervals in this map. Equal to
+        :attr:`~.RateMap.num_missing_intervals` +
+        :attr:`~.RateMap.num_non_missing_intervals`.
         """
-        return RateMap([0, sequence_length], [rate])
+        return len(self._rate)
 
-    def asdict(self):
-        return {"position": self.position, "rate": self.rate}
+    @property
+    def num_missing_intervals(self) -> int:
+        """
+        Returns the number of missing intervals, i.e., those in which the
+        :attr:`~.RateMap.rate` value is a NaN.
+        """
+        return self._num_missing_intervals
+
+    @property
+    def num_non_missing_intervals(self) -> int:
+        """
+        The number of non missing intervals, i.e., those in which the
+        :attr:`~.RateMap.rate` value is not a NaN.
+        """
+        return self.num_intervals - self.num_missing_intervals
 
     @property
     def sequence_length(self):
@@ -173,134 +208,246 @@ class RateMap:
     @property
     def total_mass(self):
         """
-        The cumulative total over the entire map
+        The cumulative total mass over the entire map.
         """
-        # Since we insist that the rate up to start_position and past end_position is 0
-        # we can just return the cumulative total.
-        return self.cumulative_mass[-1]
+        return self._cumulative_mass[-1]
 
     @property
     def mean_rate(self):
         """
-        The mean rate over this map, from :attr:`start_position` to
-        :attr:`end_position`, weighted by the span covered by each rate.
+        The mean rate over this map weighted by the span covered by each rate.
+        Unknown intervals are excluded.
         """
-        span = self.end_position - self.start_position
-        return self.total_mass / span
+        total_span = np.sum(self.span[self.non_missing])
+        return self.total_mass / total_span
 
     def get_rate(self, x):
         """
-        Return the rate at a list of user-specified positions along the map, i.e.
-        interpolated between the fixed :attr:`position` values. Any positions
-        beyond the end  of the map will return the final rate value.
+        Return the rate at the specified list of positions.
+
+        .. note:: This function will return a NaN value for any positions
+            that contain missing data.
 
         :param numpy.ndarray x: The positions for which to return values.
-
         :return: An array of rates, the same length as ``x``.
-        :rtype: numpy.ndarray(dtype=np.float64)
+        :rtype: numpy.ndarray
         """
         loc = np.searchsorted(self.position, x, side="right") - 1
-        loc = np.minimum(loc, len(self.rate) - 1)  # Return final rate if off the end
-        if np.any(loc < 0):
-            raise ValueError("No rate exists for positions below the minimum map pos")
+        if np.any(loc < 0) or np.any(loc >= len(self.rate)):
+            raise ValueError("position out of bounds")
         return self.rate[loc]
 
     def get_cumulative_mass(self, x):
         """
-        Return the cumulative rate at a list of user-specified positions along the map,
-        i.e. interpolated between the fixed :attr:`position` values.
+        Return the cumulative mass of the map up to (but not including) a
+        given point for a list of positions along the map. This is equal to
+        the integral of the rate from 0 to the point.
 
         :param numpy.ndarray x: The positions for which to return values.
 
-        :return: An array of cumulative rates, the same length as ``x``
-        :rtype: numpy.ndarray(dtype=np.float64)
+        :return: An array of cumulative mass values, the same length as ``x``
+        :rtype: numpy.ndarray
         """
-        if np.any(np.array(x) < 0) or np.any(np.array(x) > self.sequence_length):
-            raise ValueError(
-                f"Cannot have physical positions < 0 or > {self.sequence_length}"
+        x = np.array(x)
+        if np.any(x < 0) or np.any(x > self.sequence_length):
+            raise ValueError(f"Cannot have positions < 0 or > {self.sequence_length}")
+        return np.interp(x, self.position, self._cumulative_mass)
+
+    def find_index(self, x: float) -> int:
+        """
+        Returns the index of the interval that the specified position falls within,
+        such that ``rate_map.left[index] <= x < self.rate_map.right[index]``.
+
+        :param float x: The position to search.
+        :return: The index of the interval containing this point.
+        :rtype: int
+        :raises: KeyError if the position is not contained in any of the intervals.
+        """
+        if x < 0 or x >= self.sequence_length:
+            raise KeyError(f"Position {x} out of bounds")
+        index = np.searchsorted(self.position, x, side="left")
+        if x < self.position[index]:
+            index -= 1
+        assert self.left[index] <= x < self.right[index]
+        return index
+
+    def missing_intervals(self):
+        """
+        Returns the left and right coordinates of the intervals containing
+        missing data in this map as a 2D numpy array
+        with shape (:attr:`~.RateMap.num_missing_intervals`, 2). Each row
+        of this returned array is therefore a ``left``, ``right`` tuple
+        corresponding to the coordinates of the missing intervals.
+
+        :return: A numpy array of the coordinates of intervals containing
+            missing data.
+        :rtype: numpy.ndarray
+        """
+        out = np.empty((self.num_missing_intervals, 2))
+        out[:, 0] = self.left[self.missing]
+        out[:, 1] = self.right[self.missing]
+        return out
+
+    def asdict(self):
+        return {"position": self.position, "rate": self.rate}
+
+    #
+    # Dunder methods. We implement the Mapping protocol via __iter__, __len__
+    # and __getitem__. We have some extra semantics for __getitem__, providing
+    # slice notation.
+    #
+
+    def __iter__(self):
+        # The clinching argument for using mid here is that if we used
+        # left instead we would have
+        #   RateMap([0, 1], [0.1]) == RateMap([0, 100], [0.1])
+        # by the inherited definition of equality since the dictionary items
+        # would be equal.
+        # Similarly, we only return the midpoints of known intervals
+        # because NaN values are not equal, and we would need to do
+        # something to work around this. It seems reasonable that
+        # this high-level operation returns the *known* values only
+        # anyway.
+        yield from self.mid[self.non_missing]
+
+    def __len__(self):
+        return np.sum(self.non_missing)
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            if key.step is not None:
+                raise TypeError("Only interval slicing is supported")
+            return self.slice(key.start, key.stop)
+        if isinstance(key, numbers.Number):
+            index = self.find_index(key)
+            if np.isnan(self.rate[index]):
+                # To be consistent with the __iter__ definition above we
+                # don't consider these missing positions to be "in" the map.
+                raise KeyError(f"Position {key} is within a missing interval")
+            return self.rate[index]
+        # TODO we could implement numpy array indexing here and call
+        # to get_rate. Note we'd need to take care that we return a keyerror
+        # if the returned array contains any nans though.
+        raise KeyError("Key {key} not in map")
+
+    def _display_table(self):
+        def format_row(left, right, mid, span, rate):
+            return [
+                f"{left:.10g}",
+                f"{right:.10g}",
+                f"{mid:.10g}",
+                f"{span:.10g}",
+                f"{rate:.2f}",
+            ]
+
+        def format_slice(start, end):
+            return list(
+                itertools.starmap(
+                    format_row,
+                    zip(
+                        self.left[start:end],
+                        self.right[start:end],
+                        self.mid[start:end],
+                        self.span[start:end],
+                        self.rate[start:end],
+                    ),
+                )
             )
-        return np.interp(x, self.position, self.cumulative_mass)
 
-    def slice(self, start=None, end=None, *, trim=False):  # noqa:A003
+        if self.num_intervals < 40:
+            data = format_slice(0, None)
+        else:
+            data = format_slice(0, 10)
+            data.append(["⋯"] * 5)
+            data += format_slice(-10, None)
+
+        return ["left", "right", "mid", "span", "rate"], data
+
+    def __str__(self):
+        titles, data = self._display_table()
+        data = [[[item] for item in row] for row in data]
+        table = core.text_table(
+            caption="",
+            column_titles=[[title] for title in titles],
+            column_alignments="<<>>>",
+            data=data,
+        )
+        return table
+
+    def _repr_html_(self):
+        col_titles, data = self._display_table()
+        return core.html_table("", col_titles, data)
+
+    def __repr__(self):
+        return f"RateMap(position={repr(self.position)}, rate={repr(self.rate)})"
+
+    #
+    # Methods for building rate maps.
+    #
+
+    def copy(self) -> RateMap:
         """
-        Returns a subset of this rate map between the specified end points.
+        Returns a deep copy of this RateMap.
+        """
+        # We take read-only copies of the arrays in the constructor anyway, so
+        # no need for copying.
+        return RateMap(position=self.position, rate=self.rate)
 
-        :param float start: The start of the region to keep. If ``None``, it defaults to
-            0.
-        :param float end: The end of the region to keep. If end is ``None``, it defaults
-            to the end of the map.
+    def slice(self, left=None, right=None, *, trim=False) -> RateMap:  # noqa: A003
+        """
+        Returns a subset of this rate map in the specified interval.
+
+        :param float left: The left coordinate (inclusive) of the region to keep.
+            If ``None``, defaults to 0.
+        :param float right: The right coordinate (exclusive) of the region to keep.
+            If ``None``, defaults to the sequence length.
         :param bool trim: If True, remove the flanking regions such that the
-            sequence length of the new rate map is ``end`` - ``start``. If ``False``
-            (default), do not change the coordinate system, but instead replace each
-            flanking region with 0, and set the ``start_position`` and ``end_position``
-            of the returned map to ``start`` and ``end``, inserting these positions if
-            they do not exist.
-
+            sequence length of the new rate map is ``right`` - ``left``. If ``False``
+            (default), do not change the coordinate system and mark the flanking
+            regions as "unknown".
         :return: A new RateMap instance
         :rtype: RateMap
         """
-        if start is None:
-            i = 0
-            start = 0
-        if end is None:
-            end = self.sequence_length
-            j = len(self.position)
+        left = 0 if left is None else left
+        right = self.sequence_length if right is None else right
+        if not (0 <= left < right <= self.sequence_length):
+            raise KeyError(f"Invalid slice: left={left}, right={right}")
 
-        if (
-            start < 0
-            or end < 0
-            or start > self.sequence_length
-            or end > self.sequence_length
-            or start > end
-        ):
-            raise IndexError(f"Invalid subset: start={start}, end={end}")
-
-        if start != 0:
-            i = np.searchsorted(self.position, start, side="left")
-            if start < self.position[i]:
-                i -= 1
-        if end != self.position[-1]:
-            j = i + np.searchsorted(self.position[i:], end, side="right")
-            if end > self.position[j - 1]:
-                j += 1
+        i = self.find_index(left)
+        j = i + np.searchsorted(self.position[i:], right, side="right")
+        if right > self.position[j - 1]:
+            j += 1
 
         position = self.position[i:j].copy()
         rate = self.rate[i : j - 1].copy()
-        position[0] = start
-        position[-1] = end
+        position[0] = left
+        position[-1] = right
 
         if trim:
             # Return trimmed map with changed coords
-            return self.__class__(position - start, rate)
+            return RateMap(position=position - left, rate=rate)
 
         # Need to check regions before & after sliced region are filled out:
-        if start != 0:
-            if rate[0] == 0:
+        if left != 0:
+            if np.isnan(rate[0]):
                 position[0] = 0  # Extend
             else:
-                rate = np.insert(rate, 0, 0)  # Prepend
+                rate = np.insert(rate, 0, np.nan)  # Prepend
                 position = np.insert(position, 0, 0)
-        if end != self.position[-1]:
-            if rate[-1] == 0:
+        if right != self.position[-1]:
+            if np.isnan(rate[-1]):
                 position[-1] = self.sequence_length  # Extend
             else:
-                rate = np.append(rate, 0)  # Append
+                rate = np.append(rate, np.nan)  # Append
                 position = np.append(position, self.position[-1])
-        return self.__class__(position, rate, start_position=start, end_position=end)
+        return RateMap(position=position, rate=rate)
 
-    def __getitem__(self, key):
+    @staticmethod
+    def uniform(sequence_length, rate) -> RateMap:
         """
-        Use slice syntax for obtaining a rate map subset. E.g.
-            >>> rate_map_4m_to_5m = rate_map[4e6:5e6]
+        Create a uniform rate map
         """
-        if not isinstance(key, slice) or key.step is not None:
-            raise TypeError("Only interval slicing is supported")
-        start, end = key.start, key.stop
-        if start is not None and start < 0:
-            start += self.sequence_length
-        if end is not None and end < 0:
-            end += self.sequence_length
-        return self.slice(start=start, end=end, trim=True)
+        return RateMap(position=[0, sequence_length], rate=[rate])
 
     @staticmethod
     def read_hapmap(
@@ -360,14 +507,13 @@ class RateMap:
             specifying the rate in cM/Mb. If ``None`` (default) do not use the rate
             column, but calculate rates using the genetic map positions, as
             specified in ``map_col``. If the rate column is used, the
-            :attr:`RateMap.start_position` of the returned map is set to the first
-            physical position in the file, and the last value in the rate column
-            must be zero.
+            interval from 0 to first physical position in the file is marked as
+            unknown, and the last value in the rate column must be zero.
         :param int map_col: The zero-based index of the column in the file
             specifying the genetic map position in centiMorgans. If ``None``
             (default), assume an index of 3 (i.e. the fourth column). If the first
-            genetic position is 0, set the :attr:`RateMap.start_position` of the
-            returned map to the first physical position in the file. Otherwise, act
+            genetic position is 0 the interval from position 0 to the first
+            physical position in the file is marked as unknown. Otherwise, act
             as if an additional row, specifying physical position 0 and genetic
             position 0, exists at the start of the file.
         :return: A RateMap object.
@@ -445,19 +591,12 @@ class RateMap:
                 genetic_positions = np.append(genetic_positions, genetic_positions[-1])
 
         assert genetic_positions[0] == 0
-        return RateMap(
-            physical_positions,
-            rate=np.diff(genetic_positions) / np.diff(physical_positions),
-            start_position=start,
-            end_position=end,
-        )
-
-
-# The RecombinationMap class is deprecated since 1.0. We maintain the
-# functionality where it is possible to do so.
-
-# TODO update the documentation to make it clear that this is a legacy
-# interface and is deprecated.
+        rate = np.diff(genetic_positions) / np.diff(physical_positions)
+        if start != 0:
+            rate[0] = np.nan
+        if end != physical_positions[-1]:
+            rate[-1] = np.nan
+        return RateMap(position=physical_positions, rate=rate)
 
 
 class RecombinationMap:
@@ -471,8 +610,13 @@ class RecombinationMap:
     position must be zero, and by convention the last rate value
     is also required to be zero (although it is not used).
 
-    .. warning::
-        The ``num_loci`` parameter is deprecated.
+    .. important::
+        This class is deprecated (but supported indefinitely);
+        please use the :class:`.RateMap` class in new code.
+        In particular, note that when specifying ``rates`` in the
+        the :class:`.RateMap` class we now require an array
+        of length :math:`n - 1` (this class requires an array
+        of length :math:`n` in which the last entry is zero).
 
     :param list positions: The positions (in bases) denoting the
         distinct intervals where recombination rates change. These can
@@ -480,12 +624,12 @@ class RecombinationMap:
     :param list rates: The list of rates corresponding to the supplied
         ``positions``. Recombination rates are specified per base,
         per generation.
-    :param int num_loci: **This parameter is deprecated**.
-        The maximum number of non-recombining loci
-        in the underlying simulation. By default this is set to
-        the largest possible value, allowing the maximum resolution
-        in the recombination process. However, for a finite sites
-        model this can be set to smaller values.
+    :param int num_loci: **This parameter is no longer supported.**
+        Must be either None (meaning a continuous genome of the
+        finest possible resolution) or be equal to ``positions[-1]``
+        (meaning a discrete genome). Any other value will result in
+        an error. Please see the :ref:`sec_legacy_0x_genome_discretisation`
+        section for more information.
     """
 
     def __init__(self, positions, rates, num_loci=None, map_start=0):
@@ -503,8 +647,7 @@ class RecombinationMap:
                 "the behaviour of msprime 0.x cannot be emulated. Please "
                 "consider upgrading your code to the version 1.x APIs."
             )
-        self.map = RateMap(positions, rates[:-1])
-        self.map_start = map_start
+        self.map = RateMap(position=positions, rate=rates[:-1])
 
     @classmethod
     def uniform_map(cls, length, rate, num_loci=None):
@@ -526,8 +669,8 @@ class RecombinationMap:
         Parses the specified file in HapMap format.
 
         .. warning::
-            This method is deprecated, use the module-level
-            :func:`read_hapmap` function instead.
+            This method is deprecated, use the :meth:`.RateMap.read_hapmap`
+            method instead.
 
         :param str filename: The name of the file to be parsed. This may be
             in plain text or gzipped plain text.
@@ -539,8 +682,11 @@ class RecombinationMap:
             FutureWarning,
         )
         rate_map = RateMap.read_hapmap(filename, position_col=1, rate_col=2)
-        rate = np.append(rate_map.rate, 0)
-        return cls(rate_map.position, rate, map_start=rate_map.start_position)
+        # Mark anything missing as 0 for backwards compatibility. This will
+        # ensure that simulate() never trims parts of the tree sequence.
+        rate = rate_map.rate.copy()
+        rate[rate_map.missing] = 0
+        return cls(rate_map.position, np.append(rate, 0))
 
     @property
     def mean_recombination_rate(self):
@@ -555,22 +701,24 @@ class RecombinationMap:
         Returns the effective recombination rate for this genetic map.
         This is the weighted mean of the rates across all intervals.
         """
-        return self.map.cumulative_mass[-1]
+        return self.map.total_mass
 
     def physical_to_genetic(self, x):
         return self.map.get_cumulative_mass(x)
 
     def genetic_to_physical(self, genetic_x):
-        if self.map.cumulative_mass[-1] == 0:
+        if self.map.total_mass == 0:
             # If we have a zero recombination rate throughout then everything
             # except L maps to 0.
             return self.get_sequence_length() if genetic_x > 0 else 0
         if genetic_x == 0:
             return self.map.position[0]
-        index = np.searchsorted(self.map.cumulative_mass, genetic_x) - 1
+        # TODO refactor this to this to use get_cumulative_mass() function / add the
+        # corresponding high-level function to the rate map.
+        index = np.searchsorted(self.map._cumulative_mass, genetic_x) - 1
         y = (
             self.map.position[index]
-            + (genetic_x - self.map.cumulative_mass[index]) / self.map.rate[index]
+            + (genetic_x - self.map._cumulative_mass[index]) / self.map.rate[index]
         )
         return y
 

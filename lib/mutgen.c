@@ -210,9 +210,6 @@ mutation_matrix_choose_root_state(mutation_model_t *self, gsl_rng *rng, site_t *
     return ret;
 }
 
-/* Return 1 if the new derived allele matches parent allele
- * and therefore no transition occurs
- */
 static int
 mutation_matrix_transition(mutation_model_t *self, gsl_rng *rng,
     const char *parent_allele, tsk_size_t parent_allele_length,
@@ -233,13 +230,8 @@ mutation_matrix_transition(mutation_model_t *self, gsl_rng *rng,
     }
     probs = params.transition_matrix + (tsk_size_t) pi * params.num_alleles;
     j = (tsk_id_t) probability_list_select(u, params.num_alleles, probs);
-    ret = 1;
-    if (j != pi) {
-        /* Only return 0 in the case where we perform an actual transition */
-        ret = 0;
-        mutation->derived_state = params.alleles[j];
-        mutation->derived_state_length = params.allele_length[j];
-    }
+    mutation->derived_state = params.alleles[j];
+    mutation->derived_state_length = params.allele_length[j];
 out:
     return ret;
 }
@@ -663,9 +655,8 @@ static double binary_model_transition_matrix[] = { 0.0, 1.0, 1.0, 0.0 };
 #define ONE_THIRD (1.0 / 3.0)
 static const char *acgt_alleles[] = { "A", "C", "G", "T" };
 static double jukes_cantor_model_root_distribution[] = { 0.25, 0.25, 0.25, 0.25 };
-static double jukes_cantor_model_transition_matrix[]
-    = { 0.0, ONE_THIRD, ONE_THIRD, ONE_THIRD, ONE_THIRD, 0.0, ONE_THIRD, ONE_THIRD,
-          ONE_THIRD, ONE_THIRD, 0.0, ONE_THIRD, ONE_THIRD, ONE_THIRD, ONE_THIRD, 0.0 };
+static double jukes_cantor_model_transition_matrix[] = { 0.25, 0.25, 0.25, 0.25, 0.25,
+    0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25 };
 
 /* Populates this mutation model instance with simple mutation model.
  *
@@ -746,10 +737,9 @@ mutgen_print_state(mutgen_t *self, FILE *out)
             (int) s->metadata_length, s->metadata, s->new, (int) s->mutations_length);
         for (m = s->mutations; m != NULL; m = m->next) {
             parent_id = m->parent == NULL ? TSK_NULL : m->parent->id;
-            fprintf(out, "\tmut:\t(%d)\t%f\t%d\t%d\t'%.*s'\t'%.*s'\t(%d)\t%d\n", m->id,
+            fprintf(out, "\tmut:\t(%d)\t%f\t%d\t%d\t'%.*s'\t'%.*s'\t(%d)\n", m->id,
                 m->time, m->node, parent_id, (int) m->derived_state_length,
-                m->derived_state, (int) m->metadata_length, m->metadata, m->new,
-                m->keep);
+                m->derived_state, (int) m->metadata_length, m->metadata, m->new);
         }
     }
     mutgen_check_state(self);
@@ -988,7 +978,7 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-mutgen_initialise_sites(mutgen_t *self, bool check_kept_times)
+mutgen_initialise_sites(mutgen_t *self)
 {
     int ret = 0;
     tsk_site_table_t *sites = &self->tables->sites;
@@ -996,7 +986,6 @@ mutgen_initialise_sites(mutgen_t *self, bool check_kept_times)
     tsk_id_t site_id;
     site_t *site;
     double time;
-    const double end_time = self->end_time;
     char *state, *metadata;
     tsk_size_t j, length, metadata_length;
 
@@ -1020,12 +1009,6 @@ mutgen_initialise_sites(mutgen_t *self, bool check_kept_times)
             time = mutations->time[j];
             if (tsk_is_unknown_time(time)) {
                 ret = MSP_ERR_UNKNOWN_TIME_NOT_SUPPORTED;
-                goto out;
-            }
-            // check if any kept mutations are younger than
-            // the time period where new mutations can be added
-            if (check_kept_times && time < end_time) {
-                ret = MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER;
                 goto out;
             }
             state = mutations->derived_state + mutations->derived_state_offset[j];
@@ -1064,31 +1047,22 @@ mutgen_populate_tables(mutgen_t *self)
         site = (site_t *) a->item;
         num_mutations = 0;
         for (m = site->mutations; m != NULL; m = m->next) {
-            if (m->keep) {
-                if (m->parent == NULL) {
-                    parent_id = TSK_NULL;
-                } else {
-                    parent_id = m->parent->id;
-                    if (m->derived_state_length == m->parent->derived_state_length
-                        && memcmp(m->derived_state, m->parent->derived_state,
-                               m->derived_state_length)
-                               == 0) {
-                        ret = MSP_ERR_BAD_ANCESTRAL_MUTATION;
-                        goto out;
-                    }
-                    tsk_bug_assert(parent_id != TSK_NULL);
-                }
-                mutation_id = tsk_mutation_table_add_row(mutations, site_id, m->node,
-                    parent_id, m->time, m->derived_state, m->derived_state_length,
-                    m->metadata, m->metadata_length);
-                if (mutation_id < 0) {
-                    ret = msp_set_tsk_error(mutation_id);
-                    goto out;
-                }
-                tsk_bug_assert(mutation_id > parent_id);
-                m->id = mutation_id;
-                num_mutations++;
+            if (m->parent == NULL) {
+                parent_id = TSK_NULL;
+            } else {
+                parent_id = m->parent->id;
+                tsk_bug_assert(parent_id != TSK_NULL);
             }
+            mutation_id = tsk_mutation_table_add_row(mutations, site_id, m->node,
+                parent_id, m->time, m->derived_state, m->derived_state_length,
+                m->metadata, m->metadata_length);
+            if (mutation_id < 0) {
+                ret = msp_set_tsk_error(mutation_id);
+                goto out;
+            }
+            tsk_bug_assert(mutation_id > parent_id);
+            m->id = mutation_id;
+            num_mutations++;
         }
         /* Omit any new sites that have no mutations */
         if ((!site->new) || num_mutations > 0) {
@@ -1237,7 +1211,6 @@ mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_muta
                 pmlen = parent_mut->metadata_length;
             }
         }
-        mut->keep = true;
         if (mut->new) {
             tsk_bug_assert(mut->derived_state == NULL);
             ret = mutation_model_transition(
@@ -1245,21 +1218,13 @@ mutgen_choose_alleles(mutgen_t *self, tsk_id_t *parent, mutation_t **bottom_muta
             if (ret < 0) {
                 goto out;
             }
-            /* A non-zero return value here indicates that we transitioned to the
-             * same allele, and so the discard the mutation. */
-            if (ret != 0) {
-                mut->keep = false;
-            }
         }
-        if (mut->keep) {
-            bottom_mutation[mut->node] = mut;
-        }
+        bottom_mutation[mut->node] = mut;
     }
     /* Reset the mapping for the next site */
     for (mut = site->mutations; mut != NULL; mut = mut->next) {
         bottom_mutation[mut->node] = NULL;
     }
-    ret = 0;
 out:
     return ret;
 }
@@ -1347,7 +1312,6 @@ mutgen_generate(mutgen_t *self, int flags)
 {
     int ret = 0;
     bool discrete_sites = flags & MSP_DISCRETE_SITES;
-    bool kept_mutations_before_end_time = flags & MSP_KEPT_MUTATIONS_BEFORE_END_TIME;
 
     avl_clear_tree(&self->sites);
 
@@ -1361,8 +1325,7 @@ mutgen_generate(mutgen_t *self, int flags)
         goto out;
     }
     if (flags & MSP_KEEP_SITES) {
-        ret = mutgen_initialise_sites(
-            self, discrete_sites && !kept_mutations_before_end_time);
+        ret = mutgen_initialise_sites(self);
         if (ret != 0) {
             goto out;
         }

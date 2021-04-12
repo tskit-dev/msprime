@@ -28,9 +28,19 @@ def log_mutation_likelihood(ts, mutation_rate):
     """
     Returns the unnormalised log probability of the stored pattern of mutations
     on the stored tree sequence, assuming infinite sites mutation. In particular,
-    each stored site must only contain a single mutation. The omitted normalising
-    constant depends on the pattern of mutations, but not on the tree sequence or
-    the mutation rate.
+    each stored site must only contain a single mutation, and all mutant alleles
+    are treated interchangeably as having arisen from a single mutation rate.
+    This is automatically true for some msprime mutation models, such as JC69.
+    The omitted normalising constant depends on the pattern of mutations, but not
+    on the tree sequence or the mutation rate.
+
+    .. warning::
+        The infinite sites assumption means that this method is only valid for
+        continuous genomes. It can also be run on discrete genomes, for which it
+        may provide a reasonable approximation when the number of sites is large
+        and the mutation rate is low. See :ref:`sec_ancestry_discrete_genome`
+        for how continuous genomes can be specified when simulating tree sequences
+        using msprime.
 
     The function first computes the probability of the overall number of mutations
     :math:`M` from the Poisson probability mass function

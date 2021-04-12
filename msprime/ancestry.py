@@ -24,12 +24,14 @@ from __future__ import annotations
 import collections.abc
 import copy
 import dataclasses
+import enum
 import inspect
 import json
 import logging
 import math
 import struct
 import sys
+from typing import Any
 from typing import ClassVar
 from typing import Union
 
@@ -46,12 +48,13 @@ from msprime import _msprime
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-def _model_factory(model):
+def _model_factory(model: Union[None, str, AncestryModel]) -> AncestryModel:
     """
-    Returns a simulation model corresponding to the specified model.
+    Returns an AncestryModel corresponding to the specified model
+    description.
     - If model is None, the default simulation model is returned.
     - If model is a string, return the corresponding model instance.
-    - If model is an instance of AncestryModel, return a copy of it.
+    - If model is an instance of AncestryModel, return it unchanged.
     - Otherwise raise a type error.
     """
     model_map = {
@@ -74,88 +77,57 @@ def _model_factory(model):
         model_instance = model_map[lower_model]
     elif not isinstance(model, AncestryModel):
         raise TypeError(
-            "Simulation model must be a string or an instance of AncestryModel"
+            "Ancestry model must be a string or an instance of AncestryModel"
         )
     else:
         model_instance = model
     return model_instance
 
 
-def _parse_model_change_events(events):
-    """
-    Parses the specified list of events provided in model_arg[1:] into
-    AncestryModelChange events. There are two different forms supported,
-    and model descriptions are anything supported by model_factory.
-    """
-    err = (
-        "Simulation model change events must be either a two-tuple "
-        "(time, model), describing the time of the model change and "
-        "the new model or be an instance of AncestryModelChange."
-    )
-    model_change_events = []
-    for event in events:
-        if isinstance(event, (tuple, list)):
-            if len(event) != 2:
-                raise ValueError(err)
-            t = event[0]
-            if t is not None:
-                try:
-                    t = float(t)
-                except (TypeError, ValueError):
-                    raise ValueError(
-                        "Model change times must be either a floating point "
-                        "value or None"
-                    )
-            event = AncestryModelChange(t, _model_factory(event[1]))
-        elif isinstance(event, AncestryModelChange):
-            # We don't want to modify our inputs, so take a deep copy.
-            event = copy.copy(event)
-            event.model = _model_factory(event.model)
-        else:
-            raise TypeError(err)
-        model_change_events.append(event)
-    return model_change_events
-
-
 def _parse_model_arg(model_arg):
     """
-    Parses the specified model argument from the simulate function,
-    returning the initial model and any model change events.
+    Parses the specified model argument from the sim_ancestry function,
+    returning the list of models.
     """
-    err = (
-        "The model argument must be either (a) a value that can be "
-        "interpreted as a simulation model or (b) a list in which "
-        "the first element is a model description and the remaining "
-        "elements are model change events. These can either be described "
-        "by a (time, model) tuple or AncestryModelChange instances."
-    )
+    # TODO be more lenient about what we accept as input here. Ideally
+    # we'd like to support generators and consume them during the
+    # actual simulation, but that would raise complications for how
+    # to deal with replication.
     if isinstance(model_arg, (list, tuple)):
         if len(model_arg) < 1:
-            raise ValueError(err)
-        model = _model_factory(model_arg[0])
-        model_change_events = _parse_model_change_events(model_arg[1:])
+            raise ValueError("Must specify at least one AncestryModel")
+        models = [_model_factory(model_desc) for model_desc in model_arg]
     else:
-        model = _model_factory(model_arg)
-        model_change_events = []
-    return model, model_change_events
+        models = [_model_factory(model_arg)]
+    return models
+
+
+def _resolve_models(events):
+    model_change_events = []
+    for event in events:
+        assert isinstance(event, SimulationModelChange)
+        # We don't want to modify our inputs, so take a deep copy.
+        event = copy.copy(event)
+        event.model = _model_factory(event.model)
+        model_change_events.append(event)
+    return model_change_events
 
 
 def _filter_events(demographic_events):
     """
     Returns a tuple (demographic_events, model_change_events) which separates
-    out the AncestryModelChange events from the list. This is to support the
+    out the SimulationModelChange events from the list. This is to support the
     pre-1.0 syntax for model changes, where they were included in the
     demographic_events parameter.
     """
     filtered_events = []
     model_change_events = []
     for event in demographic_events:
-        if isinstance(event, AncestryModelChange):
+        if isinstance(event, SimulationModelChange):
             model_change_events.append(event)
         else:
             filtered_events.append(event)
-    # Make sure any model references are resolved.
-    model_change_events = _parse_model_change_events(model_change_events)
+    model_change_events = _resolve_models(model_change_events)
     return filtered_events, model_change_events
 
 
@@ -214,12 +186,12 @@ def _demography_factory(
 ):
     demography = demog.Demography.from_old_style(
         population_configurations,
-        migration_matrix,
-        demographic_events,
+        migration_matrix=migration_matrix,
+        demographic_events=demographic_events,
         Ne=Ne,
+        ignore_sample_size=True,
     )
-    demography.validate()
-    return demography
+    return demography.validate()
 
 
 def _build_initial_tables(*, sequence_length, samples, ploidy, demography, pedigree):
@@ -306,18 +278,14 @@ def _parse_simulate(
         )
     samples = _samples_factory(sample_size, samples, population_configurations)
 
-    model, model_change_events = _parse_model_arg(model)
+    models = [_model_factory(model)]
     if demographic_events is not None:
-        demographic_events, old_style_model_change_events = _filter_events(
-            demographic_events
-        )
-        if len(old_style_model_change_events) > 0:
-            if len(model_change_events) > 0:
-                raise ValueError(
-                    "Cannot specify AncestryModelChange events using both new-style "
-                    "and pre 1.0 syntax"
-                )
-            model_change_events = old_style_model_change_events
+        demographic_events, model_change_events = _filter_events(demographic_events)
+        current_time = 0 if start_time is None else start_time
+        for mce in model_change_events:
+            models[-1].duration = mce.time - current_time
+            models.append(mce.model)
+            current_time = mce.time
 
     demography = _demography_factory(
         Ne, population_configurations, migration_matrix, demographic_events
@@ -390,7 +358,7 @@ def _parse_simulate(
             pedigree=pedigree,
         )
     else:
-        tables = from_ts.tables
+        tables = from_ts.dump_tables()
 
     # It's useful to call _parse_simulate outside the context of the main
     # entry point - so we want to get good seeds in this case too.
@@ -400,14 +368,13 @@ def _parse_simulate(
     sim = Simulator(
         tables=tables,
         recombination_map=recombination_map,
-        model=model,
+        models=models,
         store_migrations=record_migrations,
         store_full_arg=record_full_arg,
         start_time=start_time,
         end_time=end_time,
         num_labels=num_labels,
         demography=demography,
-        model_change_events=model_change_events,
         # Defaults for the values that are not supported through simulate()
         gene_conversion_map=intervals.RateMap.uniform(
             recombination_map.sequence_length, 0
@@ -503,6 +470,10 @@ def simulate(
     of genomes in the population is 2*Ne), but ``sample_size`` is the
     number of (monoploid) genomes sampled.
 
+    .. important::
+        This function is deprecated (but supported indefinitely);
+        please use :func:`.sim_ancestry` in new code.
+
     :param int sample_size: The number of sampled monoploid genomes.  If not
         specified or None, this defaults to the sum of the subpopulation sample
         sizes. Either ``sample_size``, ``population_configurations`` or
@@ -534,7 +505,7 @@ def simulate(
         the populations to be simulated. If this is not specified,
         a single population with a sample of size ``sample_size``
         is assumed.
-    :type population_configurations: list or None.
+    :type population_configurations: list or None
     :param list migration_matrix: The matrix describing the rates of migration
         between all pairs of populations. If :math:`N` populations are defined
         in the ``population_configurations`` parameter, then the migration
@@ -571,7 +542,7 @@ def simulate(
         resulting :class:`tskit.TreeSequence` objects returned.
     :param tskit.TreeSequence from_ts: If specified, initialise the simulation
         from the root segments of this tree sequence and return the
-        completed tree sequence. Please see :ref:`here
+        updated tree sequence. Please see :ref:`here
         <sec_ancestry_initial_state>` for details on the required properties
         of this tree sequence and its interactions with other parameters.
         (Default: None).
@@ -582,8 +553,8 @@ def simulate(
         existing tree sequence (see the ``from_ts`` parameter).
     :param float end_time: If specified, terminate the simulation at the
         specified time. In the returned tree sequence, all rootward paths from
-        samples with time < end_time will end in a node with one child with
-        time equal to end_time. Sample nodes with time >= end_time will
+        samples with time <= end_time will end in a node with one child with
+        time equal to end_time. Sample nodes with time > end_time will
         also be present in the output tree sequence. If not specified or ``None``,
         run the simulation until all samples have an MRCA at all positions in
         the genome.
@@ -593,13 +564,10 @@ def simulate(
         trees that have only one child). Defaults to False.
     :param model: The simulation model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
-        a simulation model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
-        Please see the :ref:`sec_ancestry_models` section for more details
-        on specifying ancestry models.
-    :type model: str or simulation model instance
-    :param bool record_provenance: If True, record all configuration and parameters
-        required to recreate the tree sequence. These can be accessed
-        via ``TreeSequence.provenances()``).
+        a ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
+    :type model: str or AncestryModel
+    :param bool record_provenance: If True, record all input parameters
+        in the tree sequence :ref:`tskit:sec_provenance`.
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -736,7 +704,11 @@ def _insert_sample_sets(sample_sets, demography, default_ploidy, tables):
     for sample_set in sample_sets:
         n = sample_set.num_samples
         population = demography[sample_set.population]
-        time = population.sampling_time if sample_set.time is None else sample_set.time
+        time = (
+            population.default_sampling_time
+            if sample_set.time is None
+            else sample_set.time
+        )
         ploidy = default_ploidy if sample_set.ploidy is None else sample_set.ploidy
         logger.info(
             f"Sampling {n} individuals with ploidy {ploidy} in population "
@@ -833,6 +805,7 @@ def _parse_sim_ancestry(
     record_full_arg=None,
     num_labels=None,
     random_seed=None,
+    init_for_debugger=False,
 ):
     """
     Argument parser for the sim_ancestry frontend. Interprets all the parameters
@@ -914,12 +887,11 @@ def _parse_sim_ancestry(
     if ploidy < 1:
         raise ValueError("ploidy must be >= 1")
 
-    model, model_change_events = _parse_model_arg(model)
-    is_dtwf = isinstance(model, DiscreteTimeWrightFisher)
+    models = _parse_model_arg(model)
+    is_dtwf = isinstance(models[0], DiscreteTimeWrightFisher)
 
     # Check the demography. If no demography is specified, we default to a
-    # single-population model with a given population size. If an initial
-    # state is provided, we default to using that number of populations.
+    # single-population model with a given population size.
     if demography is None:
         if is_dtwf:
             # A default size of 1 isn't so smart for DTWF and almost certainly
@@ -930,26 +902,34 @@ def _parse_sim_ancestry(
                     "explicitly, either using the population_size or demography "
                     "arguments."
                 )
-        num_populations = 1 if initial_state is None else len(initial_state.populations)
+        if initial_state is not None:
+            if population_size is None:
+                raise ValueError(
+                    "Must specify either a demography object or a population_size "
+                    "(for single population models) when providing an initial_state."
+                )
+            if len(initial_state.populations) > 1:
+                raise ValueError(
+                    "Must specify demography for initial_state with > 1 population"
+                )
         population_size = 1 if population_size is None else float(population_size)
-        demography = demog.Demography.isolated_model(
-            [population_size] * num_populations
-        )
+        demography = demog.Demography.isolated_model([population_size])
     elif isinstance(demography, demog.Demography):
         if population_size is not None:
             raise ValueError("Cannot specify demography and population size")
     else:
         raise TypeError("demography argument must be an instance of msprime.Demography")
-    demography.validate()
+    demography = demography.validate()
 
     if initial_state is None:
-        if samples is None:
+        if samples is None and not init_for_debugger:
             raise ValueError(
                 "Either the samples or initial_state arguments must be provided"
             )
         initial_state = tskit.TableCollection(sequence_length)
         demography.insert_populations(initial_state)
-        _parse_samples(samples, demography, ploidy, initial_state)
+        if not init_for_debugger:
+            _parse_samples(samples, demography, ploidy, initial_state)
     else:
         if samples is not None:
             raise ValueError("Cannot specify both samples and initial_state")
@@ -963,6 +943,24 @@ def _parse_sim_ancestry(
             raise ValueError(
                 "initial_state tables must define at least one population."
             )
+        # Make sure the names match-up in the input demography.
+        demography_check = demog.Demography.from_tree_sequence(
+            initial_state.tree_sequence()
+        )
+        if demography.num_populations < demography_check.num_populations:
+            raise ValueError(
+                "Input demography must have at least as many populations as the "
+                "initial state population table: "
+                f"{demography.num_populations} < {demography_check.num_populations}"
+            )
+
+        for pop1, pop2 in zip(demography.populations, demography_check.populations):
+            if pop1.name != pop2.name:
+                raise ValueError(
+                    "Population names in the input demography and the initial "
+                    f"state population table must be equal: {pop1.name} ≠ {pop2.name}"
+                )
+        demography.insert_extra_populations(initial_state)
 
     # It's useful to call _parse_sim_ancestry outside the context of the main
     # entry point - so we want to get good seeds in this case too.
@@ -977,8 +975,7 @@ def _parse_sim_ancestry(
         discrete_genome=discrete_genome,
         ploidy=ploidy,
         demography=demography,
-        model=model,
-        model_change_events=model_change_events,
+        models=models,
         store_migrations=record_migrations,
         store_full_arg=record_full_arg,
         start_time=start_time,
@@ -991,13 +988,13 @@ def _parse_sim_ancestry(
 def sim_ancestry(
     samples=None,
     *,
+    demography=None,
     sequence_length=None,
     discrete_genome=None,
     recombination_rate=None,
     gene_conversion_rate=None,
     gene_conversion_tract_length=None,
     population_size=None,
-    demography=None,
     ploidy=None,
     model=None,
     initial_state=None,
@@ -1012,7 +1009,7 @@ def sim_ancestry(
     record_provenance=None,
 ):
     """
-    Simulates an ancestral process described by a given model, demography and
+    Simulates an ancestral process described by the specified model, demography and
     samples, and return a :class:`tskit.TreeSequence` (or a sequence of
     replicate tree sequences).
 
@@ -1025,12 +1022,22 @@ def sim_ancestry(
         population at its default sampling time. It is important to note that
         samples correspond to *individuals* here, and each sampled individual
         is usually associated with :math:`k` sample *nodes* (or genomes) when
-        ``ploidy`` = :math:`k`. See :ref:`sec_ancestry_samples` for further details.
+        ``ploidy`` = :math:`k`. See the :ref:`sec_ancestry_samples` section
+        for further details.
         Either ``samples`` or ``initial_state`` must be specified.
+    :param demography: The demographic model to simulate, describing the
+        extant and ancestral populations, their population sizes and growth
+        rates, their migration rates, and demographic events affecting the
+        populations over time. See the :ref:`sec_demography` section for
+        details on how to specify demographic models and
+        :ref:`sec_ancestry_samples` for details on how to specify the
+        populations that samples are drawn from. If not specified (or None) we
+        default to a single population with constant size 1
+        (see also the ``population_size`` parameter).
     :param int ploidy: The number of monoploid genomes per sample individual
-        (Default=2). See :ref:`sec_ancestry_ploidy` for usage examples.
+        (Default=2). See the :ref:`sec_ancestry_ploidy` section for usage examples.
     :param float sequence_length: The length of the genome sequence to simulate.
-        See :ref:`sec_ancestry_genome_length` for usage examples
+        See the :ref:`sec_ancestry_sequence_length` section for usage examples
         for this parameter and how it interacts with other parameters.
     :param bool discrete_genome: If True (the default) simulation occurs
         in discrete genome coordinates such that recombination and
@@ -1040,18 +1047,17 @@ def sim_ancestry(
         are performed using continuous genome coordinates. In this
         case multiple events at precisely the same genome location are very
         unlikely (but technically possible).
-        See :ref:`sec_ancestry_discrete_genome` for usage examples.
+        See the :ref:`sec_ancestry_discrete_genome` section for usage examples.
     :param recombination_rate: The rate of recombination along the sequence;
         can be either a single value (specifying a single rate over the entire
         sequence) or an instance of :class:`RateMap`.
-        See :ref:`sec_ancestry_recombination` for usage examples
+        See the :ref:`sec_ancestry_recombination` section for usage examples
         for this parameter and how it interacts with other parameters.
-    :param gene_conversion_rate: The rate of gene conversion along the sequence;
-        can be a single value (specifying a single rate over the entire
-        sequence). Currently an instance of :class:`RateMap` is not supported.
+    :param gene_conversion_rate: The rate of gene conversion along the sequence.
         If provided, a value for ``gene_conversion_tract_length`` must also be
-        specified. See :ref:`sec_ancestry_gene_conversion` for usage examples
-        for this parameter and how it interacts with other parameters.
+        specified. See the :ref:`sec_ancestry_gene_conversion` section
+        for usage examples for this parameter and how it interacts with
+        other parameters.
     :param gene_conversion_tract_length: The mean length of the gene conversion
         tracts. For discrete genomes the tract lengths are geometrically
         distributed with mean ``gene_conversion_tract_length``, which must be
@@ -1062,52 +1068,63 @@ def sim_ancestry(
         :class:`.Demography`. If not specified, defaults to 1. Cannot be specified
         along with the ``demography`` parameter. See the :ref:`sec_demography`
         section for more details on demographic models and population sizes
-        and the :ref:`sec_ancestry_population_size` section for usage examples.
+        and the :ref:`sec_ancestry_demography` section for usage examples.
     :param int random_seed: The random seed. If this is not specified or `None`,
         a high-quality random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
-        See :ref:`sec_ancestry_random_seed` for usage examples.
+        See the :ref:`sec_ancestry_random_seed` section for usage examples.
     :param int num_replicates: The number of replicates of the specified
         parameters to simulate. If this is not specified or `None`,
         no replication is performed and a :class:`tskit.TreeSequence` object
         returned. If `num_replicates` is provided, the specified
         number of replicates is performed, and an iterator over the
         resulting :class:`tskit.TreeSequence` objects returned.
-        See :ref:`sec_ancestry_replication` for examples.
+        See the :ref:`sec_ancestry_replication` section for examples.
     :param bool record_full_arg: If True, record all intermediate nodes
         arising from common ancestor and recombination events in the output
         tree sequence. This will result in unary nodes (i.e., nodes in marginal
         trees that have only one child). Defaults to False.
-        See :ref:`sec_ancestry_full_arg` for examples.
+        See the :ref:`sec_ancestry_full_arg` section for examples.
     :param bool record_migrations: If True, record all migration events
         that occur in the :ref:`tskit:sec_migration_table_definition` of
         the output tree sequence. Defaults to False.
-        See :ref:`sec_ancestry_record_migrations` for examples.
+        See the :ref:`sec_ancestry_record_migrations` section for examples.
     :param tskit.TreeSequence initial_state: If specified, initialise the
         simulation from the root segments of this tree sequence and return the
         completed tree sequence. Please see
         :ref:`sec_ancestry_initial_state` for details of the required
         properties of this tree sequence and its interactions with other parameters.
+        All information in the ``initial_state`` tables is preserved
+        (including metadata) and included in the returned tree sequence.
         (Default: None).
     :param float start_time: If specified, set the initial time that the
         simulation starts to this value. If not specified, the start
         time is zero if performing a simulation of a set of samples,
         or is the time of the oldest node if simulating from an
         existing tree sequence (see the ``initial_state`` parameter).
-        See :ref:`sec_ancestry_start_time` for examples.
+        See the :ref:`sec_ancestry_start_time` section for examples.
     :param float end_time: If specified, terminate the simulation at the
         specified time. In the returned tree sequence, all rootward paths from
         samples with time < ``end_time`` will end in a node with one child with
         time equal to end_time. Any sample nodes with time >= ``end_time`` will
         also be present in the output tree sequence. If not specified or ``None``,
         run the simulation until all samples have an MRCA at all positions in
-        the genome. See :ref:`sec_ancestry_end_time` for examples.
-    :param model: The ancestry model to use.
-        This can either be a string (e.g., ``"smc_prime"``) or an instance of
-        an ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
-        Please see the :ref:`sec_ancestry_models` section for more details
-        on specifying ancestry models.
-    :type model: str or .AncestryModel
+        the genome. See the :ref:`sec_ancestry_end_time` section for examples.
+    :param bool record_provenance: If True (the default), record all input
+        parameters in the tree sequence :ref:`tskit:sec_provenance`.
+    :param model: The ancestry model to use. This can be either a
+        single instance of :class:`.AncestryModel` (or a string that can be
+        interpreted as an ancestry model), or a list of :class:`.AncestryModel`
+        instances. If the ``duration`` attribute of any of these models is
+        set, the simulation will be run until at most :math:`t + t_m`, where
+        :math:`t` is the simulation time when the model starts and :math:`t_m`
+        is the model's ``duration``. If the ``duration`` is not set, the
+        simulation will continue until the model completes, the overall
+        ``end_time`` is reached, or overall coalescence. See
+        the :ref:`sec_ancestry_models_specifying` section for more details,
+        and the :ref:`sec_ancestry_models` section for the available models
+        and examples.
+    :type model: str or .AncestryModel or list
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
@@ -1153,6 +1170,35 @@ def sim_ancestry(
     )
 
 
+class ExitReason(enum.IntEnum):
+    """
+    The different reasons that the low-level simulation exits.
+    """
+
+    MAX_EVENTS = _msprime.EXIT_MAX_EVENTS
+    """
+    We ran for the specified maximum number of events. We usually
+    run for a maximum number of events so that we return to Python
+    regularly, to update logs and to check if CTRL-C has been hit, etc.
+    """
+
+    MAX_TIME = _msprime.EXIT_MAX_TIME
+    """
+    The simulation is equal to the specified maximum time.
+    """
+
+    COALESCENCE = _msprime.EXIT_COALESCENCE
+    """
+    The simulation is complete, and we have fully coalesced.
+    """
+
+    MODEL_COMPLETE = _msprime.EXIT_MODEL_COMPLETE
+    """
+    The model we have specified has run to completion **without**
+    resulting in coalescence.
+    """
+
+
 class Simulator(_msprime.Simulator):
     """
     Class to simulate trees under a variety of population models.
@@ -1172,9 +1218,8 @@ class Simulator(_msprime.Simulator):
         discrete_genome,
         ploidy,
         demography,
-        model_change_events,
         random_generator,
-        model=None,
+        models=None,
         store_migrations=False,
         store_full_arg=False,
         start_time=None,
@@ -1190,17 +1235,16 @@ class Simulator(_msprime.Simulator):
         node_mapping_block_size = block_size
 
         if num_labels is None:
-            num_labels = self._choose_num_labels(model, model_change_events)
+            num_labels = self._choose_num_labels(models)
 
         # Now, convert the high-level values into their low-level
         # counterparts.
-        ll_simulation_model = model.get_ll_representation()
         ll_population_configuration = [pop.asdict() for pop in demography.populations]
         ll_demographic_events = [
-            event.get_ll_representation(demography=demography)
-            for event in demography.events
+            event.get_ll_representation() for event in demography.events
         ]
-        ll_recomb_map = recombination_map.asdict()
+        ll_recomb_map = self._resolve_missing_intervals(recombination_map)
+
         ll_tables = _msprime.LightweightTableCollection(tables.sequence_length)
         ll_tables.fromdict(tables.asdict())
 
@@ -1215,7 +1259,6 @@ class Simulator(_msprime.Simulator):
             recombination_map=ll_recomb_map,
             start_time=start_time,
             random_generator=random_generator,
-            model=ll_simulation_model,
             migration_matrix=demography.migration_matrix,
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
@@ -1230,9 +1273,9 @@ class Simulator(_msprime.Simulator):
             discrete_genome=discrete_genome,
             ploidy=ploidy,
         )
-        # highlevel attributes used externally that have no lowlevel equivalent
-        self.end_time = end_time
-        self.model_change_events = model_change_events
+        # Highlevel attributes used externally that have no lowlevel equivalent
+        self.end_time = np.inf if end_time is None else end_time
+        self.models = models
         self.demography = demography
         # Temporary, until we add the low-level infrastructure for the gc map
         # when we'll take the same approach as the recombination map.
@@ -1262,17 +1305,50 @@ class Simulator(_msprime.Simulator):
     def recombination_map(self):
         return intervals.RateMap(**super().recombination_map)
 
-    def _choose_num_labels(self, model, model_change_events):
+    def _choose_num_labels(self, models):
         """
-        Choose the number of labels appropriately, given the simulation
+        Choose the number of labels appropriately, given the ancestry
         models that will be simulated.
         """
         num_labels = 1
-        models = [model] + [event.model for event in model_change_events]
         for model in models:
             if isinstance(model, SweepGenicSelection):
                 num_labels = 2
         return num_labels
+
+    def _resolve_missing_intervals(self, recombination_map):
+        """
+        Inspect the recombination map for unknown intervals, resolve
+        the appropriate recombination rate to use in the actual simulation,
+        and return the low-level recombination map representation.
+
+        Also store the set of missing_intervals for later use in delete_intervals.
+
+        For now we only support unknown values in the flanking regions,
+        and insist that we can have at most two of them (so, no attempt to
+        coalesce adjacent unknown intervals at the ends of the map).
+        See https://github.com/tskit-dev/msprime/issues/1604 for plans
+        and discussion for how to simulate chromosomes with unknown
+        regions in the middle.
+        """
+        self.missing_intervals = recombination_map.missing_intervals()
+        error_msg = (
+            "Missing regions of the genome other than the flanks are currently "
+            "not supported. Please see "
+            "https://github.com/tskit-dev/msprime/issues/1604"
+        )
+        if self.missing_intervals.shape[0] > 2:
+            raise ValueError(error_msg)
+        for left, right in self.missing_intervals:
+            if not (left == 0 or right == recombination_map.sequence_length):
+                raise ValueError(error_msg)
+
+        ll_recomb_map = recombination_map.asdict()
+        missing = recombination_map.missing
+        rate = recombination_map.rate.copy()
+        rate[missing] = 0
+        ll_recomb_map["rate"] = rate
+        return ll_recomb_map
 
     def _run_until(self, end_time, event_chunk=None, debug_func=None):
         # This is a pretty big default event chunk so that we don't spend
@@ -1285,51 +1361,47 @@ class Simulator(_msprime.Simulator):
         if event_chunk <= 0:
             raise ValueError("Must have at least 1 event per chunk")
         logger.info("Running model %s until max time: %f", self.model, end_time)
-        while super().run(end_time, event_chunk) == _msprime.EXIT_MAX_EVENTS:
-            logger.debug("time=%g ancestors=%d", self.time, self.num_ancestors)
+        ret = ExitReason.MAX_EVENTS
+        while ret == ExitReason.MAX_EVENTS:
+            ret = ExitReason(super().run(end_time, event_chunk))
+            if self.time > end_time:
+                # Currently the Pedigree and Sweeps models are "non-rentrant"
+                # We can change this to an assertion once these have been fixed.
+                raise RuntimeError(
+                    f"Model {self.model['name']} does not support interruption. "
+                    "Please open an issue on GitHub"
+                )
+            logger.debug(
+                "time=%g ancestors=%d ret=%s", self.time, self.num_ancestors, ret
+            )
             if debug_func is not None:
                 debug_func(self)
+        return ret
 
     def run(self, event_chunk=None, debug_func=None):
         """
-        Runs the simulation until complete coalescence has occurred.
+        Runs the simulation until complete coalescence has occurred,
+        end_time has been reached, or all model durations have
+        elapsed.
         """
-        for event in self.model_change_events:
-            # If the event time is a callable, we compute the end_time
-            # as a function of the current simulation time.
-            current_time = self.time
-            model_start_time = event.time
-            if callable(event.time):
-                model_start_time = event.time(current_time)
-            # If model_start_time is None, we run until the current
-            # model completes. Note that when event.time is a callable
-            # it can also return None for this behaviour.
-            if model_start_time is None:
-                model_start_time = np.inf
-            if model_start_time < current_time:
-                raise ValueError(
-                    "Model start times out of order or not computed correctly. "
-                    f"current time = {current_time}; start_time = {model_start_time}"
-                )
-            self._run_until(model_start_time, event_chunk, debug_func)
+        for j, model in enumerate(self.models):
+            self.model = model._as_lowlevel()
             logger.info(
-                "model %s ended at time=%g nodes=%d edges=%d",
+                "model[%d] %s started at time=%g nodes=%d edges=%d",
+                j,
                 self.model,
                 self.time,
                 self.num_nodes,
                 self.num_edges,
             )
-            if self.time > model_start_time:
-                raise NotImplementedError(
-                    "The previously running model does not support ending early "
-                    "and the requested model change cannot be performed. Please "
-                    "open an issue on GitHub if this functionality is something "
-                    "you require"
-                )
-            ll_new_model = event.model.get_ll_representation()
-            self.model = ll_new_model
-        end_time = np.inf if self.end_time is None else self.end_time
-        self._run_until(end_time, event_chunk, debug_func)
+            model_duration = np.inf if model.duration is None else model.duration
+            if model_duration < 0:
+                raise ValueError("Model durations must be >= 0")
+            end_time = min(self.time + model_duration, self.end_time)
+            exit_reason = self._run_until(end_time, event_chunk, debug_func)
+            if exit_reason == ExitReason.COALESCENCE or self.time == self.end_time:
+                logger.debug("Skipping remaining %d models", len(self.models) - j - 1)
+                break
         self.finalise_tables()
         logger.info(
             "Completed at time=%g nodes=%d edges=%d",
@@ -1358,7 +1430,9 @@ class Simulator(_msprime.Simulator):
             encoded_provenance = provenance.json_encode_provenance(
                 provenance_dict, num_replicates
             )
+
         for replicate_index in range(num_replicates):
+            logger.info("Starting replicate %d", replicate_index)
             self.run()
             if mutation_rate is not None:
                 # This is only called from simulate() or the ms interface,
@@ -1370,79 +1444,128 @@ class Simulator(_msprime.Simulator):
                     rate=mutation_rate,
                 )
             tables = tskit.TableCollection.fromdict(self.tables.asdict())
+            if len(self.missing_intervals) > 0:
+                tables.delete_intervals(self.missing_intervals, record_provenance=False)
             replicate_provenance = None
             if encoded_provenance is not None:
                 replicate_provenance = encoded_provenance.replace(
                     f'"{placeholder}"', str(replicate_index)
                 )
                 tables.provenances.add_row(replicate_provenance)
-            yield tables.tree_sequence()
+
+            # There are rare cases when we are simulating from
+            # awkward initial states where the tables we produce in the
+            # simulation are not correctly sorted. The simplest course
+            # of action here to just let it fail and sort.
+            # https://github.com/tskit-dev/msprime/issues/1606
+            try:
+                ts = tables.tree_sequence()
+            except tskit.LibraryError:
+                # TODO add a warning? This is probably badly formed input
+                # so it seems reasonable to issue a warning.
+                tables.sort()
+                ts = tables.tree_sequence()
+            yield ts
             self.reset()
 
 
 @dataclasses.dataclass
 class SampleSet:
     """
-    TODO document
+    Specify a set of exchangable sample individuals with a given ploidy
+    value from a population at a given time. See the
+    :ref:`sec_ancestry_samples` section for details and examples.
     """
 
     num_samples: int
+    """
+    The number of k-ploid sample **individuals** to draw.
+    """
     population: Union[int, str, None] = None
+    """
+    The population in which the samples are drawn. May be either a
+    string name or integer ID (see
+    :ref:`sec_demography_populations_identifiers` details).
+    """
     time: Union[float, None] = None
+    """
+    The time at which these samples are drawn. If not specified or None,
+    defaults to the :attr:`.Population.default_sampling_time`.
+    """
     ploidy: Union[int, None] = None
+    """
+    The number of monoploid genomes to sample for each sample individual.
+    See the :ref:`sec_ancestry_ploidy` section for more details and
+    examples.
+    """
 
     def asdict(self):
         return dataclasses.asdict(self)
 
 
-# TODO update the documentation here to state that using this class is
-# deprecated, and users should use the model=[...] notation instead.
 @dataclasses.dataclass
-class AncestryModelChange:
+class SimulationModelChange:
     """
-    An event representing a change of underlying :ref:`ancestry model
-    <sec_ancestry_models>`.
+    Demographic event denoting an change in ancestry model.
 
-    :param float time: The time at which the ancestry model changes
-        to the new model, in generations. After this time, all internal
-        tree nodes, edges and migrations are the result of the new model.
-        If time is set to None (the default), the model change will occur
-        immediately after the previous model has completed. If time is a
-        callable, the time at which the model changes is the result
-        of calling this function with the time that the previous model
-        started with as a parameter.
-    :param model: The new ancestry model to use.
-        This can either be a string (e.g., ``"smc_prime"``) or an instance of
-        an ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
-        Please see the :ref:`sec_ancestry_models` section for more details
-        on specifying these models. If this is None (the default) the model is
-        changed to the standard coalescent.
-    :type model: str or .AncestryModel
+    .. important::
+        This class is deprecated (but supported indefinitely);
+        please use the ``model`` argument in :func:`sim_ancestry`
+        to specify multiple models in new code.
     """
 
     time: Union[float, None] = None
-    model: Union[str, AncestryModel, None] = None
+    """
+    The time at which the ancestry model changes to the new model, in
+    generations. After this time, all internal tree nodes, edges and migrations
+    are the result of the new model. If time is set to None (the default), the
+    model change will occur immediately after the previous model has completed.
+    """
+
+    # Can't use typehints here because having a reference to AncestryModel
+    # breaks autodoc, which wants to call it msprime.ancestry.AncestryModel
+    # whereas we have it documented as msprime.AncestryModel. Annoying.
+    model: Any = None
+    """
+    The new ancestry model to use. This can either be a string (e.g.,
+    ``"smc_prime"``) or an instance of an ancestry model class (e.g,
+    ``msprime.DiscreteTimeWrightFisher()``. Please see the
+    :ref:`sec_ancestry_models` section for more details on specifying these
+    models. If this is None (the default) the model is changed to the standard
+    coalescent.
+    """
 
     def asdict(self):
         return dataclasses.asdict(self)
 
 
-class SimulationModelChange(AncestryModelChange):
-    """
-    Deprecated 0.x way to describe an :class:`AncestryModelChange`.
-    """
-
-
-@dataclasses.dataclass
+@dataclasses.dataclass(init=False)
 class AncestryModel:
     """
     Abstract superclass of all ancestry models.
     """
 
+    duration: Union[float, None]
+    """
+    The time duration that this model should run for. If None, the model
+    will run until completion (i.e., until the simulation coalesces
+    or the model itself completes). Otherwise, this defines the maximum
+    time duration which the model can run. See the
+    :ref:`sec_ancestry_models_specifying` section for more details.
+    """
     name: ClassVar[str]
 
-    def get_ll_representation(self):
-        return {"name": self.name}
+    # We have to define an __init__ to enfore keyword-only behaviour
+    def __init__(self, *, duration=None):
+        self.duration = duration
+
+    # We need to have a separate _as_lowlevel and asdict because the
+    # asdict form can't have the name in the dictionary for the
+    # provenance code.
+    def _as_lowlevel(self):
+        d = {"name": self.name}
+        d.update(self.asdict())
+        return d
 
     def asdict(self):
         return dataclasses.asdict(self)
@@ -1453,7 +1576,12 @@ class StandardCoalescent(AncestryModel):
     The classical coalescent with recombination model (i.e., Hudson's algorithm).
     The string ``"hudson"`` can be used to refer to this model.
 
-    This is the default simulation model.
+    This is a continuous time model in which the time to the next event
+    is exponentially distributed with rates depending on the population size(s),
+    migration rates, numbers of extant lineages and the amount of ancestral
+    material currently present. See
+    `Kelleher et al. (2016) <https://doi.org/10.1371/journal.pcbi.1004842>`_ for a
+    detailed description of the model and further references.
     """
 
     name = "hudson"
@@ -1461,10 +1589,16 @@ class StandardCoalescent(AncestryModel):
 
 class SmcApproxCoalescent(AncestryModel):
     """
-    The original SMC model defined by McVean and Cardin. This
-    model is implemented using a naive rejection sampling approach
-    and so it may not be any more efficient to simulate than the
-    standard Hudson model.
+    The Sequentially Markov Coalescent (SMC) model defined by
+    `McVean and Cardin (2005) <https://dx.doi.org/10.1098%2Frstb.2005.1673>`_.
+    In the SMC, only common ancestor events that result in marginal coalescences
+    are possible. Under this approximation, the marginal trees along the
+    genome depend only on the immediately previous tree (i.e. are Markovian).
+
+    .. note::
+        This model is implemented using a naive rejection sampling approach
+        and so it may not be any more efficient to simulate than the
+        standard Hudson model.
 
     The string ``"smc"`` can be used to refer to this model.
     """
@@ -1474,10 +1608,17 @@ class SmcApproxCoalescent(AncestryModel):
 
 class SmcPrimeApproxCoalescent(AncestryModel):
     """
-    The SMC' model defined by Marjoram and Wall as an improvement on the
-    original SMC. model is implemented using a naive rejection sampling
-    approach and so it may not be any more efficient to simulate than the
-    standard Hudson model.
+    The SMC' model defined by
+    `Marjoram and Wall (2006) <https://doi.org/10.1186/1471-2156-7-16>`_
+    as a refinement of the :class:`SMC<SmcApproxCoalescent>`. The SMC'
+    extends the SMC by additionally allowing common ancestor events that
+    join contiguous tracts of ancestral material (as well as events that
+    result in marginal coalescences).
+
+    .. note::
+        This model is implemented using a naive rejection sampling approach
+        and so it may not be any more efficient to simulate than the
+        standard Hudson model.
 
     The string ``"smc_prime"`` can be used to refer to this model.
     """
@@ -1533,11 +1674,6 @@ class ParametricAncestryModel(AncestryModel):
     """
     The superclass of ancestry models that require extra parameters.
     """
-
-    def get_ll_representation(self):
-        d = super().get_ll_representation()
-        d.update(self.__dict__)
-        return d
 
 
 @dataclasses.dataclass
@@ -1643,8 +1779,16 @@ class BetaCoalescent(ParametricAncestryModel):
 
     name = "beta"
 
-    alpha: Union[float, None] = None
-    truncation_point: float = sys.float_info.max
+    alpha: Union[float, None]
+    truncation_point: float
+
+    # We have to define an __init__ to enfore keyword-only behaviour
+    def __init__(
+        self, *, duration=None, alpha=None, truncation_point=sys.float_info.max
+    ):
+        self.duration = duration
+        self.alpha = alpha
+        self.truncation_point = truncation_point
 
 
 @dataclasses.dataclass
@@ -1685,8 +1829,14 @@ class DiracCoalescent(ParametricAncestryModel):
 
     name = "dirac"
 
-    psi: Union[float, None] = None
-    c: Union[float, None] = None
+    psi: Union[float, None]
+    c: Union[float, None]
+
+    # We have to define an __init__ to enfore keyword-only behaviour
+    def __init__(self, *, duration=None, psi=None, c=None):
+        self.duration = duration
+        self.psi = psi
+        self.c = c
 
 
 @dataclasses.dataclass
@@ -1702,28 +1852,20 @@ class SweepGenicSelection(ParametricAncestryModel):
     Thus fitness of the heterozygote is intermediate to the
     two homozygotes.
 
-    The model is one of a
-    a structured coalescent where selective backgrounds are defined as in
+    The model is one of a structured coalescent where selective backgrounds are
+    defined as in
     `Braverman et al. (1995) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1206652/>`_
-    The implementation details here follow closely to those in discoal,
-    `Kern and Schrider (2016)
+    The implementation details here follow closely those in discoal
+    `(Kern and Schrider, 2016)
     <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5167068/>`_
 
-    See :ref:`sec_ancestry_models_selective_sweeps` for a basic usage and example and
-    :ref:`sec_ancestry_models_sweep_types` for details on how to specify different
-    types of sweeps.
-
-    .. warning::
-        If the effective strength of selection (:math:`2Ns`) is sufficiently large
-        the time difference between successive events can be smaller than
-        the finite precision available, leading to zero length branches
-        in the output trees. As this is not allowed by tskit, an error
-        will be raised.
+    See :ref:`sec_ancestry_models_selective_sweeps` for examples and
+    details on how to specify different types of sweeps.
 
     .. warning::
         Currently models with more than one population and a selective sweep
-        are not implemented. Further population size change during the sweep
-        is not yet possible in msprime.
+        are not implemented. Population size changes during the sweep
+        are not yet possible in msprime.
 
     :param float position: the location of the beneficial allele along the
         chromosome.
@@ -1741,8 +1883,26 @@ class SweepGenicSelection(ParametricAncestryModel):
 
     name = "sweep_genic_selection"
 
-    position: Union[float, None] = None
-    start_frequency: Union[float, None] = None
-    end_frequency: Union[float, None] = None
-    s: Union[float, None] = None
-    dt: Union[float, None] = None
+    position: Union[float, None]
+    start_frequency: Union[float, None]
+    end_frequency: Union[float, None]
+    s: Union[float, None]
+    dt: Union[float, None]
+
+    # We have to define an __init__ to enfore keyword-only behaviour
+    def __init__(
+        self,
+        *,
+        duration=None,
+        position=None,
+        start_frequency=None,
+        end_frequency=None,
+        s=None,
+        dt=None,
+    ):
+        self.duration = duration
+        self.position = position
+        self.start_frequency = start_frequency
+        self.end_frequency = end_frequency
+        self.s = s
+        self.dt = dt

@@ -25,7 +25,7 @@ kernelspec:
 
 (sec_ancestry)=
 
-# Ancestry
+# Ancestry simulations
 
 Msprime simulates the ancestry of sampled genomes under a number of
 different backwards-in-time population genetic
@@ -53,12 +53,14 @@ parameters.
 :::{note}
 It's important to note that {func}`.sim_ancestry` only simulates
 the ancestral trees for samples: if we want actual sequence data
-then we need to additionally simulate mutations on these trees.
+then we also need to simulate mutations on these trees.
 See the {ref}`sec_mutations` section for more information on how to do
 this.
 :::
 
 ---
+
+(sec_ancestry_quickref)=
 
 ## Quick reference
 
@@ -70,54 +72,52 @@ this.
 {class}`.StandardCoalescent`
 : Coalescent with recombination ("hudson")
 
-{class}`.SmcApproxCoalescent`             
-: Sequentially Markov Coalescent ("smc")    
+{class}`.SmcApproxCoalescent`
+: Sequentially Markov Coalescent ("smc")
 
-{class}`.SmcPrimeApproxCoalescent`        
-: SMC'("smc_prime")                         
+{class}`.SmcPrimeApproxCoalescent`
+: SMC'("smc_prime")
 
-{class}`.DiscreteTimeWrightFisher`        
-: Generation-by-generation Wright-Fisher    
+{class}`.DiscreteTimeWrightFisher`
+: Generation-by-generation Wright-Fisher
 
 {class}`.BetaCoalescent`
-: Beta coalescent multiple-merger           
+: Beta coalescent multiple-merger
 
-{class}`.DiracCoalescent`                 
-: Dirac coalescent multiple-merger          
+{class}`.DiracCoalescent`
+: Dirac coalescent multiple-merger
 
-{class}`.SweepGenicSelection`             
-: Selective sweep at a linked locus         
+{class}`.SweepGenicSelection`
+: Selective sweep at a linked locus
 
 ---
+
 
 (sec_ancestry_samples)=
 ## Specifying samples
 
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
 The `samples` argument to {func}`.sim_ancestry` defines the number
-of sample individuals we simulate the history of. There are three different
+of sampled individuals whose history will be simulated. There are three different
 forms; the `samples` argument can be:
 
-- an **integer**, interpreted as the number of samples to draw in a single
-  population model;
+- an **integer**, interpreted as the number of sampled individuals to draw in
+  a single population model;
 - a **dictionary** mapping population references (either integer IDs or
-  names) to the number of samples for that population;
+  names) to the number of sampled individuals for that population;
 - a list of {class}`.SampleSet` objects, which provide more flexibility
   in how groups of similar samples are drawn from populations.
 
 
-In the simplest case provide a single integer which defines the number
+In the simplest case, provide a single integer which defines the number
 of samples:
 
 ```{code-cell}
-ts = msprime.sim_ancestry(2)
+ts = msprime.sim_ancestry(2, random_seed=1234)
 ts
 ```
+
+Here we specify two sample **individuals**, which at the default
+ploidy of two, gives us four sample **nodes**.
 
 :::{warning}
 It is important to note that the number of samples
@@ -126,16 +126,20 @@ refers to the number of *individuals* not the number of *nodes*
 section for details.
 :::
 
+This integer form for the ``samples`` argument can only be used
+when the ``demography`` is a single population model.
+
 ### Populations
 
-```{eval-rst}
-.. todo:: Some text here that refers to the demography section.
-```
-
 The next example illustrates one usage of the dictionary form of the `samples`
-argument. We first create a {class}`.Demography` object representing
+argument, in which the keys refer to populations in the
+{ref}`demographic model<sec_demography>` and
+the values are the number of samples to draw.
+(See the {ref}`sec_ancestry_demography` section for more details on
+the ``demography`` argument to {func}`.sim_ancestry`.)
+We first create a {class}`.Demography` object representing
 a 10 deme linear stepping stone model. Then, we run the simulation
-with 1 diploid sample each drawn from the first and last demes in this
+with 3 diploid samples each drawn from the first and last demes in this
 linear habitat.
 
 ```{code-cell}
@@ -144,12 +148,13 @@ demography = msprime.Demography.stepping_stone_model(
     [100] * N,
     migration_rate=0.1,
     boundaries=True)
-ts = msprime.sim_ancestry({0: 1, N - 1: 1}, demography=demography)
+ts = msprime.sim_ancestry({0: 3, N - 1: 3}, demography=demography)
 ts
 ```
 
 The keys in the dictionary can also be the string names of the
-population, which is useful when we are simulating from empirically
+population (see the {ref}`sec_demography_populations_identifiers` section
+), which is useful when we are simulating from empirically
 estimated models. For example, here create a {class}`.Demography` object
 based on a species tree, and then draw samples using the species names.
 
@@ -163,35 +168,50 @@ ts = msprime.sim_ancestry({"gorilla": 2, "human": 4}, demography=demography)
 ts
 ```
 
+When samples are drawn using this dictionary form it is always
+at the population's {ref}`sec_demography_populations_default_sampling_time`.
+If you wish to draw samples at a different time, then you must use the
+more general form of a list of {class}`.SampleSet` objects.
+
+:::{seealso}
+See the {ref}`sec_ancestry_demography` section for more information
+on how to specify demographic models in a simulation.
+:::
+
 (sec_ancestry_samples_sampling_time)=
 
 ### Sampling time
 
-By default the samples that we draw from a {class}`.Population` are the
-population's `sampling_time`. This is usually zero, representing the
-present, but in some demographic models representing (for example)
-with populations representing archaic individuals the default sampling
-time might be older. We can manually control the time at which samples
+By default the samples that we draw from a {class}`.Population` are
+at the population's {attr}`~.Population.default_sampling_time`.
+See the {ref}`sec_demography_populations_default_sampling_time`
+section for more information about how this is
+set for populations in a demographic model.
+
+We can manually control the time at which samples
 are drawn using list of {class}`.SampleSet` objects form for the
 samples argument.
 
-```{code-cell}
+In this example we create two diploid sample individuals,
+one at the present time
+and one taken 50 generations ago, representing one modern
+and one ancient individual. By default, when we draw the
+trees, the nodes that belong to samples are drawn as squares
+whereas nodes that are not samples are drawn as circles.
 
+```{code-cell}
+ts = msprime.sim_ancestry(
     samples = [
         msprime.SampleSet(1),
-        msprime.SampleSet(1, time=1.0)
-    ]
-    ts = msprime.sim_ancestry(samples)
-    print(ts.tables.nodes)
-    SVG(ts.draw_svg())
+        msprime.SampleSet(1, time=50)
+    ],
+    population_size=100,
+    random_seed=42
+)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
-In this example we create two diploid sample individuals, one at the present time
-and one taken 5 generations in the past, representing one modern
-and one ancient diploid individual. Running this example, we get:
-
-Because nodes `0` and `1` were sampled at time 0, their times in the
-node table are both 0; likewise, nodes `2` and `3` are at time 1.0.
+(sec_ancestry_samples_sampling_details)=
 
 ### Sample details
 
@@ -212,7 +232,8 @@ print(ts.tables.nodes)
 
 (Because we're only interested in the sampled nodes and individuals we
 stopped the simulation from actually doing anything by setting
-`end_time=0`.) Here we define three sample individuals,
+`end_time=0` --- see the {ref}`sec_ancestry_start_time` section
+for more information.) Here we define three sample individuals,
 and we therefore have three rows in the individual table.
 Because these are diploid individuals, the node table contains
 six sample nodes. If we look at the `individual` column in the
@@ -246,189 +267,385 @@ but in this they are mixed ploidy: the first individual is triploid
 and the other two are haploid.
 
 :::{warning}
-
 It is vital to note that setting the `ploidy` value
 of {class}`.SampleSet` objects only affects sampling and does
 not affect the actual simulation. In this case, the simulation
-will be run on the haploid time scale. Some models may not
-support mixing of ploidy at all.
-
+will be run on the haploid time scale.  See the
+{ref}`sec_ancestry_ploidy` section for more details.
 :::
 
 If you wish to set up the node and individual IDs in some other way,
-the {ref}`sec_ancestry_samples_advanced_sampling` section shows how
-to fully control how sample individuals and nodes are defined. However,
-this level of control should not be needed for the vast majority of
-applications.
+it is possible to do so by using the ``initial_state`` parameter.
+See the  {ref}`sec_ancestry_initial_state` for more information
+on how to use this (advanced) feature.
 
-(sec_ancestry_samples_advanced_sampling)=
+(sec_ancestry_demography)=
+## Demography
 
-### Advanced sampling
+A {ref}`demographic model<sec_demography>` is a description of a
+set of populations, the migration rates between then and the
+events that modify the populations over time. Ancestry simulations
+can take one of these models as input via the ``demography``
+parameter to {func}`.sim_ancestry`.
 
-```{eval-rst}
-.. todo:: This section should describe how to define samples directly in
-    terms of the ``initial_state`` tables and give an example of how to
-    use it.
+:::{seealso}
+Please see the {ref}`sec_demography` section for details on how
+to create and debug demographic models, and the
+{ref}`sec_ancestry_samples` section for help on how to
+define the locations and times of sampled individuals.
+:::
 
+We don't need to explicitly specify a {class}`.Demography`
+for every ancestry simulation, however. By default, we assume a
+single fixed-size population. For the default
+{ref}`standard coalescent<sec_ancestry_models_hudson>` ancestry
+model we assume a population size of 1, so that time is measured
+in "coalescent units". This is useful for theoretical work where
+we usually work in scaled coalescent time.
+
+:::{important}
+By default msprime uses the **diploid** coalescent time scale;
+see the {ref}`sec_ancestry_ploidy` section for more details.
+:::
+
+Outside of theoretical analysis, working with scaled
+coalescent time can be confusing and it's usually better to
+explicitly set the population size so that the output
+times are directly interpretable in generations.
+The ``population_size`` parameter to {func}`.sim_ancestry`
+allows us to set the size of the single constant
+sized population in the default demography.
+
+For example, here we run the same simulation twice, one with
+the default population size and one with a population size
+of 100:
+
+```{code-cell}
+ts = msprime.sim_ancestry(2, random_seed=1234)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
+```{code-cell}
+ts = msprime.sim_ancestry(2, population_size=100, random_seed=1234)
+SVG(ts.draw_svg(y_axis=True))
+```
+We can see that the results are identical, except the node times have
+been scaled by the population size.
+
+The {ref}`sec_ancestry_models_dtwf` model is different. Because it
+explicitly works with a population of N individuals we get an
+error if we don't specify a population size:
+
+```{code-cell}
+:tags: [raises-exception]
+msprime.sim_ancestry(2, model="dtwf", random_seed=1234)
+```
+
+:::{note}
+Because the DTWF models populations of individuals rather than
+using continuous
+time approximations, simulations with different population sizes
+will yield entirely different results; we are **not** simply
+rescaling time by using different population sizes. Furthermore,
+simulations with large population sizes will take relatively
+more CPU time and memory.
+:::
 
 ---
 
 (sec_ancestry_ploidy)=
 ## Ploidy
 
-```{eval-rst}
-.. todo:: This section is pretty much superseded by the previous discussion
-    and we don't actually discuss the important point about timescales
-    anywhere. We need to have a top-level section about this somewhere.
-```
+The ``ploidy`` argument to {func}`.sim_ancestry` has two effects:
 
-The samples argument for {func}`.sim_ancestry` is flexible, and allows us
-to provide samples in a number of different forms. In single-population
-models we can use the numeric form, which gives us {math}`n` samples:
+1. It sets the default ploidy (i.e., number sample nodes) of sample
+individuals.
+2. For continuous time coalescent models, it sets the time scale.
 
-```{code-cell}
+Both of these are somewhat confusing, so let's look at them one at a time.
 
-    ts = msprime.sim_ancestry(3)
-    SVG(ts.first().draw_svg())
+(sec_ancestry_ploidy_default_num_nodes)=
 
-```
+### Default number of nodes per sample individual
 
-It's important to note that the number of samples refers to the number
-of {math}`k`-ploid *individuals*, not the number of sample nodes
-in the trees. The `ploidy` argument determines the number of sample
-nodes per individual, and is `2` by default; hence, when we asked
-for 3 sample individuals in the example above, we got a tree with
-six sample *nodes*.
+As discussed in the {ref}`sec_ancestry_samples_sampling_details` section,
+the number of nodes (i.e., monoploid genomes) that we allocate per
+sample individual is determined by the ploidy. Here, we specify
+2 sample individuals with a ploidy of 3:
 
 ```{code-cell}
-
-    ts = msprime.sim_ancestry(3, ploidy=1)
-    SVG(ts.first().draw_svg())
+ts = msprime.sim_ancestry(samples=2, ploidy=3, end_time=0)
+print(ts.tables.individuals)
+print(ts.tables.nodes)
 ```
 
-(sec_ancestry_population_size)=
+:::{note}
+Because we're only interested in the initial conditions here we
+set the ``end_time`` to zero: see the {ref}`sec_ancestry_start_time`
+section for more details.
+:::
 
-## Population size
+Our individual table has two rows (the number of ``samples``)
+and node table has 6 rows: three for each of the sampled
+individuals.
 
-```{eval-rst}
-.. todo:: Some nodes on population size and the common gotchas, especially
-    how this relates to ploidy. Should link to the demography page and
-    model sections for more details.
+Note that this is the **default**, and can be overridden by the
+{attr}`.SampleSet.ploidy` value, as described in the
+{ref}`sec_ancestry_samples_sampling_details` section.
+
+(sec_ancestry_ploidy_coalescent_time_scales)=
+
+### Coalescent time scales
+
+The ploidy argument also
+affects the time scale on which coalescence occurs,
+since it affects the total number of genomes in the population
+(see also {ref}`population size<sec_ancestry_demography>`).
+For example, consider the following two simulations, which
+are identical except for different ``ploidy`` values
+(note we use the {class}`.SampleSet` object to make
+sure we allocate the same number of **nodes**, as discussed
+in the {ref}`sec_ancestry_ploidy_default_num_nodes` section):
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    samples=[msprime.SampleSet(4, ploidy=1)],
+    population_size=1,
+    ploidy=1,
+    random_seed=1234
+)
+SVG(ts.draw_svg(y_axis=True))
 ```
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    samples=[msprime.SampleSet(4, ploidy=1)],
+    population_size=1,
+    ploidy=2,
+    random_seed=1234
+)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+The resulting tree sequences are identical, except that node time differ by a
+factor of 2, because in the underlying coalescent algorithm the total number of
+genomes in the population acts as a time scaling.
+
+:::{todo}
+Add a discussion here here about the Lambda coalescents an how
+things are more complicated for them.
+:::
+
+:::{important}
+The {ref}`sec_ancestry_models_dtwf` model is an explicitly diploid model
+and it is therefore
+an error to run it with any ``ploidy`` value other than 2.
+:::
 
 (sec_ancestry_genome_properties)=
 
 ## Genome properties
 
-```{eval-rst}
-.. todo:: This is text taken from the old api.rst. Reuse/adapt as appropriate.
-```
+(sec_ancestry_sequence_length)=
 
-(sec_ancestry_genome_length)=
-
-### Genome length
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
+### Sequence length
 
 There are a number of different ways to specify the length of the
 chromosome that we want to simulate. In the absence of recombination
 and gene conversion, we assume a genome of length 1:
 
 ```{code-cell}
-
-    ts = msprime.sim_ancestry(3)
-    ts.sequence_length
-
+ts = msprime.sim_ancestry(2, random_seed=1)
+SVG(ts.draw_svg())
 ```
 
-If a recombination or gene conversion rate is specified, though, we
-must define a `sequence_length`:
+The ``sequence_length`` parameter determines the length of the
+simulated sequence:
 
 ```{code-cell}
+ts = msprime.sim_ancestry(2, sequence_length=100, random_seed=1)
+SVG(ts.draw_svg())
+```
 
-    ts = msprime.sim_ancestry(
-        3, recombination_rate=0.1, sequence_length=10, random_seed=2)
-    ts.sequence_length, ts.num_trees
+By default there is no recombination or gene conversion, and so we
+therefore still have only one tree defining the ancestry of the
+samples. The sequence length makes little difference if we are
+considering only the ancestry of a non-recombining sequence, however,
+this will be important if we are interested in adding
+{ref}`mutations<sec_mutations>` later.
+
+(sec_ancestry_recombination)=
+
+### Recombination
+
+As we trace the ancestry of a sample of genomes backwards in time,
+recombination has the effect of creating segments of genome
+that have different (but highly correlated) genealogical trees.
+The {func}`.sim_ancestry` function has a ``recombination_rate``
+argument that allows us to flexibly specify both uniform and
+non-uniform rates of recombination along the genome.
+
+The simplest way to run simulations with recombination is to
+use the ``recombination_rate`` and ``sequence_length`` parameters:
+```{code-cell}
+ts = msprime.sim_ancestry(
+    3, recombination_rate=0.1, sequence_length=10, random_seed=2)
+SVG(ts.draw_svg())
+```
+Here, we we have four distinct trees along the genome,
+created by recombination events.
+
+```{code-cell}
+:tags: [remove-cell]
+assert 1 < ts.num_trees < 5
+```
+
+We can also provide a {class}`.RateMap` argument to ``recombination_rate``:
+
+```{code-cell}
+rate_map = msprime.RateMap.uniform(sequence_length=10, rate=0.1)
+other_ts = msprime.sim_ancestry(3, recombination_rate=rate_map, random_seed=2)
+assert ts.equals(other_ts, ignore_provenance=True)
+```
+
+There are two things to note here:
+
+1. We didn't need to specify a ``sequence_length`` argument to
+{func}`.sim_ancestry`, as this information is encapsulated by the ``rate_map``
+instance. (We can provide a value for ``sequence_length`` if we wish, but
+it must be equal to the {attr}`~.RateMap.sequence_length` property of the
+{class}`.RateMap`).
+2. The result of the simulation for a {ref}`sec_rate_maps_creating_uniform`
+rate map with the same rate and ``sequence_length`` is identical to
+the first simulation above.
+
+We can simulate non-uniform recombination by defining our {class}`.RateMap`
+appropriately. For example, here we define a map in which the
+rate over the first half of the sequence is one tenth of the second half:
+
+```{code-cell}
+rate_map = msprime.RateMap(position=[0, 10, 20], rate=[0.01, 0.1])
+ts = msprime.sim_ancestry(3, recombination_rate=rate_map, random_seed=2)
+SVG(ts.draw_svg())
+```
+
+Because the recombination rate in from position 10 to 20 is so much
+higher than the rate from 0 to 10, we can see that all the recombinations
+have fallen in the high recombination region.
+
+:::{seealso}
+- See the {ref}`sec_rate_maps_creating` section for more examples of
+creating {class}`.RateMap` instances.
+
+- See the {meth}`.RateMap.read_hapmap` method for reading in
+genetic maps from text files.
+:::
+
+(sec_ancestry_gene_conversion)=
+
+### Gene conversion
+
+Gene conversion events are defined by two parameters: the rate at which gene
+conversion events are initiated and the distribution of tract lengths.
+In the default case of discrete genome coordinates, tract lengths are drawn
+from a geometric distribution with mean ``gene_conversion_tract_length`` (which
+must be at least 1). Note that if we specify a tract length of 1, then all
+gene conversion tracts will have length exactly 1.
+In the following example one gene conversion event of length 1 has occurred:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    3, gene_conversion_rate=0.02, gene_conversion_tract_length=1,
+    sequence_length=10, random_seed=3)
+SVG(ts.draw_svg())
+```
+:::{note}
+We can see the specific effect of gene conversion here in this simple
+example, because the trees at either side of the event are identical.
+However, this will not be true in general.
+:::
+
+```{code-cell}
+:tags: [remove-cell]
+assert ts.num_trees == 3
+assert ts.at(0).parent_dict == ts.at(2).parent_dict
+```
+
+Continuous genomes can also be used. In this case the parameters define
+the rate at which gene conversion events are initiated per unit of sequence
+length and the mean of the exponentially distributed gene conversion tract
+lengths. The following example shows the same simulation as above but for a
+continuous genome:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    3, gene_conversion_rate=0.02, gene_conversion_tract_length=1,
+    sequence_length=10, random_seed=3, discrete_genome=False)
+SVG(ts.draw_svg())
 ```
 
 ```{code-cell}
-
-
-    assert ts.num_trees > 1
+:tags: [remove-cell]
+assert ts.num_trees == 3
 ```
 
-In this example we have a uniform recombination rate between all
-positions along the genome. We can also simulate variable
-recombination rates along the genome using a {class}`.RateMap`.
+Recombination and gene conversion at constant rates can be simulated alongside.
+In the following example recombinations at site 60 and 97 have occurred in addition
+to a gene conversion event covering the tract from site 76 to site 80.
 
 ```{code-cell}
-
-    rate_map = msprime.RateMap(
-        position=[0, 10, 12, 20],
-        rate=[0.1, 0.5, 0.1])
-    ts = msprime.sim_ancestry(3, recombination_rate=rate_map, random_seed=2)
-    ts.sequence_length, ts.num_trees
+ts = msprime.sim_ancestry(
+    3, sequence_length = 100, recombination_rate=0.003,
+    gene_conversion_rate=0.002, gene_conversion_tract_length=5,
+    random_seed=6)
+SVG(ts.draw_svg())
 ```
 
-Here we specify varying recombination rates for a genome of length 20,
-and there's a hotspot from position 10 to 12. In this case we don't
-need to specify the `sequence_length` in the call to `sim_ancestry`
-because it's already defined by the {class}`.RateMap`.
+```{code-cell}
+:tags: [remove-cell]
+assert 1 < ts.num_trees < 6
+```
+
+Variable recombination rates and constant gene conversion rates
+can also be combined.
+
+:::{note}
+Variable rates of gene conversion breakpoint initiation are not currently
+supported, but are planned for a future release. If you are interested
+in this feature please let us know!
+:::
 
 (sec_ancestry_discrete_genome)=
 
 ### Discrete or continuous?
 
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
 By default, we assume that the genome we are simulating is *discrete*
 so that genome coordinates are at integer positions:
 
 ```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, recombination_rate=0.1, sequence_length=10, random_seed=2)
-    ts.sequence_length
+ts = msprime.sim_ancestry(
+    3, recombination_rate=0.1, sequence_length=10, random_seed=2)
+SVG(ts.draw_svg())
 ```
 
 ```{code-cell}
-
-
-    assert 1 < ts.num_trees < 5
-
-```
-
-```{code-cell}
-
-    SVG(ts.draw_svg())
+:tags: [remove-cell]
+assert 1 < ts.num_trees < 5
 ```
 
 We can also simulate a continous genome by setting
 `discrete_genome=False`:
 
 ```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, recombination_rate=0.25, sequence_length=1, discrete_genome=False,
-        random_seed=33)
-    SVG(ts.draw_svg())
+ts = msprime.sim_ancestry(
+    3, recombination_rate=0.25, sequence_length=1, discrete_genome=False,
+    random_seed=33)
+SVG(ts.draw_svg())
 ```
 
 ```{code-cell}
-
-
-    assert 1 < ts.num_trees < 5
+:tags: [remove-cell]
+assert 1 < ts.num_trees < 5
 ```
 
 Here we see that the breakpoints along the genome occur at floating point
@@ -436,255 +653,162 @@ positions. Simulating a continuous genome sequence can be useful for
 theoretical work, but we recommend using discrete coordinates for most
 purposes.
 
-(sec_ancestry_recombination)=
-
-### Recombination
-
-```{eval-rst}
-.. todo:: This is old text taken from api.rst. Reuse as appropriate.
-    Note that some of this is specific to the Hudson model and so
-    should perhaps be moved in there.
-```
-
-Similarly, recombination rates are per unit of sequence length and per
-generation in `msprime`. Thus, given the per generation crossover rate
-{math}`r`, the overall rate of recombination between the ends of the sequence
-in coalescent time units is {math}`\rho = 4 N_e r L`. Although breakpoints do
-not necessarily occur at integer locations, the underlying recombination model
-is finite, and the behaviour of a small number of loci can be modelled using
-the {class}`.RecombinationMap` class. However, this is considered an advanced
-feature and the majority of cases should be well served with the default
-recombination model and number of loci.
-
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
-```{eval-rst}
-.. todo:: Examples of the different ways we can specify recombination
-    rates. Ideally we'd start with an
-    example with one GC event where we could explain what happened.
-    This might be tricky to finesse.
-
-```
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, recombination_rate=0.1, sequence_length=10, random_seed=2)
-    ts.sequence_length
-```
-
-```{code-cell}
-
-
-    assert 1 < ts.num_trees < 5
-```
-
-(sec_ancestry_gene_conversion)=
-
-### Gene conversion
-
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
-Gene conversion events are defined by two parameters: the rate at which gene
-conversion events are initiated and the distribution of tract lengths.
-In the default case of discrete genome coordinates, tract lengths are drawn
-from a geometric distribution with mean gene_conversion_tract_length (which
-must be at least 1). Note that if we specify a tract length of 1, then all
-gene conversion tracts will have length exactly 1.
-In the following example one gene conversion event of length 1 has occured.
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, gene_conversion_rate=0.02, gene_conversion_tract_length=1,
-        sequence_length=10, random_seed=3)
-    ts.sequence_length
-    SVG(ts.draw_svg())
-```
-
-```{code-cell}
-
-
-    assert 1 < ts.num_trees < 5
-```
-
-Continous genomes can also be used. In this case the parameters define
-the rate at which gene conversion events are initiated per unit of sequence
-length and the mean of the exponentially distributed gene conversion tract
-lengths. The following example shows the same simulation as above but for a
-continuous genome of length 1 and scaled gene conversion parameters.
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, gene_conversion_rate=0.2, gene_conversion_tract_length=0.1,
-        sequence_length=1, random_seed=3, discrete_genome=False)
-    ts.sequence_length
-    SVG(ts.draw_svg())
-```
-
-```{code-cell}
-
-
-    assert 1 < ts.num_trees < 5
-```
-
-Recombination and gene conversion at constant rates can be simulated alongside.
-In the following example recombinations at site 60 and 97 have occured in addition
-to a gene conversion event covering the tract from site 76 to site 80.
-
-```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, sequence_length = 100, recombination_rate=0.003,
-        gene_conversion_rate=0.002, gene_conversion_tract_length=5,
-        random_seed=6)
-    ts.sequence_length
-    SVG(ts.draw_svg())
-```
-
-```{code-cell}
-
-
-    assert 1 < ts.num_trees < 6
-```
-
-Variable recombination rates and constant gene conversion rates can be combined.
-In the next example we define a recombination map with a high recombination rate between
-site 10 and site 11 and a constant gene conversion rate with a mean tract length of 3.
-
-```{code-cell}
-
-    rate_map = msprime.RateMap(
-        position=[0, 10, 11, 20],
-        rate=[0.01, 0.5, 0.01])
-    ts = msprime.sim_ancestry(
-        3, recombination_rate=rate_map,
-        gene_conversion_rate=0.01, gene_conversion_tract_length=3,
-        random_seed=8)
-    ts.sequence_length
-    SVG(ts.draw_svg())
-```
-
-```{code-cell}
-
-
-    assert 1 < ts.num_trees < 5
-
-```
+:::{note}
+With a discrete genome and a recombination rate of {math}`r`,
+the expected number of recombinations per unit time and per unit
+length is {math}`1-e^{-r}`. Therefore the total map length for a
+segment of length {math}`L` and recombination rate {math}`r`
+is {math}`L (1 - e^{-r})`
+and so {math}`Lr (1 - r/2) < L (1 - e^{-r}) < Lr`.
+:::
 
 (sec_ancestry_multiple_chromosomes)=
 
 ### Multiple chromosomes
 
-Multiple chromosomes can be simulated by specifying a recombination map with
-single-bp segments with recombination probability 1/2 separating adjacent
-chromosomes. By simulating using `sim_ancestry` and `discrete_genome=True`
-(the default setting), we set the recombination rate so that chromosomes
-separated by such "hotspots" have a 50% chance of being inherited from the
-same parent.
-
-The probability that a recombination breakpoint occurs at a given base pair
+Msprime does not directly support simulating multiple chromosomes
+simultaneously, but we can emulate it using a single linear genome split into
+chromosome segments. Multiple chromosomes are modelled by specifying
+a recombination map with single base-pair segments with recombination
+probability 1/2 separating adjacent chromosomes. The probability that
+a recombination breakpoint occurs over one unit of time at a given base pair
 that has recombination rate {math}`r` is {math}`1-e^{-r}`. Thus, we set the
 recombination rate in the base pair segments separating chromosomes to
-{math}`\log(2)`. This ensures that the recombination probility each generation
-is 1/2.
+{math}`\log(2)`. This ensures that the recombination probability each
+generation is 1/2.
 
-For example, the following defines a recombination map for three chromosomes
-each 1 cM in length:
-
-```{code-cell}
-
-    import msprime
-    import numpy as np
-
-    r_chrom = 1e-8
-    r_break = np.log(2)
-    positions = [0, 1e6, 1e6 + 1, 2e6, 2e6 + 1, 3e6]
-    rates = [r_chrom, r_break, r_chrom, r_break, r_chrom]
-    rate_map = msprime.RateMap(positions, rates)
-```
+#### Do I need to do this?
 
 The main purpose of simulating multiple chromosomes together (instead of
-running independent simulations for each chromosome) is to capture the correct
-correlation between trees on distinct chromosomes. (Note that for many purposes,
-this may not be necessary, and simulating chromosomes independently may be
-preferred for efficiency.)
-To get the correct correlation between chromosomes, we must use the
-{ref}`discrete-time Wright-Fisher <sec_ancestry_models_dtwf>` model in the
-recent past. Because correlations between chromosomes break down very rapidly,
-we only need to simulate using `dtwf` for roughly 10-20 generations, after which
-we can switch to the `hudson` model to finish the simulation more efficiently.
+running independent simulations for each chromosome) is to capture
+correlations between trees on distinct chromosomes. In many scenarios,
+**simulating multiple chromosomes may not be necessary**, and independent
+simulations may be preferable as they will be much more efficient.
 
+[Nelson et al. 2020](https://doi.org/10.1371/journal.pgen.1008619) describes
+a few cases where simulating multiple chromosomes using the DTWF is important
+for accurately modeling shared patterns of variation between samples.
+In large simulated cohorts, where many samples can be close
+relatives, we need the DTWF model and multiple chromosomes to obtain the
+correct distribution of the number and total length of shared IBD segments. We
+similarly require multiple chromosomes and the DTWF model to get the correct
+ancestry patterns for very recently admixed populations.
+
+Additionally,
 {ref}`Multiple merger coalescents <sec_ancestry_models_multiple_mergers>`
-result in positively correlated ancestries between unlinked chromosomes. The
-correlations do not break down in time so that multiple chromosomes should not
-be simulated independently.
+result in positively correlated ancestries between unlinked chromosomes
+(see [Birkner et al. 2013](https://www.genetics.org/content/193/1/255)).
+This correlation does not break down in time and multiple chromosomes should
+not be simulated independently under the multiple merger models. Unlinked
+chromosomes should scatter into distinct ancestors instantaneously under
+multiple merger coalescents, not with probability 1/2 per generation
+as in discrete population models. In msprime, this waiting time of length zero
+is approximated by an exponential distribution with rate {math}`r`, i.e. the
+recombination rate at the base pair separating the chromosomes, which
+should be set to a high enough value to obtain an acceptable approximation.
+We recommend considering in particular the relative error in comparison to
+the magnitudes other waiting times which are likely to arise in the simulation.
 
-For example, simulating 10 sampled diploid individuals using the recombination
-map defined above for three chromosomes and switching from the `dtwf` to
-`hudson` model 20 generations ago, we run
+:::{important}
+Simulations of multiple chromosomes under either DTWF or the multiple merger
+models should use a {ref}`discrete genome <sec_ancestry_discrete_genome>`.
+While it is possible to set up such a simulation using a continuous genome,
+we *strongly* recommend against it, as chromosome divisions cannot be defined
+as discrete break points and the simulation will be very inefficient.
+:::
+
+#### Example
+
+We first set up the chromosome coordinates, recombination rates, and the
+corresponding recombination map. The following defines a recombination map for
+three chromosomes each 1 cM in length:
 
 ```{code-cell}
+import math
 
-    tree_sequence = msprime.sim_ancestry(
-        10,
-        population_size=1000,
-        recombination_rate=rate_map,
-        model=["dtwf", (20, "hudson")]
-    )
+r_chrom = 1e-8
+r_break = math.log(2)
+chrom_positions = [0, 1e6, 2e6, 3e6]
+map_positions = [
+    chrom_positions[0],
+    chrom_positions[1],
+    chrom_positions[1] + 1,
+    chrom_positions[2],
+    chrom_positions[2] + 1,
+    chrom_positions[3]
+]
+rates = [r_chrom, r_break, r_chrom, r_break, r_chrom]
+rate_map = msprime.RateMap(position=map_positions, rate=rates)
 ```
 
-To isolate tree sequences for each chromosome, we can trim the full tree sequence
-for each chromosome by defining the end points of each chromosome and using
-the `keep_intervals` fuction. It is important to specify `simplify=False` so
-that node indices remain consistent across chromosomes. The function `trim()`
-is then used to trim the tree sequences to the focal chromosome, so that position
-indices begin at 0 within each chromosome tree sequence.
+We cannot use the default {class}`.StandardCoalescent` model to run simulations
+of multiple chromosomes; doing so would be equivalent to running independent
+replicate simulations and **much** less efficient. To get the correct
+correlation between chromosomes, we must use a model like
+{ref}`discrete-time Wright-Fisher <sec_ancestry_models_dtwf>`.
+However, because correlations
+between chromosomes break down very rapidly, we only need to simulate using
+`dtwf` for roughly 10-20 generations, after which we can switch to the `hudson`
+model to finish the simulation more efficiently (see the
+{ref}`sec_ancestry_models_specifying` section for more information on switching
+between ancestry models).
+
+In this example, we simulate 10 sampled diploid individuals using the
+recombination map defined above for three chromosomes and switching from the
+`dtwf` to `hudson` model 20 generations ago:
 
 ```{code-cell}
-
-    chrom_positions = [0, 1e6, 2e6, 3e6]
-    ts_chroms = []
-    for j in range(len(chrom_positions) - 1):
-        start, end = chrom_positions[j: j + 2]
-        chrom_ts = tree_sequence.keep_intervals([[start, end]], simplify=False)
-        ts_chroms.append(chrom_ts.trim())
+ts = msprime.sim_ancestry(
+    10,
+    population_size=1000,
+    recombination_rate=rate_map,
+    model=[
+        msprime.DiscreteTimeWrightFisher(duration=20),
+        msprime.StandardCoalescent(),
+    ],
+    random_seed=1234,
+)
+ts
 ```
 
-This gives us a list of tree sequences, one for each chromosome, in the order that
-they were stitched together in the initial recombination map.
+To place each chromosome in its own separate tree sequence, we can trim the full tree
+sequence for each chromosome by defining the end points of each chromosome and
+using the {meth}`~tskit.TreeSequence.keep_intervals` method. It is important to
+specify `simplify=False` so that node indices remain consistent across
+chromosomes. The {meth}`~tskit.TreeSequence.trim` method is then used to trim
+the tree sequences to the focal chromosome, so that position indices begin at
+0 within each chromosome tree sequence.
 
-```{eval-rst}
-.. todo:: Add a section to the Tutorial showing how to access tree sequences across
-    chromosomes and showing the correlation of trees on different chromosomes
-    using the ``dtwf`` model.
+```{code-cell}
+ts_chroms = []
+for j in range(len(chrom_positions) - 1):
+    start, end = chrom_positions[j: j + 2]
+    chrom_ts = ts.keep_intervals([[start, end]], simplify=False).trim()
+    ts_chroms.append(chrom_ts)
+    print(chrom_ts.sequence_length)
+
+# the third chromosome
+chrom_ts
 ```
+
+This gives us a list of tree sequences, one for each chromosome, in the order
+that they were stitched together in the initial recombination map.
 
 (sec_ancestry_controlling_randomness)=
 
 ## Controlling randomness
 
+:::{important}
+There is usually not much reason for setting a random seed when
+running simulations for statistical analysis. Msprime will generate
+high-quality random seeds by default. If you are concerned about
+reproducibility, the tree sequence provenance contains all the
+information required to reproduce any simulation.
+:::
+
 (sec_ancestry_random_seed)=
 
 ### Random seeds
-
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
 
 Stochastic simulations depend on a source of randomness, provided
 by a [psuedorandom number generator](<https://en.wikipedia.org/wiki/Pseudorandom_number_generator>).
@@ -702,70 +826,59 @@ seeds by default.
 Thus, if we run two simulations with the same parameters, we will get different
 results, as we can see from the different times of the last node:
 
-```{code-cell} python
 
-ts = msprime.sim_ancestry(1)
-ts.tables.nodes[-1].time
+```{code-cell}
+:tags: [remove-cell]
 
-0.13313422084255794
-
+# Make this deterministic. DON'T DO THIS IN YOUR CODE.
+msprime.core.set_seed_rng_seed(412343)
 ```
 
-```{code-cell} python
+```{code-cell}
+ts = msprime.sim_ancestry(2)
+SVG(ts.draw_svg(y_axis=True))
+```
 
-ts = msprime.sim_ancestry(1)
-ts.tables.nodes
-
-3.2090602418210956
-
+```{code-cell}
+ts = msprime.sim_ancestry(2)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
 The `random_seed` argument to {func}`.sim_ancestry` allows us specify
 seeds explicitly, making the output of the simulation fully deterministic:
 
-```{code-cell}
 
-    ts = msprime.sim_ancestry(1, random_seed=42)
-    ts.tables.nodes
+```{code-cell}
+ts = msprime.sim_ancestry(2, random_seed=42)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
 ```{code-cell}
-
-    ts = msprime.sim_ancestry(1, random_seed=42)
-    ts.tables.nodes
-
+ts = msprime.sim_ancestry(2, random_seed=42)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
 (sec_ancestry_replication)=
 
 ### Running replicate simulations
 
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
 Simulations are random, and we will therefore usually want to have
-many independant replicates for a particular set of parameters.
+many independent replicates for a particular set of parameters.
 The `num_replicates` parameter provides a convenient and efficient
 way to iterate over a number of replicate simulations. For example,
 this is a good way to compute the mean and variance of the time to the most
 recent common ancestor in a set of simulations:
 
 ```{code-cell}
+import numpy as np
 
-    import numpy as np
-
-    num_replicates = 100
-    tmrca = np.zeros(num_replicates)
-    replicates = msprime.sim_ancestry(10, num_replicates=num_replicates, random_seed=42)
-    for replicate_index, ts in enumerate(replicates):
-        tree = ts.first()
-        tmrca[replicate_index] = tree.time(tree.root)
-    np.mean(tmrca), np.var(tmrca)
-
+num_replicates = 100
+tmrca = np.zeros(num_replicates)
+replicates = msprime.sim_ancestry(10, num_replicates=num_replicates, random_seed=42)
+for replicate_index, ts in enumerate(replicates):
+    tree = ts.first()
+    tmrca[replicate_index] = tree.time(tree.root)
+np.mean(tmrca), np.var(tmrca)
 ```
 
 It's important to note that the replicate simulations are generated
@@ -774,13 +887,11 @@ This means we use much less memory that we would if we stored each
 of the replicate simulations in a list.
 
 :::{note}
-
-The return type of `sim_ancestry` changes when we use the
+The return type of {func}`.sim_ancestry` changes when we use the
 `num_replicates` argument. If `num_replicates` is not specified
 or `None`, we return an instance of {class}`tskit.TreeSequence`.
 If it is specified, we return an *iterator* over
 a set of {class}`tskit.TreeSequence` instances.
-
 :::
 
 ## Recording more information
@@ -794,13 +905,6 @@ of options that allow us to do this.
 
 ### Ancestral recombination graph
 
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
 In `msprime` we usually want to simulate the coalescent with recombination
 and represent the output as efficiently as possible. As a result, we don't
 store individual recombination events, but rather their effects on the output
@@ -812,16 +916,15 @@ representation of its outcome. The `record_full_arg` option to
 following example:
 
 ```{code-cell}
-
-    ts = msprime.sim_ancestry(
-        3, recombination_rate=0.1, sequence_length=2,
-        record_full_arg=True, random_seed=42)
-    print(ts.tables.nodes)
-    SVG(ts.draw_svg())
-
+ts = msprime.sim_ancestry(
+    3, recombination_rate=0.1, sequence_length=2,
+    record_full_arg=True, random_seed=42)
+print(ts.tables.nodes)
+SVG(ts.draw_svg())
 ```
 
-After running the simulation we first print out the [node table](<https://tskit.readthedocs.io/en/stable/data-model.html#node-table>), which
+After running the simulation we first print out the
+[node table](<https://tskit.readthedocs.io/en/stable/data-model.html#node-table>), which
 contains information on all the nodes in the tree sequence. Note that `flags`
 column contains several different values: all of the sample nodes (at time 0)
 have a flag value of `1` ({data}`tskit.NODE_IS_SAMPLE`). Most other
@@ -836,10 +939,13 @@ the other identifying the individuals providing the genetic material to the
 right. The effect of this extra node can be seen in the trees: node 9 is
 present as a 'unary' node in the left hand tree and node 10 in the right.
 
-Node 11 has a flags value of 262144 ({data}`.NODE_IS_CA_EVENT`), which
-tells us that it is an ARG common ancestor event that *did not* result
-in marginal coalescence. This class of event also results in unary nodes
-in the trees, which we can see in the example.
+In this particular case, the first thing that happens to these two lineages
+as we go up the tree sequence is that they coalesce straight back together again
+at node 11, forming a (normally undetectable) "diamond event" in the ARG, and
+explaining why the topology of both these trees appears the same. In a full ARG,
+this is one of many ways that a coalescent event can occur without resulting in a
+marginal coalescence, and which instead results in an additional unary node in the
+trees. Such nodes are given a flags value of 262144 ({data}`.NODE_IS_CA_EVENT`).
 
 If we wish to reduce these trees down to the minimal representation, we can
 use {meth}`tskit.TreeSequence.simplify`. The resulting tree sequence will have
@@ -855,13 +961,6 @@ section for more details.
 
 ### Migration events
 
-
-```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
-```
-
 ```{eval-rst}
 .. todo:: examples of using the record_migrations
 
@@ -876,22 +975,23 @@ during the simulation. This can be useful when you wish to study haplotypes that
 ancestral to your simulated sample, or when you wish to know which lineages were present in
 which populations at specified times.
 
-For instance, the following code specifies a simulation with two samples drawn from each of
-two populations. There are two demographic events: a migration rate change and a census
-event. At generation 100 and earlier, the two populations exchange migrants at a rate of
-0.05. At generation 5000, a census is performed:
+For instance, the following example creates a two population island
+model {class}`.Demography`, with the populations exchanging migrants
+at rate 0.05. At generation 5000, we add a census event using the
+{meth}`.Demography.add_census` method
+to determine where each of the lineages is at that time:
 
 ```{code-cell}
-
-    pop_config = msprime.PopulationConfiguration(sample_size=2, initial_size=1000)
-    mig_rate_change = msprime.MigrationRateChange(time=100, rate=0.05)
-    ts = msprime.simulate(
-                population_configurations=[pop_config, pop_config],
-                length=1000,
-                demographic_events=[mig_rate_change, msprime.CensusEvent(time=5000)],
-                recombination_rate=1e-7,
-                random_seed=141)
-    SVG(ts.draw_svg())
+demography = msprime.Demography.island_model([1000, 1000], migration_rate=0.05)
+demography.add_census(time=5000)
+ts = msprime.sim_ancestry(
+    {0: 1, 1: 1},
+    demography=demography,
+    recombination_rate=1e-7,
+    sequence_length=1000,
+    random_seed=141
+)
+SVG(ts.draw_svg())
 ```
 
 The resulting tree sequence has nodes on each tree at the specified census time.
@@ -903,8 +1003,7 @@ these haplotypes (nodes 8, 9, 10 and 11) were in population 0 at this time, and
 two of these haplotypes (nodes 12 and 13) were in population 1 at this time.
 
 ```{code-cell}
-
-    print(ts.tables.nodes)
+print(ts.tables.nodes)
 ```
 
 If we wish to study these ancestral haplotypes further, we can simplify the tree sequence
@@ -915,10 +1014,54 @@ In this example, `ts_anc` is a tree sequence obtained from the original tree seq
 not ancestral to these census nodes.
 
 ```{code-cell}
+nodes = [i.id for i in ts.nodes() if i.flags==msprime.NODE_IS_CEN_EVENT]
+ts_anc = ts.simplify(samples=nodes)
+```
 
-    nodes = [i.id for i in ts.nodes() if i.flags==msprime.NODE_IS_CEN_EVENT]
-    ts_anc = ts.simplify(samples=nodes)
+(sec_ancestry_census_events_dtwf)=
 
+#### Using the DTWF model
+
+Census events assume that they are being used as part of a continuous time
+simulation process, in which multiple events are guaranteed not to happen
+at the same time. However, the {class}`.DiscreteTimeWrightFisher` model does
+not meet these assumptions, and allows multiple events (such as coalescences,
+migrations etc) to all occur at the same time. This includes census events,
+which can lead to errors when used in conjunction with the DTWF model.
+
+Consider the following example:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=10)
+ts = msprime.sim_ancestry({"A": 3}, demography=demography, model="dtwf", random_seed=1)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+We can see that a coalescence happens at time 21, giving node 9. Now, let's
+try to perform a census at time 21:
+
+```{code-cell}
+:tags: [raises-exception]
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=10)
+demography.add_census(time=21)
+ts = msprime.sim_ancestry({"A": 3}, demography=demography, model="dtwf", random_seed=1)
+```
+
+We got an error from msprime about a parent node having a time value <= to its child,
+which occured because we tried to add set of census nodes at time 21, but node 9 was
+already at time 21, giving a zero branch length (which is disallowed by tskit).
+
+The solution is to use non-integer time values when performing a census
+under the DTWF:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=10)
+demography.add_census(time=21.5)
+ts = msprime.sim_ancestry({"A": 3}, demography=demography, model="dtwf", random_seed=1)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
 ## Manipulating simulation time
@@ -927,89 +1070,321 @@ not ancestral to these census nodes.
 
 ### Stopping simulations early
 
+In most simulations we want to simulate a complete history for our samples:
+that is, to when we have a common ancestor at every point along the
+sequence. For example, here we generate a complete ancestral history
+for two diploid samples:
+
 ```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
+ts = msprime.sim_ancestry(2, sequence_length=10, recombination_rate=0.1, random_seed=42)
+SVG(ts.draw_svg(y_axis=True))
 ```
 
+Sometimes we would like to stop the simulation early, **before** complete
+coalescence has occured; perhaps we would like to
+{ref}`combine several simulations<sec_ancestry_initial_state_combining>`
+with different properties, or we are really only interested in the
+recent past and simulating more ancient processes would be a waste
+of computational resources.
 
-```{eval-rst}
-.. todo:: Go through an example of using the end time.
+We can do this by specifying a ``end_time`` value.
+Let's repeat the same simulation as above with an ``end_time`` of 2:
 
+```{code-cell}
+ts = msprime.sim_ancestry(
+    2, sequence_length=10, recombination_rate=0.1, end_time=2, random_seed=42)
+SVG(ts.draw_svg(y_axis=True))
 ```
+
+There are a number of important things to observe about this
+tree sequence:
+
+1. The history up until time 2 is **identical** to the original simulation.
+2. The first tree has not fully coalesced, and we therefore have **multiple
+roots**. Trees with multiple roots are fully supported in tskit.
+3. The nodes 8 and 9 are at time 2 (our ``end_time`` value), and these
+connect to the uncoalesced portions of the tree. These "unary" nodes
+are very important for ensuring the correct statistical properties
+when we
+{ref}`combine multiple simulations<sec_ancestry_initial_state_combining>`.
+
+:::{seealso}
+The ancestry model {ref}`duration<sec_ancestry_models_specifying_duration>`
+can also be used to stop simulations before coalescence.
+:::
+
+For discrete time models, the exact interpretation
+of the ``end_time`` is important --- we continue to simulate
+the process while the time is <= ``end_time``. For example here
+we use an ``end_time`` of 1 generation in a {ref}`sec_ancestry_models_dtwf`
+simulation:
+
+```{code-cell}
+ts = msprime.sim_ancestry(3, population_size=10, model="dtwf", end_time=1, random_seed=42)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+We have run 1 generation of the DTWF, resulting in the coalescence
+at node 9.
+
 
 (sec_ancestry_start_time)=
 
 ### Setting the start time
 
+:::{important}
+Setting simulation start time is an advanced feature which is rarely
+needed in practice.
+:::
+
+Sometimes we need control when the simulation process starts. For
+example, given the initial configuration of at time zero we want to
+"jump ahead" to a later time point before we start generating
+waiting times and events. Consider the following example:
+
 ```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
+ts = msprime.sim_ancestry(2, random_seed=42)
+ts.tables.nodes
 ```
 
-```{eval-rst}
-.. todo:: Go through an example of using the start time.
+Now we run the same simulation with a ``start_time`` of 10:
 
+```{code-cell}
+ts = msprime.sim_ancestry(2, start_time=10, random_seed=42)
+ts.tables.nodes
 ```
+
+We can see that the results are identical except that 10 has
+been added to all of the internal node times.
 
 (sec_ancestry_initial_state)=
 
 ## Specifying the initial state
 
+By default `msprime` simulations are initialised by specifying a set of
+{ref}`samples<sec_ancestry_samples>`,
+which sets up the simulation with segments of ancestral material covering the
+whole sequence. Internally, this initial state is implemented by
+setting up a {class}`tskit.TableCollection` which contains the
+{ref}`population<tskit:sec_population_table_definition>`,
+{ref}`node<tskit:sec_node_table_definition>`,
+and {ref}`individual<tskit:sec_individual_table_definition>` information.
+The low-level simulation code then reads these tables and sets up the
+simulation accordingly. We can see what this initial state looks like
+by setting up a simple simulation and stopping it immediately:
 
 ```{code-cell}
-:tags: [remove-cell]
+initial_ts = msprime.sim_ancestry(1, end_time=0)
+initial_ts
+```
+We can see that the returned tree sequence has one population,
+two sample nodes and one individual (since sample individuals are
+{ref}`diploid<sec_ancestry_ploidy>` by default). There are no
+{ref}`edges<tskit:sec_edge_table_definition>` because the simulation
+didn't run for any period of time: we're essentially just returning
+the initial state used to start the simulation.
 
-    msprime.core.set_seed_rng_seed(42)
+Then, running a simulation in which the ``initial_state`` is equal to
+``initial_ts`` is *precisely* the same as running the simulation
+with the same arguments as we used above:
+```{code-cell}
+ts1 = msprime.sim_ancestry(initial_state=initial_ts, population_size=100, random_seed=2)
+ts2 = msprime.sim_ancestry(1, population_size=100, random_seed=2)
+assert ts1.equals(ts2, ignore_provenance=True)
 ```
 
-```{eval-rst}
-.. todo:: Go through an example where we specify the initial state
-    and explain that specifying the samples is actually the same thing.
+:::{warning}
+Note that the ``initial_state`` tree sequence only contains the
+information about the ancestral histories, and not any of the
+simulation parameters. In the previous example we used default
+parameters to keep things simple, but in general the full
+simulation model will need to be specified as well as the initial state.
+In particular, see the {ref}`sec_ancestry_initial_state_demography` section.
+:::
 
+While it is possible to specify the initial state manually by
+constructing the input tree sequence,
+it is an advanced topic and rarely necessary. More often we are
+interested in specifying the initial state of an ``msprime``
+simulation using the output of *another* simulation.
+
+:::{note}
+The ``initial_state`` tree sequence is quite literally the initial
+state of the tree sequence that is returned at the end of a simulation,
+and that any information present (including metadata) will not be
+altered.
+:::
+
+(sec_ancestry_initial_state_combining)=
+
+### Combining backward-time simulations
+
+Suppose that we wished to simulate a scenario
+in which we have recombination happening at some rate in the recent past,
+and in the more distant past there is no recombination.
+We can do this by combining the simulations,
+using one as the ``initial_state`` for the other.
+
+We first run the simulation of the recent past:
+
+```{code-cell}
+ts1 = msprime.sim_ancestry(
+    2, recombination_rate=0.01, sequence_length=10, end_time=10,
+    population_size=100, random_seed=1)
+SVG(ts1.draw_svg(y_axis=True))
 ```
 
-```{eval-rst}
-.. todo:: Port this old documentation to the new format. The sectioning
-    is definitely not right here also, as we've just pasted in the old
-    tutorial content directly in here.
+Some recombination and coalescence has happened and we have three
+marginal trees along the genome. None of these trees has fully coalesced,
+and so each of the trees has multiple roots.
+
+:::{important}
+The set of nodes at time 10 connecting to all the internal nodes in the
+trees are very important: without these nodes and unary edges, the
+statistical properties of the combined simulations would not be correct!
+(See also section below on
+{ref}`forward simulations<sec_ancestry_initial_state_forward_simulations>`.)
+:::
+
+We then run the next phase of the simulation in which there is
+*no* recombination by passing ``ts1`` as the argument to ``initial_state``:
+
+```{code-cell}
+ts2 = msprime.sim_ancestry(initial_state=ts1, population_size=100, random_seed=3)
+SVG(ts2.draw_svg(y_axis=True))
 ```
 
-By default `msprime` simulations are initialised by specifying a set of samples,
-using the `sample_size` or  `samples` parameters to {func}`.simulate`. This
-initialises the simulation with segments of ancestral material covering the
-whole sequence. Simulation then proceeds backwards in time until a most recent
-common ancestor has been found at all points along this sequence. We can
-also start simulations from different initial conditions by using the
-`from_ts` argument to {func}`.simulate`. Informally, we take an 'unfinished'
-tree sequence as a parameter to simulate, initialise the simulation
+Since there is no recombination in this more ancient simulation,
+node ``12`` is the MRCA in all three trees. The unary nodes
+``6``, ``7``, ``8``, and ``9`` marking the transition between the
+two simulation regimes are still present in the trees. If you
+wish to remove these, we can use the {meth}`tskit.TreeSequence.simplify`
+method:
+
+```{code-cell}
+ts_simplified = ts2.simplify()
+SVG(ts_simplified.draw_svg())
+```
+
+(sec_ancestry_initial_state_demography)=
+
+### Interaction with demography
+
+In the previous example we saw how to combine two single population simulations.
+We can also combine more complex simulations involving
+{ref}`demography<sec_demography>`, but care needs to be taken to ensure that
+the correct models are simulated in each part of the simulation.
+Suppose we have simple model with a
+{ref}`population split<sec_demography_events_population_split>`:
+
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", description="Contemporary population A", initial_size=100)
+demography.add_population(name="B", description="Contemporary population B", initial_size=200)
+demography.add_population(name="C", description="Ancestral population", initial_size=300)
+demography.add_population_split(time=100, ancestral="C", derived=["A", "B"])
+demography
+```
+Then, we run a simulation of this model for 50 generations:
+```{code-cell}
+ts1 = msprime.sim_ancestry(
+    samples={"A": 1, "B": 1}, demography=demography, end_time=50, random_seed=1234)
+node_labels = {
+    node.id: f"{node.id}:{ts1.population(node.population).metadata['name']}"
+    for node in ts1.nodes()}
+SVG(ts1.draw_svg(node_labels=node_labels, y_axis=True))
+```
+After 50 generations we can see there has been a coalescence in population ``A``
+but none in ``B`` and we therefore have three lineages left when the simulation
+finishes. We can then continue the simulation based on this initial state:
+
+```{code-cell}
+ts2 = msprime.sim_ancestry(
+    initial_state=ts1, demography=demography, random_seed=5678)
+node_labels = {
+    node.id: f"{node.id}:{ts2.population(node.population).metadata['name']}"
+    for node in ts2.nodes()}
+SVG(ts2.draw_svg(node_labels=node_labels, y_axis=True))
+```
+Note that we use the **same** demography object, and so the lineages
+migrate and ultimately coalesce in population ``C``, as we'd expect.
+This is the simplest case, in which we already have the demography
+object which we can use to model the entire simulation from end-to-end.
+
+In other cases (e.g. when working with simulations from a different
+program), we don't have the {class}`.Demography` object at hand
+and we need to create one that is both compatible with the
+``initial_state`` tree sequence and reflects the demographic
+model that we are interested in using. The best way to do this
+is to use the {meth}`.Demography.from_tree_sequence` method to
+first get a base demography that is based on the
+tree sequence {ref}`population table<tskit:sec_population_table_definition>`
+and {ref}`metadata<tskit:sec_metadata>`:
+
+```{code-cell}
+demography = msprime.Demography.from_tree_sequence(ts1)
+demography
+```
+
+We can see that the population names and descriptions have been recovered
+from the tree sequence metadata but **no other information**: the
+population sizes are all zero and we no longer have a population split
+event. If we try to run a simulation using this demography we get an
+error:
+
+```{code-cell}
+:tags: [raises-exception]
+
+ts = msprime.sim_ancestry(initial_state=ts1, demography=demography)
+```
+
+To recover the original model we must update the {class}`.Population`
+objects in place and add the
+{ref}`population split<sec_demography_events_population_split>` event:
+
+```{code-cell}
+demography["A"].initial_size = 100
+demography["B"].initial_size = 200
+demography["C"].initial_size = 300
+demography.add_population_split(time=100, ancestral="C", derived=["A", "B"])
+demography
+```
+
+:::{note}
+See the {class}`.Demography` documentation for details on how to access
+{class}`.Population` objects.
+:::
+
+The demography that we obtain from {meth}`.Demography.from_tree_sequence`
+is really just a template, which we update and elaborate as we need.
+In particular, we are free to add more populations as needed.
+
+(sec_ancestry_initial_state_forward_simulations)=
+
+### Continuing forwards-time simulations ("recapitating")
+
+The most common use for the ``initial_state`` argument is to
+start the simulation from the output of a forwards-time simulation.
+Informally, we take an 'unfinished'
+tree sequence as a parameter to {func}`.sim_ancestry`, initialise the simulation
 from the state of this tree sequence and then run the simulation until
 coalescence. The returned tree sequence is then the result of taking the
 input tree sequence and completing the trees using the coalescent.
 
 This is useful for forwards-time simulators such as
-[SLiM](<https://messerlab.org/slim/>) that can output tree sequences. By running
+[SLiM](https://messerlab.org/slim/) and
+[fwdpy11](https://pypi.org/project/fwdpy11/)
+that can output tree sequences. By running
 forward-time simulation for a certain number of generations we obtain a
 tree sequence, but these trees may not have had sufficient time to
-reach a most recent common ancestor. By using the `from_ts` argument
-to {func}`.simulate` we can combine the best of both forwards- and
+reach a most recent common ancestor. By using the `initial_state` argument
+to {func}`.sim_ancestry` we can combine the best of both forwards- and
 backwards-time simulators. The recent past can be simulated forwards
 in time and the ancient past by the coalescent. The coalescent
 simulation is initialised by the root segments of the
 input tree sequence, ensuring that the minimal amount of ancestral
 material possible is simulated.
-
-<!---
-Please see the :ref:`tutorial <sec_tutorial_simulate_from>` for an example of
--->
-
-<!---
-how to use this feature with a simple forwards-time Wright-Fisher simulator
--->
-
-### Input requirements
 
 Any tree sequence can be provided as input to this process, but there is a
 specific topological requirement that must be met for the simulations to be
@@ -1020,88 +1395,409 @@ corresponding to the initial generation. Furthermore, for every sample in the
 final generation (i.e. the extant population at the present time) there must be
 a path to one of the founder population nodes.
 
-<!---
-(Please see the :ref:`tutorial
--->
-
-<!---
-<sec_tutorial_simulate_from>` for further explanation of this point and an
--->
-
-<!---
-example.)
--->
+:::{seealso}
+See the {ref}`recapitation tutorial<pyslim:sec_tutorial_recapitation>`
+from the [pyslim](https://github.com/tskit-dev/pyslim) documentation
+for a detailed explanation of this process when
+using [SLiM](https://messerlab.org/slim/).
+:::
 
 (sec_ancestry_models)=
 
+
 ## Models
 
+The ancestry model determines the model under which the ancestral
+history of the sample is generated. It is concerned with the
+the basic processes of how (for example) common ancestor and
+recombination events occur. For example, the default
+"standard" or {ref}`sec_ancestry_models_hudson` is an
+efficient continuous time model, and the
+{ref}`sec_ancestry_models_dtwf` model allows
+for more detailed (if less efficient) simulations by
+making fewer mathematical approximations.
+We can combine multiple ancestry models in a simulation
+using a flexible {ref}`notation<sec_ancestry_models_specifying>`.
 
+:::{seealso}
+See the {ref}`sec_ancestry_quickref` for a summary of the available
+ancestry models
+:::
+
+:::{important}
+The ancestry model is distinct from the {ref}`demographic model<sec_demography>`,
+which is mostly independent of the chosen ancestry model.
+:::
+
+(sec_ancestry_models_specifying)=
+
+### Specifying ancestry models
+
+The ancestry models used during a simulation are specified using
+the ``model`` parameter to {func}`.sim_ancestry`. Each model is a
+subclass of the {class}`.AncestryModel` class (see the following
+subsections for the available models, and examples of their usage).
+
+#### Single models
+
+Most of the time we want to run a simulation under a single
+ancestry model. By default, we run simulations under the
+{class}`.StandardCoalescent` model. If we wish to run
+under a different model, we use the ``model`` argument to
+{func}`.sim_ancestry`. For example, here we use the
+{class}`SMC<.SmcApproxCoalescent>` model instead of the
+standard coalescent:
+
+```{code-cell}
+ts1 = msprime.sim_ancestry(
+    10,
+    sequence_length=10,
+    recombination_rate=0.1,
+    model=msprime.SmcApproxCoalescent(),
+    random_seed=1234)
+```
+
+We specify the model as an instance of one of the ancestry model classes.
+For nonparametric models, there is also a useful shorthand
+of the model name:
+
+```{code-cell}
+ts2 = msprime.sim_ancestry(
+    10,
+    sequence_length=10,
+    recombination_rate=0.1,
+    model="smc",
+    random_seed=1234)
+assert ts1.equals(ts2, ignore_provenance=True)
+```
+
+This string form is useful for single model simulations;
+however, when working with
+{ref}`sec_ancestry_models_specifying_multiple` it is better to use
+the explicit class form so that the
+{ref}`sec_ancestry_models_specifying_duration` can be set.
+
+(sec_ancestry_models_specifying_duration)=
+#### Model duration
+
+Each ancestry model instance has a {attr}`~.AncestryModel.duration` associated
+with it. This is the maximum amount of time that this model can run for. Thus,
+if we wanted to run 10 generations of the {class}`.DiscreteTimeWrightFisher`
+model we could write:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    3,
+    population_size=10,
+    model=msprime.DiscreteTimeWrightFisher(duration=10),
+    random_seed=1234)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+:::{note}
+Using the duration value for a single model like this is identical to
+specifying an ``end_time`` value: see the {ref}`sec_ancestry_end_time`
+section for more information.
+:::
+
+It is vital to understand that the ``duration`` value here is **not**
+an absolute time at which the simulation must stop, but rather
+the number of generations that the model should run for. To illustrate
+this we can use the {ref}`start_time<sec_ancestry_start_time>` parameter:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    3,
+    population_size=10,
+    start_time=5,
+    model=msprime.DiscreteTimeWrightFisher(duration=10),
+    random_seed=1234)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+We can see that the simulation continued until 15 generations ago,
+because it didn't start until 5 generations ago and we then specified
+that the model should run for at most 10 generations.
+
+The model activity time is specified as a duration in this way
+as this is a natural way to specify
+{ref}`sec_ancestry_models_specifying_multiple`, in which
+some of the models may run for random periods of time.
+
+
+(sec_ancestry_models_specifying_completion)=
+
+#### Model completion
+
+Most ancestry models will run until the overall simulation has
+completed; that is, when we have simulated back to the most
+recent common ancestor at every position along the sequence.
+For example, the {class}`.StandardCoalescent` and
+{class}`.DiscreteTimeWrightFisher` models will simulate
+until coalescence, unless we explicitly indicate that we wish
+to stop the simulation early via the
+{ref}`model duration<sec_ancestry_models_specifying_duration>`
+or the {ref}`end_time<sec_ancestry_end_time>` parameter.
+
+Models such as {class}`.SweepGenicSelection` are different though:
+they are only defined for a limited amount of time and
+may not run until coalescence (see the
+{ref}`sec_ancestry_models_selective_sweeps`
+for more information on the model itself).
+
+```{code-cell}
+sweep = msprime.SweepGenicSelection(
+    position=5,
+    start_frequency=0.1,
+    end_frequency=0.9,
+    s=0.25,
+    dt=1e-6,
+)
+ts = msprime.sim_ancestry(
+    3,
+    sequence_length=10,
+    population_size=100,
+    model=sweep,
+    random_seed=1234)
+SVG(ts.draw_svg(y_axis=True))
+```
+Here, we see that even though we didn't specify
+a {ref}`model duration<sec_ancestry_models_specifying_duration>`
+or {ref}`end_time<sec_ancestry_end_time>` parameter the simulation
+has ended before we reached coalescence. In addition, the
+model duration is **random**:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    3,
+    sequence_length=10,
+    population_size=100,
+    model=sweep,
+    random_seed=12345)
+SVG(ts.draw_svg(y_axis=True))
+```
+Here we ran the same simulation with a different random seed, and
+we can see that the time the model completed was different in
+the two cases (30.22 vs 28.15 generations ago).
+
+:::{note}
+Models such as {class}`.SweepGenicSelection` can also complete due
+to full coalescence.
+:::
+
+(sec_ancestry_models_specifying_multiple)=
+
+#### Multiple models
+
+Sometimes we are interested in combining different models in a simulation.
+To do this we provide a **list** of ancestry model instances as the
+``model`` argument to {func}`.sim_ancestry`. The models
+are run in the order they are specified. For each model, if its
+{attr}`~.AncestryModel.duration` is set, then the simulation will run
+for at most that additional time duration. If the ``duration`` is
+not set (or ``None``), then the model will run until
+{ref}`completion<sec_ancestry_models_specifying_completion>`.
+
+
+For example, here we run a hybrid DTWF and coalescent
+simulation (see the {ref}`sec_ancestry_models_dtwf` section for more
+details):
 
 
 ```{code-cell}
-:tags: [remove-cell]
-
-    msprime.core.set_seed_rng_seed(42)
+ts = msprime.sim_ancestry(
+    2,
+    population_size=1000,
+    model=[
+        msprime.DiscreteTimeWrightFisher(duration=500),
+        msprime.StandardCoalescent(),
+    ],
+    random_seed=2
+)
 ```
 
-```{eval-rst}
-.. todo:: quick overview of what a model *is* and also an example of
-  how to use it.
+:::{warning}
+It is very imporant to remember to set a ``duration`` value in the first
+model here! Otherwise, the entire simulation will run under the DTWF model.
+:::
 
-```
+In this example we've run the {class}`.DiscreteTimeWrightFisher`
+model for the first 500 generations, and then switched to the
+{class}`.StandardCoalescent`. Because we did not specify a
+``duration`` in the second model, it will run until coalescence.
+
+:::{note}
+Switching models at a fixed time point like this is equivalent to
+first running the DTWF phase of the simulation with ``end_time=500``
+and then using the output as the
+{ref}`initial state<sec_ancestry_initial_state>` for the simulation
+of the Hudson phase. The model switching syntax here is a little
+more convenient and efficient, however.
+:::
+
+:::{seealso}
+See the {ref}`sec_ancestry_models_selective_sweeps_multiple` section for
+an example of running many models with random durations.
+:::
+
+:::{tip}
+The logging output of msprime can be very useful when working with
+multiple models. See the {ref}`sec_logging` section for more
+details.
+:::
 
 (sec_ancestry_models_hudson)=
 
 ### Hudson coalescent
 
-The default simulation model in `msprime` is the coalescent
-with recombination, based on the classical `ms` program.
-Please see the {class}`API documentation<.StandardCoalescent>`
-for a formal description of the model.
+The {class}`standard coalescent<.StandardCoalescent>`
+is the default model in msprime. The algorithm
+for simulating the coalescent with recombination was developed
+by [Hudson (1983)](https://doi.org/10.1016/0040-5809(83)90013-8),
+and so we refer to it as the "Hudson" coalescent.
 
-The standard coalescent is the default model of ancestry used
-in msprime if we don't specify any value for the `model` parameter.
+Running a simulation without specifying a ``model`` is the
+same as running with ``model="hudson"``:
 
 ```{code-cell}
-    ts1 = msprime.sim_ancestry(5, random_seed=2)
-    ts2 = msprime.sim_ancestry(5, model="hudson", random_seed=2)
-    # This is the same simulation so we should get the same
-    # node and edge tables.
-    assert ts1.tables.nodes == ts2.tables.nodes
-    assert ts1.tables.edges == ts2.tables.edges
-
+ts1 = msprime.sim_ancestry(5, random_seed=2)
+ts2 = msprime.sim_ancestry(5, model="hudson", random_seed=2)
+# This is the same simulation so tree sequences are equal
+assert ts1.equals(ts2, ignore_provenance=True)
 ```
+
+Time is measured in units of generations ago. This is a continuous time
+model, in which the simulation moves event-by-event backwards
+in time (contrasting with the {ref}`sec_ancestry_models_dtwf` model, which
+works generation-by-generation). Thus, we can have fractional
+generations, as in this example where the MRCA of the sample
+occurs 10.59 "generations" ago:
+
+```{code-cell}
+ts = msprime.sim_ancestry(3, random_seed=234)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+This occurs because time is scaled to be proportional to
+the population size; if we run the same simulation with a
+different {ref}`population size<sec_ancestry_demography>`, we can see that
+the time values are simply scaled up accordingly
+(the default ``population_size`` is 1):
+
+```{code-cell}
+ts = msprime.sim_ancestry(3, population_size=100, random_seed=234)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+:::{seealso}
+The {ref}`ploidy<sec_ancestry_ploidy>` parameter also controls
+the time scale; the
+default here is the diploid time scale where time is measured
+in units of 4N generations.
+:::
 
 (sec_ancestry_models_smc)=
 
 ### SMC approximations
 
+The {class}`SMC <.SmcApproxCoalescent>` and {class}`SMC' <.SmcPrimeApproxCoalescent>`
+are approximations of the continuous time
+{ref}`Hudson coalescent<sec_ancestry_models_hudson>` model. These were originally
+motivated largely by the need to simulate coalescent processes more efficiently
+than was possible using the software available at the time; however,
+[improved algorithms](https://doi.org/10.1371/journal.pcbi.1004842)
+mean that such approximations are now mostly unnecessary for simulations.
 
-```{eval-rst}
-.. todo:: Write this section, including a simple example ideally showing
-    a property of an SMC simulation
+The SMC and SMC' are however very important for inference, as the approximations
+have made many analytical advances possible.
 
-```
+Since the SMC approximations are not required for simulation efficiency, these
+models are implemented using a naive rejection sampling approach in msprime.
+The implementation is intended to facilitate the study of the
+SMC approximations, rather than to be used in a general-purpose way.
 
 (sec_ancestry_models_dtwf)=
 
 ### Discrete Time Wright-Fisher
 
-Msprime provides the option to perform discrete-time Wright-Fisher simulations
-for scenarios when the coalescent model is not appropriate, including large
+Msprime provides the option to perform discrete-time Wright-Fisher (DTWF)
+simulations for scenarios when the coalescent model is not appropriate, including large
 sample sizes, multiple chromosomes, or recent migration.
 Please see the {class}`API documentation<.DiscreteTimeWrightFisher>`
-for a formal description of the model.
+for a formal description of the model,
+and [Nelson et al. 2020](https://doi.org/10.1371/journal.pgen.1008619) for
+more details and background information.
 
-All other parameters can be set as usual. Note that for discrete-time
-Wright-Fisher simulations with population structure, each row of the migration
-matrix must sum to one or less.
+To run DTWF simulations, we need to provide the ``model="dtwf"`` argument
+to {func}`.sim_ancestry`:
 
-```{eval-rst}
-.. todo:: An example of the DTWF. Show the discrete with an example of a
-    non-binary tree.
+```{code-cell}
+ts = msprime.sim_ancestry(4, population_size=10, model="dtwf", random_seed=7)
+SVG(ts.draw_svg(y_axis=True, tree_height_scale="log_time"))
 ```
+
+There are a few important points to note here:
+
+1. All node times are integers (this is discrete time counted in generations);
+2. We can have **non-binary** nodes (see node 10);
+3. We can have **simultaneous** events (see nodes 8 and 9).
+
+Most features can be used with the DTWF model, and an error will be raised if
+you attempt to use a feature that is not implemented for DTWF. (Please let
+us know if this feature is important to you!)
+
+:::{important}
+For DTWF simulations with population structure, each row of the migration
+matrix must sum to one or less.
+:::
+
+Because DTWF simulations trace the history of a sample by going backwards
+in time generation-by-generation rather than event-by-event like the
+continuous time models, it is significantly slower to simulate than
+the standard coalescent.
+
+"Hybrid" simulations can be a good solution if DTWF simulations are
+slow. In this case we can use DTWF simulations for the recent past, and using
+the standard coalescent for the more distant past (where it is an excellent
+approximation of the discrete time model). Hybrid simulations
+of this type provide the best of computational efficiency and accuracy.
+
+:::{seealso}
+See [Nelson et al. 2020](https://doi.org/10.1371/journal.pgen.1008619) for
+more details and examples where the DTWF model is more realistic than
+the coalescent, and an assessment of the accuracy of hybrid simulations.
+:::
+
+For example, here we simulate with the DTWF model for 500 generations,
+before switching to the standard (Hudson) coalescent:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    2,
+    population_size=1000,
+    model=[
+        msprime.DiscreteTimeWrightFisher(duration=500),
+        msprime.StandardCoalescent(),
+    ],
+    random_seed=4
+)
+SVG(ts.draw_svg(y_axis=True, tree_height_scale="log_time"))
+```
+
+Because of the integer node times, we can see here that most of the coalescent
+happened during the Wright-Fisher phase of the simulation, and as-of 500
+generations in the past, there were only two lineages left. The continuous
+time standard coalescent model was then used to simulate the ancient past of
+these two lineages.
+
+See the {ref}`sec_ancestry_models_specifying` section for more details on
+how the use the ``model`` argument to {func}`.sim_ancestry` to run
+multiple models.
+
+:::{seealso}
+See the {ref}`sec_ancestry_multiple_chromosomes` section for information
+on how to simulate multiple chromosomes using the DTWF.
+:::
 
 (sec_ancestry_models_multiple_mergers)=
 
@@ -1152,7 +1848,7 @@ SVG(ts.draw_svg())
 
 ```
 
-Multiple mergers still take place in a haploid simulaton, but only one merger
+Multiple mergers still take place in a haploid simulation, but only one merger
 can take place at a given time:
 
 ```{code-cell}
@@ -1265,136 +1961,234 @@ print(tree.tmrca(0,1))
 
 ### Selective sweeps
 
-Msprime provides the option to perform coalescent approximations
-to selective sweeps, in which a beneficial mutation moves through
-the population. This is done through the use of a structured 
-coalescent model in the spirit of 
+Although the coalescent assumes that lineages are exchangable, (and therefore
+evolving nuetrally), approximations to some forms of selective sweep
+(beneficial mutation moves through the population), have been derived. This is
+done through the use of a structured coalescent model in the spirit of
 [Braverman et al. (1995)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1206652/).
 
-Looking backwards in time the population enters a sweep phase where
+In the {class}`.SweepGenicSelection` model,
 the population is split between two classes of selective backgrounds,
 those linked to the beneficial allele, call it {math}`B`, and those not,
-{math}`b`. During this portion of the simulation we track competing
+{math}`b`. In this model we track competing
 rates of coalescence and recombination on the {math}`B` and {math}`b`
 backgrounds.
-
-This implementation is reasonable general, althougth there are 
-current limitations (e.g., no change of population size during
-a sweep). The user supplies a final allele frequency and a starting
-allele frequency, between which msprime will simulate a stochastic 
+The user supplies a final allele frequency and a starting
+allele frequency, between which msprime simulates a stochastic
 sweep trajectory according to a conditional diffusion model [(Coop
 and Griffiths, 2004](https://pubmed.ncbi.nlm.nih.gov/15465123/);
 [Kim and Stephan 2002](https://pubmed.ncbi.nlm.nih.gov/11861577/)).
 
 Beyond the start and end frequencies of the sweep trajectory, the user
-must specify the selection coefficient of the beneficial mutation 
+must specify the selection coefficient of the beneficial mutation
 {math}`s` the selective
 advantage of the {math}`B` homozygote over the {math}`b` homozygote
 and {math}`h=0.5`. The position represents the location along
 the chromosome where the beneficial allele occurs.
- All other parameters can be set as usual. 
+All other parameters can be set as usual.
 
-As an example, let's perform 50 replicate hard sweep simulations using 
-msprime and then plot mean {meth}`pairwise diversity<tskit.TreeSequence.diversity>` in windows across the simulated
-region. The position is set to the middle of the chromosome, so we
-expect to see the characteristic valley of diversity following our sweeps.
-The key step here is to build a list of models which includes
-a {class}`SweepGenicSelection<.SweepGenicSelection>` model.
+:::{warning}
+The implementation of the structured coalescent is quite general, but there are
+some limitations in the current implementation of the sweeps model (e.g., no
+change of population size during a sweep). Please let us know if there are
+related features you would like to see (or if you would be interested in
+helping to create this functionality!)
+:::
+
+
+#### Hard sweeps
+
+:::{todo}
+What's a hard sweep? Some intro sentences here.
+:::
+
+In this example we run some replicate hard sweep simulations
+and plot the mean
+{meth}`pairwise diversity<tskit.TreeSequence.diversity>` in windows
+across the simulated region, showing the characteristic
+valley of diversity.
+
+First we set up some basic parameters, and define the sweep model:
+
+```{code-cell}
+Ne = 1e3
+L = 1e6  # Length of simulated region
+num_reps = 100
+
+# define hard sweep model
+sweep_model = msprime.SweepGenicSelection(
+    position=L / 2,  # middle of chrom
+    start_frequency=1.0 / (2 * Ne),
+    end_frequency=1.0 - (1.0 / (2 * Ne)),
+    s=0.25,
+    dt=1e-6,
+)
+```
+
+:::{todo}
+Explain why these parameters give a hard sweep.
+:::
+
+Next we set up the replicate simulations. As described
+in the {ref}`sec_ancestry_models_specifying_multiple` section,
+the ``model`` parameter is a list when we want to run multiple
+ancestry models. In this example, we have a sweep that occurs
+in the immediate past, and is then followed by the
+standard coalescent for the rest of time:
+
+```{code-cell}
+reps = msprime.sim_ancestry(
+    5,
+    model=[sweep_model, msprime.StandardCoalescent()],
+    population_size=Ne,
+    recombination_rate=1e-7,
+    sequence_length=L,
+    num_replicates=num_reps,
+)
+```
+
+:::{note}
+Because the {class}`.SweepGenicSelection` model has a random
+{ref}`duration<sec_ancestry_models_specifying_duration>` we do
+not set this value in the model. Please see the
+{ref}`sec_ancestry_models_specifying_completion` section for
+more discussion on this important point.
+:::
+
+Once we've set up the replicate simulations we can compute the
+windows for plotting, run the actual simulations
+(see the {ref}`sec_ancestry_replication` section for more details)
+and compute the
+{meth}`pairwise diversity<tskit.TreeSequence.diversity>`.
+
+```{code-cell}
+wins = np.linspace(0, L, 21)
+mids = (wins[1:] + wins[:-1]) / 2
+diversity = np.zeros((num_reps, mids.shape[0]))
+for j, ts in enumerate(reps):
+    diversity[j] = ts.diversity(windows=wins, mode="branch")
+```
+
+Finally, we can plot the observed mean diversity across the replicates
+and compare it to the neutral expectation:
 
 ```{code-cell}
 from matplotlib import pyplot as plt
 
-Ne = 1e3
-s = 0.25 
-# define hard sweep model
-sweep = msprime.SweepGenicSelection(
-    position=1e6 / 2,  # middle of chrom
-    start_frequency=1.0 / (2 * Ne),
-    end_frequency=1.0 - (1.0 / (2 * Ne)),
-    s=s,
-    dt=1e-6,
-)
-
-reps = msprime.sim_ancestry(
-    5,
-    population_size=Ne,
-    model=[sweep, (None, 'hudson')],
-    recombination_rate=1e-7,
-    sequence_length = 1e6,
-    num_replicates=50,
-    )
-
-wins = np.linspace(0,int(1e6),21)
-mids = (wins[1:] + wins[:-1]) / 2
-    
-msp_pis = []
-for ts in reps:
-	mutated_ts = msprime.sim_mutations(ts, rate=1e-8)
-	msp_pis.append(mutated_ts.diversity(windows=wins))
-
-plt.plot(mids,np.array(msp_pis).mean(axis=0), label="msp")   
-plt.axhline(4 * Ne * 1e-8, linestyle=":", label=r'neutral $\pi$')
-plt.ylabel(r'$\pi$'); plt.ylabel('position (bp)')
-plt.legend()
+plt.plot(mids, diversity.mean(axis=0), label="Simulations")
+plt.axhline(4 * Ne, linestyle=":", label=r'Neutral expectation')
+plt.ylabel(r'Branch $\pi$');
+plt.xlabel('Position (bp)')
+plt.legend();
 ```
+
+:::{note}
+We use the "branch" measure of pairwise diversity which is
+defined in terms of the trees rather than nucleotide sequences. See
+[Ralph et al. 2020](https://doi.org/10.1534/genetics.120.303253)
+for more information.
+:::
+
 As we can see, the selective sweep has reduced variation in the region
-most closely linked to the beneficial allele and then heterozygosity
-increases with distance to each side. 
+most closely linked to the beneficial allele and then diversity
+increases with distance to each side.
 
-(sec_ancestry_models_sweep_types)=
+(sec_ancestry_models_selective_sweeps_multiple)=
 
-#### Sweep model examples
+#### Multiple sweeps
+
+:::{todo}
+This example is very artificial; it would be much better to illustrate
+with a meaningful example from the literature. Pull requests welcome!
+:::
+
+To illustrate the idea that we can simulate large numbers of different
+models, in this example we create a simulation in which we have
+sweeps happening at random points along the genome, which
+are separated by a random duration of the standard coalescent.
+
+First we set up our models:
+
+```{code-cell}
+import random
+random.seed(1234)
+L = 100
+
+models = []
+for _ in range(100):
+    models.append(msprime.StandardCoalescent(duration=random.uniform(0, 1)))
+    models.append(
+        msprime.SweepGenicSelection(
+            position=random.randint(1, L - 1),
+            start_frequency=0.4,
+            end_frequency=0.5,
+            s=0.01,
+            dt=1e-6,
+        )
+    )
+models.append(msprime.StandardCoalescent())
+models[:5]
+```
+We've created a list of models that have random parameters using the
+standard Python tools. There are lots of sweeps (many more than we
+will actually run, in all probability), each at a random position
+on the genome and each separated by a random amount of time running
+the standard coalescent. Finally, we add an instance of the standard
+coalescent without a {ref}`duration<sec_ancestry_models_specifying_duration>`
+to guarantee that our simulation will always coalesce fully
+(See the {ref}`sec_ancestry_models_specifying_completion` section
+for more information.) Finally, we print out the first 5 models
+so we can inspect them.
+
+Then, we can run our simulation as usual:
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    10,
+    population_size=100,
+    sequence_length=L,
+    recombination_rate=0.01,
+    model=models,
+    random_seed=6789
+)
+ts
+```
+
+:::{tip}
+The logging output of msprime can be very useful when working with
+multiple models. See the {ref}`sec_logging` section for more
+details.
+:::
+
+(sec_ancestry_missing_data)=
+
+## Missing data
+
+:::{todo}
+Give an example of doing a simulation with unknown rates on the flanks
+and show that the resulting tree sequence has missing data in these
+regions.
+:::
+
+(sec_ancestry_errors)=
+
+## Common errors
+
+(sec_ancestry_errors_infinite_waiting_time)=
+
+### Infinite waiting time
 
 ```{eval-rst}
-.. todo:: Need to add some examples to this section and build it out. 
-    want examples of hard sweeps, partial sweeps, and soft sweeps.
+.. todo:: explain this, why it happens and give examples of when
+   we don't detect it. Mention the possible_lineage_locations method.
 ```
 
-(sec_ancestry_models_multiple_models)=
+```{code-cell}
+:tags: [raises-exception]
 
-### Multiple models
-
-```{eval-rst}
-.. todo:: This is copied from the old tutorial and is out of date now.
-    Update the to use the new model=[(time, model)]`` syntax.
-    It's also too focused on the DTWF model.
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=1)
+demography.add_population(name="B", initial_size=1)
+msprime.sim_ancestry(samples={"A": 1, "B": 1}, demography=demography)
 ```
 
-In some situations Wright-Fisher simulations are desireable but less
-computationally efficient than coalescent simulations, for example simulating a
-small sample in a recently admixed population. In these cases, a hybrid model
-offers an excellent tradeoff between simulation accuracy and performance.
-
-This is done through a {class}`.SimulationModelChange` event, which is a special type of
-demographic event.
-
-For example, here we switch from the discrete-time Wright-Fisher model to the
-standard Hudson coalescent 500 generations in the past:
-
-```{code-cell} python
-
-ts = msprime.simulate(
-    sample_size=6, Ne=1000, model="dtwf", random_seed=2,
-    demographic_events=[
-        msprime.SimulationModelChange(time=500, model="hudson")])
-print(ts.tables.nodes)
-# id      flags   population      individual      time    metadata
-# 0       1       0       -1      0.00000000000000
-# 1       1       0       -1      0.00000000000000
-# 2       1       0       -1      0.00000000000000
-# 3       1       0       -1      0.00000000000000
-# 4       1       0       -1      0.00000000000000
-# 5       1       0       -1      0.00000000000000
-# 6       0       0       -1      78.00000000000000
-# 7       0       0       -1      227.00000000000000
-# 8       0       0       -1      261.00000000000000
-# 9       0       0       -1      272.00000000000000
-#10      0       0       -1      1629.06982528980075
-
-```
-
-Because of the integer node times, we can see here that most of the coalescent
-happened during the Wright-Fisher phase of the simulation, and as-of 500
-generations in the past, there were only two lineages left. The continuous
-time standard coalescent model was then used to simulate the ancient past of
-these two lineages.

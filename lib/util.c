@@ -195,17 +195,6 @@ msp_strerror_internal(int err)
         case MSP_ERR_UNKNOWN_ALLELE:
             ret = "Existing allele(s) incompatible with mutation model alphabet.";
             break;
-        case MSP_ERR_MUTATION_GENERATION_OUT_OF_ORDER:
-            ret = "Tree sequence contains mutations that would descend from "
-                  "existing mutations: finite site mutations must be generated on "
-                  "older time periods first.";
-            break;
-        case MSP_ERR_BAD_ANCESTRAL_MUTATION:
-            ret = "The ancestral mutations added resulted in a silent transition "
-                  "(e.g. A -> A) which is not permitted by tskit. Please open an "
-                  "issue at https://github.com/tskit-dev/msprime/issues if you "
-                  "encounter this problem.";
-            break;
         case MSP_ERR_INSUFFICIENT_ALLELES:
             ret = "Must have at least two alleles.";
             break;
@@ -275,13 +264,34 @@ msp_strerror_internal(int err)
         case MSP_ERR_DTWF_DIPLOID_ONLY:
             ret = "The DTWF model only supports ploidy = 2";
             break;
-        case MSP_ERR_TOO_MANY_SPLIT_POPULATIONS:
-            ret = "Cannot have more than 100 populations splitting at once. "
+        case MSP_ERR_TOO_MANY_EVENT_POPULATIONS:
+            ret = "Cannot have more than 100 populations in one event. "
                   "If this is something that you need to do, please open an issue "
                   "on GitHub";
             break;
         case MSP_ERR_DUPLICATE_POPULATION:
             ret = "Population IDs must be unique";
+            break;
+        case MSP_ERR_POPULATION_INACTIVE_MOVE:
+            ret = "Attempt to move a lineage into an inactive population";
+            break;
+        case MSP_ERR_POPULATION_INACTIVE_SAMPLE:
+            ret = "Attempt to sample a lineage from an inactive population";
+            break;
+        case MSP_ERR_POPULATION_PREVIOUSLY_ACTIVE:
+            ret = "Attempt to set a previously active population to active";
+            break;
+        case MSP_ERR_ADMIX_ANCESTRAL_NOT_ACTIVE:
+            ret = "All ancestral populations in admixture must already be active";
+            break;
+        case MSP_ERR_ADMIX_DERIVED_NOT_ACTIVE:
+            ret = "The derived population in an admixture must be active";
+            break;
+        case MSP_ERR_SPLIT_DERIVED_NOT_ACTIVE:
+            ret = "The derived population in a population split must be active";
+            break;
+        case MSP_ERR_POP_SIZE_ZERO_SAMPLE:
+            ret = "Attempt to sample lineage in a population with size=0";
             break;
         default:
             ret = "Error occurred generating error string. Please file a bug "

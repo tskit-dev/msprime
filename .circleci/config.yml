@@ -26,7 +26,7 @@ jobs:
             sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev ninja-build valgrind clang
             pip install --user -r requirements/CI-complete/requirements.txt
             # FIXME pinning meson for now, https://github.com/tskit-dev/msprime/issues/1485
-            pip install --user twine meson==0.56
+            pip install --user build twine meson==0.56
             # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
             echo 'export PATH=/home/circleci/.local/bin:$PATH' >> $BASH_ENV
       - save_cache:
@@ -76,11 +76,24 @@ jobs:
             codecov -X gcov -F C
 
       - run:
-          name: Make sure we can build a distribution tarball.
+          name: Valgrind for C tests.
+          command: |
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_core
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_ancestry
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_fenwick
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_likelihood
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_mutations
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_rate_map
+            valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_sweeps
+
+      - run:
+          name: Make sure we can build a distribution.
           command: |
             python setup.py sdist
             python setup.py check
-            python -m twine check dist/*.tar.gz
+            python -m twine check dist/*.tar.gz --strict
+            python -m build
+
       - run:
           name: Install from the distribution tarball
           command: |
@@ -88,3 +101,8 @@ jobs:
             source venv/bin/activate
             pip install --upgrade setuptools pip
             pip install dist/*.tar.gz
+            python -c 'import msprime; print(msprime.__version__)'
+
+            # We should still be able to import without the newick module
+            python -m pip uninstall -y newick
+            python -c 'import msprime; print(msprime.__version__)'

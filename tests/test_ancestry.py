@@ -252,39 +252,38 @@ class TestSimulator:
         sim.random_generator.seed = 42
         with caplog.at_level(logging.INFO):
             sim.run()
-        assert len(caplog.records) == 2
+        assert len(caplog.records) == 3
+        assert caplog.messages[0].startswith("model[0] {'name': 'hudson'}")
         assert (
-            caplog.messages[0] == "Running model {'name': 'hudson'}"
+            caplog.messages[1] == "Running model {'name': 'hudson'}"
             " until max time: inf"
         )
-
-        assert caplog.messages[1].startswith("Completed at time")
+        assert caplog.messages[-1].startswith("Completed at time")
 
     def test_debug_logging(self, caplog):
         sim = ancestry._parse_simulate(3)
         sim.random_generator.seed = 42
         with caplog.at_level(logging.DEBUG):
             sim.run(event_chunk=1)
-        assert len(caplog.records) == 3
-        assert (
-            caplog.messages[0] == "Running model {'name': 'hudson'}"
-            " until max time: inf"
-        )
+        assert len(caplog.records) == 6
+        assert caplog.messages[0].startswith("model[0] {'name': 'hudson'}")
         assert caplog.messages[-1].startswith("Completed at time")
-        assert caplog.messages[1] == "time=0.312845 ancestors=2"
+        assert (
+            caplog.messages[2] == "time=0.312845 ancestors=2 ret=ExitReason.MAX_EVENTS"
+        )
 
     def test_debug_logging_dtwf(self, caplog):
         sim = ancestry._parse_simulate(3, Ne=10, model="dtwf")
         sim.random_generator.seed = 42
         with caplog.at_level(logging.DEBUG):
             sim.run(event_chunk=1)
-            assert len(caplog.records) == 5
+            assert len(caplog.records) == 8
             assert (
-                caplog.messages[0] == "Running model {'name': 'dtwf'}"
+                caplog.messages[1] == "Running model {'name': 'dtwf'}"
                 " until max time: inf"
             )
             assert caplog.messages[-1].startswith("Completed at time")
-            assert caplog.messages[1] == "time=1 ancestors=3"
+            assert caplog.messages[2] == "time=1 ancestors=3 ret=ExitReason.MAX_EVENTS"
 
 
 class TestParseRandomSeed:
@@ -400,7 +399,10 @@ class TestParseSimAncestry:
         # If we have an initial_state this defines sequence_length
         initial_state = tskit.TableCollection(1234)
         initial_state.populations.add_row()
-        sim = ancestry._parse_sim_ancestry(initial_state=initial_state)
+        with pytest.warns(msprime.IncompletePopulationMetadataWarning):
+            sim = ancestry._parse_sim_ancestry(
+                initial_state=initial_state, population_size=1
+            )
         assert sim.sequence_length == 1234
         assert sim.copy_tables().sequence_length == sim.sequence_length
 
@@ -649,11 +651,19 @@ class TestParseSimAncestry:
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(10, demography=demography, population_size=1)
 
+        # Cannot specify a population_size and a initial state with > 1 pop.
+        demography = msprime.Demography.isolated_model([10, 10])
+        ts1 = msprime.sim_ancestry(
+            {0: 2}, demography=demography, end_time=0, random_seed=1
+        )
+        with pytest.raises(ValueError, match="Must specify demography"):
+            msprime.sim_ancestry(initial_state=ts1, population_size=100, random_seed=2)
+
     def test_demography(self):
         demography = msprime.Demography.stepping_stone_model([1] * 5, 0.1)
         samples = {0: 2}
         sim = ancestry._parse_sim_ancestry(samples, demography=demography)
-        assert sim.demography is demography
+        assert sim.demography is not demography
         assert sim.num_populations == demography.num_populations
         assert np.array_equal(sim.migration_matrix, demography.migration_matrix)
         # Numeric samples fail here as we have more than 1 population
@@ -669,11 +679,18 @@ class TestParseSimAncestry:
     def test_model(self):
         # Extensive testing of the model parsing is done elsewhere.
         sim = ancestry._parse_sim_ancestry(10, model="smc")
-        assert sim.model["name"] == "smc"
-        sim = ancestry._parse_sim_ancestry(10, model=("smc", (10, "hudson")))
-        assert sim.model["name"] == "smc"
-        assert len(sim.model_change_events) == 1
-        assert sim.model_change_events[0].time == 10
+        assert len(sim.models) == 1
+        assert isinstance(sim.models[0], msprime.SmcApproxCoalescent)
+        assert sim.models[0].duration is None
+
+        sim = ancestry._parse_sim_ancestry(
+            10, model=(msprime.SmcPrimeApproxCoalescent(duration=10), "hudson")
+        )
+        assert len(sim.models) == 2
+        assert isinstance(sim.models[0], msprime.SmcPrimeApproxCoalescent)
+        assert sim.models[0].duration == 10
+        assert isinstance(sim.models[1], msprime.StandardCoalescent)
+        assert sim.models[1].duration is None
 
     def test_dtwf_population_size(self):
         # It's an error to not specify a pop size for dtwf.
@@ -694,12 +711,27 @@ class TestParseSimAncestry:
             with pytest.raises(TypeError):
                 ancestry._parse_sim_ancestry(initial_state=bad_type)
 
+        # Must have a demography if we have more than 1 pop.
+        demography = msprime.Demography.isolated_model([10, 10])
+        ts1 = msprime.sim_ancestry(
+            {0: 2}, demography=demography, end_time=0, random_seed=1
+        )
+        with pytest.raises(ValueError, match="Must specify either a demography"):
+            msprime.sim_ancestry(initial_state=ts1, random_seed=2)
+
+        demography = msprime.Demography.isolated_model([10])
+        ts1 = msprime.sim_ancestry(
+            {0: 2}, demography=demography, end_time=0, random_seed=1
+        )
+        with pytest.raises(ValueError, match="Must specify either a demography"):
+            msprime.sim_ancestry(initial_state=ts1, random_seed=2)
+
     def test_initial_state(self):
         ts = msprime.sim_ancestry(10, end_time=0.01, random_seed=2)
         # Same if we use either the tables or tree sequence object.
-        sim = ancestry._parse_sim_ancestry(initial_state=ts)
+        sim = ancestry._parse_sim_ancestry(initial_state=ts, population_size=1)
         assert sim.copy_tables() == ts.tables
-        sim = ancestry._parse_sim_ancestry(initial_state=ts.tables)
+        sim = ancestry._parse_sim_ancestry(initial_state=ts.tables, population_size=1)
         assert sim.copy_tables() == ts.tables
 
     def test_num_labels(self):
@@ -759,7 +791,7 @@ class TestSimAncestrySamples:
 
     def test_sample_sets_override_time(self):
         demography = msprime.Demography.isolated_model([1])
-        demography.populations[0].sampling_time = 10
+        demography.populations[0].default_sampling_time = 10
         samples = [
             msprime.SampleSet(1, ploidy=2, time=2),
             msprime.SampleSet(1, ploidy=3),  # No time, should use default
@@ -854,6 +886,7 @@ class TestSimAncestrySamples:
         assert np.all(tables.nodes.population[:4] == 0)
 
     def verify_samples_map(self, samples, demography, ploidy):
+        demography = demography.validate()
         sim = ancestry._parse_sim_ancestry(
             samples=samples, demography=demography, ploidy=ploidy
         )
@@ -871,7 +904,10 @@ class TestSimAncestrySamples:
                 for _ in range(ploidy):
                     node = tables.nodes[node_id]
                     assert node.individual == ind_id
-                    assert node.time == demography.populations[pop_id].sampling_time
+                    assert (
+                        node.time
+                        == demography.populations[pop_id].default_sampling_time
+                    )
                     assert node.population == pop_id
                     assert node.flags == tskit.NODE_IS_SAMPLE
                     node_id += 1
@@ -895,8 +931,8 @@ class TestSimAncestrySamples:
 
     def test_sample_time_with_map(self):
         demography = msprime.Demography.stepping_stone_model([1, 1], 0)
-        demography.populations[0].sampling_time = 1
-        demography.populations[1].sampling_time = 2
+        demography.populations[0].default_sampling_time = 1
+        demography.populations[1].default_sampling_time = 2
         samples = {0: 5, 1: 5}
         self.verify_samples_map(samples, demography, ploidy=1)
         self.verify_samples_map(samples, demography, ploidy=2)
@@ -909,7 +945,7 @@ class TestSimAncestrySamples:
                 ancestry._parse_sim_ancestry(samples=samples, demography=demography)
         for bad_pop in [1.1, ValueError]:
             samples = [msprime.SampleSet(2, time=0, population=bad_pop)]
-            with pytest.raises(TypeError):
+            with pytest.raises(KeyError):
                 ancestry._parse_sim_ancestry(samples=samples, demography=demography)
 
     def test_list_samples_no_population(self):
@@ -1124,7 +1160,7 @@ class TestParseSimulate:
             assert list(other_map.rate) == rates
             assert sim.sequence_length == other_map.sequence_length
             # Use the new-form RateMap
-            rate_map = msprime.RateMap(positions, rates)
+            rate_map = msprime.RateMap(position=positions, rate=rates)
             sim = ancestry._parse_simulate(10, recombination_map=rate_map)
             other_map = sim.recombination_map
             assert list(other_map.position) == positions
@@ -1214,34 +1250,7 @@ class TestParseSimulate:
         assert s.time == 2
         assert s == (1, 2)
 
-    def test_new_old_style_model_changes_equal(self):
-        models = [
-            msprime.SweepGenicSelection(
-                position=j, start_frequency=j, end_frequency=j, s=j, dt=j
-            )
-            for j in range(1, 10)
-        ]
-        # Old style
-        sim = ancestry._parse_simulate(
-            sample_size=2,
-            Ne=10,
-            demographic_events=[
-                msprime.SimulationModelChange(None, model) for model in models
-            ],
-        )
-        assert len(sim.model_change_events) == len(models)
-        for event, model in zip(sim.model_change_events, models):
-            assert event.model == model
-
-        sim2 = ancestry._parse_simulate(
-            sample_size=2,
-            Ne=10,
-            model=[None]
-            + [msprime.SimulationModelChange(None, model) for model in models],
-        )
-        assert sim.model_change_events == sim2.model_change_events
-
-    def test_model_change_old_style(self):
+    def test_model_change_events(self):
         main_model = msprime.SmcApproxCoalescent()
         sim = ancestry._parse_simulate(
             Ne=100,
@@ -1252,21 +1261,28 @@ class TestParseSimulate:
                 msprime.SimulationModelChange(2, None),
             ],
         )
-        assert len(sim.model_change_events) == 2
-        assert sim.model_change_events[0].time == 1
+        assert len(sim.models) == 3
+        assert sim.models[0].duration == 1
+        assert isinstance(sim.models[0], msprime.SmcApproxCoalescent)
+        assert sim.models[1].duration == 1
+        assert isinstance(sim.models[1], msprime.DiscreteTimeWrightFisher)
         # When model=None we change to the standard coalescent
-        assert sim.model_change_events[1].time == 2
-        assert sim.model_change_events[1].model.name == "hudson"
+        assert sim.models[2].duration is None
+        assert isinstance(sim.models[2], msprime.StandardCoalescent)
 
-        # This should be the same in new notation
-        sim = ancestry._parse_simulate(
-            Ne=100, sample_size=2, model=[main_model, (1, "dtwf"), (2, None)]
-        )
-        assert len(sim.model_change_events) == 2
-        assert sim.model_change_events[0].time == 1
-        # When model=None we change to the standard coalescent
-        assert sim.model_change_events[1].time == 2
-        assert sim.model_change_events[1].model.name == "hudson"
+    def test_model_change_events_error(self):
+        with pytest.raises(ValueError, match="durations must be >= 0"):
+            msprime.simulate(
+                Ne=100,
+                sample_size=2,
+                model=None,
+                demographic_events=[
+                    msprime.SimulationModelChange(
+                        1, msprime.DiscreteTimeWrightFisher()
+                    ),
+                    msprime.SimulationModelChange(0.5, None),
+                ],
+            )
 
     def test_bad_sample_population_reference(self):
         # What happens when we reference a population that doesn't exist?
@@ -1568,6 +1584,50 @@ class TestSimAncestryInterface:
         assert np.all(ts.tables.nodes.time <= 0.01)
         assert ts.first().num_roots > 1
 
+    def test_start_time_model_duration(self):
+        ts = msprime.sim_ancestry(
+            10,
+            random_seed=42,
+            population_size=100,
+            start_time=5,
+            model=msprime.DiscreteTimeWrightFisher(duration=10),
+        )
+        assert ts.first().num_roots > 1
+        assert np.all(ts.tables.nodes.time <= 15)
+        assert ts.tables.nodes.time[-1] == 15
+
+    def test_end_time_model_duration(self):
+        # Should take the min of the model duration and end_time
+        ts = msprime.sim_ancestry(
+            10,
+            random_seed=42,
+            end_time=1,
+            model=msprime.StandardCoalescent(duration=0.01),
+        )
+        assert np.all(ts.tables.nodes.time <= 0.01)
+        assert ts.tables.nodes.time[-1] == 0.01
+        assert ts.first().num_roots > 1
+
+        ts = msprime.sim_ancestry(
+            10,
+            random_seed=42,
+            end_time=0.01,
+            model=msprime.StandardCoalescent(duration=1),
+        )
+        assert np.all(ts.tables.nodes.time <= 0.01)
+        assert ts.first().num_roots > 1
+
+    def test_model_durations_accumulate(self):
+        dt = 0.125
+        n = 8
+        t = dt * n
+        ts = msprime.sim_ancestry(
+            10, random_seed=42, model=[msprime.StandardCoalescent(duration=dt)] * n
+        )
+        assert np.all(ts.tables.nodes.time <= t)
+        assert ts.first().num_roots > 1
+        assert ts.tables.nodes.time[-1] == t
+
     def test_record_migrations(self):
         demography = msprime.Demography.stepping_stone_model([1, 1], 0.1)
         samples = {0: 2, 1: 2}
@@ -1614,12 +1674,16 @@ class TestSimAncestryInterface:
         # Simple recapitate scenario
         ts = msprime.sim_ancestry(5, end_time=0.5, random_seed=53)
         assert ts.first().num_roots > 1
-        recapitated1 = msprime.sim_ancestry(initial_state=ts, random_seed=234)
+        recapitated1 = msprime.sim_ancestry(
+            initial_state=ts, population_size=1, random_seed=234
+        )
         assert recapitated1.num_trees == 1
         assert recapitated1.first().num_roots == 1
 
         # We should get the same answer from the providing the tables argument.
-        recapitated2 = msprime.sim_ancestry(initial_state=ts.tables, random_seed=234)
+        recapitated2 = msprime.sim_ancestry(
+            initial_state=ts.tables, population_size=1, random_seed=234
+        )
         assert tree_sequences_equal(recapitated1, recapitated2)
 
     def test_replicate_index(self):
@@ -1834,12 +1898,6 @@ class TestReprRoundTrip:
         ]
         self.assert_repr_round_trip(examples)
 
-    def test_population_split(self):
-        examples = [
-            msprime.PopulationSplit(time=1, derived=[1, 2], ancestral=3),
-        ]
-        self.assert_repr_round_trip(examples)
-
     def test_simulation_model_change(self):
         examples = [
             msprime.SimulationModelChange(),
@@ -1887,3 +1945,53 @@ class TestReprRoundTrip:
             ),
         ]
         self.assert_repr_round_trip(examples)
+
+
+class TestUnknownGenomeRegions:
+    def test_sim_ancestry_unknown_flanks(self):
+        rate_map = msprime.RateMap(position=[0, 1, 9, 10], rate=[np.nan, 0, np.nan])
+        ts = msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)
+        assert ts.num_trees == 3
+        tree = ts.first()
+        assert tree.interval == (0, 1)
+        assert tree.num_roots == ts.num_samples
+        tree.next()  # noqa: B305
+        assert tree.interval == (1, 9)
+        assert tree.num_roots == 1
+        tree.next()  # noqa: B305
+        assert tree.interval == (9, 10)
+        assert tree.num_roots == ts.num_samples
+
+    def test_sim_ancestry_unknown_left(self):
+        rate_map = msprime.RateMap(position=[0, 1, 10], rate=[np.nan, 0])
+        ts = msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)
+        assert ts.num_trees == 2
+        tree = ts.first()
+        assert tree.interval == (0, 1)
+        assert tree.num_roots == ts.num_samples
+        tree.next()  # noqa: B305
+        assert tree.interval == (1, 10)
+        assert tree.num_roots == 1
+
+    def test_sim_ancestry_unknown_right(self):
+        rate_map = msprime.RateMap(position=[0, 9, 10], rate=[0, np.nan])
+        ts = msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)
+        assert ts.num_trees == 2
+        tree = ts.first()
+        assert tree.interval == (0, 9)
+        assert tree.num_roots == 1
+        tree.next()  # noqa: B305
+        assert tree.interval == (9, 10)
+        assert tree.num_roots == ts.num_samples
+
+    def test_sim_ancestry_unknown_mid(self):
+        rate_map = msprime.RateMap(position=[0, 1, 9, 10], rate=[0, np.nan, 0])
+        with pytest.raises(ValueError, match="Missing regions of the genome"):
+            msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)
+
+    def test_sim_ancestry_unknown_mid_plus_flanks(self):
+        rate_map = msprime.RateMap(
+            position=[0, 1, 5, 6, 7, 10], rate=[np.nan, 0, np.nan, 0, np.nan]
+        )
+        with pytest.raises(ValueError, match="Missing regions of the genome"):
+            msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)

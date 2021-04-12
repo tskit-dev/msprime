@@ -37,9 +37,9 @@ test_single_locus_simulation(void)
 
     memset(samples, 0, n * sizeof(sample_t));
     ret = build_sim(&msp, &tables, rng, 1, 1, samples, n);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* For the single locus sim we should have exactly n - 1 events */
     for (j = 0; j < n - 2; j++) {
@@ -250,7 +250,7 @@ test_single_locus_historical_sample(void)
             ret = msp_set_simulation_model_dtwf(&msp);
             CU_ASSERT_EQUAL(ret, 0);
         }
-        ret = msp_set_population_configuration(&msp, 0, 100, 0);
+        ret = msp_set_population_configuration(&msp, 0, 100, 0, true);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(&msp);
         CU_ASSERT_EQUAL(ret, 0);
@@ -309,7 +309,7 @@ test_single_locus_all_historical(void)
             ret = msp_set_simulation_model_dtwf(&msp);
             CU_ASSERT_EQUAL(ret, 0);
         }
-        ret = msp_set_population_configuration(&msp, 0, 100, 0);
+        ret = msp_set_population_configuration(&msp, 0, 100, 0, true);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(&msp);
         CU_ASSERT_EQUAL(ret, 0);
@@ -370,7 +370,7 @@ test_single_locus_multiple_historical_samples(void)
         CU_ASSERT_EQUAL(ret, 0);
 
         msp_print_state(&msp, _devnull);
-        ret = msp_run(&msp, 10, ULONG_MAX);
+        ret = msp_run(&msp, 10 - 1E-6, ULONG_MAX);
         CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
         CU_ASSERT_EQUAL(msp_get_num_ancestors(&msp), 1);
         msp_verify(&msp, 0);
@@ -417,7 +417,7 @@ test_single_locus_historical_sample_start_time(void)
                 ret = msp_set_simulation_model_dtwf(&msp);
                 CU_ASSERT_EQUAL(ret, 0);
             }
-            ret = msp_set_population_configuration(&msp, 0, 100, 0);
+            ret = msp_set_population_configuration(&msp, 0, 100, 0, true);
             CU_ASSERT_EQUAL(ret, 0);
             ret = msp_set_start_time(&msp, start_times[j]);
             CU_ASSERT_EQUAL(ret, 0);
@@ -480,13 +480,13 @@ test_single_locus_historical_sample_end_time(void)
             ret = msp_set_simulation_model_dtwf(&msp);
             CU_ASSERT_EQUAL(ret, 0);
         }
-        ret = msp_set_population_configuration(&msp, 0, 100, 0);
+        ret = msp_set_population_configuration(&msp, 0, 100, 0, true);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(&msp);
         CU_ASSERT_EQUAL(ret, 0);
 
         msp_print_state(&msp, _devnull);
-        ret = msp_run(&msp, 10.0, ULONG_MAX);
+        ret = msp_run(&msp, 10.0 - 1E-6, ULONG_MAX);
         CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
         /* msp_verify(&msp); */
 
@@ -734,7 +734,7 @@ test_dtwf_multi_locus_simulation(void)
     ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 0.1), 0);
-    ret = msp_set_population_configuration(&msp, 0, n, 0);
+    ret = msp_set_population_configuration(&msp, 0, n, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
     CU_ASSERT_EQUAL(ret, 0);
@@ -763,7 +763,7 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 0.1), 0);
     ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 0, n, 0);
+    ret = msp_set_population_configuration(&msp, 0, n, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
     ret = msp_initialise(&msp);
@@ -806,7 +806,7 @@ test_dtwf_deterministic(void)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_recombination_rate(&msp, 1);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_population_configuration(&msp, 0, n, 0);
+        ret = msp_set_population_configuration(&msp, 0, n, 0, true);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_initialise(&msp);
         CU_ASSERT_EQUAL(ret, 0);
@@ -847,7 +847,7 @@ test_dtwf_simultaneous_historical_samples(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 0, 100, 0);
+    ret = msp_set_population_configuration(&msp, 0, 100, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_initialise(&msp);
@@ -887,7 +887,7 @@ test_dtwf_low_recombination(void)
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1e-9), 0);
     ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 0, n, 0);
+    ret = msp_set_population_configuration(&msp, 0, n, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -927,9 +927,9 @@ test_dtwf_events_between_generations(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(&msp, 1);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 0, 10, 0);
+    ret = msp_set_population_configuration(&msp, 0, 10, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 1, 10, 0);
+    ret = msp_set_population_configuration(&msp, 1, 10, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1031,7 +1031,7 @@ test_dtwf_zero_pop_size(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 0, 0.4, 0);
+    ret = msp_set_population_configuration(&msp, 0, 0.4, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1047,7 +1047,7 @@ test_dtwf_zero_pop_size(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 0, 10, 100);
+    ret = msp_set_population_configuration(&msp, 0, 10, 100, true);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1076,9 +1076,9 @@ test_dtwf_migration_matrix_not_stochastic(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_simulation_model_dtwf(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 1, 10, 0);
+    ret = msp_set_population_configuration(&msp, 1, 10, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 2, 10, 0);
+    ret = msp_set_population_configuration(&msp, 2, 10, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(&msp, 9, migration_matrix);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1170,7 +1170,7 @@ test_pedigree_single_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
     msp_verify(&msp, 0);
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_STATE);
@@ -1226,7 +1226,7 @@ test_pedigree_multi_locus_simulation(void)
     ret = msp_initialise(&msp);
 
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
     msp_verify(&msp, 0);
     /* TODO put in some meaningful tests of the pedigree */
     ret = msp_set_simulation_model_dtwf(&msp);
@@ -1337,6 +1337,7 @@ test_mixed_hudson_dtwf(void)
     double N = 100;
     int model;
     double initial_size, growth_rate;
+    int state;
     const char *model_name;
     tsk_table_collection_t tables;
     tsk_treeseq_t ts;
@@ -1352,11 +1353,11 @@ test_mixed_hudson_dtwf(void)
     CU_ASSERT_EQUAL(ret, 0);
     /* Set the populations to 1, 2, and 3N. We don't simulate them,
      * but they should be equal at the end */
-    ret = msp_set_population_configuration(&msp, 0, N, 0);
+    ret = msp_set_population_configuration(&msp, 0, N, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 1, 2 * N, g);
+    ret = msp_set_population_configuration(&msp, 1, 2 * N, g, true);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 2, 3 * N, 2 * g);
+    ret = msp_set_population_configuration(&msp, 2, 3 * N, 2 * g, true);
     CU_ASSERT_EQUAL(ret, 0);
 
     ret = msp_initialise(&msp);
@@ -1368,10 +1369,12 @@ test_mixed_hudson_dtwf(void)
         msp_verify(&msp, 0);
         /* Check that our populations and growth rates are still correct */
         for (k = 0; k < 3; k++) {
-            ret = msp_get_population_configuration(&msp, k, &initial_size, &growth_rate);
+            ret = msp_get_population_configuration(
+                &msp, k, &initial_size, &growth_rate, &state);
             CU_ASSERT_EQUAL(ret, 0);
             CU_ASSERT_EQUAL(initial_size, (k + 1) * N);
             CU_ASSERT_EQUAL_FATAL(growth_rate, k * g);
+            CU_ASSERT_EQUAL(state, MSP_POP_STATE_ACTIVE);
         }
         CU_ASSERT_FALSE(msp_is_completed(&msp));
         if (j % 2 == 1) {
@@ -1672,7 +1675,7 @@ test_multiple_mergers_growth_rate(void)
             msp_set_ploidy(&msp, k);
 
             /* Set to a nonzero growth_rate */
-            ret = msp_set_population_configuration(&msp, 0, 1, -0.01);
+            ret = msp_set_population_configuration(&msp, 0, 1, -0.01, true);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
             ret = msp_initialise(&msp);
             CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1756,6 +1759,7 @@ test_simulator_getters_setters(void)
     gsl_rng *rng = safe_rng_alloc();
     double migration_matrix[] = { 0, 0, 0, 0 };
     double matrix[4], growth_rate, initial_size;
+    int state;
     double Ne = 4;
     size_t migration_events[4];
     size_t breakpoints[m];
@@ -1800,9 +1804,9 @@ test_simulator_getters_setters(void)
     CU_ASSERT_EQUAL(msp_set_node_mapping_block_size(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_segment_block_size(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
     CU_ASSERT_EQUAL(msp_set_avl_node_block_size(&msp, 0), MSP_ERR_BAD_PARAM_VALUE);
-    CU_ASSERT_EQUAL(msp_set_population_configuration(&msp, -1, 0, 0),
+    CU_ASSERT_EQUAL(msp_set_population_configuration(&msp, -1, 0, 0, true),
         MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-    CU_ASSERT_EQUAL(msp_set_population_configuration(&msp, 3, 0, 0),
+    CU_ASSERT_EQUAL(msp_set_population_configuration(&msp, 3, 0, 0, true),
         MSP_ERR_POPULATION_OUT_OF_BOUNDS);
     CU_ASSERT_EQUAL(msp_set_recombination_rate(&msp, -1), MSP_ERR_BAD_RATE_VALUE);
     CU_ASSERT_EQUAL(
@@ -1822,12 +1826,12 @@ test_simulator_getters_setters(void)
 
     ret = msp_set_simulation_model_hudson(&msp);
     CU_ASSERT_EQUAL(msp_get_model(&msp)->type, MSP_MODEL_HUDSON);
-    ret = msp_set_population_configuration(&msp, 0, Ne, 0);
+    ret = msp_set_population_configuration(&msp, 0, Ne, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
 
-    CU_ASSERT_EQUAL(msp_get_population_configuration(&msp, 3, NULL, NULL),
+    CU_ASSERT_EQUAL(msp_get_population_configuration(&msp, 3, NULL, NULL, NULL),
         MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-    ret = msp_set_population_configuration(&msp, 0, 2 * Ne, 0.5);
+    ret = msp_set_population_configuration(&msp, 0, 2 * Ne, 0.5, true);
     CU_ASSERT_EQUAL(ret, 0);
 
     CU_ASSERT_EQUAL(
@@ -1853,10 +1857,11 @@ test_simulator_getters_setters(void)
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 
-    ret = msp_get_population_configuration(&msp, 0, &initial_size, &growth_rate);
+    ret = msp_get_population_configuration(&msp, 0, &initial_size, &growth_rate, &state);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL(initial_size, 2 * Ne);
     CU_ASSERT_EQUAL(growth_rate, 0.5);
+    CU_ASSERT_EQUAL(state, MSP_POP_STATE_ACTIVE);
 
     CU_ASSERT_TRUE(msp_get_store_migrations(&msp));
     CU_ASSERT_EQUAL(msp_get_num_avl_node_blocks(&msp), 1);
@@ -1904,7 +1909,8 @@ test_demographic_events(void)
     gsl_rng *rng = safe_rng_alloc();
     double migration_matrix[] = { 0, 0.1, 0.1, 0 };
     double last_time, time, pop_size;
-    int source[2];
+    int pops[2];
+    double probs[2] = { 0, 1 };
     tsk_table_collection_t tables;
     msp_t msp;
 
@@ -1921,12 +1927,12 @@ test_demographic_events(void)
         CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1), 0);
 
         /* Negative population sizes are not allowed */
-        ret = msp_set_population_configuration(&msp, 0, -1, 0);
+        ret = msp_set_population_configuration(&msp, 0, -1, 0, true);
         CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_PARAM_VALUE);
 
-        ret = msp_set_population_configuration(&msp, 0, 1, 0.001);
+        ret = msp_set_population_configuration(&msp, 0, 1, 0.001, true);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_population_configuration(&msp, 1, 2, 0.002);
+        ret = msp_set_population_configuration(&msp, 1, 2, 0.002, true);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
         CU_ASSERT_EQUAL(ret, 0);
@@ -1939,9 +1945,9 @@ test_demographic_events(void)
             CU_ASSERT_EQUAL(ret, 0);
         }
 
-        ret = msp_set_population_configuration(&msp, 0, 0, 0);
+        ret = msp_set_population_configuration(&msp, 0, 0, 0, true);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_population_configuration(&msp, 0, 100, 0);
+        ret = msp_set_population_configuration(&msp, 0, 100, 0, true);
         CU_ASSERT_EQUAL(ret, 0);
 
         CU_ASSERT_EQUAL(msp_add_mass_migration(&msp, 10, -1, 0, 1),
@@ -1953,20 +1959,51 @@ test_demographic_events(void)
         CU_ASSERT_EQUAL(
             msp_add_mass_migration(&msp, 10, 0, 1, -5), MSP_ERR_BAD_PROPORTION);
 
-        source[0] = 0;
-        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 100, source, 1),
-            MSP_ERR_TOO_MANY_SPLIT_POPULATIONS);
-        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 1, source, 2),
+        pops[0] = 0;
+        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 100, pops, 1),
+            MSP_ERR_TOO_MANY_EVENT_POPULATIONS);
+        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 1, pops, 2),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
         CU_ASSERT_EQUAL_FATAL(
-            msp_add_population_split(&msp, 10, 1, source, 0), MSP_ERR_SOURCE_DEST_EQUAL);
-        source[0] = -1;
-        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 1, source, 0),
+            msp_add_population_split(&msp, 10, 1, pops, 0), MSP_ERR_SOURCE_DEST_EQUAL);
+        pops[0] = -1;
+        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 1, pops, 0),
             MSP_ERR_POPULATION_OUT_OF_BOUNDS);
-        source[0] = 0;
-        source[1] = 0;
-        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 2, source, 1),
+        pops[0] = 0;
+        pops[1] = 0;
+        CU_ASSERT_EQUAL(msp_add_population_split(&msp, 10, 2, pops, 1),
             MSP_ERR_DUPLICATE_POPULATION);
+        CU_ASSERT_EQUAL(
+            msp_add_population_split(&msp, -1, 1, pops, 1), MSP_ERR_BAD_PARAM_VALUE);
+
+        pops[0] = 0;
+        CU_ASSERT_EQUAL(msp_add_admixture(&msp, 10.0, 1, 100, pops, probs),
+            MSP_ERR_TOO_MANY_EVENT_POPULATIONS);
+        CU_ASSERT_EQUAL(msp_add_admixture(&msp, 10.0, 2, 1, pops, probs),
+            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL(msp_add_admixture(&msp, 10.0, -1, 1, pops, probs),
+            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+        CU_ASSERT_EQUAL_FATAL(
+            msp_add_admixture(&msp, 10, 0, 1, pops, probs), MSP_ERR_SOURCE_DEST_EQUAL);
+        pops[0] = -1;
+        CU_ASSERT_EQUAL_FATAL(msp_add_admixture(&msp, 10, 0, 1, pops, probs),
+            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+        pops[0] = 2;
+        CU_ASSERT_EQUAL_FATAL(msp_add_admixture(&msp, 10, 0, 1, pops, probs),
+            MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+        pops[0] = 1;
+        pops[1] = 1;
+        CU_ASSERT_EQUAL_FATAL(msp_add_admixture(&msp, 10, 0, 2, pops, probs),
+            MSP_ERR_DUPLICATE_POPULATION);
+        probs[0] = -1;
+        CU_ASSERT_EQUAL_FATAL(
+            msp_add_admixture(&msp, 10, 0, 1, pops, probs), MSP_ERR_BAD_PROPORTION);
+        probs[0] = 1.1;
+        CU_ASSERT_EQUAL_FATAL(
+            msp_add_admixture(&msp, 10, 0, 1, pops, probs), MSP_ERR_BAD_PROPORTION);
+        probs[0] = 1;
+        CU_ASSERT_EQUAL_FATAL(
+            msp_add_admixture(&msp, -1, 0, 1, pops, probs), MSP_ERR_BAD_PARAM_VALUE);
 
         CU_ASSERT_EQUAL(msp_add_migration_rate_change(&msp, 10, -1, 0, 0.2),
             MSP_ERR_BAD_MIGRATION_MATRIX_INDEX);
@@ -2046,13 +2083,6 @@ test_demographic_events(void)
             ret = msp_add_mass_migration(&msp, 2.5, 1, 0, 0.6);
             CU_ASSERT_EQUAL(ret, 0);
         }
-
-        source[0] = 0;
-        /* Zero source populations have no effect */
-        ret = msp_add_population_split(&msp, 10.6, 0, source, 1);
-        CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_add_population_split(&msp, 10.6, 1, source, 1);
-        CU_ASSERT_EQUAL(ret, 0);
 
         CU_ASSERT_EQUAL(msp_add_mass_migration(&msp, 0.1, 0, 1, 0.5),
             MSP_ERR_UNSORTED_DEMOGRAPHIC_EVENTS);
@@ -2180,15 +2210,490 @@ test_population_split(void)
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[3].state, MSP_POP_STATE_ACTIVE);
+
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
     msp_verify(&msp, 0);
     msp_print_state(&msp, _devnull);
 
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[3].state, MSP_POP_STATE_ACTIVE);
+
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
+}
+
+static void
+test_population_split_debug(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    int32_t derived[2];
+    double time;
+    /*
+            6
+          ┏━┻━┓
+          ┃   5
+          ┃ ┏━┻┓
+          ┃ ┃  4
+          ┃ ┃ ┏┻┓
+          0 1 2 3
+    */
+    ret = build_sim(&msp, &tables, rng, 1, 7, NULL, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    derived[0] = 2;
+    derived[1] = 3;
+    ret = msp_add_population_split(&msp, 4, 2, derived, 4);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 4, 1, 0, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    derived[0] = 1;
+    derived[1] = 4;
+    ret = msp_add_population_split(&msp, 5, 2, derived, 5);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 5, 1, 0, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    derived[0] = 0;
+    derived[1] = 5;
+    ret = msp_add_population_split(&msp, 6, 2, derived, 6);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 6, 1, 0, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[3].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[4].state, MSP_POP_STATE_INACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[5].state, MSP_POP_STATE_INACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[6].state, MSP_POP_STATE_INACTIVE);
+
+    ret = msp_debug_demography(&msp, &time);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(time, 4);
+
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[3].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[4].state, MSP_POP_STATE_INACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[5].state, MSP_POP_STATE_INACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[6].state, MSP_POP_STATE_INACTIVE);
+
+    ret = msp_debug_demography(&msp, &time);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(time, 5);
+
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[3].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[4].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[5].state, MSP_POP_STATE_INACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[6].state, MSP_POP_STATE_INACTIVE);
+
+    ret = msp_debug_demography(&msp, &time);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(time, 6);
+
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[3].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[4].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[5].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[6].state, MSP_POP_STATE_INACTIVE);
+
+    ret = msp_debug_demography(&msp, &time);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(isinf(time));
+
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[3].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[4].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[5].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[6].state, MSP_POP_STATE_ACTIVE);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_population_split_replicates(void)
+{
+    int ret;
+    int j;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    int32_t derived[] = { 0, 1 };
+    sample_t samples[]
+        = { { .time = 0, .population = 0 }, { .time = 0, .population = 1 } };
+    /*
+        2
+       ┏┻┓
+       0 1
+    */
+    /* Nominal case. */
+    ret = build_sim(&msp, &tables, rng, 1, 3, samples, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_split(&msp, 2, 2, derived, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 2, 1, 0, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    for (j = 0; j < 10; j++) {
+        ret = msp_reset(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_ACTIVE);
+        CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_ACTIVE);
+        CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_INACTIVE);
+
+        ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+        CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+        CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_ACTIVE);
+    }
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_inactive_populations(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    int32_t derived[] = { 0, 1 };
+    sample_t samples[]
+        = { { .time = 0, .population = 0 }, { .time = 0, .population = 1 } };
+    /*
+        2
+       ┏┻┓
+       0 1
+    */
+    /* Nominal case. */
+    ret = build_sim(&msp, &tables, rng, 1, 3, samples, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_split(&msp, 2, 2, derived, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 2, 1, 0, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    /* Sample from inactive at time zero. */
+    samples[0].population = 2;
+    ret = build_sim(&msp, &tables, rng, 1, 3, samples, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_split(&msp, 2, 2, derived, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 2, 1, 0, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_INACTIVE_SAMPLE);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    /* Sample from inactive as event. */
+    samples[0].population = 2;
+    samples[0].time = 1;
+    ret = build_sim(&msp, &tables, rng, 1, 3, samples, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_split(&msp, 2, 2, derived, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 2, 1, 0, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_INACTIVE_SAMPLE);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    /* Migrate into inactive via mass migration */
+    samples[0].population = 0;
+    samples[0].time = 0;
+    ret = build_sim(&msp, &tables, rng, 1, 3, samples, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_split(&msp, 2, 2, derived, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_mass_migration(&msp, 2.0001, 2, 1, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_INACTIVE_MOVE);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    /* Migrate into inactive via continuous migration */
+    ret = build_sim(&msp, &tables, rng, 1, 3, samples, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_split(&msp, 2, 2, derived, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_migration_rate_change(&msp, 2.0001, 2, 1, 10.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_INACTIVE_MOVE);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    gsl_rng_free(rng);
+}
+
+static void
+test_admixture(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    sample_t samples[] = {
+        { .time = 0, .population = 3 },
+        { .time = 0, .population = 3 },
+        { .time = 0, .population = 3 },
+        { .time = 0, .population = 3 },
+        { .time = 0, .population = 3 },
+        { .time = 0, .population = 3 },
+    };
+    int admix_source[] = { 0, 1, 2 };
+    double probs[] = { 0.25, 0.25, 0.5 };
+    tsk_table_collection_t tables;
+
+    /* Build a 5 pop model, where 3 is admixed from 0, 1, 2, and then
+     * 0, 1, 2 all split from 4. */
+    ret = build_sim(&msp, &tables, rng, 1, 5, samples, 6);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_admixture(&msp, 0.5, 3, 3, admix_source, probs);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_population_split(&msp, 1.5, 3, admix_source, 4);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 4, 1, 0, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[3].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[4].state, MSP_POP_STATE_INACTIVE);
+
+    ret = msp_run(&msp, 0.51, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
+    msp_verify(&msp, 0);
+    msp_print_state(&msp, _devnull);
+
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[3].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[4].state, MSP_POP_STATE_INACTIVE);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp, 0);
+    msp_print_state(&msp, _devnull);
+
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[3].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[4].state, MSP_POP_STATE_ACTIVE);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_admixture_excess_probability(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    sample_t samples[] = {
+        { .time = 0, .population = 3 },
+        { .time = 0, .population = 3 },
+        { .time = 0, .population = 3 },
+        { .time = 0, .population = 3 },
+        { .time = 0, .population = 3 },
+        { .time = 0, .population = 1 },
+    };
+    int admix_source[] = { 0, 1, 2 };
+    /* Put all the weight on population 1, but don't make the total sum = 1 */
+    double probs[] = { 0.00001, 1, 0.5 };
+    tsk_table_collection_t tables;
+
+    /* Build a 4 pop model, where 3 is admixed from 0, 1, 2. Since all
+     * the probability is from pop 1, the lineages should all migrate there
+     * and coalesce */
+    ret = build_sim(&msp, &tables, rng, 1, 4, samples, 6);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_admixture(&msp, 0.5, 3, 3, admix_source, probs);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[3].state, MSP_POP_STATE_ACTIVE);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp, 0);
+    msp_print_state(&msp, _devnull);
+
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[2].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[3].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_population_state_machine_errors(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    double time;
+    double proba[] = { 1 };
+    int32_t derived[] = { 0 };
+    int32_t ancestral[] = { 0 };
+
+    /* PREVIOUSLY_ACTIVE -> ACTIVE */
+    ret = build_sim(&msp, &tables, rng, 1, 3, NULL, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* 0 -> 1 */
+    derived[0] = 0;
+    ret = msp_add_population_split(&msp, 2, 1, derived, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* 1 -> 2 */
+    derived[0] = 1;
+    ret = msp_add_population_split(&msp, 2, 1, derived, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* 2 -> 1 */
+    derived[0] = 2;
+    ret = msp_add_population_split(&msp, 2, 1, derived, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_debug_demography(&msp, &time);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(time, 2);
+    ret = msp_debug_demography(&msp, &time);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_POPULATION_PREVIOUSLY_ACTIVE);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    /* Inactive population as admixture derived.*/
+    ret = build_sim(&msp, &tables, rng, 1, 2, NULL, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* 0 -> 1 */
+    ancestral[0] = 1;
+    ret = msp_add_admixture(&msp, 2, 0, 1, ancestral, proba);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* 1 -> 0 */
+    derived[0] = 1;
+    ret = msp_add_population_split(&msp, 2, 1, derived, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 1, 0, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_debug_demography(&msp, &time);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(time, 2);
+    ret = msp_debug_demography(&msp, &time);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ADMIX_DERIVED_NOT_ACTIVE);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    /* Inactive population as admix ancestral.*/
+    ret = build_sim(&msp, &tables, rng, 1, 2, NULL, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* 1 -> 0 */
+    ancestral[0] = 0;
+    ret = msp_add_admixture(&msp, 2, 1, 1, ancestral, proba);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* 1 -> 0 */
+    derived[0] = 1;
+    ret = msp_add_population_split(&msp, 2, 1, derived, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 1, 0, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_debug_demography(&msp, &time);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(time, 2);
+    ret = msp_debug_demography(&msp, &time);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ADMIX_ANCESTRAL_NOT_ACTIVE);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    /* derived not active in split */
+    ret = build_sim(&msp, &tables, rng, 1, 2, NULL, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* 0 -> 1 */
+    derived[0] = 0;
+    ret = msp_add_population_split(&msp, 2, 1, derived, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    /* 1 -> 0 */
+    derived[0] = 1;
+    ret = msp_add_population_split(&msp, 2, 1, derived, 0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 1, 0, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_debug_demography(&msp, &time);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(time, 2);
+    ret = msp_debug_demography(&msp, &time);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_SPLIT_DERIVED_NOT_ACTIVE);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    gsl_rng_free(rng);
 }
 
 static void
@@ -2271,7 +2776,7 @@ test_floating_point_extremes(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, DBL_MAX), 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_discrete_genome(&msp, false), 0);
-    ret = msp_set_population_configuration(&msp, 0, DBL_MAX, 0);
+    ret = msp_set_population_configuration(&msp, 0, DBL_MAX, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2478,7 +2983,7 @@ test_large_bottleneck_simulation(void)
             &msp, bottlenecks[j].time, 0, bottlenecks[j].parameter);
         CU_ASSERT_EQUAL(ret, 0);
     }
-    ret = msp_set_population_configuration(&msp, 0, 0.25, 0);
+    ret = msp_set_population_configuration(&msp, 0, 0.25, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2537,7 +3042,7 @@ verify_simulate_from(int model, rate_map_t *recomb_map,
         ret = msp_set_simulation_model_dtwf(&msp);
         CU_ASSERT_EQUAL(ret, 0);
     }
-    ret = msp_set_population_configuration(&msp, 0, 10, 0);
+    ret = msp_set_population_configuration(&msp, 0, 10, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
     /* TODO add dirac and other models */
     ret = msp_initialise(&msp);
@@ -2925,11 +3430,11 @@ check_zero_population_size(
             CU_ASSERT_EQUAL(ret, 0);
         }
 
-        ret = msp_set_population_configuration(&msp, 0, 0, 0);
+        ret = msp_set_population_configuration(&msp, 0, 0, 0, true);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_population_configuration(&msp, 1, N, 0);
+        ret = msp_set_population_configuration(&msp, 1, N, 0, true);
         CU_ASSERT_EQUAL(ret, 0);
-        ret = msp_set_population_configuration(&msp, 2, N, 0);
+        ret = msp_set_population_configuration(&msp, 2, N, 0, true);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_add_mass_migration(&msp, T, 1, 0, 1.0);
         CU_ASSERT_EQUAL(ret, 0);
@@ -2973,8 +3478,8 @@ test_zero_population_size(void)
     check_zero_population_size(samples_good_1, n, N, T, 0, 0);
     check_zero_population_size(samples_good_2, n, N, T, 0, 0);
     check_zero_population_size(samples_good_3, n, N, T, 0, 0);
-    check_zero_population_size(samples_bad_1, n, N, T, MSP_ERR_BAD_SAMPLES, 0);
-    check_zero_population_size(samples_bad_2, n, N, T, 0, MSP_ERR_BAD_SAMPLES);
+    check_zero_population_size(samples_bad_1, n, N, T, MSP_ERR_POP_SIZE_ZERO_SAMPLE, 0);
+    check_zero_population_size(samples_bad_2, n, N, T, 0, MSP_ERR_POP_SIZE_ZERO_SAMPLE);
 }
 
 int
@@ -3032,6 +3537,12 @@ main(int argc, char **argv)
         { "test_demographic_events", test_demographic_events },
         { "test_demographic_events_start_time", test_demographic_events_start_time },
         { "test_population_split", test_population_split },
+        { "test_population_split_debug", test_population_split_debug },
+        { "test_population_split_replicates", test_population_split_replicates },
+        { "test_inactive_populations", test_inactive_populations },
+        { "test_admixture", test_admixture },
+        { "test_admixture_excess_probability", test_admixture_excess_probability },
+        { "test_population_state_machine_errors", test_population_state_machine_errors },
         { "test_census_event", test_census_event },
         { "test_time_travel_error", test_time_travel_error },
         { "test_floating_point_extremes", test_floating_point_extremes },

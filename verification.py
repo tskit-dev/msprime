@@ -56,6 +56,7 @@ import argparse
 import ast
 import collections
 import concurrent.futures
+import functools
 import inspect
 import itertools
 import json
@@ -312,7 +313,7 @@ class Test:
         return df
 
     def _build_filename(self, *args):
-        return self.output_dir / "_".join(args[1:])
+        return self.output_dir / ("_".join(args[1:]) + ".png")
 
     def _plot_stats(self, stats_type, df1, df2, df1_name, df2_name):
         assert set(df1.columns.values) == set(df2.columns.values)
@@ -331,9 +332,12 @@ class Test:
                 f = self._build_filename(stats_type, stat)
                 pyplot.savefig(f, dpi=72)
                 pyplot.close("all")
+                # Put the histograms in their own directory to avoid
+                # cluttering up the qqplots.
                 plot_stat_hist(v1, v2, df1_name, df2_name)
-                f = self._build_filename(stats_type, stat)
-                f = str(f) + ".hist.png"
+                histdir = self.output_dir / "histograms"
+                histdir.mkdir(exist_ok=True)
+                f = histdir / f.name
                 pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
@@ -796,7 +800,7 @@ class DiscoalTest(Test):
                 theta = float(tokens[i + 1])
             if tokens[i] == "-r":
                 rho = float(tokens[i + 1])
-        mod_list = [("hudson")]
+        mod_list = []
         if alpha is not None:
             # sweep model
             s = alpha / (2 * refsize)
@@ -807,7 +811,8 @@ class DiscoalTest(Test):
                 s=s * 2,  # discoal fitness model is 1, 1+s, 1+2s
                 dt=1e-6,
             )
-            mod_list.append((sweep_mod_time, mod))
+            mod_list.append(msprime.StandardCoalescent(duration=sweep_mod_time))
+            mod_list.append(mod)
             # if an event is defined from discoal line
             # best thing to do is rescale to Ne=0.25
             # so that time scale are consistent
@@ -817,21 +822,23 @@ class DiscoalTest(Test):
                 refsize = 0.25
                 mod.s = alpha / refsize
         # append final model
-        mod_list.append((None, "hudson"))
-        # scale theta and rho and create recomb_map
-        recomb_map = msprime.RecombinationMap.uniform_map(
-            seq_length, rho / 4 / refsize / (seq_length - 1)
-        )
-        mu = theta / 4 / refsize / seq_length
-        replicates = msprime.simulate(
-            sample_size,
-            Ne=refsize,
+        mod_list.append("hudson")
+        # scale theta and rho
+        recomb_rate = rho / (4 * refsize * (seq_length - 1))
+        mu = theta / (4 * refsize * seq_length)
+        replicates = msprime.sim_ancestry(
+            [msprime.SampleSet(sample_size, ploidy=1)],
+            population_size=refsize,
             model=mod_list,
-            recombination_map=recomb_map,
-            mutation_rate=mu,
+            recombination_rate=recomb_rate,
+            sequence_length=seq_length,
+            discrete_genome=False,
             num_replicates=nreps,
         )
-        return replicates
+        mutate = functools.partial(
+            msprime.sim_mutations, discrete_genome=False, rate=mu
+        )
+        return map(mutate, replicates)
 
 
 class DiscoalCompatibility(DiscoalTest):
@@ -900,7 +907,7 @@ class DiscoalSweeps(DiscoalTest):
         self._run(cmd)
 
     def test_sweep_no_rec_ex2(self):
-        cmd = "10 1000 10000 -t 10.0 -r 0.0 -ws 0 -a 200 -x 0.5 -N 10000"
+        cmd = "100 1000 10000 -t 10.0 -r 0.0 -ws 0 -a 200 -x 0.5 -N 10000"
         self._run(cmd)
 
     def test_sweep_rec_ex1(self):
@@ -940,12 +947,19 @@ def sample_recap_simplify(slim_ts, sample_size, Ne, r, mu):
     """
     takes a ts from slim and samples, recaps, simplifies
     """
-    recap = msprime.sim_ancestry(
-        initial_state=slim_ts,
-        population_size=Ne,
-        recombination_rate=r,
-        start_time=slim_ts.metadata["SLiM"]["generation"],
-    )
+    demography = msprime.Demography.from_tree_sequence(slim_ts)
+    demography[1].initial_size = Ne
+    with warnings.catch_warnings():
+        warnings.simplefilter(
+            "ignore", category=msprime.IncompletePopulationMetadataWarning
+        )
+        recap = msprime.sim_ancestry(
+            initial_state=slim_ts,
+            demography=demography,
+            recombination_rate=r,
+            # TODO is this needed now? Shouldn't be, right?
+            start_time=slim_ts.metadata["SLiM"]["generation"],
+        )
     rts = pyslim.SlimTreeSequence(recap)
     logging.debug(f"pyslim: slim generation:{slim_ts.metadata['SLiM']['generation']}")
     alive_inds = rts.individuals_alive_at(0)
@@ -987,7 +1001,7 @@ class SweepVsSlim(Test):
         replicates = msprime.sim_ancestry(
             sample_size,
             population_size=pop_size,
-            model=[None, (tau, sweep), (None, "hudson")],
+            model=[msprime.StandardCoalescent(duration=tau), sweep, "hudson"],
             recombination_rate=recombination_rate,
             sequence_length=seq_length,
             num_replicates=num_replicates,
@@ -1114,13 +1128,7 @@ class SweepVsSlim(Test):
         self._run(10, 1e6, 1e3, 1e-7, 0.25, 5000, num_replicates=10)
 
 
-# FIXME disabling these for now because they are unreliable and result in
-# errors (root: EXCEPTION:No columns to parse from file). This is probably
-# harmless as it means there's no data simulated, but it stops the rest
-# of the tests from running so we need to deal with it somehow.
-
-
-class MsmsSweeps:
+class MsmsSweeps(Test):
     """
     Compare msms with msprime/discoal for selective sweeps.
 
@@ -1263,36 +1271,53 @@ class MsmsSweeps:
         samples.
         """
         if params["num_sweeps"] > 0:
-            model = [None]
+            model = []
+            t_start = params["end_time_lst"][0] * 4 * params["refsize"]
+            model.append(msprime.StandardCoalescent(duration=(t_start - 0)))
             for i in range(params["num_sweeps"]):
                 temp_model = msprime.SweepGenicSelection(
-                    position=params["sel_pos"],
+                    position=params["sel_pos"] * params["num_sites"],
                     end_frequency=params["end_frequency_lst"][i],
                     start_frequency=0.5 / params["refsize"],
-                    alpha=params["alpha"],
+                    s=params["alpha"] / params["refsize"],  # alpha=saA, s=sAA/(2N)
                     dt=1.0 / (40 * params["refsize"]),
                 )
-                t_start = params["end_time_lst"][i]
-                model.append((t_start, temp_model))
-            model.append((None, None))
+                model.append(temp_model)
+                # Before the Sweep model is made interruptable and support multiple
+                # sweeps, we just use a single sweep for now.
+                break
+            model.append(msprime.StandardCoalescent())
 
         else:
             model = "hudson"
 
-        scale_factor = params["num_sites"]
-        recombination_rate = params["rho"] / (scale_factor - 1)
+        scale_factor = 4.0 * params["refsize"] * (params["num_sites"] - 1)
+        recombination_rate = params["rho"] / scale_factor
+        scale_factor = 4.0 * params["refsize"] * params["num_sites"]
         mutation_rate = params["theta"] / scale_factor
 
-        ts = msprime.simulate(
-            sample_size=params["nsam"],
-            Ne=0.25,
-            length=params["num_sites"],
-            mutation_rate=mutation_rate,
-            recombination_rate=recombination_rate,
+        repeats = msprime.sim_ancestry(
+            samples=params["nsam"] / 2,  # use sample size of diploids
+            population_size=params["refsize"],
             model=model,
+            recombination_rate=recombination_rate,
+            discrete_genome=False,
+            sequence_length=params["num_sites"],
+            num_replicates=params["nrep"],
         )
 
-        return ts
+        # Critical to use BinaryMutationModel and get ancestral and derived alleles
+        mutated_repeats = [
+            msprime.sim_mutations(
+                ts,
+                rate=mutation_rate,
+                model=msprime.BinaryMutationModel(),
+                discrete_genome=False,
+            )
+            for ts in repeats
+        ]
+
+        return mutated_repeats
 
     def _run_msp_sample_stats(self, msms_cmd):
         """
@@ -1305,12 +1330,12 @@ class MsmsSweeps:
 
         # run simulation and print ms format data into a file
         msms_params = self._msms_str_to_parameters(msms_cmd)
-        num_replicates = msms_params["nrep"]
         print("ms " + msms_cmd, file=output)  # needed by sample_stat tools
         self._ms_random_seeds = msms_params["rand_seed"] = self.get_ms_seeds()
 
-        for _ in range(num_replicates):
-            tree_sequence = self._msms_params_to_run_msp(msms_params)
+        mutated_ts_repeats = self._msms_params_to_run_msp(msms_params)
+
+        for tree_sequence in mutated_ts_repeats:
             print(file=output)
             print("//", file=output)
             if msms_params["theta"] > 0:
@@ -1378,7 +1403,11 @@ class MsmsSweeps:
         return self._run_sample_stats(_discoal_executable + discoal_cmd.split(" "))
 
     def _cmp_msms_vs_msp(self, cmd):
-        df_msp = self._run_msp_sample_stats(cmd)
+        try:
+            df_msp = self._run_msp_sample_stats(cmd)
+        except pd.error.ParserError:
+            logging.warning("msm_vs_msp FAILED")
+            return
         df_msms = self._run_msms_sample_stats(cmd)
         self._plot_stats("msp_msms", df_msp, df_msms, "msp", "msms")
 
@@ -1397,7 +1426,7 @@ class MsmsSweeps:
     def test_neutral_msms_vs_msp(self):
         self._cmp_msms_vs_msp("100 300 -t 200 -r 200 500000 -N 10000")
 
-    def test_selective_discoal_vs_msp(self):
+    def _test_selective_discoal_vs_msp(self):
         self._cmp_discoal_vs_msp_via_msms_cmd(
             "100 300 -t 20 -r 20 50000"
             " -SF 0 0.99995 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
@@ -1414,12 +1443,15 @@ class MsmsSweeps:
             "100 300 -t 200 -r 200 500000 -SF 0 0.9 -Sp 0.5 -SaA 1 -SAA 2 -N 10000"
         )
 
-    def test_selective_msms_vs_msp_multiple_sweeps(self):
+    """ Not implemented
+    def _test_selective_msms_vs_msp_multiple_sweeps(self):
+
         self._cmp_msms_vs_msp(
             "100 300 -t 200 -r 200 500000"
             " -SF 0 0.9 -Sp 0.5"
             " -SF 0.1 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
         )
+    """
 
     def _test_selective_msp_50Mb(self):
         """
@@ -1498,11 +1530,15 @@ class SweepAnalytical(Test):
         return 4.0 / s * inner
 
     def test_sojourn_time(self):
-        alphas = np.arange(5e-3, 5e-2, 5e-3)
+        """
+        testing against expected sojourn time of a
+        beneficial mutation over a range of selection
+        coefficients
+        """
+        alphas = np.linspace(100, 5000, 20)
         refsize = 1e4
-        nreps = 500
+        nreps = 50
         seqlen = 1e4
-        mu = 2.5e-8
         rho = 0
         p0 = 1.0 / (2 * refsize)
         p1 = 1 - p0
@@ -1511,18 +1547,17 @@ class SweepAnalytical(Test):
         df = pd.DataFrame()
         data = collections.defaultdict(list)
         for a in alphas:
-            mod = msprime.SweepGenicSelection(
-                start_frequency=p0, end_frequency=p1, s=a, dt=dt, position=pos
-            )
             s = a / 2 / refsize
-            replicates = msprime.simulate(
-                10,
-                Ne=refsize,
-                model=[mod],
-                length=seqlen,
+            mod = msprime.SweepGenicSelection(
+                start_frequency=p0, end_frequency=p1, s=s, dt=dt, position=pos
+            )
+            replicates = msprime.sim_ancestry(
+                5,
+                population_size=refsize,
+                model=mod,
+                sequence_length=seqlen,
                 num_labels=2,
                 recombination_rate=rho,
-                mutation_rate=mu,
                 num_replicates=nreps,
             )
 
@@ -1537,6 +1572,10 @@ class SweepAnalytical(Test):
                 reptimes[i] = np.max(tree_times)
                 i += 1
             data["alpha_means"].append(np.mean(reptimes))
+            logging.debug(
+                f"mean time for alpha={a} / s={s} -- \
+                          {np.mean(reptimes)}"
+            )
             data["exp_means"].append(self.charlesworth_exp_sojourn(a, s))
         df = pd.DataFrame.from_dict(data)
         df = df.fillna(0)
@@ -1548,32 +1587,32 @@ class SweepAnalytical(Test):
         pyplot.close("all")
 
     def test_sojourn_time2(self):
+        """
+        testing against expected sojourn time of a
+        beneficial mutation over a range of population
+        sizes but keeping 2Ns constant
+        """
         alpha = 1000
-        refsizes = [0.25, 0.5, 1.0]
-        selrefsize = 1000
-        nreps = 500
+        refsizes = np.linspace(1e2, 1e4, 10)
+        nreps = 50
         seqlen = 1e4
-        mu = 2.5e-8
-        rho = 0
-        p0 = 1.0 / (2 * selrefsize)
-        p1 = 1 - p0
-        dt = 1.0 / (400 * selrefsize)
+        dt = 1e-6
         pos = np.floor(seqlen / 2)
         df = pd.DataFrame()
         data = collections.defaultdict(list)
         for n in refsizes:
             s = alpha / (2 * n)
+            p0 = 1.0 / (2 * n)
+            p1 = 1 - p0
             mod = msprime.SweepGenicSelection(
                 start_frequency=p0, end_frequency=p1, s=s, dt=dt, position=pos
             )
-            replicates = msprime.simulate(
-                10,
-                Ne=n,
-                model=[mod],
-                length=seqlen,
+            replicates = msprime.sim_ancestry(
+                5,
+                population_size=n,
+                model=mod,
+                sequence_length=seqlen,
                 num_labels=2,
-                recombination_rate=rho,
-                mutation_rate=mu,
                 num_replicates=nreps,
             )
 
@@ -1589,6 +1628,10 @@ class SweepAnalytical(Test):
                 i += 1
             data["alpha_means"].append(np.mean(reptimes))
             data["exp_means"].append(self.hermissonPennings_exp_sojourn(alpha) * 2 * n)
+            logging.debug(
+                f"mean time for N={n} -- \
+                          {np.mean(reptimes)}"
+            )
         df = pd.DataFrame.from_dict(data)
         df = df.fillna(0)
         sm.qqplot_2samples(df["exp_means"], df["alpha_means"], line="45")
@@ -1825,9 +1868,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
 
     def test_dtwf_vs_coalescent_2_pops_massmigration(self):
         demography = msprime.Demography.isolated_model([1000, 1000])
-        demography.events.append(
-            msprime.MassMigration(time=300, source=1, destination=0, proportion=1.0)
-        )
+        demography.add_mass_migration(time=10, source=1, dest=0, proportion=1.0)
         self._run(
             samples={0: 10, 1: 10},
             demography=demography,
@@ -1957,7 +1998,7 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
                 row[i] = 0
                 migration_matrix.append(row)
 
-        demography.migration_matrix = migration_matrix
+        demography.migration_matrix[:] = migration_matrix
 
         super()._run(
             samples={j: sample_size for j, sample_size in enumerate(sample_sizes)},
@@ -2130,7 +2171,7 @@ class DtwfVsSlim(Test):
                 row = [default_mig_rate] * num_pops
                 row[i] = 0
                 migration_matrix.append(row)
-        demography.migration_matrix = migration_matrix
+        demography.migration_matrix[:] = migration_matrix
 
         # SLiM rates are 'immigration' forwards in time, which matches
         # DTWF backwards-time 'emmigration'
@@ -2197,7 +2238,7 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
             migration_matrix.append(
                 [random.uniform(0.05, 0.25) * (j != i) for j in range(N)]
             )
-        demography.migration_matrix = migration_matrix
+        demography.migration_matrix[:] = migration_matrix
 
         # Add demographic events and some migration rate changes
         t_max = 1000
@@ -2554,15 +2595,8 @@ class KnownSFS(Test):
         data = collections.defaultdict(list)
         tbl_sum = [0] * (sample_size - 1)
         tot_bl_sum = [0]
-        # Because we have input cases which sample_size % ploidy != 0 we can't
-        # use the standard approach for specifying the samples. Sidestep this
-        # by setting the initial state directly.
-        tables = tskit.TableCollection(1)
-        tables.populations.add_row()
-        for _ in range(sample_size):
-            tables.nodes.add_row(tskit.NODE_IS_SAMPLE, time=0, population=0)
         replicates = msprime.sim_ancestry(
-            initial_state=tables,
+            [msprime.SampleSet(sample_size, ploidy=1, population=0)],
             ploidy=ploidy,
             model=model,
             num_replicates=num_replicates,
@@ -2572,7 +2606,7 @@ class KnownSFS(Test):
                 tot_bl = 0.0
                 tbl = [0] * (sample_size - 1)
                 for node in tree.nodes():
-                    if tree.parent(node) != msprime.NULL_NODE:
+                    if tree.parent(node) != tskit.NULL:
                         tbl[tree.num_samples(node) - 1] = tbl[
                             tree.num_samples(node) - 1
                         ] + tree.branch_length(node)
@@ -3245,7 +3279,7 @@ class VariableRecombination(ContinuousVsDiscreteRecombination):
         positions = [0, 10000, 50000, 150000, 200000]
         rates = [0.0, r, 5 * r, r / 2]
 
-        recomb_map = msprime.RateMap(positions, rates)
+        recomb_map = msprime.RateMap(position=positions, rate=rates)
 
         self.run_cont_discrete_comparison(model, recomb_map)
 
@@ -4160,6 +4194,7 @@ class SimulateFrom(Test):
             reps = msprime.sim_ancestry(
                 n,
                 recombination_rate=recomb_rate,
+                population_size=1,
                 sequence_length=m,
                 num_replicates=num_replicates,
             )
@@ -4180,6 +4215,7 @@ class SimulateFrom(Test):
                 for j, ts in enumerate(reps):
                     final_ts = msprime.sim_ancestry(
                         initial_state=ts,
+                        population_size=1,
                         recombination_rate=recomb_rate,
                         start_time=np.max(ts.tables.nodes.time),
                     )
@@ -4491,27 +4527,43 @@ class MutationStatsTest(Test):
         pyplot.savefig(outfile, dpi=72)
         pyplot.close(fig)
 
-    def plot_y_equals_x(self, x, y, name):
-        x = np.array(x).flatten()
-        y = np.array(y).flatten()
-        xx = np.linspace(1, 1.1 * max(x), 51)
+    def plot_y_equals_x(
+        self, xlist, ylist, titles, name, xlabel="expected", ylabel="observed"
+    ):
+        assert len(xlist) == len(ylist)
+        assert len(xlist) == len(titles)
         outfile = self._build_filename(None, name)
-        fig, ax = pyplot.subplots(1, 1, figsize=(8, 8))
-        ax.scatter(x, y)
-        ax.plot(
-            [0, 1.1 * np.max(x)], [0, 1.1 * np.max(x)], "r-", linewidth=2, label="y = x"
+        fig, (axes,) = pyplot.subplots(
+            1, len(xlist), figsize=(8 * len(xlist), 8), squeeze=False
         )
-        ax.plot(
-            xx, xx + 4 * np.sqrt(xx), "r:", linewidth=2, label="rough expected bounds"
-        )
-        ax.plot(xx, xx - 4 * np.sqrt(xx), "r:", linewidth=2)
-        ax.legend()
-        ax.set_xlabel("expected")
-        ax.set_ylabel("observed")
+        for ax, x, y, title in zip(axes, xlist, ylist, titles):
+            x = np.array(x).flatten()
+            y = np.array(y).flatten()
+            xx = np.linspace(0.9 * min(x), 1.1 * max(x), 51)
+            ax.scatter(x, y)
+            ax.plot(
+                [0.9 * min(x), 1.1 * np.max(x)],
+                [0.9 * min(x), 1.1 * np.max(x)],
+                "r-",
+                linewidth=2,
+                label="y = x",
+            )
+            ax.plot(
+                xx,
+                xx + 4 * np.sqrt(xx),
+                "r:",
+                linewidth=2,
+                label="rough expected bounds",
+            )
+            ax.plot(xx, xx - 4 * np.sqrt(xx), "r:", linewidth=2)
+            ax.legend()
+            ax.set_title(title)
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
         pyplot.savefig(outfile, dpi=72)
         pyplot.close(fig)
 
-    def verify_model(self, model, name, verify_rates=False, state_independent=False):
+    def verify_model(self, model, name):
         L = 100000
         ots = msprime.sim_ancestry(
             8,
@@ -4521,7 +4573,6 @@ class MutationStatsTest(Test):
             discrete_genome=True,
         )
         for discrete_genome in (True, False):
-            verify_times = (not discrete_genome) or state_independent
             x = []
             observed = []
             expected = []
@@ -4556,9 +4607,8 @@ class MutationStatsTest(Test):
                 )
                 observed_rates.append(obs_rates)
                 expected_rates.append(exp_rates)
-                if verify_times:
-                    obs_times = self.verify_mutation_times(ts)
-                    observed_times.extend(obs_times)
+                obs_times = self.verify_mutation_times(ts)
+                observed_times.extend(obs_times)
             if discrete_genome:
                 pname = f"{name}_discrete"
             else:
@@ -4574,36 +4624,58 @@ class MutationStatsTest(Test):
                 name=pname + "_roots",
             )
             # check mutation times
-            if verify_times:
-                self.plot_uniform(observed_times, name=pname + "_times")
-            if verify_rates:
-                # this test only works if the probability of dropping a mutation
-                # doesn't depend on the previous state
-                assert len(set(np.diag(model.transition_matrix))) == 1
-                self.plot_y_equals_x(
-                    observed_rates, expected_rates, name=pname + "_rates"
-                )
+            self.plot_uniform(observed_times, name=pname + "_times")
+            # and overall mutation rate
+            self.plot_y_equals_x(
+                [observed_rates],
+                [expected_rates],
+                name=pname + "_rates",
+                titles=["number of mutations"],
+            )
 
-    def verify_transitions(self, ts, model, discrete_genome, mutation_rate):
-        alleles = model.alleles
-        num_alleles = len(alleles)
+    def verify_stacking(self, model, name):
+        # model should be parent-independent
+        for j in range(len(model.alleles)):
+            assert np.allclose(model.transition_matrix[0], model.transition_matrix[j])
+        L = 100000
+        ots = msprime.sim_ancestry(
+            8,
+            random_seed=88,
+            recombination_rate=3 / L,
+            sequence_length=L,
+            discrete_genome=True,
+        )
+        rate = 10000 / L
+        # mutate once
+        ts1 = msprime.sim_mutations(
+            ots,
+            random_seed=99,
+            rate=rate,
+            model=model,
+        )
+        ts2 = ots
+        nsub = 10
+        for j in range(nsub):
+            ts2 = msprime.sim_mutations(
+                ts2,
+                random_seed=99 + j,
+                rate=rate / nsub,
+                model=model,
+            )
+        roots1 = self.count_roots(ts1, model)
+        transitions1 = self.count_transitions(ts1, model)
+        roots2 = self.count_roots(ts2, model)
+        transitions2 = self.count_transitions(ts2, model)
+        self.plot_y_equals_x(
+            [roots1, transitions1],
+            [roots2, transitions2],
+            titles=["roots", "transitions"],
+            name=name + "_stacking",
+            xlabel="mutate once",
+            ylabel="mutate many times",
+        )
 
-        observed = np.zeros((num_alleles, num_alleles))
-        expected = np.zeros((num_alleles, num_alleles))
-        for mut in ts.mutations():
-            if mut.parent == tskit.NULL:
-                pa = ts.site(mut.site).ancestral_state
-            else:
-                pa = ts.mutation(mut.parent).derived_state
-            da = mut.derived_state
-            observed[alleles.index(pa), alleles.index(da)] += 1
-        for j, (row, p) in enumerate(zip(observed, model.transition_matrix)):
-            p[j] = 0
-            p /= sum(p)
-            expected[j, :] = sum(row) * p
-        return observed, expected
-
-    def verify_roots(self, ts, model, discrete_genome, mutation_rate):
+    def count_roots(self, ts, model):
         alleles = model.alleles
         num_alleles = len(alleles)
         observed = np.zeros((num_alleles,))
@@ -4612,20 +4684,39 @@ class MutationStatsTest(Test):
             aa = site.ancestral_state
             observed[alleles.index(aa)] += 1
 
-        expected = np.zeros(num_alleles)
-        change_probs = model.transition_matrix.sum(axis=1) - np.diag(
-            model.transition_matrix
-        )
+        return observed
+
+    def count_transitions(self, ts, model):
+        alleles = model.alleles
+        num_alleles = len(alleles)
+
+        observed = np.zeros((num_alleles, num_alleles))
+        for mut in ts.mutations():
+            if mut.parent == tskit.NULL:
+                pa = ts.site(mut.site).ancestral_state
+            else:
+                pa = ts.mutation(mut.parent).derived_state
+            da = mut.derived_state
+            observed[alleles.index(pa), alleles.index(da)] += 1
+        return observed
+
+    def verify_transitions(self, ts, model, discrete_genome, mutation_rate):
+        observed = self.count_transitions(ts, model)
+        expected = np.zeros(observed.shape)
+        for j, (row, p) in enumerate(zip(observed, model.transition_matrix)):
+            expected[j, :] = sum(row) * p
+        return observed, expected
+
+    def verify_roots(self, ts, model, discrete_genome, mutation_rate):
+        observed = self.count_roots(ts, model)
+        expected = np.zeros(observed.shape)
         for t in ts.trees():
             if discrete_genome:
                 t_span = np.ceil(t.interval[1] - np.ceil(t.interval[0]))
                 expected += (
                     model.root_distribution
                     * t_span
-                    * (
-                        1
-                        - np.exp(-mutation_rate * t.total_branch_length * change_probs)
-                    )
+                    * (1 - np.exp(-mutation_rate * t.total_branch_length))
                 )
             else:
                 t_span = t.span
@@ -4634,13 +4725,11 @@ class MutationStatsTest(Test):
                     * mutation_rate
                     * t.total_branch_length
                     * t_span
-                    * change_probs
                 )
 
         return observed, expected
 
     def verify_mutation_rates(self, ts, model, rate, discrete_genome):
-        mut_rate = rate * (1 - model.transition_matrix[0, 0])
         observed = np.zeros(ts.num_trees)
         expected = np.zeros(ts.num_trees)
         for j, t in enumerate(ts.trees()):
@@ -4648,7 +4737,7 @@ class MutationStatsTest(Test):
                 span = np.ceil(t.interval[1]) - np.ceil(t.interval[0])
             else:
                 span = t.span
-            mean = mut_rate * span * t.total_branch_length
+            mean = rate * span * t.total_branch_length
             observed[j] = t.num_mutations
             # if we draw an indepenent Poisson with the same mean
             # it should be greater than observed half the time it is different
@@ -4674,46 +4763,66 @@ class MutationStatsTest(Test):
     def test_binary_model_stats(self):
         model = msprime.BinaryMutationModel()
         self.verify_model(
-            model, name="binary", state_independent=True, verify_rates=True
+            model,
+            name="binary",
         )
+        model = msprime.BinaryMutationModel(state_independent=True)
+        self.verify_stacking(model, name="binary")
 
     def test_jukes_cantor_stats(self):
-        model = msprime.JC69MutationModel()
+        model = msprime.JC69()
         self.verify_model(
-            model, name="jukes_cantor", state_independent=True, verify_rates=True
+            model,
+            name="jukes_cantor",
         )
+        model = msprime.JC69(state_independent=True)
+        self.verify_stacking(model, name="jukes_cantor")
 
     def test_HKY_stats(self):
         equilibrium_frequencies = [0.3, 0.2, 0.3, 0.2]
-        kappa = 0.75
-        model = msprime.HKYMutationModel(
-            kappa=kappa, equilibrium_frequencies=equilibrium_frequencies
-        )
+        model = msprime.HKY(kappa=0.75, equilibrium_frequencies=equilibrium_frequencies)
         self.verify_model(model, name="HKY")
+        # now the state-independent version
+        model = msprime.HKY(
+            kappa=1.0,
+            equilibrium_frequencies=equilibrium_frequencies,
+            state_independent=True,
+        )
+        self.verify_stacking(model, name="HKY")
 
     def test_F84_stats(self):
         equilibrium_frequencies = [0.4, 0.1, 0.1, 0.4]
-        kappa = 0.75
-        model = msprime.F84MutationModel(
-            kappa=kappa, equilibrium_frequencies=equilibrium_frequencies
-        )
+        model = msprime.F84(kappa=0.75, equilibrium_frequencies=equilibrium_frequencies)
         self.verify_model(model, name="F84")
+        # now the parent-independent version
+        model = msprime.F84(
+            kappa=1.0,
+            equilibrium_frequencies=equilibrium_frequencies,
+            state_independent=True,
+        )
+        self.verify_stacking(model, name="F84")
 
     def test_GTR_stats(self):
         relative_rates = [0.2, 0.1, 0.7, 0.5, 0.3, 0.4]
         equilibrium_frequencies = [0.3, 0.4, 0.2, 0.1]
-        model = msprime.GTRMutationModel(
+        model = msprime.GTR(
             relative_rates=relative_rates,
             equilibrium_frequencies=equilibrium_frequencies,
         )
         self.verify_model(model, name="GTR")
+        model = msprime.GTR(
+            relative_rates=[1] * 6,
+            equilibrium_frequencies=equilibrium_frequencies,
+            state_independent=True,
+        )
+        self.verify_stacking(model, name="GTR")
 
     def test_PAM_stats(self):
-        model = msprime.PAMMutationModel()
+        model = msprime.PAM()
         self.verify_model(model, name="PAM")
 
     def test_BLOSUM62_stats(self):
-        model = msprime.BLOSUM62MutationModel()
+        model = msprime.BLOSUM62()
         self.verify_model(model, name="BLOSUM62")
 
     def test_arbitrary_model_stats(self):
@@ -4723,7 +4832,8 @@ class MutationStatsTest(Test):
             transition_matrix=[[0.2, 0.4, 0.4], [0.1, 0.2, 0.7], [0.5, 0.3, 0.2]],
         )
         self.verify_model(
-            model, name="arbitrary", state_independent=True, verify_rates=True
+            model,
+            name="arbitrary",
         )
 
 
@@ -4735,9 +4845,7 @@ class MutationRateMapTest(Test):
                 np.concatenate(
                     [
                         rate_map.position,
-                        np.linspace(
-                            rate_map.start_position, rate_map.end_position, 101
-                        ),
+                        np.linspace(0, rate_map.sequence_length, 101),
                     ]
                 )
             )
@@ -4751,7 +4859,7 @@ class MutationRateMapTest(Test):
             # to use in calculating expected values
             int_pos = np.unique(np.ceil(rate_map.position))
             int_rate = [rate_map.get_rate(p) for p in int_pos[:-1]]
-            rate_map = msprime.RateMap(int_pos, int_rate)
+            rate_map = msprime.RateMap(position=int_pos, rate=int_rate)
 
         bins = np.linspace(0, ts.sequence_length, min(101, int(ts.sequence_length + 1)))
         breaks = np.unique(np.sort(np.concatenate([bins, rate_map.position])))
@@ -4799,7 +4907,7 @@ class MutationRateMapTest(Test):
             population_size=10000,
             random_seed=1,
         )
-        rate_map = msprime.RateMap([0, 1e6], [1e-8])
+        rate_map = msprime.RateMap(position=[0, 1e6], rate=[1e-8])
         self.verify_subdivided(ts, rate_map)
 
     def test_varying_rate(self):
@@ -4810,7 +4918,7 @@ class MutationRateMapTest(Test):
             population_size=10000,
             random_seed=1,
         )
-        rate_map = msprime.RateMap([0, 3e5, 6e5, 1e6], [2e-8, 1e-9, 1e-8])
+        rate_map = msprime.RateMap(position=[0, 3e5, 6e5, 1e6], rate=[2e-8, 1e-9, 1e-8])
         self.verify_subdivided(ts, rate_map)
 
     def test_shorter_chromosome(self):
@@ -4991,21 +5099,21 @@ class SeqGenTest(MutationTest):
         for plotting.
         """
         model_dict = {
-            "JC69": {"model_id": msprime.JC69MutationModel(), "par": ["-m", "HKY"]},
+            "JC69": {"model_id": msprime.JC69(), "par": ["-m", "HKY"]},
             "HKY": {
-                "model_id": msprime.HKYMutationModel(
+                "model_id": msprime.HKY(
                     kappa=1.5, equilibrium_frequencies=[0.2, 0.3, 0.1, 0.4]
                 ),
                 "par": ["-m", "HKY", "-t", "0.75", "-f", "0.2,0.3,0.1,0.4"],
             },
             "F84": {
-                "model_id": msprime.F84MutationModel(
+                "model_id": msprime.F84(
                     kappa=1.0, equilibrium_frequencies=[0.3, 0.25, 0.2, 0.25]
                 ),
                 "par": ["-m", "F84", "-t", "0.5", "-f", "0.3,0.25,0.2,0.25"],
             },
             "GTR": {
-                "model_id": msprime.GTRMutationModel(
+                "model_id": msprime.GTR(
                     relative_rates=[0.4, 0.1, 0.4, 0.2, 0.4, 0.4],
                     equilibrium_frequencies=[0.3, 0.2, 0.3, 0.2],
                 ),
@@ -5018,9 +5126,9 @@ class SeqGenTest(MutationTest):
                     "0.3,0.2,0.3,0.2",
                 ],
             },
-            "PAM": {"model_id": msprime.PAMMutationModel(), "par": ["-m", "PAM"]},
+            "PAM": {"model_id": msprime.PAM(), "par": ["-m", "PAM"]},
             "BLOSUM62": {
-                "model_id": msprime.BLOSUM62MutationModel(),
+                "model_id": msprime.BLOSUM62(),
                 "par": ["-m", "BLOSUM"],
             },
         }
@@ -5204,11 +5312,11 @@ class PyvolveTest(MutationTest):
 
         model_dict = {
             "JC69": {
-                "model_id": msprime.JC69MutationModel(),
+                "model_id": msprime.JC69(),
                 "pyvolve_model": pyvolve.Model("nucleotide"),
             },
             "HKY": {
-                "model_id": msprime.HKYMutationModel(
+                "model_id": msprime.HKY(
                     kappa=1.5, equilibrium_frequencies=[0.2, 0.3, 0.1, 0.4]
                 ),
                 "pyvolve_model": pyvolve.Model(
@@ -5216,11 +5324,11 @@ class PyvolveTest(MutationTest):
                 ),
             },
             "PAM": {
-                "model_id": msprime.PAMMutationModel(),
+                "model_id": msprime.PAM(),
                 "pyvolve_model": pyvolve.Model("DAYHOFFDCMUT"),
             },
             "BLOSUM62": {
-                "model_id": msprime.BLOSUM62MutationModel(),
+                "model_id": msprime.BLOSUM62(),
                 "pyvolve_model": pyvolve.Model("BLOSUM62"),
             },
         }
@@ -5334,6 +5442,59 @@ class PyvolveTest(MutationTest):
 
     def test_pyv_BLOSUM62(self):
         self._run_pyvolve_comparison("BLOSUM62")
+
+
+class SequentialMutations(MutationTest):
+    """
+    Verify that repeated rounds to running sim_mutations gives the same
+    results as running it once with a high rate.
+    """
+
+    def _run(self, model):
+        total_rate = 10
+        num_repeats = 10
+        num_replicates = 100
+        num_mutations_single = np.zeros(num_replicates)
+        num_sites_single = np.zeros(num_replicates)
+        num_mutations_repeat = np.zeros(num_replicates)
+        num_sites_repeat = np.zeros(num_replicates)
+
+        for j in range(num_replicates):
+            base_ts = msprime.sim_ancestry(10, sequence_length=1000)
+            single_ts = msprime.sim_mutations(base_ts, rate=total_rate, model=model)
+            num_mutations_single[j] = single_ts.num_mutations
+            num_sites_single[j] = single_ts.num_sites
+            repeat_ts = base_ts
+            for _ in range(num_repeats):
+                repeat_ts = msprime.sim_mutations(
+                    repeat_ts,
+                    rate=total_rate / num_repeats,
+                    model=model,
+                )
+
+                num_mutations_repeat[j] = repeat_ts.num_mutations
+                num_sites_repeat[j] = repeat_ts.num_sites
+
+        df_single = pd.DataFrame(
+            {"num_sites": num_sites_single, "num_mutations": num_mutations_single}
+        )
+        df_repeat = pd.DataFrame(
+            {"num_sites": num_sites_repeat, "num_mutations": num_mutations_repeat}
+        )
+        self._plot_stats("", df_single, df_repeat, "single", "repeat")
+
+    def test_sequential_mutate_binary(self):
+        self._run(msprime.BinaryMutationModel())
+
+    def test_sequential_mutate_JC69(self):
+        self._run("JC69")
+
+    def test_sequential_mutate_HKY(self):
+        model = msprime.HKY(kappa=1.5, equilibrium_frequencies=[0.2, 0.3, 0.1, 0.4])
+        self._run(model)
+
+    def test_sequential_mutate_PAM(self):
+        self._run("PAM")
 
 
 class OlderMsprimeTest(Test):

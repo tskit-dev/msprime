@@ -10,6 +10,9 @@ only_build_toc_files: true
 execute:
   execute_notebooks: cache
 
+launch_buttons:
+  binderhub_url: ""
+
 repository:
   url: https://github.com/tskit-dev/msprime
   branch: main
@@ -35,13 +38,26 @@ sphinx:
     - sphinxarg.ext
 
     config:
+      myst_enable_extensions:
+      - colon_fence
+      - deflist
       issues_github_path: tskit-dev/msprime
       todo_include_todos: true
       intersphinx_mapping:
         python: ["https://docs.python.org/3/", null]
-        tskit: ["https://tskit.readthedocs.io/en/stable", null]
+        tskit: ["https://tskit.dev/tskit/docs/stable", null]
         tutorials: ["https://tskit.dev/tutorials/", null]
         stdpopsim: ["https://stdpopsim.readthedocs.io/en/stable", null]
-      myst_enable_extensions:
-      - colon_fence
-      - deflist
+        # Note: pyslim is moving to tskit.dev soon
+        pyslim: ["https://pyslim.readthedocs.io/en/stable", null]
+        numpy: ['https://numpy.org/doc/stable/', null]
+      nitpicky: true
+
+      autodoc_member_order: bysource
+
+      # Without this option, autodoc tries to put links for all return types
+      # in terms of the fully-qualified classnames
+      # (e.g. msprime.demography.Demography) which we don't want, and also
+      # leads to broken links and nitpick failures. So, until we tackle
+      # typehints fully, this is the simplest approach.
+      autodoc_typehints: none

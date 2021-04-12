@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2020 University of Oxford
+# Copyright (C) 2020-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -206,7 +206,7 @@ class TestSpeciesTreeRoundTrip:
             if tree.is_internal(node):
                 event = demography.events[j]
                 j += 1
-                assert isinstance(event, msprime.PopulationSplit)
+                assert isinstance(event, msprime.demography.PopulationSplit)
                 assert event.time == pytest.approx(tree.time(node))
                 assert event.ancestral == demography[pop_id_map[node]].name
                 assert event.derived == [
@@ -408,7 +408,7 @@ class TestStarbeastRoundTrip:
             if tree.is_internal(node):
                 event = demography.events[j]
                 j += 1
-                assert isinstance(event, msprime.PopulationSplit)
+                assert isinstance(event, msprime.demography.PopulationSplit)
                 assert event.time == pytest.approx(tree.time(node))
                 assert event.ancestral == demography[pop_id_map[node]].name
                 assert event.derived == [
@@ -796,4 +796,13 @@ class TestStarbeastExamples:
                 assert species_name[3:].isnumeric()
             assert len(spec.events) == 11
             for mm in spec.events:
-                assert isinstance(mm, msprime.PopulationSplit)
+                assert isinstance(mm, msprime.demography.PopulationSplit)
+
+
+def test_newick_import():
+    try:
+        species_trees._newick_imported = False
+        with pytest.raises(ImportError, match="The 'newick' module"):
+            species_trees.check_newick_import()
+    finally:
+        species_trees._newick_imported = True

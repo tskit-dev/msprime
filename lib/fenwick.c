@@ -310,5 +310,15 @@ fenwick_find(fenwick_t *self, double sum)
     while (index <= size && values[index] == 0) {
         index++;
     }
+    /* But, it can ALSO happen that we just have trailing zeros.
+     * Skip back until we find a non-zero index. */
+    if (index > self->size) {
+        tsk_bug_assert(index == self->size + 1);
+        tsk_bug_assert(values[self->size] == 0);
+        index = self->size;
+        while (index > 0 && values[index] == 0) {
+            index--;
+        }
+    }
     return index;
 }

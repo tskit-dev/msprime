@@ -15,24 +15,50 @@ kernelspec:
 :tags: [remove-cell]
 
     import msprime
+    import tskit
     from IPython.display import SVG
     import numpy as np
-    # Doing this to make the notebook outputs deterministic. 
+    # Doing this to make the notebook outputs deterministic.
     # DO NOT DO THIS IN YOUR CODE
     msprime.core.set_seed_rng_seed(42)
 ```
 
 (sec_mutations)=
 
-# Mutations
+# Mutation simulations
 
+{ref}`Ancestry simulations<sec_ancestry>` in msprime simulate a random
+ancestral history of a set of sampled genomes. While the trees representing
+this history are very useful (and often all we need, for many purposes),
+they do not include any information about what the actual genome **sequences**
+would look like for these samples. To produce genetic variation data
+(as represented by a [VCF file](https://samtools.github.io/hts-specs/VCFv4.2.pdf),
+for example), we need to simulate some extra information: we need
+*mutations*. Msprime provides a powerful and efficient way of superimposing
+neutral mutations from a range of sequence evolution
+{ref}`models <sec_mutations_models>` using the {func}`.sim_mutations`
+function.
 
-:::{warning}
+For example, here we simulate the ancestry of two diploids (and therefore
+four sample genomes) and store the resulting {class}`tskit.TreeSequence`
+object in the ``ts`` variable. We then simulate some mutations on
+that tree sequence, and show the resulting tree with mutations:
+```{code-cell}
+ts = msprime.sim_ancestry(2, sequence_length=100, random_seed=1234)
+mts = msprime.sim_mutations(ts, rate=0.01, random_seed=5678)
+SVG(mts.draw_svg())
+```
+We can see the variation data produced by these mutations most simply
+via the {meth}`tskit.TreeSequence.variants` method:
+```{code-cell}
+for var in mts.variants():
+    print(var.site.position, var.alleles, var.genotypes, sep="\t")
+```
 
-This documentation is under heavy construction. Please note
-any outstanding TODOs before opening issues.
-
-:::
+The [tskit](https://tskit.dev/tskit) library has many powerful
+methods for working with mutation data --- see the
+{ref}`tutorials:sec_tskit_getting_started` tutorial
+for more information.
 
 ---
 
@@ -40,62 +66,48 @@ any outstanding TODOs before opening issues.
 
 
 {func}`.sim_mutations`
-: Simulate mutations on ancestral topology 
+: Add simulated mutations to a tree sequence
 
 **Models**
 
-{class}`.BinaryMutationModel`             
-: Basic binary mutation model with two flip-flopping alleles: "0" and "1".
+{class}`.JC69` (Nucleotides)
+: Jukes & Cantor model ('69), equal probability of transitions between nucleotides
 
-{class}`.JC69MutationModel`               
-: Jukes & Cantor model '69 with equal probability of transitions between nucleotides
+{class}`.HKY` (Nucleotides)
+: Hasegawa, Kishino & Yano model ('85), different probabilities for transitions and transversions
 
-{class}`.HKYMutationModel`                
-: Hasegawa, Kishino & Yano model '85, different probabilities for transitions and transversions
+{class}`.F84` (Nucleotides)
+: Felsenstein model ('84), different probabilities for transitions and transversions
 
-{class}`.F84MutationModel`                
-: Felsenstein model '84, different probabilities for transitions and transversions
+{class}`.GTR` (Nucleotides)
+: Generalised Time-Reversible nucleotide mutation model
 
-{class}`.GTRMutationModel`                
-: The Generalised Time-Reversible nucleotide mutation model, a general parameterization of a time-reversible mutation process
-
-{class}`.BLOSUM62MutationModel` 
+{class}`.BLOSUM62` (Amino acids)
 : The BLOSUM62 model of time-reversible amino acid mutation
 
-{class}`.PAMMutationModel`              
+{class}`.PAM` (Amino acids)
 : The PAM model of time-reversible amino acid mutation
 
-{class}`.MatrixMutationModel`             
-: Superclass of the specific mutation models with a finite set of states
+{class}`.BinaryMutationModel` (Binary ancestral/derived)
+: Binary mutation model with two flip-flopping alleles: "0" and "1".
 
-{class}`.InfiniteAllelesMutationModel`    
-: A generic infinite-alleles mutation model          
+{class}`.MatrixMutationModel` (General finite state model)
+: Superclass of mutation models with a finite set of states
 
-{class}`.SLiMMutationModel`               
-: An infinite-alleles model of mutation producing SLiM-style mutations
+{class}`.InfiniteAlleles` (Integers)
+: A generic infinite-alleles mutation model
+
+{class}`.SLiMMutationModel` (Integers)
+: An infinite-alleles model producing SLiM-style mutations
 
 ---
-
-
-We can add mutations to a tree sequence simulated with {func}`.sim_ancestry` by
-using {func}`.sim_mutations`. We can specify a mutation rate or ratemap
-{ref}`sec_mutations_rate`, whether mutations should only occur at discrete, integer
-coordinates {ref}`sec_mutations_discrete`, and a specific time span within which to add
-mutations {ref}`mutations_time_span`. 
-
-One of the most powerful features of `msprime` is the flexibility of specifying
-the model under which mutations are generated in our simulations. Select from among
-the many predefined models {ref}`sec_mutations_models`, such as the infinite alleles
-model {ref}`sec_mutations_mutation_infinite_alleles`, or define your own
-{ref}`sec_mutations_matrix_mutation_models_details`.
-
 
 (sec_mutations_rate)=
 
 ## Specifying rates
 
 The `rate` parameter of {func}`.sim_mutations` determines the rate of mutations per unit
-of sequence length per generation. If not specified, no mutations are generated. 
+of sequence length per generation. A rate must be specified for mutations to be generated.
 
 ```{code-cell}
 ts = msprime.sim_ancestry(2, random_seed=1)
@@ -103,7 +115,7 @@ mts = msprime.sim_mutations(ts, rate=1, random_seed=1)
 mts.num_mutations
 ```
 
-Running {func}`.sim_mutations` on this simulated tree of length 1 with a rate of 1
+Running {func}`.sim_mutations` on this simulated tree of length 1 with `rate=1`
 produces 7 mutations.
 
 Specifying higher rates lead to proportionately more mutations:
@@ -114,68 +126,99 @@ mts = msprime.sim_mutations(ts, rate=5, random_seed=1)
 mts.num_mutations
 ```
 
-It's also possible to provide a RateMap {class}`.RateMap` which specifies variable
-mutation rates across the genome. In this example, we choose positions uniformly along
-the length of the simulated sequence and randomly select five mutation rates from a
-normal distribution centered at 1. 
+It's also possible to provide a {class}`.RateMap` which specifies variable
+mutation rates over different stretches of the sequence.
+
+In the following example, the mutation rate between positions 0 and 2 is 0.5,
+between positions 2 and 5 is 0, and between positions 5 and 10 is 0.1:
 
 ```{code-cell}
-ts = msprime.sim_ancestry(10, sequence_length=10, random_seed=1)
-pos = [0, 2, 5, 10]
-rate = [1, 2, 0.5]
-ratemap = msprime.RateMap(pos, rate)
-mts = msprime.sim_mutations(ts, rate=ratemap, random_seed=1)
+ts = msprime.sim_ancestry(4, sequence_length=7, random_seed=1)
+ratemap = msprime.RateMap(position=[0, 2, 5, 7], rate=[0.5, 0, 0.1])
+mts = msprime.sim_mutations(ts, rate=ratemap, random_seed=10)
+SVG(mts.draw_svg(node_labels={}, size=(400, 300)))
 ```
 
-Be sure that the final position of your RateMap {class}`.RateMap` is the same as the
+As we can see from the output, there are three mutations at site 0 (position 0),
+three mutations at site 1 (position 1), no mutations between positions 2 and 5
+(where the mutation rate is zero) and one mutation at site 2 (position 5).
+This illustrates that as the rate increases, the probability of recurrent mutation
+(multiple mutations at a site) also increases.
+
+:::{note}
+
+If using a {class}`.RateMap` with {func}`.sim_mutations`, be sure that the final
+position of the {class}`.RateMap` is the same as the
 `sequence_length` of the tree sequence you're adding mutations to!
+
+:::
+
 
 (sec_mutations_randomness)=
 
 ## Controlling randomness
 
-As described in Section {ref}`sec_mutations_matrix_mutation_theory`, ``msprime`` uses
-pseudorandom number generation from the GNU science library for high-quality random
-number generation. Passing an integer to the ``random_seed`` parameter makes the output
-of {func}`.sim_mutations` deterministic.
+As described in {ref}`sec_ancestry_random_seed`, ``msprime`` uses a
+[psuedorandom number generator](<https://en.wikipedia.org/wiki/Pseudorandom_number_generator>)
+from the [GNU Scientific Library](<https://www.gnu.org/software/gsl/doc/html/rng.html>) for
+random number generation. Passing an integer to the ``random_seed`` parameter
+defines a trajectory for a call of {func}`.sim_mutations`, making output deterministic.
 
 ```{code-cell}
+ts = msprime.sim_ancestry(10, random_seed=1)
 mts_1 = msprime.sim_mutations(ts, rate=1, random_seed=7)
-mts_2 = msprime.sim_mutations(ts, rate=1, random_seed=7)
-np.array_equal(mts_1.tables.sites.position, mts_1.tables.sites.position)
+mts_2 = msprime.sim_mutations(ts, rate=1, random_seed=8)
+mts_1.tables.equals(mts_2.tables, ignore_timestamps=True)
 ```
+
+Here, we check for equality between the TableCollections of the `mts_1` and `mts_2` tree
+sequences, excluding the differing timestamps in Provenance tables. The result is
+`False` because we used different seeds.
+
+```{code-cell}
+mts_3 = msprime.sim_mutations(ts, rate=1, random_seed=7)
+mts_1.tables.equals(mts_3.tables, ignore_timestamps=True)
+```
+
+When we use the same seed, the resulting tree sequence is identical.
+
 
 (sec_mutations_discrete)=
 
 ## Discrete or continuous
 
-As in {func}`.sim_ancestry` (see Section {ref}`sec_ancestry_discrete_genome`),
-the `discrete_genome` parameter controls whether to place mutations at discrete, integer
-coordinates or continously at floating point positions.
-`discrete_genome=True` by default:
+As in {func}`.sim_ancestry` (see {ref}`sec_ancestry_discrete_genome`),
+the `discrete_genome` parameter controls whether mutations should be placed at
+discrete, integer coordinates or continuously at floating point positions.
+`discrete_genome=True` is the default:
 
 ```{code-cell}
-mts = msprime.sim_mutations(ts, rate=1)
+ts = msprime.sim_ancestry(4, sequence_length=5, random_seed=1)
+mts = msprime.sim_mutations(ts, rate=0.1, random_seed=5)
 mts.tables.sites.position
 ```
 
 Specifying `discrete_genome=False` places mutations at floating point positions
-continously along the genome.
+continuously along the genome.
 
 ```{code-cell}
-mts = msprime.sim_mutations(ts, rate=1, random_seed=7, discrete_genome=False)
+mts = msprime.sim_mutations(ts, rate=0.1, random_seed=5, discrete_genome=False)
 mts.tables.sites.position
 ```
 
-Note that using `discrete_genome=False` specifies an infinite sites model.
+:::{note}
 
+Using `discrete_genome=False` means that the mutation model will conform
+to the classic _infinite sites_ assumption, where each mutation in the simulation
+occurs at a new site.
+
+:::
 
 (sec_mutations_time_span)=
 
 ## Restricting time span
 
-The time range where mutations can appear can be restricted using the `start_time`
-and `end_time` parameters. For instance, the following only allows mutations to occur
+The time range where mutations can be placed is specified using the `start_time`
 earlier than time ``1`` in the tree:
 
 ```{code-cell}
@@ -184,56 +227,260 @@ mts = msprime.sim_mutations(ts, rate=2, start_time=1, random_seed=1)
 mts.tables.mutations.time
 ```
 
-Note, however, that the child node of the edge where the mutation occured can be younger
+Note, however, that the child node of the edge where the mutation occurred can be younger
 than `start_time`.
 
 ```{code-cell}
 mts.tables.nodes.time[mts.tables.mutations.node]
 ```
 
-It is also possible to use multiple calls of `{func}`.sim_mutations` with `start_time`
+It is also possible to use multiple calls of {func}`.sim_mutations` with `start_time`
 and `end_time` specified to simulate differing mutation rates at different
-periods of time. For instance, the following code simulates mutations older than time
-``1`` at a low rate and a more recent period with a higher rate. 
+periods of time. For instance, the following code simulates mutations at a low rate
+prior to time ``1`` and at a higher rate more recently.
 
 ```{code-cell}
 ts = msprime.sim_ancestry(2, random_seed=1)
 mts = msprime.sim_mutations(ts, rate=0.1, start_time=1, random_seed=1)
 print(mts.tables.mutations.time)
-mts = msprime.sim_mutations(mts, rate=5, end_time=1, random_seed=1)
+mts = msprime.sim_mutations(mts, rate=4, end_time=1, random_seed=1)
 print(mts.tables.mutations.time)
 ```
 
-As explained in Section {ref}`sec_mutations_existing`, reversing the order of these two
+As explained in {ref}`the following section <sec_mutations_existing>`, reversing the order of these two
 lines will result in an error, as older mutations must be added first.
+
+
+(sec_mutations_silent)=
+
+## Silent mutations
+
+Some of these mutation models produce *silent mutations*,
+that do not change the allelic state.
+For instance, here are all the mutations in a small simulation
+using the {class}`.HKY`:
+
+```{code-cell}
+def count_transitions(ts, alleles):
+    counts = np.zeros((len(alleles), len(alleles)), dtype='int')
+    for s in ts.sites():
+        aa = s.ancestral_state
+        for m in s.mutations:
+            pa = aa
+            da = m.derived_state
+            if m.parent != tskit.NULL:
+                pa = ts.mutation(m.parent).derived_state
+            counts[alleles.index(pa), alleles.index(da)] += 1
+    print("\t", "\t".join(alleles))
+    for j, a in enumerate(alleles):
+        print(f"{a}\t", "\t".join(map(str, counts[j])))
+
+model = msprime.HKY(kappa=0.75, equilibrium_frequencies=[0.2, 0.3, 0.3, 0.2])
+ts = msprime.sim_ancestry(5, random_seed=1, sequence_length=1e7, recombination_rate=1e-8, population_size=1000)
+mts = msprime.sim_mutations(ts, rate=1e-8, model=model, random_seed=1)
+count_transitions(mts, model.alleles)
+```
+
+There are a moderate but small number of C->C and G->G mutations.
+This is because under the HKY model with these parameters,
+the mutation rates for C and G is less than that of A and T.
+However, msprime puts down mutations on the trees at *constant* rate;
+and so to make the mutation process correct, some of these "mutations"
+are chosen to be silent.
+See {ref}`sec_mutations_matrix_mutation_theory` for more details on how this works.
+
+Such silent mutations might be surprising, but they are harmless:
+they do not affect summary statistics
+(e.g., {meth}`tskit.TreeSequence.diversity`)
+or genotypes in any way.
+In fact, leaving them in makes msprime's mutation process *more* robust:
+see {ref}`sec_mutations_state_independence` for details.
+
+To demonstrate insensitivity to these silent mutations,
+let's compute the number of segregating sites for the mutated tree sequence above.
+Here's how many sites it has mutations at:
+
+```{code-cell}
+print(f"The tree sequence has {mts.num_sites} sites with mutations.")
+```
+
+So, we might expect the total number of segregating sites to be 1182.
+However, some are silent, and subtracting the number of these gets the same answer as
+{meth}`tskit.TreeSequence.segregating_sites`:
+
+```{code-cell}
+num_silent = 0
+for s in mts.sites():
+    for m in s.mutations:
+        pa = s.ancestral_state
+        if m.parent != tskit.NULL:
+            pa = mts.mutation(m.parent).derived_state
+        if pa == m.derived_state:
+            num_silent += 1
+
+segsites = mts.segregating_sites(span_normalise=False)
+
+print(f"The tree sequence has {num_silent} silent mutations,\n"
+      f"and {segsites} segregating sites.")
+```
+
+Indeed, 1182 - 75 = 1107.
+
 
 (sec_mutations_existing)=
 
 ## Existing mutations
 
-If adding mutations to a tree sequence which already contains them, the `keep` parameter
+When you add mutations to a tree sequence which already contains them, the `keep` parameter
 controls whether existing mutations are kept or discarded (the default is `keep=True`).
 For instance, in final code block in {ref}`sec_mutations_time_span`, mutations were
-progressively added to a simulated tree sequence.
+progressively added to a simulated tree sequence, beginning with the oldest time period.
+This could also be used to add mutations with different mutation models to different segments
+of the genome.
 
-While it is simple to add younger mutations to a tree sequence which already contains
-mutations, adding a mutation ancestral to an existing mutation will result in
-an error unless `add_ancestral=True` is specified, as in the following code block:
+While it is more natural to add younger mutations to a tree sequence which already contains
+older mutations, you can also add mutations ancestral to an existing mutations,
+as in the following code block:
+
 ```{code-cell}
 ts = msprime.sim_ancestry(5, random_seed=1)
 mts = msprime.sim_mutations(ts, rate=1, random_seed=1)
-mts = msprime.sim_mutations(mts, rate=0.1, random_seed=5, add_ancestral=True)
+mmts = msprime.sim_mutations(mts, rate=0.1, random_seed=5)
+print(f"Before: {mts.num_mutations} mutations.\n"
+      f"After: {mmts.num_mutations} mutations.")
 ```
 
-Note that specifying `add_ancestral=True` does not guarantee that mutations
-can be added to the tree sequence. If an added mutation causes a "silent transitions"
-or a mutation which would cause a nucleotide to transition to itself, such as "A -> A",
-an error is thrown as these transitions are not permitted in `tskit`.
+This might be done, for instance, if a tree sequence is the result of a forwards
+simulation that has non-neutral variation, and you'd like to add neutral mutations.
 
-Even if no silent transitions occur, `add_ancestral` should be specified with care as
-adding ancestral mutations can be problematic. For instance, if mutations are added to
-a tree sequence under two different models, impossible transition may result. See
-`{func}`.sim_mutations` for further explanation.
+(sec_mutations_state_independence)=
+
+### Silent mutations and state-independence
+
+Although it is possible to add new mutations ancestrally to
+existing mutations, doing so can produce confusing situations.
+For instance, new mutations added to an already mutated site
+will not assign a new ancestral state: for instance, with the
+{class}`.PAM` of amino acid mutation,
+if a site has ancestral state ``V`` and a mutation with derived state ``I``,
+and a new mutation is added ancestral to the existing one,
+the derived state of the new mutation will be randomly assigned
+(rather than being ``V`` as you might expect).
+This can lead to unlikely or even impossible situations:
+the new mutation in this example might be a ``G``,
+since mutations from ``V`` to ``G`` and ``V`` to ``I`` are both reasonably likely.
+However, a mutation from ``G`` to ``I`` is impossible under this model,
+and we now have the chain V->G->I
+(the chain is possible under the {class}`.BLOSUM62`, but unlikely).
+In practice this is more confusing than concerning,
+since it can only happen when the same site is mutated more than once,
+which affects only a small proportion of sites.
+
+The situation above occurred because the probability of mutating to ``I``
+was very different depending on the initial state.
+However, if derived alleles are chosen in a way *independent* of the previous state,
+then adding mutations at rate {math}`\alpha`
+and then adding mutations at rate {math}`\beta`
+is *equivalent* to adding mutations once, at rate {math}`\alpha + \beta`.
+A mutation model has this property if rows of its transition matrix are the same,
+and is called *state independent* (or, *parent independent*).
+For instance, mutations under the {class}`.JC69`
+choose *any* derived allele with equal probability.
+This means that the *result* of a mutation can be chosen without knowing
+what the previous state at that site was ("state independence"),
+which implies that adding new mutations above a given mutation does not affect
+the probability of that mutation occurring.
+However, this is only true if "any derived allele" includes the previous allele,
+i.e., if we include {ref}`silent mutations <sec_mutations_silent>`.
+The default Jukes-Cantor model will mutate an ``A`` to either a ``C``, ``G``, or ``T``
+with equal probability, which we can check by looking at the *transition matrix*,
+whose rows give the probability that each allele mutates into each other allele
+(see {ref}`sec_mutations_matrix_mutations_models` for more):
+
+
+```{code-cell}
+jc69 = msprime.JC69()
+jc69.transition_matrix
+```
+
+We can check that this does not produce any silent mutations:
+
+```{code-cell}
+rate = 1.5e-3
+ts = msprime.sim_ancestry(5, random_seed=5, sequence_length=1e6)
+mts = msprime.sim_mutations(ts, rate=rate, model=jc69, random_seed=7)
+count_transitions(mts, jc69.alleles)
+```
+
+Although this model does not include silent mutations,
+applying it more than once could produce some -
+for instance, if one mutation with derived state ``C`` is inserted
+above an existing mutation with the same derived state.
+To make it state-independent, we have to choose the derived state
+uniformly from *all* nucleotides:
+
+```{code-cell}
+pi_jc69 = msprime.JC69(state_independent=True)
+pi_jc69.transition_matrix
+```
+
+With this change, mutating twice with {class}`.JC69`
+is *equivalent* to mutating once with rate equal to the sum of the rates.
+In other words, these two operations are equivalent:
+
+```{code-cell}
+alpha = 0.4 * rate
+beta = 0.6 * rate
+# mutate once:
+mts1 = msprime.sim_mutations(ts, rate=alpha + beta, model=pi_jc69, random_seed=7)
+print("Mutated once:")
+count_transitions(mts1, pi_jc69.alleles)
+# or, mutate twice:
+mts2 = msprime.sim_mutations(ts, rate=alpha, model=pi_jc69, random_seed=7)
+mts2 = msprime.sim_mutations(mts2, rate=beta, model=pi_jc69, random_seed=8)
+print("Mutated twice:")
+count_transitions(mts2, pi_jc69.alleles)
+```
+
+These are very similar - any differences are due to statistical noise.
+
+However, now 25% of the mutations are silent.
+These silent mutations are harmless, and will not affect most things at all.
+However, they do count as mutations, and so including them decreases the
+effective mutation rate.
+Above, we produced ``mts`` by mutating with the default Jukes-Cantor model
+at rate 1.5. Here, we produced ``mts1`` (and ``mts2``) using Jukes-Cantor
+but with 25% of the mutations silent.
+This means that to produce an set of mutations equivalent to ``mts``
+that includes silent mutations, we need to use the parent-independent
+Jukes-Cantor model with rate {math}`1/(1-0.25) = 4/3` times higher:
+
+```{code-cell}
+mts_with_silent = msprime.sim_mutations(ts, rate=rate * 4/3, model=pi_jc69, random_seed=12)
+count_transitions(mts_with_silent, pi_jc69.alleles)
+```
+
+Note that the offdiagonal counts are similar to what we saw above for ``mts`` -
+again, any differences are due to statistical noise.
+Another way to see this is that nucleotide diversity is similar for ``mts`` and ``mts_with_silent``,
+but is only 75% as big for ``mts1``:
+
+```{code-cell}
+print(f"Nucleotide diversity for default JC69 with rate {rate}: {mts.diversity():.4f}")
+print(f"              parent-independent JC69 with rate {rate}: {mts1.diversity():.4f}")
+print(f"              parent-independent JC69 with rate {rate * 4/3}: {mts_with_silent.diversity():.4f}")
+```
+
+Here's the takeaways from this section:
+
+```{attention}
+1. If you're going to add mutations to the same tree sequence more than once,
+    you should use the ``parent_independent`` mutation models
+    (or carefully consider the consequences).
+2. If you use a parent-independent model, you need to make your mutation rate higher,
+    to account for the silent mutations. See {ref}`sec_mutations_adjusting_for_silent`
+    for more details.
+```
 
 
 (sec_mutations_models)=
@@ -243,18 +490,18 @@ a tree sequence under two different models, impossible transition may result. Se
 Mutation models are specified using the `model` parameter to
 {func}`.sim_mutations`. This parameter can either take the form of a
 string describing the model (e.g. `model="jc69"`) or an instance of a
-model definition class (e.g `model=msprime.JC69MutationModel()`).
+model definition class (e.g `model=msprime.JC69()`).
 Here are the available models; they are documented in more detail below.
 
 - {class}`.BinaryMutationModel`: Basic binary mutation model with two flip-flopping alleles: "0" and "1".
-- {class}`.JC69MutationModel`: Jukes & Cantor model '69 with equal probability of transitions between nucleotides
-- {class}`.HKYMutationModel`: Hasegawa, Kishino & Yano model '85, different probabilities for transitions and transversions
-- {class}`.F84MutationModel`: Felsenstein model '84, different probabilities for transitions and transversions
-- {class}`.GTRMutationModel`: The Generalised Time-Reversible nucleotide mutation model, a general parameterization of a time-reversible mutation process
-- {class}`.BLOSUM62MutationModel`: The BLOSUM62 model of time-reversible amino acid mutation
-- {class}`.PAMMutationModel`: The PAM model of time-reversible amino acid mutation
+- {class}`.JC69`: Jukes & Cantor model ('69), equal probability of transitions between nucleotides
+- {class}`.HKY`: Hasegawa, Kishino & Yano model ('85), different probabilities for transitions and transversions
+- {class}`.F84`: Felsenstein model ('84), different probabilities for transitions and transversions
+- {class}`.GTR`: The Generalised Time-Reversible nucleotide mutation model, a general parameterization of a time-reversible mutation process
+- {class}`.BLOSUM62`: The BLOSUM62 model of time-reversible amino acid mutation
+- {class}`.PAM`: The PAM model of time-reversible amino acid mutation
 - {class}`.MatrixMutationModel`: Superclass of the specific mutation models with a finite set of states
-- {class}`.InfiniteAllelesMutationModel`: A generic infinite-alleles mutation model
+- {class}`.InfiniteAlleles`: A generic infinite-alleles mutation model
 - {class}`.SLiMMutationModel`: An infinite-alleles model of mutation producing SLiM-style mutations
 
 (sec_mutations_matrix_mutations_models)=
@@ -311,7 +558,7 @@ model = msprime.MatrixMutationModel(
                          [1.0, 0.0, 0.0]]
 )
 ts = msprime.sim_ancestry(6, population_size=10, random_seed=2, sequence_length=7)
-mts = msprime.sim_mutations(ts, rate=2, random_seed=1, model=model, discrete_genome=True)
+mts = msprime.sim_mutations(ts, rate=2, random_seed=1, model=model)
 
 ```
 
@@ -346,79 +593,26 @@ must give *probabilities*, i.e., they must be nonnegative numbers summing to 1.
 
 To interpret these parameters,
 it helps to know how the underlying mutational process is implemented.
-First, "possible" mutations are placed on the tree,
+First, mutations are placed on the tree,
 with a mean density equal to the `rate`, per unit of time and sequence length.
 If `discrete_genome=False` then this is an infinite-sites model,
-so each possible mutation occurs at a distinct location.
-If `discrete_genome=True` then at each integer position,
+so each mutation occurs at a distinct position along the genome.
+If `discrete_genome=True` (the default setting) then at each integer position,
 each branch of the tree at that position gets a Poisson number of mutations
 with mean equal to `rate` multiplied by the length of the branch.
-Next, each site that has a possible mutation is assigned an ancestral state,
+Next, each site that has a mutation is assigned an ancestral state,
 i.e., the allele at the root of the tree at that position,
 by drawing an allele from the probabilities in the `root_distribution`.
-Now, each possible mutation is examined, moving down the tree.
-For each, a derived state is chosen using the probabilities given in the
+Now, each mutation is examined, moving down the tree,
+and a derived state is chosen using the probabilities given in the
 row of the `transition_matrix` that corresponds to the "parental state",
 i.e., the allele that this mutation will replace.
-Importantly, if the chosen allele is the *same* as the parental allele,
-no mutation is recorded (that's why they were called "possible mutations").
-And, any site at which no mutations are recorded is not recorded either.
+Importantly, the mutation is recorded even if the chosen allele is the same
+as the parental allele - so, if the diagonal of the transition matrix
+contains nonzero entries, then the mutated tree sequence will
+(probably) contain silent mutations.
 
-This arrangement is necessary to fully specify Markov models of mutation,
-with a free "mutation rate" parameter.
-However, there are some surprising consequences.
-For instance, the distribution of ancestral alleles, across all sites,
-is *not* necessarily equal to the root distribution.
-This is because the root distribution gives the distribution of
-"ancestral" alleles across the entire sequence,
-but we only see the ancestral alleles at *mutated* sites,
-and some alleles may have a higher mutation rate than others.
-For instance, if we have
-
-```{code-block} python
-
-import numpy as np
-from scipy import linalg
-
-alleles = ["A", "C", "G", "T"]
-root_distribution = np.array([0.25, 0.25, 0.25, 0.25])
-transition_matrix = np.array([
-   [0.25, 0.25, 0.25, 0.25],
-   [ 0.3,  0.0,  0.4,  0.3],
-   [ 0.3,  0.4,  0.0,  0.3],
-   [0.25, 0.25, 0.25, 0.25]
-])
-
-```
-
-then A and T alleles have a 25% lower mutation rate than do C and G alleles,
-since 25% of the time that we consider mutating them, we leave them unchanged.
-From the properties of the Poisson distribution,
-the probability that a tree of total length {math}`T`
-has no mutations at a given discrete site is {math}`\exp(-rT)`,
-if mutations are put down at a rate of {math}`r`.
-Suppose that a single tree of total length {math}`T = 1.5`
-extends over many discrete sites,
-and that mutations are placed on it at rate {math}`r = 2.0`.
-Every site that is assigned a "C" or "G" ancestral allele is retained,
-but of those sites that are assigned an "A" or "T",
-some are not recorded in the resulting tree sequence.
-The expected proportions of the ancestral states
-across all sites is proportional to the root distribution
-multiplied by the probability that at least one mutation is retained on the tree.
-In this situation it can be computed as follows:
-
-```{code-block} python
-
-r = 2.0
-T = 1.5
-prob_mut = 1.0 - np.diag(transition_matrix)
-ancestral_state_distribution = root_distribution * (1 - np.exp(- r * T * prob_mut))
-ancestral_state_distribution /= sum(ancestral_state_distribution)
-
-```
-
-Two more facts about Markov chains are useful to interpret the statistics
+Some facts about Markov chains are useful to interpret the statistics
 of these mutation models.
 First, suppose we have tabulated all mutations, and so for each pair of alleles
 {math}`i` and {math}`j` we have the proportion of mutations that caused an {math}`i \to j` change.
@@ -432,6 +626,7 @@ the scaled [infinitestimal rate matrix](<https://en.wikipedia.org/wiki/Transitio
 which can be computed as follows:
 
 ```{code-block} python
+import scipy
 
 Q = (transition_matrix - np.eye(len(alleles)))
 Pt = linalg.expm(t * rate * Q)[i,j]
@@ -440,6 +635,57 @@ Pt = linalg.expm(t * rate * Q)[i,j]
 
 If the top of a branch of length {math}`t` has allele {math}`i`,
 the bottom of the branch has allele {math}`j` with probability `Pt[i,j]`.
+
+
+(sec_mutations_adjusting_for_silent)=
+
+#### Adjusting mutation rates for silent mutations
+
+As discussed in {ref}`sec_mutations_silent`, matrix mutation models can insert *silent* mutations,
+which may make it difficult to set the mutation rate appropriately,
+since by "mutation rate" we mean the rate of appearance of mutations that *change* the allelic state.
+However, the "mutation rate" is not in fact a single value: it depends on context,
+as some alleles may tend to mutate more than others.
+
+As an example of how to appropriately adjust the mutation rate to produce a given expected diversity,
+take the following somewhat contrived problem.
+Suppose we generate a tree sequence of 1000 samples of 10Mb from a population of size 1,000,
+which has mutations generated under the HKY model with {math}`\kappa = 0.75`
+and equilibrium frequencies {math}`\pi = [0.1, 0.2, 0.3, 0.4]`.
+We'd like to choose the mutation rate {math}`\mu` so that the mean genetic diversity
+is equal to 0.001.
+If this was equal to the usual {math}`\theta = 4Nu`, we'd need a "mutation rate"
+of {math}`u = 2.5 \times 10^{-7}`, so we know we'll need a number slightly higher than that.
+
+To do this, let's figure out the mean rate of appearance of silent mutations.
+We know that (a) the rate of appearance of silent mutations per nucleotide is given by {math}`\mu`
+times the diagonal of the transition matrix, and (b) the equilibrium frequency of the four
+nucleotides is given by {math}`\pi`. Multiplying these together and adding them up
+gives us the expected proportion of mutations that are silent.
+Now, writing that we want {math}`u` to equal {math}`\mu` times one minus the this proportion,
+we get {math}`2.5 \times 10^{-7} = \mu (1 - \sum_i \pi_i P_{ii})`, so
+solving for {math}`\mu` gives us:
+
+```{code-cell}
+pi = np.array([0.1, 0.2, 0.3, 0.4])
+hky = msprime.HKY(kappa=0.75, equilibrium_frequencies=pi)
+P = hky.transition_matrix
+u = 2.5e-7
+mu = u / (1 - np.sum(pi * np.diag(P)))
+print(f"Mutation rate should be increased by a factor of {mu/u:.2f}.")
+```
+
+Now, let's verify we get the nucleotide diversity we were aiming for:
+
+```{code-cell}
+ts = msprime.sim_ancestry(1000, population_size=1000, sequence_length=1e7, recombination_rate=1e-8, random_seed=5)
+mts = msprime.sim_mutations(ts, rate=mu, model=hky, random_seed=27)
+theta = mts.diversity()
+print(f"Genetic diversity: {theta}.")
+```
+
+That's pretty close to 0.001! The difference is within statistical error.
+
 
 (sec_mutations_mutation_infinite_alleles)=
 
@@ -461,8 +707,8 @@ and print the resulting tree, labeling each mutation with its derived state:
 ```{code-cell} python
 
 ts = msprime.sim_ancestry(6, random_seed=2, sequence_length=1)
-model = msprime.InfiniteAllelesMutationModel()
-mts = msprime.sim_mutations(ts, rate=2, random_seed=1, model=model, discrete_genome=True)
+model = msprime.InfiniteAlleles()
+mts = msprime.sim_mutations(ts, rate=2, random_seed=1, model=model)
 t = mts.first()
 ml = {m.id: m.derived_state for m in mts.mutations()}
 SVG(t.draw_svg(mutation_labels=ml, node_labels={}, size=(400, 300)))
@@ -493,7 +739,7 @@ to agree with the underlying mutation model in SLiM.
 As with the InfiniteAlleles model, it assigns each new mutation a unique integer,
 by keeping track of the `next_id` and incrementing it each time a new mutation appears.
 
-This differs from the {class}`.InfiniteAllelesMutationmodel` because mutations
+This differs from the {class}`.InfiniteAlleles` because mutations
 in SLiM can "stack": new mutations can add to the existing state, rather than
 replacing the previous state. So, derived states are comma-separated lists of
 mutation IDs, and the ancestral state is always the empty string. For instance,
@@ -514,7 +760,8 @@ For instance,
 ```{code-cell} python
 
 model = msprime.SLiMMutationModel(type=1)
-mts = msprime.sim_mutations(ts, rate=1, random_seed=1, model=model, discrete_genome=True, add_ancestral=True)
+mts = msprime.sim_mutations(
+    ts, rate=1, random_seed=1, model=model)
 t = mts.first()
 ml = {m.id: m.derived_state for m in mts.mutations()}
 SVG(t.draw_svg(mutation_labels=ml, node_labels={}, size=(400, 300)))
@@ -530,7 +777,7 @@ Here, we first lay down mutations of type 1, starting from ID 0:
 ```{code-cell} python
 
 model_1 = msprime.SLiMMutationModel(type=1)
-mts_1 = msprime.sim_mutations(ts, rate=0.5, random_seed=2, model=model_1, discrete_genome=True)
+mts_1 = msprime.sim_mutations(ts, rate=0.5, random_seed=2, model=model_1)
 t = mts_1.first()
 ml = {m.id: m.derived_state for m in mts_1.mutations()}
 SVG(t.draw_svg(mutation_labels=ml, node_labels={}, size=(400, 300)))
@@ -542,14 +789,12 @@ These we assign starting from ID 100,
 to make it easy to see which are which:
 in general just need to make sure that we start at an ID greater than any
 previously assigned.
-Note that without the `add_ancestral=True` parameter
-this would cause an error, because we are adding mutations above existing ones.
 
 ```{code-cell} python
 
 model_2 = msprime.SLiMMutationModel(type=2, next_id=100)
-mts = msprime.sim_mutations(mts_1, rate=0.5, random_seed=3, model=model_2, discrete_genome=True, add_ancestral=True,
-                     keep=True)
+mts = msprime.sim_mutations(
+    mts_1, rate=0.5, random_seed=3, model=model_2, keep=True)
 t = mts.first()
 ml = {m.id: m.derived_state for m in mts.mutations()}
 SVG(t.draw_svg(mutation_labels=ml, node_labels={}, size=(400, 300)))
@@ -567,6 +812,6 @@ But then, moving down the branch, we come upon the mutation with ID `3`.
 This was already present in the tree sequence, so its derived state is not modified:
 `0,3`. We can rationalize this, post-hoc, by saying that the type 1 mutation `3`
 has "erased" the type 2 mutations `100` and `102`.
-If you want a different arrangment,
+If you want a different arrangement,
 you can go back and edit the derived states (and metadata) as you like.
 

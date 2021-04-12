@@ -22,6 +22,7 @@ Core functions and classes used throughout msprime.
 from __future__ import annotations
 
 import dataclasses
+import html
 import numbers
 import os
 import random
@@ -129,12 +130,13 @@ class TableEntry:
     data: str
     extra: Union[str, None] = None
 
-    def as_html(self):
+    def as_html(self, escape=True):
         ret = "<td"
         if self.extra is not None:
-            wrapped = textwrap.fill(self.extra, 80)
+            wrapped = html.escape(textwrap.fill(self.extra, 80))
             ret += f" title='{wrapped}'"
-        ret += f">{self.data}</td>"
+        content = html.escape(self.data) if escape else self.data
+        ret += f">{content}</td>"
         return ret
 
     def as_text(self):
@@ -142,20 +144,24 @@ class TableEntry:
 
 
 def html_table(
-    caption: str, column_titles: List[str], data: List[List[Union[TableEntry, str]]]
+    caption: str,
+    column_titles: List[str],
+    data: List[List[Union[TableEntry, str]]],
+    no_escape: Union[List[int], None] = None,
 ):
     """
     Returns a HTML table formatted with the specified data.
     """
+    no_escape = [] if no_escape is None else no_escape
     header = "".join(f"<th>{col_title}</th>" for col_title in column_titles)
     rows = ""
     for row_data in data:
         assert len(column_titles) == len(row_data)
         row = ""
-        for item in row_data:
+        for col_index, item in enumerate(row_data):
             if not isinstance(item, TableEntry):
                 item = TableEntry(item)
-            row += item.as_html()
+            row += item.as_html(escape=col_index not in no_escape)
         rows += f"<tr>{row}</tr>"
     s = (
         "<div>"
@@ -165,7 +171,7 @@ def html_table(
             .tskit-table tbody td {text-align: right;padding: 0.5em 0.5em;}
             .tskit-table tbody th {padding: 0.5em 0.5em;}
         </style>"""
-        f"<h4>{caption}</h4>"
+        f"<b>{caption}</b>"
         '<table border="1" class="tskit-table">'
         "<thead>"
         "<tr>" + header + "</tr>"

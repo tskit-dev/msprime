@@ -1,34 +1,29 @@
 - file: intro
 - part: Getting started
   chapters:
-    - file: quickstart
-    - file: installation
+  - file: quickstart
+  - file: installation
 
-- part: Using msprime
+- part: Running simulations
   chapters:
-    - file: simulations
-      sections:
-      - file: ancestry
-      - file: demography
-      - file: mutations
-    - file: utilities
-      sections:
-      - file: likelihoods
-      - file: rate_maps
-      - file: cli
-      - file: logging
-    - file: api
+  - file: ancestry
+  - file: mutations
+  - file: demography
 
+- part: Interfaces
+  chapters:
+  - file: api
+  - file: cli
+
+- part: Utilities
+  chapters:
+  - file: rate_maps
+  - file: likelihoods
+  - file: logging
 - part: Miscellaneous
   chapters:
-  - file : notes_ms_users
-  - file: development
   - file: legacy
-
-  # Stuff we haven't converted to md yet.
-  - file: changelog
+  - file: switch_from_other_simulators
+  - file: development
   - file: CITATION
-
-  # This is going to be deleted once we get the remaining content
-  # ported somewhere else.
-  - file: tutorial
+  - file: CHANGELOG

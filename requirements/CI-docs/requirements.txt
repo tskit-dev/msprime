@@ -1,9 +1,11 @@
+docutils==0.15  # issue with 0.17, https://github.com/tskit-dev/msprime/issues/1625
+daiquiri==2.1.1
 setuptools-scm==4.1.2
 sphinx==3.3.1
 sphinx-argparse==0.2.5
 sphinx-issues==1.2.0
 jupyter-book==0.10.0
-tskit==0.3.3
+tskit==0.3.5
 newick==1.0.0
 PyGithub==1.53
-matplotlib==3.3.0
+matplotlib==3.4.0

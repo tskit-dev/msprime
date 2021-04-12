@@ -154,7 +154,7 @@ read_pedigree(tsk_table_collection_t *tables, config_t *config)
     for (j = 0; j < num_inds; j++) {
         ret = tsk_individual_table_add_row(&tables->individuals, 0, NULL, 0,
             /* encode the parents in the metadata */
-            (void *) (parents + j * ploidy), ploidy * sizeof(tsk_id_t));
+            NULL, 0, (void *) (parents + j * ploidy), ploidy * sizeof(tsk_id_t));
         if (ret < 0) {
             fatal_tskit_error(ret, __LINE__);
         }
@@ -391,7 +391,7 @@ read_population_configuration(msp_t *msp, config_t *config)
             fatal_error("initial_size not specified");
         }
         initial_size = config_setting_get_float(t);
-        ret = msp_set_population_configuration(msp, j, initial_size, growth_rate);
+        ret = msp_set_population_configuration(msp, j, initial_size, growth_rate, true);
         if (ret != 0) {
             fatal_msprime_error(ret, __LINE__);
         }

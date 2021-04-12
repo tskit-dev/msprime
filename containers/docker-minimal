@@ -1,0 +1,12 @@
+#maintainer Ariella Gladstein
+#organization tskit-dev
+#application "Msprime: a population genetics simulator of ancestry and DNA sequence evolution"
+
+# TODO change this to a minimal Python image
+FROM jupyter/scipy-notebook:latest
+
+# Set the working directory to /app
+WORKDIR /app
+
+# Install latest msprime release
+RUN pip install --pre msprime

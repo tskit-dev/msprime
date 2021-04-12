@@ -1,5 +1,8 @@
+# Turn off flake8 and reorder-python-imports for this file.
+# flake8: NOQA
+# noreorder
 #
-# Copyright (C) 2015-2018 University of Oxford
+# Copyright (C) 2015-2021 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -17,56 +20,229 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Msprime is a reimplementation of Hudson's classical ms simulator for
-modern datasets.
+Msprime is a population genetics simulator.
+Please see the documentation at https://tskit.dev/msprime/docs/
+for more information.
 """
-# flake8: NOQA
-import tskit
 
-# Compatibility layer for old code using the tskit API exported by msprime.
-NULL_NODE = tskit.NULL
-NULL_POPULATION = tskit.NULL
-NULL_INDIVIDUAL = tskit.NULL
-NULL_MUTATION = tskit.NULL
+from msprime._msprime import (
+    NODE_IS_CEN_EVENT,
+    NODE_IS_CA_EVENT,
+    NODE_IS_MIG_EVENT,
+    NODE_IS_RE_EVENT,
+)
 
-# TODO document these flags
-from msprime import _msprime
-from msprime._msprime import NODE_IS_CA_EVENT
-from msprime._msprime import NODE_IS_CEN_EVENT
-from msprime._msprime import NODE_IS_MIG_EVENT
-from msprime._msprime import NODE_IS_RE_EVENT
+from msprime.ancestry import (
+    AncestryModel,
+    BetaCoalescent,
+    DiracCoalescent,
+    DiscreteTimeWrightFisher,
+    SampleSet,
+    sim_ancestry,
+    SmcApproxCoalescent,
+    SmcPrimeApproxCoalescent,
+    StandardCoalescent,
+    SweepGenicSelection,
+    WrightFisherPedigree,
+)
 
 from msprime.core import __version__
-from msprime.exceptions import *
-from msprime.demography import *
-from msprime.ancestry import *
-from msprime.pedigrees import *
-from msprime.mutations import *
-from msprime.likelihood import *
-from msprime.intervals import *
 
-from types import ModuleType
+from msprime.demography import (
+    Demography,
+    DemographyDebugger,
+    IncompletePopulationMetadataWarning,
+    Population,
+)
 
-old_module = sys.modules["msprime"]
+from msprime.intervals import RateMap
+from msprime.likelihood import log_arg_likelihood, log_mutation_likelihood
 
-# Many attributes were moved to tskit, we use a facade here so we don't break old
-# code, but do emit a warning
-class DeprecationFacade(ModuleType):
-    def __getattr__(self, name):
-        try:
-            # Tree used to be SparseTree
-            if name == "SparseTree":
-                name = "Tree"
-            result = getattr(tskit, name)
-            warnings.warn(
-                f"'{__name__}.{name}' is deprecated and will be removed"
-                f" in future versions. Use 'tskit.{name}'."
-            )
-        except AttributeError:
+from msprime.mutations import (
+    BinaryMutationModel,
+    BLOSUM62,
+    F84,
+    GTR,
+    HKY,
+    InfiniteAlleles,
+    JC69,
+    MatrixMutationModel,
+    MutationModel,
+    NUCLEOTIDES,
+    PAM,
+    SLiMMutationModel,
+    sim_mutations,
+)
+
+# Imports for deprecated 0.x classes and functions. We keep these separate
+# here for clarity, but they will be maintained indefinitely.
+
+from msprime.ancestry import (
+    Sample,
+    simulate,
+    SimulationModelChange,
+)
+from msprime.demography import (
+    CensusEvent,
+    InstantaneousBottleneck,
+    MassMigration,
+    MigrationRateChange,
+    PopulationConfiguration,
+    PopulationParametersChange,
+    SimpleBottleneck,
+)
+from msprime.mutations import (
+    BINARY,
+    mutate,
+    NUCLEOTIDES,
+    InfiniteSites,
+)
+from msprime.intervals import RecombinationMap
+
+__all__ = [
+    "AncestryModel",
+    "BINARY",
+    "BLOSUM62",
+    "BetaCoalescent",
+    "BinaryMutationModel",
+    "CensusEvent",
+    "Demography",
+    "DemographyDebugger",
+    "DiracCoalescent",
+    "DiscreteTimeWrightFisher",
+    "F84",
+    "GTR",
+    "HKY",
+    "IncompletePopulationMetadataWarning",
+    "InfiniteAlleles",
+    "InfiniteSites",
+    "InstantaneousBottleneck",
+    "JC69",
+    "MassMigration",
+    "MatrixMutationModel",
+    "MigrationRateChange",
+    "MutationModel",
+    "NODE_IS_CA_EVENT",
+    "NODE_IS_CEN_EVENT",
+    "NODE_IS_MIG_EVENT",
+    "NODE_IS_RE_EVENT",
+    "NUCLEOTIDES",
+    "PAM",
+    "Population",
+    "PopulationConfiguration",
+    "PopulationParametersChange",
+    "RateMap",
+    "RecombinationMap",
+    "SLiMMutationModel",
+    "Sample",
+    "SampleSet",
+    "SimpleBottleneck",
+    "SimulationModelChange",
+    "SmcApproxCoalescent",
+    "SmcPrimeApproxCoalescent",
+    "StandardCoalescent",
+    "SweepGenicSelection",
+    "WrightFisherPedigree",
+    "log_arg_likelihood",
+    "log_mutation_likelihood",
+    "mutate",
+    "sim_ancestry",
+    "sim_mutations",
+    "simulate",
+]
+
+
+def __make_tskit_deprecations():
+    """
+    Update the namespace to include redirects from the old tskit classes
+    that used to be in msprime. These will raise a formal warning for
+    now and will be removed in 1.2.
+
+    We do this in a function to avoid cluttering up the top-level namespace
+    with more stuff.
+    """
+
+    import sys
+    import tskit
+    import warnings
+    import types
+
+    old_module = sys.modules["msprime"]
+
+    # Many attributes were moved to tskit, we use a facade here so we don't break old
+    # code, but do emit a warning
+    msprime_names_now_in_tskit = [
+        "Edge",
+        "EdgeTable",
+        "Edgeset",
+        "FORWARD",
+        "Individual",
+        "IndividualTable",
+        "LdCalculator",
+        "Migration",
+        "MigrationTable",
+        "Mutation",
+        "MutationTable",
+        "NODE_IS_SAMPLE",
+        "Node",
+        "NodeTable",
+        "PopulationTable",
+        "Provenance",
+        "ProvenanceTable",
+        "REVERSE",
+        "Site",
+        "SiteTable",
+        "TableCollection",
+        "Tree",
+        "TreeSequence",
+        "Variant",
+        "load",
+        "load_text",
+        "parse_nodes",
+        "pack_bytes",
+        "pack_strings",
+        "parse_edges",
+        "parse_individuals",
+        "parse_mutations",
+        "parse_sites",
+        "unpack_bytes",
+        "unpack_strings",
+        "validate_provenance",
+        "NULL",
+    ]
+
+    old_msprime_stuff_renamed = {
+        "NULL_NODE": "NULL",
+        "NULL_POPULATION": "NULL",
+        "NULL_INDIVIDUAL": "NULL",
+        "NULL_MUTATION": "NULL",
+        "SparseTree": "Tree",
+    }
+
+    class DeprecationFacade(types.ModuleType):
+        def __getattr__(self, name):
+            if name in old_msprime_stuff_renamed:
+                new_name = old_msprime_stuff_renamed[name]
+                warnings.warn(
+                    f"'{__name__}.{name}' is deprecated and will be removed"
+                    f" in future versions. Use 'tskit.{new_name}'.",
+                    category=FutureWarning,
+                )
+                return getattr(tskit, new_name)
+            if name in msprime_names_now_in_tskit:
+                result = getattr(tskit, name)
+                warnings.warn(
+                    f"'{__name__}.{name}' is deprecated and will be removed"
+                    f" in future versions. Use 'tskit.{name}'.",
+                    category=FutureWarning,
+                )
+                return result
             raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-        return result
+
+    # Patch the facade into the dict of loaded modules
+    facade = DeprecationFacade("msprime")
+    facade.__dict__.update(old_module.__dict__)
+    sys.modules["msprime"] = facade
 
 
-# Patch the facade into the dict of loaded modules
-facade = sys.modules["msprime"] = DeprecationFacade("msprime")
-facade.__dict__.update(old_module.__dict__)
+__make_tskit_deprecations()

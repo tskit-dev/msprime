@@ -1,6 +1,6 @@
 (sec_development)=
 
-# Developer documentation
+# Development
 
 If you would like to add some features to `msprime`, please read the
 following. If you think there is anything missing,
@@ -24,8 +24,7 @@ please open an [issue](<http://github.com/tskit-dev/msprime/issues>) or
   ```
   $ git submodule update --init --recursive
   ```
-- Install the {ref}`system requirements <sec_development_system_requirements>`.
-- Install the Python development requirements using `pip install -r requirements/development.txt`.
+- Install the {ref}`requirements <sec_development_requirements>`.
 - Build the low level module by running `make` in the project root.
 - Run the tests to ensure everything has worked: `python3 -m pytest`. These should
   all pass.
@@ -48,11 +47,34 @@ please open an [issue](<http://github.com/tskit-dev/msprime/issues>) or
 - See the [tskit documentation](<https://tskit.readthedocs.io/en/latest/development.html#github-workflow>)
   for more details on the recommended GitHub workflow.
 
-(sec_development_system_requirements)=
-## System requirements
+(sec_development_requirements)=
+## Requirements
+
+### System requirements
 
 To develop with msprime you will need to have [GSL](https://www.gnu.org/software/gsl/)
-installed. See section {ref}`sec_pip_install_source` for how to install GSL on some common platforms.
+installed and a working compiler. Please see the {ref}`sec_pip_install_source`
+section for how to install GSL on some common platforms.
+
+:::{important}
+You still need to install GSL and have a working compiler if you are working
+on the documentation because it requires a locally built version of the
+{ref}`C module<sec_development_c_module>`.
+:::
+
+### Python requirements
+
+The list of packages needed for development are listed in
+``requirements/development.txt``. Install these using either:
+
+```
+conda install --file requirements/development.txt
+```
+or
+```
+$ python -m pip install -r requirements/development.txt
+```
+depending on whether you are a conda or pip user.
 
 ## Overview
 
@@ -101,16 +123,16 @@ is split into two main sections:
 Further documentation where features are combined to perform specific
 tasks is provided in the [tskit tutorials](https://tskit.dev/tutorials) site.
 
-Documentation can be written on GitHub or locally. If you are new to contributing 
+Documentation can be written on GitHub or locally. If you are new to contributing
 to msprime and you will be making minor edits to markdown text, you may find
-it easier to make edits on GitHub. To do this, hover your mouse over the GitHub 
-icon in the top right corner of the documentation, and click "suggest edit". 
-You can then edit and preview markdown in GitHub's user interface. Clicking 
+it easier to make edits on GitHub. To do this, hover your mouse over the GitHub
+icon in the top right corner of the documentation, and click "suggest edit".
+You can then edit and preview markdown in GitHub's user interface. Clicking
 "propose change" at the bottom of the page will commit to a new branch on your fork.
-If you do not already have a fork of the msprime repository, GitHub will prompt you 
-to "fork this repository" - go ahead and create your fork. 
-You can then create a pull request for your proposed change. On the other hand, 
-if you are already familiar with contributing to msprime, or have more than simple 
+If you do not already have a fork of the msprime repository, GitHub will prompt you
+to "fork this repository" - go ahead and create your fork.
+You can then create a pull request for your proposed change. On the other hand,
+if you are already familiar with contributing to msprime, or have more than simple
 markdown edits to add, you can edit and
 {ref}`build <sec_development_documentation_building>` the documentation locally.
 To do that, first follow the {ref}`Quickstart <sec_development_quickstart>`.
@@ -128,7 +150,9 @@ and the local development version of msprime.
 (sec_development_documentation_building)=
 ### Building
 
-To build the documentation locally, go to the `docs` directory and run `make`.
+To build the documentation locally, go to the `docs` directory and run `make`
+(ensure that the {ref}`sec_development_requirements` have been installed
+and the low-level C module has been built---see the note in the previous section).
 This will build the HTML documentation in  `docs/_build/html/`. You can now
 view the local build of the HTML in your local browser (if you do not know how
 to do this, try double clicking the HTML file).
