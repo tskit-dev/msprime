@@ -3228,9 +3228,9 @@ class DemographyDebugger:
         return pop_size
 
     @property
-    def epoch_times(self):
+    def epoch_start_time(self):
         """
-        Returns array of epoch times defined by the demographic model
+        The array of epoch start_times defined by the demographic model.
         """
         return np.array([x.start_time for x in self.epochs])
 
@@ -3285,7 +3285,7 @@ class DemographyDebugger:
         # epochs are defined by mass migration events or changes to population sizes
         # or migration rates, so we add the epoch interval times to the steps that we
         # need to account for
-        epoch_breaks = [t for t in self.epoch_times if t not in steps]
+        epoch_breaks = [t for t in self.epoch_start_time if t not in steps]
         all_steps = np.concatenate([steps, epoch_breaks])
 
         sampling = []
@@ -3418,7 +3418,7 @@ class DemographyDebugger:
             sampling_times[t] = list(set(sampling_times[t]))
 
         all_steps = sorted(
-            list(set([t for t in self.epoch_times] + list(sampling_times.keys())))
+            list(set([t for t in self.epoch_start_time] + list(sampling_times.keys())))
         )
 
         epochs = [(x, y) for x, y in zip(all_steps[:-1], all_steps[1:])]
@@ -3521,11 +3521,11 @@ class DemographyDebugger:
 
         if steps is None:
             last_N = max(self.population_size_history[:, self.num_epochs - 1])
-            last_epoch = max(self.epoch_times)
+            last_epoch = self.epoch_start_time[-1]
             steps = sorted(
                 list(
                     set(np.linspace(0, last_epoch + 12 * last_N, 101)).union(
-                        set(self.epoch_times)
+                        set(self.epoch_start_time)
                     )
                 )
             )
@@ -3687,7 +3687,7 @@ class DemographyDebugger:
         P = P / np.sum(P)
         # add epoch breaks if not there already but remember which steps they are
         epoch_breaks = list(
-            set([0.0] + [t for t in self.epoch_times if t not in steps])
+            set([0.0] + [t for t in self.epoch_start_time if t not in steps])
         )
         steps_b = np.concatenate([steps, epoch_breaks])
         ix = np.argsort(steps_b)

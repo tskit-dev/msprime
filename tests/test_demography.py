@@ -798,7 +798,7 @@ class TestDemographyDebugger:
         Check that the array properties that we generate are computed correctly.
         """
         pop_size = dd.population_size_history
-        times = dd.epoch_times
+        times = dd.epoch_start_time
         assert dd.num_epochs == times.shape[0]
         assert dd.num_epochs == pop_size.shape[1]
         assert dd.num_populations == pop_size.shape[0]
@@ -833,7 +833,7 @@ class TestDemographyDebugger:
         self.verify_arrays(dd)
         e = dd.epochs[0]
         assert e.start_time == 0
-        assert dd.epoch_times[0] == 0
+        assert dd.epoch_start_time[0] == 0
         assert dd.population_size_history.shape[0] == 1
         assert math.isinf(e.end_time)
         assert len(e.events) == 0
@@ -1004,8 +1004,8 @@ class TestDemographyDebugger:
             e = dd.epochs[0]
             assert e.start_time == 0
             assert e.end_time == t1
-            assert dd.epoch_times[0] == 0
-            assert dd.epoch_times[1] == t1
+            assert dd.epoch_start_time[0] == 0
+            assert dd.epoch_start_time[1] == t1
             assert len(e.events) == 0
             assert len(e.populations) == 2
             np.testing.assert_array_equal(e.migration_matrix, [[0, 0], [0, 0]])
@@ -3855,7 +3855,7 @@ class TestLineageProbabilities:
         reps = msprime.sim_ancestry(
             samples=samples,
             demography=dd.demography,
-            end_time=max(dd.epoch_times + 1),
+            end_time=max(dd.epoch_start_time + 1),
             num_replicates=10,
             random_seed=42,
         )
