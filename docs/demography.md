@@ -1776,6 +1776,8 @@ distance, but as we go further back into the past
 the possible location of lineages becomes more evenly
 distributed in space.
 
+(sec_demography_numerical_coalescence)=
+
 ### Coalescence rates and mean times
 
 Lineage probabilities tell us where lineages might possibly be,
@@ -1846,6 +1848,8 @@ and that diversity within "B" goes from a level close to that found between popu
 to that within "A", as the "A→B" migration rate approaches the "B→A" rate.
 
 
+(sec_demography_numerical_trajectories)=
+
 ### Inverse instantaneous coalescence rates
 
 Coalescence rates are analogous to effective population sizes,
@@ -1887,9 +1891,9 @@ T = np.concatenate([
 ])
 
 R = np.zeros((len(T), 3))
-R[:,0], _ = debug.coalescence_rate_trajectory(T, {"YRI": 1})
-R[:,1], _ = debug.coalescence_rate_trajectory(T, {"CEU": 1})
-R[:,2], _ = debug.coalescence_rate_trajectory(T, {"CHB": 1})
+R[:,0], _ = debug.coalescence_rate_trajectory(T, {"YRI": 2})
+R[:,1], _ = debug.coalescence_rate_trajectory(T, {"CEU": 2})
+R[:,2], _ = debug.coalescence_rate_trajectory(T, {"CHB": 2})
 ```
 
 The time values look a bit weird because when at first we set them to have
