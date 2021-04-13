@@ -3,13 +3,13 @@
 # Command line interface
 
 Two command line applications are provided with `msprime`: {ref}`sec_msp` and
-{ref}`sec_mspms`. The {command}`msp` program is a POSIX compliant command line 
+{ref}`sec_mspms`. The {command}`msp` program is a POSIX compliant command line
 interface to the library. The {command}`mspms` program is a fully-{command}`ms`
 compatible interface. This is useful for those who wish to get started quickly
 with using
 the library, and also as a means of plugging `msprime` into existing work
 flows. However, there is a substantial overhead involved in translating data
-from `msprime`'s native history file into legacy formats, and so new code
+from `msprime`'s native history file into legacy formats like `ms`, and so new code
 should use the Python API where possible.
 
 (sec_msp)=
@@ -19,22 +19,70 @@ should use the Python API where possible.
 The {command}`msp` program provides a convenient interface to the `msprime` API.
 It is based on subcommands that either generate or consume a
 tree sequence file. The `ancestry` sub-command simulates tree sequences from the
- coalescent with recombination. The `mutate` sub-command places 
-mutations onto an existing tree sequence. Several mutation models are available.
+ coalescent with recombination. The `mutations` sub-command places
+mutations onto an existing tree sequence. Several
+{ref}`mutation models<sec_mutations_models>` are available.
 The deprecated `simulate` sub-command simulates tree sequences from the
- coalescent with recombination and mutations.
+coalescent with recombination and mutations.
+
+:::{important}
+The {command}`msp ancestry` and {command}`msp mutations` commands write
+their output to stdout by default so make sure you redirect this to a
+file or use the ``--output`` option.
+:::
+
+### Examples
+
+Simulate 10 diploid samples from a population of size 1000
+with a genome of 100 base pairs, and write the output to ``ancestry.trees``:
+
+```sh
+$ msp ancestry 10 -N 1000 -L 100 > ancestry.trees
+```
+
+Simulate mutations from the {class}`Jukes-Cantor<.JC69>` mutation model
+at rate 0.01 per-base per-generation, and write this to ``mutations.trees``.
+
+```sh
+$ msp mutations 0.01 ancestry.trees > mutations.trees
+```
+
+Do the same simulations, but pipe the output of the ancestry simulation
+directly to the mutations simulation:
+```sh
+$ msp ancestry 10 -N 1000 -L 100 | msp mutations 0.01 > combined.trees
+```
+
+Show a summary of the properties of the trees file ``combined.trees``:
+```
+$ tskit info combined.trees
+sequence_length:  100.0
+trees:            1
+samples:          20
+individuals:      10
+nodes:            39
+edges:            38
+sites:            100
+mutations:        16997
+migrations:       0
+populations:      1
+provenances:      2
+```
+
+See the {ref}`tskit documentation<tskit:sec_cli>` for more details on the
+{program}`tskit` command line interface.
 
 (sec_msp_ancestry)=
 
 ### msp ancestry
 
-{command}`msp ancestry` generates coalescent simulations with recombination 
+{command}`msp ancestry` generates coalescent simulations with recombination
 from a constant population size and stores the result as a tree sequence in
 an output file. This sub-command is an interface to the
-{func}`msprime.sim_ancestry` API function. 
+{func}`msprime.sim_ancestry` API function.
 
 ```{eval-rst}
-.. argparse:: 
+.. argparse::
     :module: msprime.cli
     :func: get_msp_parser
     :prog: msp
@@ -45,37 +93,39 @@ an output file. This sub-command is an interface to the
 
 (sec_msp_mutate)=
 
-### msp mutate
+### msp mutations
 
 {command}`msp mutate` can be used to add mutations to a tree sequence and store
 a copy of the resulting tree sequence in a second file. This
 sub-command is an interface to the
-{func}`msprime.sim_mutations` API function. 
+{func}`msprime.sim_mutations` API function.
 
 ```{eval-rst}
 .. argparse::
     :module: msprime.cli
     :func: get_msp_parser
     :prog: msp
-    :path: mutate
+    :path: mutations
     :nodefault:
 ```
 
-
-
 ### msp simulate
 
-{command}`msp simulate` generates coalescent simulations with recombination 
+:::{warning}
+The {command}`msp simulate` command is deprecated.
+:::
+
+{command}`msp simulate` generates coalescent simulations with recombination
 from a constant population size and stores the result as a tree sequence in
 an output file.
-{command}`msp simulate` is deprecated, but will be supported indefinitely. 
+{command}`msp simulate` is deprecated, but will be supported indefinitely.
 {ref}`sec_msp_mutate` provides further mutation models.
-{command}`msp ancestry` will provide further demographic scenarios from 
+{command}`msp ancestry` will provide further demographic scenarios from
 which to simulate tree sequences. {command}`msp simulate` is an
-interface to the deprecated {func}`msprime.simulate` API function. 
+interface to the deprecated {func}`msprime.simulate` API function.
 
 ```{eval-rst}
-.. argparse:: 
+.. argparse::
     :module: msprime.cli
     :func: get_msp_parser
     :prog: msp

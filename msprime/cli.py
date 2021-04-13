@@ -1057,7 +1057,10 @@ def get_msp_parser():
 
 def add_mutate_subcommand(subparsers):
     parser = subparsers.add_parser(
-        "mutations", aliases=["mut"], help="Simulate mutations on a tree sequence."
+        # see note above on aliases and sphinx-argparse
+        # aliases=["mut"],
+        "mutations",
+        help="Simulate mutations on a tree sequence.",
     )
     parser.add_argument(
         "mutation_rate",
@@ -1147,7 +1150,10 @@ def add_simulate_subcommand(subparsers) -> None:
 def add_ancestry_subcommand(subparsers) -> None:
     parser = subparsers.add_parser(
         "ancestry",
-        aliases=["anc"],
+        # We'd like to use aliases there but sphinx-argparse doesn't support it
+        # in the released version. Looks like the project has been abandoned by
+        # its original maintainers, so we might want to stop using it.
+        # aliases=["anc"],
         help="Simulate an ancestral history and output as a tskit tree sequence.",
     )
     parser.add_argument(

@@ -1262,19 +1262,19 @@ class TestMspArgumentParser:
         parser = cli.get_msp_parser()
         args = parser.parse_args(["mutations", "10"])
         assert args.output is sys.stdout
-        args = parser.parse_args(["ancestry", "10", "-o", "-"])
+        args = parser.parse_args(["mutations", "10", "-o", "-"])
         assert args.output is sys.stdout
 
     def test_mutations_stdin(self):
         parser = cli.get_msp_parser()
         args = parser.parse_args(["mutations", "10"])
         assert args.input is sys.stdin
-        args = parser.parse_args(["ancestry", "10", "-"])
+        args = parser.parse_args(["mutations", "10", "-"])
         assert args.input is sys.stdin
 
     def test_mut_default_values(self):
         parser = cli.get_msp_parser()
-        cmd = "mut"
+        cmd = "mutations"
         args = parser.parse_args([cmd, "0.1"])
         assert args.input is sys.stdin
         assert args.output is sys.stdout
@@ -1296,7 +1296,7 @@ class TestMspArgumentParser:
     def test_mutate_model_is_changeable(self):
         parser = cli.get_msp_parser()
         for model_arg in ["--model", "-m"]:
-            args = parser.parse_args(["mut", "1", model_arg, "blosum62"])
+            args = parser.parse_args(["mutations", "1", model_arg, "blosum62"])
             assert args.model == "blosum62"
 
 
@@ -1443,7 +1443,7 @@ def tree_sequence_file(tmp_path, tree_sequence):
     def test_mutate_discrete_start_end_time(self, tree_sequence_file, tmp_path):
         out_tree_sequence_file = str(tmp_path / "out.ts")
 
-        cmd = "mut"
+        cmd = "mutations"
         stdout, stderr = capture_output(
             cli.msp_main,
             [
@@ -1473,7 +1473,7 @@ def tree_sequence_file(tmp_path, tree_sequence):
 
 class TestMspMutateModelOutput:
     def test_binary_uses_0_or_1_states(self, tree_sequence_file, tmp_path):
-        cmd = "mut"
+        cmd = "mutations"
         out_tree_sequence_file = str(tmp_path / "out.ts")
         stdout, stderr = capture_output(
             cli.msp_main,
@@ -1498,7 +1498,7 @@ class TestMspMutateModelOutput:
         assert set(tables.mutations.derived_state) <= {ord("0"), ord("1")}
 
     def test_default_jc69_uses_ACGT_states(self, tree_sequence_file, tmp_path):
-        cmd = "mut"
+        cmd = "mutations"
         out_tree_sequence_file = str(tmp_path / "out.ts")
         stdout, stderr = capture_output(
             cli.msp_main,
