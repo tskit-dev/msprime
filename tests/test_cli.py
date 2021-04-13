@@ -1364,9 +1364,17 @@ class TestMspAncestryOutput:
 
 @pytest.fixture
 def tree_sequence():
-    return msprime.simulate(
-        10, length=10, recombination_rate=0, mutation_rate=10, random_seed=1
+    return msprime.sim_ancestry(
+        10, sequence_length=10, recombination_rate=0, random_seed=1
     )
+
+
+@pytest.fixture
+def mutated_tree_sequence():
+    ts = msprime.sim_ancestry(
+        10, sequence_length=10, recombination_rate=0, random_seed=1
+    )
+    return msprime.sim_mutations(ts, rate=1, random_seed=2)
 
 
 @pytest.fixture
@@ -1381,12 +1389,10 @@ class TestMspMutateOutput:
     Tests the output of msp mutate to ensure it's correct.
     """
 
-    @pytest.mark.xfail(reason="Issue #1440 unresolved")
-    def test_mutate_keep(self, tree_sequence_file):
-        fd, out_tree_sequence_file = tempfile.mkstemp(
-            prefix="msp_cli_mutate", suffix=".trees"
-        )
-        os.close(fd)
+    def test_mutate_keep(self, mutated_tree_sequence, tmp_path):
+        in_path = tmp_path / "input.trees"
+        out_path = tmp_path / "output.trees"
+        mutated_tree_sequence.dump(in_path)
 
         cmd = "mutate"
         mutation_rate = 10
@@ -1395,8 +1401,8 @@ class TestMspMutateOutput:
             cli.msp_main,
             [
                 cmd,
-                tree_sequence_file,
-                out_tree_sequence_file,
+                str(in_path),
+                str(out_path),
                 "-u",
                 str(mutation_rate),
                 "-s",
@@ -1405,12 +1411,10 @@ class TestMspMutateOutput:
         )
         assert len(stderr) == 0
 
-        previous_ts = tskit.load(tree_sequence_file)
-        tree_sequence = tskit.load(out_tree_sequence_file)
+        tree_sequence = tskit.load(out_path)
 
-        assert tree_sequence.get_num_mutations() > previous_ts.get_num_mutations()
+        assert tree_sequence.num_mutations > mutated_tree_sequence.num_mutations
 
-    @pytest.mark.xfail(reason="Issue #1440 unresolved")
     def test_mutate_discrete_start_end_time(self, tree_sequence_file, tmp_path):
         out_tree_sequence_file = str(tmp_path / "out.ts")
 
@@ -1443,7 +1447,6 @@ class TestMspMutateOutput:
 
 
 class TestMspMutateModelOutput:
-    @pytest.mark.xfail(reason="Issue #1440 unresolved")
     def test_binary_uses_0_or_1_states(self, tree_sequence_file, tmp_path):
         cmd = "mutate"
         out_tree_sequence_file = str(tmp_path / "out.ts")
@@ -1469,7 +1472,6 @@ class TestMspMutateModelOutput:
         assert set(tables.sites.ancestral_state) == {ord("0")}
         assert set(tables.mutations.derived_state) <= {ord("0"), ord("1")}
 
-    @pytest.mark.xfail(reason="Issue #1440 unresolved")
     def test_default_jc69_uses_ACGT_states(self, tree_sequence_file, tmp_path):
         cmd = "mutate"
         out_tree_sequence_file = str(tmp_path / "out.ts")
