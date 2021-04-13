@@ -755,10 +755,10 @@ def _parse_sample_sets(sample_sets, demography):
     return sample_sets
 
 
-def _parse_samples(samples, demography, ploidy, tables):
+def _parse_samples(samples, demography):
     """
-    Parse the specified "samples" value for sim_ancestry and insert them into the
-    specified tables.
+    Parse the specified "samples" value for sim_ancestry and return the equivalent
+    list of SampleSet instances.
     """
     if isinstance(samples, collections.abc.Sequence):
         sample_sets = samples
@@ -768,11 +768,11 @@ def _parse_samples(samples, demography, ploidy, tables):
             for population, num_samples in samples.items()
         ]
     elif core.isinteger(samples):
-        if len(tables.populations) != 1:
+        if demography.num_populations != 1:
             raise ValueError(
                 "Numeric samples can only be used in single population models. "
-                "Please use Demography.sample() to generate a list of samples "
-                "for your model, which can be used instead."
+                "Please use either the mapping form {pop_id: num_samples} or "
+                "a list of SampleSet instances."
             )
         sample_sets = [SampleSet(samples)]
     else:
@@ -783,8 +783,7 @@ def _parse_samples(samples, demography, ploidy, tables):
             "objects. Please see the online documentation for more details on "
             "the different forms."
         )
-    sample_sets = _parse_sample_sets(sample_sets, demography)
-    _insert_sample_sets(sample_sets, demography, ploidy, tables)
+    return _parse_sample_sets(sample_sets, demography)
 
 
 def _parse_sim_ancestry(
@@ -930,7 +929,8 @@ def _parse_sim_ancestry(
         initial_state = tskit.TableCollection(sequence_length)
         demography.insert_populations(initial_state)
         if not init_for_debugger:
-            _parse_samples(samples, demography, ploidy, initial_state)
+            sample_sets = _parse_samples(samples, demography)
+            _insert_sample_sets(sample_sets, demography, ploidy, initial_state)
     else:
         if samples is not None:
             raise ValueError("Cannot specify both samples and initial_state")

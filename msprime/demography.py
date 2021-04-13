@@ -3455,11 +3455,11 @@ class DemographyDebugger:
         return combined_indicators
 
     def mean_coalescence_time(
-        self, num_samples, min_pop_size=1, steps=None, rtol=0.005, max_iter=12
+        self, samples, min_pop_size=1, steps=None, rtol=0.005, max_iter=12
     ):
         """
         Compute the mean time until coalescence between lineages of two samples drawn
-        from the sample configuration specified in `num_samples`. This is done using
+        from the sample configuration specified in `samples`. This is done using
         :meth:`~.DemographyDebugger.coalescence_rate_trajectory`
         to compute the probability that the lineages have not yet coalesced by time `t`,
         and using these to approximate :math:`E[T] = \\int_t^\\infty P(T > t) dt`,
@@ -3478,7 +3478,7 @@ class DemographyDebugger:
             import daiquiri
 
             daiquiri.setup(level="DEBUG")
-            debugger.mean_coalescence_time([2])
+            debugger.mean_coalescence_time(1)
 
         Briefly, this outputs iteration number, mean coalescence time, maximum
         difference in probabilty of not having coalesced yet, difference to
@@ -3486,9 +3486,18 @@ class DemographyDebugger:
         time point, and whether the last iteration was an extension or
         refinement.
 
-        :param list num_samples: A list of the same length as the number
-            of populations, so that `num_samples[j]` is the number of sampled
-            chromosomes in subpopulation `j`.
+        .. important:: This function assumes a ploidy value of 2 when computing
+            coalescence rates (see the
+            :ref:`sec_ancestry_ploidy_coalescent_time_scales` section for more
+            information) and the number of samples refers to diploid
+            **individuals**. If you wish to sample monoploid genomes, please use
+            the :class:`.SampleSet` sample specification form with ``ploidy=1``
+            See the :ref:`sec_ancestry_samples` section for more information on
+            how to specify samples.
+
+        :param samples: A sample specification as accepted by
+            :func:`.sim_ancestry`. See :ref:`sec_ancestry_samples` for details
+            on the different forms that can be used.
         :param int min_pop_size: See
             :meth:`~.DemographyDebugger.coalescence_rate_trajectory`.
         :param list steps: The time discretization to start out with (by default,
@@ -3548,7 +3557,7 @@ class DemographyDebugger:
             last_steps = steps
             _, P1 = self.coalescence_rate_trajectory(
                 steps=last_steps,
-                num_samples=num_samples,
+                samples=samples,
                 min_pop_size=min_pop_size,
                 double_step_validation=False,
             )
@@ -3565,7 +3574,7 @@ class DemographyDebugger:
                 steps.sort()
             _, P2 = self.coalescence_rate_trajectory(
                 steps=steps,
-                num_samples=num_samples,
+                samples=samples,
                 min_pop_size=min_pop_size,
                 double_step_validation=False,
             )
@@ -3597,12 +3606,12 @@ class DemographyDebugger:
         return m2
 
     def coalescence_rate_trajectory(
-        self, steps, num_samples, min_pop_size=1, double_step_validation=True
+        self, steps, samples, min_pop_size=1, double_step_validation=True
     ):
         """
         Calculate the mean coalescence rates and proportions
         of uncoalesced lineages between the lineages of the sample
-        configuration provided in `num_samples`, at each of the times ago
+        configuration provided in `samples`, at each of the times ago
         listed by steps, in this demographic model. The coalescence rate at
         time t in the past is the average rate of coalescence of
         as-yet-uncoalesed lineages, computed as follows: let :math:`p(t)` be
@@ -3625,10 +3634,19 @@ class DemographyDebugger:
         grid of steps twice as fine and throwing a warning if the resulting
         values do not match to a relative tolerance of 0.001.
 
+        .. important:: This function assumes a ploidy value of 2 when computing
+            coalescence rates (see the
+            :ref:`sec_ancestry_ploidy_coalescent_time_scales` section for more
+            information) and the number of samples refers to diploid
+            **individuals**. If you wish to sample monoploid genomes, please use
+            the :class:`.SampleSet` sample specification form with ``ploidy=1``
+            See the :ref:`sec_ancestry_samples` section for more information on
+            how to specify samples.
+
         :param list steps: The times ago at which coalescence rates will be computed.
-        :param list num_samples: A list of the same length as the number
-            of populations, so that `num_samples[j]` is the number of sampled
-            chromosomes in subpopulation `j`.
+        :param samples: A sample specification as accepted by
+            :func:`.sim_ancestry`. See :ref:`sec_ancestry_samples` for details
+            on the different forms that can be used.
         :param int min_pop_size: The smallest allowed population size during
             computation of coalescent rates (i.e., coalescence rates are actually
             1 / (2 * max(min_pop_size, N(z,t))). Spurious very small population sizes
@@ -3645,11 +3663,12 @@ class DemographyDebugger:
             not yet coalesced (denoted p(t[j]) above).
         :rtype: (numpy.ndarray, numpy.ndarray)
         """
-        num_pops = self.num_populations
-        if not len(num_samples) == num_pops:
-            raise ValueError(
-                "`num_samples` must have the same length as the number of populations"
-            )
+        sample_sets = ancestry._parse_samples(samples, self.demography)
+        num_samples = np.zeros(self.num_populations, dtype=int)
+        for sample_set in sample_sets:
+            pop_id = self.demography[sample_set.population].id
+            ploidy = 2 if sample_set.ploidy is None else sample_set.ploidy
+            num_samples[pop_id] += sample_set.num_samples * ploidy
         steps = np.array(steps)
         if not np.all(np.diff(steps) > 0):
             raise ValueError("`steps` must be a sequence of increasing times.")
