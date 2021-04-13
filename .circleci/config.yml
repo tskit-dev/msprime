@@ -43,8 +43,7 @@ jobs:
           name: Run highlevel tests and upload coverage
           # We hard-code number of cores here as we were running low on memory with more
           command: |
-            pytest --cov=msprime --cov=docs/examples --cov-report=xml --cov-branch \
-                        -n 8 tests
+            pytest --cov=msprime --cov-report=xml --cov-branch -n 8 tests
             codecov -X gcov -F python
             rm .coverage
 

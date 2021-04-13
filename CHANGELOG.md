@@ -70,6 +70,14 @@ with nearly all existing code.
   may break old code that depends on the tskit table entities being
   exported from msprime (other classes are now formally deprecated and
   will raise a warning; see the deprecations section).
+- The semantics of ``start_time`` and exponential growth models has changed;
+  previously, exponential population size changes would be calculated starting
+  at the simulation ``start_time`` at the beginning of the simulation. Now
+  population growth rates are always computed from time 0 (unless other
+  events occur). The old semantics, if needed, can be recovered by setting
+  the ``growth_rate`` to 0 in the initial population declaration and adding
+  a population parameters change event at the ``start_time`` to change the
+  ``growth_rate`` to the desired value.
 
 **Performance improvements**
 

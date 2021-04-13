@@ -31,6 +31,7 @@ import logging
 import math
 import struct
 import sys
+import tempfile
 from typing import Any
 from typing import ClassVar
 from typing import Union
@@ -1467,6 +1468,18 @@ class Simulator(_msprime.Simulator):
                 ts = tables.tree_sequence()
             yield ts
             self.reset()
+
+    def __str__(self):
+        # Warning! This can be very big as it's a direct dump of the low-level
+        # data structures. If you want to debug a large simulation use
+        # simulator.print_state(sys.stdout).
+        # It's also possible to trigger segfault/assertions by calling this on a
+        # simulator that's in an errored state - so use this method with care!
+        with tempfile.TemporaryFile() as f:
+            self.print_state(f)
+            f.seek(0)
+            s = f.read().decode()
+        return "================\nSimulator state:\n================\n" + s
 
 
 @dataclasses.dataclass

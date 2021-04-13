@@ -44,7 +44,7 @@ test_single_locus_simulation(void)
     /* For the single locus sim we should have exactly n - 1 events */
     for (j = 0; j < n - 2; j++) {
         ret = msp_run(&msp, DBL_MAX, 1);
-        CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_EVENTS);
+        CU_ASSERT_EQUAL_FATAL(ret, MSP_EXIT_MAX_EVENTS);
         msp_verify(&msp, 0);
     }
     ret = msp_run(&msp, DBL_MAX, 1);
@@ -490,8 +490,8 @@ test_single_locus_historical_sample_end_time(void)
         CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
         /* msp_verify(&msp); */
 
-        /* The sampling event should *not* have been applied */
-        CU_ASSERT_EQUAL_FATAL(msp.next_sampling_event, 0);
+        /* The second sampling event should *not* have been applied */
+        CU_ASSERT_EQUAL_FATAL(msp.next_sampling_event, 1);
         CU_ASSERT_EQUAL_FATAL(msp_get_num_ancestors(&msp), 1);
         CU_ASSERT_EQUAL_FATAL(msp_get_num_nodes(&msp), 2);
 
@@ -3452,9 +3452,11 @@ check_zero_population_size(
         if (init_ret == 0) {
             msp_print_state(&msp, _devnull);
             ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
-            CU_ASSERT_EQUAL(ret, run_ret);
-            msp_verify(&msp, 0);
-            msp_print_state(&msp, _devnull);
+            CU_ASSERT_EQUAL_FATAL(ret, run_ret);
+            if (ret == 0) {
+                msp_verify(&msp, 0);
+                msp_print_state(&msp, _devnull);
+            }
         }
         CU_ASSERT_EQUAL(msp_free(&msp), 0);
         tsk_table_collection_free(&tables);
@@ -3480,6 +3482,43 @@ test_zero_population_size(void)
     check_zero_population_size(samples_good_3, n, N, T, 0, 0);
     check_zero_population_size(samples_bad_1, n, N, T, MSP_ERR_POP_SIZE_ZERO_SAMPLE, 0);
     check_zero_population_size(samples_bad_2, n, N, T, 0, MSP_ERR_POP_SIZE_ZERO_SAMPLE);
+}
+
+static void
+test_population_size_start_time(void)
+{
+
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    double t = 10;
+    double size1, size2;
+
+    ret = build_sim(&msp, &tables, rng, 1, 2, NULL, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 1, 0.1, true);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_compute_population_size(&msp, 0, t, &size1);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    /* The size of the population should not be affected by start_time */
+    ret = build_sim(&msp, &tables, rng, 1, 2, NULL, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 1, 0.1, true);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_start_time(&msp, 5);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_compute_population_size(&msp, 0, t, &size2);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    CU_ASSERT_EQUAL_FATAL(size1, size2);
+    gsl_rng_free(rng);
 }
 
 int
@@ -3563,6 +3602,7 @@ main(int argc, char **argv)
 
         { "test_simulate_init_errors", test_simulate_init_errors },
         { "test_zero_population_size", test_zero_population_size },
+        { "test_population_size_start_time", test_population_size_start_time },
 
         CU_TEST_INFO_NULL,
     };
