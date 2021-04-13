@@ -798,6 +798,93 @@ demography.add_mass_migration(time=10, source=0, dest=1, proportion=0.5)
 demography.debug()
 ```
 
+
+(sec_demography_events_instantaneous_bottleneck)=
+
+#### Instantaneous bottleneck
+
+A common approach to modelling the effect of demographic history on genealogies
+is to assume that effective population size ({math}`N_e`) changes in discrete steps
+which define a series of epochs.
+In this setting of piece-wise constant
+{math}`N_e`, capturing a population bottleneck requires three epochs: {math}`N_e` is
+reduced by some fraction {math}`b` at the start of the bottleneck,
+{math}`T_{start}`, and
+recovers to its initial value at time {math}`T_{end}` (Marth et al 2004).
+If bottlenecks are short both on the timescale of coalescence and mutations, one
+may expect little information about the duration of a bottleneck
+{math}`(T_{end}-T_{start})` in sequence data.
+Thus a simpler, alternative model is to assume that
+bottlenecks are instantaneous
+({math}`T_{end}-T_{start} \rightarrow 0`) and generate
+a sudden burst of coalescence events in the genealogy.
+
+The strength of the bottleneck {math}`B` can be thought of as an (imaginary)
+time period during which coalescence events are collapsed, i.e. there is no
+growth in genealogical branches during {math}`B` and the probability
+that a single pair
+of lineages entering the bottleneck coalesce during the bottleneck is
+{math}`1-e^{-B}`.
+
+In the following example we create a population of size 100,
+and then 25 generations ago create a bottleneck equivalent to
+200 generations of the coalescent using the
+{meth}`~.Demography.add_instantaneous_bottleneck`
+method:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(initial_size=100)
+demography.add_instantaneous_bottleneck(time=25, strength=200, population=0)
+
+ts = msprime.sim_ancestry(5, demography=demography, random_seed=1234)
+SVG(ts.draw_svg(y_axis=True, size=(300, 200)))
+```
+
+We can see that there is a strong burst of coalscence 25 generations ago.
+
+:::{important}
+Note that there is no possibility of recombination, migration or any other
+events occuring during the bottleneck: it is strictly *instantaneous*
+and can only result in coalscences within the trees.
+:::
+
+:::{seealso}
+See [Bunnefeld et al. (2015)](https://doi.org/10.1534/genetics.115.179861)
+and [Galtier et al. (2000)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1461106/)
+for more details on this model of population bottlenecks.
+:::
+
+
+(sec_demography_events_simple_bottleneck)=
+
+#### Simple bottleneck
+
+In a {meth}`simple bottleneck<.Demography.add_simple_bottleneck>`
+each lineage in a given population has a specified
+probability of coalescing into a single ancestral lineage and a given
+time. For example, here we create a bottleneck in which lineages
+have a probability of 0.8 of coalescing at time 1:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=10)
+demography.add_simple_bottleneck(time=1, population="A", proportion=0.8)
+
+ts = msprime.sim_ancestry(4, demography=demography, random_seed=243)
+SVG(ts.draw_svg(y_axis=True))
+```
+
+We can see that at time 1 we had 7 extant lineages, and all of these
+happened to coalesce, leading to a large polytomy at the root.
+
+:::{note}
+The {meth}`.Demography.add_simple_bottleneck` method can be useful
+for creating trees with particular properties, but it is not
+based on any particular theoretical model and is unlikely to be
+useful in modelling real populations.
+:::
+
 (sec_demography_demography_objects)=
 
 ## Demography objects

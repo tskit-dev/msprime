@@ -1358,6 +1358,26 @@ class TestSimAncestryInterface:
             assert ts.num_populations == 2
             assert ts.num_individuals == 2 * n
 
+    def test_ploidy_bottleneck(self):
+        def run_sim(ploidy):
+            demography = msprime.Demography.isolated_model([100])
+            demography.add_instantaneous_bottleneck(time=10, strength=20, population=0)
+            return msprime.sim_ancestry(
+                [msprime.SampleSet(10, ploidy=1)],
+                demography=demography,
+                ploidy=ploidy,
+                random_seed=1234,
+            )
+
+        ts_p1 = run_sim(1)
+        ts_p2 = run_sim(2)
+        # These should be different simulations and not just simple rescalings
+        # of the times, because the bottleneck changes depending on the ploidy.
+        # NOTE: this may be brittle: we're depending on the bottleneck actually
+        # creating a ternary node in one but not the other. This is just a
+        # random chance and may need to be changed in future.
+        assert ts_p1.num_nodes != ts_p2.num_nodes
+
     def test_random_seed(self):
         ts1 = msprime.sim_ancestry(10, random_seed=1)
         ts2 = msprime.sim_ancestry(10, random_seed=1)

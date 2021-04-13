@@ -6247,15 +6247,11 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     segment_t *individual;
     label_id_t label = 0; /* For now only support label 0 */
 
-    /* This should have been caught on adding the event */
-    if (population_id < 0 || population_id >= N) {
-        ret = MSP_ERR_ASSERTION_FAILED;
-        goto out;
-    }
     if (self->model.type == MSP_MODEL_DTWF) {
         ret = MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK;
         goto out;
     }
+    tsk_bug_assert(population_id >= 0 && population_id < N);
     pop = &self->populations[population_id].ancestors[label];
     n = avl_count(pop);
     lineages = malloc(n * sizeof(tsk_id_t));
@@ -6285,8 +6281,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     t = 0.0;
     parent = (tsk_id_t) n;
     while (j > 0) {
-        rate = j + 1;
-        rate = rate * j;
+        rate = (j + 1) * j / 2;
         t += msp_get_common_ancestor_waiting_time_from_rate(
             self, &self->populations[population_id], rate);
         if (t >= T2) {
