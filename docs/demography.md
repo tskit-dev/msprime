@@ -1776,6 +1776,8 @@ distance, but as we go further back into the past
 the possible location of lineages becomes more evenly
 distributed in space.
 
+(sec_demography_numerical_coalescence)=
+
 ### Coalescence rates and mean times
 
 Lineage probabilities tell us where lineages might possibly be,
@@ -1795,16 +1797,16 @@ demography.set_migration_rate(source="B", dest="A", rate=0.02)
 
 debug = demography.debug()
 T = np.linspace(0, 500, 51)
-RAA, _ = debug.coalescence_rate_trajectory(T, [2, 0])
-RBB, _ = debug.coalescence_rate_trajectory(T, [0, 2])
-RAB, _ = debug.coalescence_rate_trajectory(T, [1, 1])
+RAA, _ = debug.coalescence_rate_trajectory(T, {"A": 2})
+RBB, _ = debug.coalescence_rate_trajectory(T, {"B": 2})
+RAB, _ = debug.coalescence_rate_trajectory(T, {"A": 1, "B": 1})
 
 plt.plot(T, RAA, label="two A samples")
 plt.plot(T, RBB, label="two B samples")
 plt.plot(T, RAB, label="one of each")
 plt.legend()
 plt.xlabel("time ago")
-plt.ylabel("coalecence rate")
+plt.ylabel("coalecence rate");
 ```
 
 The coalescence rate of lineages sampled from different populations begins at zero,
@@ -1822,9 +1824,9 @@ change as we make the migration rate less asymmetric:
 def get_mean_coaltimes(m):
     demography.set_migration_rate(source="A", dest="B", rate=m)
     debug = demography.debug()
-    TAA = debug.mean_coalescence_time([2, 0])
-    TBB = debug.mean_coalescence_time([0, 2])
-    TAB = debug.mean_coalescence_time([1, 1])
+    TAA = debug.mean_coalescence_time({"A": 2})
+    TBB = debug.mean_coalescence_time({"B": 2})
+    TAB = debug.mean_coalescence_time({"A": 1, "B": 1})
     return [TAA, TBB, TAB]
 
 M = np.linspace(0.001, 0.02, 11)
@@ -1845,6 +1847,8 @@ that divergence between the populations is always greater than diversity within 
 and that diversity within "B" goes from a level close to that found between populations
 to that within "A", as the "A→B" migration rate approaches the "B→A" rate.
 
+
+(sec_demography_numerical_trajectories)=
 
 ### Inverse instantaneous coalescence rates
 
@@ -1882,14 +1886,14 @@ demography = msprime.Demography._ooa_model()
 debug = demography.debug()
 
 T = np.concatenate([
-        np.linspace(0, 1000, 2001),
-        np.linspace(1000, 1e4, 401)[1:]
+    np.linspace(0, 1000, 2001),
+    np.linspace(1000, 1e4, 401)[1:]
 ])
 
 R = np.zeros((len(T), 3))
-R[:,0], _ = debug.coalescence_rate_trajectory(T, [2, 0, 0, 0, 0, 0])
-R[:,1], _ = debug.coalescence_rate_trajectory(T, [0, 2, 0, 0, 0, 0])
-R[:,2], _ = debug.coalescence_rate_trajectory(T, [0, 0, 2, 0, 0, 0])
+R[:,0], _ = debug.coalescence_rate_trajectory(T, {"YRI": 2})
+R[:,1], _ = debug.coalescence_rate_trajectory(T, {"CEU": 2})
+R[:,2], _ = debug.coalescence_rate_trajectory(T, {"CHB": 2})
 ```
 
 The time values look a bit weird because when at first we set them to have
@@ -1916,14 +1920,14 @@ shared "OOA" population for both the non-African populations).
 ```{code-cell}
 N = debug.population_size_trajectory(T)
 # CEU-CHB merge
-which_T = (T >= debug.epoch_times[1])
+which_T = (T >= debug.epoch_start_time[1])
 for j in (1, 2):
     N[which_T, j] = N[which_T, 3]
 # OOA-Afr merge
-which_T = (T >= debug.epoch_times[2])
+which_T = (T >= debug.epoch_start_time[2])
 for j in (0, 1, 2):
     N[which_T, j] = N[which_T, 4]
-which_T = (T >= debug.epoch_times[3])
+which_T = (T >= debug.epoch_start_time[3])
 for j in (0, 1, 2):
     N[which_T, j] = N[which_T, 5]
 

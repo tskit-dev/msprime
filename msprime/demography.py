@@ -3228,9 +3228,9 @@ class DemographyDebugger:
         return pop_size
 
     @property
-    def epoch_times(self):
+    def epoch_start_time(self):
         """
-        Returns array of epoch times defined by the demographic model
+        The array of epoch start_times defined by the demographic model.
         """
         return np.array([x.start_time for x in self.epochs])
 
@@ -3285,7 +3285,7 @@ class DemographyDebugger:
         # epochs are defined by mass migration events or changes to population sizes
         # or migration rates, so we add the epoch interval times to the steps that we
         # need to account for
-        epoch_breaks = [t for t in self.epoch_times if t not in steps]
+        epoch_breaks = [t for t in self.epoch_start_time if t not in steps]
         all_steps = np.concatenate([steps, epoch_breaks])
 
         sampling = []
@@ -3418,7 +3418,7 @@ class DemographyDebugger:
             sampling_times[t] = list(set(sampling_times[t]))
 
         all_steps = sorted(
-            list(set([t for t in self.epoch_times] + list(sampling_times.keys())))
+            list(set([t for t in self.epoch_start_time] + list(sampling_times.keys())))
         )
 
         epochs = [(x, y) for x, y in zip(all_steps[:-1], all_steps[1:])]
@@ -3455,11 +3455,22 @@ class DemographyDebugger:
         return combined_indicators
 
     def mean_coalescence_time(
-        self, num_samples, min_pop_size=1, steps=None, rtol=0.005, max_iter=12
+        self, lineages, min_pop_size=1, steps=None, rtol=0.005, max_iter=12
     ):
         """
-        Compute the mean time until coalescence between lineages of two samples drawn
-        from the sample configuration specified in `num_samples`. This is done using
+        Compute the mean time until coalescence between pairs of the specified
+        sample ``lineages``. Sample lineages are specified as a mapping from
+        populations to the number of **monoploid** sample genomes present in
+        that population at time zero. See the
+        :ref:`sec_demography_numerical_coalescence` section for usage examples
+        and more details.
+
+        .. important:: This function assumes a diploid model when computing
+            coalescence rates (see the
+            :ref:`sec_ancestry_ploidy_coalescent_time_scales` section for more
+            information).
+
+        The calculation is performed by using
         :meth:`~.DemographyDebugger.coalescence_rate_trajectory`
         to compute the probability that the lineages have not yet coalesced by time `t`,
         and using these to approximate :math:`E[T] = \\int_t^\\infty P(T > t) dt`,
@@ -3478,7 +3489,7 @@ class DemographyDebugger:
             import daiquiri
 
             daiquiri.setup(level="DEBUG")
-            debugger.mean_coalescence_time([2])
+            debugger.mean_coalescence_time(1)
 
         Briefly, this outputs iteration number, mean coalescence time, maximum
         difference in probabilty of not having coalesced yet, difference to
@@ -3486,9 +3497,10 @@ class DemographyDebugger:
         time point, and whether the last iteration was an extension or
         refinement.
 
-        :param list num_samples: A list of the same length as the number
-            of populations, so that `num_samples[j]` is the number of sampled
-            chromosomes in subpopulation `j`.
+        :param dict lineages: A mapping of populations (either integer IDs
+            or string names: see the :ref:`sec_demography_populations_identifiers`
+            section for more details) to the number of monoploid sample lineages
+            in that population.
         :param int min_pop_size: See
             :meth:`~.DemographyDebugger.coalescence_rate_trajectory`.
         :param list steps: The time discretization to start out with (by default,
@@ -3521,11 +3533,11 @@ class DemographyDebugger:
 
         if steps is None:
             last_N = max(self.population_size_history[:, self.num_epochs - 1])
-            last_epoch = max(self.epoch_times)
+            last_epoch = self.epoch_start_time[-1]
             steps = sorted(
                 list(
                     set(np.linspace(0, last_epoch + 12 * last_N, 101)).union(
-                        set(self.epoch_times)
+                        set(self.epoch_start_time)
                     )
                 )
             )
@@ -3548,7 +3560,7 @@ class DemographyDebugger:
             last_steps = steps
             _, P1 = self.coalescence_rate_trajectory(
                 steps=last_steps,
-                num_samples=num_samples,
+                lineages=lineages,
                 min_pop_size=min_pop_size,
                 double_step_validation=False,
             )
@@ -3565,7 +3577,7 @@ class DemographyDebugger:
                 steps.sort()
             _, P2 = self.coalescence_rate_trajectory(
                 steps=steps,
-                num_samples=num_samples,
+                lineages=lineages,
                 min_pop_size=min_pop_size,
                 double_step_validation=False,
             )
@@ -3597,14 +3609,19 @@ class DemographyDebugger:
         return m2
 
     def coalescence_rate_trajectory(
-        self, steps, num_samples, min_pop_size=1, double_step_validation=True
+        self, steps, lineages, min_pop_size=1, double_step_validation=True
     ):
         """
         Calculate the mean coalescence rates and proportions
-        of uncoalesced lineages between the lineages of the sample
-        configuration provided in `num_samples`, at each of the times ago
-        listed by steps, in this demographic model. The coalescence rate at
-        time t in the past is the average rate of coalescence of
+        of uncoalesced lineages between the specified sample lineages,
+        at each of the times ago listed by steps, in this demographic model.
+        Sample lineages are specified as a mapping from
+        populations to the number of **monoploid** sample genomes present in
+        that population at time zero. See the
+        :ref:`sec_demography_numerical_trajectories` section for usage examples
+        and more details.
+
+        The coalescence rate at time t in the past is the average rate of coalescence of
         as-yet-uncoalesed lineages, computed as follows: let :math:`p(t)` be
         the probability that the lineages of a randomly chosen pair of samples
         has not yet coalesced by time :math:`t`, let :math:`p(z,t)` be the
@@ -3626,9 +3643,10 @@ class DemographyDebugger:
         values do not match to a relative tolerance of 0.001.
 
         :param list steps: The times ago at which coalescence rates will be computed.
-        :param list num_samples: A list of the same length as the number
-            of populations, so that `num_samples[j]` is the number of sampled
-            chromosomes in subpopulation `j`.
+        :param dict lineages: A mapping of populations (either integer IDs
+            or string names: see the :ref:`sec_demography_populations_identifiers`
+            section for more details) to the number of monoploid sample lineages
+            in that population.
         :param int min_pop_size: The smallest allowed population size during
             computation of coalescent rates (i.e., coalescence rates are actually
             1 / (2 * max(min_pop_size, N(z,t))). Spurious very small population sizes
@@ -3645,11 +3663,10 @@ class DemographyDebugger:
             not yet coalesced (denoted p(t[j]) above).
         :rtype: (numpy.ndarray, numpy.ndarray)
         """
-        num_pops = self.num_populations
-        if not len(num_samples) == num_pops:
-            raise ValueError(
-                "`num_samples` must have the same length as the number of populations"
-            )
+        num_samples = np.zeros(self.num_populations, dtype=int)
+        for population, num_genomes in lineages.items():
+            pop_id = self.demography[population].id
+            num_samples[pop_id] += num_genomes
         steps = np.array(steps)
         if not np.all(np.diff(steps) > 0):
             raise ValueError("`steps` must be a sequence of increasing times.")
@@ -3687,7 +3704,7 @@ class DemographyDebugger:
         P = P / np.sum(P)
         # add epoch breaks if not there already but remember which steps they are
         epoch_breaks = list(
-            set([0.0] + [t for t in self.epoch_times if t not in steps])
+            set([0.0] + [t for t in self.epoch_start_time if t not in steps])
         )
         steps_b = np.concatenate([steps, epoch_breaks])
         ix = np.argsort(steps_b)
