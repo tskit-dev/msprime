@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.0b1] - 2021-03-31
+## [1.0.0] - 2021-04-14
 
 Msprime 1.0 is a major update, recommended for all users. It introduces
 new APIs and many new features, which still retaining compatibility
@@ -19,8 +19,6 @@ with nearly all existing code.
   coordinates. This fixes some long standing bugs and makes it far simpler
   to add features such as gene conversion. ({user}`daniel-goldstein`)
 - Support discrete or continuous genomes in simulations directly.
-- Add an modern array oriented RateMap class as to replace the RecombinationMap
-  class ({user}`jeromekelleher`, {user}`grahamgower`, {user}`hyanwong`).
 - Gene conversion ({user}`fbaumdicker`)
 - Selective sweeps and low-level infrastructure for the structured coalescent
   ({user}`andrewkern`, {user}`gbinux`)
@@ -29,6 +27,22 @@ with nearly all existing code.
 - Different ploidy levels for coalescent models ({user}`jerekoskela`)
 - Functions to parse species trees and set up simulation models according
   to the species tree. ({user}`mmatschiner` {issue}`893` {issue}`929` {issue}`931`)
+- Add an modern array oriented RateMap class as to replace the RecombinationMap
+  class ({user}`jeromekelleher`, {user}`grahamgower`, {user}`hyanwong`).
+- Functions to compute the likelihood of a particular ARG realisation
+  under the coalescent with recombination ({user}`jerekoskela`).
+- Mutations are assigned times ({user}`petrelharp`)
+- Finite sites mutations ({user}`petrelharp`)
+- Several instances of matrix mutation models: JC69, GTR, HKY, F84, BLOSUM62,
+  PAM. ({user}`GertjanBisschop`, {user}`petrelharp`).
+- An implementation of the SLiM mutation model ({user}`petrelharp`)
+- An infinite alleles mutation model ({user}`jeromekelleher`)
+- Methods to track the possible location of lineages, and compute the
+  coalescence rates over time ({user}`apragsdale`, {user}`petrelharp`
+  {user}`grahamgower`).
+- Two new CLI commands, `msp ancestry` and `msp mutations` which correspond
+  to the `sim_ancestry` and `sim_mutations` functions. These can be pipelined
+  using stdin/stdout. ({user}`winni2k`, {user}`jeromekelleher`)
 - Complete provenance recording of all arguments to simulate and mutate.
   Adds argument record_provenance to simulate, which allows recording of
   provenances to be disabled, for example when they are large.
@@ -38,19 +52,7 @@ with nearly all existing code.
 - Details of the simulation are written to the DEBUG log periodically.
   This can help debug long-running simulations. ({user}`jeromekelleher`,
   {pr}`1080`).
-- Functions to compute the likelihood of a particular ARG realisation
-  under the coalescent with recombination ({user}`jerekoskela`).
-- Finite sites mutations ({user}`petrelharp`)
-- Several instances of matrix mutation models: JC69, GTR, HKY, F84, BLOSUM62,
-  PAM. ({user}`GertjanBisschop`, {user}`petrelharp`).
-- An implementation of the SLiM mutation model ({user}`petrelharp`)
-- An infinite alleles mutation model ({user}`jeromekelleher`)
-- Methods to track the possible location of lineages, and compute the
-  coalescence rates over time ({user}`apragsdale`, {user}`petrelharp`
-  {user}`grahamgower`).
-- Improved command line interface features ({user}`winni2k`)
 - Binary wheels for PyPI ({user}`benjeffery`)
-- Mutations are assigned times ({user}`petrelharp`)
 
 **Breaking changes**:
 
@@ -60,8 +62,8 @@ with nearly all existing code.
   {pr}`1028`).
 - The `simulate` function only takes one positional argument, and all other
   arguments are keyword-only.
-- The `msp` CLI has been stripped of all sub-commands except for
-  `simulate` and `mutate`. These sub-commands are provided by the `tskit`
+- The `msp` CLI has been stripped of all existing sub-commands except for
+  `simulate`. The old sub-commands are provided by the `tskit`
   CLI or the `TreeSequence` API in `tskit`.
 - The `end_time` option now allows events up to and including the specified
   max time. Previously, events occurred strictly before the max time.
