@@ -2,6 +2,14 @@
 
 # Switching from other simulators
 
+:::{seealso}
+Msprime outputs results as a succinct tree sequence using
+the  [tskit](https://tskit.dev) library.
+Please see {ref}`tutorials:sec_tskit_getting_started` for information
+on how to use this data structure to compute statistics and
+(if necessary) export to other formats.
+:::
+
 ## Notes for ms users
 
 Msprime began as an efficient reimplementation of the classical ``ms``
@@ -76,12 +84,12 @@ selected allele (`AA`), `hs` for (`Aa`). Currently, `h` is always 0.5 in
 | Selection position    | selpos     | selopos/L  | selpos/L    | -      |
 | Time                  | g          | g/(4N)     | g/(4N)      | g/(2N) |
 
-Additional comments: 
+Additional comments:
 
 - `msprime` can directly use `nsam` as sample size parameter if `ploidy` is
 specified to 1. See {ref}`sec_ancestry_ploidy` section for detailed
 explanation about `ploidy`.
-- Time in `macs` is also calculated as g/(4N), see 
+- Time in `macs` is also calculated as g/(4N), see
 [Browning, 2015](https://www.cell.com/ajhg/fulltext/S0002-9297(15)00288-8).
 
 ### Example 1
@@ -89,70 +97,64 @@ explanation about `ploidy`.
 In **Example 1**, we simulate 100 samples with a sample size of 300
 (chromosomes), a chromosome length of 1000,000 bp, recombination and mutation
 rates of 1e-8 per generation per base pair, and an effective population size
-of 1000. 
+of 1000.
 
-- Msprime:
+#### Msprime
 
 ```python
 import msprime
 
-repeats = msprime.sim_ancestry(
+ts = msprime.sim_ancestry(
     samples=150,  # Default ploidy is 2, so 300 sampled chromosomes
-    num_replicates=100,
     population_size=1000,
     recombination_rate=1e-8,
     sequence_length=1e6,
     discrete_genome=False,
     model='Hudson',
 )
-
-mutated_repeats = [
-    msprime.sim_mutations(
-        tree_sequence,
-        rate=1e-8,
-        discrete_genome=False,
-        model=msprime.BinaryMutationModel(),
-    )
-    for tree_sequence in repeats
-]
-
+mutated_ts = msprime.sim_mutations(
+    ts,
+    rate=1e-8,
+    discrete_genome=False,
+    model=msprime.BinaryMutationModel(),
+)
 ```
 
 :::{note}
-``msprime`` separates the {ref}`sec_ancestry` and {ref}`sec_mutations`,
-although the two steps might be run together by default in the other
-simulators. See {ref}`sec_quickstart` section to get a basic idea about
+``msprime`` separates {ref}`ancestry<sec_ancestry>` and {ref}`mutation<sec_mutations>`
+simulations, although the two steps are usually run together in other
+simulators. See the {ref}`sec_quickstart` section for an introduction to
 simulating ancestry and mutations in ``msprime``.
-
-The above code generated a list of mutated tree sequences. If needed, the
-haplotype data can be acquired by calling
-{meth}`tskit.TreeSequence.haplotypes`.
-
 :::
 
+:::{seealso}
+We run a single replicate simulation here. Please
+see the {ref}`sec_randomness` section for more information on
+how to run replicate simulations in msprime.
+:::
 
-- Discoal: 
+#### Discoal
 ```sh
 # discoal {nsam} {num_repeats} {L} -t {4*N*u*L} -r {4*N*r*(L-1)}
 
 $ discoal 300 100 1000000 -t 40 -r 40
 ```
 
-- Msms:
+#### Msms
 
 ```sh
 # java -jar msms.jar {nsam} {num_repeats} \
 #   -t {4*N*u*L} -r {4*N*r*(L-1)} {L}
 
-$ java -Xmx1G -jar msms.jar 300 100 -t 40 -r 40 1000000 
+$ java -Xmx1G -jar msms.jar 300 100 -t 40 -r 40 1000000
 ```
 
-- Macs:
+#### MaCS
 
 ```sh
 # macs {nsam} {L} -t {4*N*u} -r {4*N*r}
 
-$ macs 300 1000000 -t 0.00004 -r 0.00004  
+$ macs 300 1000000 -t 0.00004 -r 0.00004
 ```
 
 ### Example 2
@@ -164,7 +166,7 @@ selected allele is 0.9; the selection coefficient is 0.2 for genotype `AA` and
 and ``msms``.
 
 
-- Msprime:
+#### Msprime
 
 ```python
 import msprime
@@ -173,48 +175,49 @@ N = 1000  # effective population size
 
 model_list = [
     msprime.StandardCoalescent(duration=80),  # From generation 0 to 80
-    msprime.SweepGenicSelection(              # From generation 80 to 
+    msprime.SweepGenicSelection(              # From generation 80 to
         position=500000,  # selpos            # selection start time (random)
         start_frequency=1 / (2 * N),
-        end_frequency=0.9, 
+        end_frequency=0.9,
         s=0.2,  # s for AA
         dt=1.0 / (40 * N)
     ),
     msprime.StandardCoalescent()  # From selection start time to coalescence
 ]
 
-repeats = msprime.sim_ancestry(
+ts = msprime.sim_ancestry(
     samples=150,  # Default ploidy is 2, so 300 sampled chromosomes
-    num_replicates=100,
     population_size=N,
     recombination_rate=1e-8,
     sequence_length=1e6,
     discrete_genome=False,
     model=model_list,
 )
-
-mutated_repeats = [
-    msprime.sim_mutations(
-        tree_sequence,
-        rate=1e-8,
-        discrete_genome=False,
-        model=msprime.BinaryMutationModel(),
-    )
-    for tree_sequence in repeats
-]
+mutated_ts = msprime.sim_mutations(
+    ts,
+    rate=1e-8,
+    discrete_genome=False,
+    model=msprime.BinaryMutationModel(),
+)
 ```
-
-:::{note}
-``msprime`` ancestry `model` parameters can be specified as a single model
-(**Example 1**), or a list of models (**Example 2**). A more comprehensive
-discription is available in {ref}`sec_ancestry_models` section.
 
 The {class}`.SweepGenicSelection` class provides an interface to define the
 selective sweep model. More examples can be found in the
 {ref}`sec_ancestry_models_selective_sweeps` section.
+
+:::{note}
+``msprime`` ancestry `model` parameters can be specified as a single model
+(**Example 1**), or a list of models (**Example 2**). Please
+see the {ref}`sec_ancestry_models` section for more details.
 :::
 
-- Discoal:
+:::{seealso}
+We run a single replicate simulation here. Please
+see the {ref}`sec_randomness` section for more information on
+how to run replicate simulations in msprime.
+:::
+
+#### Discoal
 
 ```sh
 # discoal {nsam} {num_repeats} {L} -t {4*N*u*L} -r {4*N*r*(L-1)} \
@@ -225,7 +228,7 @@ $ discoal 300 100 1000000 -t 40 -r 40 \
    -ws 0.02 -a 200 -x 0.5 -c 0.9 -N 1000
 ```
 
-- Msms:
+#### Msms
 
 ```sh
 # java -jar msms.jar {nsam} {num_repeats} -t {4*N*u*L} -r {4*N*r*(L-1)} {L} \
