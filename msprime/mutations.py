@@ -1301,6 +1301,7 @@ def sim_mutations(
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
+        See the :ref:`sec_randomness_seeds` section for usage examples.
     :param MutationModel model: The mutation model to use when generating
         mutations. This can either be a string (e.g., ``"jc69"``) or
         an instance of a simulation model class

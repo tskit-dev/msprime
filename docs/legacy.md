@@ -46,19 +46,8 @@ to be supported indefinitely**.
 
 One major change is that {ref}`ancestry<sec_ancestry>` and
 {ref}`mutations<sec_mutations>` must be simulated **separately**.
-A good pattern for this when performing
-{ref}`replicate simulations<sec_ancestry_replication>` is
-
-```{code-cell}
-import msprime
-
-ancestry_replicates = msprime.sim_ancestry(10, num_replicates=10)
-for ts in ancestry_replicates:
-    ts = msprime.sim_mutations(ts, rate=0.1)
-    # Do something with your mutated tree sequence now.
-```
-
-This approach is memory efficient and uses high-quality random seeds.
+See the {ref}`sec_randomness_replication_mutations` section for
+idiomatic examples of how to do this efficiently.
 
 ### Ancestry
 

@@ -15,12 +15,10 @@ kernelspec:
 ```{code-cell}
 :tags: [remove-cell]
 
-    import msprime
-    from IPython.display import SVG
-    from matplotlib import pyplot as plt
-    # Doing this to make the notebook outputs deterministic.
-    # DO NOT DO THIS IN YOUR CODE
-    msprime.core.set_seed_rng_seed(42)
+import msprime
+from IPython.display import SVG
+from matplotlib import pyplot as plt
+import numpy as np
 ```
 
 (sec_ancestry)=
@@ -799,105 +797,6 @@ chrom_ts
 This gives us a list of tree sequences, one for each chromosome, in the order
 that they were stitched together in the initial recombination map.
 
-(sec_ancestry_controlling_randomness)=
-
-## Controlling randomness
-
-:::{important}
-There is usually not much reason for setting a random seed when
-running simulations for statistical analysis. Msprime will generate
-high-quality random seeds by default. If you are concerned about
-reproducibility, the tree sequence provenance contains all the
-information required to reproduce any simulation.
-:::
-
-(sec_ancestry_random_seed)=
-
-### Random seeds
-
-Stochastic simulations depend on a source of randomness, provided
-by a [psuedorandom number generator](<https://en.wikipedia.org/wiki/Pseudorandom_number_generator>).
-Msprime uses the [GNU Scientific Library](<https://www.gnu.org/software/gsl/doc/html/rng.html>) to generate high-quality
-random numbers. The particular trajectory produced by a pseudorandom number
-generator is controlled by the "seed" it is provided.
-
-By default, msprime generates random seeds using a private instance of
-{class}`python:random.Random`, which should guarantee unique seeds are produced
-even if (e.g.) many simulations are started at the same time in different
-processes. In particular, simulations run concurrently in subprocesses using
-{mod}`concurrent.futures` or {mod}`multiprocessing` will be assigned unique
-seeds by default.
-
-Thus, if we run two simulations with the same parameters, we will get different
-results, as we can see from the different times of the last node:
-
-
-```{code-cell}
-:tags: [remove-cell]
-
-# Make this deterministic. DON'T DO THIS IN YOUR CODE.
-msprime.core.set_seed_rng_seed(412343)
-```
-
-```{code-cell}
-ts = msprime.sim_ancestry(2)
-SVG(ts.draw_svg(y_axis=True))
-```
-
-```{code-cell}
-ts = msprime.sim_ancestry(2)
-SVG(ts.draw_svg(y_axis=True))
-```
-
-The `random_seed` argument to {func}`.sim_ancestry` allows us specify
-seeds explicitly, making the output of the simulation fully deterministic:
-
-
-```{code-cell}
-ts = msprime.sim_ancestry(2, random_seed=42)
-SVG(ts.draw_svg(y_axis=True))
-```
-
-```{code-cell}
-ts = msprime.sim_ancestry(2, random_seed=42)
-SVG(ts.draw_svg(y_axis=True))
-```
-
-(sec_ancestry_replication)=
-
-### Running replicate simulations
-
-Simulations are random, and we will therefore usually want to have
-many independent replicates for a particular set of parameters.
-The `num_replicates` parameter provides a convenient and efficient
-way to iterate over a number of replicate simulations. For example,
-this is a good way to compute the mean and variance of the time to the most
-recent common ancestor in a set of simulations:
-
-```{code-cell}
-import numpy as np
-
-num_replicates = 100
-tmrca = np.zeros(num_replicates)
-replicates = msprime.sim_ancestry(10, num_replicates=num_replicates, random_seed=42)
-for replicate_index, ts in enumerate(replicates):
-    tree = ts.first()
-    tmrca[replicate_index] = tree.time(tree.root)
-np.mean(tmrca), np.var(tmrca)
-```
-
-It's important to note that the replicate simulations are generated
-lazily here on demand - the `replicates` variable is a Python iterator.
-This means we use much less memory that we would if we stored each
-of the replicate simulations in a list.
-
-:::{note}
-The return type of {func}`.sim_ancestry` changes when we use the
-`num_replicates` argument. If `num_replicates` is not specified
-or `None`, we return an instance of {class}`tskit.TreeSequence`.
-If it is specified, we return an *iterator* over
-a set of {class}`tskit.TreeSequence` instances.
-:::
 
 ## Recording more information
 
@@ -1902,12 +1801,6 @@ but only one merger event can take place at a given time. For {math}`p`-ploids,
 up to {math}`2p` simultaneous mergers can take place, corresponding to the
 {math}`2p` available parental chromosome copies.
 
-```{code-cell}
-:tags: [remove-cell]
-
-msprime.core.set_seed_rng_seed(42)
-```
-
 The diploid Beta-Xi-coalescent can be simulated as follows:
 
 ```{code-cell}
@@ -2142,7 +2035,7 @@ more discussion on this important point.
 
 Once we've set up the replicate simulations we can compute the
 windows for plotting, run the actual simulations
-(see the {ref}`sec_ancestry_replication` section for more details)
+(see the {ref}`sec_randomness_replication` section for more details)
 and compute the
 {meth}`pairwise diversity<tskit.TreeSequence.diversity>`.
 

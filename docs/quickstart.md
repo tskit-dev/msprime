@@ -19,15 +19,15 @@ This page gives some simple examples of how to use the major features
 of {program}`msprime`, with links to more detailed documentation
 and tutorial content.
 
-See the {ref}`sec_installation` page for instructions on installing 
-{program}`msprime` (short version: ``pip install msprime`` or 
+See the {ref}`sec_installation` page for instructions on installing
+{program}`msprime` (short version: ``pip install msprime`` or
 ``conda install -c conda-forge msprime`` will work for most users).
 
 (sec_quickstart_ancestry)=
 
 ## Ancestry
 
-Msprime simulates ancestral histories for a set of sample genomes 
+Msprime simulates ancestral histories for a set of sample genomes
 using backwards-in-time population genetic models.
 Here we run a simple simulation of a short recombining sequence under
 human-like parameters:
@@ -40,49 +40,49 @@ human-like parameters:
     # Simulate an ancestral history for 3 diploid samples under the coalescent
     # with recombination on a 5kb region with human-like parameters.
     ts = msprime.sim_ancestry(
-        samples=3, 
-        recombination_rate=1e-8, 
+        samples=3,
+        recombination_rate=1e-8,
         sequence_length=5_000,
-        population_size=10_000, 
+        population_size=10_000,
         random_seed=123456)
     # Visualise the simulated ancestral history.
     SVG(ts.draw_svg())
 ```
 
-In this example we simulate the ancestral history of three diploid 
+In this example we simulate the ancestral history of three diploid
 individuals (see {ref}`sec_ancestry_samples` and {ref}`sec_ancestry_ploidy`)
-for a 5kb sequence with a 
+for a 5kb sequence with a
 [recombination](<https://en.wikipedia.org/wiki/Genetic_recombination>)
-rate of {math}`10^{-8}` 
+rate of {math}`10^{-8}`
 (see {ref}`sec_ancestry_genome_properties`)
-from a population with a constant size of 10,000 (see 
+from a population with a constant size of 10,000 (see
 the {ref}`sec_quickstart_demography` section below)
-under the default 
+under the default
 [coalescent](<https://en.wikipedia.org/wiki/Coalescent_theory>)
-ancestry model (see the {ref}`sec_ancestry_models` for details on 
+ancestry model (see the {ref}`sec_ancestry_models` for details on
 other available models).
-To ensure that 
-the output of this example is predictable, we set a random seed 
-(see {ref}`sec_ancestry_random_seed`).
+To ensure that
+the output of this example is predictable, we set a random seed
+(see {ref}`sec_randomness_seeds`).
 
 When recombination is present, the ancestry of a sample of DNA sequences
-cannot be represented by a single genealogical tree relating the 
+cannot be represented by a single genealogical tree relating the
 samples to their genetic ancestors; there is instead
 a *sequence* of highly correlated trees along the genome.
 The result of our simulation is therefore a [tree sequence](https://tskit.dev)
 object from the {ref}`tskit <tskit:sec_introduction>` library,
-which provides a rich suite of operations for 
-analysing these genealogical histories: see the 
-{ref}`tutorials:sec_tskit_getting_started` tutorial for help. 
+which provides a rich suite of operations for
+analysing these genealogical histories: see the
+{ref}`tutorials:sec_tskit_getting_started` tutorial for help.
 In this example we show a visualisation
-of the four different trees along the 5kb region 
-(see the {ref}`tutorials:sec_tskit_viz` tutorial for more 
-examples).  Because we have specified three diploid sample 
-*individuals*, each of these trees has 6 "sample" nodes 
+of the four different trees along the 5kb region
+(see the {ref}`tutorials:sec_tskit_viz` tutorial for more
+examples).  Because we have specified three diploid sample
+*individuals*, each of these trees has 6 "sample" nodes
 (the "leaves" or "tips"), because each diploid individual
 has two monoploid genomes (see {ref}`sec_ancestry_samples`).
 
-See the {ref}`sec_ancestry` section for more details on 
+See the {ref}`sec_ancestry` section for more details on
 ancestry simulations.
 
 ## Mutations
@@ -92,15 +92,15 @@ ancestry simulations.
 ```
 
 The {func}`.sim_ancestry` function generates a simulated ancestral
-history for some samples. 
+history for some samples.
 If we want [genome sequence](<https://en.wikipedia.org/wiki/Genome>)
 we must also simulate some
 [mutations](<https://en.wikipedia.org/wiki/Mutation>) on these trees.
-However, it's important to note that it's not always necessary to 
-simulate mutations in order to use the simulations; often, it's 
-better *not to*; see the 
+However, it's important to note that it's not always necessary to
+simulate mutations in order to use the simulations; often, it's
+better *not to*; see the
 % TODO enable this once the tutorials build is fixed
-% {ref}`tutorials:sec_tskit_no_mutations` 
+% {ref}`tutorials:sec_tskit_no_mutations`
 tutorial for more information.
 
 ```{code-cell}
@@ -123,9 +123,9 @@ for variant in mutated_ts.variants():
 
 ```{eval-rst}
 .. todo:: Not sure how much detail we want to get into here. The salient points
-    we want to get across are that mutations are not automatically part of the 
+    we want to get across are that mutations are not automatically part of the
     simulation, that we only output sites with mutations and we have efficient
-    ways to work with the results. A lot of this should be pointing to the 
+    ways to work with the results. A lot of this should be pointing to the
     "getting started with tskit" tutorial.
 
 ```

@@ -154,34 +154,6 @@ position of the {class}`.RateMap` is the same as the
 :::
 
 
-(sec_mutations_randomness)=
-
-## Controlling randomness
-
-As described in {ref}`sec_ancestry_random_seed`, ``msprime`` uses a
-[psuedorandom number generator](<https://en.wikipedia.org/wiki/Pseudorandom_number_generator>)
-from the [GNU Scientific Library](<https://www.gnu.org/software/gsl/doc/html/rng.html>) for
-random number generation. Passing an integer to the ``random_seed`` parameter
-defines a trajectory for a call of {func}`.sim_mutations`, making output deterministic.
-
-```{code-cell}
-ts = msprime.sim_ancestry(10, random_seed=1)
-mts_1 = msprime.sim_mutations(ts, rate=1, random_seed=7)
-mts_2 = msprime.sim_mutations(ts, rate=1, random_seed=8)
-mts_1.tables.equals(mts_2.tables, ignore_timestamps=True)
-```
-
-Here, we check for equality between the TableCollections of the `mts_1` and `mts_2` tree
-sequences, excluding the differing timestamps in Provenance tables. The result is
-`False` because we used different seeds.
-
-```{code-cell}
-mts_3 = msprime.sim_mutations(ts, rate=1, random_seed=7)
-mts_1.tables.equals(mts_3.tables, ignore_timestamps=True)
-```
-
-When we use the same seed, the resulting tree sequence is identical.
-
 
 (sec_mutations_discrete)=
 
@@ -277,7 +249,9 @@ def count_transitions(ts, alleles):
         print(f"{a}\t", "\t".join(map(str, counts[j])))
 
 model = msprime.HKY(kappa=0.75, equilibrium_frequencies=[0.2, 0.3, 0.3, 0.2])
-ts = msprime.sim_ancestry(5, random_seed=1, sequence_length=1e7, recombination_rate=1e-8, population_size=1000)
+ts = msprime.sim_ancestry(
+    5, random_seed=1, sequence_length=1e7, recombination_rate=1e-8,
+    population_size=1000)
 mts = msprime.sim_mutations(ts, rate=1e-8, model=model, random_seed=1)
 count_transitions(mts, model.alleles)
 ```
