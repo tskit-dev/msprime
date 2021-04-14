@@ -101,30 +101,6 @@ def add_sample_size_argument(parser):
     )
 
 
-def add_tree_sequence_argument(parser):
-    parser.add_argument("tree_sequence", help="The msprime tree sequence file")
-
-
-def add_precision_argument(parser):
-    parser.add_argument(
-        "--precision",
-        "-p",
-        type=int,
-        default=6,
-        help="The number of decimal places to print in records",
-    )
-
-
-def add_mutation_rate_argument(parser):
-    parser.add_argument(
-        "--mutation-rate",
-        "-u",
-        type=float,
-        default=0,
-        help="The mutation rate per base per generation",
-    )
-
-
 def add_random_seed_argument(parser):
     parser.add_argument(
         "--random-seed",
@@ -132,6 +108,19 @@ def add_random_seed_argument(parser):
         type=int,
         default=None,
         help="The random seed; If not specified, one is chosen randomly.",
+    )
+
+
+def add_output_argument(parser):
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=argparse.FileType("wb"),
+        default=sys.stdout,
+        help=(
+            "Where to write the output tree sequence file. If omitted or '-', "
+            "write to standard output"
+        ),
     )
 
 
@@ -1001,9 +990,9 @@ def mspms_main(arg_list=None):
 def run_simulate(args):
     warnings.warn(
         "The simulate command is deprecated but will continue to work "
-        "indefinitely. To simulate ancestries, please use the ancestry "
+        "indefinitely. To simulate ancestries, please use the 'ancestry' "
         "command. To place mutations on a tree sequence, please use "
-        "the mutate command."
+        "the 'mutations' command."
     )
 
     if args.compress:
@@ -1022,10 +1011,10 @@ def run_simulate(args):
     tree_sequence.dump(args.tree_sequence)
 
 
-def run_mutate(args):
-    tree_sequence = tskit.load(args.tree_sequence)
-    tree_sequence = msprime.sim_mutations(
-        tree_sequence=tree_sequence,
+def run_mutations(args):
+    input_ts = tskit.load(args.input)
+    output_ts = msprime.sim_mutations(
+        tree_sequence=input_ts,
         rate=args.mutation_rate,
         random_seed=args.random_seed,
         keep=True,
@@ -1034,19 +1023,19 @@ def run_mutate(args):
         discrete_genome=True,
         model=args.model,
     )
-    tree_sequence.dump(args.output_tree_sequence)
+    output_ts.dump(args.output)
 
 
 def run_ancestry(args):
     tree_sequence = msprime.sim_ancestry(
-        samples=int(args.sample_size),
+        samples=int(args.samples),
         population_size=args.population_size,
         sequence_length=args.length,
         ploidy=args.ploidy,
         recombination_rate=args.recombination_rate,
         random_seed=args.random_seed,
     )
-    tree_sequence.dump(args.tree_sequence)
+    tree_sequence.dump(args.output)
 
 
 def get_msp_parser():
@@ -1067,14 +1056,26 @@ def get_msp_parser():
 
 
 def add_mutate_subcommand(subparsers):
-    parser = subparsers.add_parser("mutate", help="Add mutations to a tree sequence.")
-    add_tree_sequence_argument(parser)
-    add_mutation_rate_argument(parser)
-    add_random_seed_argument(parser)
-    parser.add_argument(
-        "output_tree_sequence",
-        help="The tree sequence output file containing the new mutations",
+    parser = subparsers.add_parser(
+        # see note above on aliases and sphinx-argparse
+        # aliases=["mut"],
+        "mutations",
+        help="Simulate mutations on a tree sequence.",
     )
+    parser.add_argument(
+        "mutation_rate",
+        type=float,
+        help="The mutation rate per base",
+    )
+    parser.add_argument(
+        "input",
+        nargs="?",
+        type=argparse.FileType("rb"),
+        default=sys.stdin,
+        help=("The input tree sequence. If omitted or '-' read from standard input"),
+    )
+    add_output_argument(parser)
+    add_random_seed_argument(parser)
     parser.add_argument(
         "--start-time",
         type=float,
@@ -1093,15 +1094,21 @@ def add_mutate_subcommand(subparsers):
         type=str,
         default="jc69",
         choices=sorted(mutations.MODEL_MAP.keys()),
-        help="The mutation model to use to generate mutations",
+        help="The mutation model to use (default=JC69)",
     )
-    parser.set_defaults(runner=run_mutate)
+    parser.set_defaults(runner=run_mutations)
 
 
 def add_simulate_subcommand(subparsers) -> None:
-    parser = subparsers.add_parser("simulate", help="Run the simulation.")
+    parser = subparsers.add_parser(
+        "simulate",
+        help=(
+            "Run a simulation. DEPRECATED - please use `msp ancestry` "
+            "and `msp mutations` instead"
+        ),
+    )
     add_sample_size_argument(parser)
-    add_tree_sequence_argument(parser)
+    parser.add_argument("tree_sequence", help="The output tree sequence file")
     parser.add_argument(
         "--length",
         "-L",
@@ -1116,7 +1123,13 @@ def add_simulate_subcommand(subparsers) -> None:
         default=0,
         help="The recombination rate per base per generation",
     )
-    add_mutation_rate_argument(parser)
+    parser.add_argument(
+        "--mutation-rate",
+        "-u",
+        type=float,
+        default=0,
+        help="The mutation rate per base per generation",
+    )
     parser.add_argument(
         "--effective-population-size",
         "-N",
@@ -1136,12 +1149,17 @@ def add_simulate_subcommand(subparsers) -> None:
 
 def add_ancestry_subcommand(subparsers) -> None:
     parser = subparsers.add_parser(
-        "ancestry", help="Simulate an ancestry from the coalescent."
+        "ancestry",
+        # We'd like to use aliases there but sphinx-argparse doesn't support it
+        # in the released version. Looks like the project has been abandoned by
+        # its original maintainers, so we might want to stop using it.
+        # aliases=["anc"],
+        help="Simulate an ancestral history and output as a tskit tree sequence.",
     )
     parser.add_argument(
-        "sample_size", type=positive_int, help="The number of individuals in the sample"
+        "samples", type=positive_int, help="The number of individuals in the sample"
     )
-    add_tree_sequence_argument(parser)
+    add_output_argument(parser)
     add_random_seed_argument(parser)
     parser.add_argument(
         "--length",

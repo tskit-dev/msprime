@@ -1242,23 +1242,43 @@ class TestMspArgumentParser:
 
     def test_ancestry_default_values(self):
         parser = cli.get_msp_parser()
-        args = parser.parse_args(["ancestry", "10", "out.trees"])
-        assert args.tree_sequence == "out.trees"
-        assert "mutation_rate" not in args
-        assert args.sample_size == 10
+        args = parser.parse_args(["ancestry", "10"])
+        assert args.output is sys.stdout
+        assert args.samples == 10
         assert args.random_seed is None
         assert args.population_size == 1.0
         assert args.ploidy == 2
         assert args.recombination_rate == 0
         assert args.length == 1
 
-    def test_mutate_default_values(self):
+    def test_ancestry_stdout(self):
         parser = cli.get_msp_parser()
-        cmd = "mutate"
-        args = parser.parse_args([cmd, "out.trees", "out2.trees"])
-        assert args.tree_sequence == "out.trees"
-        assert args.output_tree_sequence == "out2.trees"
-        assert args.mutation_rate == 0
+        args = parser.parse_args(["ancestry", "10"])
+        assert args.output is sys.stdout
+        args = parser.parse_args(["ancestry", "10", "-o", "-"])
+        assert args.output is sys.stdout
+
+    def test_mutations_stdout(self):
+        parser = cli.get_msp_parser()
+        args = parser.parse_args(["mutations", "10"])
+        assert args.output is sys.stdout
+        args = parser.parse_args(["mutations", "10", "-o", "-"])
+        assert args.output is sys.stdout
+
+    def test_mutations_stdin(self):
+        parser = cli.get_msp_parser()
+        args = parser.parse_args(["mutations", "10"])
+        assert args.input is sys.stdin
+        args = parser.parse_args(["mutations", "10", "-"])
+        assert args.input is sys.stdin
+
+    def test_mut_default_values(self):
+        parser = cli.get_msp_parser()
+        cmd = "mutations"
+        args = parser.parse_args([cmd, "0.1"])
+        assert args.input is sys.stdin
+        assert args.output is sys.stdout
+        assert args.mutation_rate == 0.1
         assert args.random_seed is None
         assert args.start_time is None
         assert args.end_time is None
@@ -1266,7 +1286,7 @@ class TestMspArgumentParser:
 
     def test_mutate_raises_with_invalid_model_name(self):
         parser = cli.get_msp_parser()
-        cmd = "mutate"
+        cmd = "mutations"
         with pytest.raises(SystemExit):
             capture_output(
                 parser.parse_args,
@@ -1275,11 +1295,8 @@ class TestMspArgumentParser:
 
     def test_mutate_model_is_changeable(self):
         parser = cli.get_msp_parser()
-        cmd = "mutate"
         for model_arg in ["--model", "-m"]:
-            args = parser.parse_args(
-                [cmd, "out.trees", "out2.trees", model_arg, "blosum62"]
-            )
+            args = parser.parse_args(["mutations", "1", model_arg, "blosum62"])
             assert args.model == "blosum62"
 
 
@@ -1338,7 +1355,7 @@ class TestMspAncestryOutput:
     def test_run_defaults(self, tmp_path):
         tree_sequence_file = str(tmp_path / "out.ts")
         stdout, stderr = capture_output(
-            cli.msp_main, ["ancestry", "10", tree_sequence_file]
+            cli.msp_main, ["ancestry", "10", "-o", tree_sequence_file]
         )
         assert len(stderr) == 0
         assert len(stdout) == 0
@@ -1352,7 +1369,18 @@ class TestMspAncestryOutput:
         tree_sequence_file = str(tmp_path / "out.ts")
         stdout, stderr = capture_output(
             cli.msp_main,
-            ["ancestry", "100", tree_sequence_file, "-L", "1e2", "-r", "5", "-k", "2"],
+            [
+                "ancestry",
+                "100",
+                "-o",
+                tree_sequence_file,
+                "-L",
+                "1e2",
+                "-r",
+                "5",
+                "-k",
+                "2",
+            ],
         )
         tree_sequence = tskit.load(tree_sequence_file)
         assert len(stderr) == 0
@@ -1364,9 +1392,17 @@ class TestMspAncestryOutput:
 
 @pytest.fixture
 def tree_sequence():
-    return msprime.simulate(
-        10, length=10, recombination_rate=0, mutation_rate=10, random_seed=1
+    return msprime.sim_ancestry(
+        10, sequence_length=10, recombination_rate=0, random_seed=1
     )
+
+
+@pytest.fixture
+def mutated_tree_sequence():
+    ts = msprime.sim_ancestry(
+        10, sequence_length=10, recombination_rate=0, random_seed=1
+    )
+    return msprime.sim_mutations(ts, rate=1, random_seed=2)
 
 
 @pytest.fixture
@@ -1375,54 +1411,47 @@ def tree_sequence_file(tmp_path, tree_sequence):
     tree_sequence.dump(tree_path)
     return str(tree_path)
 
-
-class TestMspMutateOutput:
     """
     Tests the output of msp mutate to ensure it's correct.
     """
 
-    @pytest.mark.xfail(reason="Issue #1440 unresolved")
-    def test_mutate_keep(self, tree_sequence_file):
-        fd, out_tree_sequence_file = tempfile.mkstemp(
-            prefix="msp_cli_mutate", suffix=".trees"
-        )
-        os.close(fd)
+    def test_mutate_keep(self, mutated_tree_sequence, tmp_path):
+        in_path = tmp_path / "input.trees"
+        out_path = tmp_path / "output.trees"
+        mutated_tree_sequence.dump(in_path)
 
-        cmd = "mutate"
+        cmd = "mutations"
         mutation_rate = 10
         seed = 1
         stdout, stderr = capture_output(
             cli.msp_main,
             [
                 cmd,
-                tree_sequence_file,
-                out_tree_sequence_file,
-                "-u",
                 str(mutation_rate),
+                str(in_path),
+                "-o",
+                str(out_path),
                 "-s",
                 str(seed),
             ],
         )
         assert len(stderr) == 0
 
-        previous_ts = tskit.load(tree_sequence_file)
-        tree_sequence = tskit.load(out_tree_sequence_file)
+        tree_sequence = tskit.load(out_path)
+        assert tree_sequence.num_mutations > mutated_tree_sequence.num_mutations
 
-        assert tree_sequence.get_num_mutations() > previous_ts.get_num_mutations()
-
-    @pytest.mark.xfail(reason="Issue #1440 unresolved")
     def test_mutate_discrete_start_end_time(self, tree_sequence_file, tmp_path):
         out_tree_sequence_file = str(tmp_path / "out.ts")
 
-        cmd = "mutate"
+        cmd = "mutations"
         stdout, stderr = capture_output(
             cli.msp_main,
             [
                 cmd,
-                tree_sequence_file,
-                out_tree_sequence_file,
-                "-u",
                 "10",
+                tree_sequence_file,
+                "-o",
+                out_tree_sequence_file,
                 "-s",
                 "1",
                 "--start-time",
@@ -1443,18 +1472,17 @@ class TestMspMutateOutput:
 
 
 class TestMspMutateModelOutput:
-    @pytest.mark.xfail(reason="Issue #1440 unresolved")
     def test_binary_uses_0_or_1_states(self, tree_sequence_file, tmp_path):
-        cmd = "mutate"
+        cmd = "mutations"
         out_tree_sequence_file = str(tmp_path / "out.ts")
         stdout, stderr = capture_output(
             cli.msp_main,
             [
                 cmd,
+                "1",
                 tree_sequence_file,
+                "-o",
                 out_tree_sequence_file,
-                "--mutation-rate",
-                "10",
                 "--random-seed",
                 "1",
                 "--model",
@@ -1469,18 +1497,17 @@ class TestMspMutateModelOutput:
         assert set(tables.sites.ancestral_state) == {ord("0")}
         assert set(tables.mutations.derived_state) <= {ord("0"), ord("1")}
 
-    @pytest.mark.xfail(reason="Issue #1440 unresolved")
     def test_default_jc69_uses_ACGT_states(self, tree_sequence_file, tmp_path):
-        cmd = "mutate"
+        cmd = "mutations"
         out_tree_sequence_file = str(tmp_path / "out.ts")
         stdout, stderr = capture_output(
             cli.msp_main,
             [
                 cmd,
-                tree_sequence_file,
-                out_tree_sequence_file,
-                "--mutation-rate",
                 "10",
+                tree_sequence_file,
+                "-o",
+                out_tree_sequence_file,
                 "--random-seed",
                 "1",
             ],
