@@ -1073,14 +1073,14 @@ def sim_ancestry(
     :param int random_seed: The random seed. If this is not specified or `None`,
         a high-quality random seed will be automatically generated. Valid random
         seeds must be between 1 and :math:`2^{32} - 1`.
-        See the :ref:`sec_ancestry_random_seed` section for usage examples.
+        See the :ref:`sec_randomness_seeds` section for usage examples.
     :param int num_replicates: The number of replicates of the specified
         parameters to simulate. If this is not specified or `None`,
         no replication is performed and a :class:`tskit.TreeSequence` object
         returned. If `num_replicates` is provided, the specified
         number of replicates is performed, and an iterator over the
         resulting :class:`tskit.TreeSequence` objects returned.
-        See the :ref:`sec_ancestry_replication` section for examples.
+        See the :ref:`sec_randomness_replication` section for examples.
     :param bool record_full_arg: If True, record all intermediate nodes
         arising from common ancestor and recombination events in the output
         tree sequence. This will result in unary nodes (i.e., nodes in marginal

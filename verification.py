@@ -3795,7 +3795,8 @@ class DemographyDebugger(Test):
                 demographic_events=model["demographic_events"],
                 migration_matrix=model["migration_matrix"],
             )
-            u = ddb.mean_coalescence_time(num_samples=model["sample_size"], max_iter=18)
+            lineages = dict(enumerate(model["sample_size"]))
+            u = ddb.mean_coalescence_time(lineages=lineages, max_iter=18)
             U.append(u)
 
             mut_rate = 1e-7

@@ -9,6 +9,7 @@
   - file: ancestry
   - file: mutations
   - file: demography
+  - file: replication
 
 - part: Interfaces
   chapters:
