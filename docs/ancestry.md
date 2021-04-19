@@ -2074,7 +2074,7 @@ print(tree.tmrca(0,1))
 ### Selective sweeps
 
 Although the coalescent assumes that lineages are exchangable, (and therefore
-evolving nuetrally), approximations to some forms of selective sweep
+evolving neutrally), approximations to some forms of selective sweep
 (beneficial mutation moves through the population), have been derived. This is
 done through the use of a structured coalescent model in the spirit of
 [Braverman et al. (1995)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1206652/).
