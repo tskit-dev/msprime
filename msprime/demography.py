@@ -1828,7 +1828,7 @@ class Demography(collections.abc.Mapping):
             ret = 0
             if epoch.size_function not in ["constant", "exponential"]:
                 raise ValueError(
-                    "msprime only supports constant exponentially changing "
+                    "msprime only supports constant or exponentially changing "
                     "population sizes"
                 )
             if epoch.end_size != epoch.start_size:
@@ -1845,14 +1845,18 @@ class Demography(collections.abc.Mapping):
             if last_epoch.end_time == 0:
                 initial_size = last_epoch.end_size
                 growth_rate = get_growth_rate(last_epoch)
+                initially_active = True
+            else:
+                initially_active = False
             demography.add_population(
                 name=deme.name,
                 description=deme.description,
                 growth_rate=growth_rate,
                 initial_size=initial_size,
                 default_sampling_time=deme.end_time,
+                initially_active=initially_active,
             )
-            for epoch in deme.epochs:
+            for epoch in reversed(deme.epochs):
                 new_initial_size = None
                 if initial_size != epoch.end_size:
                     new_initial_size = epoch.end_size
@@ -1875,16 +1879,33 @@ class Demography(collections.abc.Mapping):
             demography.add_population_split(
                 time=split.time, ancestral=split.parent, derived=split.children
             )
-        for pulse in events.pop("pulses"):
-            assert False
         for branch in events.pop("branches"):
+            demography.add_population_split(
+                time=branch.time,
+                ancestral=branch.parent,
+                derived=[branch.child],
+            )
+        for pulse in events.pop("pulses"):
             demography.add_mass_migration(
-                time=branch.time, source=branch.child, dest=branch.parent, proportion=1
+                time=pulse.time,
+                source=pulse.dest,
+                dest=pulse.source,
+                proportion=pulse.proportion,
             )
         for merger in events.pop("mergers"):
-            assert False
+            demography.add_admixture(
+                time=merger.time,
+                derived=merger.child,
+                ancestral=merger.parents,
+                proportions=merger.proportions,
+            )
         for admixture in events.pop("admixtures"):
-            assert False
+            demography.add_admixture(
+                time=admixture.time,
+                derived=admixture.child,
+                ancestral=admixture.parents,
+                proportions=admixture.proportions,
+            )
         assert len(events) == 0
 
         for migration in graph.migrations:

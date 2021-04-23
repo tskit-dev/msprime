@@ -74,6 +74,12 @@ class TestYamlExamples:
         graph = demes.loads(textwrap.dedent(yaml))
         return msprime.Demography.from_demes(graph)
 
+    def get_active_populations(self, dbg):
+        return {
+            (e.start_time, e.end_time): [p.name for p in e.active_populations]
+            for e in dbg.epochs
+        }
+
     def test_one_pop_two_epoch(self):
         yaml = """\
         description: Single-population two-epoch demography.
@@ -96,6 +102,9 @@ class TestYamlExamples:
         assert dbg.epochs[0].populations[0].start_size == 2000
         assert dbg.epochs[1].populations[0].start_size == 1000
         assert dbg.epochs[1].start_time == 100
+        active_pops = self.get_active_populations(dbg)
+        assert "deme0" in active_pops[(0, 100)]
+        assert "deme0" in active_pops[(100, np.inf)]
 
     def test_zigzag(self):
         yaml = """\
@@ -180,6 +189,14 @@ class TestYamlExamples:
         assert list(x[(0, 1000)]) == [False, True, True]
         assert list(x[(1000, np.inf)]) == [True, False, False]
 
+        active_pops = self.get_active_populations(dbg)
+        assert "A" in active_pops[(0, 1000)]
+        assert "B" in active_pops[(0, 1000)]
+        assert "X" in active_pops[(1000, np.inf)]
+        assert "X" not in active_pops[(0, 1000)]
+        assert "A" not in active_pops[(1000, np.inf)]
+        assert "B" not in active_pops[(1000, np.inf)]
+
     def test_branch(self):
         yaml = """\
         time_units: generations
@@ -200,9 +217,160 @@ class TestYamlExamples:
         assert dbg.num_epochs == 2
         for epoch in dbg.epochs:
             assert epoch.populations[0].start_size == 2000
-            assert epoch.populations[1].start_size == 2000
+        assert dbg.epochs[0].populations[1].start_size == 2000
+        assert dbg.epochs[1].populations[1].start_size == 0
 
         x = dbg.possible_lineage_locations(["X", "A"])
         assert len(x) == 2
         assert list(x[(0, 1000)]) == [True, True]
         assert list(x[(1000, np.inf)]) == [True, False]
+
+        active_pops = self.get_active_populations(dbg)
+        assert "A" in active_pops[(0, 1000)]
+        assert "X" in active_pops[(0, 1000)]
+        assert "X" in active_pops[(1000, np.inf)]
+        assert "A" not in active_pops[(1000, np.inf)]
+
+    def test_pulses(self):
+        yaml = """\
+        time_units: generations
+        demes:
+          - name: X
+            epochs:
+              - start_size: 2000
+          - name: A
+            ancestors: [X]
+            start_time: 1000
+            epochs:
+              - start_size: 2000
+        pulses:
+          - source: X
+            dest: A
+            time: 500
+            proportion: 0.1
+          - source: A
+            dest: X
+            time: 100
+            proportion: 0.2
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 2
+        assert len(d.events) == 3
+        dbg = d.debug()
+        assert dbg.num_epochs == 4
+        assert len(dbg.epochs[1].events) == 1
+        assert len(dbg.epochs[2].events) == 1
+        assert dbg.epochs[1].events[0].__class__ == msprime.demography.MassMigration
+        assert dbg.epochs[2].events[0].__class__ == msprime.demography.MassMigration
+        assert dbg.epochs[1].events[0].time == 100
+        assert dbg.epochs[1].events[0].dest == "A"
+        assert dbg.epochs[1].events[0].source == "X"
+        assert dbg.epochs[1].events[0].proportion == 0.2
+        assert dbg.epochs[2].events[0].time == 500
+        assert dbg.epochs[2].events[0].dest == "X"
+        assert dbg.epochs[2].events[0].source == "A"
+        assert dbg.epochs[2].events[0].proportion == 0.1
+
+        active_pops = self.get_active_populations(dbg)
+        assert "A" in active_pops[(0, 100)]
+        assert "X" in active_pops[(0, 100)]
+        assert "A" in active_pops[(100, 500)]
+        assert "X" in active_pops[(100, 500)]
+        assert "A" in active_pops[(500, 1000)]
+        assert "X" in active_pops[(500, 1000)]
+        assert "X" in active_pops[(1000, np.inf)]
+        assert "A" not in active_pops[(1000, np.inf)]
+
+    def test_merger(self):
+        yaml = """\
+        time_units: generations
+        demes:
+          - name: X
+            epochs:
+              - start_size: 2000
+                end_time: 1000
+          - name: A
+            ancestors: [X]
+            epochs:
+              - start_size: 2000
+                end_time: 100
+          - name: B
+            ancestors: [X]
+            epochs:
+              - start_size: 2000
+                end_time: 100
+          - name: C
+            ancestors: [A, B]
+            proportions: [0.2, 0.8]
+            start_time: 100
+            epochs:
+              - start_size: 2000
+                end_time: 0
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 4
+        assert len(d.events) == 5
+        dbg = d.debug()
+        assert (
+            msprime.demography.Admixture(
+                time=100, derived="C", ancestral=["A", "B"], proportions=[0.2, 0.8]
+            )
+            in d.events
+        )
+        x = dbg.possible_lineage_locations(["X", "A", "B", "C"])
+        assert len(x) == 3
+        assert list(x[(0, 100)]) == [False, False, False, True]
+        assert list(x[(100, 1000)]) == [False, True, True, False]
+        assert list(x[(1000, np.inf)]) == [True, False, False, False]
+
+        active_pops = self.get_active_populations(dbg)
+        assert "C" in active_pops[(0, 100)]
+        assert "A" in active_pops[(100, 1000)]
+        assert "B" in active_pops[(100, 1000)]
+        assert "X" in active_pops[(1000, np.inf)]
+        assert "C" not in active_pops[(100, 1000)]
+        assert "C" not in active_pops[(1000, np.inf)]
+        assert "A" not in active_pops[(0, 100)]
+        assert "B" not in active_pops[(0, 100)]
+
+    def test_admixture(self):
+        yaml = """\
+        time_units: generations
+        demes:
+          - name: X
+            epochs:
+              - start_size: 2000
+                end_time: 1000
+          - name: A
+            ancestors: [X]
+            epochs:
+              - start_size: 2000
+                end_time: 0
+          - name: B
+            ancestors: [X]
+            epochs:
+              - start_size: 2000
+                end_time: 0
+          - name: C
+            ancestors: [A, B]
+            proportions: [0.2, 0.8]
+            start_time: 100
+            epochs:
+              - start_size: 2000
+                end_time: 0
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 4
+        assert len(d.events) == 3
+        dbg = d.debug()
+        assert (
+            msprime.demography.Admixture(
+                time=100, derived="C", ancestral=["A", "B"], proportions=[0.2, 0.8]
+            )
+            in d.events
+        )
+        x = dbg.possible_lineage_locations(["X", "A", "B", "C"])
+        assert len(x) == 3
+        assert list(x[(0, 100)]) == [False, True, True, True]
+        assert list(x[(100, 1000)]) == [False, True, True, False]
+        assert list(x[(1000, np.inf)]) == [True, False, False, False]

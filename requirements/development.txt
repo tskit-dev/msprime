@@ -4,7 +4,7 @@ bintrees
 codecov
 coverage
 daiquiri
-demes
+demes>=0.1.0
 flake8
 matplotlib>=3.4.0
 mock

@@ -6059,8 +6059,10 @@ msp_admixture(msp_t *self, demographic_event_t *event)
     for (index = 0; index < num_ancestral; index++) {
         pop = &self->populations[ancestral[index]];
         if (pop->state != MSP_POP_STATE_ACTIVE) {
-            ret = MSP_ERR_ADMIX_ANCESTRAL_NOT_ACTIVE;
-            goto out;
+            ret = msp_activate_population(self, ancestral[index]);
+            if (ret != 0) {
+                goto out;
+            }
         }
     }
 
