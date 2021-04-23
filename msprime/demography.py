@@ -954,6 +954,8 @@ class Demography(collections.abc.Mapping):
         """
         if populations is None:
             populations = range(self.num_populations)
+        if len(populations) != self.num_populations:
+            raise ValueError("populations must have Demography.num_populations entries")
         copy_demog = Demography()
         for identifier in populations:
             pop = self[identifier]
@@ -977,11 +979,13 @@ class Demography(collections.abc.Mapping):
             ]
 
         def remap(identifier):
+            if identifier == -1:
+                return -1
             return self[identifier].name
 
         for event in self.events:
             copy_event = copy.deepcopy(event)
-            if isinstance(event, MassMigration):
+            if isinstance(event, (MassMigration, MigrationRateChange)):
                 copy_event.source = remap(event.source)
                 copy_event.dest = remap(event.dest)
             elif isinstance(event, PopulationSplit):
@@ -990,13 +994,18 @@ class Demography(collections.abc.Mapping):
             elif isinstance(event, Admixture):
                 copy_event.ancestral = [remap(pop) for pop in event.ancestral]
                 copy_event.derived = remap(event.derived)
-            elif isinstance(event, PopulationParametersChange):
+            elif isinstance(
+                event,
+                (PopulationParametersChange, SimpleBottleneck, InstantaneousBottleneck),
+            ):
                 copy_event.population = remap(event.population)
             elif isinstance(event, SymmetricMigrationRateChange):
                 copy_event.populations = [remap(pop) for pop in event.populations]
+            elif isinstance(event, CensusEvent):
+                # Census has no population
+                pass
             else:
                 raise AssertionError("Event class not implemented in copy")
-
             copy_demog.add_event(copy_event)
 
         return copy_demog
@@ -1860,13 +1869,24 @@ class Demography(collections.abc.Mapping):
                     )
                     initial_size = new_initial_size
                     growth_rate = new_growth_rate
-        events = graph.discrete_demographic_events()
-        for split in events["splits"]:
+
+        events = dict(graph.discrete_demographic_events())
+        for split in events.pop("splits"):
             demography.add_population_split(
                 time=split.time, ancestral=split.parent, derived=split.children
             )
+        for pulse in events.pop("pulses"):
+            assert False
+        for branch in events.pop("branches"):
+            demography.add_mass_migration(
+                time=branch.time, source=branch.child, dest=branch.parent, proportion=1
+            )
+        for merger in events.pop("mergers"):
+            assert False
+        for admixture in events.pop("admixtures"):
+            assert False
+        assert len(events) == 0
 
-        # TODO add other events.
         for migration in graph.migrations:
             if migration.end_time == 0:
                 demography.set_migration_rate(
