@@ -1,0 +1,36 @@
+version: 2
+updates:
+- package-ecosystem: pip
+  directory: "/requirements/CI-complete"
+  schedule:
+    interval: monthly
+  open-pull-requests-limit: 10
+  reviewers:
+  - benjeffery
+  labels:
+  - dependancy-upgrade
+  ignore:
+  - dependency-name: mypy
+    versions:
+    - "0.800"
+  - dependency-name: pytest-cov
+    versions:
+    - 2.11.1
+- package-ecosystem: pip
+  directory: "/requirements/CI-tests-conda"
+  schedule:
+    interval: monthly
+  open-pull-requests-limit: 10
+  reviewers:
+  - benjeffery
+  labels:
+  - dependancy-upgrade
+- package-ecosystem: pip
+  directory: "/requirements/CI-tests-pip"
+  schedule:
+    interval: monthly
+  open-pull-requests-limit: 10
+  reviewers:
+  - benjeffery
+  labels:
+  - dependancy-upgrade
