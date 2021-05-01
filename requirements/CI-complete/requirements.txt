@@ -3,7 +3,7 @@ codecov==2.1.10
 daiquiri==3.0.0
 mypy==0.812 
 newick==1.2.0
-numpy==1.20.1
+numpy==1.20.2
 pytest==6.2.3
 pytest-cov==2.10.1
 pytest-xdist==2.2.1
