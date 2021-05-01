@@ -1,7 +1,7 @@
 bintrees==2.1.0
 daiquiri==3.0.0
 newick==1.0.0
-numpy==1.20.1
+numpy==1.20.2
 pytest==6.2.2
 pytest-xdist==2.2.1
 python_jsonschema_objects==0.3.13
