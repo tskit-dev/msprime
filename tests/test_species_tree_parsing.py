@@ -695,25 +695,6 @@ class TestStarbeastParsingErrors:
                     tree=bad_tree, generation_time=good_generation_time
                 )
 
-    def test_bad_annotations(self):
-        good = "((1[&dmv={0.1}]:1,2[&dmv={0.2}]:1)[&dmv={0.3}])"
-        assert species_trees.strip_extra_annotations(good) == good
-        bad_examples = [
-            # No annotations
-            "((1:1,2:1)",
-            # Mismatched annotations
-            "((1[]:1,2[]:1)[]]",
-            "((1[]:1,2[]:1)[",
-            "((1[]:1,2[]:1)]",
-            # Missing all dmvs
-            "((1[]:1,2[]:1)[]",
-            # Missing closing }
-            "((1[&dmv={]:1,2[]:1)[]",
-        ]
-        for example in bad_examples:
-            with pytest.raises(ValueError):
-                species_trees.strip_extra_annotations(example)
-
     def test_bad_annotations_in_tree(self):
         name_map = {f"n{j}": f"n{j}" for j in range(3)}
         good = "(n1[&dmv={1}]:1.14,n2[&dmv={1}]:1.14)[&dmv={1}]"
