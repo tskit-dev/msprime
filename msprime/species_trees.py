@@ -68,9 +68,8 @@ def parse_starbeast(tree, generation_time, time_units="myr"):
 
     translate_string, tree_string = parse_nexus(tree)
     species_name_map = parse_translate_command(translate_string)
-    clean_tree_string = strip_extra_annotations(tree_string)
     return process_starbeast_tree(
-        clean_tree_string, generations_per_branch_length_unit, species_name_map
+        tree_string, generations_per_branch_length_unit, species_name_map
     )
 
 
@@ -219,9 +218,8 @@ def process_starbeast_tree(
 
     def add_population(node):
         name = None
-        newick_id = node.name.strip().split("[")[0]
-        if len(newick_id) > 0:
-            name = species_name_map[newick_id]
+        if node.name is not None:
+            name = species_name_map[node.name]
 
         population = demography.add_population(
             initial_size=population_size_map[node], name=name
@@ -231,10 +229,10 @@ def process_starbeast_tree(
         return population.name
 
     for node in root.walk():
-        if node.name is None:
+        if node.comment is None:
             raise ValueError("Annotation missing for one or more nodes.")
         find_pattern = "\\&dmv=\\{([\\d\\.]+?)\\}"
-        dmv_patterns = re.search(find_pattern, node.name)
+        dmv_patterns = re.search(find_pattern, node.comment)
         if dmv_patterns is None:
             raise ValueError("No dmv annotation for node")
         pop_size = float(dmv_patterns.group(1)) * generations_per_branch_length_unit
@@ -325,101 +323,6 @@ def parse_newick(tree, branch_length_multiplier):
                     f"All leaf populations must be at time 0: time={node.time}"
                 )
     return root
-
-
-def strip_extra_annotations(tree_string):
-    """
-    Takes the input newick string and strips all extended newick annotations
-    other than the dmv attribute, returning the simplified newick string.
-    """
-    if "[" not in tree_string:
-        raise ValueError("No annotation in tree string.")
-    if tree_string.count("[") != tree_string.count("]"):
-        raise ValueError("Unbalanced square brackets in annotation.")
-    if "&dmv={" not in tree_string:
-        raise ValueError("No dmv tag in annotation.")
-    if "}" not in tree_string:
-        raise ValueError("No closing curly brackets in annotation.")
-
-    # Make sure that each substring that begins with an opening square bracket and ends
-    # with a closing square bracket does not contain any further square or round brackets
-    # in it and that it does include the dmv tag.
-    in_annotation = False
-    annotation_string = ""
-    for x in range(len(tree_string)):
-        if tree_string[x] == "[":
-            in_annotation = True
-            annotation_string += tree_string[x]
-        elif tree_string[x] == "]":
-            in_annotation = False
-            annotation_string += tree_string[x]
-            assert "[" not in annotation_string[1:-1], "Square bracket in annotation"
-            assert "]" not in annotation_string[1:-1], "Square bracket in annotation"
-            assert annotation_string.count("&dmv=") == 1, "Multiple or no dmv tags"
-            # Make sure that the dmv tag is followed by a closing curly bracket.
-            # Also ensure that the dmv tag is the first in the annotation.
-            dmv_string = ""
-            in_dmv = False
-            for y in range(len(annotation_string)):
-                dmv_string += annotation_string[y]
-                if annotation_string[y] == "}":
-                    break
-            err = "Uneven curly parentheses in dmv annotation"
-            assert dmv_string.count("{") == dmv_string.count("}"), err
-            assert dmv_string.count("{") == 1, "Multiple or no values in dmv annotation"
-            annotation_string = ""
-            # Make sure that a positive number is found between curly brackets.
-            clean_dmv_string = dmv_string.split("{")[1][0:-1]
-            assert is_number(clean_dmv_string), "dmv annotation is not a number"
-            assert float(clean_dmv_string) >= 0, "dmv annotation is negative"
-        elif in_annotation:
-            annotation_string += tree_string[x]
-
-    # Because the newick module doesn't support parsing extended newick attributes
-    # in general, we have to clean thing up manually before parsing the tree. Here,
-    # we get rid of all annotations except for dmv.
-    clean_tree_string = ""
-    in_annotation = False
-    in_dmv = False
-    for x in range(len(tree_string)):
-        if tree_string[x] == "[":
-            in_annotation = True
-            clean_tree_string += tree_string[x]
-        elif tree_string[x] == "]":
-            in_annotation = False
-            clean_tree_string += tree_string[x]
-        elif in_annotation:
-            if tree_string[x - 1] == "[" and tree_string[x] == "&":
-                clean_tree_string += "&"
-            if tree_string[x - 5 : x] == "dmv={":
-                in_dmv = True
-                clean_tree_string += "dmv={"
-            if in_dmv:
-                clean_tree_string += tree_string[x]
-            if tree_string[x] == "}":
-                in_dmv = False
-        else:
-            clean_tree_string += tree_string[x]
-
-    # Make sure that only dmv annotation remains in the tree string.
-    in_annotation = False
-    annotation_string = ""
-    for x in range(len(clean_tree_string)):
-        if clean_tree_string[x] == "[":
-            in_annotation = True
-            annotation_string += clean_tree_string[x]
-        elif clean_tree_string[x] == "]":
-            in_annotation = False
-            annotation_string += clean_tree_string[x]
-            assert annotation_string[0:7] == "[&dmv={", "Annotation could not be read"
-            assert annotation_string[-2:] == "}]", "Annotation could not be read"
-            assert is_number(annotation_string[7:-2]), "dmv annotation is not a number"
-            assert float(annotation_string[7:-2]) >= 0, "dmv annotation is negative"
-            annotation_string = ""
-        elif in_annotation:
-            annotation_string += clean_tree_string[x]
-
-    return clean_tree_string
 
 
 def parse_translate_command(translate_command):

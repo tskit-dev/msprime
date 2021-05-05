@@ -25,6 +25,6 @@ sphinx-argparse
 sphinx-issues
 jupyter-book
 
-newick
+newick>=1.3.0
 # We use JSON-schema to test out metadata handling.
 python_jsonschema_objects
