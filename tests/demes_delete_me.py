@@ -83,9 +83,7 @@ def epochs_lists(draw, start_time=math.inf, max_epochs=5):
         if i == 0 and math.isinf(start_time):
             end_size = start_size
         else:
-            end_size = draw(
-                st.floats(min_value=0, exclude_min=True, allow_infinity=False)
-            )
+            end_size = draw(st.floats(min_value=1, allow_infinity=False))
         cloning_rate = draw(st.floats(min_value=0, max_value=1))
         selfing_rate = draw(st.floats(min_value=0, max_value=1 - cloning_rate))
 
