@@ -6,6 +6,7 @@ coverage
 daiquiri
 demes>=0.1.0
 flake8
+hypothesis
 matplotlib>=3.4.0
 mock
 mypy

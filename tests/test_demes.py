@@ -22,10 +22,12 @@ Test cases for demes support.
 import textwrap
 
 import demes
+import hypothesis as hyp
 import numpy as np
 import pytest
 
 import msprime
+from .demes_delete_me import graphs
 
 
 class TestDemes:
@@ -67,6 +69,12 @@ class TestDemes:
         ooa1 = msprime.Demography.from_demes(g)
         ooa2 = msprime.Demography._ooa_model().copy([d.name for d in g.demes])
         ooa2.assert_equivalent(ooa1)
+
+    @hyp.settings(deadline=None, suppress_health_check=[hyp.HealthCheck.too_slow])
+    @hyp.given(graphs())
+    def test_random_graph(self, graph):
+        d = msprime.Demography.from_demes(graph)
+        d.debug()
 
 
 class TestYamlExamples:
