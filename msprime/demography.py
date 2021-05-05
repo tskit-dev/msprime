@@ -458,8 +458,11 @@ class Demography(collections.abc.Mapping):
         ancestral population(s), an admixture has the following additional
         effects:
 
-        - All derived populations are set to
+        - The derived population is set to
           :ref:`inactive<sec_demography_populations_life_cycle>`.
+        - The ancestral populations are set to
+          :ref:`active<sec_demography_populations_life_cycle>`, if they are
+          not already active.
         - All migration rates to and from the derived population are set to 0.
         - Population sizes and growth rates for the derived population are set
           to 0, and the poulation is marked as inactive.
@@ -941,6 +944,74 @@ class Demography(collections.abc.Mapping):
             if population.initially_active is None:
                 population.initially_active = True
         return resolved
+
+    def copy(self, populations: Union[List[str], None] = None) -> Demography:
+        """
+        Returns a copy of this model. If the ``populations`` argument is
+        specified, the populations in the copied model will be in this order.
+
+        :param list populations: A list of population identifiers defining the
+            order of the populations in the new model. If not specified, the
+            current order is used.
+        :return: A copy of this Demography.
+        """
+        if populations is None:
+            populations = range(self.num_populations)
+        if len(populations) != self.num_populations:
+            raise ValueError("populations must have Demography.num_populations entries")
+        copy_demog = Demography()
+        for identifier in populations:
+            pop = self[identifier]
+            copy_demog.add_population(
+                initial_size=pop.initial_size,
+                growth_rate=pop.growth_rate,
+                name=pop.name,
+                description=pop.description,
+                extra_metadata=pop.extra_metadata,
+                default_sampling_time=pop.default_sampling_time,
+                initially_active=pop.initially_active,
+            )
+        for copy_p1, copy_p2 in itertools.combinations(copy_demog.populations, 2):
+            self_p1 = self[copy_p1.name].id
+            self_p2 = self[copy_p2.name].id
+            copy_demog.migration_matrix[copy_p1.id, copy_p2.id] = self.migration_matrix[
+                self_p1, self_p2
+            ]
+            copy_demog.migration_matrix[copy_p2.id, copy_p1.id] = self.migration_matrix[
+                self_p2, self_p1
+            ]
+
+        def remap(identifier):
+            if identifier == -1:
+                return -1
+            return self[identifier].name
+
+        for event in self.events:
+            copy_event = copy.deepcopy(event)
+            if isinstance(event, (MassMigration, MigrationRateChange)):
+                copy_event.source = remap(event.source)
+                copy_event.dest = remap(event.dest)
+            elif isinstance(event, PopulationSplit):
+                copy_event.derived = [remap(pop) for pop in event.derived]
+                copy_event.ancestral = remap(event.ancestral)
+            elif isinstance(event, Admixture):
+                copy_event.ancestral = [remap(pop) for pop in event.ancestral]
+                copy_event.derived = remap(event.derived)
+            elif isinstance(
+                event,
+                (PopulationParametersChange, SimpleBottleneck, InstantaneousBottleneck),
+            ):
+                copy_event.population = remap(event.population)
+            elif isinstance(event, SymmetricMigrationRateChange):
+                copy_event.populations = [remap(pop) for pop in event.populations]
+            elif isinstance(event, CensusEvent):
+                # Census has no population
+                pass
+            else:
+                raise AssertionError("Event class not implemented in copy")
+            copy_demog.add_event(copy_event)
+
+        return copy_demog
 
     def sort_events(self):
         # Sort demographic events by time. Sorting is stable so the relative
@@ -1753,6 +1824,114 @@ class Demography(collections.abc.Mapping):
                 demographic_events,
                 population_map,
             )
+
+    @staticmethod
+    def from_demes(graph):
+        def get_growth_rate(epoch):
+            ret = 0
+            if epoch.size_function not in ["constant", "exponential"]:
+                raise ValueError(
+                    "msprime only supports constant or exponentially changing "
+                    "population sizes"
+                )
+            if epoch.end_size != epoch.start_size:
+                ret = -math.log(epoch.start_size / epoch.end_size) / epoch.time_span
+            return ret
+
+        graph = graph.in_generations()
+
+        demography = Demography()
+        for deme in graph.demes:
+            initial_size = 0
+            growth_rate = 0
+            last_epoch = deme.epochs[-1]
+            if last_epoch.end_time == 0:
+                initial_size = last_epoch.end_size
+                growth_rate = get_growth_rate(last_epoch)
+                initially_active = True
+            else:
+                initially_active = False
+            demography.add_population(
+                name=deme.name,
+                description=deme.description,
+                growth_rate=growth_rate,
+                initial_size=initial_size,
+                default_sampling_time=deme.end_time,
+                initially_active=initially_active,
+            )
+            for epoch in reversed(deme.epochs):
+                new_initial_size = None
+                if initial_size != epoch.end_size:
+                    new_initial_size = epoch.end_size
+                new_growth_rate = None
+                alpha = get_growth_rate(epoch)
+                if growth_rate != alpha:
+                    new_growth_rate = alpha
+                if new_growth_rate is not None or new_initial_size is not None:
+                    demography.add_population_parameters_change(
+                        population=deme.name,
+                        time=epoch.end_time,
+                        initial_size=new_initial_size,
+                        growth_rate=new_growth_rate,
+                    )
+                    initial_size = new_initial_size
+                    growth_rate = new_growth_rate
+
+        events = dict(graph.discrete_demographic_events())
+        for split in events.pop("splits"):
+            demography.add_population_split(
+                time=split.time, ancestral=split.parent, derived=split.children
+            )
+        for branch in events.pop("branches"):
+            demography.add_population_split(
+                time=branch.time,
+                ancestral=branch.parent,
+                derived=[branch.child],
+            )
+        for pulse in events.pop("pulses"):
+            demography.add_mass_migration(
+                time=pulse.time,
+                source=pulse.dest,
+                dest=pulse.source,
+                proportion=pulse.proportion,
+            )
+        for merger in events.pop("mergers"):
+            demography.add_admixture(
+                time=merger.time,
+                derived=merger.child,
+                ancestral=merger.parents,
+                proportions=merger.proportions,
+            )
+        for admixture in events.pop("admixtures"):
+            demography.add_admixture(
+                time=admixture.time,
+                derived=admixture.child,
+                ancestral=admixture.parents,
+                proportions=admixture.proportions,
+            )
+        assert len(events) == 0
+
+        for migration in graph.migrations:
+            if migration.end_time == 0:
+                demography.set_migration_rate(
+                    source=migration.dest, dest=migration.source, rate=migration.rate
+                )
+            else:
+                demography.add_migration_rate_change(
+                    time=migration.end_time,
+                    source=migration.dest,
+                    dest=migration.source,
+                    rate=migration.rate,
+                )
+            if not math.isinf(migration.start_time):
+                demography.add_migration_rate_change(
+                    time=migration.start_time,
+                    source=migration.dest,
+                    dest=migration.source,
+                    rate=0,
+                )
+        demography.sort_events()
+        return demography
 
     @staticmethod
     def from_tree_sequence(

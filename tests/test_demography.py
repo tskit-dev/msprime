@@ -4597,6 +4597,99 @@ class TestDemographyObject:
         assert not validated["C"].initially_active
 
 
+class TestDemographyCopy:
+    def test_empty(self):
+        d1 = msprime.Demography()
+        d2 = d1.copy()
+        assert d1 is not d2
+        d1.assert_equal(d2)
+
+    def test_all_events(self):
+        d1 = all_events_example_demography(integer_ids=False)
+        d1.assert_equal(d1)
+        d2 = d1.copy()
+        d1.assert_equal(d2)
+
+    def test_all_events_permute(self):
+        d1 = all_events_example_demography(integer_ids=False)
+        populations = [pop.name for pop in d1.populations]
+        d2 = d1.copy(populations=populations[::-1])
+        assert d1 != d2
+        d2 = d2.copy(populations=populations)
+        d1.assert_equal(d2)
+
+    def test_migration_matrix(self):
+        d1 = msprime.Demography.isolated_model([10] * 5)
+        d1.migration_matrix[:] = np.arange(25).reshape(5, 5)
+        np.fill_diagonal(d1.migration_matrix, 0)
+        d1.assert_equal(d1)
+        d2 = d1.copy()
+        d1.assert_equal(d2)
+
+    def test_migration_matrix_permutation(self):
+        d1 = msprime.Demography.isolated_model([10] * 5)
+        d1.migration_matrix[:] = np.arange(25).reshape(5, 5)
+        np.fill_diagonal(d1.migration_matrix, 0)
+        d1.assert_equal(d1)
+        populations = [pop.name for pop in d1.populations]
+        d2 = d1.copy(populations[::-1])
+        assert d1 != d2
+        d2 = d2.copy(populations)
+        d1.assert_equal(d2)
+
+    def test_population_attrs(self):
+        d1 = msprime.Demography()
+        d1.add_population(
+            name="asr",
+            initial_size=1234,
+            growth_rate=0.234,
+            description="ASDF",
+            extra_metadata={"a": "B", "c": 1234},
+            default_sampling_time=0.2,
+            initially_active=True,
+        )
+        d2 = d1.copy()
+        d1.assert_equal(d2)
+
+    def test_populations_remap(self):
+        d1 = msprime.Demography()
+        d1.add_population(initial_size=1, name="A")
+        d1.add_population(initial_size=2, name="B")
+        d2 = d1.copy(["B", "A"])
+        assert d2.populations[0].name == "B"
+        assert d2.populations[0].initial_size == 2
+        assert d2.populations[1].name == "A"
+        assert d2.populations[1].initial_size == 1
+
+    def test_populations_remap_integers(self):
+        d1 = msprime.Demography()
+        d1.add_population(initial_size=1, name="A")
+        d1.add_population(initial_size=2, name="B")
+        d2 = d1.copy([1, 0])
+        assert d2.populations[0].name == "B"
+        assert d2.populations[0].initial_size == 2
+        assert d2.populations[1].name == "A"
+        assert d2.populations[1].initial_size == 1
+
+    def test_bad_populations_arg(self):
+        d1 = msprime.Demography()
+        d1.add_population(initial_size=1, name="A")
+        d1.add_population(initial_size=1, name="B")
+        with pytest.raises(ValueError):
+            d1.copy([])
+        with pytest.raises(ValueError, match="Duplicate"):
+            d1.copy(["A", "A"])
+        with pytest.raises(KeyError, match="not found"):
+            d1.copy(["A", "C"])
+
+    def test_unknown_event_error(self):
+        d1 = msprime.Demography()
+        d1.add_population(initial_size=1, name="A")
+        d1.events.append(None)
+        with pytest.raises(AssertionError, match="not implemented"):
+            d1.copy()
+
+
 class TestMissingPopulation:
     def test_add_population_split(self):
         demography = msprime.Demography()
@@ -5308,6 +5401,25 @@ class TestAdmixture:
         ts = msprime.sim_ancestry({0: 100}, demography=demography, random_seed=1234)
         assert ts.tables.nodes.population[-1] == 1
 
+    def test_admix_ancestral_inactive(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1, initially_active=False)
+        demography.add_population(name="B", initial_size=1, initially_active=False)
+        demography.add_population(name="C", initial_size=1)
+        demography.add_admixture(
+            1, derived="C", ancestral=["A", "B"], proportions=[0.5, 0.5]
+        )
+        dbg = demography.debug()
+        assert dbg.num_epochs == 2
+        epoch = dbg.epochs[0]
+        assert not epoch.populations[0].active
+        assert not epoch.populations[1].active
+        assert epoch.populations[2].active
+        epoch = dbg.epochs[1]
+        assert epoch.populations[0].active
+        assert epoch.populations[1].active
+        assert not epoch.populations[2].active
+
     def test_record_migrations(self):
         demography = msprime.Demography.isolated_model([10] * 2)
         demography.add_admixture(0.01, derived=0, ancestral=[1], proportions=[1])
@@ -5344,7 +5456,7 @@ class TestPopulationLoops:
         demography.add_population(name="B", initial_size=1)
         demography.add_admixture(0.1, derived="A", ancestral=["B"], proportions=[1])
         demography.add_admixture(0.2, derived="B", ancestral=["A"], proportions=[1])
-        msg = "All ancestral populations in admixture must already be active"
+        msg = "Attempt to set a previously active population to active"
         with pytest.raises(_msprime.LibraryError, match=msg):
             demography.debug()
         with pytest.raises(_msprime.LibraryError, match=msg):
@@ -5374,7 +5486,7 @@ class TestPopulationLoops:
         demography.add_population(name="C", initial_size=1)
         demography.add_population_split(0.1, derived=["A"], ancestral="B")
         demography.add_admixture(0.2, derived="C", ancestral=["A"], proportions=[1])
-        msg = "ancestral populations in admixture must already be active"
+        msg = "Attempt to set a previously active population to active"
         with pytest.raises(_msprime.LibraryError, match=msg):
             demography.debug()
         with pytest.raises(_msprime.LibraryError, match=msg):

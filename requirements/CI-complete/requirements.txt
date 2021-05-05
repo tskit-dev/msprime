@@ -1,6 +1,7 @@
 bintrees==2.1.0
 codecov==2.1.10
 daiquiri==3.0.0
+demes==0.1.1
 mypy==0.812 
 newick==1.2.0
 numpy==1.20.2

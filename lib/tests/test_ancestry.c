@@ -2647,29 +2647,6 @@ test_population_state_machine_errors(void)
     msp_free(&msp);
     tsk_table_collection_free(&tables);
 
-    /* Inactive population as admix ancestral.*/
-    ret = build_sim(&msp, &tables, rng, 1, 2, NULL, 0);
-    CU_ASSERT_EQUAL(ret, 0);
-    /* 1 -> 0 */
-    ancestral[0] = 0;
-    ret = msp_add_admixture(&msp, 2, 1, 1, ancestral, proba);
-    CU_ASSERT_EQUAL(ret, 0);
-    /* 1 -> 0 */
-    derived[0] = 1;
-    ret = msp_add_population_split(&msp, 2, 1, derived, 0);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_set_population_configuration(&msp, 0, 1, 0, false);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_debug_demography(&msp, &time);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_EQUAL_FATAL(time, 2);
-    ret = msp_debug_demography(&msp, &time);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_ADMIX_ANCESTRAL_NOT_ACTIVE);
-    msp_free(&msp);
-    tsk_table_collection_free(&tables);
-
     /* derived not active in split */
     ret = build_sim(&msp, &tables, rng, 1, 2, NULL, 0);
     CU_ASSERT_EQUAL(ret, 0);
