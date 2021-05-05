@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.1] - 2021-05-XX
+
+- Change the semantics of Admixture events slightly so that ancestral
+  populations that are inactive, are marked as active ({pr}`1662`,
+  {issue}`1657`, {user}`jeromekelleher`, {user}`apragsdale`)
+
+- Initial support for Demes via the ``Demography.from_demes`` method.
+  ({pr}`1662`, {issue}`1675`, {user}`jeromekelleher`, {user}`apragsdale`)
+
+
 ## [1.0.0] - 2021-04-14
 
 Msprime 1.0 is a major update, recommended for all users. It introduces

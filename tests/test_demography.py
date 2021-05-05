@@ -5401,6 +5401,25 @@ class TestAdmixture:
         ts = msprime.sim_ancestry({0: 100}, demography=demography, random_seed=1234)
         assert ts.tables.nodes.population[-1] == 1
 
+    def test_admix_ancestral_inactive(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1, initially_active=False)
+        demography.add_population(name="B", initial_size=1, initially_active=False)
+        demography.add_population(name="C", initial_size=1)
+        demography.add_admixture(
+            1, derived="C", ancestral=["A", "B"], proportions=[0.5, 0.5]
+        )
+        dbg = demography.debug()
+        assert dbg.num_epochs == 2
+        epoch = dbg.epochs[0]
+        assert not epoch.populations[0].active
+        assert not epoch.populations[1].active
+        assert epoch.populations[2].active
+        epoch = dbg.epochs[1]
+        assert epoch.populations[0].active
+        assert epoch.populations[1].active
+        assert not epoch.populations[2].active
+
     def test_record_migrations(self):
         demography = msprime.Demography.isolated_model([10] * 2)
         demography.add_admixture(0.01, derived=0, ancestral=[1], proportions=[1])
@@ -5437,7 +5456,7 @@ class TestPopulationLoops:
         demography.add_population(name="B", initial_size=1)
         demography.add_admixture(0.1, derived="A", ancestral=["B"], proportions=[1])
         demography.add_admixture(0.2, derived="B", ancestral=["A"], proportions=[1])
-        msg = "All ancestral populations in admixture must already be active"
+        msg = "Attempt to set a previously active population to active"
         with pytest.raises(_msprime.LibraryError, match=msg):
             demography.debug()
         with pytest.raises(_msprime.LibraryError, match=msg):
@@ -5467,7 +5486,7 @@ class TestPopulationLoops:
         demography.add_population(name="C", initial_size=1)
         demography.add_population_split(0.1, derived=["A"], ancestral="B")
         demography.add_admixture(0.2, derived="C", ancestral=["A"], proportions=[1])
-        msg = "ancestral populations in admixture must already be active"
+        msg = "Attempt to set a previously active population to active"
         with pytest.raises(_msprime.LibraryError, match=msg):
             demography.debug()
         with pytest.raises(_msprime.LibraryError, match=msg):

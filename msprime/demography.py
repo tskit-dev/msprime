@@ -458,8 +458,11 @@ class Demography(collections.abc.Mapping):
         ancestral population(s), an admixture has the following additional
         effects:
 
-        - All derived populations are set to
+        - The derived population is set to
           :ref:`inactive<sec_demography_populations_life_cycle>`.
+        - The ancestral populations are set to
+          :ref:`active<sec_demography_populations_life_cycle>`, if they are
+          not already active.
         - All migration rates to and from the derived population are set to 0.
         - Population sizes and growth rates for the derived population are set
           to 0, and the poulation is marked as inactive.
@@ -947,10 +950,10 @@ class Demography(collections.abc.Mapping):
         Returns a copy of this model. If the ``populations`` argument is
         specified, the populations in the copied model will be in this order.
 
-        @param list populations: A list of population identifiers defining the
+        :param list populations: A list of population identifiers defining the
             order of the populations in the new model. If not specified, the
             current order is used.
-        @return A copy of this Demography.
+        :return: A copy of this Demography.
         """
         if populations is None:
             populations = range(self.num_populations)
