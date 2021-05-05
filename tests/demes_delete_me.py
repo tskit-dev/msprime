@@ -79,9 +79,7 @@ def epochs_lists(draw, start_time=math.inf, max_epochs=5):
     epochs = []
 
     for i, end_time in enumerate(times):
-        start_size = draw(
-            st.floats(min_value=0, exclude_min=True, allow_infinity=False)
-        )
+        start_size = draw(st.floats(min_value=1, allow_infinity=False))
         if i == 0 and math.isinf(start_time):
             end_size = start_size
         else:
