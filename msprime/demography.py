@@ -1848,16 +1848,12 @@ class Demography(collections.abc.Mapping):
             if last_epoch.end_time == 0:
                 initial_size = last_epoch.end_size
                 growth_rate = get_growth_rate(last_epoch)
-                initially_active = True
-            else:
-                initially_active = False
             demography.add_population(
                 name=deme.name,
                 description=deme.description,
                 growth_rate=growth_rate,
                 initial_size=initial_size,
                 default_sampling_time=deme.end_time,
-                initially_active=initially_active,
             )
             for epoch in reversed(deme.epochs):
                 new_initial_size = None

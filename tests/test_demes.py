@@ -70,7 +70,9 @@ class TestDemes:
         ooa2 = msprime.Demography._ooa_model().copy([d.name for d in g.demes])
         ooa2.assert_equivalent(ooa1)
 
-    @hyp.settings(deadline=None, suppress_health_check=[hyp.HealthCheck.too_slow])
+    @hyp.settings(
+        deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
+    )
     @hyp.given(graphs())
     def test_random_graph(self, graph):
         d = msprime.Demography.from_demes(graph)
@@ -268,8 +270,8 @@ class TestYamlExamples:
         assert dbg.num_epochs == 4
         assert len(dbg.epochs[1].events) == 1
         assert len(dbg.epochs[2].events) == 1
-        assert dbg.epochs[1].events[0].__class__ == msprime.demography.MassMigration
-        assert dbg.epochs[2].events[0].__class__ == msprime.demography.MassMigration
+        assert isinstance(dbg.epochs[1].events[0], msprime.demography.MassMigration)
+        assert isinstance(dbg.epochs[2].events[0], msprime.demography.MassMigration)
         assert dbg.epochs[1].events[0].time == 100
         assert dbg.epochs[1].events[0].dest == "A"
         assert dbg.epochs[1].events[0].source == "X"
