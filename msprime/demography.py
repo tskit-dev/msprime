@@ -1841,19 +1841,26 @@ class Demography(collections.abc.Mapping):
         graph = graph.in_generations()
 
         demography = Demography()
+        min_end_time = min(deme.end_time for deme in graph.demes)
+        if min_end_time != 0:
+            raise ValueError("Must have at least one Deme with end_time=0")
         for deme in graph.demes:
             initial_size = 0
             growth_rate = 0
             last_epoch = deme.epochs[-1]
-            if last_epoch.end_time == 0:
+            if last_epoch.end_time == min_end_time:
                 initial_size = last_epoch.end_size
                 growth_rate = get_growth_rate(last_epoch)
+                initially_active = True
+            else:
+                initially_active = False
             demography.add_population(
                 name=deme.name,
                 description=deme.description,
                 growth_rate=growth_rate,
                 initial_size=initial_size,
                 default_sampling_time=deme.end_time,
+                initially_active=initially_active,
             )
             for epoch in reversed(deme.epochs):
                 new_initial_size = None

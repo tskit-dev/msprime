@@ -28,6 +28,31 @@ import pytest
 
 import msprime
 from .demes_delete_me import graphs
+from msprime.demography import PopulationStateMachine
+
+
+def validate_demes_demography(graph, demography):
+    """
+    Checks that the specified Demes graph and msprime are consistent.
+    """
+    assert len(graph.demes) == len(demography.populations)
+    assert {deme.name for deme in graph.demes} == set(demography.keys())
+    dbg = demography.debug()
+    for deme in graph.demes:
+        pop_id = demography[deme.name].id
+        start_time = deme.end_time
+        end_time = deme.start_time
+        # print(pop_id, start_time, end_time)
+        for epoch in dbg.epochs:
+            pop = epoch.populations[pop_id]
+            if end_time <= epoch.start_time:
+                assert pop.state == PopulationStateMachine.PREVIOUSLY_ACTIVE
+            elif start_time >= epoch.end_time:
+                assert pop.state == PopulationStateMachine.INACTIVE
+            else:
+                assert pop.state == PopulationStateMachine.ACTIVE
+
+            # print("E", epoch.start_time, epoch.end_time)
 
 
 class TestDemes:
@@ -74,15 +99,28 @@ class TestDemes:
         deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
     )
     @hyp.given(graphs())
+    @hyp.reproduce_failure("6.12.0", b"AXicY2BkAAJGRgZBECEEYjMQBowoFC4AAA2RACw=")
     def test_random_graph(self, graph):
-        d = msprime.Demography.from_demes(graph)
-        d.debug()
+        print("HERE!!")
+        try:
+            demography = msprime.Demography.from_demes(graph)
+        except ValueError as v:
+            if str(v).startswith("Must have at least one"):
+                print("OOPS!")
+                return
+            raise v
+        # print(graph.demes)
+        print(demography)
+        print(demography.debug())
+        validate_demes_demography(graph, demography)
 
 
 class TestYamlExamples:
     def from_yaml(self, yaml):
         graph = demes.loads(textwrap.dedent(yaml))
-        return msprime.Demography.from_demes(graph)
+        demography = msprime.Demography.from_demes(graph)
+        validate_demes_demography(graph, demography)
+        return demography
 
     def get_active_populations(self, dbg):
         return {
@@ -384,3 +422,15 @@ class TestYamlExamples:
         assert list(x[(0, 100)]) == [False, True, True, True]
         assert list(x[(100, 1000)]) == [False, True, True, False]
         assert list(x[(1000, np.inf)]) == [True, False, False, False]
+
+    def test_no_zero_end_time(self):
+        yaml = """\
+        time_units: generations
+        demes:
+          - name: A
+            epochs:
+              - start_size: 2000
+                end_time: 100
+        """
+        with pytest.raises(ValueError, match="at least one Deme with end_time=0"):
+            d = self.from_yaml(yaml)
