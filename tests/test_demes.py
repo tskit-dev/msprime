@@ -23,12 +23,27 @@ import textwrap
 
 import demes
 import hypothesis as hyp
+import hypothesis.strategies as st
 import numpy as np
 import pytest
 
 import msprime
 from .demes_delete_me import graphs
 from msprime.demography import PopulationStateMachine
+
+
+@st.composite
+def permissible_graphs(draw):
+    """
+    Wrapper around the hypothesis strategy for generating demes graphs,
+    which excludes pathological cases we don't care about.
+    """
+    graph = draw(graphs())
+    for name, children in graph.successors().items():
+        if len(children) == 0:
+            # This deme is a leaf, so make sure it lives at time 0.
+            graph[name].epochs[-1].end_time = 0
+    return graph
 
 
 def validate_demes_demography(graph, demography):
@@ -98,8 +113,10 @@ class TestDemes:
     @hyp.settings(
         deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
     )
-    @hyp.given(graphs())
-    @hyp.reproduce_failure("6.12.0", b"AXicY2BkAAJGRgZBECEEYjMQBowoFC4AAA2RACw=")
+    @hyp.given(permissible_graphs())
+    @hyp.reproduce_failure(
+        "6.12.0", b"AXicY2RgYJK490WYkYGBAYQZGBkZBIEEmA0VQtAwLpmADO0ARIUCHQ=="
+    )
     def test_random_graph(self, graph):
         print("HERE!!")
         try:
@@ -433,4 +450,4 @@ class TestYamlExamples:
                 end_time: 100
         """
         with pytest.raises(ValueError, match="at least one Deme with end_time=0"):
-            d = self.from_yaml(yaml)
+            self.from_yaml(yaml)
