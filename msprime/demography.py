@@ -1839,6 +1839,13 @@ class Demography(collections.abc.Mapping):
             return ret
 
         graph = graph.in_generations()
+        events = graph.discrete_demographic_events()
+        initially_active = collections.defaultdict(lambda: True)
+        for split in events["splits"]:
+            initially_active[split.parent] = False
+        for merge in events["mergers"]:
+            for parent in merge.parents:
+                initially_active[parent] = False
 
         demography = Demography()
         for deme in graph.demes:
@@ -1848,16 +1855,13 @@ class Demography(collections.abc.Mapping):
             if last_epoch.end_time == 0:
                 initial_size = last_epoch.end_size
                 growth_rate = get_growth_rate(last_epoch)
-                initially_active = True
-            else:
-                initially_active = False
             demography.add_population(
                 name=deme.name,
                 description=deme.description,
                 growth_rate=growth_rate,
                 initial_size=initial_size,
                 default_sampling_time=deme.end_time,
-                initially_active=initially_active,
+                initially_active=initially_active[deme.name],
             )
             for epoch in reversed(deme.epochs):
                 new_initial_size = None
@@ -1877,7 +1881,6 @@ class Demography(collections.abc.Mapping):
                     initial_size = new_initial_size
                     growth_rate = new_growth_rate
 
-        events = dict(graph.discrete_demographic_events())
         for split in events.pop("splits"):
             demography.add_population_split(
                 time=split.time, ancestral=split.parent, derived=split.children

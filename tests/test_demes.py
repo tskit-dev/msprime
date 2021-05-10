@@ -22,10 +22,37 @@ Test cases for demes support.
 import textwrap
 
 import demes
+import hypothesis as hyp
 import numpy as np
 import pytest
 
 import msprime
+from .demes_delete_me import graphs
+
+
+def validate_demes_demography(graph, demography):
+    """
+    Checks that the specified Demes graph and msprime are consistent.
+    """
+    assert len(graph.demes) == len(demography.populations)
+    assert {deme.name for deme in graph.demes} == set(demography.keys())
+    for deme in graph.demes:
+        population = demography[deme.name]
+        # The default sampling time should always be the demes end_time
+        assert population.default_sampling_time == deme.end_time
+        # TODO once we have manual management of population states in #1679
+        # and changed to use this in the demes converter we can turn back
+        # on this check.
+        # start_time = deme.end_time
+        # end_time = deme.start_time
+        # for epoch in dbg.epochs:
+        #     pop = epoch.populations[pop_id]
+        #     if end_time <= epoch.start_time:
+        #         assert pop.state == PopulationStateMachine.PREVIOUSLY_ACTIVE
+        #     elif start_time >= epoch.end_time:
+        #         assert pop.state == PopulationStateMachine.INACTIVE
+        #     else:
+        #         assert pop.state == PopulationStateMachine.ACTIVE
 
 
 class TestDemes:
@@ -68,11 +95,21 @@ class TestDemes:
         ooa2 = msprime.Demography._ooa_model().copy([d.name for d in g.demes])
         ooa2.assert_equivalent(ooa1)
 
+    @hyp.settings(
+        deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
+    )
+    @hyp.given(graphs())
+    def test_random_graph(self, graph):
+        demography = msprime.Demography.from_demes(graph)
+        validate_demes_demography(graph, demography)
+
 
 class TestYamlExamples:
     def from_yaml(self, yaml):
         graph = demes.loads(textwrap.dedent(yaml))
-        return msprime.Demography.from_demes(graph)
+        demography = msprime.Demography.from_demes(graph)
+        validate_demes_demography(graph, demography)
+        return demography
 
     def get_active_populations(self, dbg):
         return {
@@ -260,8 +297,8 @@ class TestYamlExamples:
         assert dbg.num_epochs == 4
         assert len(dbg.epochs[1].events) == 1
         assert len(dbg.epochs[2].events) == 1
-        assert dbg.epochs[1].events[0].__class__ == msprime.demography.MassMigration
-        assert dbg.epochs[2].events[0].__class__ == msprime.demography.MassMigration
+        assert isinstance(dbg.epochs[1].events[0], msprime.demography.MassMigration)
+        assert isinstance(dbg.epochs[2].events[0], msprime.demography.MassMigration)
         assert dbg.epochs[1].events[0].time == 100
         assert dbg.epochs[1].events[0].dest == "A"
         assert dbg.epochs[1].events[0].source == "X"
@@ -374,3 +411,14 @@ class TestYamlExamples:
         assert list(x[(0, 100)]) == [False, True, True, True]
         assert list(x[(100, 1000)]) == [False, True, True, False]
         assert list(x[(1000, np.inf)]) == [True, False, False, False]
+
+    def test_non_zero_end_time(self):
+        yaml = """\
+        time_units: generations
+        demes:
+          - name: A
+            epochs:
+              - start_size: 2000
+                end_time: 100
+        """
+        self.from_yaml(yaml)
