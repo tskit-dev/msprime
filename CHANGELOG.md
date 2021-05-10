@@ -1,6 +1,8 @@
 # Changelog
 
-## [1.0.1] - 2021-05-XX
+## [1.0.1] - 2021-05-10
+
+Minor feature release with experimental Demes support.
 
 - Change the semantics of Admixture events slightly so that ancestral
   populations that are inactive, are marked as active ({pr}`1662`,
