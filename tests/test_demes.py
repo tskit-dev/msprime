@@ -28,7 +28,6 @@ import pytest
 
 import msprime
 from .demes_delete_me import graphs
-from msprime.demography import PopulationStateMachine
 
 
 def validate_demes_demography(graph, demography):
@@ -37,23 +36,23 @@ def validate_demes_demography(graph, demography):
     """
     assert len(graph.demes) == len(demography.populations)
     assert {deme.name for deme in graph.demes} == set(demography.keys())
-    dbg = demography.debug()
     for deme in graph.demes:
-        pop_id = demography[deme.name].id
-        start_time = deme.end_time
-        end_time = deme.start_time
-        # print(pop_id, start_time, end_time)
-        for epoch in dbg.epochs:
-            pop = epoch.populations[pop_id]
-            if end_time <= epoch.start_time:
-                assert pop.state == PopulationStateMachine.PREVIOUSLY_ACTIVE
-            elif start_time >= epoch.end_time:
-                # assert pop.state == PopulationStateMachine.INACTIVE
-                pass
-            else:
-                assert pop.state == PopulationStateMachine.ACTIVE
-
-            # print("E", epoch.start_time, epoch.end_time)
+        population = demography[deme.name]
+        # The default sampling time should always be the demes end_time
+        assert population.default_sampling_time == deme.end_time
+        # TODO once we have manual management of population states in #1679
+        # and changed to use this in the demes converter we can turn back
+        # on this check.
+        # start_time = deme.end_time
+        # end_time = deme.start_time
+        # for epoch in dbg.epochs:
+        #     pop = epoch.populations[pop_id]
+        #     if end_time <= epoch.start_time:
+        #         assert pop.state == PopulationStateMachine.PREVIOUSLY_ACTIVE
+        #     elif start_time >= epoch.end_time:
+        #         assert pop.state == PopulationStateMachine.INACTIVE
+        #     else:
+        #         assert pop.state == PopulationStateMachine.ACTIVE
 
 
 class TestDemes:
@@ -100,21 +99,8 @@ class TestDemes:
         deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
     )
     @hyp.given(graphs())
-    @hyp.reproduce_failure(
-        "6.12.0", b"AXicY2RgYJK490WYkYGBAYQZGBkZBIEEmA0VQtAwLpmADO0ARIUCHQ=="
-    )
     def test_random_graph(self, graph):
-        print("HERE!!")
-        try:
-            demography = msprime.Demography.from_demes(graph)
-        except ValueError as v:
-            if str(v).startswith("Must have at least one"):
-                print("OOPS!")
-                return
-            raise v
-        # print(graph.demes)
-        print(demography)
-        print(demography.debug())
+        demography = msprime.Demography.from_demes(graph)
         validate_demes_demography(graph, demography)
 
 

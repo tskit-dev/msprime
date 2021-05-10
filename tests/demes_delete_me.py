@@ -285,10 +285,13 @@ def graphs(draw, max_demes=5, max_epochs=10, max_migrations=10, max_pulses=10):
     :param int max_pulses: The maximum number of pulses in the graph.
     """
     generation_time = draw(st.none() | st.floats(min_value=1e-9, max_value=1e6))
-    if generation_time is None:
-        time_units = "generations"
-    else:
-        time_units = draw(yaml_strings())
+    # JK: setting time_units to always be generations to avoid rounding problems
+    # with Graph.in_generations() at the very extreme floating point values.
+    # if generation_time is None:
+    #     time_units = "generations"
+    # else:
+    #     time_units = draw(yaml_strings())
+    time_units = "generations"
     b = demes.Builder(
         description=draw(yaml_strings()),
         generation_time=generation_time,
