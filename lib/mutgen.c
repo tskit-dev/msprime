@@ -811,7 +811,7 @@ mutgen_set_rate_map(mutgen_t *self, size_t size, double *position, double *rate)
         goto out;
     }
     if (rate_map_get_sequence_length(&self->rate_map) != self->tables->sequence_length) {
-        ret = MSP_ERR_INCOMPATIBLE_MUTATION_MAP;
+        ret = MSP_ERR_INCOMPATIBLE_MUTATION_MAP_LENGTH;
         goto out;
     }
 out:

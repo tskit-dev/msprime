@@ -171,8 +171,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_BAD_RATE_VALUE:
             ret = "Rates must be non-negative and finite";
             break;
-        case MSP_ERR_INCOMPATIBLE_MUTATION_MAP:
-            ret = "Mutation map is not compatible with specified tables.";
+        case MSP_ERR_INCOMPATIBLE_MUTATION_MAP_LENGTH:
+            ret = "Incompatible mutation map: sequence length differs from that of "
+                  "the tree sequence.";
             break;
         case MSP_ERR_INSUFFICIENT_INTERVALS:
             ret = "At least one interval must be specified.";
