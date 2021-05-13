@@ -162,7 +162,7 @@ test_mutgen_errors(void)
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_set_rate_map(&mutgen, 1, pos, &rate);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCOMPATIBLE_MUTATION_MAP);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INCOMPATIBLE_MUTATION_MAP_LENGTH);
     mutgen_free(&mutgen);
 
     tables.sequence_length = 10;
