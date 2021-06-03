@@ -529,7 +529,7 @@ def simulate(
         samples, and cannot be used in conjunction with the ``sample_size``
         parameter. Each sample is a (``population``, ``time``) pair
         such that the sample in position ``j`` in the list of samples
-        is drawn in the specified population at the specfied time. Time
+        is drawn in the specified population at the specified time. Time
         is measured in generations ago, as elsewhere.
     :param int random_seed: The random seed. If this is `None`, a
         random seed will be automatically generated. Valid random
@@ -1365,7 +1365,7 @@ class Simulator(_msprime.Simulator):
         while ret == ExitReason.MAX_EVENTS:
             ret = ExitReason(super().run(end_time, event_chunk))
             if self.time > end_time:
-                # Currently the Pedigree and Sweeps models are "non-rentrant"
+                # Currently the Pedigree and Sweeps models are "non-reentrant"
                 # We can change this to an assertion once these have been fixed.
                 raise RuntimeError(
                     f"Model {self.model['name']} does not support interruption. "
@@ -1472,7 +1472,7 @@ class Simulator(_msprime.Simulator):
 @dataclasses.dataclass
 class SampleSet:
     """
-    Specify a set of exchangable sample individuals with a given ploidy
+    Specify a set of exchangeable sample individuals with a given ploidy
     value from a population at a given time. See the
     :ref:`sec_ancestry_samples` section for details and examples.
     """
@@ -1555,7 +1555,7 @@ class AncestryModel:
     """
     name: ClassVar[str]
 
-    # We have to define an __init__ to enfore keyword-only behaviour
+    # We have to define an __init__ to enforce keyword-only behaviour
     def __init__(self, *, duration=None):
         self.duration = duration
 

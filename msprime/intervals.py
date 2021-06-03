@@ -89,7 +89,7 @@ class RateMap(collections.abc.Mapping):
         # It's really the sum of the mass up to but not including the current
         # interval, which is a bit confusing. Probably best to just leave
         # it as a function, so that people can sample at regular positions
-        # along the genome anyway, empasising that it's a continuous function,
+        # along the genome anyway, emphasising that it's a continuous function,
         # not a step function like the other interval attributes.
         self._cumulative_mass = np.insert(np.nancumsum(self.mass), 0, 0)
         assert self._cumulative_mass[0] == 0
@@ -583,7 +583,7 @@ class RateMap(collections.abc.Mapping):
         if sequence_length is not None:
             if sequence_length < end:
                 raise ValueError(
-                    "The sequence_length cannot be less that the last physical position "
+                    "The sequence_length cannot be less than the last physical position "
                     f" ({physical_positions[-1]})"
                 )
             if sequence_length > end:
