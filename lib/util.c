@@ -282,6 +282,9 @@ msp_strerror_internal(int err)
         case MSP_ERR_POPULATION_PREVIOUSLY_ACTIVE:
             ret = "Attempt to set a previously active population to active";
             break;
+        case MSP_ERR_POPULATION_CURRENTLY_ACTIVE:
+            ret = "Attempt to set a currently active population to active";
+            break;
         case MSP_ERR_ADMIX_DERIVED_NOT_ACTIVE:
             ret = "The derived population in an admixture must be active";
             break;

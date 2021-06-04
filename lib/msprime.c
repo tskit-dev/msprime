@@ -5875,17 +5875,12 @@ msp_activate_population(msp_t *self, int population_id)
     int ret = 0;
     population_t *pop = &self->populations[population_id];
 
-    /* It's not currently possible to do this because we're only calling
-     * msp_activate_population from population split, where we only activate
-     * if it's not already active. But, leaving this here as a reminder
-     * in case we ever do call activate from somewhere else.
-     */
-    /* if (pop->state == MSP_POP_STATE_ACTIVE) { */
-    /*     ret = MSP_ERR_POPULATION_CURRENTLY_ACTIVE; */
-    /*     goto out; */
-    /* } */
     if (pop->state == MSP_POP_STATE_PREVIOUSLY_ACTIVE) {
         ret = MSP_ERR_POPULATION_PREVIOUSLY_ACTIVE;
+        goto out;
+    }
+    if (pop->state == MSP_POP_STATE_ACTIVE) {
+        ret = MSP_ERR_POPULATION_CURRENTLY_ACTIVE;
         goto out;
     }
     pop->state = MSP_POP_STATE_ACTIVE;
@@ -6482,6 +6477,46 @@ msp_add_census_event(msp_t *self, double time)
     de->print_state = msp_print_census_event;
     ret = 0;
 
+out:
+    return ret;
+}
+
+/* Add an activate_population_event at a given time */
+
+static int
+msp_activate_population_event(msp_t *self, demographic_event_t *event)
+{
+    population_id_t population = event->params.activate_population.population;
+
+    return msp_activate_population(self, population);
+}
+
+static void
+msp_print_activate_population_event(
+    msp_t *MSP_UNUSED(self), demographic_event_t *event, FILE *out)
+{
+    fprintf(out, "%f\tactivate_population_event:\n", event->time);
+}
+
+int MSP_WARN_UNUSED
+msp_add_activate_population_event(msp_t *self, double time, int population_id)
+{
+    int ret = 0;
+    demographic_event_t *de;
+    int N = (int) self->num_populations;
+
+    if (population_id < 0 || population_id >= N) {
+        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
+        goto out;
+    }
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
+        goto out;
+    }
+    de->params.activate_population.population = population_id;
+    de->change_state = msp_activate_population_event;
+    de->print_state = msp_print_activate_population_event;
+    ret = 0;
 out:
     return ret;
 }
