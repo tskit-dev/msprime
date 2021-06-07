@@ -8,4 +8,4 @@ pytest==6.2.4
 pytest-xdist==2.2.1
 python_jsonschema_objects==0.4.0
 scipy==1.6.3
-tskit==0.3.5
+tskit==0.3.6
