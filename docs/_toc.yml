@@ -1,27 +1,26 @@
-- file: intro
-- part: Getting started
+format: jb-book
+root: intro
+parts:
+- caption: Getting started
   chapters:
   - file: quickstart
   - file: installation
-
-- part: Running simulations
+- caption: Running simulations
   chapters:
   - file: ancestry
   - file: mutations
   - file: demography
   - file: replication
-
-- part: Interfaces
+- caption: Interfaces
   chapters:
   - file: api
   - file: cli
-
-- part: Utilities
+- caption: Utilities
   chapters:
   - file: rate_maps
   - file: likelihoods
   - file: logging
-- part: Miscellaneous
+- caption: Miscellaneous
   chapters:
   - file: legacy
   - file: switch_from_other_simulators
