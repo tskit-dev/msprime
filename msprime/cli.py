@@ -21,12 +21,16 @@ Command line interfaces to the msprime library.
 """
 import argparse
 import hashlib
+import logging
 import os
 import random
 import signal
 import sys
 import warnings
+from typing import Dict
+from typing import List
 
+import demes
 import tskit
 
 import msprime
@@ -34,10 +38,24 @@ from . import ancestry
 from . import mutations
 
 
+logger = logging.getLogger(__name__)
+
+
 def set_sigpipe_handler():
     if os.name == "posix":
         # Set signal handler for SIGPIPE to quietly kill the program.
         signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
+
+def setup_logging(args):
+    log_level = "WARN"
+    if args.verbosity > 0:
+        log_level = "INFO"
+    if args.verbosity > 1:
+        log_level = "DEBUG"
+    logging.basicConfig(
+        level=log_level, format="%(asctime)s %(name)s %(levelname)s %(message)s"
+    )
 
 
 #######################################################
@@ -1026,9 +1044,55 @@ def run_mutations(args):
     output_ts.dump(args.output)
 
 
+def parse_sample_size(s: str) -> int:
+    """
+    Support sample sizes specified like 1e3, as well as integer literals
+    like 1_000.
+    """
+    float_val = float(s)
+    int_val = int(float_val)
+    if int_val != float_val:
+        raise ValueError(f"Bad sample size: {s}; must be an integer")
+    return int_val
+
+
+def parse_sample_spec(sample_spec: List[str]) -> Dict[str, int]:
+    """
+    Parse a list of <population_name>:<sample_size> values into a dictionary.
+    """
+    samples = {}
+    for pop_spec in sample_spec:
+        # We only accept ID:num_samples values
+        tokens = pop_spec.split(":")
+        if len(tokens) != 2 or any(len(tok) == 0 for tok in tokens):
+            raise ValueError(
+                "Sample specifications must be in the form <population_name:num_samples>"
+            )
+        name = tokens[0]
+        if name in samples:
+            raise ValueError(
+                f"Population '{name}' referred to more than once in sample "
+                "specification"
+            )
+        samples[name] = parse_sample_size(tokens[1])
+    return samples
+
+
 def run_ancestry(args):
+    setup_logging(args)
+    if args.demography is not None:
+        graph = demes.load(args.demography)
+        logger.debug(f"Loaded demes graph from {args.demography}")
+        demography = msprime.Demography.from_demes(graph)
+        samples = parse_sample_spec(args.samples)
+    else:
+        if len(args.samples) != 1:
+            raise ValueError("Samples must be a single integer")
+        demography = None
+        samples = parse_sample_size(args.samples[0])
     tree_sequence = msprime.sim_ancestry(
-        samples=int(args.samples),
+        samples=samples,
+        demography=demography,
         population_size=args.population_size,
         sequence_length=args.length,
         ploidy=args.ploidy,
@@ -1157,7 +1221,26 @@ def add_ancestry_subcommand(subparsers) -> None:
         help="Simulate an ancestral history and output as a tskit tree sequence.",
     )
     parser.add_argument(
-        "samples", type=positive_int, help="The number of individuals in the sample"
+        "-v",
+        "--verbosity",
+        action="count",
+        default=0,
+        help="Increase the verbosity. Use -v for INFO output and -vv for DEBUG",
+    )
+    parser.add_argument(
+        "samples",
+        nargs="+",
+        help=(
+            "The sample specification. If a demography is not specified using the "
+            "-d option, this must be a single integer denoting the number of "
+            "k-ploid individuals (see the --ploidy argument) to sample. "
+            "If a demography is specified, the samples must be provided as "
+            "<population identifier>:<num samples> pairs. Samples from multiple "
+            "populations can be specified; for example, if we have a demography "
+            "with two populations named A and B the sample specification 'A:5 B:6' will "
+            "sample 5 individuals from A and 6 from B. Samples are always taken at "
+            "the corresponding population's default sampling time."
+        ),
     )
     add_output_argument(parser)
     add_random_seed_argument(parser)
@@ -1176,13 +1259,6 @@ def add_ancestry_subcommand(subparsers) -> None:
         help="The recombination rate per base per generation",
     )
     parser.add_argument(
-        "--population-size",
-        "-N",
-        type=float,
-        default=1,
-        help="The number of individuals in the population",
-    )
-    parser.add_argument(
         "--ploidy",
         "-k",
         type=int,
@@ -1190,6 +1266,21 @@ def add_ancestry_subcommand(subparsers) -> None:
         help="The number of monoploid genomes per sample individual",
     )
 
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--population-size",
+        "-N",
+        type=float,
+        default=None,
+        help="The number of individuals in the population",
+    )
+    group.add_argument(
+        "--demography",
+        "-d",
+        type=str,
+        default=None,
+        help="The path to a Demes YAML file describing the demographic model.",
+    )
     parser.set_defaults(runner=run_ancestry)
 
 

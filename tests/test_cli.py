@@ -25,6 +25,7 @@ import os
 import random
 import sys
 import tempfile
+import textwrap
 import unittest
 from unittest import mock
 
@@ -1244,12 +1245,14 @@ class TestMspArgumentParser:
         parser = cli.get_msp_parser()
         args = parser.parse_args(["ancestry", "10"])
         assert args.output is sys.stdout
-        assert args.samples == 10
+        assert args.samples == ["10"]
         assert args.random_seed is None
-        assert args.population_size == 1.0
+        assert args.population_size is None
+        assert args.demography is None
         assert args.ploidy == 2
         assert args.recombination_rate == 0
         assert args.length == 1
+        assert args.verbosity == 0
 
     def test_ancestry_stdout(self):
         parser = cli.get_msp_parser()
@@ -1286,11 +1289,10 @@ class TestMspArgumentParser:
 
     def test_mutate_raises_with_invalid_model_name(self):
         parser = cli.get_msp_parser()
-        cmd = "mutations"
         with pytest.raises(SystemExit):
             capture_output(
                 parser.parse_args,
-                [cmd, "--model", "not-a-model", "out.trees", "out2.trees"],
+                ["mutations", "--model", "not-a-model", "out.trees", "out2.trees"],
             )
 
     def test_mutate_model_is_changeable(self):
@@ -1298,6 +1300,12 @@ class TestMspArgumentParser:
         for model_arg in ["--model", "-m"]:
             args = parser.parse_args(["mutations", "1", model_arg, "blosum62"])
             assert args.model == "blosum62"
+
+    def test_ancestry_raises_with_invalid_samples(self):
+        parser = cli.get_msp_parser()
+        args = parser.parse_args(["ancestry", "1", "1"])
+        with pytest.raises(ValueError, match="must be a single integer"):
+            cli.run_ancestry(args)
 
 
 class TestMspSimulateOutput:
@@ -1388,6 +1396,109 @@ class TestMspAncestryOutput:
         assert tree_sequence.get_sample_size() == 200
         assert tree_sequence.get_sequence_length() == 100
         assert tree_sequence.get_num_mutations() == 0
+
+    def test_run_yaml(self, tmp_path):
+
+        yaml = """\
+        time_units: generations
+        demes:
+          - name: X
+            epochs:
+              - end_time: 1000
+                start_size: 2000
+          - name: A
+            ancestors:
+              - X
+            epochs:
+              - start_size: 2000
+          - name: B
+            ancestors:
+              - X
+            epochs:
+              - start_size: 2000
+        """
+        tree_sequence_file = str(tmp_path / "out.ts")
+        yaml_file = str(tmp_path / "model.yaml")
+        with open(yaml_file, "w") as f:
+            f.write(textwrap.dedent(yaml))
+        stdout, stderr = capture_output(
+            cli.msp_main,
+            [
+                "ancestry",
+                "A:1",
+                "B:2",
+                "-d",
+                yaml_file,
+                "-o",
+                tree_sequence_file,
+                "--ploidy",
+                "1",
+            ],
+        )
+        assert len(stderr) == 0
+        assert len(stdout) == 0
+
+        ts = tskit.load(tree_sequence_file)
+        assert ts.sample_size == 3
+        assert ts.num_populations == 3
+        assert ts.population(0).metadata["name"] == "X"
+        assert ts.population(1).metadata["name"] == "A"
+        assert ts.population(2).metadata["name"] == "B"
+        nodes = ts.tables.nodes
+        assert nodes[0].population == 1
+        assert nodes[1].population == 2
+        assert nodes[2].population == 2
+        # Coalescence must have happened in X
+        assert nodes[-1].population == 0
+
+
+class TestSampleParsing:
+    @pytest.mark.parametrize(
+        ["param", "result"], [("1", 1), ("1000", 1000), ("1_000", 1000), ("1e3", 1000)]
+    )
+    def test_parse_sample_size(self, param, result):
+        value = cli.parse_sample_size(param)
+        assert value == result
+
+    @pytest.mark.parametrize("param", ["0.1", "1.1", "1e-6"])
+    def test_parse_sample_size_error(self, param):
+        with pytest.raises(ValueError, match="Bad sample size"):
+            cli.parse_sample_size(param)
+
+    @pytest.mark.parametrize(
+        ["param", "result"],
+        [
+            (["A:1"], {"A": 1}),
+            (["A:2", "B:1"], {"A": 2, "B": 1}),
+            (["A:2_000", "B:1e6"], {"A": 2000, "B": 1_000_000}),
+        ],
+    )
+    def test_parse_sample_spec(self, param, result):
+        value = cli.parse_sample_spec(param)
+        assert value == result
+
+    def test_parse_sample_spec_repeated_keys(self):
+        with pytest.raises(ValueError, match="'A' referred to more than once"):
+            cli.parse_sample_spec(["A:1", "A:1"])
+
+    @pytest.mark.parametrize("param", ["", ":::", "A_2", ":" "A:", ":1"])
+    def test_parse_sample_spec_malformed_token(self, param):
+        with pytest.raises(ValueError, match="must be in the form"):
+            cli.parse_sample_spec([param])
+
+
+@pytest.mark.parametrize(
+    ["verbosity", "log_level"],
+    [("", "WARN"), ("-v", "INFO"), ("-vv", "DEBUG"), ("-vvv", "DEBUG")],
+)
+def test_setup_logging(verbosity, log_level):
+    parser = cli.get_msp_parser()
+    args = parser.parse_args(["ancestry", "1", verbosity])
+    with mock.patch("logging.basicConfig") as mocked:
+        cli.setup_logging(args)
+    mocked.assert_called_once()
+    kwargs = mocked.call_args[1]
+    assert kwargs["level"] == log_level
 
 
 @pytest.fixture

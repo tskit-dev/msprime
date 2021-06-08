@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2] - 2021-06-XX
+
+**New features**:
+
+- Support for Demes input and logging in the msp simulate CLI
+  ({pr}`1716`, {user}`jeromekelleher`).
+
 ## [1.0.1] - 2021-05-10
 
 Minor feature release with experimental Demes support.
