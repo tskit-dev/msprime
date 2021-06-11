@@ -1872,7 +1872,7 @@ class SweepGenicSelection(ParametricAncestryModel):
     `(Kern and Schrider, 2016)
     <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5167068/>`_, with
     the important difference that :math:`s` in msprime is half of
-    of that in discoal (i.e. for equivalent results multiply use :math:`2s`).
+    of that in discoal (i.e. for equivalent results  use :math:`2s`).
 
     See :ref:`sec_ancestry_models_selective_sweeps` for examples and
     details on how to specify different types of sweeps.
