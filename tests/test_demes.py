@@ -25,15 +25,16 @@ import demes
 import hypothesis as hyp
 import numpy as np
 import pytest
+from demes.hypothesis_strategies import graphs
 
 import msprime
-from .demes_delete_me import graphs
 
 
 def validate_demes_demography(graph, demography):
     """
     Checks that the specified Demes graph and msprime are consistent.
     """
+    graph = graph.in_generations()
     assert len(graph.demes) == len(demography.populations)
     assert {deme.name for deme in graph.demes} == set(demography.keys())
     for deme in graph.demes:
@@ -98,7 +99,7 @@ class TestDemes:
     @hyp.settings(
         deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
     )
-    @hyp.given(graphs())
+    @hyp.given(graphs(size_functions=["constant", "exponential"]))
     def test_random_graph(self, graph):
         demography = msprime.Demography.from_demes(graph)
         validate_demes_demography(graph, demography)

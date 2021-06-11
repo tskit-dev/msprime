@@ -1,6 +1,6 @@
 docutils==0.15  # issue with 0.17, https://github.com/tskit-dev/msprime/issues/1625
 daiquiri==2.1.1
-demes==0.1.1
+demes==0.1.2
 setuptools-scm==4.1.2
 sphinx==3.3.1
 sphinx-argparse==0.2.5
