@@ -167,6 +167,14 @@ This section provides the detailed listing of the arguments to
 the [documentation for ms](<http://thirteen-01.stat.iastate.edu/snoweye/phyclust/document/msdoc.pdf>)
 for details on how these values should be interpreted.
 
+```{warning}
+Due to quirks in Python's argparse module, negative growth rates
+written in exponential form (e.g. `-eG 1.0 -1e-5`) are not recognised as an
+option argument. To work around this, specify the argument using quotes
+and a leading space, e.g. `-eG 1.0 ' -1e-5'`, or avoid scientific notation,
+e.g. `-eG 1.0 -0.00001`.
+```
+
 ```{eval-rst}
 .. argparse::
     :module: msprime.cli

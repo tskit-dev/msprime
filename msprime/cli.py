@@ -67,7 +67,12 @@ mscompat_description = (
     "It simulates the coalescent with recombination for a variety of "
     "demographic models and outputs the results in a text-based format. "
     "It supports a subset of the functionality available in ms and aims "
-    "for full compatibility."
+    "for full compatibility. "
+    "WARNING: due to quirks in Python's argparse module, negative growth rates "
+    "written in exponential form (e.g. `-eG 1.0 -1e-5`) are not recognised as an "
+    "option argument. To work around this, specify the argument using quotes "
+    "and a leading space, e.g. `-eG 1.0 ' -1e-5'`, or avoid scientific notation, "
+    "e.g. `-eG 1.0 -0.00001`."
 )
 mscompat_recombination_help = (
     "Recombination at rate rho=4*N0*r where r is the rate of recombination "
@@ -842,7 +847,10 @@ def get_mspms_parser(error_handler=None):
         "-G",
         metavar="alpha",
         type=float,
-        help="Set the growth rate to alpha for all populations.",
+        help=(
+            "Set the growth rate to alpha for all populations. "
+            "See warning above about negative growth rates."
+        ),
     )
     group.add_argument(
         "--population-growth-rate",
@@ -852,7 +860,10 @@ def get_mspms_parser(error_handler=None):
         nargs=2,
         metavar=("population_id", "alpha"),
         type=float,
-        help="Set the growth rate to alpha for a specific population.",
+        help=(
+            "Set the growth rate to alpha for a specific population. "
+            "See warning above about negative growth rates."
+        ),
     )
     group.add_argument(
         "--population-size",
@@ -873,7 +884,10 @@ def get_mspms_parser(error_handler=None):
         type=float,
         default=[],
         metavar=("t", "alpha"),
-        help="Set the growth rate for all populations to alpha at time t",
+        help=(
+            "Set the growth rate for all populations to alpha at time t. "
+            "See warning above about negative growth rates."
+        ),
     )
     group.add_argument(
         "--population-growth-rate-change",
@@ -883,7 +897,10 @@ def get_mspms_parser(error_handler=None):
         type=float,
         default=[],
         metavar=("t", "population_id", "alpha"),
-        help=("Set the growth rate for a specific population to " "alpha at time t"),
+        help=(
+            "Set the growth rate for a specific population to alpha at time t. "
+            "See warning above about negative growth rates."
+        ),
     )
     group.add_argument(
         "--size-change",
