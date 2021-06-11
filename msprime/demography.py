@@ -30,6 +30,7 @@ import itertools
 import logging
 import math
 import numbers
+import operator
 import re
 import sys
 import textwrap
@@ -38,8 +39,11 @@ from typing import Any
 from typing import ClassVar
 from typing import Dict
 from typing import List
+from typing import MutableMapping
+from typing import Tuple
 from typing import Union
 
+import demes
 import numpy as np
 import tskit
 
@@ -1826,7 +1830,23 @@ class Demography(collections.abc.Mapping):
             )
 
     @staticmethod
-    def from_demes(graph):
+    def from_demes(graph: demes.Graph) -> Demography:
+        """
+        Creates a :class:`.Demography` object from the specified
+        :ref:`demes graph <demes:sec_introduction>`.
+
+        .. code::
+
+            import demes
+
+            graph = demes.load("model.yaml")
+            demography = msprime.Demography.from_demes(graph)
+
+        :param demes.Graph graph: A demes graph.
+        :return: A :class:`.Demography` instance corresponding to the demes model.
+        :rtype: .Demography
+        """
+
         def get_growth_rate(epoch):
             ret = 0
             if epoch.size_function not in ["constant", "exponential"]:
@@ -2431,6 +2451,275 @@ class Demography(collections.abc.Mapping):
         demography.add_population_split(5920, derived=["AMH"], ancestral="ANC")
         return demography
 
+    def to_demes(self) -> demes.Graph:
+        """
+        Creates a :class:`demes.Graph` object from the demography.
+
+        .. note::
+
+            Demographic models using bottlenecks added via the
+            :meth:`add_simple_bottleneck` or :meth:`add_instantaneous_bottleneck`
+            methods are not able to be converted into a demes graph.
+
+        .. note::
+
+            Demes is stricter than msprime with regard to how a demographic
+            model is structured, so models that can be simulated with msprime
+            are not guaranteed to be convertable to a demes graph. In particular,
+            msprime's legacy API permits setting migrations or other attributes
+            for a population even after that population has been merged into an
+            ancestor. Such models are rarely constructed deliberately, so an
+            error during conversion of a legacy model could indicate model
+            misspecification.
+
+        The returned graph can be saved as a
+        `Demes-format <https://popsim-consortium.github.io/demes-spec-docs/main/>`_
+        YAML file using the :ref:`demes <demes:sec_introduction>` API.
+
+        .. code::
+
+            import demes
+
+            demography = msprime.Demography.island_model([1000] * 3, 1e-5)
+            graph = demography.to_demes()
+            demes.dump(graph, "island_model.yaml")
+
+        Or plotted using the `demesdraw <https://github.com/grahamgower/demesdraw>`_
+        visualisation package.
+
+        .. code::
+
+            import demesdraw
+
+            demography = msprime.Demography.island_model([1000] * 3, 1e-5)
+            graph = demography.to_demes()
+            ax = demesdraw.tubes(graph)
+            ax.figure.savefig("island_model.pdf")
+
+        :return: A :class:`demes.Graph` object corresponding to the demography.
+        :rtype: demes.Graph
+        """
+        dbg = self.debug()
+        resolved = dbg.demography
+        b = demes.Builder()
+        for pop in resolved.populations:
+            start_time = max(
+                epoch.end_time
+                for epoch in dbg.epochs
+                if epoch.populations[pop.id].state == PopulationStateMachine.ACTIVE
+            )
+            end_time = min(
+                epoch.start_time
+                for epoch in dbg.epochs
+                if epoch.populations[pop.id].state == PopulationStateMachine.ACTIVE
+            )
+            assert start_time > end_time
+            initial_epoch = dict(
+                end_size=pop.initial_size,
+                growth_rate=pop.growth_rate,
+                end_time=end_time,
+            )
+            b.add_deme(
+                pop.name,
+                description=pop.description if pop.description else None,
+                start_time=start_time,
+                epochs=[initial_epoch],
+            )
+
+        deme_map = {pop.name: b.data["demes"][pop.id] for pop in resolved.populations}
+
+        # Copied from demes/ms.py
+        def epoch_resolve(deme, time):
+            """
+            Return the oldest epoch if it has end_time == time. If not, create a
+            new oldest epoch with end_time=time. Also resolve sizes by dealing
+            with the growth_rate attribute (if required).
+            """
+            epoch = deme["epochs"][0]
+            start_time = deme["start_time"]
+            end_time = epoch["end_time"]
+            if not (start_time > time >= end_time):
+                raise ValueError(
+                    f"time {time} outside {deme['name']}'s existence interval "
+                    f"(start_time={start_time}, end_time={end_time}]"
+                )
+
+            if time > end_time:
+                new_epoch = copy.deepcopy(epoch)
+                # find size at given time
+                growth_rate = epoch.pop("growth_rate", 0)
+                dt = time - epoch["end_time"]
+                size_at_t = epoch["end_size"] * math.exp(-growth_rate * dt)
+                epoch["start_size"] = size_at_t
+                new_epoch["end_size"] = size_at_t
+                new_epoch["end_time"] = time
+                deme["epochs"].insert(0, new_epoch)
+                epoch = new_epoch
+
+            return epoch
+
+        for time, events_group in itertools.groupby(
+            resolved.events, operator.attrgetter("time")
+        ):
+            events_group = list(events_group)
+            lineage_movements = []
+            for event in events_group:
+                if isinstance(event, LineageMovementEvent):
+                    # Collect these so that we can later group them by source.
+                    lineage_movements.extend(event._as_lineage_movements())
+                elif isinstance(event, PopulationParametersChange):
+                    if event.population == -1:
+                        pids = range(len(resolved.populations))
+                    else:
+                        pids = [event.population]
+                    for pid in pids:
+                        deme = deme_map[resolved[pid].name]
+                        if (
+                            len(deme["epochs"]) == 1
+                            and deme["epochs"][0]["end_size"] == 0
+                            and event.initial_size is not None
+                            and event.initial_size > 0
+                        ):
+                            # The population size was 0 at time 0, but is now
+                            # positive, indicating population extinction at the
+                            # current time.
+                            deme["epochs"][0]["end_time"] = time
+                        epoch = epoch_resolve(deme, time)
+                        if event.growth_rate is not None:
+                            epoch["growth_rate"] = event.growth_rate
+                        if event.initial_size is not None:
+                            epoch["end_size"] = event.initial_size
+                elif isinstance(event, StateChangeEvent):
+                    raise ValueError(f"Cannot convert {event} to demes model.")
+
+            # Lineage movement events correspond to either the source deme's
+            # creation, or otherwise just pulses into the source.
+            # We distinguish these cases based on the total ancestry
+            # proportion for the source deme at this time.
+            lm_by_source = collections.defaultdict(list)
+            for lm in lineage_movements:
+                source = resolved[lm.source].name
+                lm_by_source[source].append(lm)
+            pulses = set()
+            for source, lm_group in lm_by_source.items():
+                ancestors = [resolved[lm.dest].name for lm in lm_group]
+                proportions = _sequential_to_proportions(
+                    [lm.proportion for lm in lm_group]
+                )
+                if math.isclose(sum(proportions), 1):
+                    # Source deme is created from the ancestors.
+                    deme = deme_map[source]
+                    deme.update(
+                        ancestors=ancestors, proportions=proportions, start_time=time
+                    )
+                    for ancestor in ancestors:
+                        if not resolved[ancestor].initially_active:
+                            anc_deme = deme_map[ancestor]
+                            anc_deme["epochs"][-1]["end_time"] = time
+                else:
+                    # Source deme receives pulses from the ancestors.
+                    pulses.update(
+                        (lm.source, lm.dest, lm.proportion) for lm in lm_group
+                    )
+
+            # The order of pulses matters when multiple pulses occur at the
+            # same time, so we must be careful to add the pulses in the same
+            # order as the lineage movements were specified. The pulses list
+            # is later reversed, to correspond with the forwards-time ordering.
+            for lm in lineage_movements:
+                if (lm.source, lm.dest, lm.proportion) in pulses:
+                    b.add_pulse(
+                        source=resolved[lm.dest].name,
+                        dest=resolved[lm.source].name,
+                        proportion=lm.proportion,
+                        time=time,
+                    )
+
+        # Resolve/remove growth_rate in oldest epochs.
+        for deme in b.data["demes"]:
+            start_time = deme.get("start_time", math.inf)
+            epoch = deme["epochs"][0]
+            growth_rate = epoch.pop("growth_rate", 0)
+            if growth_rate != 0:
+                if math.isinf(start_time):
+                    raise ValueError(
+                        f"{deme['name']}: growth rate for infinite-length "
+                        "epoch is invalid"
+                    )
+                dt = start_time - epoch["end_time"]
+                epoch["start_size"] = epoch["end_size"] * math.exp(-dt * growth_rate)
+            else:
+                epoch["start_size"] = epoch["end_size"]
+
+        # Copied from demes/ms.py
+        def migrations_from_mm_list(
+            mm_list: List[Any], end_times: List[float], deme_names: List[str]
+        ) -> List[MutableMapping]:
+            """
+            Convert a list of migration matrices into a list of migration dicts.
+            """
+            assert len(mm_list) == len(end_times)
+            migrations: List[MutableMapping] = []
+            current: Dict[Tuple[int, int], MutableMapping] = dict()
+            start_time = math.inf
+            for migration_matrix, end_time in zip(mm_list, end_times):
+                n = len(migration_matrix)
+                assert n == len(deme_names)
+                for j in range(n):
+                    assert n == len(migration_matrix[j])
+                    for k in range(n):
+                        if j == k:
+                            continue
+                        rate = migration_matrix[j][k]
+                        migration_dict = current.get((j, k))
+                        if migration_dict is None:
+                            if rate != 0:
+                                migration_dict = dict(
+                                    source=deme_names[j],
+                                    dest=deme_names[k],
+                                    start_time=start_time,
+                                    end_time=end_time,
+                                    rate=rate,
+                                )
+                                current[(j, k)] = migration_dict
+                                migrations.append(migration_dict)
+                        else:
+                            if rate == 0:
+                                del current[(j, k)]
+                            elif migration_dict["rate"] == rate:
+                                # extend migration_dict
+                                migration_dict["end_time"] = end_time
+                            else:
+                                migration_dict = dict(
+                                    source=deme_names[j],
+                                    dest=deme_names[k],
+                                    start_time=start_time,
+                                    end_time=end_time,
+                                    rate=rate,
+                                )
+                                current[(j, k)] = migration_dict
+                                migrations.append(migration_dict)
+                start_time = end_time
+            return migrations
+
+        mm_list = [epoch.migration_matrix.T for epoch in reversed(dbg.epochs)]
+        mm_end_times = [epoch.start_time for epoch in reversed(dbg.epochs)]
+        migrations = migrations_from_mm_list(mm_list, mm_end_times, list(resolved))
+        b.data["migrations"] = migrations
+
+        # Reverse the order of pulses, so that older pulses come first.
+        # This also fixes the order of pulses that occur simultaneously,
+        # so that realised ancestry proportions match the msprime model.
+        if "pulses" in b.data:
+            b.data["pulses"].reverse()
+
+        # Sort demes by their start time (so that ancestors come before descendants).
+        b.data["demes"] = sorted(
+            b.data["demes"], key=operator.itemgetter("start_time"), reverse=True
+        )
+
+        return b.resolve()
+
 
 # This was lifted out of older code as-is. No point in updating it
 # to use dataclasses, since all we want to do is maintain compatability
@@ -2661,7 +2950,6 @@ class MigrationRateChange(ParameterChangeEvent):
     :param float rate: The new per-generation migration rate.
     :param int source: The ID of the source population.
     :param int dest: The ID of the destination population.
-    :param int source: The source population ID.
     """
 
     rate: float
@@ -3610,14 +3898,14 @@ class DemographyDebugger:
         all_steps.append(all_steps[-1] + 1)
 
         indicators = {e: np.zeros(self.num_populations, dtype=bool) for e in epochs}
-        for sample_time, demes in sampling_times.items():
+        for sample_time, pop_ids in sampling_times.items():
             P_out = self.lineage_probabilities(all_steps, sample_time=sample_time)
             for epoch, P in zip(epochs, P_out[1:]):
                 if epoch[1] <= sample_time:
                     # samples shouldn't affect the epoch previous to the sampling time
                     continue
-                for deme in demes:
-                    indicators[epoch][P[deme] > 0] = True
+                for pop_id in pop_ids:
+                    indicators[epoch][P[pop_id] > 0] = True
 
         # join epochs if adjacent epochs have same set of possible live populations
         combined_indicators = {}

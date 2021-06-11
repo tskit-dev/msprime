@@ -6,6 +6,8 @@
 
 - Support for Demes input and logging in the msp simulate CLI
   ({pr}`1716`, {user}`jeromekelleher`).
+- Add ``Demography.to_demes`` method for creating a Demes demographic model
+  from an msprime demography ({pr}`1724`, {user}`grahamgower`).
 
 ## [1.0.1] - 2021-05-10
 
