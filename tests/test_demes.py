@@ -469,6 +469,83 @@ class TestFromYamlExamples:
         """
         self.from_yaml(yaml)
 
+    def test_symmetric_migration(self):
+        yaml = """\
+        time_units: generations
+        defaults:
+          epoch:
+            start_size: 2000
+        demes:
+          - name: A
+          - name: B
+          - name: C
+        migrations:
+          - {demes: [A, B, C], rate: 0.1}
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 3
+        assert len(d.events) == 0
+        for j in range(2):
+            for k in range(2):
+                rate = d.migration_matrix[j, k]
+                if j != k:
+                    assert rate == 0.1
+                else:
+                    assert rate == 0
+
+    def check_asymmetric_matrix(self, migration_matrix, expected_rate, j, k):
+        N = len(migration_matrix)
+        for jj in range(N):
+            for kk in range(N):
+                rate = migration_matrix[jj][kk]
+                if j == jj and k == kk:
+                    assert rate == expected_rate
+                else:
+                    assert rate == 0
+
+    def test_asymmetric_migration(self):
+        yaml = """\
+        time_units: generations
+        defaults:
+          epoch:
+            start_size: 2000
+        demes:
+          - name: A
+          - name: B
+        migrations:
+          - {source: A, dest: B, rate: 0.1}
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 2
+        assert len(d.events) == 0
+        self.check_asymmetric_matrix(d.migration_matrix, 0.1, d["B"].id, d["A"].id)
+
+    def test_asymmetric_migration_multiple(self):
+        yaml = """\
+        time_units: generations
+        defaults:
+          epoch:
+            start_size: 2000
+        demes:
+          - name: A
+          - name: B
+        migrations:
+          - {source: A, dest: B, rate: 0.1, start_time: 200, end_time: 100}
+          - {source: A, dest: B, rate: 0.2, start_time: 100, end_time: 50}
+          - {source: A, dest: B, rate: 0.3, start_time: 50, end_time: 0}
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 2
+        dbg = d.debug()
+        assert dbg.num_epochs == 4
+
+        j = d["B"].id
+        k = d["A"].id
+        self.check_asymmetric_matrix(dbg.epochs[0].migration_matrix, 0.3, j, k)
+        self.check_asymmetric_matrix(dbg.epochs[1].migration_matrix, 0.2, j, k)
+        self.check_asymmetric_matrix(dbg.epochs[2].migration_matrix, 0.1, j, k)
+        self.check_asymmetric_matrix(dbg.epochs[3].migration_matrix, 0, j, k)
+
 
 class TestToDemes:
     def test_ooa_example(self):

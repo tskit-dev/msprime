@@ -1936,6 +1936,19 @@ class Demography(collections.abc.Mapping):
             )
         assert len(events) == 0
 
+        # Turn migrations off at the start_time. We schedule all start_time
+        # events first, and then all end_time events. This ensures that events
+        # for migrations with an end_time that coincides with the start_time of
+        # another migration will be scheduled later (backwards in time),
+        # and thus override the rate=0 setting.
+        for migration in graph.migrations:
+            if not math.isinf(migration.start_time):
+                demography.add_migration_rate_change(
+                    time=migration.start_time,
+                    source=migration.dest,
+                    dest=migration.source,
+                    rate=0,
+                )
         for migration in graph.migrations:
             if migration.end_time == 0:
                 demography.set_migration_rate(
@@ -1947,13 +1960,6 @@ class Demography(collections.abc.Mapping):
                     source=migration.dest,
                     dest=migration.source,
                     rate=migration.rate,
-                )
-            if not math.isinf(migration.start_time):
-                demography.add_migration_rate_change(
-                    time=migration.start_time,
-                    source=migration.dest,
-                    dest=migration.source,
-                    rate=0,
                 )
         demography.sort_events()
         return demography
