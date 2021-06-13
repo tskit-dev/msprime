@@ -320,6 +320,50 @@ class TestFromYamlExamples:
         assert "X" in active_pops[(1000, np.inf)]
         assert "A" not in active_pops[(1000, np.inf)]
 
+    @pytest.mark.filterwarnings(
+        # demes warns about multiple pulses with the same time
+        "ignore:Multiple pulses:UserWarning"
+    )
+    def test_pulses_ordering(self):
+        yaml = """\
+        time_units: generations
+        defaults:
+          epoch:
+            start_size: 2000
+        demes:
+          - name: A
+          - name: B
+          - name: C
+          - name: D
+          - name: E
+        pulses:
+          - {source: A, dest: B, time: 100, proportion: 0.1}
+          - {source: B, dest: C, time: 100, proportion: 0.2}
+          - {source: C, dest: D, time: 100, proportion: 0.3}
+          - {source: A, dest: E, time: 200, proportion: 0.4}
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 5
+        assert len(d.events) == 4
+        for event in d.events:
+            assert isinstance(event, msprime.demography.MassMigration)
+        assert d.events[0].time == 100
+        assert d.events[0].source == "D"
+        assert d.events[0].dest == "C"
+        assert d.events[0].proportion == 0.3
+        assert d.events[1].time == 100
+        assert d.events[1].source == "C"
+        assert d.events[1].dest == "B"
+        assert d.events[1].proportion == 0.2
+        assert d.events[2].time == 100
+        assert d.events[2].source == "B"
+        assert d.events[2].dest == "A"
+        assert d.events[2].proportion == 0.1
+        assert d.events[3].time == 200
+        assert d.events[3].source == "E"
+        assert d.events[3].dest == "A"
+        assert d.events[3].proportion == 0.4
+
     def test_merger(self):
         yaml = """\
         time_units: generations

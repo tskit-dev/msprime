@@ -1911,7 +1911,9 @@ class Demography(collections.abc.Mapping):
                 ancestral=branch.parent,
                 derived=[branch.child],
             )
-        for pulse in events.pop("pulses"):
+        # Add pulses in reverse order, so that pulses with the same time
+        # correspond to the correct backwards-time mass migration ordering.
+        for pulse in reversed(events.pop("pulses")):
             demography.add_mass_migration(
                 time=pulse.time,
                 source=pulse.dest,
