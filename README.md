@@ -1,4 +1,4 @@
-# msprime  <img align="right" width="145" height="90" src="https://github.com/tskit-dev/msprime/msprime_logo.svg">
+# msprime  <img align="right" width="145" height="90" src="https://raw.githubusercontent.com/tskit-dev/msprime/main/msprime_logo.svg">
 
  [![CircleCI](https://circleci.com/gh/tskit-dev/msprime.svg?style=svg)](https://circleci.com/gh/tskit-dev/msprime) [![codecov](https://codecov.io/gh/tskit-dev/msprime/branch/main/graph/badge.svg)](https://codecov.io/gh/tskit-dev/msprime) [![PyPI Downloads](https://pepy.tech/badge/msprime)](https://pepy.tech/project/msprime) [![Conda Downloads](https://anaconda.org/conda-forge/msprime/badges/downloads.svg)](https://anaconda.org/conda-forge/msprime) [![Docs Build](https://github.com/tskit-dev/msprime/actions/workflows/docs.yml/badge.svg)](https://github.com/tskit-dev/msprime/actions/workflows/docs.yml) [![Binary wheels](https://github.com/tskit-dev/msprime/actions/workflows/wheels.yml/badge.svg)](https://github.com/tskit-dev/msprime/actions/workflows/wheels.yml) [![Tests](https://github.com/tskit-dev/msprime/actions/workflows/tests.yml/badge.svg)](https://github.com/tskit-dev/msprime/actions/workflows/tests.yml)
 
