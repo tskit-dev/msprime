@@ -172,10 +172,28 @@ great way to deepen your understanding of the coalescent in general.
 Mostly it doesn't matter, and it's just a point of clarification
 for reading this documentation and understanding why the models
 we define are usually expressed backwards in time. However,
-it is essential to be remember that ``source`` and ``dest``
-populations are from the perspective of the coalescent
-when describing {ref}`migration<sec_demography_migration>`,
-which we try to flag in this documentation where it's important.
+it is essential to be remember that {ref}`migration<sec_demography_migration>`
+is described from the perspective of the coalescent, so that when describing
+migrations in msprime, the following reversed terminology holds:
+
+(sec_demography_direction_of_time_dest)=
+
+destination (or ``dest``)
+: The population containing the immediate ancestors of the migrant(s). Forwards in time,
+  this is where migrants come from. In reverse time, a lineage that is traced
+  backwards in time (i.e. from the current day into the past) will appear to jump
+  *into* this ancestral destination at the precise time of the migration event.
+
+(sec_demography_direction_of_time_source)=
+
+``source``
+: The population containing the immediate descendants of the migrants. Forwards in time,
+  this is where migrants end up. In reverse time, a lineage traced backwards
+  from the current day will appear to jump *from* this population into the ancestral
+  ("destination") population.
+
+We try to flag up the meaning of these definitions in the documentation,
+where it's important.
 
 (sec_demography_definitions)=
 
