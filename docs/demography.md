@@ -847,12 +847,12 @@ ts = msprime.sim_ancestry(5, demography=demography, random_seed=1234)
 SVG(ts.draw_svg(y_axis=True, size=(300, 200)))
 ```
 
-We can see that there is a strong burst of coalscence 25 generations ago.
+We can see that there is a strong burst of coalescence 25 generations ago.
 
 :::{important}
 Note that there is no possibility of recombination, migration or any other
 events occuring during the bottleneck: it is strictly *instantaneous*
-and can only result in coalscences within the trees.
+and can only result in coalescences within the trees.
 :::
 
 :::{seealso}
