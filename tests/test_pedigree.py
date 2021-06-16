@@ -308,7 +308,7 @@ class TestPedigreeSimulation:
 
     @pytest.mark.parametrize("n_children_prob", [[0.5, 0.5], [0, 0.5, 0.5]])
     def test_expected_n_children(self, n_children_prob):
-        n_reps = 100
+        n_reps = 1000
         n_founders = 2
         n_children = []
         for _ in range(n_reps):
