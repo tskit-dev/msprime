@@ -44,6 +44,11 @@ test_ancestry = executable('test_ancestry',
     link_with: [msprime_lib, test_lib], dependencies: [cunit_dep, kastore_dep, tskit_dep])
 test('ancestry', test_ancestry)
 
+test_pedigrees = executable('test_pedigrees',
+    sources: ['tests/test_pedigrees.c'], 
+    link_with: [msprime_lib, test_lib], dependencies: [cunit_dep, kastore_dep, tskit_dep])
+test('pedigrees', test_pedigrees)
+
 test_mutations = executable('test_mutations',
     sources: ['tests/test_mutations.c'], 
     link_with: [msprime_lib, test_lib], dependencies: [cunit_dep, kastore_dep, tskit_dep])
