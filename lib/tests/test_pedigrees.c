@@ -26,9 +26,9 @@ test_pedigree_single_locus_simulation(void)
     tsk_table_collection_t tables;
     int num_inds = 4;
     int ploidy = 2;
-    tsk_id_t parents[8] = { 2, 3, 2, 3, -1, -1, -1, -1 }; // size num_inds * ploidy
-    double time[4] = { 0, 0, 1, 1 };
-    tsk_flags_t is_sample[4] = { 1, 1, 0, 0 };
+    tsk_id_t parents[] = { -1, -1, -1, -1, 0, 0, 1, 1 }; // size num_inds * ploidy
+    double time[] = { 1, 1, 0, 0 };
+    tsk_flags_t is_sample[] = { 0, 0, 1, 1 };
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
 
@@ -36,7 +36,7 @@ test_pedigree_single_locus_simulation(void)
         &msp, &tables, rng, 1, ploidy, num_inds, parents, time, is_sample);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
@@ -44,6 +44,9 @@ test_pedigree_single_locus_simulation(void)
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_STATE);
     /* TODO put in some meaningful tests of the WF pedigree */
+
+    /* msp_print_state(&msp, stdout); */
+    /* tsk_table_collection_print_state(&tables, stdout); */
 
     /* Complete the simulation */
     ret = msp_set_simulation_model_dtwf(&msp);
@@ -72,9 +75,9 @@ test_pedigree_multi_locus_simulation(void)
     tsk_table_collection_t tables;
     int num_inds = 4;
     int ploidy = 2;
-    tsk_id_t parents[8] = { 2, 3, 2, 3, -1, -1, -1, -1 }; // size num_inds * ploidy
-    double time[4] = { 0, 0, 1, 1 };
-    tsk_flags_t is_sample[4] = { 1, 1, 0, 0 };
+    tsk_id_t parents[] = { -1, -1, -1, -1, 0, 0, 1, 1 }; // size num_inds * ploidy
+    double time[] = { 1, 1, 0, 0 };
+    tsk_flags_t is_sample[] = { 0, 0, 1, 1 };
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
 
@@ -84,6 +87,7 @@ test_pedigree_multi_locus_simulation(void)
     ret = msp_set_recombination_rate(&msp, 10);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
@@ -117,9 +121,9 @@ test_pedigree_errors(void)
     int ret;
     size_t num_inds = 4;
     size_t ploidy = 2;
-    tsk_id_t parents[8] = { 2, 3, 2, 3, -1, -1, -1, -1 }; // size num_inds * ploidy
-    double time[4] = { 0, 0, 1, 1 };
-    tsk_flags_t is_sample[4] = { 1, 1, 0, 0 };
+    tsk_id_t parents[] = { -1, -1, -1, -1, 0, 0, 1, 1 }; // size num_inds * ploidy
+    double time[] = { 1, 1, 0, 0 };
+    tsk_flags_t is_sample[] = { 0, 0, 1, 1 };
     msp_t msp;
     tsk_table_collection_t tables;
     gsl_rng *rng = safe_rng_alloc();
@@ -155,8 +159,8 @@ test_pedigree_errors(void)
     tsk_table_collection_free(&tables);
     msp_free(&msp);
 
-    time[0] = 1;
-    time[1] = 1;
+    time[2] = 1;
+    time[3] = 1;
     ret = build_pedigree_sim(
         &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -166,8 +170,8 @@ test_pedigree_errors(void)
     CU_ASSERT_EQUAL(ret, MSP_ERR_TIME_TRAVEL);
     tsk_table_collection_free(&tables);
     msp_free(&msp);
-    time[0] = 0;
-    time[1] = 0;
+    time[2] = 0;
+    time[3] = 0;
 
     parents[0] = -2;
     ret = build_pedigree_sim(

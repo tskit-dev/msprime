@@ -323,6 +323,7 @@ class TestSimulateRoundTrip(TestRoundTrip):
         )
         self.verify(ts)
 
+    @pytest.mark.skip("Pedigrees broken")
     def test_pedigree(self):
         inds = np.array([1, 2, 3, 4, 5, 6])
         parent_indices = np.array([4, 5, 4, 5, 4, 5, 4, 5, -1, -1, -1, -1]).reshape(

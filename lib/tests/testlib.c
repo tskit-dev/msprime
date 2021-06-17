@@ -78,9 +78,8 @@ build_pedigree_sim(msp_t *msp, tsk_table_collection_t *tables, gsl_rng *rng,
 
     /* Insert the pedigree individuals */
     for (j = 0; j < num_individuals; j++) {
-        ret = tsk_individual_table_add_row(&tables->individuals, 0, NULL, 0, NULL, 0,
-            /* encode the parents in the metadata */
-            (void *) (parents + j * ploidy), ploidy * sizeof(tsk_id_t));
+        ret = tsk_individual_table_add_row(
+            &tables->individuals, 0, NULL, 0, parents + j * ploidy, ploidy, NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, j);
         ind_id = ret;
         for (k = 0; k < ploidy; k++) {

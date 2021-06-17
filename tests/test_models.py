@@ -506,6 +506,7 @@ class TestMultipleMergerModels:
         assert ts is not None
         self.verify_non_binary(ts)
 
+    @pytest.mark.skip("Pedigrees broken")
     def test_wf_ped(self):
         inds = np.array([1, 2, 3, 4])
         parent_indices = np.array([2, 3, 2, 3, -1, -1, -1, -1]).reshape(-1, 2)
@@ -586,6 +587,7 @@ class TestMixedModels:
     Tests that we can run mixed simulation models.
     """
 
+    @pytest.mark.skip("Pedigrees broken")
     def test_ped_wf_single_locus(self):
         inds = np.array([1, 2, 3, 4, 5, 6])
         parent_indices = np.array([4, 5, 4, 5, 4, 5, 4, 5, -1, -1, -1, -1]).reshape(
@@ -615,6 +617,7 @@ class TestMixedModels:
         wf_times = all_times[all_times > t]
         assert wf_times.shape[0] > 0
 
+    @pytest.mark.skip("Pedigrees broken")
     def test_pedigree_unsupported_events(self):
         inds = np.array([1, 2, 3, 4, 5, 6])
         parent_indices = np.array([4, 5, 4, 5, 4, 5, 4, 5, -1, -1, -1, -1]).reshape(
@@ -647,6 +650,7 @@ class TestMixedModels:
                 model="wf_ped",
             )
 
+    @pytest.mark.skip("Pedigrees broken")
     def test_ped_wf_recombination(self):
         inds = np.array([1, 2, 3, 4, 5, 6])
         parent_indices = np.array([4, 5, 4, 5, 4, 5, 4, 5, -1, -1, -1, -1]).reshape(

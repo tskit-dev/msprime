@@ -29,7 +29,6 @@ import inspect
 import json
 import logging
 import math
-import struct
 import sys
 import tempfile
 from typing import Any
@@ -219,10 +218,7 @@ def _build_initial_tables(*, sequence_length, samples, ploidy, demography, pedig
         for parents, time, is_sample in zip(
             pedigree.parents, pedigree.time, pedigree.is_sample
         ):
-            # We encode the parents in the metadata for now, but see
-            # https://github.com/tskit-dev/tskit/issues/852
-            encoded_parents = struct.pack("=ii", *parents)
-            ind_id = tables.individuals.add_row(0, metadata=encoded_parents)
+            ind_id = tables.individuals.add_row(0, parents=parents)
             node_flags = tskit.NODE_IS_SAMPLE if is_sample else 0
             for _ in range(ploidy):
                 tables.nodes.add_row(node_flags, time, population=0, individual=ind_id)
