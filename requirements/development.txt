@@ -8,8 +8,11 @@ demes>=0.1.2
 flake8
 hypothesis
 matplotlib>=3.4.0
+# More recent meson is too strict. See #1485.
+meson<=0.56
 mock
 mypy
+ninja
 numpy
 pre-commit
 pytest
