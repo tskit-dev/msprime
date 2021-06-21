@@ -5,6 +5,7 @@ import unittest
 
 import numpy as np
 import pytest
+import tskit
 
 import msprime
 from msprime import pedigrees
@@ -174,3 +175,151 @@ class TestPedigree(unittest.TestCase):
 
         with pytest.raises(ValueError):
             ped.get_times(individual=ped.individual)
+
+
+def simulate_pedigree(
+    num_founders, num_children_prob=None, num_generations=3, random_seed=42
+) -> tskit.IndividualTable:
+    """
+    Simulates pedigree.
+
+    num_founders: Number of founders for pedigree
+    num_children_prob: Array-like object of probabilities for number of children
+        produced by each pair of mates. Index 0 corresponds to probability of
+        0 children, index 1 corresponds to probability of 1 child, etc. Sum of
+        entries must be 1.
+    num_generations: Number of generations to attempt to simulate
+    random_seed: Random seed.
+
+    """
+    rng = np.random.RandomState(random_seed)
+    tb = tskit.IndividualTable()
+
+    if (
+        num_children_prob is None
+    ):  # Use this to avoid "Default arguments value is mutable" warning
+        # P(0 children) = 0, P(1 child) = 0, P(2 children) = 1
+        num_children_prob = [0, 0, 1]
+
+    # first generation
+    num_prev_gen = 0
+    curr_gen = range(num_founders)
+    for _ in curr_gen:
+        tb.add_row(parents=[-1, -1])
+
+    # next generations
+    for gen_idx in range(2, num_generations + 1):
+        num_curr_gen = len(curr_gen)
+        num_pairs = num_curr_gen // 2
+        if num_pairs == 0 and num_children_prob[0] != 1:
+            raise Exception(
+                f"Not enough people to make children in generation {gen_idx}"
+            )
+        parents = num_prev_gen + rng.choice(
+            a=num_curr_gen, size=(num_pairs, 2), replace=False
+        )
+        num_children_list = rng.choice(
+            a=len(num_children_prob), size=num_pairs, p=num_children_prob
+        )
+        num_prev_gen = len(tb)
+        for (parent1, parent2), num_children in zip(parents, num_children_list):
+            for _ in range(num_children):
+                tb.add_row(parents=[parent1, parent2])
+        curr_gen = range(len(tb) - sum(num_children_list), len(tb))
+
+    return tb
+
+
+class TestPedigreeSimulation:
+    """
+    Tests for simple pedigree simulator
+    """
+
+    def simple_sim(
+        self, num_founders=2, num_children_prob=None, num_generations=2, random_seed=42
+    ):
+        if num_children_prob is None:
+            num_children_prob = [0, 0, 1]
+        tb = simulate_pedigree(
+            num_founders=num_founders,
+            num_children_prob=num_children_prob,
+            num_generations=num_generations,
+            random_seed=random_seed,
+        )
+        return tb
+
+    def test_one_generation_no_children(self):
+        num_founders = 8
+        tb = self.simple_sim(num_founders=num_founders, num_generations=1)
+        assert len(tb) == num_founders
+
+        # check that all parents of founders are missing
+        assert all([np.array_equal(row.parents, [-1, -1]) for row in tb])
+
+    def test_one_trio(self):
+        tb = self.simple_sim(
+            num_founders=2, num_children_prob=[0, 1], num_generations=2
+        )
+        assert len(tb) == 3
+        assert np.array_equal(tb[2].parents, [1, 0])
+        assert all([np.array_equal(tb[idx].parents, [-1, -1]) for idx in range(2)])
+
+    def test_grandparents(self):
+        tb = self.simple_sim(
+            num_founders=4, num_children_prob=[0, 1], num_generations=3
+        )
+        assert len(tb) == 7
+        assert all([np.array_equal(tb[idx].parents, [-1, -1]) for idx in range(4)])
+        assert set(tb[4].parents).union(tb[5].parents) == set(range(4))
+        assert set(tb[6].parents) == {4, 5}
+
+    def test_insufficient_founders(self):
+        with pytest.raises(Exception):
+            self.simple_sim(num_founders=1, num_children_prob=[0, 1])
+        with pytest.raises(Exception):
+            self.simple_sim(num_founders=3, num_children_prob=[0, 1], num_generations=3)
+
+    @pytest.mark.parametrize("num_children", range(5))
+    def test_nonrandom_child_prob(self, num_children):
+        tb = self.simple_sim(
+            num_founders=2,
+            num_children_prob=[0] * num_children + [1],
+            num_generations=2,
+        )
+        assert len(tb) == 2 + num_children
+
+    @pytest.mark.parametrize("num_children_prob", [[0.5, 0.5], [0, 0.5, 0.5]])
+    def test_expected_num_children(self, num_children_prob):
+        n_reps = 1000
+        num_founders = 2
+        num_children = []
+        for rep in range(n_reps):
+            tb = self.simple_sim(
+                num_founders=num_founders,
+                num_children_prob=num_children_prob,
+                num_generations=2,
+                random_seed=rep,
+            )
+            num_children.append(len(tb) - num_founders)
+        expected_num_children = sum(
+            prob * n
+            for prob, n in zip(num_children_prob, range(len(num_children_prob)))
+        )
+        assert np.mean(num_children) == pytest.approx(expected_num_children, rel=0.1)
+
+    def test_bad_num_children_prob(self):
+        with pytest.raises(ValueError):
+            self.simple_sim(num_children_prob=[2])
+        with pytest.raises(ValueError):
+            self.simple_sim(num_children_prob=[1, 1])
+
+    def test_valid_pedigree(self):
+        tb = self.simple_sim(
+            num_founders=128,
+            num_generations=10,
+        )
+        tc = tskit.TableCollection(1)
+        tc.individuals.metadata_schema = tb.metadata_schema
+        for row in tb:
+            tc.individuals.append(row)
+        tc.tree_sequence()  # creating tree sequence should succeed
