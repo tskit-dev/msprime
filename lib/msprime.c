@@ -7110,20 +7110,12 @@ msp_set_simulation_model_wf_ped(msp_t *self)
         goto out;
     }
 
-    /* Extract the pedigree information from the tables. This is a hacky
-     * workaround, we can do this much better. */
-
-    /* Decode the parent arrays from the individual metadata. Note:
-     * this should really be done via a proper column in the
-     * individual table: https://github.com/tskit-dev/tskit/issues/852
-     */
     for (j = 0; j < num_individuals; j++) {
         ret = tsk_individual_table_get_row(
             &self->tables->individuals, (tsk_id_t) j, &ind);
         tsk_bug_assert(ret == 0);
-        ind_parents = (const tsk_id_t *) ind.metadata;
-        /* This is a temporary hack anyway */
-        tsk_bug_assert(ind.metadata_length == self->ploidy * sizeof(tsk_id_t));
+        ind_parents = ind.parents;
+        tsk_bug_assert(ind.parents_length == self->ploidy);
         for (k = 0; k < self->ploidy; k++) {
             if (ind_parents[k] < TSK_NULL
                 || ind_parents[k] >= (tsk_id_t) num_individuals) {

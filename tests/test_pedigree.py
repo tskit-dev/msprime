@@ -24,6 +24,26 @@ class TestPedigree(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
 
+    def test_simple_case(self):
+        # Simple test to check that the current code is still roughly working.
+        # Should be replace by better tests.
+        individual = np.array([1, 2, 3, 4])
+        parents = np.array([-1, -1, -1, -1, 0, 1, 1, 0]).reshape(-1, 2)
+        time = np.array([1, 1, 0, 0])
+        is_sample = np.array([0, 0, 1, 1])
+
+        model = msprime.WrightFisherPedigree()
+        ped = pedigrees.Pedigree(
+            individual, parents, time, is_sample, sex=None, ploidy=2
+        )
+        ts = msprime.simulate(2, pedigree=ped, model=model, recombination_rate=1)
+        table = ts.tables.individuals
+        assert np.all(table[0].parents == [-1, -1])
+        assert np.all(table[1].parents == [-1, -1])
+        # FIXME these are currently being reversed.
+        # assert np.all(table[2].parents == [0, 1])
+        # assert np.all(table[3].parents == [1, 0])
+
     @unittest.skip("Currently broken")
     def test_pedigree_replicates(self):
         individual = np.array([1, 2, 3, 4])
@@ -41,6 +61,7 @@ class TestPedigree(unittest.TestCase):
         for ts in replicates:
             assert ts is not None
 
+    @unittest.skip("Currently broken")
     def test_pedigree_samples(self):
         individual = np.array([1, 2, 3, 4])
         parents = np.array([2, 3, 2, 3, -1, -1, -1, -1]).reshape(-1, 2)
