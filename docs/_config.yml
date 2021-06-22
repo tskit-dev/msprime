@@ -50,7 +50,8 @@ sphinx:
         stdpopsim: ["https://stdpopsim.readthedocs.io/en/stable", null]
         # Note: pyslim is moving to tskit.dev soon
         pyslim: ["https://pyslim.readthedocs.io/en/stable", null]
-        numpy: ['https://numpy.org/doc/stable/', null]
+        numpy: ["https://numpy.org/doc/stable/", null]
+        demes: ["https://popsim-consortium.github.io/demes-docs/main/", null]
       nitpicky: true
 
       autodoc_member_order: bysource

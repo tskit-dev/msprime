@@ -19,6 +19,8 @@
 """
 Test cases for demes support.
 """
+import copy
+import math
 import textwrap
 
 import demes
@@ -56,7 +58,7 @@ def validate_demes_demography(graph, demography):
         #         assert pop.state == PopulationStateMachine.ACTIVE
 
 
-class TestDemes:
+class TestFromDemes:
     def test_ooa_example(self):
         b = demes.Builder(
             description="Gutenkunst et al. (2009) three-population model.",
@@ -105,7 +107,7 @@ class TestDemes:
         validate_demes_demography(graph, demography)
 
 
-class TestYamlExamples:
+class TestFromYamlExamples:
     def from_yaml(self, yaml):
         graph = demes.loads(textwrap.dedent(yaml))
         demography = msprime.Demography.from_demes(graph)
@@ -319,6 +321,50 @@ class TestYamlExamples:
         assert "X" in active_pops[(1000, np.inf)]
         assert "A" not in active_pops[(1000, np.inf)]
 
+    @pytest.mark.filterwarnings(
+        # demes warns about multiple pulses with the same time
+        "ignore:Multiple pulses:UserWarning"
+    )
+    def test_pulses_ordering(self):
+        yaml = """\
+        time_units: generations
+        defaults:
+          epoch:
+            start_size: 2000
+        demes:
+          - name: A
+          - name: B
+          - name: C
+          - name: D
+          - name: E
+        pulses:
+          - {source: A, dest: B, time: 100, proportion: 0.1}
+          - {source: B, dest: C, time: 100, proportion: 0.2}
+          - {source: C, dest: D, time: 100, proportion: 0.3}
+          - {source: A, dest: E, time: 200, proportion: 0.4}
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 5
+        assert len(d.events) == 4
+        for event in d.events:
+            assert isinstance(event, msprime.demography.MassMigration)
+        assert d.events[0].time == 100
+        assert d.events[0].source == "D"
+        assert d.events[0].dest == "C"
+        assert d.events[0].proportion == 0.3
+        assert d.events[1].time == 100
+        assert d.events[1].source == "C"
+        assert d.events[1].dest == "B"
+        assert d.events[1].proportion == 0.2
+        assert d.events[2].time == 100
+        assert d.events[2].source == "B"
+        assert d.events[2].dest == "A"
+        assert d.events[2].proportion == 0.1
+        assert d.events[3].time == 200
+        assert d.events[3].source == "E"
+        assert d.events[3].dest == "A"
+        assert d.events[3].proportion == 0.4
+
     def test_merger(self):
         yaml = """\
         time_units: generations
@@ -423,3 +469,524 @@ class TestYamlExamples:
                 end_time: 100
         """
         self.from_yaml(yaml)
+
+    def test_symmetric_migration(self):
+        yaml = """\
+        time_units: generations
+        defaults:
+          epoch:
+            start_size: 2000
+        demes:
+          - name: A
+          - name: B
+          - name: C
+        migrations:
+          - {demes: [A, B, C], rate: 0.1}
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 3
+        assert len(d.events) == 0
+        for j in range(2):
+            for k in range(2):
+                rate = d.migration_matrix[j, k]
+                if j != k:
+                    assert rate == 0.1
+                else:
+                    assert rate == 0
+
+    def check_asymmetric_matrix(self, migration_matrix, expected_rate, j, k):
+        N = len(migration_matrix)
+        for jj in range(N):
+            for kk in range(N):
+                rate = migration_matrix[jj][kk]
+                if j == jj and k == kk:
+                    assert rate == expected_rate
+                else:
+                    assert rate == 0
+
+    def test_asymmetric_migration(self):
+        yaml = """\
+        time_units: generations
+        defaults:
+          epoch:
+            start_size: 2000
+        demes:
+          - name: A
+          - name: B
+        migrations:
+          - {source: A, dest: B, rate: 0.1}
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 2
+        assert len(d.events) == 0
+        self.check_asymmetric_matrix(d.migration_matrix, 0.1, d["B"].id, d["A"].id)
+
+    def test_asymmetric_migration_multiple(self):
+        yaml = """\
+        time_units: generations
+        defaults:
+          epoch:
+            start_size: 2000
+        demes:
+          - name: A
+          - name: B
+        migrations:
+          - {source: A, dest: B, rate: 0.1, start_time: 200, end_time: 100}
+          - {source: A, dest: B, rate: 0.2, start_time: 100, end_time: 50}
+          - {source: A, dest: B, rate: 0.3, start_time: 50, end_time: 0}
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 2
+        dbg = d.debug()
+        assert dbg.num_epochs == 4
+
+        j = d["B"].id
+        k = d["A"].id
+        self.check_asymmetric_matrix(dbg.epochs[0].migration_matrix, 0.3, j, k)
+        self.check_asymmetric_matrix(dbg.epochs[1].migration_matrix, 0.2, j, k)
+        self.check_asymmetric_matrix(dbg.epochs[2].migration_matrix, 0.1, j, k)
+        self.check_asymmetric_matrix(dbg.epochs[3].migration_matrix, 0, j, k)
+
+
+class TestToDemes:
+    def test_ooa_example(self):
+        ooa1 = msprime.Demography._ooa_model()
+        graph = ooa1.to_demes()
+        assert len(graph.demes) == len(ooa1)
+        assert sorted(d.name for d in graph.demes) == sorted(ooa1)
+        assert graph["CEU"].ancestors == ["OOA"]
+        assert graph["CHB"].ancestors == ["OOA"]
+        assert graph["OOA"].ancestors == ["AMH"]
+        assert graph["YRI"].ancestors == ["AMH"]
+        assert graph["AMH"].ancestors == ["ANC"]
+        assert graph["ANC"].ancestors == []
+        assert len(graph.migrations) == 8
+        assert len(graph.pulses) == 0
+
+    def test_american_admixture_example(self):
+        aa1 = msprime.Demography._american_admixture_model()
+        graph = aa1.to_demes()
+        assert len(graph.demes) == len(aa1)
+        assert sorted(d.name for d in graph.demes) == sorted(aa1)
+        assert sorted(graph["ADMIX"].ancestors) == sorted(["EUR", "EAS", "AFR"])
+        assert graph["EUR"].ancestors == ["OOA"]
+        assert graph["EAS"].ancestors == ["OOA"]
+        assert graph["AFR"].ancestors == ["AMH"]
+        assert graph["OOA"].ancestors == ["AMH"]
+        assert graph["AMH"].ancestors == ["ANC"]
+        assert graph["ANC"].ancestors == []
+        assert len(graph.migrations) == 8
+        assert len(graph.pulses) == 0
+
+    @pytest.mark.parametrize("num_pops", [1, 2, 3])
+    def test_isolated(self, num_pops):
+        demog = msprime.Demography.isolated_model([1000] * num_pops)
+        graph = demog.to_demes()
+        assert len(graph.migrations) == 0
+        assert len(graph.pulses) == 0
+        assert len(graph.demes) == num_pops
+        for j in range(num_pops):
+            name = f"pop_{j}"
+            assert name in graph
+            assert len(graph[name].epochs) == 1
+            epoch = graph[name].epochs[0]
+            assert math.isinf(epoch.start_time)
+            assert epoch.end_time == 0
+            assert epoch.start_size == 1000
+            assert epoch.end_size == 1000
+
+    @pytest.mark.parametrize("num_derived", [1, 2, 3])
+    def test_split(self, num_derived):
+        demog = msprime.Demography.isolated_model([1000] * (num_derived + 1))
+        demog.add_population_split(
+            100,
+            derived=[f"pop_{j}" for j in range(1, num_derived + 1)],
+            ancestral="pop_0",
+        )
+        graph = demog.to_demes()
+        assert len(graph.migrations) == 0
+        assert len(graph.pulses) == 0
+        assert len(graph.demes) == num_derived + 1
+        assert graph["pop_0"].ancestors == []
+        assert graph["pop_0"].end_time == 100
+        for j in range(1, num_derived + 1):
+            name = f"pop_{j}"
+            assert graph[name].ancestors == ["pop_0"]
+            assert graph[name].start_time == 100
+            assert len(graph[name].epochs) == 1
+            epoch = graph[name].epochs[0]
+            assert epoch.end_time == 0
+            assert epoch.start_size == 1000
+            assert epoch.end_size == 1000
+
+    def test_split_via_mass_migration(self):
+        demog = msprime.Demography.isolated_model([1000] * 2)
+        demog.add_mass_migration(100, source="pop_1", dest="pop_0", proportion=1)
+        graph = demog.to_demes()
+        assert len(graph.migrations) == 0
+        assert len(graph.pulses) == 0
+        assert len(graph.demes) == 2
+        assert graph["pop_0"].ancestors == []
+        assert graph["pop_0"].end_time == 0
+        assert graph["pop_1"].ancestors == ["pop_0"]
+        assert graph["pop_1"].start_time == 100
+
+    @pytest.mark.parametrize("num_ancestral", [1, 2, 3])
+    def test_admixture(self, num_ancestral):
+        ancestral = [f"pop_{j}" for j in range(1, num_ancestral + 1)]
+        proportions = [1 / num_ancestral for _ in range(num_ancestral)]
+        demog = msprime.Demography.isolated_model([1000] * (num_ancestral + 1))
+        demog.add_admixture(
+            100,
+            derived="pop_0",
+            ancestral=ancestral,
+            proportions=proportions,
+        )
+        graph = demog.to_demes()
+        assert len(graph.migrations) == 0
+        assert len(graph.pulses) == 0
+        assert len(graph.demes) == num_ancestral + 1
+        assert tuple(
+            sorted(zip(graph["pop_0"].ancestors, graph["pop_0"].proportions))
+        ) == tuple(zip(ancestral, proportions))
+        assert graph["pop_0"].start_time == 100
+        assert graph["pop_0"].end_time == 0
+        for j in range(1, num_ancestral + 1):
+            name = f"pop_{j}"
+            assert graph[name].ancestors == []
+            assert graph[name].end_time == 0
+            assert len(graph[name].epochs) == 1
+            epoch = graph[name].epochs[0]
+            assert epoch.end_time == 0
+            assert epoch.start_size == 1000
+            assert epoch.end_size == 1000
+
+    def test_admixture_via_mass_migration(self):
+        demog = msprime.Demography.isolated_model([1000] * 4)
+        demog.add_mass_migration(100, source="pop_0", dest="pop_1", proportion=0.5)
+        demog.add_mass_migration(100, source="pop_0", dest="pop_2", proportion=0.5)
+        demog.add_mass_migration(100, source="pop_0", dest="pop_3", proportion=1)
+        graph = demog.to_demes()
+        assert len(graph.migrations) == 0
+        assert len(graph.pulses) == 0
+        assert len(graph.demes) == 4
+        assert sorted(graph["pop_0"].ancestors) == ["pop_1", "pop_2", "pop_3"]
+        assert tuple(
+            sorted(zip(graph["pop_0"].ancestors, graph["pop_0"].proportions))
+        ) == tuple(zip(["pop_1", "pop_2", "pop_3"], [0.5, 0.25, 0.25]))
+        assert graph["pop_0"].start_time == 100
+        assert graph["pop_0"].end_time == 0
+        for j in range(1, len(demog)):
+            name = f"pop_{j}"
+            assert graph[name].ancestors == []
+            assert graph[name].end_time == 0
+            assert len(graph[name].epochs) == 1
+            epoch = graph[name].epochs[0]
+            assert epoch.end_time == 0
+            assert epoch.start_size == 1000
+            assert epoch.end_size == 1000
+
+    @pytest.mark.parametrize(
+        "time_lo,time_hi", [(0, math.inf), (0, 20), (10, math.inf), (10, 20)]
+    )
+    def test_asymmetric_migration_via_rate_change(self, time_lo, time_hi):
+        demog = msprime.Demography.isolated_model([1000] * 2)
+        demog.add_migration_rate_change(time_lo, rate=0.1, source="pop_0", dest="pop_1")
+        if not math.isinf(time_hi):
+            demog.add_migration_rate_change(time_hi, rate=0)
+        graph = demog.to_demes()
+        assert len(graph.demes) == 2
+        assert len(graph.migrations) == 1
+        assert len(graph.pulses) == 0
+        migration = graph.migrations[0]
+        assert migration.source == "pop_1"
+        assert migration.dest == "pop_0"
+        assert migration.rate == 0.1
+        if math.isinf(time_hi):
+            assert math.isinf(migration.start_time)
+        else:
+            assert migration.start_time == time_hi
+        assert migration.end_time == time_lo
+
+    def test_asymmetric_migration_via_initial_matrix(self):
+        demog = msprime.Demography.isolated_model([1000] * 2)
+        demog.set_migration_rate(source="pop_0", dest="pop_1", rate=0.1)
+        graph = demog.to_demes()
+        assert len(graph.demes) == 2
+        assert len(graph.migrations) == 1
+        assert len(graph.pulses) == 0
+        migration = graph.migrations[0]
+        assert migration.source == "pop_1"
+        assert migration.dest == "pop_0"
+        assert migration.rate == 0.1
+        assert math.isinf(migration.start_time)
+        assert migration.end_time == 0
+
+    def test_asymmetric_migration_multiple(self):
+        demog = msprime.Demography.isolated_model([1000] * 2)
+        demog.add_migration_rate_change(10, rate=0.1, source="pop_0", dest="pop_1")
+        demog.add_migration_rate_change(15, rate=0.1, source="pop_0", dest="pop_1")
+        demog.add_migration_rate_change(20, rate=0.2, source="pop_0", dest="pop_1")
+        demog.add_migration_rate_change(25, rate=0.2, source="pop_0", dest="pop_1")
+        demog.add_migration_rate_change(30, rate=0, source="pop_0", dest="pop_1")
+        graph = demog.to_demes()
+        assert len(graph.demes) == 2
+        assert len(graph.migrations) == 2
+        assert len(graph.pulses) == 0
+        assert graph.migrations[0].source == "pop_1"
+        assert graph.migrations[0].dest == "pop_0"
+        assert graph.migrations[0].start_time == 30
+        assert graph.migrations[0].end_time == 20
+        assert graph.migrations[0].rate == 0.2
+        assert graph.migrations[1].source == "pop_1"
+        assert graph.migrations[1].dest == "pop_0"
+        assert graph.migrations[1].start_time == 20
+        assert graph.migrations[1].end_time == 10
+        assert graph.migrations[1].rate == 0.1
+
+    @pytest.mark.parametrize("num_pops", [2, 5, 10])
+    def test_symmetric_migration(self, num_pops):
+        demog = msprime.Demography.island_model([1000] * num_pops, 0.1)
+        graph = demog.to_demes()
+        assert len(graph.demes) == num_pops
+        assert len(graph.migrations) == num_pops * (num_pops - 1)
+        assert len(graph.pulses) == 0
+        for migration in graph.migrations:
+            assert math.isinf(migration.start_time)
+            assert migration.end_time == 0
+            assert migration.rate == 0.1
+
+    @pytest.mark.parametrize("num_pops", [2, 5, 10])
+    def test_symmetric_migration_time_limited(self, num_pops):
+        demog = msprime.Demography.isolated_model([1000] * num_pops)
+        demog.add_symmetric_migration_rate_change(
+            100, populations=list(demog), rate=0.1
+        )
+        demog.add_symmetric_migration_rate_change(200, populations=list(demog), rate=0)
+        graph = demog.to_demes()
+        assert len(graph.demes) == num_pops
+        assert len(graph.migrations) == num_pops * (num_pops - 1)
+        assert len(graph.pulses) == 0
+        for migration in graph.migrations:
+            assert migration.start_time == 200
+            assert migration.end_time == 100
+            assert migration.rate == 0.1
+
+    @pytest.mark.filterwarnings("ignore:Non-zero migration.*after merging:UserWarning")
+    def test_bad_migration1(self):
+        demog = msprime.Demography.isolated_model([1000] * 2)
+        demog.add_mass_migration(100, source="pop_0", dest="pop_1", proportion=1)
+        # Migration after pop_0 is merged.
+        demog.add_migration_rate_change(200, source="pop_1", dest="pop_0", rate=0.1)
+        with pytest.raises(ValueError, match="invalid migration"):
+            demog.to_demes()
+
+    @pytest.mark.filterwarnings("ignore:Non-zero migration.*after merging:UserWarning")
+    def test_bad_migration2(self):
+        demog = msprime.Demography.island_model([1000] * 2, 0.1)
+        demog.add_mass_migration(100, source="pop_0", dest="pop_1", proportion=1)
+        # Forgot to turn off migration after merging pop_0 into pop_1.
+        with pytest.raises(ValueError, match="invalid migration"):
+            demog.to_demes()
+
+    def test_pulse(self):
+        demog = msprime.Demography.isolated_model([1000] * 2)
+        demog.add_mass_migration(100, source="pop_0", dest="pop_1", proportion=0.1)
+        graph = demog.to_demes()
+        assert len(graph.demes) == 2
+        assert len(graph.migrations) == 0
+        assert len(graph.pulses) == 1
+        pulse = graph.pulses[0]
+        assert pulse.time == 100
+        assert pulse.source == "pop_1"
+        assert pulse.dest == "pop_0"
+        assert pulse.proportion == 0.1
+
+    @pytest.mark.filterwarnings(
+        # demes warns about multiple pulses with the same time
+        "ignore:Multiple pulses:UserWarning"
+    )
+    def test_pulse_ordering(self):
+        demog = msprime.Demography.isolated_model([1000] * 5)
+        demog.add_mass_migration(100, source="pop_0", dest="pop_1", proportion=0.1)
+        demog.add_mass_migration(100, source="pop_1", dest="pop_2", proportion=0.2)
+        demog.add_mass_migration(100, source="pop_2", dest="pop_3", proportion=0.3)
+        demog.add_mass_migration(200, source="pop_3", dest="pop_4", proportion=0.4)
+        graph = demog.to_demes()
+        assert len(graph.demes) == 5
+        assert len(graph.migrations) == 0
+        assert len(graph.pulses) == 4
+        pulses = graph.pulses
+        assert pulses[0].source == "pop_4"
+        assert pulses[0].dest == "pop_3"
+        assert pulses[0].proportion == 0.4
+        assert pulses[0].time == 200
+        assert pulses[1].source == "pop_3"
+        assert pulses[1].dest == "pop_2"
+        assert pulses[1].proportion == 0.3
+        assert pulses[1].time == 100
+        assert pulses[2].source == "pop_2"
+        assert pulses[2].dest == "pop_1"
+        assert pulses[2].proportion == 0.2
+        assert pulses[2].time == 100
+        assert pulses[3].source == "pop_1"
+        assert pulses[3].dest == "pop_0"
+        assert pulses[3].proportion == 0.1
+        assert pulses[3].time == 100
+
+    def test_bad_pulse(self):
+        demog = msprime.Demography.isolated_model([1000] * 2)
+        demog.add_mass_migration(100, source="pop_0", dest="pop_1", proportion=1)
+        demog.add_mass_migration(200, source="pop_0", dest="pop_1", proportion=0.1)
+        with pytest.raises(ValueError, match="invalid pulse"):
+            demog.to_demes()
+
+    @pytest.mark.parametrize(
+        "sizes,times",
+        (([1000], [0]), ([1000, 500], [0, 20]), ([1000, 50, 1000], [0, 20, 30])),
+    )
+    def test_piecewise_constant_sizes(self, sizes, times):
+        assert len(sizes) == len(times)
+        demog = msprime.Demography.isolated_model([1234])
+        for size, time in zip(sizes, times):
+            demog.add_population_parameters_change(time, initial_size=size)
+        graph = demog.to_demes()
+        assert len(graph.demes) == 1
+        assert len(graph.migrations) == 0
+        assert len(graph.pulses) == 0
+        epochs = graph.demes[0].epochs
+        assert len(epochs) == len(sizes)
+        for j in range(len(epochs)):
+            assert epochs[j].size_function == "constant"
+            assert epochs[j].start_size == sizes[len(sizes) - j - 1]
+            assert epochs[j].end_size == sizes[len(sizes) - j - 1]
+            if j == 0:
+                assert math.isinf(epochs[j].start_time)
+            else:
+                assert epochs[j].start_time == times[len(times) - j]
+            assert epochs[j].end_time == times[len(times) - j - 1]
+
+    @pytest.mark.parametrize(
+        "sizes,growth_rates,times",
+        (
+            ([1000, 500], [0.1, 0], [0, 20]),
+            ([1000, None, 1000], [0.1, -0.1, 0], [0, 20, 30]),
+            ([1000, 5000, 1000], [0.1, None, 0], [0, 20, 30]),
+            ([1000, 5000, None], [0.1, None, 0], [0, 20, 30]),
+        ),
+    )
+    def test_piecewise_exponential_sizes(self, sizes, growth_rates, times):
+        assert growth_rates[-1] == 0  # can't convert to demes graph otherwise
+        assert len(sizes) == len(growth_rates) == len(times)
+        demog = msprime.Demography.isolated_model([1234])
+        for size, growth_rate, time in zip(sizes, growth_rates, times):
+            demog.add_population_parameters_change(
+                time, initial_size=size, growth_rate=growth_rate
+            )
+        graph = demog.to_demes()
+        assert len(graph.demes) == 1
+        assert len(graph.migrations) == 0
+        assert len(graph.pulses) == 0
+        epochs = graph.demes[0].epochs
+        assert len(epochs) == len(sizes)
+        size = 4321
+        growth_rate = 0
+        start_times = times[1:] + [math.inf]
+        for j, (start_time, end_time) in enumerate(zip(start_times, times)):
+            epoch = epochs[len(epochs) - j - 1]
+            if sizes[j] is not None:
+                end_size = sizes[j]
+            if growth_rates[j] is not None:
+                growth_rate = growth_rates[j]
+
+            if j == len(sizes) - 1:
+                assert epoch.size_function == "constant"
+                start_size = end_size
+            else:
+                assert epoch.size_function == "exponential"
+                dt = start_time - end_time
+                start_size = end_size * math.exp(dt * -growth_rate)
+
+            assert math.isclose(epoch.start_size, start_size)
+            assert math.isclose(epoch.end_size, end_size)
+
+            if math.isinf(start_time):
+                assert math.isinf(epoch.start_time)
+            else:
+                assert epoch.start_time == start_time
+            assert epoch.end_time == end_time
+
+            end_size = start_size
+
+    def test_bad_growth_rate(self):
+        demog = msprime.Demography.isolated_model([1000], growth_rate=[-1e-5])
+        with pytest.raises(
+            ValueError, match="growth rate for infinite-length epoch is invalid"
+        ):
+            demog.to_demes()
+
+    def test_bad_population_size_change(self):
+        demog = msprime.Demography.isolated_model([1000] * 2)
+        demog.add_mass_migration(100, source="pop_0", dest="pop_1", proportion=1)
+        demog.add_population_parameters_change(
+            200, initial_size=500, population="pop_0"
+        )
+        with pytest.raises(ValueError, match="outside pop_0's existence interval"):
+            demog.to_demes()
+
+    def test_unsupported_event_simple_bottleneck(self):
+        demog = msprime.Demography.isolated_model([1000])
+        demog.add_simple_bottleneck(100, population=0, proportion=0.5)
+        with pytest.raises(ValueError, match="Cannot convert"):
+            demog.to_demes()
+
+    def test_unsupported_event_instantaneous_bottleneck(self):
+        demog = msprime.Demography.isolated_model([1000])
+        demog.add_instantaneous_bottleneck(100, population=0, strength=100)
+        with pytest.raises(ValueError, match="Cannot convert"):
+            demog.to_demes()
+
+    def test_census_event_is_ignored(self):
+        demog = msprime.Demography.isolated_model([1000])
+        demog.add_census(100)
+        demog.to_demes()
+
+
+class TestRoundTrip:
+    def remove_selfing_and_cloning(self, graph):
+        graph = copy.deepcopy(graph)
+        for deme in graph.demes:
+            for epoch in deme.epochs:
+                epoch.selfing_rate = 0
+                epoch.cloning_rate = 0
+        return graph
+
+    @pytest.mark.filterwarnings(
+        # demes warns about multiple pulses with the same time
+        "ignore:Multiple pulses:UserWarning"
+    )
+    @hyp.settings(
+        deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
+    )
+    @hyp.given(graphs(size_functions=["constant", "exponential"], min_deme_size=1))
+    def test_random_graph(self, graph1):
+        graph1 = graph1.in_generations()
+        graph1 = self.remove_selfing_and_cloning(graph1)
+        demography1 = msprime.Demography.from_demes(graph1)
+        graph2 = demography1.to_demes()
+        demography2 = msprime.Demography.from_demes(graph2)  # noqa: F841
+
+        # XXX: We'd like to assert that the models are equivalent after
+        # converting back and forth. However, hypothesis readily produces
+        # examples with redundant epochs or migrations, which don't survive
+        # the process of conversion. E.g.
+        #
+        #   time_units: generations
+        #   demes:
+        #     - name: A
+        #       epochs:
+        #         - {end_time: 100, start_size 1}
+        #         - {end_time: 0, start_size 1}
+
+        # graph2.assert_close(graph1)
+        # demography2.assert_equivalent(demography1)

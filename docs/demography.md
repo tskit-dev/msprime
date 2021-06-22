@@ -118,6 +118,12 @@ more detailed examples of models from the literature.
 {meth}`.Demography.from_old_style`
 : Demography from msprime legacy 0.x inputs
 
+{meth}`.Demography.from_demes`
+: Convert a Demes demographic model to an msprime Demography
+
+{meth}`.Demography.to_demes`
+: Convert an msprime Demography to a Demes demographic model
+
 **Debugging**
 
 {meth}`.Demography.debug`
