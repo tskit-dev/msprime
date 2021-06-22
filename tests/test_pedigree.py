@@ -250,6 +250,7 @@ def simulate_pedigree(
             for _ in range(num_children):
                 ind_id = add_individual(generation, parents=parents.astype(np.int32))
                 curr_gen.append(ind_id)
+    tables.build_index()
     return tables
 
 
