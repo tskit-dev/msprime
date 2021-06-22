@@ -35,3 +35,26 @@ pull_request_rules:
       label:
         remove:
           - AUTOMERGE-REQUESTED
+
+  - name: Automatic dep update
+    conditions:
+      - author~=^dependabot(|-preview)\[bot\]$
+      - "-merged"
+      - base=main
+      - status-success=Docs
+      - status-success=Lint
+      - status-success=Python (3.7, macos-latest)
+      - status-success=Python (3.8, macos-latest)
+      - status-success=Python (3.9, macos-latest)
+      - status-success=Python (3.7, ubuntu-latest)
+      - status-success=Python (3.8, ubuntu-latest)
+      - status-success=Python (3.9, ubuntu-latest)
+      - status-success=Python (3.7, windows-latest)
+      - status-success=Python (3.8, windows-latest)
+      - status-success=Python (3.9, windows-latest)
+      - "status-success=ci/circleci: build"
+    actions:
+      merge:
+        strict: smart
+        strict_method: rebase
+        method: merge
