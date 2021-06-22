@@ -48,8 +48,7 @@ sphinx:
         tskit: ["https://tskit.dev/tskit/docs/stable", null]
         tutorials: ["https://tskit.dev/tutorials/", null]
         stdpopsim: ["https://stdpopsim.readthedocs.io/en/stable", null]
-        # Note: pyslim is moving to tskit.dev soon
-        pyslim: ["https://pyslim.readthedocs.io/en/stable", null]
+        pyslim: ["https://tskit.dev/pyslim/docs/latest/", null]
         numpy: ["https://numpy.org/doc/stable/", null]
         demes: ["https://popsim-consortium.github.io/demes-docs/main/", null]
       nitpicky: true

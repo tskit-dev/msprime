@@ -1182,7 +1182,7 @@ class TestDemographicEventMessages:
 
     def test_mass_migration(self):
         event = msprime.MassMigration(time=1, proportion=0.5, source=0, dest=1)
-        event._parameters() == "source=0, dest=1, proportion=0.5"
+        assert event._parameters() == "source=0, dest=1, proportion=0.5"
         effect = (
             "Lineages currently in population 0 move to 1 with probability 0.5 "
             "(equivalent to individuals migrating from 1 to 0 forwards in time)"
@@ -1190,7 +1190,7 @@ class TestDemographicEventMessages:
         assert event._effect() == effect
 
         event = msprime.MassMigration(time=1, proportion=1.0, source=0, dest=1)
-        event._parameters() == "source=0, dest=1, proportion=1.0"
+        assert event._parameters() == "source=0, dest=1, proportion=1"
         effect = (
             "All lineages currently in population 0 move to 1 "
             "(equivalent to individuals migrating from 1 to 0 forwards in time)"

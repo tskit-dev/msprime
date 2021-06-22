@@ -27,7 +27,6 @@ import itertools
 import json
 import struct
 from typing import Any
-from typing import List
 
 import numpy as np
 import pytest
@@ -795,7 +794,7 @@ class TestFiniteSites(MutateMixin):
         )
         assert mutated.num_sites > 0
         if discrete_genome:
-            assert max([len(s.mutations) for s in mutated.sites()]) > 1
+            assert max(len(s.mutations) for s in mutated.sites()) > 1
         for site in mutated.sites():
             assert site.ancestral_state == "0"
             assert len(site.mutations) >= 1
@@ -822,7 +821,7 @@ class TestFiniteSites(MutateMixin):
         )
         assert mutated.num_sites > 0
         if discrete_genome:
-            assert max([len(s.mutations) for s in mutated.sites()]) > 1
+            assert max(len(s.mutations) for s in mutated.sites()) > 1
         for mut in ts.mutations():
             assert mut.derived_state in nucleotides
             if mut.parent == -1:
@@ -879,7 +878,7 @@ class TestFiniteSites(MutateMixin):
         )
         assert mutated.num_sites > 0
         if discrete_genome:
-            assert max([len(s.mutations) for s in mutated.sites()]) > 1
+            assert max(len(s.mutations) for s in mutated.sites()) > 1
         num_nucs = {a: 0 for a in nucleotides}
         for site in mutated.sites():
             assert site.ancestral_state == "A"
@@ -911,7 +910,7 @@ class TestFiniteSites(MutateMixin):
         )
         assert mutated.num_sites > 0
         if discrete_genome:
-            assert max([len(s.mutations) for s in mutated.sites()]) > 1
+            assert max(len(s.mutations) for s in mutated.sites()) > 1
         for site in mutated.sites():
             assert site.ancestral_state == "A"
             assert len(site.mutations) > 0
@@ -1741,7 +1740,7 @@ class Site:
     position: float
     ancestral_state: str
     metadata: bytes
-    mutations: List[Mutation]
+    mutations: list[Mutation]
     new: bool
 
     def __str__(self):
@@ -1844,7 +1843,7 @@ class PythonInfiniteAllelesMutationModel(PythonMutationModel):
 class PythonMutationMatrixModel(PythonMutationModel):
     # for compatability with the C code we provide alleles as bytes,
     # but we want them as strings here for simplicity.
-    alleles: List[bytes]
+    alleles: list[bytes]
     # Taking a short-cut here with the annotations
     root_distribution: Any
     transition_matrix: Any

@@ -28,9 +28,6 @@ import os
 import random
 import textwrap
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Union
 
 import numpy as np
 
@@ -60,10 +57,10 @@ _msprime.unset_gsl_error_handler()
 # PID, child processes will share the same random generator as the
 # parent.
 
-_seed_rng_map: Dict[int, random.Random] = {}
+_seed_rng_map: dict[int, random.Random] = {}
 
 
-def get_seed_rng() -> Union[random.Random, None]:
+def get_seed_rng() -> random.Random | None:
     return _seed_rng_map.get(os.getpid(), None)
 
 
@@ -128,7 +125,7 @@ def _parse_flag(value: Any, *, default: bool) -> bool:
 @dataclasses.dataclass
 class TableEntry:
     data: str
-    extra: Union[str, None] = None
+    extra: str | None = None
 
     def as_html(self, escape=True):
         ret = "<td"
@@ -145,9 +142,9 @@ class TableEntry:
 
 def html_table(
     caption: str,
-    column_titles: List[str],
-    data: List[List[Union[TableEntry, str]]],
-    no_escape: Union[List[int], None] = None,
+    column_titles: list[str],
+    data: list[list[TableEntry | str]],
+    no_escape: list[int] | None = None,
 ):
     """
     Returns a HTML table formatted with the specified data.
@@ -201,9 +198,9 @@ def _text_table_row(data, alignments, widths):
 
 def text_table(
     caption: str,
-    column_titles: List[List[str]],
-    column_alignments: List[str],
-    data: List[List[List[str]]],
+    column_titles: list[list[str]],
+    column_alignments: list[str],
+    data: list[list[list[str]]],
     internal_hlines=False,
 ):
     """
@@ -219,7 +216,7 @@ def text_table(
     for row in data + [column_titles]:
         assert N == len(row)
         for j in range(N):
-            widths[j] = max(widths[j], max([len(line) for line in row[j]], default=0))
+            widths[j] = max(widths[j], max((len(line) for line in row[j]), default=0))
     widths += 3
 
     hline = "─" * (sum(widths) - 1)

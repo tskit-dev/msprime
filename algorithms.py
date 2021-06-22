@@ -221,7 +221,7 @@ class Population:
         return ret
 
     def get_ind_range(self, t):
-        """ Returns ind labels at time t """
+        """Returns ind labels at time t"""
         first_ind = np.sum([self.get_size(t_prev) for t_prev in range(0, int(t))])
         last_ind = first_ind + self.get_size(t)
 
@@ -449,7 +449,7 @@ class Individual:
         heapq.heappush(self.segments[parent_ix], (seg.left, seg))
 
     def num_lineages(self):
-        return sum([len(s) for s in self.segments])
+        return sum(len(s) for s in self.segments)
 
 
 class TrajectorySimulator:
