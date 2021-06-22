@@ -1,0 +1,34 @@
+version: 2
+updates:
+- package-ecosystem: pip
+  directory: "/requirements/CI-complete"
+  rebase-strategy: disabled
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 1
+  labels:
+    - dependancy-upgrade
+- package-ecosystem: pip
+  directory: "/requirements/CI-docs"
+  rebase-strategy: disabled
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 1
+  labels:
+    - dependancy-upgrade
+- package-ecosystem: pip
+  directory: "/requirements/CI-tests-conda"
+  rebase-strategy: disabled
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 1
+  labels:
+    - dependancy-upgrade
+- package-ecosystem: pip
+  directory: "/requirements/CI-tests-pip"
+  rebase-strategy: disabled
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 1
+  labels:
+    - dependancy-upgrade

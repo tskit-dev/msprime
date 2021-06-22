@@ -76,7 +76,7 @@ class TestRandomSeeds:
             python_seeds = set()
             values = set()
             for _ in range(num_random_tests):
-                input_seed = tuple([random.randint(1, max_seed) for k in range(3)])
+                input_seed = tuple(random.randint(1, max_seed) for k in range(3))
                 python_seed = cli.get_single_seed(input_seed)
                 assert input_seed not in input_seeds
                 assert python_seed not in python_seeds
@@ -954,7 +954,7 @@ class TestMspmsOutput(TestCli):
         assert tree[-1] == ";"
         newick_tree = newick.loads(tree)[0]
         leaf_names = newick_tree.get_leaf_names()
-        assert sorted(leaf_names) == sorted([str(u + 1) for u in range(sample_size)])
+        assert sorted(leaf_names) == sorted(str(u + 1) for u in range(sample_size))
 
     def verify_output(
         self,

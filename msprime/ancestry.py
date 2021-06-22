@@ -33,7 +33,6 @@ import sys
 import tempfile
 from typing import Any
 from typing import ClassVar
-from typing import Union
 
 import numpy as np
 import tskit
@@ -48,7 +47,7 @@ from msprime import _msprime
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-def _model_factory(model: Union[None, str, AncestryModel]) -> AncestryModel:
+def _model_factory(model: None | str | AncestryModel) -> AncestryModel:
     """
     Returns an AncestryModel corresponding to the specified model
     description.
@@ -1490,18 +1489,18 @@ class SampleSet:
     """
     The number of k-ploid sample **individuals** to draw.
     """
-    population: Union[int, str, None] = None
+    population: int | str | None = None
     """
     The population in which the samples are drawn. May be either a
     string name or integer ID (see
     :ref:`sec_demography_populations_identifiers` details).
     """
-    time: Union[float, None] = None
+    time: float | None = None
     """
     The time at which these samples are drawn. If not specified or None,
     defaults to the :attr:`.Population.default_sampling_time`.
     """
-    ploidy: Union[int, None] = None
+    ploidy: int | None = None
     """
     The number of monoploid genomes to sample for each sample individual.
     See the :ref:`sec_ancestry_ploidy` section for more details and
@@ -1523,7 +1522,7 @@ class SimulationModelChange:
         to specify multiple models in new code.
     """
 
-    time: Union[float, None] = None
+    time: float | None = None
     """
     The time at which the ancestry model changes to the new model, in
     generations. After this time, all internal tree nodes, edges and migrations
@@ -1554,7 +1553,7 @@ class AncestryModel:
     Abstract superclass of all ancestry models.
     """
 
-    duration: Union[float, None]
+    duration: float | None
     """
     The time duration that this model should run for. If None, the model
     will run until completion (i.e., until the simulation coalesces
@@ -1788,7 +1787,7 @@ class BetaCoalescent(ParametricAncestryModel):
 
     name = "beta"
 
-    alpha: Union[float, None]
+    alpha: float | None
     truncation_point: float
 
     # We have to define an __init__ to enfore keyword-only behaviour
@@ -1838,8 +1837,8 @@ class DiracCoalescent(ParametricAncestryModel):
 
     name = "dirac"
 
-    psi: Union[float, None]
-    c: Union[float, None]
+    psi: float | None
+    c: float | None
 
     # We have to define an __init__ to enfore keyword-only behaviour
     def __init__(self, *, duration=None, psi=None, c=None):
@@ -1894,11 +1893,11 @@ class SweepGenicSelection(ParametricAncestryModel):
 
     name = "sweep_genic_selection"
 
-    position: Union[float, None]
-    start_frequency: Union[float, None]
-    end_frequency: Union[float, None]
-    s: Union[float, None]
-    dt: Union[float, None]
+    position: float | None
+    start_frequency: float | None
+    end_frequency: float | None
+    s: float | None
+    dt: float | None
 
     # We have to define an __init__ to enfore keyword-only behaviour
     def __init__(

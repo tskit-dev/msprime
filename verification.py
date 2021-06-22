@@ -3705,7 +3705,7 @@ class HudsonAnalytical(Test):
         ms_mean = np.zeros_like(rho)
         msp_mean = np.zeros_like(rho)
         for j in range(len(num_loci)):
-            cmd = "{} {} -T -r {} {}".format(n, num_replicates, rho[j], num_loci[j])
+            cmd = f"{n} {num_replicates} -T -r {rho[j]} {num_loci[j]}"
             T = self.get_num_trees(
                 _ms_executable + cmd.split() + self.get_ms_seeds(), num_replicates
             )
@@ -4085,7 +4085,7 @@ class SmcTest(Test):
 
         for j in range(len(L)):
             # Run SCRM under the SMC to see if we get the correct variance.
-            cmd = "{} {} -L -r {} {} -l 0".format(n, num_replicates, rho[j], L[j])
+            cmd = f"{n} {num_replicates} -L -r {rho[j]} {L[j]} -l 0"
             T = self.get_scrm_num_trees(
                 _scrm_executable + cmd.split() + self.get_ms_seeds(), num_replicates
             )
@@ -4356,9 +4356,7 @@ class SimulateFrom(Test):
         for j, ts in enumerate(sim.run_replicates(num_replicates)):
             num_ca_events1[j] = sim.num_common_ancestor_events
             num_re_events1[j] = sim.num_recombination_events
-            num_mig_events1[j] = sum(
-                [r for row in sim.num_migration_events for r in row]
-            )
+            num_mig_events1[j] = sum(r for row in sim.num_migration_events for r in row)
             T1[j] = np.max(ts.tables.nodes.time)
             num_trees1[j] = ts.num_trees
             num_nodes1[j] = ts.num_nodes
@@ -4397,7 +4395,7 @@ class SimulateFrom(Test):
                 num_ca_events2[j] = sim.num_common_ancestor_events
                 num_re_events2[j] = sim.num_recombination_events
                 num_mig_events2[j] = sum(
-                    [r for row in sim.num_migration_events for r in row]
+                    r for row in sim.num_migration_events for r in row
                 )
 
                 max_time = max(node.time for node in ts.nodes())
@@ -4415,7 +4413,7 @@ class SimulateFrom(Test):
                 num_ca_events2[j] += sim2.num_common_ancestor_events
                 num_re_events2[j] += sim2.num_recombination_events
                 num_mig_events2[j] += sum(
-                    [r for row in sim2.num_migration_events for r in row]
+                    r for row in sim2.num_migration_events for r in row
                 )
 
                 T2[j] = np.max(final_ts.tables.nodes.time)

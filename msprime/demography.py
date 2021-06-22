@@ -37,11 +37,7 @@ import textwrap
 import warnings
 from typing import Any
 from typing import ClassVar
-from typing import Dict
-from typing import List
 from typing import MutableMapping
-from typing import Tuple
-from typing import Union
 
 import demes
 import numpy as np
@@ -105,7 +101,7 @@ class Population:
     details and examples.
     """
 
-    name: Union[str, None] = None
+    name: str | None = None
     """
     The name of the population. If specified this must be a uniquely
     identifying string and must be a valid Python identifier (i.e., could be
@@ -129,14 +125,14 @@ class Population:
     details and examples.
     """
 
-    default_sampling_time: Union[float, None] = None
+    default_sampling_time: float | None = None
     """
     The default time at which samples are drawn from this population. See the
     :ref:`sec_demography_populations_default_sampling_time` section for more
     details.
     """
 
-    initially_active: Union[bool, None] = None
+    initially_active: bool | None = None
     """
     If True, this population will always be initially active, regardless
     of whether it participates in a :ref:`sec_demography_events_population_split`.
@@ -146,7 +142,7 @@ class Population:
     more details.
     """
 
-    id: Union[int, None] = dataclasses.field(default=None)  # noqa: A003
+    id: int | None = dataclasses.field(default=None)  # noqa: A003
     """
     The integer ID of this population within the parent :class:`.Demography`.
     This attribute is assigned by the Demography class and should not be set
@@ -190,11 +186,11 @@ class Demography(collections.abc.Mapping):
     or integer IDs, and the two forms can be used interchangeably.
     """
 
-    populations: List[Population] = dataclasses.field(default_factory=list)
-    events: List = dataclasses.field(default_factory=list)
+    populations: list[Population] = dataclasses.field(default_factory=list)
+    events: list = dataclasses.field(default_factory=list)
     # Until we can use numpy type hints properly, it's not worth adding them
     # here. We still have to add in ignores below for indexed assignment errors.
-    migration_matrix: Union[Any, None] = None
+    migration_matrix: Any | None = None
 
     def __post_init__(self):
         if self.migration_matrix is None:
@@ -222,12 +218,12 @@ class Demography(collections.abc.Mapping):
         self,
         *,
         initial_size: float,
-        growth_rate: Union[float, None] = None,
-        name: Union[str, None] = None,
-        description: Union[str, None] = None,
-        extra_metadata: Union[dict, None] = None,
-        default_sampling_time: Union[float, None] = None,
-        initially_active: Union[bool, None] = None,
+        growth_rate: float | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        extra_metadata: dict | None = None,
+        default_sampling_time: float | None = None,
+        initially_active: bool | None = None,
     ) -> Population:
         """
         Adds a new :class:`.Population` to this :class:`.Demography` with the
@@ -295,7 +291,7 @@ class Demography(collections.abc.Mapping):
         return population
 
     def _add_population_from_old_style(
-        self, pop_config: PopulationConfiguration, name: Union[str, None] = None
+        self, pop_config: PopulationConfiguration, name: str | None = None
     ) -> Population:
         population = self.add_population(
             name=name,
@@ -327,7 +323,7 @@ class Demography(collections.abc.Mapping):
         return event
 
     def set_migration_rate(
-        self, source: Union[str, int], dest: Union[str, int], rate: float
+        self, source: str | int, dest: str | int, rate: float
     ) -> None:
         """
         Sets the backwards-time rate of migration from the specified ``source``
@@ -360,7 +356,7 @@ class Demography(collections.abc.Mapping):
 
     def set_symmetric_migration_rate(
         self,
-        populations: List[Union[str, int]],
+        populations: list[str | int],
         rate: float,
     ) -> None:
         """
@@ -389,7 +385,7 @@ class Demography(collections.abc.Mapping):
 
     # Demographic events.
 
-    def _check_population_references(self, populations: List[Union[str, int]]):
+    def _check_population_references(self, populations: list[str | int]):
         for pop_ref in populations:
             # Slightly unsure whether this call can get optimised out, but
             # there doesn't seem to be a better way to do it without duplicating
@@ -397,7 +393,7 @@ class Demography(collections.abc.Mapping):
             self[pop_ref]
 
     def add_population_split(
-        self, time: float, *, derived: List[Union[str, int]], ancestral: Union[str, int]
+        self, time: float, *, derived: list[str | int], ancestral: str | int
     ) -> PopulationSplit:
         """
         Adds a population split event at the specified time. In a population
@@ -440,9 +436,9 @@ class Demography(collections.abc.Mapping):
         self,
         time: float,
         *,
-        derived: Union[str, int],
-        ancestral: List[Union[str, int]],
-        proportions: List[float],
+        derived: str | int,
+        ancestral: list[str | int],
+        proportions: list[float],
     ) -> Admixture:
         """
         Adds an admixture event at the specified time. In an admixture
@@ -493,8 +489,8 @@ class Demography(collections.abc.Mapping):
         self,
         time: float,
         *,
-        source: Union[str, int],
-        dest: Union[str, int],
+        source: str | int,
+        dest: str | int,
         proportion: float,
     ) -> MassMigration:
         """
@@ -533,8 +529,8 @@ class Demography(collections.abc.Mapping):
         time: float,
         *,
         rate: float,
-        source: Union[int, str, None] = None,
-        dest: Union[int, str, None] = None,
+        source: int | str | None = None,
+        dest: int | str | None = None,
     ) -> MigrationRateChange:
         """
         Changes the rate of migration from one deme to another to a new value at a
@@ -573,7 +569,7 @@ class Demography(collections.abc.Mapping):
         )
 
     def add_symmetric_migration_rate_change(
-        self, time: float, populations: List[Union[str, int]], rate: float
+        self, time: float, populations: list[str | int], rate: float
     ) -> SymmetricMigrationRateChange:
         """
         Sets the symmetric migration rate between all pairs of populations in
@@ -600,9 +596,9 @@ class Demography(collections.abc.Mapping):
         self,
         time: float,
         *,
-        initial_size: Union[float, None] = None,
-        growth_rate: Union[float, None] = None,
-        population: Union[int, None] = None,
+        initial_size: float | None = None,
+        growth_rate: float | None = None,
+        population: int | None = None,
     ) -> PopulationParametersChange:
         """
         Changes the size parameters of a population (or all populations)
@@ -636,8 +632,8 @@ class Demography(collections.abc.Mapping):
     def add_simple_bottleneck(
         self,
         time: float,
-        population: Union[int, str],
-        proportion: Union[float, None] = None,
+        population: int | str,
+        proportion: float | None = None,
     ) -> SimpleBottleneck:
         """
         Adds a population bottleneck at the specified time in which each lineage
@@ -660,7 +656,7 @@ class Demography(collections.abc.Mapping):
         )
 
     def add_instantaneous_bottleneck(
-        self, time: float, *, population: Union[str, int], strength: float
+        self, time: float, *, population: str | int, strength: float
     ) -> InstantaneousBottleneck:
         """
         Adds a bottleneck at the specified time in the specified population
@@ -949,7 +945,7 @@ class Demography(collections.abc.Mapping):
                 population.initially_active = True
         return resolved
 
-    def copy(self, populations: Union[List[str], None] = None) -> Demography:
+    def copy(self, populations: list[str] | None = None) -> Demography:
         """
         Returns a copy of this model. If the ``populations`` argument is
         specified, the populations in the copied model will be in this order.
@@ -1204,8 +1200,8 @@ class Demography(collections.abc.Mapping):
     def assert_equivalent(
         self,
         other: Demography,
-        rel_tol: Union[None, float] = None,
-        abs_tol: Union[None, float] = None,
+        rel_tol: None | float = None,
+        abs_tol: None | float = None,
     ):
         # Same defaults as math.isclose
         rel_tol = 1e-9 if rel_tol is None else rel_tol
@@ -1373,7 +1369,7 @@ class Demography(collections.abc.Mapping):
                         f"{self_lm.proportion} ≠ {other_lm.proportion}"
                     )
 
-    def _normalise_lineage_movements(self, events: List[DemographicEvent]):
+    def _normalise_lineage_movements(self, events: list[DemographicEvent]):
         """
         Extract the LineageMovementEvent instances from the specified list
         and normalise their effects into LineageMovement instances, and
@@ -1394,7 +1390,7 @@ class Demography(collections.abc.Mapping):
             # absolute proportions.
             assert all(lm.source == pop for lm in ret[pop])
             P = _sequential_to_proportions([pm.proportion for pm in ret[pop]])
-            id_value_pairs = sorted([(lm.dest, p) for lm, p in zip(ret[pop], P)])
+            id_value_pairs = sorted((lm.dest, p) for lm, p in zip(ret[pop], P))
             S = _proportions_to_sequential([p for _, p in id_value_pairs])
             ret[pop] = [
                 LineageMovement(source=pop, dest=id_value_pairs[j][0], proportion=S[j])
@@ -1536,10 +1532,10 @@ class Demography(collections.abc.Mapping):
         )
 
     def _from_old_style_map_populations(
-        population_configurations: List[PopulationConfiguration],
-        migration_matrix: List[List[float]],
-        demographic_events: List[DemographicEvent],
-        population_map: [List[Dict[int, str]]],
+        population_configurations: list[PopulationConfiguration],
+        migration_matrix: list[list[float]],
+        demographic_events: list[DemographicEvent],
+        population_map: [list[dict[int, str]]],
     ) -> Demography:
         direct_model = Demography._from_old_style_simple(
             population_configurations, migration_matrix, demographic_events
@@ -1779,7 +1775,7 @@ class Demography(collections.abc.Mapping):
         demographic_events=None,
         Ne=1,
         ignore_sample_size=False,
-        population_map: Union[[List[Dict[int, Union[str, int]]]], None] = None,
+        population_map: [list[dict[int, str | int]]] | None = None,
     ) -> Demography:
         """
         Creates a Demography object from the pre 1.0 style input parameters,
@@ -2661,14 +2657,14 @@ class Demography(collections.abc.Mapping):
 
         # Copied from demes/ms.py
         def migrations_from_mm_list(
-            mm_list: List[Any], end_times: List[float], deme_names: List[str]
-        ) -> List[MutableMapping]:
+            mm_list: list[Any], end_times: list[float], deme_names: list[str]
+        ) -> list[MutableMapping]:
             """
             Convert a list of migration matrices into a list of migration dicts.
             """
             assert len(mm_list) == len(end_times)
-            migrations: List[MutableMapping] = []
-            current: Dict[Tuple[int, int], MutableMapping] = dict()
+            migrations: list[MutableMapping] = []
+            current: dict[tuple[int, int], MutableMapping] = dict()
             start_time = math.inf
             for migration_matrix, end_time in zip(mm_list, end_times):
                 n = len(migration_matrix)
@@ -2778,7 +2774,7 @@ class PopulationConfiguration:
         )
 
 
-def _list_str(a: List, fmt=None):
+def _list_str(a: list, fmt=None):
     """
     Returns the specified items rendered as a string without quotes.
     """
@@ -2871,13 +2867,13 @@ class PopulationParametersChange(ParameterChangeEvent):
         simultaneously.
     """
 
-    initial_size: Union[float, None] = None
-    growth_rate: Union[float, None] = None
+    initial_size: float | None = None
+    growth_rate: float | None = None
     # TODO change the default to -1 to match MigrationRateChange.
-    population: Union[int, None] = None
+    population: int | None = None
     # Deprecated.
     # TODO add a formal deprecation notice
-    population_id: Union[int, None] = dataclasses.field(default=None, repr=False)
+    population_id: int | None = dataclasses.field(default=None, repr=False)
 
     _type_str: ClassVar[str] = "Population parameter change"
 
@@ -2965,7 +2961,7 @@ class MigrationRateChange(ParameterChangeEvent):
     dest: int = -1
     # Deprecated.
     # TODO add a formal deprecation notice
-    matrix_index: Union[tuple, None] = dataclasses.field(default=None, repr=False)
+    matrix_index: tuple | None = dataclasses.field(default=None, repr=False)
 
     _type_str: ClassVar[str] = "Migration rate change"
 
@@ -3010,7 +3006,7 @@ class SymmetricMigrationRateChange(ParameterChangeEvent):
     external API as it was added after 1.0.
     """
 
-    populations: List[Union[int, str]]
+    populations: list[int | str]
     rate: float
 
     _type_str: ClassVar[str] = dataclasses.field(
@@ -3058,7 +3054,7 @@ class LineageMovementEvent(DemographicEvent):
     Superclass of events that move lineages around between populations.
     """
 
-    def _as_lineage_movements(self) -> List[LineageMovement]:
+    def _as_lineage_movements(self) -> list[LineageMovement]:
         """
         Returns the equivalent of this lineage movement event as a
         list of lineage movements.
@@ -3097,11 +3093,11 @@ class MassMigration(LineageMovementEvent):
 
     source: int
     # dest only has a default because of the deprecated destination attr.
-    dest: Union[None, int] = None
+    dest: None | int = None
     proportion: float = 1.0
     # Deprecated.
     # TODO add a formal deprecation notice
-    destination: Union[int, None] = dataclasses.field(default=None, repr=False)
+    destination: int | None = dataclasses.field(default=None, repr=False)
 
     _type_str: ClassVar[str] = dataclasses.field(default="Mass Migration", repr=False)
 
@@ -3163,8 +3159,8 @@ class PopulationSplit(LineageMovementEvent):
     :param int ancestral: The ID of the ancestral population.
     """
 
-    derived: List[Union[int, str]]
-    ancestral: Union[int, str]
+    derived: list[int | str]
+    ancestral: int | str
 
     _type_str: ClassVar[str] = dataclasses.field(default="Population Split", repr=False)
 
@@ -3220,9 +3216,9 @@ class Admixture(LineageMovementEvent):
     :param float time: The time at which this event occurs in generations.
     """
 
-    derived: Union[int, str]
-    ancestral: List[Union[int, str]]
-    proportions: List[float]
+    derived: int | str
+    ancestral: list[int | str]
+    proportions: list[float]
 
     _type_str: ClassVar[str] = dataclasses.field(default="Admixture", repr=False)
 
@@ -3470,9 +3466,9 @@ class Epoch:
     index: int
     start_time: float
     end_time: float
-    populations: List[PopulationState]
+    populations: list[PopulationState]
     migration_matrix: list  # TODO numpy array
-    events: List[DemographicEvent]
+    events: list[DemographicEvent]
 
     def _title_text(self):
         return (
