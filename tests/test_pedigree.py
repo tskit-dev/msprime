@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 
@@ -199,8 +200,12 @@ class TestPedigree(unittest.TestCase):
 
 
 def simulate_pedigree(
-    num_founders, num_children_prob=None, num_generations=3, random_seed=42
-) -> tskit.IndividualTable:
+    num_founders,
+    num_children_prob=(0, 0, 1),
+    num_generations=3,
+    sequence_length=1,
+    random_seed=42,
+) -> tskit.TableCollection:
     """
     Simulates pedigree.
 
@@ -208,47 +213,44 @@ def simulate_pedigree(
     num_children_prob: Array-like object of probabilities for number of children
         produced by each pair of mates. Index 0 corresponds to probability of
         0 children, index 1 corresponds to probability of 1 child, etc. Sum of
-        entries must be 1.
+        entries must be 1. Defaults to (0, 0, 1), i.e., there are always exactly
+        two children.
     num_generations: Number of generations to attempt to simulate
+    sequence_length: The sequence_length of the output tables.
     random_seed: Random seed.
-
     """
     rng = np.random.RandomState(random_seed)
-    tb = tskit.IndividualTable()
+    tables = tskit.TableCollection(sequence_length=sequence_length)
+    # Add single population for simplicity.
+    tables.populations.add_row()
 
-    if (
-        num_children_prob is None
-    ):  # Use this to avoid "Default arguments value is mutable" warning
-        # P(0 children) = 0, P(1 child) = 0, P(2 children) = 1
-        num_children_prob = [0, 0, 1]
+    def add_individual(generation, parents=(-1, -1)):
+        ind_id = tables.individuals.add_row(parents=parents)
+        time = num_generations - generation - 1
+        for _ in parents:
+            tables.nodes.add_row(
+                flags=tskit.NODE_IS_SAMPLE if time == 0 else 0,
+                time=time,
+                population=0,
+                individual=ind_id,
+            )
+        return ind_id
 
-    # first generation
-    num_prev_gen = 0
-    curr_gen = range(num_founders)
-    for _ in curr_gen:
-        tb.add_row(parents=[-1, -1])
-
-    # next generations
-    for gen_idx in range(2, num_generations + 1):
-        num_curr_gen = len(curr_gen)
-        num_pairs = num_curr_gen // 2
+    curr_gen = [add_individual(0) for _ in range(num_founders)]
+    for generation in range(1, num_generations):
+        num_pairs = len(curr_gen) // 2
         if num_pairs == 0 and num_children_prob[0] != 1:
             raise Exception(
-                f"Not enough people to make children in generation {gen_idx}"
+                f"Not enough people to make children in generation {generation}"
             )
-        parents = num_prev_gen + rng.choice(
-            a=num_curr_gen, size=(num_pairs, 2), replace=False
-        )
-        num_children_list = rng.choice(
-            a=len(num_children_prob), size=num_pairs, p=num_children_prob
-        )
-        num_prev_gen = len(tb)
-        for (parent1, parent2), num_children in zip(parents, num_children_list):
+        all_parents = rng.choice(curr_gen, size=(num_pairs, 2), replace=False)
+        curr_gen = []
+        for parents in all_parents:
+            num_children = rng.choice(len(num_children_prob), p=num_children_prob)
             for _ in range(num_children):
-                tb.add_row(parents=[parent1, parent2])
-        curr_gen = range(len(tb) - sum(num_children_list), len(tb))
-
-    return tb
+                ind_id = add_individual(generation, parents=parents.astype(np.int32))
+                curr_gen.append(ind_id)
+    return tables
 
 
 class TestPedigreeSimulation:
@@ -261,13 +263,26 @@ class TestPedigreeSimulation:
     ):
         if num_children_prob is None:
             num_children_prob = [0, 0, 1]
-        tb = simulate_pedigree(
+        tables = simulate_pedigree(
             num_founders=num_founders,
             num_children_prob=num_children_prob,
             num_generations=num_generations,
             random_seed=random_seed,
         )
-        return tb
+        self.verify_nodes(tables)
+        return tables.individuals
+
+    def verify_nodes(self, tables):
+        """
+        Check that the nodes and individuals in the specified tables have the
+        required properties.
+        """
+        ts = tables.tree_sequence()
+        for ind in ts.individuals():
+            assert len(ind.nodes) == 2
+            assert len({ts.node(node).flags for node in ind.nodes}) == 1
+            assert len({ts.node(node).time for node in ind.nodes}) == 1
+            assert len({ts.node(node).population for node in ind.nodes}) == 1
 
     def test_one_generation_no_children(self):
         num_founders = 8
@@ -344,3 +359,16 @@ class TestPedigreeSimulation:
         for row in tb:
             tc.individuals.append(row)
         tc.tree_sequence()  # creating tree sequence should succeed
+
+
+if __name__ == "__main__":
+    # Easy way to output a simulated pedigree for command line testing.
+    # Run with python3 tests/test_pedigree.py NUM_FOUNDERS NUM_GENERATIONS > out.trees
+    num_founders = int(sys.argv[1])
+    num_generations = int(sys.argv[2])
+    tables = simulate_pedigree(
+        num_founders=num_founders,
+        num_generations=num_generations,
+    )
+    ts = tables.tree_sequence()
+    ts.dump(sys.stdout)
