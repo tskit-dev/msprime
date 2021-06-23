@@ -13,7 +13,7 @@ import tskit
 import algorithms
 import msprime
 import tests.test_cli as test_cli
-from msprime import pedigrees
+from tests.test_pedigree import simulate_pedigree
 
 
 IS_WINDOWS = platform.system() == "Windows"
@@ -169,18 +169,13 @@ class TestAlgorithms:
             assert ts.sequence_length == 100
 
     def test_pedigree(self):
+        tables = simulate_pedigree(num_founders=10, num_generations=5)
         with tempfile.TemporaryDirectory() as tmpdir:
-            ped_path = pathlib.Path(tmpdir) / "tmp.ped"
-            individual = np.array([1, 2, 3, 4], dtype=int)
-            parents = np.array([2, 3, 2, 3, -1, -1, -1, -1], dtype=int).reshape(-1, 2)
-            time = np.array([0, 0, 1, 1])
-            is_sample = np.array([1, 1, 0, 0], dtype=int)
-            ped = pedigrees.Pedigree(
-                individual, parents, time, is_sample, sex=None, ploidy=2
-            )
-            ped.save_txt(ped_path)
-            ts = self.run_script(f"2 --pedigree-file {ped_path} --model=wf_ped")
-            for tree in ts.trees():
-                assert tree.num_roots > 1
-            assert ts.num_individuals == len(individual)
-            assert ts.num_samples == 4
+            ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
+            tables.dump(ts_path)
+            ts = self.run_script(f"0 --from-ts {ts_path} -r 0.1 --model=wf_ped")
+        assert ts.num_trees > 1
+        for tree in ts.trees():
+            assert tree.num_roots > 1
+        assert ts.num_individuals == len(tables.individuals)
+        assert ts.num_samples == 20

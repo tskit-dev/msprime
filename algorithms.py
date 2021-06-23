@@ -14,7 +14,6 @@ import numpy as np
 import tskit
 
 import msprime
-from msprime import pedigrees
 
 
 logger = daiquiri.getLogger()
@@ -271,113 +270,50 @@ class Population:
         return self._ancestors[indv.label].index(indv)
 
 
-# TODO this needs to be refactored a bit and cleaned up. We can integrate
-# better with tskit for this.
+# TODO this needs to be refactored and cleaned up. The class
+# currently does very litte.
 class Pedigree:
     """
     Class representing a pedigree for use with the DTWF model, as implemented
     in C library
     """
 
-    def __init__(self, num_individuals, ploidy):
-        self.ploidy = ploidy
-        self.num_individuals = num_individuals
+    def __init__(self, tables):
+        self.ploidy = 2
+        self.num_individuals = 0
+        self.node_individual_map = {}
         self.inds = []
         self.samples = []
         self.num_samples = 0
         self.ind_heap = []
         self.is_climbing = False
-
         # Stores most recently merged segment
         self.merged_segment = None
 
-    def set_pedigree(self, inds, parents, times, is_sample):
-        self.ploidy = parents.shape[1]
-        self.is_sample = is_sample
-        self.inds = [
-            Individual(ploidy=self.ploidy) for i in range(self.num_individuals)
-        ]
-
-        num_samples = 0
-        for i in range(self.num_individuals):
-            ind = self.inds[i]
-            ind.id = inds[i]
-            assert ind.id > 0
-            ind.time = times[i]
-            for j, parent in enumerate(parents[i]):
-                if parent != tskit.NULL:
-                    assert parent >= 0
-                    ind.parents[j] = self.inds[parent]
-
-            if is_sample[i] != 0:
-                assert is_sample[i] == 1
-                self.samples.append(ind)
-                num_samples += 1
-
-        self.num_samples = num_samples
-
-    def load_pop(self, pop):
-        """
-        Loads segments from a given pop into the pedigree samples
-        """
-        if self.num_sample_lineages() != pop.get_num_ancestors():
-            err_str = (
-                "Ped samples: "
-                + str(self.num_sample_lineages())
-                + " Samples: "
-                + str(pop.get_num_ancestors())
-                + " - must be equal!"
-            )
-            raise ValueError(err_str)
-
-        # for i, anc in enumerate(pop):
-        for i in range(pop.get_num_ancestors() - 1, -1, -1):
-            anc = pop.remove(i)
-            # Each individual gets 'ploidy' lineages
-            ind = self.samples[i // self.ploidy]
-            parent_ix = i % self.ploidy
-            ind.add_segment(anc, parent_ix=parent_ix)
-
-        # Add samples to queue to prepare for climbing - might be better if
-        # included in previous loop
-        for ind in self.samples:
-            self.push_ind(ind)
-
-    def assign_times(self, check=False):
-        """
-        For pedigrees without specified times, crudely assigns times to
-        all individuals.
-        """
-        if len(self.samples) == 0:
-            self.set_samples()
-        assert len(self.samples) > 0
-
-        climbers = [s for s in self.samples]
-        t = 0
-        while len(climbers) > 0:
-            next_climbers = []
-            for climber in climbers:
-                if climber.time < t:
-                    climber.time = t
-                for parent in climber.parents:
-                    if parent is not None:
-                        next_climbers.append(parent)
-            climbers = next_climbers
-            t += 1
-
-        if check:
-            for ind in self.inds:
-                for parent in ind.parents:
-                    if parent is not None:
-                        assert ind.time < parent.time
-
-    def build_ind_queue(self):
-        """
-        Set up heap queue of samples, so most recent can be popped for merge.
-        Heapify in case samples are not all at t=0.
-        """
-        self.ind_heap = [(ind.time, ind) for ind in self.samples]
-        heapq.heapify(self.ind_heap)
+        ts = tables.tree_sequence()
+        tsk_id_map = {tskit.NULL: None}
+        for tsk_ind in ts.individuals():
+            if len(tsk_ind.nodes) > 0:
+                assert len(tsk_ind.nodes) == self.ploidy
+                assert len(tsk_ind.parents) == self.ploidy
+                time = ts.node(tsk_ind.nodes[0]).time
+                flags = ts.node(tsk_ind.nodes[0]).flags
+                # All nodes must be equivalent
+                assert len({ts.node(node).flags for node in tsk_ind.nodes}) == 1
+                assert len({ts.node(node).time for node in tsk_ind.nodes}) == 1
+                assert len({ts.node(node).population for node in tsk_ind.nodes}) == 1
+                ind = Individual(ploidy=self.ploidy)
+                tsk_id_map[tsk_ind.id] = ind
+                for node in tsk_ind.nodes:
+                    self.node_individual_map[node] = ind
+                ind.id = len(self.inds)
+                ind.parents = [tsk_id_map[parent] for parent in tsk_ind.parents]
+                ind.time = time
+                self.inds.append(ind)
+                if flags & tskit.NODE_IS_SAMPLE != 0:
+                    self.samples.append(ind)
+        self.num_samples = len(self.samples)
+        self.num_individuals = len(self.inds)
 
     def push_ind(self, ind):
         """
@@ -394,15 +330,7 @@ class Pedigree:
         ind = heapq.heappop(self.ind_heap)
         assert ind.queued
         ind.queued = False
-
         return ind
-
-    def num_sample_lineages(self):
-        return len(self.samples) * self.ploidy
-
-    def print_samples(self):
-        for s in self.samples:
-            print(s)
 
 
 class Individual:
@@ -660,7 +588,6 @@ class Simulator:
         time_slice=None,
         gene_conversion_rate=0.0,
         gene_conversion_length=1,
-        pedigree=None,
         discrete_genome=True,
     ):
         # Must be a square matrix.
@@ -685,6 +612,7 @@ class Simulator:
         self.num_populations = N
         self.max_segments = max_segments
         self.full_arg = full_arg
+        self.pedigree = None
         self.segment_stack = []
         self.segments = [None for j in range(self.max_segments + 1)]
         for j in range(self.max_segments):
@@ -709,14 +637,8 @@ class Simulator:
             pop.set_start_size(population_sizes[pop.id])
             pop.set_growth_rate(population_growth_rates[pop.id], 0)
         self.edge_buffer = []
-        self.pedigree = pedigree
 
         self.initialise(tables.tree_sequence())
-
-        if pedigree is not None:
-            assert N == 1  # <- only support single pop/pedigree for now
-            pop = self.P[0]
-            pedigree.load_pop(pop)
 
         self.num_ca_events = 0
         self.num_re_events = 0
@@ -1175,11 +1097,9 @@ class Simulator:
         """
         Simulates through the provided pedigree, stopping at the top.
         """
+        self.pedigree = Pedigree(self.tables)
         assert self.pedigree is not None
         self.dtwf_climb_pedigree()
-
-        # Complete simulations under dtwf model
-        # self.dtwf_simulate
 
     def dtwf_simulate(self):
         """
@@ -1188,7 +1108,6 @@ class Simulator:
         while self.ancestors_remain():
             self.t += 1
             self.verify()
-
             self.dtwf_generation()
 
     def dtwf_generation(self):
@@ -1256,12 +1175,23 @@ class Simulator:
         Simulates transmission of ancestral material through a pre-specified
         pedigree
         """
-        assert len(self.pedigree.ind_heap) > 0
         assert self.num_populations == 1  # Single pop/pedigree for now
+        pop = self.P[0]
+        for i in range(pop.get_num_ancestors() - 1, -1, -1):
+            anc = pop.remove(i)
+            ind = self.pedigree.node_individual_map[anc.node]
+            # FIXME this is icky - what do we use parent_ix for? There
+            # must be a better way of doing this.
+            parent_ix = i % self.pedigree.ploidy
+            ind.add_segment(anc, parent_ix=parent_ix)
+
+        # Add samples to queue to prepare for climbing
+        for ind in self.pedigree.samples:
+            self.pedigree.push_ind(ind)
+
         self.pedigree.is_climbing = True
 
         # Store founders for adding back to population when climbing is done
-        # TODO: Store as heap to add to population for simultaneous DTWF sims?
         founder_lineages = []
 
         while len(self.pedigree.ind_heap) > 0:
@@ -1296,7 +1226,7 @@ class Simulator:
                     assert seg.prev is None
                     parent.add_segment(seg, parent_ix=i)
 
-                if parent.queued is False:
+                if not parent.queued:
                     self.pedigree.push_ind(parent)
 
             next_ind.merged = True
@@ -2207,8 +2137,6 @@ def run_simulate(args):
     sample_configuration = [0 for j in range(num_populations)]
     population_growth_rates = [0 for j in range(num_populations)]
     population_sizes = [1 for j in range(num_populations)]
-    if args.pedigree_file is not None:
-        n *= 2
     sample_configuration[0] = n
     if args.sample_configuration is not None:
         sample_configuration = args.sample_configuration
@@ -2234,53 +2162,17 @@ def run_simulate(args):
         traj_sim = TrajectorySimulator(init_freq, end_freq, alpha, args.time_slice)
         sweep_trajectory = traj_sim.run()
         num_labels = 2
-    pedigree = None
-    if args.pedigree_file is not None:
-        # TODO we should be ignoring the sample number and instead reading
-        # the is_sample status from the file.
-        if n % 2 != 0:
-            raise ValueError(
-                "Must specify an even number of sample lineages for "
-                "diploid simulations"
-            )
-
-        num_diploid_individuals = n // 2
-        py_pedigree = pedigrees.Pedigree.read_txt(args.pedigree_file)
-        py_pedigree.set_samples(num_diploid_individuals)
-        ll_pedigree = py_pedigree.get_ll_representation()
-        pedigree = Pedigree(py_pedigree.num_individuals, py_pedigree.ploidy)
-        pedigree.set_pedigree(
-            ll_pedigree["individual"],
-            ll_pedigree["parents"],
-            ll_pedigree["time"],
-            ll_pedigree["is_sample"],
-        )
     random.seed(args.random_seed)
     np.random.seed(args.random_seed + 1)
 
     if args.from_ts is None:
         tables = tskit.TableCollection(m)
-        if pedigree is None:
-            for pop_id, sample_count in enumerate(sample_configuration):
-                tables.populations.add_row()
-                for _ in range(sample_count):
-                    tables.nodes.add_row(
-                        flags=tskit.NODE_IS_SAMPLE, time=0, population=pop_id
-                    )
-        else:
-            # Assume one population for now.
+        for pop_id, sample_count in enumerate(sample_configuration):
             tables.populations.add_row()
-            for is_sample, ind in zip(pedigree.is_sample, pedigree.inds):
-                # TODO add information about the individual.
-                ind_id = tables.individuals.add_row()
-                if is_sample:
-                    for _ in range(ind.ploidy):
-                        tables.nodes.add_row(
-                            flags=tskit.NODE_IS_SAMPLE,
-                            time=ind.time,
-                            population=0,
-                            individual=ind_id,
-                        )
+            for _ in range(sample_count):
+                tables.nodes.add_row(
+                    flags=tskit.NODE_IS_SAMPLE, time=0, population=pop_id
+                )
     else:
         from_ts = tskit.load(args.from_ts)
         tables = from_ts.dump_tables()
@@ -2304,7 +2196,6 @@ def run_simulate(args):
         time_slice=args.time_slice,
         gene_conversion_rate=gc_rate,
         gene_conversion_length=mean_tract_length,
-        pedigree=pedigree,
         discrete_genome=args.discrete,
     )
     ts = s.simulate(args.end_time)
@@ -2386,7 +2277,6 @@ def add_simulator_arguments(parser):
         help="The delta_t value for selective sweeps",
     )
     parser.add_argument("--model", default="hudson")
-    parser.add_argument("--pedigree-file", default=None)
     parser.add_argument(
         "--from-ts",
         "-F",
