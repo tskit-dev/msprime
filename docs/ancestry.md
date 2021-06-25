@@ -1072,24 +1072,24 @@ Consider the following example:
 ```{code-cell}
 demography = msprime.Demography()
 demography.add_population(name="A", initial_size=10)
-ts = msprime.sim_ancestry({"A": 3}, demography=demography, model="dtwf", random_seed=1)
-SVG(ts.draw_svg(y_axis=True))
+ts = msprime.sim_ancestry({"A": 3}, demography=demography, model="dtwf", random_seed=33)
+SVG(ts.draw_svg(y_axis=True, time_scale="log_time"))
 ```
 
-We can see that a coalescence happens at time 21, giving node 9. Now, let's
-try to perform a census at time 21:
+We can see that a coalescence happens at time 3, giving node 7. Now, let's
+try to perform a census at time 3:
 
 ```{code-cell}
-:tags: [raises-exception]
+:tags: [raises-exception, output_scroll]
 demography = msprime.Demography()
 demography.add_population(name="A", initial_size=10)
-demography.add_census(time=21)
-ts = msprime.sim_ancestry({"A": 3}, demography=demography, model="dtwf", random_seed=1)
+demography.add_census(time=3)
+ts = msprime.sim_ancestry({"A": 3}, demography=demography, model="dtwf", random_seed=33)
 ```
 
 We got an error from msprime about a parent node having a time value <= to its child,
-which occured because we tried to add set of census nodes at time 21, but node 9 was
-already at time 21, giving a zero branch length (which is disallowed by tskit).
+which occured because we tried to add set of census nodes at time 3, but node 7 was
+already at time 3, giving a zero branch length (which is disallowed by tskit).
 
 The solution is to use non-integer time values when performing a census
 under the DTWF:
@@ -1097,9 +1097,9 @@ under the DTWF:
 ```{code-cell}
 demography = msprime.Demography()
 demography.add_population(name="A", initial_size=10)
-demography.add_census(time=21.5)
-ts = msprime.sim_ancestry({"A": 3}, demography=demography, model="dtwf", random_seed=1)
-SVG(ts.draw_svg(y_axis=True))
+demography.add_census(time=3.5)
+ts = msprime.sim_ancestry({"A": 3}, demography=demography, model="dtwf", random_seed=33)
+SVG(ts.draw_svg(y_axis=True, time_scale="log_time"))
 ```
 
 ## Manipulating simulation time
@@ -1115,7 +1115,7 @@ for two diploid samples:
 
 ```{code-cell}
 ts = msprime.sim_ancestry(2, sequence_length=10, recombination_rate=0.1, random_seed=42)
-SVG(ts.draw_svg(y_axis=True))
+SVG(ts.draw_svg(y_axis=True, y_ticks=[0, 1, 2, 3, 4, 5]))
 ```
 
 Sometimes we would like to stop the simulation early, **before** complete
@@ -1131,7 +1131,7 @@ Let's repeat the same simulation as above with an ``end_time`` of 2:
 ```{code-cell}
 ts = msprime.sim_ancestry(
     2, sequence_length=10, recombination_rate=0.1, end_time=2, random_seed=42)
-SVG(ts.draw_svg(y_axis=True))
+SVG(ts.draw_svg(y_axis=True, y_ticks=[0, 1, 2]))
 ```
 
 There are a number of important things to observe about this
@@ -1349,7 +1349,7 @@ We first run the simulation of the recent past:
 ts1 = msprime.sim_ancestry(
     2, recombination_rate=0.01, sequence_length=10, end_time=10,
     population_size=100, random_seed=1)
-SVG(ts1.draw_svg(y_axis=True))
+SVG(ts1.draw_svg(y_axis=True, time_scale="log_time", y_ticks=[0, 1, 2, 5, 10]))
 ```
 
 Some recombination and coalescence has happened and we have three
@@ -1369,7 +1369,7 @@ We then run the next phase of the simulation in which there is
 
 ```{code-cell}
 ts2 = msprime.sim_ancestry(initial_state=ts1, population_size=100, random_seed=3)
-SVG(ts2.draw_svg(y_axis=True))
+SVG(ts2.draw_svg(y_axis=True, time_scale="log_time", y_ticks=[0, 10, 20, 50, 100, 200, 500]))
 ```
 
 Since there is no recombination in this more ancient simulation,
