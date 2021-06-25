@@ -463,7 +463,7 @@ class RateMap(collections.abc.Mapping):
         # so we explicitly disable reformatting here.
         # fmt: off
         """
-        Parses the specified file in HapMap format and returns a RateMap.
+        Parses the specified file in HapMap format and returns a :class:`.RateMap`.
         HapMap files must white-space-delimited, and by default are assumed to
         contain a single header line (which is ignored). Each subsequent line
         then contains a physical position (in base pairs) and either a genetic
@@ -482,6 +482,14 @@ class RateMap(collections.abc.Mapping):
             ...
             chr10	133762002     3.358        181.129345
             chr10	133766368     0.000        181.144008
+
+        In the example above, the first row has a nonzero genetic map position
+        (last column, cM), implying a nonzero recombination rate before that
+        position, that is assumed to extend to the start of the chromosome
+        (at position 0 bp). However, if the first line has a nonzero bp position
+        (second column) and a zero genetic map position (last column, cM),
+        then the recombination rate before that position is *unknown*, producing
+        :ref:`missing data <sec_rate_maps_missing>`.
 
         .. note::
             The rows are all assumed to come from the same contig, and the
