@@ -1,4 +1,4 @@
-bintrees==2.1.0
+bintrees==2.2.0
 daiquiri==3.0.0
 demes==0.1.2
 hypothesis==6.13.14
