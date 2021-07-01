@@ -302,7 +302,7 @@ class Pedigree:
                 assert len({ts.node(node).flags for node in tsk_ind.nodes}) == 1
                 assert len({ts.node(node).time for node in tsk_ind.nodes}) == 1
                 assert len({ts.node(node).population for node in tsk_ind.nodes}) == 1
-                ind = Individual(ploidy=self.ploidy)
+                ind = Individual(ploidy=self.ploidy, nodes=tsk_ind.nodes)
                 tsk_id_map[tsk_ind.id] = ind
                 for node in tsk_ind.nodes:
                     self.node_individual_map[node] = ind
@@ -339,7 +339,7 @@ class Individual:
     arbitrary ploidy possible at some point in the future.
     """
 
-    def __init__(self, ploidy=2):
+    def __init__(self, ploidy=2, nodes=None):
         self.id = None  # This is the index of the individual in pedigree.inds
         self.ploidy = ploidy
         self.parents = [None for i in range(ploidy)]
@@ -347,6 +347,8 @@ class Individual:
         self.sex = None
         self.time = -1
         self.queued = False
+        self.nodes = nodes
+        assert len(nodes) == ploidy
 
         # For debugging - to ensure we only merge once
         self.merged = False
@@ -361,7 +363,10 @@ class Individual:
 
         parents_str = ",".join(parents)
 
-        return f"(ID: {self.id}, time: {self.time}, parents: {parents_str})"
+        return (
+            f"(ID: {self.id}, time: {self.time}, "
+            + f"parents: {parents_str}, nodes: {self.nodes})"
+        )
 
     def __repr__(self):
         return self.__str__()
@@ -412,7 +417,6 @@ class TrajectorySimulator:
         t_inc = self._time_slice
         t = 0
         while x > self._initial_freq:
-            # print("x: ",x)
             self._allele_freqs.append(max(x, self._initial_freq))
             self._times.append(t)
             # just a note below
@@ -784,19 +788,20 @@ class Simulator:
 
     def store_node(self, population, flags=0):
         self.flush_edges()
-        self.tables.nodes.add_row(time=self.t, flags=flags, population=population)
+        return self.tables.nodes.add_row(
+            time=self.t, flags=flags, population=population
+        )
 
     def flush_edges(self):
         """
         Flushes the edges in the edge buffer to the table, squashing any adjacent edges.
         """
         if len(self.edge_buffer) > 0:
-            parent = len(self.tables.nodes) - 1
             self.edge_buffer.sort(key=lambda e: (e.child, e.left))
             left = self.edge_buffer[0].left
             right = self.edge_buffer[0].right
             child = self.edge_buffer[0].child
-            assert self.edge_buffer[0].parent == parent
+            parent = self.edge_buffer[0].parent
             for e in self.edge_buffer[1:]:
                 assert e.parent == parent
                 if e.left != right or e.child != child:
@@ -1027,7 +1032,6 @@ class Simulator:
                     self.P[0].get_num_ancestors(label=0),
                     self.P[0].get_num_ancestors(label=1),
                 ]
-                # print(sweep_pop_sizes)
                 p_rec_b = self.get_total_recombination_rate(0) * t_inc_orig
                 p_rec_B = self.get_total_recombination_rate(1) * t_inc_orig
 
@@ -1062,7 +1066,6 @@ class Simulator:
             else:
                 self.t += e_time
                 # choose which event happened
-                # print("event time: "+str(self.t))
                 if random.random() < sweep_pop_tot_rate / total_rate:
                     # even in sweeping pop, choose which kind
                     r = random.random()
@@ -1200,14 +1203,18 @@ class Simulator:
             assert next_ind.num_lineages() > 0
             assert next_ind.merged is False
 
-            for segments, parent in zip(next_ind.segments, next_ind.parents):
+            for segments, parent, node in zip(
+                next_ind.segments, next_ind.parents, next_ind.nodes
+            ):
+
                 # This parent may not have contributed any ancestral material
                 # to the samples.
                 if len(segments) == 0:
                     continue
 
                 # Merge segments inherited from this ind and recombine
-                self.merge_ancestors(segments, 0, 0)
+                self.merge_ancestors(segments, 0, 0, node)
+                self.flush_edges()
                 merged_segment = self.pedigree.merged_segment
                 self.pedigree.merged_segment = None
                 assert merged_segment.prev is None
@@ -1711,7 +1718,7 @@ class Simulator:
                 heapq.heappush(H, (x.left, x))
         self.merge_ancestors(H, pop_id, label)
 
-    def merge_ancestors(self, H, pop_id, label):
+    def merge_ancestors(self, H, pop_id, label, new_node_id=-1):
         pop = self.P[pop_id]
         defrag_required = False
         coalescence = False
@@ -1742,10 +1749,9 @@ class Simulator:
                     alpha = x
                     alpha.next = None
             else:
-                if not coalescence:
+                if new_node_id == -1:
                     coalescence = True
-                    self.store_node(pop_id)
-                u = len(self.tables.nodes) - 1
+                    new_node_id = self.store_node(pop_id)
                 # We must also break if the next left value is less than
                 # any of the right values in the current overlap set.
                 if left not in self.S:
@@ -1763,10 +1769,10 @@ class Simulator:
                     while right < r_max and self.S[right] != len(X):
                         self.S[right] -= len(X) - 1
                         right = self.S.succ_key(right)
-                    alpha = self.alloc_segment(left, right, u, pop_id)
+                    alpha = self.alloc_segment(left, right, new_node_id, pop_id)
                 # Update the heaps and make the record.
                 for x in X:
-                    self.store_edge(left, right, u, x.node)
+                    self.store_edge(left, right, new_node_id, x.node)
                     if x.right == right:
                         self.free_segment(x)
                         if x.next is not None:

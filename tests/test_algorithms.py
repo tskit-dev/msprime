@@ -169,7 +169,11 @@ class TestAlgorithms:
             assert ts.sequence_length == 100
 
     def test_pedigree(self):
-        tables = simulate_pedigree(num_founders=10, num_generations=5)
+        num_founders = 10
+        num_generations = 5
+        tables = simulate_pedigree(
+            num_founders=num_founders, num_generations=num_generations
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
             tables.dump(ts_path)
@@ -177,5 +181,30 @@ class TestAlgorithms:
         assert ts.num_trees > 1
         for tree in ts.trees():
             assert tree.num_roots > 1
-        assert ts.num_individuals == len(tables.individuals)
-        assert ts.num_samples == 20
+        for node in ts.nodes():
+            assert node.individual != tskit.NULL
+        assert ts.num_samples == 2 * num_founders
+
+        # founder nodes have correct time
+        founder_ids = {
+            idx
+            for idx, ind in enumerate(ts.dump_tables().individuals)
+            if np.array_equal(ind.parents, [-1, -1])
+        }
+        for tree in ts.trees():
+            for node_id in tree.nodes():
+                node = ts.node(node_id)
+                individual = ts.individual(node.individual)
+                if tree.parent(node_id) != tskit.NULL:
+                    parent_node = ts.node(tree.parent(node_id))
+                    assert parent_node.individual in individual.parents
+                else:
+                    assert node.individual in founder_ids
+
+    def test_one_gen_pedigree(self):
+        tables = simulate_pedigree(num_founders=20, num_generations=1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
+            tables.dump(ts_path)
+            ts = self.run_script(f"0 --from-ts {ts_path} -r 1 --model=wf_ped")
+        assert len(ts.dump_tables().edges) == 0
