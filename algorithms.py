@@ -1214,27 +1214,31 @@ class Simulator:
 
                 # Merge segments inherited from this ind and recombine
                 self.merge_ancestors(segments, 0, 0, node)
-                self.flush_edges()
-                merged_segment = self.pedigree.merged_segment
+                merged_head = self.pedigree.merged_segment
                 self.pedigree.merged_segment = None
-                assert merged_segment.prev is None
+                assert merged_head.prev is None
 
                 # If parent is None, we are at a pedigree founder and we add
-                # to founder lineages.
+                # to founder lineages and add unary edges for any nodes
+                # that did not coalesce.
                 if parent is None:
-                    founder_lineages.append(merged_segment)
-                    continue
-
-                # Recombine and climb segments to parents.
-                segs_pair = self.dtwf_recombine(merged_segment)
-                for i, seg in enumerate(segs_pair):
-                    if seg is None:
-                        continue
-                    assert seg.prev is None
-                    parent.add_segment(seg, parent_ix=i)
-
-                if not parent.queued:
-                    self.pedigree.push_ind(parent)
+                    founder_lineages.append(merged_head)
+                    x = merged_head
+                    while x is not None:
+                        if x.node != node:
+                            self.store_edge(x.left, x.right, node, x.node)
+                            x.node = node
+                        x = x.next
+                else:
+                    # Recombine and climb segments to parents.
+                    segs_pair = self.dtwf_recombine(merged_head)
+                    for i, seg in enumerate(segs_pair):
+                        if seg is not None:
+                            assert seg.prev is None
+                            parent.add_segment(seg, parent_ix=i)
+                    if not parent.queued:
+                        self.pedigree.push_ind(parent)
+                self.flush_edges()
 
             next_ind.merged = True
 
@@ -1243,7 +1247,6 @@ class Simulator:
         # Add lineages back to population.
         for lineage in founder_lineages:
             self.P[0].add(lineage)
-
         self.verify()
 
     def store_arg_edges(self, segment):
@@ -1785,6 +1788,9 @@ class Simulator:
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
                 if z is None:
+                    # TODO refactor this so that we're returning alpha
+                    # as the head of the stored segment chain rather than
+                    # using the pedigree state.
                     # Pedigrees don't currently track lineages in Populations,
                     # so keep reference to merged segments instead.
                     if self.pedigree is not None and self.pedigree.is_climbing:
