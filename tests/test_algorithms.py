@@ -168,14 +168,62 @@ class TestAlgorithms:
             assert ts.num_trees > 1
             assert ts.sequence_length == 100
 
-    def test_pedigree(self):
-        tables = simulate_pedigree(num_founders=10, num_generations=5)
+    @pytest.mark.parametrize(
+        ["num_founders", "num_generations", "r"],
+        [
+            (4, 5, 0),
+            (4, 5, 0.1),
+            (4, 5, 1),
+            (4, 10, 0.1),
+            (10, 5, 0.1),
+            (100, 2, 0.1),
+        ],
+    )
+    def test_pedigree(self, num_founders, num_generations, r):
+        tables = simulate_pedigree(
+            num_founders=num_founders, num_generations=num_generations
+        )
         with tempfile.TemporaryDirectory() as tmpdir:
             ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
             tables.dump(ts_path)
-            ts = self.run_script(f"0 --from-ts {ts_path} -r 0.1 --model=wf_ped")
-        assert ts.num_trees > 1
+            ts = self.run_script(f"0 --from-ts {ts_path} -r {r} --model=wf_ped")
+        for node in ts.nodes():
+            assert node.individual != tskit.NULL
+        assert ts.num_samples == 2 * num_founders
+
+        # Make the set of ancestors for each individual
+        ancestors = [set() for _ in ts.individuals()]
+        for individual in ts.individuals():
+            for parent_id in individual.parents:
+                stack = [parent_id]
+                while len(stack) > 0:
+                    parent_id = stack.pop()
+                    if parent_id != tskit.NULL:
+                        ancestors[individual.id].add(parent_id)
+                        for u in ts.individual(parent_id).parents:
+                            stack.append(u)
+        # founder nodes have correct time
+        founder_ids = {
+            ind.id for ind in ts.individuals() if len(ancestors[ind.id]) == 0
+        }
+        for founder in founder_ids:
+            for node_id in ts.individual(founder).nodes:
+                node = ts.node(node_id)
+                assert node.time == num_generations - 1
         for tree in ts.trees():
-            assert tree.num_roots > 1
-        assert ts.num_individuals == len(tables.individuals)
-        assert ts.num_samples == 20
+            for node_id in tree.nodes():
+                node = ts.node(node_id)
+                individual = ts.individual(node.individual)
+                if tree.parent(node_id) != tskit.NULL:
+                    parent_node = ts.node(tree.parent(node_id))
+                    assert parent_node.individual in ancestors[individual.id]
+                else:
+                    assert node.individual in founder_ids
+
+    def test_one_gen_pedigree(self):
+        tables = simulate_pedigree(num_founders=20, num_generations=1)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
+            tables.dump(ts_path)
+            ts = self.run_script(f"0 --from-ts {ts_path} -r 1 --model=wf_ped")
+        assert len(ts.dump_tables().edges) == 0
