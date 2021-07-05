@@ -288,28 +288,22 @@ mutation_matrix_free(mutation_model_t *self)
 static void
 copy_slim_mutation_metadata(slim_mutator_t *params, char *dest, double time)
 {
-    size_t n;
-    int32_t *mutation_type_id;
-    float *selection_coeff;
-    int32_t *subpop_index;
-    int32_t *origin_generation;
-    int8_t *nucleotide;
+    int32_t mutation_type_id = params->mutation_type_id;
+    float selection_coeff = 0;
+    int32_t subpop_index = TSK_NULL;
+    int32_t origin_generation = params->slim_generation - (int32_t) time;
+    int8_t nucleotide = -1;
 
-    n = 0;
-    mutation_type_id = (int32_t *) (dest + n);
-    *mutation_type_id = params->mutation_type_id;
-    n += sizeof(int32_t);
-    selection_coeff = (float *) (dest + n);
-    *selection_coeff = 0.0;
-    n += sizeof(float);
-    subpop_index = (int32_t *) (dest + n);
-    *subpop_index = TSK_NULL;
-    n += sizeof(int32_t);
-    origin_generation = (int32_t *) (dest + n);
-    *origin_generation = params->slim_generation - (int32_t) time;
-    n += sizeof(int32_t);
-    nucleotide = (int8_t *) (dest + n);
-    *nucleotide = -1;
+    memcpy(dest, &mutation_type_id, sizeof(mutation_type_id));
+    dest += sizeof(mutation_type_id);
+    memcpy(dest, &selection_coeff, sizeof(selection_coeff));
+    dest += sizeof(selection_coeff);
+    memcpy(dest, &subpop_index, sizeof(subpop_index));
+    dest += sizeof(subpop_index);
+    memcpy(dest, &origin_generation, sizeof(origin_generation));
+    dest += sizeof(origin_generation);
+    memcpy(dest, &nucleotide, sizeof(nucleotide));
+    dest += sizeof(nucleotide);
 }
 
 static void
