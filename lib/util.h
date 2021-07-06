@@ -122,6 +122,8 @@
 #define MSP_ERR_ADMIX_DERIVED_NOT_ACTIVE                            -78
 #define MSP_ERR_POP_SIZE_ZERO_SAMPLE                                -79
 #define MSP_ERR_POPULATION_CURRENTLY_ACTIVE                         -80
+#define MSP_ERR_DEACTIVATE_INACTIVE_POPULATION                      -81
+#define MSP_ERR_DEACTIVATE_PREVIOUSLY_ACTIVE_POPULATION             -82
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */
