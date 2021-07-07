@@ -5856,17 +5856,31 @@ out:
     return ret;
 }
 
-static void
+static int
 msp_deactivate_population(msp_t *self, int population_id)
 {
+    int ret = 0;
     population_t *pop = &self->populations[population_id];
+
+    if (pop->state == MSP_POP_STATE_INACTIVE) {
+        ret = MSP_ERR_DEACTIVATE_INACTIVE_POPULATION;
+        goto out;
+    }
+
+    if (pop->state == MSP_POP_STATE_PREVIOUSLY_ACTIVE) {
+        ret = MSP_ERR_DEACTIVATE_PREVIOUSLY_ACTIVE_POPULATION;
+        goto out;
+    }
 
     tsk_bug_assert(pop->state == MSP_POP_STATE_ACTIVE);
     tsk_bug_assert(msp_get_num_population_ancestors(self, population_id) == 0);
+
     pop->state = MSP_POP_STATE_PREVIOUSLY_ACTIVE;
     /* Set these to zero for tidyness sake */
     pop->initial_size = 0;
     pop->growth_rate = 0;
+out:
+    return ret;
 }
 
 static int
@@ -6516,6 +6530,46 @@ msp_add_activate_population_event(msp_t *self, double time, int population_id)
     de->params.activate_population.population = population_id;
     de->change_state = msp_activate_population_event;
     de->print_state = msp_print_activate_population_event;
+    ret = 0;
+out:
+    return ret;
+}
+
+/* Add a deactivate_population_event at a given time */
+
+static int
+msp_deactivate_population_event(msp_t *self, demographic_event_t *event)
+{
+    population_id_t population = event->params.deactivate_population.population;
+
+    return msp_deactivate_population(self, population);
+}
+
+static void
+msp_print_deactivate_population_event(
+    msp_t *MSP_UNUSED(self), demographic_event_t *event, FILE *out)
+{
+    fprintf(out, "%f\tdeactivate_population_event:\n", event->time);
+}
+
+int MSP_WARN_UNUSED
+msp_add_deactivate_population_event(msp_t *self, double time, int population_id)
+{
+    int ret = 0;
+    demographic_event_t *de;
+    int N = (int) self->num_populations;
+
+    if (population_id < 0 || population_id >= N) {
+        ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
+        goto out;
+    }
+    ret = msp_add_demographic_event(self, time, &de);
+    if (ret != 0) {
+        goto out;
+    }
+    de->params.deactivate_population.population = population_id;
+    de->change_state = msp_deactivate_population_event;
+    de->print_state = msp_print_deactivate_population_event;
     ret = 0;
 out:
     return ret;

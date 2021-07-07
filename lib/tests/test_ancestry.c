@@ -2622,6 +2622,104 @@ test_activate_population_event_errors(void)
 }
 
 static void
+test_deactivate_population_event(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    sample_t samples[] = {
+        { .time = 0, .population = 0 },
+        { .time = 0, .population = 0 },
+    };
+    tsk_table_collection_t tables;
+
+    ret = build_sim(&msp, &tables, rng, 1, 2, samples, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_add_deactivate_population_event(&msp, 1, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_ACTIVE);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp, 0);
+    msp_print_state(&msp, _devnull);
+
+    CU_ASSERT_EQUAL(msp.populations[0].state, MSP_POP_STATE_ACTIVE);
+    CU_ASSERT_EQUAL(msp.populations[1].state, MSP_POP_STATE_PREVIOUSLY_ACTIVE);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_deactivate_population_event_errors(void)
+{
+    int ret;
+    uint32_t n = 10;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+
+    /* Deactivate inactive population. */
+    ret = build_sim(&msp, &tables, rng, 1, 2, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 1, 1, 0, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_deactivate_population_event(&msp, 1, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DEACTIVATE_INACTIVE_POPULATION);
+
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    /* Deactivate previously active population. */
+    ret = build_sim(&msp, &tables, rng, 1, 2, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_deactivate_population_event(&msp, 0.1, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_deactivate_population_event(&msp, 0.2, 1); /* deactivate again */
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_DEACTIVATE_PREVIOUSLY_ACTIVE_POPULATION);
+
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    /* Activate nonexistent populations. */
+    ret = build_sim(&msp, &tables, rng, 1, 1, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_deactivate_population_event(&msp, 1, -1);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    ret = build_sim(&msp, &tables, rng, 1, 1, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_deactivate_population_event(&msp, 1, 1);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_POPULATION_OUT_OF_BOUNDS);
+
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+
+    gsl_rng_free(rng);
+}
+
+static void
 test_time_travel_error(void)
 {
     int ret;
@@ -3466,6 +3564,9 @@ main(int argc, char **argv)
         { "test_activate_population_event", test_activate_population_event },
         { "test_activate_population_event_errors",
             test_activate_population_event_errors },
+        { "test_deactivate_population_event", test_deactivate_population_event },
+        { "test_deactivate_population_event_errors",
+            test_deactivate_population_event_errors },
         { "test_time_travel_error", test_time_travel_error },
         { "test_floating_point_extremes", test_floating_point_extremes },
         { "test_simulation_replicates", test_simulation_replicates },

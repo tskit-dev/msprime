@@ -299,6 +299,10 @@ typedef struct {
 
 typedef struct {
     population_id_t population;
+} deactivate_population_t;
+
+typedef struct {
+    population_id_t population;
 } activate_population_t;
 
 typedef struct {
@@ -327,6 +331,7 @@ typedef struct demographic_event_t_t {
         instantaneous_bottleneck_t instantaneous_bottleneck;
         mass_migration_t mass_migration;
         population_split_t population_split;
+        deactivate_population_t deactivate_population;
         activate_population_t activate_population;
         admixture_t admixture;
         migration_rate_change_t migration_rate_change;
@@ -451,6 +456,7 @@ int msp_add_mass_migration(
 int msp_add_population_split(
     msp_t *self, double time, size_t num_derived, int32_t *derived, int ancestral);
 int msp_add_activate_population_event(msp_t *self, double time, int population_id);
+int msp_add_deactivate_population_event(msp_t *self, double time, int population_id);
 int msp_add_admixture(msp_t *self, double time, int derived, size_t num_ancestral,
     int32_t *ancestral, double *proportions);
 int msp_add_simple_bottleneck(
