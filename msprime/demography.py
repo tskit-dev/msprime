@@ -392,6 +392,19 @@ class Demography(collections.abc.Mapping):
             # the KeyError message
             self[pop_ref]
 
+    def _add_activate_population_event(
+        self, time: float, *, population: str | int
+    ) -> ActivatePopulationEvent:
+        """
+        Activates a population at the specified time. The population is expected to be
+        initially inactive.
+
+        :param float time: The time at which this event occurs in generations.
+        :param str, int population: The population to activate.
+        """
+        self._check_population_references([population])
+        return self.add_event(ActivatePopulationEvent(time=time, population=population))
+
     def add_population_split(
         self, time: float, *, derived: list[str | int], ancestral: str | int
     ) -> PopulationSplit:
@@ -1856,29 +1869,40 @@ class Demography(collections.abc.Mapping):
 
         graph = graph.in_generations()
         events = graph.discrete_demographic_events()
-        initially_active = collections.defaultdict(lambda: True)
-        for split in events["splits"]:
-            initially_active[split.parent] = False
-        for merge in events["mergers"]:
-            for parent in merge.parents:
-                initially_active[parent] = False
 
         demography = Demography()
         for deme in graph.demes:
             initial_size = 0
             growth_rate = 0
             last_epoch = deme.epochs[-1]
+            initially_active = False
+            to_activate = False
             if last_epoch.end_time == 0:
                 initial_size = last_epoch.end_size
                 growth_rate = get_growth_rate(last_epoch)
+                initially_active = True
+            else:
+                # add activation if needed
+                # needed if isn't the ancestor of any split or merger
+                to_activate = True
+                for split in events["splits"]:
+                    if deme.name == split.parent:
+                        to_activate = False
+                for merger in events["mergers"]:
+                    if deme.name in merger.parents:
+                        to_activate = False
             demography.add_population(
                 name=deme.name,
                 description=deme.description,
                 growth_rate=growth_rate,
                 initial_size=initial_size,
                 default_sampling_time=deme.end_time,
-                initially_active=initially_active[deme.name],
+                initially_active=initially_active,
             )
+            if to_activate:
+                demography._add_activate_population_event(
+                    time=deme.end_time, population=deme.name
+                )
             for epoch in reversed(deme.epochs):
                 new_initial_size = None
                 if initial_size != epoch.end_size:
@@ -2189,7 +2213,9 @@ class Demography(collections.abc.Mapping):
             initial_size=2100,
         )
         demography.add_population(
-            name="AMH", description="Anatomically modern humans", initial_size=12300
+            name="AMH",
+            description="Anatomically modern humans",
+            initial_size=12300,
         )
         demography.add_population(
             name="ANC",
@@ -2436,7 +2462,9 @@ class Demography(collections.abc.Mapping):
             initial_size=1861,
         )
         demography.add_population(
-            name="AMH", description="Anatomically modern humans", initial_size=14474
+            name="AMH",
+            description="Anatomically modern humans",
+            initial_size=14474,
         )
         demography.add_population(
             name="ANC",
@@ -3148,6 +3176,39 @@ class MassMigration(LineageMovementEvent):
                 proportion=self.proportion,
             )
         ]
+
+
+@dataclasses.dataclass
+class ActivatePopulationEvent(DemographicEvent):
+    """
+    A population activation event, which changes the state of the population
+    from inactive to active at the given time.
+    """
+
+    population: int | str | None = None
+    """
+    The name or ID of the population to activate.
+    """
+
+    _type_str: ClassVar[str] = dataclasses.field(
+        default="Activate population event", repr=False
+    )
+
+    def get_ll_representation(self, num_populations=None):
+        # We need to keep the num_populations argument until stdpopsim 0.1 is out
+        # https://github.com/tskit-dev/msprime/issues/1037
+        return {
+            "type": "activate_population_event",
+            "time": self.time,
+            "population": self._convert_id(self.population),
+        }
+
+    def _parameters(self):
+        return f"population={self.population}"
+
+    def _effect(self):
+        s = f"Activates population {self.population}"
+        return s
 
 
 @dataclasses.dataclass
