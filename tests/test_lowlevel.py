@@ -213,6 +213,18 @@ def get_mass_migration_event(time=0.0, source=0, dest=1, proportion=1):
     }
 
 
+def get_activate_population_event(time=0.0, population=None):
+    """
+    Returns an activate population demographic event.
+    """
+    population = 0 if population is None else population
+    return {
+        "type": "activate_population_event",
+        "time": time,
+        "population": population,
+    }
+
+
 def get_population_split_event(time=0.0, derived=None, ancestral=1):
     """
     Returns a population split demographic event.
@@ -1586,6 +1598,7 @@ class TestSimulator(LowLevelTestCase):
             get_migration_rate_change_event,
             get_symmetric_migration_rate_change_event,
             get_mass_migration_event,
+            get_activate_population_event,
             get_population_split_event,
             get_admixture_event,
             get_simple_bottleneck_event,
@@ -1714,6 +1727,7 @@ class TestSimulator(LowLevelTestCase):
             get_migration_rate_change_event,
             get_symmetric_migration_rate_change_event,
             get_mass_migration_event,
+            get_activate_population_event,
             get_population_split_event,
             get_admixture_event,
             get_simple_bottleneck_event,
@@ -1746,6 +1760,9 @@ class TestSimulator(LowLevelTestCase):
             with pytest.raises(_msprime.InputError):
                 f([event])
             event = get_simple_bottleneck_event(population=bad_pop_id)
+            with pytest.raises(_msprime.InputError):
+                f([event])
+            event = get_activate_population_event(population=bad_pop_id)
             with pytest.raises(_msprime.InputError):
                 f([event])
             event = get_population_split_event(derived=[bad_pop_id])
@@ -1827,6 +1844,7 @@ class TestSimulator(LowLevelTestCase):
             get_migration_rate_change_event,
             get_symmetric_migration_rate_change_event,
             get_mass_migration_event,
+            get_activate_population_event,
             get_population_split_event,
             get_admixture_event,
             get_simple_bottleneck_event,
@@ -2005,6 +2023,25 @@ class TestSimulator(LowLevelTestCase):
                 pop_sizes_after[pop_id] += 1
         assert pop_sizes_before[0] == pop_sizes_after[1]
 
+    def test_activate_population_errors(self):
+        def f(pop_id):
+            return make_sim(
+                samples=10,
+                num_populations=2,
+                population_configuration=[
+                    get_population_configuration(),
+                    get_population_configuration(),
+                ],
+                demographic_events=[
+                    get_activate_population_event(0, population=pop_id)
+                ],
+                migration_matrix=[[0, 0], [0, 0]],
+            )
+
+        for bad_id in [{}, [[], []], ["sdf"], 3, None]:
+            with pytest.raises(_msprime.InputError):
+                f(bad_id)
+
     def test_population_split_errors(self):
         def f(derived):
             return make_sim(
@@ -2070,6 +2107,27 @@ class TestSimulator(LowLevelTestCase):
             f([0, 0], [0, 1])
         with pytest.raises(ValueError, match="must be same size"):
             f([0], [0, 1])
+
+    def test_activate_population(self):
+        n = 10
+        t = 1e-2
+        dt = 1e-6
+        sim = make_sim(
+            samples=n,
+            num_populations=2,
+            population_configuration=[
+                get_population_configuration(),
+                get_population_configuration(initially_active=False),
+            ],
+            demographic_events=[get_activate_population_event(t + dt, population=1)],
+            migration_matrix=[[0, 0], [0, 0]],
+        )
+        sim.run(t)
+        assert sim.population_configuration[0]["state"] == 1
+        assert sim.population_configuration[1]["state"] == 0
+        sim.run(t + 2 * dt)
+        assert sim.population_configuration[0]["state"] == 1
+        assert sim.population_configuration[1]["state"] == 1
 
     def test_population_split(self):
         n = 10
