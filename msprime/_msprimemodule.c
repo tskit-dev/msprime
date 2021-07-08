@@ -1243,6 +1243,29 @@ out:
 }
 
 static int
+Simulator_parse_activate_population_event(Simulator *self, double time, PyObject *py_event)
+{
+    int ret = -1;
+    int err, population_id;
+    PyObject *value;
+
+    value = get_dict_value(py_event, "population");
+    if (value == NULL) {
+        goto out;
+    }
+    population_id = (int) PyLong_AsLong(value);
+
+    err = msp_add_activate_population_event(self->sim, time, population_id);
+    if (err != 0) {
+        handle_input_error("activate population event", err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static int
 Simulator_parse_population_split(Simulator *self, double time, PyObject *py_event)
 {
     int ret = -1;
@@ -1445,12 +1468,14 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     int err, population_id, source, destination;
     int is_population_parameter_change, is_migration_rate_change, is_mass_migration,
         is_population_split, is_admixture, is_symmetric_migration_rate_change,
-        is_simple_bottleneck, is_instantaneous_bottleneck, is_census_event;
+        is_simple_bottleneck, is_instantaneous_bottleneck, is_census_event,
+        is_activate_population_event;
     PyObject *item, *value, *type;
     PyObject *population_parameter_change_s = NULL;
     PyObject *migration_rate_change_s = NULL;
     PyObject *symmetric_migration_rate_change_s = NULL;
     PyObject *mass_migration_s = NULL;
+    PyObject *activate_population_event_s = NULL;
     PyObject *population_split_s = NULL;
     PyObject *admixture_s = NULL;
     PyObject *simple_bottleneck_s = NULL;
@@ -1477,6 +1502,10 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     }
     mass_migration_s = Py_BuildValue("s", "mass_migration");
     if (mass_migration_s == NULL) {
+        goto out;
+    }
+    activate_population_event_s = Py_BuildValue("s", "activate_population_event");
+    if (activate_population_event_s == NULL) {
         goto out;
     }
     population_split_s = Py_BuildValue("s", "population_split");
@@ -1549,6 +1578,11 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
         is_mass_migration = PyObject_RichCompareBool(type, mass_migration_s,
                 Py_EQ);
         if (is_mass_migration == -1) {
+            goto out;
+        }
+        is_activate_population_event = PyObject_RichCompareBool(type,
+                activate_population_event_s, Py_EQ);
+        if (is_activate_population_event == -1) {
             goto out;
         }
         is_population_split = PyObject_RichCompareBool(type, population_split_s,
@@ -1637,6 +1671,10 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             destination = (int) PyLong_AsLong(value);
             err = msp_add_mass_migration(self->sim, time, source, destination,
                     proportion);
+        } else if (is_activate_population_event) {
+            if (Simulator_parse_activate_population_event(self, time, item) != 0) {
+                goto out;
+            }
         } else if (is_population_split) {
             if (Simulator_parse_population_split(self, time, item) != 0) {
                 goto out;
@@ -1694,6 +1732,7 @@ out:
     Py_XDECREF(migration_rate_change_s);
     Py_XDECREF(symmetric_migration_rate_change_s);
     Py_XDECREF(mass_migration_s);
+    Py_XDECREF(activate_population_event_s);
     Py_XDECREF(population_split_s);
     Py_XDECREF(admixture_s);
     Py_XDECREF(simple_bottleneck_s);
