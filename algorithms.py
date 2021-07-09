@@ -1225,6 +1225,8 @@ class Simulator:
                     founder_lineages.append(merged_head)
                     x = merged_head
                     while x is not None:
+                        print(f"merged_head: {merged_head.show_chain(merged_head)}")
+                        print(f"x.node: {x.node}")
                         if x.node != node:
                             self.store_edge(x.left, x.right, node, x.node)
                             x.node = node
