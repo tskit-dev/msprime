@@ -5,4 +5,4 @@ matplotlib==3.4.2
 newick==1.3.0
 sphinx-argparse==0.2.5
 sphinx-issues==1.2.0
-tskit==0.3.6
+tskit==0.3.7
