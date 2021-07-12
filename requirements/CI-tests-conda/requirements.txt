@@ -1,4 +1,4 @@
 gsl
-tskit==0.3.6
+tskit==0.3.7
 stdpopsim==0.1.2
 demes==0.1.2
