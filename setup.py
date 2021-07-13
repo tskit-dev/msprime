@@ -113,6 +113,9 @@ _msprime_module = Extension(
 
 
 setup(
+    # The package name along with all the other metadata is specified in setup.cfg
+    # However, GitHub's dependency graph can't see the package unless we put this here.
+    name="msprime",
     use_scm_version={"write_to": "msprime/_version.py"},
     ext_modules=[_msprime_module],
     cmdclass={"build_ext": local_build_ext},
