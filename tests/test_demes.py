@@ -19,17 +19,18 @@
 """
 Test cases for demes support.
 """
-import copy
+# import copy
 import math
 import textwrap
 
 import demes
-import hypothesis as hyp
 import numpy as np
 import pytest
-from demes.hypothesis_strategies import graphs
 
 import msprime
+
+# import hypothesis as hyp
+# from demes.hypothesis_strategies import graphs
 
 
 def validate_demes_demography(graph, demography):
@@ -98,13 +99,14 @@ class TestFromDemes:
         ooa2 = msprime.Demography._ooa_model().copy([d.name for d in g.demes])
         ooa2.assert_equivalent(ooa1)
 
-    @hyp.settings(
-        deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
-    )
-    @hyp.given(graphs(size_functions=["constant", "exponential"]))
-    def test_random_graph(self, graph):
-        demography = msprime.Demography.from_demes(graph)
-        validate_demes_demography(graph, demography)
+
+#    @hyp.settings(
+#        deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
+#    )
+#    @hyp.given(graphs(size_functions=["constant", "exponential"]))
+#    def test_random_graph(self, graph):
+#        demography = msprime.Demography.from_demes(graph)
+#        validate_demes_demography(graph, demography)
 
 
 class TestFromYamlExamples:
@@ -547,6 +549,71 @@ class TestFromYamlExamples:
         self.check_asymmetric_matrix(dbg.epochs[2].migration_matrix, 0.1, j, k)
         self.check_asymmetric_matrix(dbg.epochs[3].migration_matrix, 0, j, k)
 
+    def test_activate_ghost_split(self):
+        yaml = """\
+        time_units: generations
+        demes:
+          - name: A
+            epochs: [{start_size: 100, end_time: 100}]
+          - name: B
+            ancestors: [A]
+            epochs: [{start_size: 100}]
+          - name: C
+            ancestors: [A]
+            epochs: [{start_size: 100, end_time: 50}]
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 3
+        dbg = d.debug()
+        assert dbg.num_epochs == 3
+
+        assert np.all(dbg.epoch_start_time == np.array([0, 50, 100]))
+
+        assert len(dbg.epochs[0].active_populations) == 1
+        assert "B" == dbg.epochs[0].active_populations[0].name
+        assert len(dbg.epochs[1].active_populations) == 2
+        active_pops = [_.name for _ in dbg.epochs[1].active_populations]
+        assert "B" in active_pops and "C" in active_pops
+        assert len(dbg.epochs[2].active_populations) == 1
+        assert "A" in dbg.epochs[2].active_populations[0].name
+
+    def test_activate_ghost_admixture(self):
+        yaml = """\
+        description: two populations admix, with one persisting but extinct before zero
+        time_units: generations
+        demes:
+          - name: A
+            epochs: [{start_size: 100, end_time: 100}]
+          - name: B
+            ancestors: [A]
+            epochs: [{start_size: 100, end_time: 25}]
+          - name: C
+            ancestors: [A]
+            epochs: [{start_size: 100, end_time: 50}]
+          - name: D
+            ancestors: [B, C]
+            proportions: [0.3, 0.7]
+            start_time: 50
+            epochs: [{start_size: 100, end_time: 0}]
+        """
+        d = self.from_yaml(yaml)
+        assert d.num_populations == 4
+        dbg = d.debug()
+        assert dbg.num_epochs == 4
+
+        assert np.all(dbg.epoch_start_time == np.array([0, 25, 50, 100]))
+
+        assert len(dbg.epochs[0].active_populations) == 1
+        assert "D" == dbg.epochs[0].active_populations[0].name
+        assert len(dbg.epochs[1].active_populations) == 2
+        active_pops = [_.name for _ in dbg.epochs[1].active_populations]
+        assert "B" in active_pops and "D" in active_pops
+        assert len(dbg.epochs[2].active_populations) == 2
+        active_pops = [_.name for _ in dbg.epochs[2].active_populations]
+        assert "B" in active_pops and "C" in active_pops
+        assert len(dbg.epochs[3].active_populations) == 1
+        assert "A" in dbg.epochs[3].active_populations[0].name
+
 
 class TestToDemes:
     def test_ooa_example(self):
@@ -952,41 +1019,41 @@ class TestToDemes:
         demog.to_demes()
 
 
-class TestRoundTrip:
-    def remove_selfing_and_cloning(self, graph):
-        graph = copy.deepcopy(graph)
-        for deme in graph.demes:
-            for epoch in deme.epochs:
-                epoch.selfing_rate = 0
-                epoch.cloning_rate = 0
-        return graph
+# class TestRoundTrip:
+#    def remove_selfing_and_cloning(self, graph):
+#        graph = copy.deepcopy(graph)
+#        for deme in graph.demes:
+#            for epoch in deme.epochs:
+#                epoch.selfing_rate = 0
+#                epoch.cloning_rate = 0
+#        return graph
+#
+#    @pytest.mark.filterwarnings(
+#        # demes warns about multiple pulses with the same time
+#        "ignore:Multiple pulses:UserWarning"
+#    )
+#    @hyp.settings(
+#        deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
+#    )
+#    @hyp.given(graphs(size_functions=["constant", "exponential"], min_deme_size=1))
+#    def test_random_graph(self, graph1):
+#        graph1 = graph1.in_generations()
+#        graph1 = self.remove_selfing_and_cloning(graph1)
+#        demography1 = msprime.Demography.from_demes(graph1)
+#        graph2 = demography1.to_demes()
+#        demography2 = msprime.Demography.from_demes(graph2)  # noqa: F841
 
-    @pytest.mark.filterwarnings(
-        # demes warns about multiple pulses with the same time
-        "ignore:Multiple pulses:UserWarning"
-    )
-    @hyp.settings(
-        deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
-    )
-    @hyp.given(graphs(size_functions=["constant", "exponential"], min_deme_size=1))
-    def test_random_graph(self, graph1):
-        graph1 = graph1.in_generations()
-        graph1 = self.remove_selfing_and_cloning(graph1)
-        demography1 = msprime.Demography.from_demes(graph1)
-        graph2 = demography1.to_demes()
-        demography2 = msprime.Demography.from_demes(graph2)  # noqa: F841
+# XXX: We'd like to assert that the models are equivalent after
+# converting back and forth. However, hypothesis readily produces
+# examples with redundant epochs or migrations, which don't survive
+# the process of conversion. E.g.
+#
+#   time_units: generations
+#   demes:
+#     - name: A
+#       epochs:
+#         - {end_time: 100, start_size 1}
+#         - {end_time: 0, start_size 1}
 
-        # XXX: We'd like to assert that the models are equivalent after
-        # converting back and forth. However, hypothesis readily produces
-        # examples with redundant epochs or migrations, which don't survive
-        # the process of conversion. E.g.
-        #
-        #   time_units: generations
-        #   demes:
-        #     - name: A
-        #       epochs:
-        #         - {end_time: 100, start_size 1}
-        #         - {end_time: 0, start_size 1}
-
-        # graph2.assert_close(graph1)
-        # demography2.assert_equivalent(demography1)
+# graph2.assert_close(graph1)
+# demography2.assert_equivalent(demography1)

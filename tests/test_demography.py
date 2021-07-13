@@ -285,6 +285,12 @@ class TestIntrospectionInterface:
         assert repr(event) == repr_s
         assert str(event) == repr_s
 
+    def test_activate_population_event(self):
+        event = demog_mod.ActivatePopulationEvent(time=1, population=0)
+        repr_s = "ActivatePopulationEvent(time=1, population=0)"
+        assert repr(event) == repr_s
+        assert str(event) == repr_s
+
     def test_population_split(self):
         event = demog_mod.PopulationSplit(time=1, derived=[0], ancestral=1)
         repr_s = "PopulationSplit(time=1, derived=[0], ancestral=1)"
@@ -1134,6 +1140,11 @@ class TestDemographicEventMessages:
             "Sets the symmetric migration rate between all pairs of populations "
             "in [0, 1, 2] to 2 per generation"
         )
+
+    def test_activate_population_event(self):
+        event = demog_mod.ActivatePopulationEvent(time=1, population=0)
+        assert event._parameters() == "population=0"
+        assert event._effect() == "Activates population 0"
 
     def test_population_split(self):
         event = demog_mod.PopulationSplit(time=1, derived=[0], ancestral=2)
