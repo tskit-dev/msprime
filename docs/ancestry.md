@@ -2265,8 +2265,8 @@ for _ in range(100):
     models.append(
         msprime.SweepGenicSelection(
             position=random.randint(1, L - 1),
-            start_frequency=0.4,
-            end_frequency=0.5,
+            start_frequency=1e-6,
+            end_frequency=1.0 - 1e-6,
             s=0.01,
             dt=1e-6,
         )
