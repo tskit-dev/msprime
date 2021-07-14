@@ -5040,7 +5040,6 @@ msp_run_sweep(msp_t *self)
         t_unscaled = time[curr_step - 1] * self->ploidy * pop_size;
         tsk_bug_assert(t_unscaled > 0);
         self->time = t_start + t_unscaled;
-        /* printf("event time: %g\n", self->time); */
         if (tmp_rand < e_sum / sweep_pop_tot_rate) {
             /* coalescent in b background */
             ret = self->common_ancestor_event(self, 0, 0);
@@ -5145,12 +5144,10 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         if (ret != 0) {
             goto out;
         }
-        printf("\nSTART msp_pedigree_climb\n");
         ret = msp_pedigree_climb(self);
         if (ret != 0) {
             goto out;
         }
-        printf("\nEND msp_pedigree_climb\n");
     } else if (self->model.type == MSP_MODEL_SWEEP) {
         /* FIXME making sweep atomic for now as it's non-rentrant */
         ret = msp_run_sweep(self);
