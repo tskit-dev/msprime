@@ -40,6 +40,8 @@ test_pedigree_single_locus_simulation(void)
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_EXIT_MODEL_COMPLETE);
     msp_verify(&msp, 0);
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_STATE);
 
     ret = msp_finalise_tables(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -78,6 +80,8 @@ test_pedigree_multi_locus_simulation(void)
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_EXIT_MODEL_COMPLETE);
     msp_verify(&msp, 0);
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_STATE);
     /* TODO put in some meaningful tests of the pedigree */
 
     model_name = msp_get_model_name(&msp);
