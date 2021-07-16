@@ -303,8 +303,11 @@ and makes it easier to avoid
 
 #### Initial size
 
-The `initial_size` of a population is its size at the start of a simulation
+The `initial_size` of a population is its size, as a number of individuals,
+at the start of a simulation
 (looking {ref}`backwards in time<sec_demography_direction_of_time>`).
+In other words, an initial size of ``n`` means that the population had
+``n * ploidy`` chromosomes at the most recent time.
 If the population's
 {ref}`sec_demography_populations_growth_rate` is zero, then
 the population will have the same size for all time (unless there are

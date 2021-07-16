@@ -234,9 +234,9 @@ class Demography(collections.abc.Mapping):
         to ``"pop_{id}"``. An :ref:`sec_demography_populations_initial_size`
         value must be specified (but may be zero).
 
-        :param float initial_size: The size of the population at time zero.
-            See the :ref:`sec_demography_populations_initial_size` section
-            for more details and examples.
+        :param float initial_size: The number of individuals of the population
+            at time zero.  See the :ref:`sec_demography_populations_initial_size`
+            section for more details and examples.
         :param float growth_rate: The exponential growth rate of the
             population. See the :ref:`sec_demography_populations_growth_rate`
             section for more details and examples.
@@ -621,7 +621,7 @@ class Demography(collections.abc.Mapping):
 
         :param float time: The length of time ago at which this event
             occurred.
-        :param float initial_size: The absolute size of the population
+        :param float initial_size: The number of individuals in the population
             at the beginning of the time slice starting at ``time``. If None,
             the initial_size of the population is computed according to
             the initial population size and growth rate over the preceding
@@ -1467,8 +1467,8 @@ class Demography(collections.abc.Mapping):
 
         :param str tree: The tree string in Newick format, with named leaves and branch
             lengths.
-        :param initial_size: Each population's initial_size. May be a single number
-            or a mapping from population names to their sizes.
+        :param initial_size: Each population's initial_size, in numbers of individuals.
+            May be a single number or a mapping from population names to their sizes.
         :param growth_rate: Each population's growth_rate. May be a single number
             or a mapping from population names to their exponential growth rates.
             Defaults to zero.
@@ -2015,7 +2015,7 @@ class Demography(collections.abc.Mapping):
         :param tskit.TreeSequence ts: The tree sequence
             to extract population information from.
         :param float initial_size: The default initial size for the newly
-            added populations (Default=0).
+            added populations, as a number of individuals (Default=0).
         :return: A Demography object representing the populations in the
             specified tree sequence.
         :rtype: .Demography
