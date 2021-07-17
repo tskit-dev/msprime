@@ -1060,7 +1060,7 @@ def sim_ancestry(
         greater than or equal to 1. For continuous genomes the tract lengths are
         exponentially distributed with mean ``gene_conversion_tract_length``,
         which must be larger than 0.
-    :param population_size: The size of the default single population
+    :param population_size: The number of individuals of the default single population
         :class:`.Demography`. If not specified, defaults to 1. Cannot be specified
         along with the ``demography`` parameter. See the :ref:`sec_demography`
         section for more details on demographic models and population sizes
