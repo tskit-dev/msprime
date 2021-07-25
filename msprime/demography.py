@@ -3459,7 +3459,7 @@ def _proportions_to_sequential(P):
     return C
 
 
-def _matrix_exponential(A):
+def _matrix_exponential_eigen(A):
     """
     Returns the matrix exponential of A.
     https://en.wikipedia.org/wiki/Matrix_exponential
@@ -3471,6 +3471,34 @@ def _matrix_exponential(A):
     D = np.diag(np.exp(d))
     B = np.matmul(Y, np.matmul(D, Yinv))
     return np.real_if_close(B, tol=1000)
+
+
+def _matrix_exponential_poisson(A, n=5):
+    """
+    Only works if the offdiagonals of A are nonnegative
+    and the row sums of A are zero.
+    """
+    dA = (-1) * np.diag(A)
+    dmax = np.max(dA)
+    if dmax == 0:
+        expA = np.eye(A.shape[0])
+    else:
+        P = A / dmax
+        np.fill_diagonal(P, 1 - dA / dmax)
+        nscales = int(max(0, np.ceil(np.log2(dmax) - np.log2(0.2))))
+        t = dmax / (2 ** nscales)
+        Pk = np.exp(-t) * t * P
+        expA = Pk
+        np.fill_diagonal(expA, np.exp(-t) + np.diag(expA))
+        for k in range(2, n + 1):
+            Pk = (t / k) * np.matmul(P, Pk)
+            expA = expA + Pk
+        for _ in range(nscales):
+            expA = np.matmul(expA, expA)
+    return expA
+
+
+_matrix_exponential = _matrix_exponential_poisson
 
 
 class PopulationStateMachine(enum.IntEnum):
