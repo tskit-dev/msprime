@@ -3480,25 +3480,28 @@ def _matrix_exponential_poisson(A, n=5):
     """
     dA = (-1) * np.diag(A)
     dmax = np.max(dA)
-    if dmax == 0:
-        expA = np.eye(A.shape[0])
-    else:
+    expA = np.eye(A.shape[0])
+    if dmax > 0:
         P = A / dmax
         np.fill_diagonal(P, 1 - dA / dmax)
+        # nscales is the number of scaling-and-squaring steps:
+        # we compute exp(tA) and then square the result nscales times
         nscales = int(max(0, np.ceil(np.log2(dmax) - np.log2(0.2))))
         t = dmax / (2 ** nscales)
-        Pk = np.exp(-t) * t * P
-        expA = Pk
-        np.fill_diagonal(expA, np.exp(-t) + np.diag(expA))
-        for k in range(2, n + 1):
+        # Now, exp(tA) = exp(-t) * (I + tP + (tP)^2 / 2 + ...)
+        # and the k-th term in this sum is Pk=(tP/k times the previous)
+        Pk = np.eye(A.shape[0])
+        for k in range(1, n + 1):
             Pk = (t / k) * np.matmul(P, Pk)
             expA = expA + Pk
+        expA *= np.exp(-t)
         for _ in range(nscales):
             expA = np.matmul(expA, expA)
     return expA
 
 
-_matrix_exponential = _matrix_exponential_poisson
+def _matrix_exponential(*args, **kwargs):
+    return _matrix_exponential_poisson(*args, **kwargs)
 
 
 class PopulationStateMachine(enum.IntEnum):
