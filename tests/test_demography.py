@@ -1874,10 +1874,9 @@ class TestMatrixExponential:
     """
 
     def verify(self, A, E=None):
-        print(A)
         assert np.max(np.diag(A)) <= 0
         assert np.min(A - np.diag(np.diag(A))) >= 0
-        assert np.allclose(np.sum(A, 1), np.zeros((np.shape(A)[0],)))
+        assert np.max(np.sum(A, 1)) <= 0
         E1 = scipy.linalg.expm(A)
         E2 = msprime.demography._matrix_exponential(A)
         assert np.min(E2) >= 0

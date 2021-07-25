@@ -3476,8 +3476,12 @@ def _matrix_exponential_eigen(A):
 def _matrix_exponential_poisson(A, n=5):
     """
     Only works if the offdiagonals of A are nonnegative
-    and the row sums of A are zero.
+    and the row sums of A are less than or equal to zero.
     """
+    # TODO: check if these affect the timing
+    assert np.max(np.diag(A)) <= 0
+    assert np.min(A - np.diag(np.diag(A))) >= 0
+    assert np.max(np.sum(A, 1)) <= 1e-10  # for floating-point error
     dA = (-1) * np.diag(A)
     dmax = np.max(dA)
     expA = np.eye(A.shape[0])
