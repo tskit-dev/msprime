@@ -130,7 +130,8 @@ class TestDemographyTrajectoriesEdgeCase:
         rates3, P3 = ddb.coalescence_rate_trajectory(
             T, {"A": 1, "C": 1}, double_step_validation=False
         )
-        with pytest.raises(AssertionError):
-            assert np.all(rates3 >= 0)
+        # Fails on Linux with openblas, but not on Github Action's MacOS blas.
+        # with pytest.raises(AssertionError):
+        #    assert np.all(rates3 >= 0)
         with pytest.raises(AssertionError):
             assert np.all(np.diff(P3) <= 0)
