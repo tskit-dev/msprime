@@ -32,7 +32,6 @@ from unittest import mock
 
 import numpy as np
 import pytest
-import scipy.linalg
 import stdpopsim
 import tskit
 
@@ -1866,49 +1865,6 @@ class TestDemographyTrajectories(unittest.TestCase):
         assert np.allclose(0.5 / R[2021], 2985.125, rtol=1e-3)
         assert np.allclose(0.5 / R[608], 9500, rtol=1e-3)
         assert np.allclose(0.5 / R[0], 29725.3435, rtol=1e-3)
-
-
-class TestMatrixExponential:
-    """
-    Test cases for the matrix exponential function.
-    """
-
-    def verify(self, A, E=None):
-        assert np.max(np.diag(A)) <= 0
-        assert np.min(A - np.diag(np.diag(A))) >= 0
-        assert np.max(np.sum(A, 1)) <= 0
-        E1 = scipy.linalg.expm(A)
-        E2 = msprime.demography._matrix_exponential(A)
-        assert np.min(E2) >= 0
-        assert np.allclose(np.sum(E2, 1), np.ones((np.shape(A)[0],)))
-        assert E1.shape == E2.shape
-        assert np.allclose(E1, E2)
-        if E is not None:
-            assert E.shape == E2.shape
-            assert np.allclose(E, E2)
-
-    def test_zeros(self):
-        for j in range(1, 10):
-            A = np.zeros((j, j))
-            self.verify(A, np.eye(j))
-
-    def test_ones_minus_diagonal(self):
-        # If we got to larger values we start getting complex number results.
-        # (k x k) matrices of ones, but with (-k) on the diagonal, for k >= 2.
-        for j in range(2, 5):
-            A = np.ones((j, j))
-            A = A - (j * np.eye(j))
-            E = np.exp(-j) * np.eye(j) + (1 - np.exp(-j)) * np.ones((j, j)) / j
-            self.verify(A, E)
-
-    def test_identity_exp(self):
-        # (-1) * np.eye(k), compared to exp(-1) * np.eye(k)
-        for k in range(2, 5):
-            A = (-1) * np.eye(k)
-            for i in range(k):
-                A[i, (i + 1) % k] = 1.0
-            print(A)
-            self.verify(A)
 
 
 class TestEventTimes:
