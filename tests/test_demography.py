@@ -32,7 +32,6 @@ from unittest import mock
 
 import numpy as np
 import pytest
-import scipy.linalg
 import stdpopsim
 import tskit
 
@@ -1866,51 +1865,6 @@ class TestDemographyTrajectories(unittest.TestCase):
         assert np.allclose(0.5 / R[2021], 2985.125, rtol=1e-3)
         assert np.allclose(0.5 / R[608], 9500, rtol=1e-3)
         assert np.allclose(0.5 / R[0], 29725.3435, rtol=1e-3)
-
-
-class TestMatrixExponential:
-    """
-    Test cases for the matrix exponential function.
-    """
-
-    def verify(self, A):
-        E1 = scipy.linalg.expm(A)
-        E2 = msprime.demography._matrix_exponential(A)
-        assert E1.shape == E2.shape
-        assert np.allclose(E1, E2)
-
-    def test_singleton(self):
-        for j in range(10):
-            A = np.array([[j]])
-            self.verify(A)
-
-    def test_zeros(self):
-        for j in range(1, 10):
-            A = np.zeros((j, j))
-            self.verify(A)
-
-    def test_ones_minus_diagonal(self):
-        # If we got to larger values we start getting complex number results.
-        # (k x k) matrices of ones, but with (-k) on the diagonal, for k >= 2.
-        for j in range(2, 5):
-            A = np.ones((j, j))
-            A = A - (2 * np.eye(j))
-            self.verify(A)
-
-    def test_singleton_against_exp(self):
-        # a 1 x 1 matrix consisting of just 0 (compared to exp(0) = 1)
-        # a 1 x 1 matrix consisting of just -1 (compared to exp(-1))
-        for t in [0, -1]:
-            A = msprime.demography._matrix_exponential([[t]])
-            B = np.exp(t)
-            assert A == B
-
-    def test_identity_exp(self):
-        # (-1) * np.eye(k), compared to exp(-1) * np.eye(k)
-        for k in range(2, 5):
-            A = msprime.demography._matrix_exponential((-1) * np.eye(k))
-            B = np.exp(-1) * np.eye(k)
-            assert np.allclose(A, B)
 
 
 class TestEventTimes:

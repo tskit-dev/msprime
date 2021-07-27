@@ -3459,18 +3459,36 @@ def _proportions_to_sequential(P):
     return C
 
 
-def _matrix_exponential(A):
+def _matrix_exponential(A, n=5):
     """
     Returns the matrix exponential of A.
-    https://en.wikipedia.org/wiki/Matrix_exponential
-    Note: this is not a general purpose method and is only intended for use within
-    msprime.
+    Only works if the offdiagonals of A are nonnegative
+    and the row sums of A are less than or equal to zero.
+    Melloy & Bennett (1993), https://doi.org/10.1016/0377-0427(93)90036-B
     """
-    d, Y = np.linalg.eig(A)
-    Yinv = np.linalg.pinv(Y)
-    D = np.diag(np.exp(d))
-    B = np.matmul(Y, np.matmul(D, Yinv))
-    return np.real_if_close(B, tol=1000)
+    assert np.max(np.diag(A)) <= 0
+    assert np.min(np.tril(A, k=-1)) == 0
+    assert np.min(np.triu(A, k=1)) == 0
+    assert np.max(np.sum(A, 1)) <= 1e-10  # for floating-point error
+    dA = (-1) * np.diag(A)
+    dmax = np.max(dA)
+    expA = np.eye(A.shape[0])
+    if dmax > 0:
+        P = A / dmax
+        np.fill_diagonal(P, 1 - dA / dmax)
+        # nscales is the number of scaling-and-squaring steps:
+        # we compute exp(tA) and then square the result nscales times
+        nscales = int(max(0, np.ceil(np.log2(dmax) - np.log2(0.2))))
+        t = dmax / (2 ** nscales)
+        # Now, exp(tA) = exp(-t) * (I + tP + (tP)^2 / 2 + ...)
+        # and the k-th term in this sum is Pk=(tP/k times the previous)
+        Pk = np.eye(A.shape[0])
+        for k in range(1, n + 1):
+            Pk = (t / k) * np.matmul(P, Pk)
+            expA = expA + Pk
+        expA *= np.exp(-t)
+        expA = np.linalg.matrix_power(expA, 2 ** nscales)
+    return expA
 
 
 class PopulationStateMachine(enum.IntEnum):
@@ -4081,7 +4099,7 @@ class DemographyDebugger:
         step_type = "none"
         n = 0
         logger.debug(
-            "iter    mean    P_diff    mean_diff last_P    adjust_type"
+            "iter    mean    P_diff    mean_diff last_P    adjust_type  "
             "num_steps  last_step"
         )
         # The factors of 20 here are probably not optimal: clearly, we need to
@@ -4093,13 +4111,14 @@ class DemographyDebugger:
             last_P > rtol or p_diff > rtol / 20 or m_diff > rtol / 20
         ):
             last_steps = steps
-            _, P1 = self.coalescence_rate_trajectory(
-                steps=last_steps,
-                lineages=lineages,
-                min_pop_size=min_pop_size,
-                double_step_validation=False,
-            )
-            m1 = mean_time(last_steps, P1)
+            if n == 0:
+                _, P1 = self.coalescence_rate_trajectory(
+                    steps=last_steps,
+                    lineages=lineages,
+                    min_pop_size=min_pop_size,
+                    double_step_validation=False,
+                )
+                m1 = mean_time(last_steps, P1)
             if last_P > rtol:
                 step_type = "extend"
                 steps = np.concatenate(
@@ -4134,6 +4153,8 @@ class DemographyDebugger:
                 len(steps),
                 max(steps),
             )
+            P1 = P2
+            m1 = m2
 
         if n == max_iter:
             raise ValueError(
@@ -4165,7 +4186,7 @@ class DemographyDebugger:
         :math:`z`, and let :math:`N(z,t)` be the diploid effective population
         size of population :math:`z` at time :math:`t`. Then the mean
         coalescence rate at time :math:`t` is :math:`r(t) = (\\sum_z p(z,t) /
-        (2 * N(z,t)) / p(t)`.
+        (2 * N(z,t))) / p(t)`.
 
         The computation is done by approximating population size trajectories
         with piecewise constant trajectories between each of the steps. For
