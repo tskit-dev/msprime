@@ -3106,13 +3106,13 @@ msp_priority_queue_pop(msp_t *self, avl_tree_t *Q)
  */
 static int MSP_WARN_UNUSED
 msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
-    label_id_t label, segment_t **merged_segment, tsk_id_t individual)
+    label_id_t label, segment_t **merged_segment, tsk_id_t individual,
+    tsk_id_t new_node_id)
 {
     int ret = MSP_ERR_GENERIC;
     bool coalescence = false;
     bool defrag_required = false;
     bool set_merged = false;
-    tsk_id_t v;
     uint32_t j, h;
     double l, r, r_max, next_l, l_min;
     avl_node_t *node;
@@ -3169,15 +3169,15 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                 }
             }
         } else {
-            if (!coalescence) {
+            if (new_node_id == TSK_NULL) {
                 coalescence = true;
                 l_min = l;
                 ret = msp_store_node(self, 0, self->time, population_id, individual);
                 if (ret != 0) {
                     goto out;
                 }
+                new_node_id = (tsk_id_t) msp_get_num_nodes(self) - 1;
             }
-            v = (tsk_id_t) msp_get_num_nodes(self) - 1;
             /* Insert overlap counts for bounds, if necessary */
             search.position = l;
             node = avl_search(&self->overlap_counts, &search);
@@ -3216,8 +3216,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     nm = (node_mapping_t *) node->item;
                     r = nm->position;
                 }
-                alpha
-                    = msp_alloc_segment(self, l, r, v, population_id, label, NULL, NULL);
+                alpha = msp_alloc_segment(
+                    self, l, r, new_node_id, population_id, label, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -3226,8 +3226,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             /* Store the edges and update the priority queue */
             for (j = 0; j < h; j++) {
                 x = H[j];
-                tsk_bug_assert(v != x->value);
-                ret = msp_store_edge(self, l, r, v, x->value);
+                tsk_bug_assert(new_node_id != x->value);
+                ret = msp_store_edge(self, l, r, new_node_id, x->value);
                 if (ret != 0) {
                     goto out;
                 }
@@ -4366,7 +4366,8 @@ msp_pedigree_climb(msp_t *self)
 
             /* Merge segments inherited from this ind and recombine */
             // TODO: Make sure population gets properly set when more than one
-            ret = msp_merge_ancestors(self, segments, 0, 0, &merged_segment, parent_id);
+            ret = msp_merge_ancestors(
+                self, segments, 0, 0, &merged_segment, parent_id, TSK_NULL);
             if (ret != 0) {
                 goto out;
             }
@@ -4551,8 +4552,8 @@ msp_dtwf_generation(msp_t *self)
                         ret = msp_merge_two_ancestors(
                             self, (population_id_t) j, label, ind1, ind2);
                     } else {
-                        ret = msp_merge_ancestors(
-                            self, &Q[i], (population_id_t) j, label, NULL, TSK_NULL);
+                        ret = msp_merge_ancestors(self, &Q[i], (population_id_t) j,
+                            label, NULL, TSK_NULL, TSK_NULL);
                     }
                 }
                 if (ret != 0) {
@@ -6204,7 +6205,7 @@ msp_simple_bottleneck(msp_t *self, demographic_event_t *event)
         }
         node = next;
     }
-    ret = msp_merge_ancestors(self, &Q, population_id, label, NULL, TSK_NULL);
+    ret = msp_merge_ancestors(self, &Q, population_id, label, NULL, TSK_NULL, TSK_NULL);
 out:
     return ret;
 }
@@ -6356,8 +6357,8 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     }
     for (j = 0; j < num_roots; j++) {
         if (lineages[j] >= (tsk_id_t) n) {
-            ret = msp_merge_ancestors(
-                self, &sets[lineages[j]], population_id, label, NULL, TSK_NULL);
+            ret = msp_merge_ancestors(self, &sets[lineages[j]], population_id, label,
+                NULL, TSK_NULL, TSK_NULL);
             if (ret != 0) {
                 goto out;
             }
@@ -6773,7 +6774,8 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t 
          * merged.
          */
         for (j = 0; j < num_parental_copies; j++) {
-            ret = msp_merge_ancestors(self, &Q[j], pop_id, label, NULL, TSK_NULL);
+            ret = msp_merge_ancestors(
+                self, &Q[j], pop_id, label, NULL, TSK_NULL, TSK_NULL);
             if (ret < 0) {
                 goto out;
             }
@@ -6989,7 +6991,8 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
          * merged.
          */
         for (j = 0; j < num_parental_copies; j++) {
-            ret = msp_merge_ancestors(self, &Q[j], pop_id, label, NULL, TSK_NULL);
+            ret = msp_merge_ancestors(
+                self, &Q[j], pop_id, label, NULL, TSK_NULL, TSK_NULL);
             if (ret < 0) {
                 goto out;
             }
