@@ -18,7 +18,6 @@ kernelspec:
 import msprime
 import numpy as np
 from IPython.display import SVG
-from matplotlib import pyplot as plt
 ```
 
 (sec_randomness)=

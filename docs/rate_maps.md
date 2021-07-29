@@ -16,8 +16,10 @@ kernelspec:
 
 import msprime
 import numpy as np
-from IPython.display import SVG
+from IPython.display import SVG, set_matplotlib_formats
 from matplotlib import pyplot as plt
+
+set_matplotlib_formats("svg")
 ```
 
 (sec_rate_maps)=

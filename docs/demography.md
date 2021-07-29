@@ -18,8 +18,9 @@ kernelspec:
 import msprime
 import numpy as np
 import matplotlib.pyplot as plt
-from IPython.display import SVG
+from IPython.display import SVG, set_matplotlib_formats
 
+set_matplotlib_formats("svg")
 plt.rcParams["figure.figsize"] = (10,7)
 ```
 
@@ -1533,14 +1534,16 @@ method does the opposite conversion.
 
 ```{warning}
 Demes uses similar terminology to msprime, but uses different conventions.
-In particular, Demes uses forwards-time conventions.
+In particular, Demes uses forwards-time conventions as opposed to the
+{ref}`backwards-time <sec_demography_direction_of_time>` conventions used
+in msprime
 ```
 
 Demes models have time in units of "time ago", and when using generations as
-the time units, the times will correspond to msprime's notion of time:
+the time units, the times will directly correspond to msprime's notion of time:
 time 0 is "now" and time values increase towards the past.
-However, in contrast to msprime, Demes uses forwards-time conventions
-everywhere else. Noteworthy differences between Demes and msprime include:
+However, in contrast to msprime, Demes uses forwards-time conventions.
+Noteworthy differences between Demes and msprime include:
 
 * Each deme has its own list of epochs, whereas in msprime's
   {class}`.DemographyDebugger`, epochs are time intervals that apply across
@@ -1549,7 +1552,9 @@ everywhere else. Noteworthy differences between Demes and msprime include:
   but the `start_time` has a value which is larger (more ancient)
   than the `end_time`.
 * For migrations and pulses, `source` indicates the deme in which a migrant
-  is born and the `dest` indiciates the deme in which a migrant has offspring.
+  is born and the `dest` indicates the deme in which a migrant has offspring.
+  This is opposite to the
+  {ref}`convention used in msprime <sec_demography_direction_of_time>`.
 
 Consider the following Demes model that describes two extant demes `A` and `B`,
 which have a common ancestor `X`.
@@ -1559,7 +1564,8 @@ which have a common ancestor `X`.
 ```
 
 When visualised using [demesdraw](https://github.com/grahamgower/demesdraw),
-the demographic model looks like this:
+the demographic model looks like this (where arrows indicate movement of
+individuals as time proceeds from the past to the present):
 
 ```{code-cell}
 :tags: [remove-input]
@@ -1567,13 +1573,10 @@ import demes
 import demesdraw
 import matplotlib.pyplot as plt
 
-from IPython.display import set_matplotlib_formats
-set_matplotlib_formats("svg")
-
 graph = demes.load("demes_example_01.yaml")
 w = 1.5 * demesdraw.utils.size_max(graph)
 positions = dict(X=0, A=-w, B=w)
-fig, ax = plt.subplots(figsize=(8.53, 4.8))
+fig, ax = plt.subplots()  # use plt.rcParams["figure.figsize"]
 demesdraw.tubes(graph, ax=ax, positions=positions, seed=1)
 plt.show()
 ```
@@ -1584,35 +1587,43 @@ and then look at the {class}`.DemographyDebugger` output.
 
 ```{code-cell}
 import demes
-import msprime
 
 graph = demes.load("demes_example_01.yaml")
 demography = msprime.Demography.from_demes(graph)
 demography.debug()
 ```
 
+The demography debugger output shows three epochs. `Epoch[0]`
+corresponds to the time interval [0, 500) generations ago, in which
+deme `B` has an initial size of 10000 at time 0 and backwards in time,
+shrinks in size to 400 individuals at time 500. Lineages sampled
+from deme `B` migrate into deme `A` at a rate of 0.0001 per generation.
+In `Epoch[1]`, [500, 1000) generations ago, both `A` and `B` have constant
+sizes, and migration is the same as in `Epoch[0]`.
+At the end of `Epoch[1]`, at generation 1000, lineages in demes `A` and `B`
+are moved into deme `X` and migrations are turned off.
+Finally, `Epoch[2]` shows that only deme `X` remains.
+
 A {class}`.Demography` object can also be exported to a {class}`demes.Graph`,
-using the {meth}`.Demography.to_demes` method. We'll use this to obtain
-a visual representation of the demography using
+using the {meth}`.Demography.to_demes` method. We'll use this to make a visual
+representation of a modified {meth}`.Demography.island_model` using
 [demesdraw](https://github.com/grahamgower/demesdraw).
 
 ```{code-cell}
-import demes
 import demesdraw
-import msprime
 import matplotlib.pyplot as plt
 
 demography = msprime.Demography.island_model([300] * 3, 1e-5)
 demography.add_population(name="ancestral", initial_size=1000)
 demography.add_population_split(time=500, derived=[0, 1, 2], ancestral="ancestral")
 graph = msprime.Demography.to_demes(demography)
-fig, ax = plt.subplots(figsize=(8.53, 4.8))
+fig, ax = plt.subplots()  # use plt.rcParams["figure.figsize"]
 demesdraw.tubes(graph, ax=ax, seed=1)
 plt.show()
 ```
 
-The YAML file can also be written to a file, e.g. for use with other
-simulation software.
+The {class}`demes.Graph` can also be written to a YAML file,
+e.g. for use with other simulation software.
 
 ```{code-cell}
 demes.dump(graph, "/tmp/my-island-model.yaml")

@@ -16,9 +16,11 @@ kernelspec:
 :tags: [remove-cell]
 
 import msprime
-from IPython.display import SVG
+from IPython.display import SVG, set_matplotlib_formats
 from matplotlib import pyplot as plt
 import numpy as np
+
+set_matplotlib_formats("svg")
 ```
 
 (sec_ancestry)=
