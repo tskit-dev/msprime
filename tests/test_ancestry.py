@@ -554,6 +554,16 @@ class TestParseSimAncestry:
                     gene_conversion_tract_length=bad_type,
                 )
 
+    def test_gene_conversion_full_arg_unsupported(self):
+        with pytest.raises(ValueError, match="record_full_arg"):
+            ancestry._parse_sim_ancestry(
+                10,
+                sequence_length=100,
+                gene_conversion_rate=1,
+                gene_conversion_tract_length=5,
+                record_full_arg=True,
+            )
+
     def test_discrete_genome(self):
         # default is True
         sim = ancestry._parse_sim_ancestry(10, sequence_length=10)
