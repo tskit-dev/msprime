@@ -51,6 +51,7 @@ sphinx:
         pyslim: ["https://tskit.dev/pyslim/docs/latest/", null]
         numpy: ["https://numpy.org/doc/stable/", null]
         demes: ["https://popsim-consortium.github.io/demes-docs/main/", null]
+        demes-spec: ["https://popsim-consortium.github.io/demes-spec-docs/main/", null]
       nitpicky: true
 
       autodoc_member_order: bysource

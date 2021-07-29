@@ -1843,6 +1843,9 @@ class Demography(collections.abc.Mapping):
         """
         Creates a :class:`.Demography` object from the specified
         :ref:`demes graph <demes:sec_introduction>`.
+        Time values in the demes graph may be specified in any units,
+        but the returned object has units converted into generations.
+        See the :ref:`sec_demography_importing_demes` section for details.
 
         .. code::
 
@@ -2486,6 +2489,7 @@ class Demography(collections.abc.Mapping):
     def to_demes(self) -> demes.Graph:
         """
         Creates a :class:`demes.Graph` object from the demography.
+        See the :ref:`sec_demography_importing_demes` section for details.
 
         .. note::
 
