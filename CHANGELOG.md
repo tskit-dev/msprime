@@ -1,6 +1,8 @@
 # Changelog
 
-## [1.0.2] - 2021-06-XX
+## [1.0.2] - 2021-06-29
+
+Improved Demes support and minor bugfixes.
 
 **New features**:
 
@@ -8,6 +10,15 @@
   ({pr}`1716`, {user}`jeromekelleher`).
 - Add ``Demography.to_demes`` method for creating a Demes demographic model
   from an msprime demography ({pr}`1724`, {user}`grahamgower`).
+- Improved mapping of Demes models to Demography objects
+  ({pr}`1758`, {pr}`1757`, {pr}`1756` {user}`apragsdale`).
+- Improved numerical algorithms in DemographyDebugger ({pr}`1788`,
+  {user}`grahamgower`, {user}`petrelharp`).
+
+**Bugfixes**:
+
+- Raise an error if running full ARG simulations with gene conversion
+  ({issue}`1774`).
 
 ## [1.0.1] - 2021-05-10
 
