@@ -7004,7 +7004,7 @@ out:
 }
 
 /**************************************************************
- * Allele frequency trajectory simulation for genic selection
+ * Allele frequency trajectory simulation for sweep routines
  *
  **************************************************************/
 
@@ -7014,6 +7014,16 @@ genic_selection_stochastic_forwards(double dt, double freq, double alpha, double
     /* this is scaled following Ewens chapter 5 e.g.,
      * w_11=1+s; w_12=1+s/2; w_22=1; that is h=0.5 */
     double ux = ((alpha / 2.0) * freq * (1 - freq)) / tanh((alpha / 2.0) * freq);
+    int sign = u < 0.5 ? 1 : -1;
+    return freq + (ux * dt) + sign * sqrt(freq * (1.0 - freq) * dt);
+}
+
+static double
+neutral_stochastic_backwards(double dt, double freq, double u)
+{
+    /* returns allele freq of neutral allele drifting conditional
+    on loss (looking backwards in time) following Ewens */
+    double ux = -1.0 * freq;
     int sign = u < 0.5 ? 1 : -1;
     return freq + (ux * dt) + sign * sqrt(freq * (1.0 - freq) * dt);
 }
