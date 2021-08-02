@@ -912,7 +912,7 @@ ts = msprime.sim_ancestry(
 
 In the following visualisation, we trace the migration history of two samples backwards
 in time to their most recent common ancestor. Each one of the ten populations in the
-model is assigned a 
+model is assigned a
 colour and a position on the x axis. The time of migration events is recorded on the y
 axis.
 
@@ -2070,6 +2070,38 @@ tree = ts.first()
 print(tree.tmrca(0,1))
 
 ```
+
+Because branch lengths are proportional to {math}`N^2` generations, the number
+of events simulated along branches (such as mutations or recombinations) will
+also be proportional to {math}`N^2`. For example, if a tree sequence generated
+using a given census size {math}`N` is used as input for simulating segregating
+sites (see {ref}`Mutation simulations<sec_mutations>` for details on how to do
+this), the expected number of segregating sites obtained will be proportional
+to {math}`N^2`.
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    samples=1, ploidy=2, random_seed=1, population_size=10000,recombination_rate=1e-8,
+    sequence_length=10**4,model=msprime.DiracCoalescent(psi=0.1, c=0))
+mts = msprime.sim_mutations(ts, rate=1e-8)
+print(str(mts.get_num_sites()))
+```
+
+If the desired amount of diversity (as measured by the number of segregating
+sites) is proportional to {math}`N`, then {math}`N^{1/2}` should be used for
+the population size under the Dirac-coalescent.
+
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    samples=1, ploidy=2, random_seed=1, population_size=100,recombination_rate=1e-8,
+    sequence_length=10**4,model=msprime.DiracCoalescent(psi=0.1, c=0))
+mts = msprime.sim_mutations(ts, rate=1e-8)
+print(str(mts.get_num_sites()))
+```
+
+Therefore the population size must be carefully chosen (and
+potentially rescaled) to obtain the desired simulated data in these models.
 
 (sec_ancestry_models_selective_sweeps)=
 
