@@ -253,7 +253,7 @@ and help users to orient themselves. The examples section for a given
 feature (e.g., function parameter) should:
 
 - Provide some background into what this feature is for, so that an
-  unsure reader can quickly orien themselves (external links to explain
+  unsure reader can quickly orient themselves (external links to explain
   concepts is good for this).
 - Give examples using inline Jupyter code to illustrate the various
   different ways that this feature can be used. These examples should
@@ -287,7 +287,7 @@ Cross referencing is done by using the ``{ref}`` inline role
 for more details) to link
 to labelled sections within the manual or to API documentation.
 
-Sections within the manual should be labelled hierachically, for example
+Sections within the manual should be labelled hierarchically, for example
 this section is labelled like this:
 
 ````md
@@ -398,7 +398,7 @@ considerably over time, and are deliberately undocumented.
 To compile and develop the C code, a few extra development libraries are needed.
 [Libconfig](http://www.hyperrealm.com/libconfig/) is used for the development CLI
 and [CUnit](http://cunit.sourceforge.net) for unit tests. We use the
-[meson](https://mesonbuild.com) build system in conjunction with [ninja-build](http://ninja-build.org) to to compile the unit tests and
+[meson](https://mesonbuild.com) build system in conjunction with [ninja-build](http://ninja-build.org) to compile the unit tests and
 development CLI. On Debian/Ubuntu, these can be installed using
 
 ```{code-block} bash
@@ -448,8 +448,8 @@ On more recent macOS releases, you may omit the `CONDA_BUILD_SYSROOT` prefix.
 
 :::{note}
 
-The use of the C toolchain on macOS is a moving target.  The above advice
-was written on 23 January, 2020 and was validated by a few `msprime` contributors.
+The use of the C toolchain on macOS is a moving target. The above advice
+was written on 23 January 2020 and was validated by a few `msprime` contributors.
 Caveat emptor, etc..
 
 :::

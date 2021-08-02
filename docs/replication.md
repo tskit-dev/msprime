@@ -37,7 +37,7 @@ to summarise those distributions.
 ## Random seeds
 
 Stochastic simulations depend on a source of randomness, provided by a
-[psuedorandom number generator](<https://en.wikipedia.org/wiki/Pseudorandom_number_generator>).
+[pseudorandom number generator](<https://en.wikipedia.org/wiki/Pseudorandom_number_generator>).
 Msprime uses the
 [GNU Scientific Library](<https://www.gnu.org/software/gsl/doc/html/rng.html>)
 to generate high-quality random numbers.
@@ -119,7 +119,7 @@ run replicate simulations in msprime.
 When performing {ref}`ancestry simulations<sec_ancestry>` with
 {func}`.sim_ancestry`, the `num_replicates` parameter provides a
 convenient and efficient
-way to iterate over a number of replicate simulations. For example,
+way to iterate over simulation replicates. For example,
 suppose we wish to examine the distribution of the
 time to the most recent common ancestor.
 
@@ -178,7 +178,7 @@ a set of {class}`tskit.TreeSequence` instances.
 Things are a little more involved when we also want to simulate
 mutations on the simulated ancestries, because we cannot get a
 stream of replicate results directly from {func}`.sim_ancestry`.
-In this section we a number of different and idiomatic ways to
+In this section we provide idiomatic code to
 efficiently combine ancestry and mutation simulations.
 
 :::{seealso}
@@ -208,13 +208,12 @@ def sim_replicates(sample_size, num_replicates):
 ```
 
 In general it's a good idea to encapsulate specific simulations
-in a function like this: an free parameters (like ``sample_size`` here)
+in a function like this: any free parameters (like ``sample_size`` here)
 can be passed in as parameters to the function, and any fixed values
 (like e.g., ``sequence_length``) can be specified in one place,
 avoiding repetition and potential for mistakes. Having defined the
 generator function, we can now run it for a given number of
-replicates and sample size. In this example, we com
-compute the number of
+replicates and sample size. In this example, we compute the number of
 {meth}`segregating sites<tskit:tskit.TreeSequence.segregating_sites>`
 in each replicate tree sequence, and store the values in a numpy
 array:
@@ -265,7 +264,7 @@ This could equally be done using a
 or indeed by defining a function in the usual way using ``def``.
 
 :::{warning}
-Do not set the random seed to a fixed value in partial function like
+Do not set the random seed to a fixed value in a partial function like
 this! This would result in different random ancestry replicates
 being correctly generated but all mutations being thrown down
 using the same seed. This would lead to nasty bugs!

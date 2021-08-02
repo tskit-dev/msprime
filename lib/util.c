@@ -213,25 +213,25 @@ msp_strerror_internal(int err)
             ret = "Mutation ID overflow.";
             break;
         case MSP_ERR_BREAKPOINT_MASS_NON_FINITE:
-            ret = "An unlikely numerical error occured computing recombination "
+            ret = "An unlikely numerical error occurred computing recombination "
                   "breakpoints (non finite breakpoint mass). Please check your "
                   "parameters, and if they make sense help us fix the problem "
                   "by opening an issue on GitHub.";
             break;
         case MSP_ERR_BREAKPOINT_RESAMPLE_OVERFLOW:
-            ret = "An unlikely numerical error occured computing recombination "
+            ret = "An unlikely numerical error occurred computing recombination "
                   "breakpoints (resample overflow). Please check your "
                   "parameters, and if they make sense help us fix the problem "
                   "by opening an issue on GitHub.";
             break;
         case MSP_ERR_TRACTLEN_RESAMPLE_OVERFLOW:
-            ret = "An unlikely numerical error occured computing gene conversion"
+            ret = "An unlikely numerical error occurred computing gene conversion"
                   "tract lengths (resample overflow). Please check your "
                   "parameters, and if they make sense help us fix the problem "
                   "by opening an issue on GitHub.";
             break;
         case MSP_ERR_FENWICK_REBUILD_FAILED:
-            ret = "An unlikely numerical error occured (Fenwick tree rebuild "
+            ret = "An unlikely numerical error occurred (Fenwick tree rebuild "
                   "did not reduce drift sufficiently). Please check your "
                   "parameters, and if they make sense help us fix the problem "
                   "by opening an issue on GitHub.";

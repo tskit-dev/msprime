@@ -472,7 +472,7 @@ Here are the available models; they are documented in more detail below.
 - {class}`.JC69`: Jukes & Cantor model ('69), equal probability of transitions between nucleotides
 - {class}`.HKY`: Hasegawa, Kishino & Yano model ('85), different probabilities for transitions and transversions
 - {class}`.F84`: Felsenstein model ('84), different probabilities for transitions and transversions
-- {class}`.GTR`: The Generalised Time-Reversible nucleotide mutation model, a general parameterization of a time-reversible mutation process
+- {class}`.GTR`: The Generalised Time-Reversible nucleotide mutation model, a general parameterisation of a time-reversible mutation process
 - {class}`.BLOSUM62`: The BLOSUM62 model of time-reversible amino acid mutation
 - {class}`.PAM`: The PAM model of time-reversible amino acid mutation
 - {class}`.MatrixMutationModel`: Superclass of the specific mutation models with a finite set of states
@@ -552,7 +552,7 @@ for v in mts.variants():
 
 (sec_mutations_matrix_mutation_theory)=
 
-### Parameterization of Matrix Mutation Models
+### Parameterisation of Matrix Mutation Models
 
 Mutation matrix models are specified by three things: an alphabet,
 a root distribution, and a transition matrix.
@@ -597,7 +597,7 @@ so is equal to `transition_matrix[i,j] / (1 - transition_matrix[i,i])`.
 Second, suppose that an ancestor carries allele {math}`i` at a given position.
 The probability that her descendant some time {math}`t` in the future carries allele {math}`j` at that position
 is given by a matrix exponential of
-the scaled [infinitestimal rate matrix](<https://en.wikipedia.org/wiki/Transition_rate_matrix>) of the Markov chain,
+the scaled [infinitesimal rate matrix](<https://en.wikipedia.org/wiki/Transition_rate_matrix>) of the Markov chain,
 which can be computed as follows:
 
 ```{code-block} python
@@ -745,7 +745,7 @@ SVG(t.draw_svg(mutation_labels=ml, node_labels={}, size=(400, 300)))
 
 These resulting alleles show how derived states are built.
 
-The behavior of this mutation model when used to add mutations to a previously mutated
+The behaviour of this mutation model when used to add mutations to a previously mutated
 tree sequence can be subtle. Let's look at a simple example.
 Here, we first lay down mutations of type 1, starting from ID 0:
 
@@ -785,7 +785,7 @@ with IDs `100` and `102`, between these two mutations.
 These were added to mutation `0`, obtaining alleles `0,100` and `0,100,102`.
 But then, moving down the branch, we come upon the mutation with ID `3`.
 This was already present in the tree sequence, so its derived state is not modified:
-`0,3`. We can rationalize this, post-hoc, by saying that the type 1 mutation `3`
+`0,3`. We can rationalise this, post-hoc, by saying that the type 1 mutation `3`
 has "erased" the type 2 mutations `100` and `102`.
 If you want a different arrangement,
 you can go back and edit the derived states (and metadata) as you like.

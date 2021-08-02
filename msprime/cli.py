@@ -113,7 +113,7 @@ PLoS Comput Biol 12(5): e1004842. doi: 10.1371/journal.pcbi.1004842
 def positive_int(value):
     int_value = int(float(value))
     if int_value <= 0:
-        msg = f"{value} in an invalid postive integer value"
+        msg = f"{value} in an invalid positive integer value"
         raise argparse.ArgumentTypeError(msg)
     return int_value
 
@@ -516,7 +516,7 @@ def create_simulation_runner(parser, arg_list):
         pid = convert_population_id(parser, population_id, num_populations)
         if proportion < 0 or proportion > 1:
             parser.error("Proportion value must be 0 <= p <= 1.")
-        # In ms, the probability of staying in source is p and the probabilty
+        # In ms, the probability of staying in source is p and the probability
         # of moving to the new population is 1 - p.
         event = (index, msprime.MassMigration(t, pid, num_populations, 1 - proportion))
         demographic_events.append(event)

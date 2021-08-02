@@ -84,7 +84,7 @@ def get_environment():
 
 class ProvenanceEncoderDecoder(json.JSONEncoder):
     """
-    Extension of the `json` encoder that serializes arbitrary python class objects
+    Extension of the `json` encoder that serialises arbitrary python class objects
     by calling an `asdict` method on the object that should provide the arguments
     needed to exactly recreate it. Special cases numpy arrays, classes and functions
     """
@@ -106,20 +106,20 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
             # what we allow as a function here. We don't include builtins or
             # callable classes, we also block functions that refer to globals
             # or the outer scope for both complexity and security reasons.
-            # We can deserialize these later with
+            # We can deserialise these later with
             # FunctionType(fcode, fglobals, fname, fdefaults, fclosure)
             if len(obj.__code__.co_names) > 0:
                 error = (
                     f"Configuration function {obj.__code__.co_name} refers to"
                     f" global variables {obj.__code__.co_names} which are not"
-                    f" currently serialized"
+                    f" currently serialised"
                 )
                 logger.warning(error)
                 return {"__error__": error}
             if obj.__closure__ is not None and len(obj.__closure__) > 0:
                 error = (
                     f"Configuration function {obj.__code__.co_name} refers to outer"
-                    f" scope variables which are not currently serialized"
+                    f" scope variables which are not currently serialised"
                 )
                 logger.warning(error)
                 return {"__error__": error}
@@ -166,7 +166,7 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
         except AttributeError:
             raise TypeError(
                 f"Object of type {obj.__class__.__name__} "
-                f"is not JSON serializable. Please provide an `asdict` method "
+                f"is not JSON serialisable. Please provide an `asdict` method "
                 f"that returns the object's constructor arguments."
             )
 
@@ -206,7 +206,7 @@ def parse_provenance(provenance, current_ts):
     ret = ProvenanceEncoderDecoder.decode(provenance.record)
     if ret["software"]["name"] != "msprime":
         raise ValueError(
-            f"Only msprime provanances can be parsed,"
+            f"Only msprime provenances can be parsed,"
             f' found {ret["software"]["name"]}'
         )
     parameters = ret["parameters"]

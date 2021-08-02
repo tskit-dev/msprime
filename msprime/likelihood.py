@@ -63,7 +63,7 @@ def log_mutation_likelihood(ts, mutation_rate):
         leaves of the tree sequence.
 
     :param tskit.TreeSequence ts: The tree sequence object with mutations.
-    :param float mutation_rate: The per-site, per-generation mutation probablity.
+    :param float mutation_rate: The per-site, per-generation mutation probability.
         Must be non-negative.
     :return: The unnormalised log probability of the observed SNPs given the tree
         sequence. If the mutation rate is set to zero and the tree sequence contains

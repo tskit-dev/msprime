@@ -119,7 +119,7 @@ class SLiMMutationModel(_msprime.SLiMMutationModel, MutationModel):
     in units of time since the start of the simulation. Adding these two together -
     time since the start of the simulation plus time until the end - is equal to the
     total number of generations of the simulation. The origin_generation is not
-    currently used by SLiM, but for consistency, the origin_genration attribute for
+    currently used by SLiM, but for consistency, the origin_generation attribute for
     mutations produced by this model is set equal to ``slim_generation`` minus
     ``floor(mut.time)``, where ``mut.time`` is the (tskit) time ago of the mutation.
 
@@ -202,7 +202,7 @@ class BinaryMutationModel(MatrixMutationModel):
 class JC69(MatrixMutationModel):
     """
     Jukes-Cantor mutation model (Jukes and Cantor 1969). Based on the standard ACGT
-    nucleotides as alleleic states, this model assumes equal probabilities for
+    nucleotides as allelic states, this model assumes equal probabilities for
     ancestral state and equal probabilities for all possible transitions.
 
     This is a :class:`.MatrixMutationModel` with alleles ``["A", "C", "G", "T"]``,
@@ -236,14 +236,14 @@ class JC69(MatrixMutationModel):
 class HKY(MatrixMutationModel):
     """
     The Hasegawa, Kishino and Yano mutation model (Hasegawa et al. 1985). Based on the
-    standard ACGT nucleotides as alleleic states, this model allows different rates for
+    standard ACGT nucleotides as allelic states, this model allows different rates for
     transitions and transversions, and sets an equilibrium frequency for each nucleotide.
     In addition a custom ancestral frequency (``root_distribution``) can be specified.
     With ``kappa=1.0`` and the default values of the other arguments this model is equal
     to :class:`.JC69`. This model is similar to :class:`.F84`
-    but with a differing parametrisation for ``kappa``.
+    but with a differing parameterisation for ``kappa``.
 
-    This model is parameterized by :math:`\\kappa` (``kappa``), the ratio of
+    This model is parameterised by :math:`\\kappa` (``kappa``), the ratio of
     transition to transversion mutation rates, and :math:`\\pi`
     (``equilibrium_frequencies``), the vector of equilibrium nucleotide
     frequencies. If this mutation model is used with a ``mutation_rate`` of
@@ -269,7 +269,7 @@ class HKY(MatrixMutationModel):
 
     Note also that :math:`\\kappa` is the ratio of *individual* mutation rates,
     not the ratio of *total* transition to transversion rates, which would
-    be :math:`\\kappa/2`, as is used in some parameterizations.
+    be :math:`\\kappa/2`, as is used in some parameterisations.
 
     If ``state_independent`` is true, then the above is modified by setting
     :math:`q_{ii} = \\kappa \\pi_i`. This makes the model completely state-independent
@@ -282,7 +282,7 @@ class HKY(MatrixMutationModel):
 
     Note that this implementation has the root distribution as a separate
     parameter, although it defaults to the equilibrium distribution. If you
-    set the root distribution to be different than the equilbrium distribution,
+    set the root distribution to be different than the equilibrium distribution,
     then you have a nonequilibrium model, and you should make sure that's what
     you want.
 
@@ -340,14 +340,14 @@ class HKY(MatrixMutationModel):
 class F84(MatrixMutationModel):
     """
     The F84 mutation model (Felsenstein and Churchill, 1996). Based on the
-    standard ACGT nucleotides as alleleic states, this model takes into account
+    standard ACGT nucleotides as allelic states, this model takes into account
     transitions and transversions, and sets an equilibrium frequency for each nucleotide.
     In addition a custom ancestral frequency (``root_distribution``) can be specified.
     With ``kappa=1.0`` and the default values of the other arguments this model is equal
     to :class:`.JC69`. This model is similar to :class:`.HKY`
-    but with a differing parametrisation for ``kappa``.
+    but with a differing parameterisation for ``kappa``.
 
-    This model is parameterized by :math:`\\kappa` (``kappa``), the ratio of
+    This model is parameterised by :math:`\\kappa` (``kappa``), the ratio of
     transition to transversion mutation rates, and :math:`\\pi`
     (``equilibrium_frequencies``), the vector of equilibrium nucleotide
     frequencies. If this mutation model is used with a ``mutation_rate`` of
@@ -389,7 +389,7 @@ class F84(MatrixMutationModel):
 
     Note that this implementation has the root distribution as a separate
     parameter, although it defaults to the equilibrium distribution. If you
-    set the root distribution to be different than the equilbrium distribution,
+    set the root distribution to be different than the equilibrium distribution,
     then you have a nonequilibrium model, and you should make sure that's what
     you want.
 
@@ -451,11 +451,11 @@ class F84(MatrixMutationModel):
 class GTR(MatrixMutationModel):
     """
     The Generalised Time-Reversible nucleotide mutation model, a general
-    parameterization of a time-reversible mutation process (Tavaré et al.
+    parameterisation of a time-reversible mutation process (Tavaré et al.
     1986). It allows specification of per-nucleotide equilibrium frequencies
     and equilibrium transition rates.
 
-    This model is parameterized by the vector :math:`r` (``relative_rates``),
+    This model is parameterised by the vector :math:`r` (``relative_rates``),
     and :math:`\\pi` (``equilibrium_frequencies``), the vector of equilibrium nucleotide
     frequencies. The entries of ``relative_rates`` are, in this order,
     :math:`(r_{AC}, r_{AG}, r_{AT}, r_{CG}, r_{CT}, r_{GT})`. If this mutation model
@@ -491,7 +491,7 @@ class GTR(MatrixMutationModel):
 
     Note that this implementation has the root distribution as a separate
     parameter, although it defaults to the equilibrium distribution. If you
-    set the root distribution to be different than the equilbrium distribution,
+    set the root distribution to be different than the equilibrium distribution,
     then you have a nonequilibrium model, and you should make sure that's what
     you want.
 
@@ -543,7 +543,7 @@ class BLOSUM62(MatrixMutationModel):
     The BLOSUM62 model of time-reversible amino acid mutation. This model has
     no free parameters.
 
-    The model is parameterized by a 20-by-20 symmetric matrix of relative rates,
+    The model is parameterised by a 20-by-20 symmetric matrix of relative rates,
     :math:`B`, and a vector of amino acid equilibrium frequencies, :math:`\\pi`
     (for the precise order, see this model's `.alleles` attribute).
     If this mutation model is used with a ``mutation_rate`` of :math:`\\mu`, then
@@ -807,7 +807,7 @@ class PAM(MatrixMutationModel):
     The PAM model of time-reversible amino acid mutation. This model has no
     free parameters.
 
-    The model is parameterized by a 20-by-20 symmetric matrix of relative rates,
+    The model is parameterised by a 20-by-20 symmetric matrix of relative rates,
     :math:`B`, and a vector of amino acid equilibrium frequencies, :math:`\\pi`
     (for the precise order, see this model's `.alleles` attribute).
     If this mutation model is used with a ``mutation_rate`` of :math:`\\mu`, then
@@ -1076,7 +1076,7 @@ NUCLEOTIDES = 1
 
 
 class InfiniteSites(MatrixMutationModel):
-    # This mutation model is defined for backwards compatability, and is a remnant
+    # This mutation model is defined for backwards compatibility, and is a remnant
     # of an earlier design.
     def __init__(self, alphabet=BINARY):
         self.alphabet = alphabet

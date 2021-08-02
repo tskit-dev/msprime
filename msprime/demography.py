@@ -478,7 +478,7 @@ class Demography(collections.abc.Mapping):
           not already active.
         - All migration rates to and from the derived population are set to 0.
         - Population sizes and growth rates for the derived population are set
-          to 0, and the poulation is marked as inactive.
+          to 0, and the population is marked as inactive.
 
         :param float time: The time at which this event occurs in generations.
         :param str, int derived: The derived population.
@@ -650,7 +650,7 @@ class Demography(collections.abc.Mapping):
     ) -> SimpleBottleneck:
         """
         Adds a population bottleneck at the specified time in which each lineage
-        has probablility equal to ``proportion`` of coalescing into a single
+        has probability equal to ``proportion`` of coalescing into a single
         ancestor.
 
         Please see the :ref:`sec_demography_events_simple_bottleneck` section
@@ -1388,7 +1388,7 @@ class Demography(collections.abc.Mapping):
         and normalise their effects into LineageMovement instances, and
         return a dictionary mapping source populations to the list of
         sequential lineage movements. For each source population we have a
-        list of sequentual lineage movements, sorted by destination population ID.
+        list of sequential lineage movements, sorted by destination population ID.
         """
         assert len({event.time for event in events}) <= 1
         ret = collections.defaultdict(list)
@@ -2138,7 +2138,7 @@ class Demography(collections.abc.Mapping):
             growth rate) or an array with the same length as ``initial_size``.
         :param bool boundaries: If True the stepping stone model has boundary
             conditions imposed so that demes at either end of the chain do
-            not exchange migrats. If False (the default), the set of
+            not exchange migrants. If False (the default), the set of
             populations is "circular" and migration takes place between the
             terminal demes.
         :return: A Demography object representing this model, suitable as
@@ -2501,7 +2501,7 @@ class Demography(collections.abc.Mapping):
 
             Demes is stricter than msprime with regard to how a demographic
             model is structured, so models that can be simulated with msprime
-            are not guaranteed to be convertable to a demes graph. In particular,
+            are not guaranteed to be convertible to a demes graph. In particular,
             msprime's legacy API permits setting migrations or other attributes
             for a population even after that population has been merged into an
             ancestor. Such models are rarely constructed deliberately, so an
@@ -2758,7 +2758,7 @@ class Demography(collections.abc.Mapping):
 
 
 # This was lifted out of older code as-is. No point in updating it
-# to use dataclasses, since all we want to do is maintain compatability
+# to use dataclasses, since all we want to do is maintain compatibility
 # with older code.
 class PopulationConfiguration:
     """
@@ -3585,7 +3585,7 @@ class DemographyDebugger:
     during the different simulation epochs defined by demographic events.
 
     .. warning:: This class is not intended to be instantiated directly using
-        the contructor - please use :meth:`.Demography.debug()` to obtain
+        the constructor - please use :meth:`.Demography.debug()` to obtain
         a DemographyDebugger for a given :class:`.Demography` instead.
     """
 
@@ -4035,8 +4035,8 @@ class DemographyDebugger:
         :meth:`~.DemographyDebugger.coalescence_rate_trajectory`
         for more details.
 
-        To compute this, an adequate time discretization must be arrived at
-        by iteratively extending or refining the current discretization.
+        To compute this, an adequate time discretisation must be arrived at
+        by iteratively extending or refining the current discretisation.
         Debugging information about numerical convergence of this procedure is
         logged using the Python :mod:`logging` infrastructure.
         The `daiquiri <https://pypi.org/project/daiquiri/>`_ module is a
@@ -4049,7 +4049,7 @@ class DemographyDebugger:
             debugger.mean_coalescence_time(1)
 
         Briefly, this outputs iteration number, mean coalescence time, maximum
-        difference in probabilty of not having coalesced yet, difference to
+        difference in probability of not having coalesced yet, difference to
         last coalescence time, probability of not having coalesced by the final
         time point, and whether the last iteration was an extension or
         refinement.
@@ -4060,7 +4060,7 @@ class DemographyDebugger:
             in that population.
         :param int min_pop_size: See
             :meth:`~.DemographyDebugger.coalescence_rate_trajectory`.
-        :param list steps: The time discretization to start out with (by default,
+        :param list steps: The time discretisation to start out with (by default,
             picks something based on epoch times).
         :param float rtol: The relative tolerance to determine mean coalescence time
             to (used to decide when to stop subdividing the steps).
@@ -4108,7 +4108,7 @@ class DemographyDebugger:
         )
         # The factors of 20 here are probably not optimal: clearly, we need to
         # compute P accurately, but there's no good reason for this stopping rule.
-        # If populations have picewise constant size then we shouldn't need this:
+        # If populations have piecewise constant size then we shouldn't need this:
         # setting steps equal to the epoch boundaries should suffice; while if
         # there is very fast exponential change in some epochs caution is needed.
         while n < max_iter and (
@@ -4182,7 +4182,7 @@ class DemographyDebugger:
         and more details.
 
         The coalescence rate at time t in the past is the average rate of coalescence of
-        as-yet-uncoalesed lineages, computed as follows: let :math:`p(t)` be
+        as-yet-uncoalesced lineages, computed as follows: let :math:`p(t)` be
         the probability that the lineages of a randomly chosen pair of samples
         has not yet coalesced by time :math:`t`, let :math:`p(z,t)` be the
         probability that the lineages of a randomly chosen pair of samples has
@@ -4219,7 +4219,7 @@ class DemographyDebugger:
             recommended, and will take at most four times the computation.
         :return: A tuple of arrays whose jth elements, respectively, are the
             coalescence rate at the jth time point (denoted r(t[j]) above),
-            and the probablility that a randomly chosen pair of lineages has
+            and the probability that a randomly chosen pair of lineages has
             not yet coalesced (denoted p(t[j]) above).
         :rtype: (numpy.ndarray, numpy.ndarray)
         """

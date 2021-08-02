@@ -495,7 +495,7 @@ unless the ``initially_active`` flag has been set.
 ### Migration
 
 Migration is the process of lineages moving from one population to another
-during the course of the simulation.
+during the simulation.
 This either happens through continuous migration, where a rate of
 migration between each pair of populations is defined, or through
 {ref}`sec_demography_events_mass_migration` events. In this section
@@ -1393,7 +1393,7 @@ this time defining only
 four populations, as in this illustration of the model using
 the [demography package](https://github.com/apragsdale/demography)
 (see also [Figure 2B](http://dx.doi.org/10.1371/journal.pgen.1000695.g002)
-of the Gutenkunst et. al paper):
+of the Gutenkunst et al. paper):
 
 ```{image} _static/Gutenkunst_OOA_diagram.svg
 :width: 500px
@@ -1816,8 +1816,7 @@ debug.possible_lineage_locations(["A"])
 ```
 
 Because we only sampled lineages in "A", we cannot have
-any lineages in "B" until after the migration between the
-the two after 50 generations ago.
+any lineages in "B" until after the migration 50 generations ago.
 
 ### Lineage probabilities
 
