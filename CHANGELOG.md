@@ -161,7 +161,7 @@ with nearly all existing code.
 
 - Support for SMC models coupled with the record_full_arg feature was
   erroneously removed in a previous version ({issue}`795`). The feature
-  has been resinstated ({pr}`796`).
+  has been reinstated ({pr}`796`).
 
 ## [0.7.2] - 2019-07-30
 
@@ -214,8 +214,8 @@ Early release making DTWF code available to beta testers.
 ## [0.7.0] - 2019-02-19
 
 Separation of tskit from msprime. Msprime is now solely dedicated to simulating
-the coalescent, and all infrastucture for working with succinct tree sequences
-is now provided by tskit. To ensure compatability, msprime now imports code
+the coalescent, and all infrastructure for working with succinct tree sequences
+is now provided by tskit. To ensure compatibility, msprime now imports code
 from tskit under the old names, which should ensure that all code continues
 to work without changes.
 
@@ -281,7 +281,7 @@ improvements and bugfixes.
 
 **Bug fixes**:
 
-- Throw a more intelligle error during simulation if a topology is produced
+- Throw a more intelligible error during simulation if a topology is produced
   where the time of a parent is equal to the time of the child. (#570, #87).
 - Pickle supported in the TableCollection object. (#574, #577).
 
@@ -427,7 +427,7 @@ compatible, however.
 - The `records` iterator has been deprecated, and the underlying data
   model has moved away from the concept of coalescence records. The
   structure of a tree sequence is now defined in terms of a set of nodes
-  and edges, essentially a normlised version of coalescence records.
+  and edges, essentially a normalised version of coalescence records.
 - Changed `population_id` to `population` in various DemographicEvent
   classes for consistency. The old `population_id` argument is kept as a
   deprecated alias.
@@ -437,7 +437,7 @@ compatible, however.
   SparseTree. The older versions are retained as deprecated aliases.
 - Change `get_num_leaves` to `num_samples` in SparseTree. The
   `get_num_leaves` method (and other related methods) that have
-  been retained for backwards compatability are semantically incorrect,
+  been retained for backwards compatibility are semantically incorrect,
   in that they now return the number of **samples**. This should have
   no effect on existing code, since samples and leaves were synonymous.
   New code should use the documented `num_samples` form.
@@ -691,7 +691,7 @@ populations.
 
 - Added the -I, -m, -ma, -em, -eM, -ema, -eG, -eg, -eN, -en,
   -ej and -es options to mspms. These should provide full ms
-  compatability, except for the -es option which is currently
+  compatibility, except for the -es option which is currently
   limited in scope.
 - Added some extra keys to the low-level configuration JSON in
   the HDF5 file format to describe the population structure.

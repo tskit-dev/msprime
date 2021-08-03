@@ -41,7 +41,7 @@ to the ARG and infinite sites models.
 Evaluating these log likelihoods requires knowledge of a whole ARG,
 rather than just the more compact tree sequence representation. Additionally
 the log likelihood implementations are only available for continuous genomes.
-Hence, the the underlying tree sequence has to conform to the
+Hence, the underlying tree sequence has to conform to the
 `record_full_arg = True` and `discrete_genome = False` options of the
 {func}`.sim_ancestry` function.
 :::
@@ -80,7 +80,7 @@ the ARG, while the other combinations are quite different.
 ```
 
 In this example, the simulated ARG contains at least one recombination,
-which is an event of probablity 0 when the `recombination_rate = 0`.
+which is an event of probability 0 when the `recombination_rate = 0`.
 Hence, the log likelihood for recombination rate zero returns a numerical
 representation of negative infinity, i.e. the logarithm of zero. The other
 three combinations of parameters all result in positive likelihoods,

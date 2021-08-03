@@ -1770,7 +1770,7 @@ class BetaCoalescent(ParametricAncestryModel):
     and `Birkner et al. (2018) <https://projecteuclid.org/euclid.ejp/1527818427>`_
     for a diploid version of the Schweinsberg (2003) model specifically.
     The general polyploid model is analogous to the diploid case, with
-    :math:`2 p` available copies of parental chromsomes per common ancestor event,
+    :math:`2 p` available copies of parental chromosomes per common ancestor event,
     and hence up to :math:`2 p` simultaneous mergers.
 
     :param float alpha: Determines the degree of skewness in the family size
@@ -1796,7 +1796,7 @@ class BetaCoalescent(ParametricAncestryModel):
     alpha: float | None
     truncation_point: float
 
-    # We have to define an __init__ to enfore keyword-only behaviour
+    # We have to define an __init__ to enforce keyword-only behaviour
     def __init__(
         self, *, duration=None, alpha=None, truncation_point=sys.float_info.max
     ):
@@ -1846,7 +1846,7 @@ class DiracCoalescent(ParametricAncestryModel):
     psi: float | None
     c: float | None
 
-    # We have to define an __init__ to enfore keyword-only behaviour
+    # We have to define an __init__ to enforce keyword-only behaviour
     def __init__(self, *, duration=None, psi=None, c=None):
         self.duration = duration
         self.psi = psi
@@ -1856,12 +1856,12 @@ class DiracCoalescent(ParametricAncestryModel):
 @dataclasses.dataclass
 class SweepGenicSelection(ParametricAncestryModel):
     """
-    A selective sweep that has occured in the history of the sample.
+    A selective sweep that has occurred in the history of the sample.
     This will lead to a burst of rapid coalescence near the selected site.
 
     The strength of selection during the sweep is determined by the
     parameter :math:`s`. Here we define s such that the
-    fitness of the three genotypes at our benefical locus are
+    fitness of the three genotypes at our beneficial locus are
     :math:`W_{bb}=1`, :math:`W_{Bb}=1 + s/2`, :math:`W_{BB}=1 + s`.
     Thus fitness of the heterozygote is intermediate to the
     two homozygotes.
@@ -1885,7 +1885,7 @@ class SweepGenicSelection(ParametricAncestryModel):
 
     :param float position: the location of the beneficial allele along the
         chromosome.
-    :param float start_frequency: population frequency of the benefical
+    :param float start_frequency: population frequency of the beneficial
         allele at the start of the selective sweep. E.g., for a *de novo*
         allele in a diploid population of size N, start frequency would be
         :math:`1/2N`.
@@ -1905,7 +1905,7 @@ class SweepGenicSelection(ParametricAncestryModel):
     s: float | None
     dt: float | None
 
-    # We have to define an __init__ to enfore keyword-only behaviour
+    # We have to define an __init__ to enforce keyword-only behaviour
     def __init__(
         self,
         *,

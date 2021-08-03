@@ -72,7 +72,7 @@ and {func}`.sim_ancestry`:
 
   1. Sets the default number of sample nodes per *individual*
   2. Changes the {ref}`timescale<sec_ancestry_ploidy_coalescent_time_scales>`
-     over which coalescence occurs.  By default `ploidy` is 2 and
+     over which coalescence occurs. By default `ploidy` is 2 and
      so mean time to common ancestor in a population of size `N` is `2N` generations,
      which is the same as msprime 0.x.
 * Rather than two parameters `num_samples` and `samples`, the
@@ -85,7 +85,7 @@ and {func}`.sim_ancestry`:
   0.x {class}`.RecombinationMap` is deprecated and not supported as input
   to {func}`.sim_ancestry`. See {ref}`sec_ancestry_recombination` for more
   details.
-* Simulations are peformed on a **discrete** genome by default. To get the
+* Simulations are performed on a **discrete** genome by default. To get the
   0.x behaviour of a continuous genome, set `discrete_genome=False`.
   See the {ref}`sec_ancestry_discrete_genome` section for more details.
 * The `from_ts` parameter used has been renamed to `initial_state` and
@@ -123,9 +123,9 @@ number of genetic loci. That is, the simulation was performed in
 at the end of simulation. This had the significant advantage that
 recombination could be implemented during the simulation as a uniform process
 over these discrete loci. However, it led to
-a number of different numerical issues encountered when mapping back and
+many numerical issues encountered when mapping back and
 forth between genetic and physical coordinates as well as limiting
-what could be done in terms of gene converion and other processes.
+what could be done in terms of gene conversion and other processes.
 We therefore changed to using physical coordinates throughout the simulation
 for msprime 1.0.
 

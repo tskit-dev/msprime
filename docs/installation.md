@@ -108,7 +108,7 @@ more details on managing packages and environments.
 ## Via Pip
 
 Installing using `pip` is more flexible than `conda` as it
-can support more versions of Python and dependencies can be customized.
+can support more versions of Python and dependencies can be customised.
 
 :::{warning}
 
