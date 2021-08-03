@@ -56,6 +56,7 @@
 #define MSP_NODE_IS_CA_EVENT (1u << 18)
 #define MSP_NODE_IS_MIG_EVENT (1u << 19)
 #define MSP_NODE_IS_CEN_EVENT (1u << 20)
+#define MSP_NODE_IS_GC_EVENT (1u << 21)
 
 /* Flags for verify */
 #define MSP_VERIFY_BREAKPOINTS (1 << 1)
@@ -506,6 +507,7 @@ size_t msp_get_num_rejected_common_ancestor_events(msp_t *self);
 size_t msp_get_num_recombination_events(msp_t *self);
 size_t msp_get_num_gene_conversion_events(msp_t *self);
 size_t msp_get_num_internal_gene_conversion_events(msp_t *self);
+size_t msp_get_num_noneffective_gene_conversion_events(msp_t *self);
 double msp_get_sum_internal_gc_tract_lengths(msp_t *self);
 
 int matrix_mutation_model_factory(mutation_model_t *self, int model);

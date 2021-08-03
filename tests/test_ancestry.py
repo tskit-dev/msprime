@@ -105,21 +105,30 @@ class TestFullArg:
         # TODO add checks for migrations.
         re_nodes = np.where(flags == msprime.NODE_IS_RE_EVENT)[0]
         ca_nodes = np.where(flags == msprime.NODE_IS_CA_EVENT)[0]
+        gc_nodes = np.where(flags == msprime.NODE_IS_GC_EVENT)[0]
         coal_nodes = np.where(flags == 0)[0]
         # There should be two recombination nodes for every event
         assert np.array_equal(time[re_nodes[::2]], time[re_nodes[1::2]])  # Odd indexes
         assert re_nodes.shape[0] / 2 == sim.num_recombination_events
+        # There should be two gene conversion nodes for every effective event
+        assert np.array_equal(time[gc_nodes[::2]], time[gc_nodes[1::2]])  # Odd indexes
+        assert (
+            gc_nodes.shape[0] / 2
+            == sim.num_internal_gene_conversion_events
+            - sim.num_noneffective_gene_conversion_events
+        )
         if not multiple_mergers:
             assert (
                 ca_nodes.shape[0] + coal_nodes.shape[0]
                 == sim.num_common_ancestor_events
             )
-        # After simplification, all the RE and CA nodes should be gone.
+        # After simplification, all the RE, GC, and CA nodes should be gone.
         ts_simplified = tree_sequence.simplify()
         new_flags = ts_simplified.tables.nodes.flags
         new_time = ts_simplified.tables.nodes.time
         assert np.sum(new_flags == msprime.NODE_IS_RE_EVENT) == 0
         assert np.sum(new_flags == msprime.NODE_IS_CA_EVENT) == 0
+        assert np.sum(new_flags == msprime.NODE_IS_GC_EVENT) == 0
         # All coal nodes from the original should be identical to the originals
         assert np.array_equal(time[coal_nodes], new_time[new_flags == 0])
         assert ts_simplified.num_nodes <= tree_sequence.num_nodes
@@ -177,6 +186,46 @@ class TestFullArg:
             ],
         )
         self.verify(sim, multiple_mergers=True)
+
+    def test_gene_conversion_n25(self):
+        sim = ancestry._parse_sim_ancestry(
+            25,
+            gene_conversion_rate=1,
+            gene_conversion_tract_length=1,
+            sequence_length=10,
+            record_full_arg=True,
+        )
+        self.verify(sim)
+
+    def test_gene_conversion_n5(self):
+        sim = ancestry._parse_sim_ancestry(
+            5,
+            gene_conversion_rate=10,
+            gene_conversion_tract_length=1.5,
+            sequence_length=10,
+            record_full_arg=True,
+        )
+        self.verify(sim)
+
+    def test_gene_conversion_n50(self):
+        sim = ancestry._parse_sim_ancestry(
+            50,
+            gene_conversion_rate=2,
+            gene_conversion_tract_length=1,
+            sequence_length=5,
+            record_full_arg=True,
+        )
+        self.verify(sim)
+
+    def test_gene_conversion_n100(self):
+        sim = ancestry._parse_sim_ancestry(
+            100,
+            gene_conversion_rate=0.2,
+            gene_conversion_tract_length=2,
+            sequence_length=10,
+            record_full_arg=True,
+        )
+        self.verify(sim)
 
 
 class TestSimulator:
@@ -553,16 +602,6 @@ class TestParseSimAncestry:
                     gene_conversion_rate=1,
                     gene_conversion_tract_length=bad_type,
                 )
-
-    def test_gene_conversion_full_arg_unsupported(self):
-        with pytest.raises(ValueError, match="record_full_arg"):
-            ancestry._parse_sim_ancestry(
-                10,
-                sequence_length=100,
-                gene_conversion_rate=1,
-                gene_conversion_tract_length=5,
-                record_full_arg=True,
-            )
 
     def test_discrete_genome(self):
         # default is True

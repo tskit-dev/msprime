@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3] - 2021-XX-XX
+
+**New features**:
+
+- Support for running full ARG simulations with gene conversion
+  ({pr}`1801`, {issue}`1773`, {user}`JereKoskela`).
+
 ## [1.0.2] - 2021-06-29
 
 Improved Demes support and minor bugfixes.
