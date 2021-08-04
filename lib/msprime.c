@@ -7077,9 +7077,13 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         }
         pop_size = get_population_size(&simulator->populations[0], sim_time);
         alpha = 2 * pop_size * trajectory.s;
-        x = 1.0
-            - genic_selection_stochastic_forwards(
-                  trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
+        if (alpha > 0) {
+            x = 1.0
+                - genic_selection_stochastic_forwards(
+                      trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
+        } else {
+            x = neutral_stochastic_backwards(trajectory.dt, x, gsl_rng_uniform(rng));
+        }
         /* need our recored traj to stay in bounds */
         t += trajectory.dt;
         sim_time += trajectory.dt * pop_size * simulator->ploidy;
@@ -7335,7 +7339,7 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
         ret = MSP_ERR_BAD_TIME_DELTA;
         goto out;
     }
-    if (s <= 0) {
+    if (s < 0) {
         ret = MSP_ERR_BAD_SWEEP_GENIC_SELECTION_S;
         goto out;
     }
