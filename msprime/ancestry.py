@@ -1248,12 +1248,6 @@ class Simulator(_msprime.Simulator):
         # https://github.com/tskit-dev/msprime/issues/1212
         assert len(gene_conversion_map.rate) == 1
         gene_conversion_rate = gene_conversion_map.rate[0]
-        if gene_conversion_rate > 0 and store_full_arg:
-            raise ValueError(
-                "The record_full_arg option is not currently supported for "
-                "simulations with gene conversion. See "
-                "https://github.com/tskit-dev/msprime/issues/1773"
-            )
 
         start_time = -1 if start_time is None else start_time
         super().__init__(

@@ -219,6 +219,12 @@ msp_get_num_internal_gene_conversion_events(msp_t *self)
     return self->num_internal_gc_events;
 }
 
+size_t
+msp_get_num_noneffective_gene_conversion_events(msp_t *self)
+{
+    return self->num_noneffective_gc_events;
+}
+
 double
 msp_get_sum_internal_gc_tract_lengths(msp_t *self)
 {
@@ -2518,6 +2524,45 @@ out:
 }
 
 static int MSP_WARN_UNUSED
+msp_store_arg_gene_conversion(
+    msp_t *self, segment_t *tail, segment_t *alpha, segment_t *head)
+{
+    int ret = 0;
+
+    /* If head and tail both null then all material moves in the gene conversion so no
+     * split to record */
+    if (tail != NULL || head != NULL) {
+        tsk_bug_assert(alpha != NULL);
+        /* Store the edges for tail & head */
+        ret = msp_store_node(
+            self, MSP_NODE_IS_GC_EVENT, self->time, alpha->population, TSK_NULL);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_store_arg_edges(self, tail);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_store_arg_edges(self, head);
+        if (ret != 0) {
+            goto out;
+        }
+        /* Store the edges for the alpha section */
+        ret = msp_store_node(
+            self, MSP_NODE_IS_GC_EVENT, self->time, alpha->population, TSK_NULL);
+        if (ret != 0) {
+            goto out;
+        }
+        ret = msp_store_arg_edges(self, alpha);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
 msp_choose_uniform_breakpoint(msp_t *self, int label, rate_map_t *rate_map,
     fenwick_t *mass_index_array, bool left_at_zero, double *ret_breakpoint,
     segment_t **ret_seg)
@@ -2845,6 +2890,12 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         ret = msp_insert_individual(self, new_individual_head);
     } else {
         self->num_noneffective_gc_events++;
+    }
+    if (self->store_full_arg) {
+        ret = msp_store_arg_gene_conversion(self, tail, alpha, head);
+        if (ret != 0) {
+            goto out;
+        }
     }
 out:
     return ret;
@@ -4133,10 +4184,18 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
         x->next = NULL;
         y->prev = NULL;
         alpha = y;
+        // Ensure y points to the last segment left of the break for full ARG recording
+        y = x;
     }
     msp_set_segment_mass(self, alpha);
     tsk_bug_assert(alpha->prev == NULL);
     ret = msp_insert_individual(self, alpha);
+    if (self->store_full_arg) {
+        ret = msp_store_arg_gene_conversion(self, NULL, y, alpha);
+        if (ret != 0) {
+            goto out;
+        }
+    }
 out:
     return ret;
 }

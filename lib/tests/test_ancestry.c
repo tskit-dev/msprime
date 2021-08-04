@@ -1299,7 +1299,7 @@ test_mixed_hudson_smc(void)
 
 static void
 run_gc_simulation(double sequence_length, double gc_rate, double tract_length,
-    double recombination_rate, bool discrete_genome)
+    double recombination_rate, bool discrete_genome, bool full_arg)
 {
     int ret;
     uint32_t n = 10;
@@ -1321,6 +1321,7 @@ run_gc_simulation(double sequence_length, double gc_rate, double tract_length,
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, recombination_rate), 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_gene_conversion_rate(&msp, gc_rate), 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_gene_conversion_tract_length(&msp, tract_length), 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_store_full_arg(&msp, full_arg), 0);
     /* Set a very small block size to force lots of fenwick tree rebuilds */
     CU_ASSERT_EQUAL_FATAL(msp_set_segment_block_size(&msp, 16), 0);
     ret = msp_initialise(&msp);
@@ -1367,8 +1368,10 @@ run_gc_simulation(double sequence_length, double gc_rate, double tract_length,
 static void
 test_gc_single_locus(void)
 {
-    run_gc_simulation(10, 0.0, 1.0, 0.0, false);
-    run_gc_simulation(1, 1.0, 1.0, 0.0, true);
+    run_gc_simulation(10, 0.0, 1.0, 0.0, false, false);
+    run_gc_simulation(1, 1.0, 1.0, 0.0, true, false);
+    run_gc_simulation(10, 0.0, 1.0, 0.0, false, true);
+    run_gc_simulation(1, 1.0, 1.0, 0.0, true, true);
 }
 
 static void
@@ -1378,25 +1381,32 @@ test_gc_tract_lengths(void)
     size_t j;
 
     for (j = 0; j < sizeof(tract_lengths) / sizeof(double); j++) {
-        run_gc_simulation(10, 1.0, tract_lengths[j], 0.1, true);
-        run_gc_simulation(10, 1.0, tract_lengths[j], 0.1, false);
+        run_gc_simulation(10, 1.0, tract_lengths[j], 0.1, true, false);
+        run_gc_simulation(10, 1.0, tract_lengths[j], 0.1, false, false);
+        run_gc_simulation(10, 1.0, tract_lengths[j], 0.1, true, true);
+        run_gc_simulation(10, 1.0, tract_lengths[j], 0.1, false, true);
     }
 }
 
 static void
 test_gc_zero_recombination(void)
 {
-    run_gc_simulation(10, 1.0, 5, 0.0, true);
-    run_gc_simulation(10, 1.0, 1, 0.0, false);
+    run_gc_simulation(10, 1.0, 5, 0.0, true, false);
+    run_gc_simulation(10, 1.0, 1, 0.0, false, false);
+    run_gc_simulation(10, 1.0, 5, 0.0, true, true);
+    run_gc_simulation(10, 1.0, 1, 0.0, false, true);
 }
 
 static void
 test_gc_rates(void)
 {
-    run_gc_simulation(10, 0.1, 1.5, 1.0, false);
-    run_gc_simulation(5, 5.0, 2.5, 0.01, false);
-    run_gc_simulation(10, 1, 1, 1.0, false);
-    run_gc_simulation(30, 1.0, 6.5, 1.0, true);
+    size_t full_arg;
+    for (full_arg = 0; full_arg < 2; full_arg++) {
+        run_gc_simulation(10, 0.1, 1.5, 1.0, false, full_arg);
+        run_gc_simulation(5, 5.0, 2.5, 0.01, false, full_arg);
+        run_gc_simulation(10, 1, 1, 1.0, false, full_arg);
+        run_gc_simulation(30, 1.0, 6.5, 1.0, true, full_arg);
+    }
 }
 
 static void

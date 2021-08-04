@@ -2265,6 +2265,19 @@ out:
 }
 
 static PyObject *
+Simulator_get_num_noneffective_gene_conversion_events(Simulator  *self, void *closure)
+{
+    PyObject *ret = NULL;
+    if (Simulator_check_sim(self) != 0) {
+        goto out;
+    }
+    ret = Py_BuildValue("n",
+        (Py_ssize_t) msp_get_num_noneffective_gene_conversion_events(self->sim));
+out:
+    return ret;
+}
+
+static PyObject *
 Simulator_get_sum_internal_gc_tract_lengths(Simulator  *self, void *closure)
 {
     PyObject *ret = NULL;
@@ -2934,6 +2947,9 @@ static PyGetSetDef Simulator_getsetters[] = {
     {"num_internal_gene_conversion_events",
             (getter) Simulator_get_num_internal_gene_conversion_events, NULL,
             "The number of internal_gene_conversion_events" },
+    {"num_noneffective_gene_conversion_events",
+            (getter) Simulator_get_num_noneffective_gene_conversion_events, NULL,
+            "The number of noneffective_gene_conversion_events" },
     {"sum_internal_gc_tract_lengths",
             (getter) Simulator_get_sum_internal_gc_tract_lengths, NULL,
             "The sum of all internal_gc_tract_lengths" },
@@ -3307,6 +3323,7 @@ PyInit__msprime(void)
 
     PyModule_AddIntConstant(module, "NODE_IS_CA_EVENT", MSP_NODE_IS_CA_EVENT);
     PyModule_AddIntConstant(module, "NODE_IS_RE_EVENT", MSP_NODE_IS_RE_EVENT);
+    PyModule_AddIntConstant(module, "NODE_IS_GC_EVENT", MSP_NODE_IS_GC_EVENT);
     PyModule_AddIntConstant(module, "NODE_IS_MIG_EVENT", MSP_NODE_IS_MIG_EVENT);
     PyModule_AddIntConstant(module, "NODE_IS_CEN_EVENT", MSP_NODE_IS_CEN_EVENT);
 

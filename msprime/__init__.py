@@ -30,6 +30,7 @@ from msprime._msprime import (
     NODE_IS_CA_EVENT,
     NODE_IS_MIG_EVENT,
     NODE_IS_RE_EVENT,
+    NODE_IS_GC_EVENT,
 )
 
 from msprime.ancestry import (
@@ -126,6 +127,7 @@ __all__ = [
     "NODE_IS_CEN_EVENT",
     "NODE_IS_MIG_EVENT",
     "NODE_IS_RE_EVENT",
+    "NODE_IS_GC_EVENT",
     "NUCLEOTIDES",
     "PAM",
     "Population",
