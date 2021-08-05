@@ -121,6 +121,7 @@ typedef struct individual_t_t {
     int sex;
     double time;
     bool queued;
+    tsk_id_t *nodes;
     // For debugging, to ensure we only merge once.
     bool merged;
 } individual_t;
