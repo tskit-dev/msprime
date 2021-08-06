@@ -43,6 +43,7 @@ from msprime.ancestry import (
     SmcPrimeApproxCoalescent,
     StandardCoalescent,
     SweepGenicSelection,
+    NeutralFixation,
     WrightFisherPedigree,
 )
 

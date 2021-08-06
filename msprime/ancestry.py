@@ -1966,6 +1966,7 @@ class NeutralFixation(ParametricAncestryModel):
     start_frequency: float | None
     end_frequency: float | None
     dt: float | None
+    s: float | 0
 
     # We have to define an __init__ to enfore keyword-only behaviour
     def __init__(
