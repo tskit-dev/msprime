@@ -1314,7 +1314,9 @@ class Simulator(_msprime.Simulator):
         """
         num_labels = 1
         for model in models:
-            if isinstance(model, SweepGenicSelection):
+            if isinstance(model, SweepGenicSelection) or isinstance(
+                model, NeutralFixation
+            ):
                 num_labels = 2
         return num_labels
 
@@ -1921,4 +1923,63 @@ class SweepGenicSelection(ParametricAncestryModel):
         self.start_frequency = start_frequency
         self.end_frequency = end_frequency
         self.s = s
+        self.dt = dt
+
+
+@dataclasses.dataclass
+class NeutralFixation(ParametricAncestryModel):
+    """
+    A fixation of a neutral mutation has occured in the history of the sample.
+    This will lead to a weak reduction in polymorphism  near the fixed site.
+
+    The model is one of a structured coalescent where selective backgrounds are
+    defined as in
+    `Braverman et al. (1995) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1206652/>`_
+    The implementation details here follow closely those in discoal
+    `(Kern and Schrider, 2016)
+    <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5167068/>`_
+
+    See :ref:`sec_ancestry_models_selective_sweeps` for examples and
+    details on how to specify different types of sweeps.
+
+    .. warning::
+        Currently models with more than one population and a sweep
+        are not implemented. Population size changes during the sweep
+        are not yet possible in msprime.
+
+    :param float position: the location of the fixation along the
+        chromosome.
+    :param float start_frequency: population frequency of the neutral
+        allele at the start of the sojourn that we will follow. E.g., for a *de novo*
+        allele in a diploid population of size N, start frequency would be
+        :math:`1/2N`.
+    :param float end_frequency: population frequency of neutral allele
+        allele at the end of its sojourn.
+    :param float dt: dt is the small increment of time for stepping through
+        the sweep phase of the model. a good rule of thumb is for this to be
+        approximately :math:`1/40N` or smaller.
+    """
+
+    name = "neutral_fixation"
+
+    position: float | None
+    start_frequency: float | None
+    end_frequency: float | None
+    dt: float | None
+
+    # We have to define an __init__ to enfore keyword-only behaviour
+    def __init__(
+        self,
+        *,
+        duration=None,
+        position=None,
+        start_frequency=None,
+        end_frequency=None,
+        dt=None,
+    ):
+        self.duration = duration
+        self.position = position
+        self.start_frequency = start_frequency
+        self.end_frequency = end_frequency
+        self.s = 0
         self.dt = dt
