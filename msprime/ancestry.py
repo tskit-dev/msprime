@@ -1939,7 +1939,7 @@ class NeutralFixation(ParametricAncestryModel):
     `(Kern and Schrider, 2016)
     <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5167068/>`_
 
-    See :ref:`sec_ancestry_models_selective_sweeps` for examples and
+    See :ref:`sec_ancestry_models_neutral_fixations` for examples and
     details on how to specify different types of sweeps.
 
     .. warning::
