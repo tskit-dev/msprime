@@ -27,6 +27,7 @@ for discussion and examples of individual features.
   BetaCoalescent
   DiracCoalescent
   SweepGenicSelection
+  NeutralFixation
 ```
 
 ### Mutations
@@ -113,6 +114,10 @@ for discussion and examples of individual features.
 
 ```{eval-rst}
 .. autoclass:: msprime.SweepGenicSelection
+```
+
+```{eval-rst}
+.. autoclass:: msprime.NeutralFixation
 ```
 
 ### Mutations
