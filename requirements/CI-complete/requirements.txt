@@ -1,5 +1,5 @@
 bintrees==2.2.0
-codecov==2.1.10
+codecov==2.1.12
 daiquiri==3.0.0
 demes==0.1.2
 hypothesis==6.14.5
