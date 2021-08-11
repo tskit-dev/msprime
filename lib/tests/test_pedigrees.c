@@ -176,7 +176,7 @@ test_pedigree_errors(void)
     parents[0] = -2;
     ret = build_pedigree_sim(
         &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, msp_set_tsk_error(TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS));
     ret = msp_initialise(&msp);
     tsk_table_collection_free(&tables);
     msp_free(&msp);
@@ -184,7 +184,7 @@ test_pedigree_errors(void)
     parents[0] = 100;
     ret = build_pedigree_sim(
         &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
-    CU_ASSERT_EQUAL_FATAL(ret, TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS);
+    CU_ASSERT_EQUAL_FATAL(ret, msp_set_tsk_error(TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS));
     ret = msp_initialise(&msp);
     tsk_table_collection_free(&tables);
     msp_free(&msp);
