@@ -1782,7 +1782,6 @@ msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t populat
     if (ret < 0) {
         goto out;
     }
-    ret = 0;
 out:
     return ret;
 }
@@ -1794,7 +1793,6 @@ msp_store_edge(msp_t *self, double left, double right, tsk_id_t parent, tsk_id_t
     tsk_edge_t *edge;
     const double *node_time = self->tables->nodes.time;
 
-    tsk_bug_assert(parent > child);
     tsk_bug_assert(parent < (tsk_id_t) self->tables->nodes.num_rows);
     if (self->num_buffered_edges == self->max_buffered_edges - 1) {
         /* Grow the array */
@@ -1879,7 +1877,7 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
     if (self->store_full_arg) {
         ret = msp_store_node(
             self, MSP_NODE_IS_MIG_EVENT, self->time, dest_pop, TSK_NULL);
-        if (ret != 0) {
+        if (ret < 0) {
             goto out;
         }
         ret = msp_store_arg_edges(self, ind);
@@ -2465,7 +2463,7 @@ msp_store_arg_recombination(msp_t *self, segment_t *lhs_tail, segment_t *rhs)
     /* Store the edges for the LHS */
     ret = msp_store_node(
         self, MSP_NODE_IS_RE_EVENT, self->time, lhs_tail->population, TSK_NULL);
-    if (ret != 0) {
+    if (ret < 0) {
         goto out;
     }
     ret = msp_store_arg_edges(self, lhs_tail);
@@ -2475,7 +2473,7 @@ msp_store_arg_recombination(msp_t *self, segment_t *lhs_tail, segment_t *rhs)
     /* Store the edges for the RHS */
     ret = msp_store_node(
         self, MSP_NODE_IS_RE_EVENT, self->time, rhs->population, TSK_NULL);
-    if (ret != 0) {
+    if (ret < 0) {
         goto out;
     }
     ret = msp_store_arg_edges(self, rhs);
@@ -2499,7 +2497,7 @@ msp_store_arg_gene_conversion(
         /* Store the edges for tail & head */
         ret = msp_store_node(
             self, MSP_NODE_IS_GC_EVENT, self->time, alpha->population, TSK_NULL);
-        if (ret != 0) {
+        if (ret < 0) {
             goto out;
         }
         ret = msp_store_arg_edges(self, tail);
@@ -2513,7 +2511,7 @@ msp_store_arg_gene_conversion(
         /* Store the edges for the alpha section */
         ret = msp_store_node(
             self, MSP_NODE_IS_GC_EVENT, self->time, alpha->population, TSK_NULL);
-        if (ret != 0) {
+        if (ret < 0) {
             goto out;
         }
         ret = msp_store_arg_edges(self, alpha);
@@ -2957,7 +2955,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                     coalescence = true;
                     l_min = l;
                     ret = msp_store_node(self, 0, self->time, population_id, TSK_NULL);
-                    if (ret != 0) {
+                    if (ret < 0) {
                         goto out;
                     }
                 }
@@ -3058,7 +3056,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
         if (!coalescence) {
             ret = msp_store_node(
                 self, MSP_NODE_IS_CA_EVENT, self->time, population_id, TSK_NULL);
-            if (ret != 0) {
+            if (ret < 0) {
                 goto out;
             }
         }
@@ -3186,11 +3184,12 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             if (new_node_id == TSK_NULL) {
                 coalescence = true;
                 l_min = l;
-                ret = msp_store_node(self, 0, self->time, population_id, individual);
-                if (ret != 0) {
+                new_node_id
+                    = msp_store_node(self, 0, self->time, population_id, individual);
+                if (new_node_id < 0) {
+                    ret = (int) new_node_id;
                     goto out;
                 }
-                new_node_id = (tsk_id_t) msp_get_num_nodes(self) - 1;
             }
             /* Insert overlap counts for bounds, if necessary */
             search.position = l;
@@ -3303,7 +3302,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         if (!coalescence) {
             ret = msp_store_node(
                 self, MSP_NODE_IS_CA_EVENT, self->time, population_id, individual);
-            if (ret != 0) {
+            if (ret < 0) {
                 goto out;
             }
         }
@@ -4349,6 +4348,7 @@ msp_pedigree_climb(msp_t *self)
     segment_t *merged_segment = NULL;
     segment_t *u[2]; // Will need to update for different ploidy
     avl_tree_t *segments = NULL;
+    tsk_id_t node = TSK_NULL;
 
     tsk_bug_assert(self->num_populations == 1);
     tsk_bug_assert(avl_count(&self->pedigree->ind_heap) > 0);
@@ -4374,6 +4374,7 @@ msp_pedigree_climb(msp_t *self)
                 goto out;
             }
             segments = ind->segments + i;
+            node = ind->nodes[i];
 
             /* This parent may not have contributed any ancestral material
              * to the samples */
@@ -4389,7 +4390,7 @@ msp_pedigree_climb(msp_t *self)
             /* Merge segments inherited from this ind and recombine */
             // TODO: Make sure population gets properly set when more than one
             ret = msp_merge_ancestors(
-                self, segments, 0, 0, &merged_segment, parent_id, TSK_NULL);
+                self, segments, 0, 0, &merged_segment, parent_id, node);
             if (ret != 0) {
                 goto out;
             }
@@ -7198,7 +7199,6 @@ msp_set_simulation_model_wf_ped(msp_t *self)
     tsk_individual_t ind_obj;
     individual_t *ind;
     tsk_node_t node_obj;
-    tsk_id_t node_id;
     tsk_size_t sample_num = 0;
     bool sample_flag;
 
@@ -7242,12 +7242,7 @@ msp_set_simulation_model_wf_ped(msp_t *self)
         sample_flag = false;
 
         for (k = 0; k < ind_obj.nodes_length; k++) {
-            // ret = tsk_treeseq_get_node(&ts, ind_obj.nodes[k], &node_obj);
-            node_id
-                = (int) j * (int) ind_obj.nodes_length
-                  + (int)
-                        k; // ugly way to access each node associated with an individual
-            ret = tsk_treeseq_get_node(&ts, node_id, &node_obj);
+            ret = tsk_treeseq_get_node(&ts, ind_obj.nodes[k], &node_obj);
             assert(ret == 0);
             assert(node_obj.individual == (tsk_id_t) j);
             ind->time = node_obj.time;
