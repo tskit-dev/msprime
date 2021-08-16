@@ -895,6 +895,8 @@ msp_free(msp_t *self)
     msp_safe_free(self->buffered_edges);
     msp_safe_free(self->root_segments);
     msp_safe_free(self->initial_overlaps);
+    msp_safe_free(self->trajectory.time);
+    msp_safe_free(self->trajectory.allele_frequency);
     /* free the object heaps */
     object_heap_free(&self->avl_node_heap);
     object_heap_free(&self->node_mapping_heap);
@@ -1565,7 +1567,8 @@ msp_print_state(msp_t *self, FILE *out)
             self->model.params.dirac_coalescent.c);
     } else if (self->model.type == MSP_MODEL_SWEEP) {
         fprintf(out, "\tsweep @ locus = %f\n", self->model.params.sweep.position);
-        self->model.params.sweep.print_state(&self->model.params.sweep, out);
+        fprintf(out, "FIXME\n");
+        /* self->model.params.sweep.print_state(&self->model.params.sweep, out); */
     }
     fprintf(out, "L = %.14g\n", self->sequence_length);
     fprintf(out, "discrete_genome = %d\n", self->discrete_genome);
@@ -4934,16 +4937,124 @@ out:
 }
 
 static int
+msp_alloc_sweep_trajectory(msp_t *self)
+{
+    int ret = 0;
+    sweep_trajectory_t *trajectory = &self->trajectory;
+
+    if (trajectory->max_steps == 0) {
+        trajectory->max_steps = 64;
+        trajectory->time = malloc(trajectory->max_steps * sizeof(*trajectory->time));
+        trajectory->allele_frequency
+            = malloc(trajectory->max_steps * sizeof(*trajectory->allele_frequency));
+        if (trajectory->time == NULL || trajectory->allele_frequency == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+    }
+out:
+    return ret;
+}
+
+static int
+msp_expand_sweep_trajectory(msp_t *self)
+{
+    int ret = 0;
+    void *tmp;
+    sweep_trajectory_t *trajectory = &self->trajectory;
+
+    if (trajectory->num_steps + 1 == trajectory->max_steps) {
+        trajectory->max_steps *= 2;
+        tmp = realloc(
+            trajectory->time, trajectory->max_steps * sizeof(*trajectory->time));
+        if (tmp == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        trajectory->time = tmp;
+        tmp = realloc(trajectory->allele_frequency,
+            trajectory->max_steps * sizeof(*trajectory->allele_frequency));
+        if (tmp == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        trajectory->allele_frequency = tmp;
+    }
+out:
+    return ret;
+}
+
+static int
+msp_generate_sweep_trajectory(msp_t *self)
+{
+    int ret;
+    /* double x, t, *tmp, pop_size, sim_time, alpha; */
+    sweep_trajectory_t *trajectory = &self->trajectory;
+    sweep_t *sweep = &self->model.params.sweep;
+    const double dt = sweep->dt;
+    const double start_frequency = sweep->start_frequency;
+    const double end_frequency = sweep->end_frequency;
+    double x, t, pop_size, sim_time;
+
+    ret = msp_alloc_sweep_trajectory(self);
+    if (ret != 0) {
+        goto out;
+    }
+
+    /* TODO Wrap this in a rejection sample loop  */
+
+    t = 0;
+    x = end_frequency;
+    /* TODO not clear why we have two ways of measuring time here. */
+    sim_time = self->time; /*time in generations*/
+    trajectory->num_steps = 0;
+    /* TODO see note below about assigning to this in muliple places */
+    trajectory->time[trajectory->num_steps] = t;
+    trajectory->allele_frequency[trajectory->num_steps] = x;
+    trajectory->num_steps++;
+
+    while (x > start_frequency) {
+        ret = msp_expand_sweep_trajectory(self);
+        if (ret != 0) {
+            goto out;
+        }
+        pop_size = get_population_size(&self->populations[0], sim_time);
+
+        x = 1.0
+            - sweep->next_frequency(
+                  x, dt, pop_size, gsl_rng_uniform(self->rng), sweep->trajectory_params);
+
+        t += dt;
+        sim_time += dt * pop_size * self->ploidy;
+
+        if (x > start_frequency) {
+            /* TODO it would be nice to refactor here so that this
+             * condition was checked only once per loop. We could
+             * have a break in the middle, or else maybe restructure
+             * a bit ? We're assigning values in three places at the
+             * moment, which is surely not necessary. */
+            trajectory->allele_frequency[trajectory->num_steps] = x;
+            trajectory->time[trajectory->num_steps] = t;
+            trajectory->num_steps++;
+        }
+    }
+    tsk_bug_assert(trajectory->num_steps < trajectory->max_steps);
+    trajectory->time[trajectory->num_steps] = t;
+    trajectory->allele_frequency[trajectory->num_steps] = start_frequency;
+    trajectory->num_steps++;
+out:
+    return ret;
+}
+
+static int
 msp_run_sweep(msp_t *self)
 {
     int ret = 0;
     simulation_model_t *model = &self->model;
-    size_t curr_step = 1;
-    size_t num_steps;
-    double *allele_frequency = NULL;
-    double *time = NULL;
+    size_t curr_step;
     double sweep_locus = model->params.sweep.position;
-    double sweep_dt;
+    double sweep_dt = model->params.sweep.dt;
+    sweep_trajectory_t *trajectory = &self->trajectory;
     size_t j = 0;
     double recomb_mass;
     unsigned long events = 0;
@@ -4978,22 +5089,28 @@ msp_run_sweep(msp_t *self)
      * depending on the value of curr_step, and hopefully reintroduce the max_time
      * and max_steps parameters. */
 
-    ret = model->params.sweep.generate_trajectory(
-        &model->params.sweep, self, &num_steps, &time, &allele_frequency);
+    ret = msp_generate_sweep_trajectory(self);
+    if (ret != 0) {
+        goto out;
+    }
+
+    /* ret = model->params.sweep.generate_trajectory( */
+    /*     &model->params.sweep, self, &num_steps, &time, &allele_frequency); */
 
     t_start = self->time;
-    sweep_dt = model->params.sweep.trajectory_params.genic_selection_trajectory.dt;
+    /* sweep_dt = model->params.sweep.trajectory_params.genic_selection_trajectory.dt; */
+    sweep_dt = model->params.sweep.dt;
     tsk_bug_assert(sweep_dt > 0);
     if (ret != 0) {
         goto out;
     }
-    ret = msp_sweep_initialise(self, allele_frequency[0]);
+    ret = msp_sweep_initialise(self, trajectory->allele_frequency[0]);
     if (ret != 0) {
         goto out;
     }
 
     curr_step = 1;
-    while (msp_get_num_ancestors(self) > 0 && curr_step < num_steps) {
+    while (msp_get_num_ancestors(self) > 0 && curr_step < trajectory->num_steps) {
         events++;
         /* Set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
@@ -5008,17 +5125,18 @@ msp_run_sweep(msp_t *self)
         event_prob = 1.0;
         event_rand = gsl_rng_uniform(self->rng);
         sweep_over = false;
-        while (event_prob > event_rand && curr_step < num_steps && !sweep_over) {
+        while (event_prob > event_rand && curr_step < trajectory->num_steps
+               && !sweep_over) {
             pop_size = get_population_size(&self->populations[0], self->time);
             p_coal_B = 0;
             if (avl_count(&self->populations[0].ancestors[1]) > 1) {
                 p_coal_B = ((sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1)) * 0.5)
-                           / allele_frequency[curr_step] * sweep_dt;
+                           / trajectory->allele_frequency[curr_step] * sweep_dt;
             }
             p_coal_b = 0;
             if (avl_count(&self->populations[0].ancestors[0]) > 1) {
                 p_coal_b = ((sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1)) * 0.5)
-                           / (1.0 - allele_frequency[curr_step]) * sweep_dt;
+                           / (1.0 - trajectory->allele_frequency[curr_step]) * sweep_dt;
             }
             p_rec_b = rec_rates[0] * pop_size * self->ploidy * sweep_dt;
             p_rec_B = rec_rates[1] * pop_size * self->ploidy * sweep_dt;
@@ -5049,7 +5167,7 @@ msp_run_sweep(msp_t *self)
         e_sum = p_coal_b;
         /* convert time scale */
         pop_size = get_population_size(&self->populations[0], self->time);
-        t_unscaled = time[curr_step - 1] * self->ploidy * pop_size;
+        t_unscaled = trajectory->time[curr_step - 1] * self->ploidy * pop_size;
         tsk_bug_assert(t_unscaled > 0);
         self->time = t_start + t_unscaled;
         /* printf("event time: %g\n", self->time); */
@@ -5065,12 +5183,12 @@ msp_run_sweep(msp_t *self)
                 e_sum += p_rec_b;
                 if (tmp_rand < e_sum / sweep_pop_tot_rate) {
                     /* recomb in b background */
-                    ret = msp_sweep_recombination_event(
-                        self, 0, sweep_locus, (1.0 - allele_frequency[curr_step - 1]));
+                    ret = msp_sweep_recombination_event(self, 0, sweep_locus,
+                        (1.0 - trajectory->allele_frequency[curr_step - 1]));
                 } else {
                     /* recomb in B background */
-                    ret = msp_sweep_recombination_event(
-                        self, 1, sweep_locus, allele_frequency[curr_step - 1]);
+                    ret = msp_sweep_recombination_event(self, 1, sweep_locus,
+                        trajectory->allele_frequency[curr_step - 1]);
                 }
             }
         }
@@ -5106,8 +5224,6 @@ msp_run_sweep(msp_t *self)
     }
     ret = MSP_EXIT_MODEL_COMPLETE;
 out:
-    msp_safe_free(time);
-    msp_safe_free(allele_frequency);
     return ret;
 }
 
@@ -7031,104 +7147,119 @@ out:
  **************************************************************/
 
 static double
-genic_selection_stochastic_forwards(double dt, double freq, double alpha, double u)
+next_frequency_genic_selection_stochastic(
+    double freq, double dt, double pop_size, double u, void *params)
 {
     /* this is scaled following Ewens chapter 5 e.g.,
      * w_11=1+s; w_12=1+s/2; w_22=1; that is h=0.5 */
+    double s = *(double *) params;
+    /* FIXME where should this 2 be? Is it really the ploidy value? */
+    double alpha = 2 * pop_size * s;
     double ux = ((alpha / 2.0) * freq * (1 - freq)) / tanh((alpha / 2.0) * freq);
     int sign = u < 0.5 ? 1 : -1;
     return freq + (ux * dt) + sign * sqrt(freq * (1.0 - freq) * dt);
 }
 
-static int
-genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
-    size_t *ret_num_steps, double **ret_time, double **ret_allele_frequency)
-{
-    int ret = 0;
-    genic_selection_trajectory_t trajectory
-        = self->trajectory_params.genic_selection_trajectory;
-    gsl_rng *rng = simulator->rng;
-    size_t max_steps = 64;
-    double *time = malloc(max_steps * sizeof(*time));
-    double *allele_frequency = malloc(max_steps * sizeof(*allele_frequency));
-    double x, t, *tmp, pop_size, sim_time, alpha;
-    size_t num_steps;
+/* static double */
+/* genic_selection_stochastic_forwards(double dt, double freq, double alpha, double u) */
+/* { */
+/*     /1* this is scaled following Ewens chapter 5 e.g., */
+/*      * w_11=1+s; w_12=1+s/2; w_22=1; that is h=0.5 *1/ */
+/*     double ux = ((alpha / 2.0) * freq * (1 - freq)) / tanh((alpha / 2.0) * freq); */
+/*     int sign = u < 0.5 ? 1 : -1; */
+/*     return freq + (ux * dt) + sign * sqrt(freq * (1.0 - freq) * dt); */
+/* } */
 
-    if (time == NULL || allele_frequency == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    /* TODO Wrap this in a rejection sample loop and get the population size
-     * from the simulator. We can use
-     * pop_size = get_population_size(sim->populations[0], time);
-     * to do this because we assume there are no demographic events
-     * during a sweep */
+/* static int */
+/* genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator, */
+/*     size_t *ret_num_steps, double **ret_time, double **ret_allele_frequency) */
+/* { */
+/*     int ret = 0; */
+/*     genic_selection_trajectory_t trajectory */
+/*         = self->trajectory_params.genic_selection_trajectory; */
+/*     gsl_rng *rng = simulator->rng; */
+/*     size_t max_steps = 64; */
+/*     double *time = malloc(max_steps * sizeof(*time)); */
+/*     double *allele_frequency = malloc(max_steps * sizeof(*allele_frequency)); */
+/*     double x, t, *tmp, pop_size, sim_time, alpha; */
+/*     size_t num_steps; */
 
-    x = trajectory.end_frequency;
-    num_steps = 0;
-    t = 0;
-    sim_time = simulator->time; /*time in generations*/
-    time[num_steps] = t;
-    allele_frequency[num_steps] = x;
-    num_steps++;
-    while (x > trajectory.start_frequency) {
-        if (num_steps + 1 >= max_steps) {
-            max_steps *= 2;
-            tmp = realloc(time, max_steps * sizeof(*time));
-            if (tmp == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            time = tmp;
-            tmp = realloc(allele_frequency, max_steps * sizeof(*allele_frequency));
-            if (tmp == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            allele_frequency = tmp;
-        }
-        pop_size = get_population_size(&simulator->populations[0], sim_time);
-        alpha = 2 * pop_size * trajectory.s;
-        x = 1.0
-            - genic_selection_stochastic_forwards(
-                  trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
-        /* need our recored traj to stay in bounds */
-        t += trajectory.dt;
-        sim_time += trajectory.dt * pop_size * simulator->ploidy;
-        if (x > trajectory.start_frequency) {
-            allele_frequency[num_steps] = x;
-            time[num_steps] = t;
-            num_steps++;
-        }
-    }
-    tsk_bug_assert(num_steps < max_steps); /* num_steps + 1 above guarantees this */
-    time[num_steps] = t;
-    allele_frequency[num_steps] = trajectory.start_frequency;
-    num_steps++;
+/*     if (time == NULL || allele_frequency == NULL) { */
+/*         ret = MSP_ERR_NO_MEMORY; */
+/*         goto out; */
+/*     } */
+/*     /1* TODO Wrap this in a rejection sample loop and get the population size */
+/*      * from the simulator. We can use */
+/*      * pop_size = get_population_size(sim->populations[0], time); */
+/*      * to do this because we assume there are no demographic events */
+/*      * during a sweep *1/ */
 
-    *ret_num_steps = num_steps;
-    *ret_time = time;
-    *ret_allele_frequency = allele_frequency;
-    time = NULL;
-    allele_frequency = NULL;
-out:
-    msp_safe_free(time);
-    msp_safe_free(allele_frequency);
-    return ret;
-}
+/*     x = trajectory.end_frequency; */
+/*     num_steps = 0; */
+/*     t = 0; */
+/*     sim_time = simulator->time; / *time in generations* / */
+/*     time[num_steps] = t; */
+/*     allele_frequency[num_steps] = x; */
+/*     num_steps++; */
+/*     while (x > trajectory.start_frequency) { */
+/*         if (num_steps + 1 >= max_steps) { */
+/*             max_steps *= 2; */
+/*             tmp = realloc(time, max_steps * sizeof(*time)); */
+/*             if (tmp == NULL) { */
+/*                 ret = MSP_ERR_NO_MEMORY; */
+/*                 goto out; */
+/*             } */
+/*             time = tmp; */
+/*             tmp = realloc(allele_frequency, max_steps * sizeof(*allele_frequency)); */
+/*             if (tmp == NULL) { */
+/*                 ret = MSP_ERR_NO_MEMORY; */
+/*                 goto out; */
+/*             } */
+/*             allele_frequency = tmp; */
+/*         } */
+/*         pop_size = get_population_size(&simulator->populations[0], sim_time); */
+/*         alpha = 2 * pop_size * trajectory.s; */
+/*         x = 1.0 */
+/*             - genic_selection_stochastic_forwards( */
+/*                   trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng)); */
+/*         /1* need our recored traj to stay in bounds *1/ */
+/*         t += trajectory.dt; */
+/*         sim_time += trajectory.dt * pop_size * simulator->ploidy; */
+/*         if (x > trajectory.start_frequency) { */
+/*             allele_frequency[num_steps] = x; */
+/*             time[num_steps] = t; */
+/*             num_steps++; */
+/*         } */
+/*     } */
+/*     tsk_bug_assert(num_steps < max_steps); /1* num_steps + 1 above guarantees this *1/
+ */
+/*     time[num_steps] = t; */
+/*     allele_frequency[num_steps] = trajectory.start_frequency; */
+/*     num_steps++; */
 
-static void
-genic_selection_print_state(sweep_t *self, FILE *out)
-{
-    genic_selection_trajectory_t *trajectory
-        = &self->trajectory_params.genic_selection_trajectory;
+/*     *ret_num_steps = num_steps; */
+/*     *ret_time = time; */
+/*     *ret_allele_frequency = allele_frequency; */
+/*     time = NULL; */
+/*     allele_frequency = NULL; */
+/* out: */
+/*     msp_safe_free(time); */
+/*     msp_safe_free(allele_frequency); */
+/*     return ret; */
+/* } */
 
-    fprintf(out, "\tGenic selection trajectory\n");
-    fprintf(out, "\t\tstart_frequency = %f\n", trajectory->start_frequency);
-    fprintf(out, "\t\tend_frequency = %f\n", trajectory->end_frequency);
-    fprintf(out, "\t\ts = %f\n", trajectory->s);
-    fprintf(out, "\t\tdt = %f\n", trajectory->dt);
-}
+/* static void */
+/* genic_selection_print_state(sweep_t *self, FILE *out) */
+/* { */
+/*     genic_selection_trajectory_t *trajectory */
+/*         = &self->trajectory_params.genic_selection_trajectory; */
+
+/*     fprintf(out, "\tGenic selection trajectory\n"); */
+/*     fprintf(out, "\t\tstart_frequency = %f\n", trajectory->start_frequency); */
+/*     fprintf(out, "\t\tend_frequency = %f\n", trajectory->end_frequency); */
+/*     fprintf(out, "\t\ts = %f\n", trajectory->s); */
+/*     fprintf(out, "\t\tdt = %f\n", trajectory->dt); */
+/* } */
 
 /**************************************************************
  * Public API for setting simulation models.
@@ -7326,9 +7457,7 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     double start_frequency, double end_frequency, double s, double dt)
 {
     int ret = 0;
-    simulation_model_t *model = &self->model;
-    genic_selection_trajectory_t *trajectory
-        = &model->params.sweep.trajectory_params.genic_selection_trajectory;
+    sweep_t *sweep = &self->model.params.sweep;
     double L = self->sequence_length;
 
     /* Check the inputs to make sure they make sense */
@@ -7358,13 +7487,21 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     if (ret != 0) {
         goto out;
     }
-    model->params.sweep.position = position;
-    model->params.sweep.generate_trajectory = genic_selection_generate_trajectory;
-    model->params.sweep.print_state = genic_selection_print_state;
-    trajectory->start_frequency = start_frequency;
-    trajectory->end_frequency = end_frequency;
-    trajectory->s = s;
-    trajectory->dt = dt;
+    sweep->position = position;
+    sweep->start_frequency = start_frequency;
+    sweep->end_frequency = end_frequency;
+    sweep->dt = dt;
+    sweep->s = s;
+    sweep->next_frequency = next_frequency_genic_selection_stochastic;
+    sweep->trajectory_params = &sweep->s;
+
+    /* model->params.sweep.position = position; */
+    /* model->params.sweep.generate_trajectory = genic_selection_generate_trajectory; */
+    /* model->params.sweep.print_state = genic_selection_print_state; */
+    /* trajectory->start_frequency = start_frequency; */
+    /* trajectory->end_frequency = end_frequency; */
+    /* trajectory->s = s; */
+    /* trajectory->dt = dt; */
 out:
     return ret;
 }

@@ -28,36 +28,36 @@ verify_simple_genic_selection_trajectory(
     gsl_rng *rng = safe_rng_alloc();
     sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 } };
     tsk_table_collection_t tables;
-    size_t j, num_steps;
-    double *allele_frequency, *time;
+    size_t j;
 
     ret = build_sim(&msp, &tables, rng, 1.0, 1, samples, 2);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_sweep_genic_selection(
         &msp, 0.5, start_frequency, end_frequency, alpha, dt);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_num_labels(&msp, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* compute the trajectory */
-    ret = msp.model.params.sweep.generate_trajectory(
-        &msp.model.params.sweep, &msp, &num_steps, &time, &allele_frequency);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_FATAL(num_steps > 1);
-    CU_ASSERT_EQUAL(time[0], 0);
-    CU_ASSERT_EQUAL(allele_frequency[0], end_frequency);
-    CU_ASSERT_TRUE(allele_frequency[num_steps - 1] == start_frequency);
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_FATAL(ret >= 0);
+    CU_ASSERT_FATAL(msp.trajectory.num_steps > 1);
+    CU_ASSERT_EQUAL(msp.trajectory.time[0], 0);
+    CU_ASSERT_EQUAL(msp.trajectory.allele_frequency[0], end_frequency);
+    CU_ASSERT_TRUE(msp.trajectory.allele_frequency[msp.trajectory.num_steps - 1]
+                   == start_frequency);
 
-    for (j = 0; j < num_steps; j++) {
-        CU_ASSERT_TRUE(allele_frequency[j] >= 0);
-        CU_ASSERT_TRUE(allele_frequency[j] <= 1);
+    for (j = 0; j < msp.trajectory.num_steps; j++) {
+        CU_ASSERT_TRUE(msp.trajectory.allele_frequency[j] >= 0);
+        CU_ASSERT_TRUE(msp.trajectory.allele_frequency[j] <= 1);
         if (j > 0) {
-            CU_ASSERT_DOUBLE_EQUAL_FATAL(time[j], time[j - 1] + dt, 1e-9);
+            CU_ASSERT_DOUBLE_EQUAL_FATAL(
+                msp.trajectory.time[j], msp.trajectory.time[j - 1] + dt, 1e-9);
         }
     }
 
-    free(time);
-    free(allele_frequency);
     msp_free(&msp);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
