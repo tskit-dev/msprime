@@ -166,6 +166,9 @@ typedef struct {
     double *allele_frequency;
 } sweep_trajectory_t;
 
+typedef double (*next_frequency_func_t)(
+    double x, double dt, double pop_size, double rand, void *params);
+
 typedef struct _sweep_t {
     double position;
     double start_frequency;
@@ -177,8 +180,9 @@ typedef struct _sweep_t {
      * we have */
     double dt;
     void *trajectory_params;
-    double (*next_frequency)(
-        double x, double dt, double pop_size, double rand, void *params);
+    next_frequency_func_t next_frequency;
+    /* double (*next_frequency)( */
+    /*     double x, double dt, double pop_size, double rand, void *params); */
     /* For simplicity store the paramters here for now. If things get complicated
      * and some models have lots of different parameters we can put in a
      * union which we manipulate to make sure there's always enough space
@@ -437,6 +441,9 @@ int msp_set_simulation_model_dtwf(msp_t *self);
 int msp_set_simulation_model_wf_ped(msp_t *self);
 int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
 int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
+int msp_set_simulation_model_sweep(msp_t *self, double position, double start_frequency,
+    double end_frequency, double dt, next_frequency_func_t next_frequency,
+    void *trajectory_params);
 int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     double start_frequency, double end_frequency, double s, double dt);
 

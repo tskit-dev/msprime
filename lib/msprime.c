@@ -7157,9 +7157,10 @@ static double
 next_frequency_genic_selection_stochastic(
     double freq, double dt, double pop_size, double u, void *params)
 {
+    sweep_t *sweep = (sweep_t *) params;
+    double s = sweep->s;
     /* this is scaled following Ewens chapter 5 e.g.,
      * w_11=1+s; w_12=1+s/2; w_22=1; that is h=0.5 */
-    double s = *(double *) params;
     /* FIXME where should this 2 be? Is it really the ploidy value? */
     double alpha = 2 * pop_size * s;
     double ux = ((alpha / 2.0) * freq * (1 - freq)) / tanh((alpha / 2.0) * freq);
@@ -7359,8 +7360,9 @@ out:
 }
 
 int
-msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
-    double start_frequency, double end_frequency, double s, double dt)
+msp_set_simulation_model_sweep(msp_t *self, double position, double start_frequency,
+    double end_frequency, double dt, next_frequency_func_t next_frequency,
+    void *trajectory_params)
 {
     int ret = 0;
     sweep_t *sweep = &self->model.params.sweep;
@@ -7384,11 +7386,6 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
         ret = MSP_ERR_BAD_TIME_DELTA;
         goto out;
     }
-    if (s <= 0) {
-        ret = MSP_ERR_BAD_SWEEP_GENIC_SELECTION_S;
-        goto out;
-    }
-
     ret = msp_set_simulation_model(self, MSP_MODEL_SWEEP);
     if (ret != 0) {
         goto out;
@@ -7397,13 +7394,26 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     sweep->start_frequency = start_frequency;
     sweep->end_frequency = end_frequency;
     sweep->dt = dt;
-    sweep->next_frequency = next_frequency_genic_selection_stochastic;
-    /* This is a short cut here putting the trajecory parameters directly into
-     * the sweep struct at the top level. We need to store them *somewhere* for
-     * trajectories we define locally, so this is convenient for now. We'd
-     * probably have a union or something at some point here more generally. */
+    sweep->next_frequency = next_frequency;
+    sweep->trajectory_params = trajectory_params;
+out:
+    return ret;
+}
+
+int
+msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
+    double start_frequency, double end_frequency, double s, double dt)
+{
+    int ret = 0;
+    sweep_t *sweep = &self->model.params.sweep;
+
+    if (s <= 0) {
+        ret = MSP_ERR_BAD_SWEEP_GENIC_SELECTION_S;
+        goto out;
+    }
     sweep->s = s;
-    sweep->trajectory_params = &sweep->s;
+    ret = msp_set_simulation_model_sweep(self, position, start_frequency, end_frequency,
+        dt, next_frequency_genic_selection_stochastic, sweep);
 out:
     return ret;
 }

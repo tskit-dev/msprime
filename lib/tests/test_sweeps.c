@@ -202,7 +202,6 @@ verify_sweep_genic_selection(double sequence_length, double s)
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
         CU_ASSERT_TRUE(ret >= 0);
-        msp_print_state(&msp, _devnull);
         ret = msp_finalise_tables(&msp);
         CU_ASSERT_EQUAL(ret, 0);
         msp_free(&msp);
