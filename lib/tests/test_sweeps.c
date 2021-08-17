@@ -157,6 +157,7 @@ test_sweep_genic_selection_events(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_EVENTS_DURING_SWEEP);
+    msp_print_state(&msp, _devnull);
     msp_free(&msp);
     tsk_table_collection_free(&tables);
 

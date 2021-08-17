@@ -170,6 +170,11 @@ typedef struct _sweep_t {
     double position;
     double start_frequency;
     double end_frequency;
+    /* JK: Question for ADK: why isn't dt in units of generations? This would seem
+     * less confusing overall, since we're converting back into generations during
+     * the simulation anyway. We could also default it to 1 then, rather than
+     * requiring users to scale it by N (which is different to every other parameter
+     * we have */
     double dt;
     void *trajectory_params;
     double (*next_frequency)(
