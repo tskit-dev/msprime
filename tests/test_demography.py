@@ -1853,7 +1853,6 @@ class TestDemographyTrajectories(unittest.TestCase):
         assert abs(coaltime - coaltime2) < 2
 
     @pytest.mark.slow
-    @pytest.mark.skipif(IS_WINDOWS, reason="windows gives nans?!?")
     def test_ooa(self):
         # let us know if these values change
         ddb = msprime.Demography._ooa_model().debug()
