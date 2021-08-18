@@ -1550,8 +1550,8 @@ msp_sweep_print_state(msp_t *self, FILE *out)
     fprintf(out, "\tTrajectory (size=%d, max=%d)\n", (int) trajectory->num_steps,
         (int) trajectory->max_steps);
     for (j = 0; j < trajectory->num_steps; j++) {
-        fprintf(
-            out, "\t\t%f\t%f\n", trajectory->time[j], trajectory->allele_frequency[j]);
+        fprintf(out, "\t\t%.14f\t%.14f\n", trajectory->time[j],
+            trajectory->allele_frequency[j]);
     }
 }
 
@@ -5041,6 +5041,10 @@ msp_sweep_generate_trajectory(msp_t *self)
         u = gsl_rng_uniform(self->rng);
         y = sweep->next_frequency(1 - x, dt, pop_size, u, sweep->trajectory_params);
         x = 1.0 - y;
+        if (x < 0 || x > 1) {
+            ret = MSP_ERR_BAD_TRAJECTORY;
+            goto out;
+        }
 
         t += dt;
         sim_time += dt * pop_size * self->ploidy;

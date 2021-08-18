@@ -73,6 +73,96 @@ test_genic_selection_trajectory(void)
     verify_simple_genic_selection_trajectory(0.1, 0.4, 50, 0.0001);
 }
 
+static double
+next_frequency_linear(double freq, double dt, double pop_size, double u, void *params)
+{
+    return freq + dt;
+}
+
+static void
+test_linear_trajectory(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 } };
+    tsk_table_collection_t tables;
+    size_t j;
+    double x, t;
+    double dt = 0.125;
+    double start_frequency = 0.125;
+    double end_frequency = 0.875;
+
+    ret = build_sim(&msp, &tables, rng, 1.0, 1, samples, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_simulation_model_sweep(
+        &msp, 0.5, start_frequency, end_frequency, dt, next_frequency_linear, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_num_labels(&msp, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* compute the trajectory */
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_FATAL(ret >= 0);
+    CU_ASSERT_FATAL(msp.trajectory.num_steps > 1);
+    CU_ASSERT_EQUAL(msp.trajectory.time[0], 0);
+    CU_ASSERT_EQUAL(msp.trajectory.allele_frequency[0], end_frequency);
+    CU_ASSERT_TRUE(msp.trajectory.allele_frequency[msp.trajectory.num_steps - 1]
+                   == start_frequency);
+
+    x = end_frequency;
+    t = 0;
+    for (j = 0; j < msp.trajectory.num_steps; j++) {
+        CU_ASSERT_TRUE(msp.trajectory.allele_frequency[j] == x);
+        CU_ASSERT_TRUE(msp.trajectory.time[j] == t);
+        t += dt;
+        x -= dt;
+    }
+
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static double
+next_frequency_negative(double freq, double dt, double pop_size, double u, void *params)
+{
+    return -1 * freq;
+}
+
+static void
+test_bad_trajectory(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 } };
+    tsk_table_collection_t tables;
+    double dt = 0.125;
+    double start_frequency = 0.125;
+    double end_frequency = 0.875;
+
+    ret = build_sim(&msp, &tables, rng, 1.0, 1, samples, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_simulation_model_sweep(
+        &msp, 0.5, start_frequency, end_frequency, dt, next_frequency_negative, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_num_labels(&msp, 2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* compute the trajectory */
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_TRAJECTORY);
+
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
 static void
 test_sweep_genic_selection_bad_parameters(void)
 {
@@ -383,6 +473,8 @@ main(int argc, char **argv)
 {
     CU_TestInfo tests[] = {
         { "test_genic_selection_trajectory", test_genic_selection_trajectory },
+        { "test_linear_trajectory", test_linear_trajectory },
+        { "test_bad_trajectory", test_bad_trajectory },
         { "test_sweep_genic_selection_bad_parameters",
             test_sweep_genic_selection_bad_parameters },
         { "test_sweep_genic_selection_events", test_sweep_genic_selection_events },
