@@ -1655,11 +1655,10 @@ class SweepAnalytical(Test):
         df = pd.DataFrame()
         data = collections.defaultdict(list)
         for n in refsizes:
-            s = 0
             p0 = 1.0 / (2 * n)
             p1 = 1 - p0
-            mod = msprime.SweepGenicSelection(
-                start_frequency=p0, end_frequency=p1, s=s, dt=dt, position=pos
+            mod = msprime.NeutralFixation(
+                start_frequency=p0, end_frequency=p1, dt=dt, position=pos
             )
             replicates = msprime.sim_ancestry(
                 5,
