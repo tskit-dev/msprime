@@ -29,17 +29,20 @@ test_pedigree_single_locus_simulation(void)
     tsk_id_t parents[] = { -1, -1, -1, -1, 0, 0, 1, 1 }; // size num_inds * ploidy
     double time[] = { 1, 1, 0, 0 };
     tsk_flags_t is_sample[] = { 0, 0, 1, 1 };
+    tsk_size_t num_nodes;
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
 
     ret = build_pedigree_sim(
         &msp, &tables, rng, 1, ploidy, num_inds, parents, time, is_sample);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    num_nodes = msp.tables->nodes.num_rows;
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
+    CU_ASSERT_EQUAL(msp.tables->nodes.num_rows, num_nodes);
     msp_verify(&msp, 0);
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_ERR_BAD_STATE);
@@ -78,12 +81,14 @@ test_pedigree_multi_locus_simulation(void)
     tsk_id_t parents[] = { -1, -1, -1, -1, 0, 0, 1, 1 }; // size num_inds * ploidy
     double time[] = { 1, 1, 0, 0 };
     tsk_flags_t is_sample[] = { 0, 0, 1, 1 };
+    tsk_size_t num_nodes;
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
 
     ret = build_pedigree_sim(
         &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    num_nodes = msp.tables->nodes.num_rows;
     ret = msp_set_recombination_rate(&msp, 10);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
@@ -91,6 +96,7 @@ test_pedigree_multi_locus_simulation(void)
 
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
+    CU_ASSERT_EQUAL(msp.tables->nodes.num_rows, num_nodes);
     msp_verify(&msp, 0);
     /* TODO put in some meaningful tests of the pedigree */
 
@@ -102,6 +108,7 @@ test_pedigree_multi_locus_simulation(void)
     msp_print_state(&msp, _devnull);
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp, 0);
 
     ret = msp_finalise_tables(&msp);
     CU_ASSERT_EQUAL(ret, 0);
