@@ -220,10 +220,31 @@ class TestAlgorithms:
                 else:
                     assert node.individual in founder_ids
 
-    def test_one_gen_pedigree(self):
-        tables = simulate_pedigree(num_founders=20, num_generations=1)
+    @pytest.mark.parametrize("r", [0, 0.1, 1])
+    def test_pedigree_trio(self, r):
+        input_tables = simulate_pedigree(
+            num_founders=2, num_children_prob=(0, 1), num_generations=2
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
+            input_tables.dump(ts_path)
+            ts = self.run_script(f"0 --from-ts {ts_path} -r {r} --model=wf_ped")
+        output_tables = ts.dump_tables()
+        print(output_tables)
+        input_tables.individuals.assert_equals(output_tables.individuals)
+        input_tables.nodes.assert_equals(output_tables.nodes)
+        if r == 0:
+            assert len(output_tables.edges) == 2
+        elif r > 0:
+            assert len(output_tables.edges) >= 2
+
+    @pytest.mark.parametrize("num_founders", [1, 2, 20])
+    def test_one_gen_pedigree(self, num_founders):
+        tables = simulate_pedigree(num_founders=num_founders, num_generations=1)
         with tempfile.TemporaryDirectory() as tmpdir:
             ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
             tables.dump(ts_path)
             ts = self.run_script(f"0 --from-ts {ts_path} -r 1 --model=wf_ped")
+        print(ts.dump_tables())
+        print(ts.draw_text())
         assert len(ts.dump_tables().edges) == 0

@@ -18,6 +18,66 @@
 */
 
 #include "testlib.h"
+#include "msprime.c"
+
+static void
+test_pedigree_trio(void)
+{
+    int ret;
+    tsk_table_collection_t tables;
+    int num_inds = 3;
+    int ploidy = 2;
+    tsk_id_t parents[] = { -1, -1, -1, -1, 0, 1 }; // size num_inds * ploidy
+    double time[] = { 1, 1, 0 };
+    tsk_flags_t is_sample[] = { 0, 0, 1 };
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+
+    ret = build_pedigree_sim(
+        &msp, &tables, rng, 1, ploidy, num_inds, parents, time, is_sample);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
+
+    // msp_print_pedigree_inds(&msp, stdout);
+    tsk_node_table_print_state(&msp.tables->nodes, stdout);
+
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_pedigree_three_generations(void)
+{
+    int ret;
+    tsk_table_collection_t tables;
+    int num_inds = 7;
+    int ploidy = 2;
+    tsk_id_t parents[]
+        = { -1, -1, -1, -1, -1, -1, -1, -1, 0, 1, 2, 3, 4, 5 }; // size num_inds * ploidy
+    double time[] = { 2, 2, 2, 2, 1, 1, 0 };
+    tsk_flags_t is_sample[] = { 0, 0, 0, 0, 0, 0, 1 };
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+
+    ret = build_pedigree_sim(
+        &msp, &tables, rng, 1, ploidy, num_inds, parents, time, is_sample);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
+
+    msp_print_pedigree_inds(&msp, stdout);
+    tsk_node_table_print_state(&msp.tables->nodes, stdout);
+
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+}
 
 static void
 test_pedigree_single_locus_simulation(void)
@@ -205,6 +265,8 @@ main(int argc, char **argv)
 {
     CU_TestInfo tests[] = {
 
+        { "test_pedigree_trio", test_pedigree_trio },
+        { "test_pedigree_three_generations", test_pedigree_three_generations },
         { "test_pedigree_single_locus_simulation",
             test_pedigree_single_locus_simulation },
         { "test_pedigree_multi_locus_simulation", test_pedigree_multi_locus_simulation },
