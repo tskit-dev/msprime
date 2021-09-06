@@ -736,7 +736,7 @@ msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng)
         ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
         goto out;
     }
-    self->num_populations = self->tables->populations.num_rows;
+    self->num_populations = (uint32_t) self->tables->populations.num_rows;
     if (self->num_populations == 0) {
         ret = MSP_ERR_ZERO_POPULATIONS;
         goto out;
@@ -1508,7 +1508,7 @@ msp_print_root_segments(msp_t *self, FILE *out)
     for (j = 0; j < self->input_position.nodes; j++) {
         head = self->root_segments[j];
         if (head != NULL) {
-            fprintf(out, "\t%d", j);
+            fprintf(out, "\t%d", (int) j);
             for (seg = head; seg != NULL; seg = seg->next) {
                 fprintf(out, "(%f, %f)", seg->left, seg->right);
             }
@@ -1526,10 +1526,10 @@ msp_print_initial_overlaps(msp_t *self, FILE *out)
 
     for (overlap = self->initial_overlaps; overlap->left < self->sequence_length;
          overlap++) {
-        fprintf(out, "\t%f -> %d\n", overlap->left, overlap->count);
+        fprintf(out, "\t%f -> %d\n", overlap->left, (int) overlap->count);
     }
     tsk_bug_assert(overlap->left == self->sequence_length);
-    fprintf(out, "\t%f -> %d\n", overlap->left, overlap->count);
+    fprintf(out, "\t%f -> %d\n", overlap->left, (int) overlap->count);
 }
 
 int
@@ -1686,12 +1686,12 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "Breakpoints = %d\n", avl_count(&self->breakpoints));
     for (a = self->breakpoints.head; a != NULL; a = a->next) {
         nm = (node_mapping_t *) a->item;
-        fprintf(out, "\t%.14g -> %d\n", nm->position, nm->value);
+        fprintf(out, "\t%.14g -> %d\n", nm->position, (int) nm->value);
     }
     fprintf(out, "Overlap count = %d\n", avl_count(&self->overlap_counts));
     for (a = self->overlap_counts.head; a != NULL; a = a->next) {
         nm = (node_mapping_t *) a->item;
-        fprintf(out, "\t%.14g -> %d\n", nm->position, nm->value);
+        fprintf(out, "\t%.14g -> %d\n", nm->position, (int) nm->value);
     }
     fprintf(out, "Tables = \n");
     tsk_table_collection_print_state(self->tables, out);
@@ -1973,7 +1973,7 @@ msp_remove_non_empty_population(msp_t *self, tsk_id_t population)
  * specified number of overlapping segments b.
  */
 static int MSP_WARN_UNUSED
-msp_insert_overlap_count(msp_t *self, double left, uint32_t v)
+msp_insert_overlap_count(msp_t *self, double left, uint32_t count)
 {
     int ret = 0;
     avl_node_t *node = msp_alloc_avl_node(self);
@@ -1984,7 +1984,7 @@ msp_insert_overlap_count(msp_t *self, double left, uint32_t v)
         goto out;
     }
     m->position = left;
-    m->value = v;
+    m->value = count;
     avl_init_node(node, m);
     node = avl_insert_node(&self->overlap_counts, node);
     tsk_bug_assert(node != NULL);
@@ -3512,7 +3512,8 @@ msp_process_input_trees(msp_t *self)
     int t_iter;
     tsk_treeseq_t ts;
     tsk_tree_t tree;
-    tsk_size_t num_trees, num_roots, overlap_count, last_overlap_count;
+    uint32_t overlap_count, last_overlap_count;
+    tsk_size_t num_trees, num_roots;
     const size_t num_nodes = self->tables->nodes.num_rows;
     overlap_count_t *overlap;
     segment_t **root_segments_tail = NULL;
@@ -3552,7 +3553,7 @@ msp_process_input_trees(msp_t *self)
         num_roots = tsk_tree_get_num_roots(&tree);
         overlap_count = 0;
         if (num_roots > 1) {
-            overlap_count = num_roots;
+            overlap_count = (uint32_t) num_roots;
             ret = msp_allocate_root_segments(self, &tree, tree.left, tree.right,
                 self->root_segments, root_segments_tail);
             if (ret != 0) {

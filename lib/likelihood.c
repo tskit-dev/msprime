@@ -52,7 +52,7 @@ msp_unnormalised_log_likelihood_mut(tsk_treeseq_t *ts, double mu, double *r_lik)
     int ret = 0;
     tsk_size_t j;
     tsk_mutation_t mut;
-    tsk_size_t num_mutations = tsk_treeseq_get_num_mutations(ts);
+    double num_mutations = (double) tsk_treeseq_get_num_mutations(ts);
     const double total_material = get_total_material(ts);
     const double *node_time = ts->tables->nodes.time;
     double branch_length, lik;
@@ -116,7 +116,7 @@ msp_log_likelihood_arg(tsk_treeseq_t *ts, double r, double Ne, double *r_lik)
 {
     int ret = 0;
     tsk_id_t i;
-    tsk_size_t lineages = tsk_treeseq_get_num_samples(ts);
+    double lineages = (double) tsk_treeseq_get_num_samples(ts);
     double sim_time = 0;
     double material = lineages * tsk_treeseq_get_sequence_length(ts);
     double material_in_children, material_in_parent, rate, gap;
