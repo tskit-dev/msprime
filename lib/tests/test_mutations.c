@@ -1091,7 +1091,7 @@ test_mutgen_infinite_alleles(void)
     for (j = 0; j < tables.mutations.num_rows; j++) {
         ret = tsk_mutation_table_get_row(&tables.mutations, j, &mutation);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        sprintf(buff, "%d", j + 1);
+        sprintf(buff, "%d", (int) j + 1);
         CU_ASSERT_NSTRING_EQUAL(
             buff, mutation.derived_state, mutation.derived_state_length);
     }

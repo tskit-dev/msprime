@@ -370,7 +370,7 @@ slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    len = snprintf(buff, alloc_size, "%.*s%s%" PRId64, parent_allele_length,
+    len = snprintf(buff, alloc_size, "%.*s%s%" PRId64, (int) parent_allele_length,
         parent_allele, sep, params->next_mutation_id);
     if (len < 0) {
         /* Technically this can happen. Returning TSK_ERR_IO should result

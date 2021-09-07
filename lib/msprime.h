@@ -86,7 +86,7 @@ typedef struct segment_t_t {
 
 typedef struct {
     double position;
-    tsk_size_t value;
+    uint32_t value;
 } node_mapping_t;
 
 #define MSP_POP_STATE_INACTIVE 0
@@ -190,7 +190,7 @@ typedef struct _simulation_model_t {
 
 typedef struct {
     double left;
-    tsk_size_t count;
+    uint32_t count;
 } overlap_count_t;
 
 typedef struct _msp_t {
