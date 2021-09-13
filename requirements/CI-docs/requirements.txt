@@ -1,4 +1,4 @@
-daiquiri==3.0.0
+daiquiri==3.0.1
 demes==0.1.2
 demesdraw==0.1.4
 jupyter-book==0.11.3
