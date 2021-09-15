@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/python:3.7-stretch
+      - image: cimg/python:3.7
     working_directory: /home/circleci/msprime
     steps:
       - checkout
@@ -23,7 +23,7 @@ jobs:
           name: Install dependencies and set path
           command: |
             sudo apt-get update
-            sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev ninja-build valgrind clang
+            sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev ninja-build valgrind clang python3-pip
             pip install --user -r requirements/CI-complete/requirements.txt
             # FIXME pinning meson for now, https://github.com/tskit-dev/msprime/issues/1485
             pip install --user build twine meson==0.56
