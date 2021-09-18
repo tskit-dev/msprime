@@ -35,6 +35,7 @@ import tskit
 
 import msprime
 from . import ancestry
+from . import json_input
 from . import mutations
 
 
@@ -1119,6 +1120,15 @@ def run_ancestry(args):
     tree_sequence.dump(args.output)
 
 
+def run_ancestry_yaml(args):
+    setup_logging(args)
+    kwargs = json_input.parse_ancestry_yaml(args.yaml_file)
+    if "num_replicates" in kwargs:
+        raise ValueError("num_replicates not supported currently")
+    tree_sequence = msprime.sim_ancestry(**kwargs)
+    tree_sequence.dump(args.output)
+
+
 def get_msp_parser():
     top_parser = argparse.ArgumentParser(
         description="Command line interface for msprime.", epilog=msprime_citation_text
@@ -1130,6 +1140,7 @@ def get_msp_parser():
     subparsers.required = True
 
     add_ancestry_subcommand(subparsers)
+    add_ancestry_yaml_subcommand(subparsers)
     add_mutate_subcommand(subparsers)
     add_simulate_subcommand(subparsers)
 
@@ -1299,6 +1310,26 @@ def add_ancestry_subcommand(subparsers) -> None:
         help="The path to a Demes YAML file describing the demographic model.",
     )
     parser.set_defaults(runner=run_ancestry)
+
+
+def add_ancestry_yaml_subcommand(subparsers) -> None:
+    parser = subparsers.add_parser(
+        "ancestry-yaml",
+        help=(
+            "Simulate an ancestral history based on yaml input "
+            "and as a tskit tree sequence."
+        ),
+    )
+    parser.add_argument(
+        "-v",
+        "--verbosity",
+        action="count",
+        default=0,
+        help="Increase the verbosity. Use -v for INFO output and -vv for DEBUG",
+    )
+    parser.add_argument("yaml_file", type=argparse.FileType("r"))
+    add_output_argument(parser)
+    parser.set_defaults(runner=run_ancestry_yaml)
 
 
 def msp_main(arg_list=None):
