@@ -230,7 +230,6 @@ class TestAlgorithms:
             input_tables.dump(ts_path)
             ts = self.run_script(f"0 --from-ts {ts_path} -r {r} --model=wf_ped")
         output_tables = ts.dump_tables()
-        print(output_tables)
         input_tables.individuals.assert_equals(output_tables.individuals)
         input_tables.nodes.assert_equals(output_tables.nodes)
         if r == 0:
@@ -245,6 +244,4 @@ class TestAlgorithms:
             ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
             tables.dump(ts_path)
             ts = self.run_script(f"0 --from-ts {ts_path} -r 1 --model=wf_ped")
-        print(ts.dump_tables())
-        print(ts.draw_text())
         assert len(ts.dump_tables().edges) == 0

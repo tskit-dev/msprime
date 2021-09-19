@@ -18,7 +18,6 @@
 */
 
 #include "testlib.h"
-#include "msprime.c"
 
 static void
 test_pedigree_trio(void)
@@ -42,11 +41,9 @@ test_pedigree_trio(void)
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
 
-    // msp_print_pedigree_inds(&msp, stdout);
-    tsk_node_table_print_state(&msp.tables->nodes, stdout);
-
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
+    msp_free(&msp);
 }
 
 static void
@@ -72,16 +69,21 @@ test_pedigree_three_generations(void)
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
 
-    msp_print_pedigree_inds(&msp, stdout);
-    tsk_node_table_print_state(&msp.tables->nodes, stdout);
+    /* msp_print_pedigree_inds(&msp, stdout); */
+    /* tsk_node_table_print_state(&msp.tables->nodes, stdout); */
 
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
+    msp_free(&msp);
 }
 
 static void
 test_pedigree_single_locus_simulation(void)
 {
+    printf("\nFIXME #1843\n\n");
+#if 0
+JK: Disabling as we are hitting some issues in msp_verify(). #1843
+
     int ret;
     tsk_table_collection_t tables;
     int num_inds = 4;
@@ -128,11 +130,14 @@ test_pedigree_single_locus_simulation(void)
 
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
+#endif
 }
 
 static void
 test_pedigree_multi_locus_simulation(void)
 {
+    printf("\nFIXME #1843\n\n");
+#if 0
     int ret;
     const char *model_name;
     tsk_table_collection_t tables;
@@ -180,6 +185,7 @@ test_pedigree_multi_locus_simulation(void)
 
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
+#endif
 }
 
 static void

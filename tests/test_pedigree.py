@@ -271,7 +271,6 @@ class TestPedigreeSimulation:
             num_generations=num_generations,
             random_seed=random_seed,
         )
-        print(tables.individuals)
         self.verify_nodes(tables)
         return tables.individuals
 
@@ -535,7 +534,6 @@ class TestSimulateThroughPedigree:
         self.add_individual(tables, time=0, parents=parents[1:])
 
         tables.build_index()
-        print(tables.individuals)
         self.verify(tables)
 
     def test_inbreeding_half_sibs(self):
