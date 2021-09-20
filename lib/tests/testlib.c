@@ -83,7 +83,11 @@ build_pedigree_sim(msp_t *msp, tsk_table_collection_t *tables, gsl_rng *rng,
         CU_ASSERT_EQUAL_FATAL(ret, j);
         ind_id = ret;
         for (k = 0; k < ploidy; k++) {
-            flags = is_sample[j] ? TSK_NODE_IS_SAMPLE : 0;
+            if (is_sample == NULL) {
+                flags = time[j] == 0;
+            } else {
+                flags = is_sample[j] ? TSK_NODE_IS_SAMPLE : 0;
+            }
             ret = tsk_node_table_add_row(
                 &tables->nodes, flags, time[j], 0, ind_id, NULL, 0);
             CU_ASSERT_FATAL(ret >= 0);
@@ -97,7 +101,6 @@ build_pedigree_sim(msp_t *msp, tsk_table_collection_t *tables, gsl_rng *rng,
     if (ret != 0) {
         goto out;
     }
-
     ret = msp_set_simulation_model_wf_ped(msp);
 out:
     return ret;

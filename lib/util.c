@@ -152,13 +152,42 @@ msp_strerror_internal(int err)
             ret = "Bottleneck events are not supported in the DTWF model. "
                   "They can be implemented as population size changes.";
             break;
+
         case MSP_ERR_BAD_PEDIGREE_NUM_SAMPLES:
-            ret = "The number of haploid lineages denoted by sample_size must "
-                  "be divisible by ploidy (default 2)";
+            ret = "Not enough sample individuals provided in the pedigree.";
             break;
-        case MSP_ERR_BAD_PEDIGREE_ID:
-            ret = "Individual IDs in pedigrees must be strictly > 0.";
+        case MSP_ERR_EMPTY_PEDIGREE:
+            ret = "No individuals in the input pedigree.";
             break;
+        case MSP_ERR_OTHER_MODELS_WITH_PED:
+            ret = "Cannot combine the through-pedigree simulation with other "
+                  "ancestry models";
+            break;
+        case MSP_ERR_PEDIGREE_IND_NODE_TIME_DISAGREE:
+            ret = "The times for the two nodes in a pedigree individual are not equal";
+            break;
+        case MSP_ERR_PEDIGREE_IND_NODE_POPULATION_DISAGREE:
+            ret = "The populations for the two nodes in a pedigree individual "
+                  "are not equal";
+            break;
+        case MSP_ERR_PEDIGREE_TIME_TRAVEL:
+            ret = "The time for a parent must be greater than its children";
+            break;
+        case MSP_ERR_PEDIGREE_IND_NOT_DIPLOID:
+            ret = "All individuals in the input pedigree must be associated with "
+                  "exactly two nodes";
+            break;
+        case MSP_ERR_PEDIGREE_IND_NOT_TWO_PARENTS:
+            ret = "All individuals in the input pedigree must be associated with "
+                  "exactly two parents (can be TSK_NULL, if not known)";
+            break;
+        case MSP_ERR_PEDIGREE_INTERNAL_SAMPLE:
+            ret = "Samples that are internal nodes in the pedigree are not "
+                  "currently supported. Please comment on this GitHub issue if you "
+                  "would like to see this feature implemented: "
+                  "https://github.com/tskit-dev/msprime/issues/1855 ";
+            break;
+
         case MSP_ERR_BAD_PROPORTION:
             ret = "Proportion values must have 0 <= x <= 1";
             break;

@@ -211,12 +211,19 @@ class TestAlgorithms:
                 node = ts.node(node_id)
                 assert node.time == num_generations - 1
         for tree in ts.trees():
+            for root in tree.roots:
+                node = ts.node(root)
+                # If this is a unary root it must be from a founder.
+                if tree.num_children(root) == 1:
+                    assert node.individual in founder_ids
             for node_id in tree.nodes():
                 node = ts.node(node_id)
                 individual = ts.individual(node.individual)
                 if tree.parent(node_id) != tskit.NULL:
                     parent_node = ts.node(tree.parent(node_id))
-                    assert parent_node.individual in ancestors[individual.id]
+                    assert parent_node.individual in ancestors[individual.id] | {
+                        tskit.NULL
+                    }
                 else:
                     assert node.individual in founder_ids
 
@@ -231,11 +238,8 @@ class TestAlgorithms:
             ts = self.run_script(f"0 --from-ts {ts_path} -r {r} --model=wf_ped")
         output_tables = ts.dump_tables()
         input_tables.individuals.assert_equals(output_tables.individuals)
-        input_tables.nodes.assert_equals(output_tables.nodes)
-        if r == 0:
-            assert len(output_tables.edges) == 2
-        elif r > 0:
-            assert len(output_tables.edges) >= 2
+        input_tables.nodes.assert_equals(output_tables.nodes[: len(input_tables.nodes)])
+        assert len(output_tables.edges) >= 2
 
     @pytest.mark.parametrize("num_founders", [1, 2, 20])
     def test_one_gen_pedigree(self, num_founders):
