@@ -3274,7 +3274,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                    keep reference to merged segments instead */
                 if (self->pedigree != NULL
                     && self->pedigree->state == MSP_PED_STATE_CLIMBING) {
-                    tsk_bug_assert(merged_segment != NULL);
+                    tsk_bug_assert(*merged_segment == NULL);
                     set_merged = true; // TODO: Must be better way of checking this
                     *merged_segment = alpha;
                 } else {
@@ -4347,6 +4347,7 @@ msp_pedigree_climb(msp_t *self)
     individual_t *ind = NULL;
     individual_t *parent = NULL;
     segment_t *merged_segment = NULL;
+    segment_t *x;
     segment_t *u[2]; // Will need to update for different ploidy
     avl_tree_t *segments = NULL;
     tsk_id_t node = TSK_NULL;
@@ -4390,6 +4391,7 @@ msp_pedigree_climb(msp_t *self)
 
             /* Merge segments inherited from this ind and recombine */
             // TODO: Make sure population gets properly set when more than one
+            merged_segment = NULL;
             ret = msp_merge_ancestors(
                 self, segments, 0, 0, &merged_segment, parent_id, node);
             if (ret != 0) {
@@ -4405,40 +4407,50 @@ msp_pedigree_climb(msp_t *self)
             /* If parent is NULL, we are at a pedigree founder and we add the
              * lineage back to its original population */
             if (parent == NULL) {
-                ret = msp_insert_individual(self, merged_segment);
-                if (ret != 0) {
-                    goto out;
-                }
-                continue;
-            }
-
-            /* Recombine and climb to segments to the parents */
-            if (rate_map_get_total_mass(&self->recomb_map) > 0) {
-                ret = msp_dtwf_recombine(self, merged_segment, &u[0], &u[1]);
-                if (ret != 0) {
-                    goto out;
+                x = merged_segment;
+                while (x != NULL) {
+                    if (x->value != node) {
+                        ret = msp_store_edge(self, x->left, x->right, node, x->value);
+                        if (ret != 0) {
+                            goto out;
+                        }
+                        x->value = node;
+                    }
+                    x = x->next;
                 }
             } else {
-                ix = (int) gsl_rng_uniform_int(self->rng, 2);
-                u[0] = NULL;
-                u[1] = NULL;
-                u[ix] = merged_segment;
+                /* Recombine and climb to segments to the parents */
+                if (rate_map_get_total_mass(&self->recomb_map) > 0) {
+                    ret = msp_dtwf_recombine(self, merged_segment, &u[0], &u[1]);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                } else {
+                    ix = (int) gsl_rng_uniform_int(self->rng, 2);
+                    u[0] = NULL;
+                    u[1] = NULL;
+                    u[ix] = merged_segment;
+                }
+                for (j = 0; j < self->ploidy; j++) {
+                    if (u[j] == NULL) {
+                        continue;
+                    }
+                    assert(u[j]->prev == NULL);
+                    ret = msp_pedigree_add_individual_segment(self, parent, u[j], j);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                }
+                if (parent->queued == false) {
+                    ret = msp_pedigree_push_ind(self, parent);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                }
             }
-            for (j = 0; j < self->ploidy; j++) {
-                if (u[j] == NULL) {
-                    continue;
-                }
-                assert(u[j]->prev == NULL);
-                ret = msp_pedigree_add_individual_segment(self, parent, u[j], j);
-                if (ret != 0) {
-                    goto out;
-                }
-            }
-            if (parent->queued == false) {
-                ret = msp_pedigree_push_ind(self, parent);
-                if (ret != 0) {
-                    goto out;
-                }
+            ret = msp_flush_edges(self);
+            if (ret != 0) {
+                goto out;
             }
         }
         ind->merged = true;
@@ -5260,6 +5272,8 @@ msp_insert_uncoalesced_edges(msp_t *self)
     }
     /* We know migrations are sorted already */
     bookmark.migrations = self->tables->migrations.num_rows;
+    /* Don't sort individuals */
+    bookmark.individuals = self->tables->individuals.num_rows;
     ret = tsk_table_collection_sort(self->tables, &bookmark, 0);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
@@ -5273,7 +5287,6 @@ int MSP_WARN_UNUSED
 msp_finalise_tables(msp_t *self)
 {
     int ret = 0;
-
     if (!msp_is_completed(self)) {
         ret = msp_insert_uncoalesced_edges(self);
         if (ret != 0) {
