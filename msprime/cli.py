@@ -1120,13 +1120,16 @@ def run_ancestry(args):
     tree_sequence.dump(args.output)
 
 
-def run_ancestry_yaml(args):
+def run_yaml(args):
     setup_logging(args)
-    kwargs = json_input.parse_ancestry_yaml(args.yaml_file)
-    if "num_replicates" in kwargs:
+    config = json_input.parse_yaml(args.yaml_file)
+
+    if "num_replicates" in config.ancestry_kwargs:
         raise ValueError("num_replicates not supported currently")
-    tree_sequence = msprime.sim_ancestry(**kwargs)
-    tree_sequence.dump(args.output)
+    ts = msprime.sim_ancestry(**config.ancestry_kwargs)
+    if config.mutations_kwargs is not None:
+        ts = msprime.sim_mutations(ts, **config.mutations_kwargs)
+    ts.dump(args.output)
 
 
 def get_msp_parser():
@@ -1140,9 +1143,9 @@ def get_msp_parser():
     subparsers.required = True
 
     add_ancestry_subcommand(subparsers)
-    add_ancestry_yaml_subcommand(subparsers)
     add_mutate_subcommand(subparsers)
     add_simulate_subcommand(subparsers)
+    add_yaml_subcommand(subparsers)
 
     return top_parser
 
@@ -1312,13 +1315,10 @@ def add_ancestry_subcommand(subparsers) -> None:
     parser.set_defaults(runner=run_ancestry)
 
 
-def add_ancestry_yaml_subcommand(subparsers) -> None:
+def add_yaml_subcommand(subparsers) -> None:
     parser = subparsers.add_parser(
-        "ancestry-yaml",
-        help=(
-            "Simulate an ancestral history based on yaml input "
-            "and as a tskit tree sequence."
-        ),
+        "yaml",
+        help=("Run a simulation described in a YAML input file."),
     )
     parser.add_argument(
         "-v",
@@ -1329,7 +1329,7 @@ def add_ancestry_yaml_subcommand(subparsers) -> None:
     )
     parser.add_argument("yaml_file", type=argparse.FileType("r"))
     add_output_argument(parser)
-    parser.set_defaults(runner=run_ancestry_yaml)
+    parser.set_defaults(runner=run_yaml)
 
 
 def msp_main(arg_list=None):

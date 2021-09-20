@@ -22,12 +22,19 @@ Define formats used for simulation input as JSON and related formats.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import json
 
 import demes
 from ruamel.yaml import YAML
 
 import msprime
+
+
+@dataclasses.dataclass
+class SimulationConfig:
+    ancestry_kwargs: dict
+    mutations_kwargs: dict = None
 
 
 def parse_ancestry_json(data):
@@ -45,7 +52,20 @@ def parse_ancestry_json(data):
     return data
 
 
-def parse_ancestry_yaml(text):
+def parse_mutations_json(data):
+
+    if "start_time" in data or "end_time" in data:
+        raise ValueError(
+            "specifying time values not currently supported as too confusing"
+        )
+    return data
+
+
+def parse_yaml(text):
 
     yaml = YAML(typ="safe")
-    return parse_ancestry_json(yaml.load(text))
+    data = yaml.load(text)
+    config = SimulationConfig(parse_ancestry_json(data["ancestry"]))
+    if "mutations" in data:
+        config.mutations_kwargs = parse_mutations_json(data["mutations"])
+    return config
