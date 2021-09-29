@@ -1077,9 +1077,10 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     PyObject *dirac_s = NULL;
     PyObject *beta_s = NULL;
     PyObject *sweep_genic_selection_s = NULL;
+    PyObject *neutral_fixation_s = NULL;
     PyObject *value;
     int is_hudson, is_dtwf, is_smc, is_smc_prime, is_dirac, is_beta, is_sweep_genic_selection;
-    int is_wf_ped;
+    int is_wf_ped, is_neutral_fixation;
     double psi, c, alpha, truncation_point;
 
     hudson_s = Py_BuildValue("s", "hudson");
@@ -1112,6 +1113,10 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     }
     sweep_genic_selection_s = Py_BuildValue("s", "sweep_genic_selection");
     if (sweep_genic_selection_s == NULL) {
+        goto out;
+    }
+    neutral_fixation_s = Py_BuildValue("s", "neutral_fixation");
+    if (neutral_fixation_s == NULL) {
         goto out;
     }
 
@@ -1219,9 +1224,23 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
             goto out;
         }
     }
+    
+    is_neutral_fixation = PyObject_RichCompareBool(py_name,
+            neutral_fixation_s, Py_EQ);
+    if (is_neutral_fixation == -1) {
+        goto out;
+    }
+    if (is_neutral_fixation) {
+        /* currently using all the machinery from the genic model */
+        ret = Simulator_parse_sweep_genic_selection_model(self, py_model);
+        if (ret != 0) {
+            goto out;
+        }
+    }
 
     if (! (is_hudson || is_dtwf || is_smc || is_smc_prime || is_dirac
-                || is_beta || is_sweep_genic_selection || is_wf_ped)) {
+                || is_beta || is_sweep_genic_selection || is_neutral_fixation
+                || is_wf_ped)) {
         PyErr_SetString(PyExc_ValueError, "Unknown simulation model");
         goto out;
     }
@@ -1239,6 +1258,7 @@ out:
     Py_XDECREF(beta_s);
     Py_XDECREF(dirac_s);
     Py_XDECREF(sweep_genic_selection_s);
+    Py_XDECREF(neutral_fixation_s);
     return ret;
 }
 

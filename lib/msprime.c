@@ -7041,7 +7041,7 @@ out:
 }
 
 /**************************************************************
- * Allele frequency trajectory simulation for genic selection
+ * Allele frequency trajectory simulation for sweep routines
  *
  **************************************************************/
 
@@ -7051,6 +7051,16 @@ genic_selection_stochastic_forwards(double dt, double freq, double alpha, double
     /* this is scaled following Ewens chapter 5 e.g.,
      * w_11=1+s; w_12=1+s/2; w_22=1; that is h=0.5 */
     double ux = ((alpha / 2.0) * freq * (1 - freq)) / tanh((alpha / 2.0) * freq);
+    int sign = u < 0.5 ? 1 : -1;
+    return freq + (ux * dt) + sign * sqrt(freq * (1.0 - freq) * dt);
+}
+
+static double
+neutral_stochastic_backwards(double dt, double freq, double u)
+{
+    /* returns allele freq of neutral allele drifting conditional
+    on loss (looking backwards in time) following Ewens */
+    double ux = -1.0 * freq;
     int sign = u < 0.5 ? 1 : -1;
     return freq + (ux * dt) + sign * sqrt(freq * (1.0 - freq) * dt);
 }
@@ -7104,9 +7114,13 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         }
         pop_size = get_population_size(&simulator->populations[0], sim_time);
         alpha = 2 * pop_size * trajectory.s;
-        x = 1.0
-            - genic_selection_stochastic_forwards(
-                  trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
+        if (alpha > 0) {
+            x = 1.0
+                - genic_selection_stochastic_forwards(
+                      trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
+        } else {
+            x = neutral_stochastic_backwards(trajectory.dt, x, gsl_rng_uniform(rng));
+        }
         /* need our recored traj to stay in bounds */
         t += trajectory.dt;
         sim_time += trajectory.dt * pop_size * simulator->ploidy;
@@ -7358,7 +7372,7 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
         ret = MSP_ERR_BAD_TIME_DELTA;
         goto out;
     }
-    if (s <= 0) {
+    if (s < 0) {
         ret = MSP_ERR_BAD_SWEEP_GENIC_SELECTION_S;
         goto out;
     }

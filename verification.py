@@ -1641,6 +1641,59 @@ class SweepAnalytical(Test):
         pyplot.savefig(f, dpi=72)
         pyplot.close("all")
 
+    def test_sojourn_time3(self):
+        """
+        testing against expected sojourn time of a
+        neutral mutation over a range of population
+        sizes
+        """
+        refsizes = np.linspace(1e2, 1e4, 10)
+        nreps = 50
+        seqlen = 1e4
+        dt = 1e-6
+        pos = np.floor(seqlen / 2)
+        df = pd.DataFrame()
+        data = collections.defaultdict(list)
+        for n in refsizes:
+            p0 = 1.0 / (2 * n)
+            p1 = 1 - p0
+            mod = msprime.NeutralFixation(
+                start_frequency=p0, end_frequency=p1, dt=dt, position=pos
+            )
+            replicates = msprime.sim_ancestry(
+                5,
+                population_size=n,
+                model=mod,
+                sequence_length=seqlen,
+                num_labels=2,
+                num_replicates=nreps,
+            )
+
+            reptimes = np.zeros(nreps)
+            i = 0
+            for x in replicates:
+                tree_times = np.zeros(x.num_trees)
+                j = 0
+                for tree in x.trees():
+                    tree_times[j] = np.max([tree.time(root) for root in tree.roots])
+                    j += 1
+                reptimes[i] = np.max(tree_times)
+                i += 1
+            data["alpha_means"].append(np.mean(reptimes))
+            data["exp_means"].append(2 * n)
+            logging.debug(
+                f"mean time for N={n} -- \
+                          {np.mean(reptimes)}"
+            )
+        df = pd.DataFrame.from_dict(data)
+        df = df.fillna(0)
+        sm.qqplot_2samples(df["exp_means"], df["alpha_means"], line="45")
+        pyplot.xlabel("expected sojourn time")
+        pyplot.ylabel("simulated sojourn time")
+        f = self.output_dir / "sojourn.png"
+        pyplot.savefig(f, dpi=72)
+        pyplot.close("all")
+
 
 # FIXME disabling these for now because the pedigree file that
 # they depend on doesn't exist. (Tests won't be picked up unless

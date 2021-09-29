@@ -90,6 +90,8 @@ this.
 {class}`.SweepGenicSelection`
 : Selective sweep at a linked locus
 
+{class}`.NeutralFixation`
+: a neutral fixation at a linked locus
 ---
 
 
@@ -2304,6 +2306,122 @@ The logging output of msprime can be very useful when working with
 multiple models. See the {ref}`sec_logging` section for more
 details.
 :::
+
+(sec_ancestry_models_neutral_fixations)=
+
+### Neutral Fixations
+
+The same sort of structured coalescent that we used above to model
+selective sweeps can also be used to model the coalescent conditional
+on the fixation of a selectively neutral mutation, what we call in 
+msprime the {class}`.NeutralFixation` model.
+
+As the {class}`.SweepGenicSelection` model,
+the population is split between two classes of selective backgrounds,
+those linked to the derived neutral allele, call it {math}`B`, and those not,
+{math}`b`. As with the {class}`.SweepGenicSelection` model,
+the user supplies a final allele frequency and a starting
+allele frequency, between which msprime simulates a stochastic
+drift trajectory according to a conditional diffusion model that
+conditions on eventual loss of the allele (looking backwards in time).
+
+Beyond the start and end frequencies of the sweep trajectory, the user
+must specify the position along
+the chromosome where the focal allele occurs.
+All other parameters can be set as usual.
+
+:::{warning}
+The implementation of the structured coalescent is quite general, but there are
+some limitations in the current implementation of the sweeps model (e.g., no
+change of population size during a sweep). Please let us know if there are
+related features you would like to see (or if you would be interested in
+helping to create this functionality!)
+:::
+#### An example of a neutral fixation simulation
+
+First we set up some basic parameters, and define the sweep model:
+
+```{code-cell}
+Ne = 1e3
+L = 1e6  # Length of simulated region
+num_reps = 100
+
+# define hard sweep model
+nf_model = msprime.NeutralFixation(
+    position=L / 2,  # middle of chrom
+    start_frequency=1.0 / (2 * Ne),
+    end_frequency=1.0 - (1.0 / (2 * Ne)),
+    dt=1e-6,
+)
+```
+The start and end frequencies here specify that we will look at 
+the complete sojourn of the neutral fixation, from frequency
+1/2N to frequency 1 looking forward in time.
+
+Next we set up the replicate simulations. As described
+in the {ref}`sec_ancestry_models_specifying_multiple` section,
+the ``model`` parameter is a list when we want to run multiple
+ancestry models. As in the hard sweep example above, 
+we here have a neutral fixation that occurs
+in the immediate past, and is then followed by the
+standard coalescent for the rest of time:
+
+```{code-cell}
+reps = msprime.sim_ancestry(
+    5,
+    model=[nf_model, msprime.StandardCoalescent()],
+    population_size=Ne,
+    recombination_rate=1e-7,
+    sequence_length=L,
+    num_replicates=num_reps,
+)
+```
+
+:::{note}
+Because the {class}`.NeutralFixation` model has a random
+{ref}`duration<sec_ancestry_models_specifying_duration>` we do
+not set this value in the model. Please see the
+{ref}`sec_ancestry_models_specifying_completion` section for
+more discussion on this important point.
+:::
+
+Once we've set up the replicate simulations we can compute the
+windows for plotting, run the actual simulations
+(see the {ref}`sec_randomness_replication` section for more details)
+and compute the
+{meth}`pairwise diversity<tskit.TreeSequence.diversity>`.
+
+```{code-cell}
+wins = np.linspace(0, L, 21)
+mids = (wins[1:] + wins[:-1]) / 2
+diversity = np.zeros((num_reps, mids.shape[0]))
+for j, ts in enumerate(reps):
+    diversity[j] = ts.diversity(windows=wins, mode="branch")
+```
+
+Finally, we can plot the observed mean diversity across the replicates
+and compare it to the neutral expectation:
+
+```{code-cell}
+from matplotlib import pyplot as plt
+
+plt.plot(mids, diversity.mean(axis=0), label="Simulations")
+plt.axhline(4 * Ne, linestyle=":", label=r'Neutral expectation')
+plt.ylabel(r'Branch $\pi$');
+plt.xlabel('Position (bp)')
+plt.legend();
+```
+
+:::{note}
+We use the "branch" measure of pairwise diversity which is
+defined in terms of the trees rather than nucleotide sequences. See
+[Ralph et al. 2020](https://doi.org/10.1534/genetics.120.303253)
+for more information.
+:::
+
+As we can see, the neutral fixation has reduced variation in the region
+most very closely linked to the focal allele but not in nearly as
+dramatic a fashion as the hard sweeps we simulated above.
 
 (sec_ancestry_missing_data)=
 

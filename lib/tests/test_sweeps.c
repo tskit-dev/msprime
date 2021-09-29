@@ -74,6 +74,16 @@ test_genic_selection_trajectory(void)
 }
 
 static void
+test_neutral_fixation_trajectory(void)
+{
+    verify_simple_genic_selection_trajectory(0.1, 0.9, 0, 0.0001);
+    verify_simple_genic_selection_trajectory(0.1, 0.9, 0, 0.000001);
+    verify_simple_genic_selection_trajectory(0.8, 0.9, 0, 0.000002);
+    verify_simple_genic_selection_trajectory(0.1, 0.7, 0, 0.000001);
+    verify_simple_genic_selection_trajectory(0.1, 0.4, 0, 0.0001);
+}
+
+static void
 test_sweep_genic_selection_bad_parameters(void)
 {
     int ret;
@@ -383,6 +393,7 @@ main(int argc, char **argv)
 {
     CU_TestInfo tests[] = {
         { "test_genic_selection_trajectory", test_genic_selection_trajectory },
+        { "test_neutral_fixation_trajectory", test_neutral_fixation_trajectory },
         { "test_sweep_genic_selection_bad_parameters",
             test_sweep_genic_selection_bad_parameters },
         { "test_sweep_genic_selection_events", test_sweep_genic_selection_events },

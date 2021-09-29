@@ -95,6 +95,20 @@ class TestIntrospectionInterface:
         assert repr(model) == repr_s
         assert str(model) == repr_s
 
+    def test_neutral_fixation(self):
+        model = msprime.NeutralFixation(
+            position=1,
+            start_frequency=0.5,
+            end_frequency=0.9,
+            dt=0.01,
+        )
+        repr_s = (
+            "NeutralFixation(duration=None, position=1, start_frequency=0.5,"
+            " end_frequency=0.9, dt=0.01, s=0)"
+        )
+        assert repr(model) == repr_s
+        assert str(model) == repr_s
+
 
 class TestModelFactory:
     """
@@ -146,6 +160,12 @@ class TestModelFactory:
                 start_frequency=0.1,
                 end_frequency=0.9,
                 s=0.01,
+                dt=0.01,
+            ),
+            msprime.NeutralFixation(
+                position=0.35,
+                start_frequency=0.1,
+                end_frequency=0.9,
                 dt=0.01,
             ),
             msprime.BetaCoalescent(alpha=2),
@@ -324,6 +344,39 @@ class TestClassesKeywordArgs:
 
         with pytest.raises(TypeError, match="takes 1 positional"):
             msprime.SweepGenicSelection(1)
+
+    def test_neutral_fixation(self):
+        model = msprime.NeutralFixation(
+            position=1, start_frequency=0.1, end_frequency=0.9, dt=0.01
+        )
+        assert model.duration is None
+        assert model.position == 1
+        assert model.start_frequency == 0.1
+        assert model.end_frequency == 0.9
+        assert model.dt == 0.01
+
+        model = msprime.SweepGenicSelection(
+            position=2,
+            start_frequency=0.5,
+            end_frequency=0.9,
+            dt=0.01,
+            duration=1234,
+        )
+        assert model.duration == 1234
+        assert model.position == 2
+        assert model.start_frequency == 0.5
+        assert model.end_frequency == 0.9
+        assert model.dt == 0.01
+
+        model = msprime.NeutralFixation()
+        assert model.duration is None
+        assert model.position is None
+        assert model.start_frequency is None
+        assert model.end_frequency is None
+        assert model.dt is None
+
+        with pytest.raises(TypeError, match="takes 1 positional"):
+            msprime.NeutralFixation(1)
 
 
 class TestRejectedCommonAncestorEventCounts:
@@ -1071,6 +1124,209 @@ class TestSweepGenicSelection:
             start_frequency=0.69,
             end_frequency=0.7,
             s=0.1,
+            dt=1e-6,
+        )
+        # Start each sweep after 0.1 generations of Hudson
+        models = [msprime.StandardCoalescent(duration=0.1), sweep_model] * 1000
+        ts = msprime.sim_ancestry(
+            10,
+            population_size=100,
+            sequence_length=10,
+            recombination_rate=0.2,
+            model=models,
+            random_seed=2,
+        )
+        assert all(tree.num_roots == 1 for tree in ts.trees())
+
+
+class TestNeutralFixation:
+    """
+    Tests for the neutral fixation model.
+    """
+
+    def test_model_end_broken(self):
+        # Checking that we're correctly detecting the fact that
+        # sweeps are non renentrant.
+        model = msprime.NeutralFixation(
+            position=0.5, start_frequency=0.1, end_frequency=0.9, dt=0.01
+        )
+        with pytest.raises(RuntimeError, match="does not support interruption"):
+            msprime.sim_ancestry(10, model=model, end_time=0.0001)
+
+    def test_incorrect_num_labels(self):
+        model = msprime.NeutralFixation(
+            position=0.5, start_frequency=0.1, end_frequency=0.9, dt=0.01
+        )
+        for num_labels in [1, 3, 10]:
+            # Not the best error, but this shouldn't be exposed to the user anyway.
+            with pytest.raises(
+                _msprime.LibraryError, match="configuration is not supported"
+            ):
+                msprime.sim_ancestry(
+                    10,
+                    model=model,
+                    num_labels=num_labels,
+                )
+
+    def test_float_position_discrete_genome(self):
+        # We can still specify a floating point position if we want, doesn't
+        # make any difference.
+        model = msprime.NeutralFixation(
+            position=0.5, start_frequency=0.1, end_frequency=0.9, dt=0.01
+        )
+        ts = msprime.sim_ancestry(
+            10, sequence_length=1, recombination_rate=20, model=model
+        )
+        assert ts.num_trees == 1
+
+    def test_neutral_fixation_no_recomb(self):
+        N = 1e6
+        model = msprime.NeutralFixation(
+            position=0.5,
+            start_frequency=1.0 / (2 * N),
+            end_frequency=1.0 - (1.0 / (2 * N)),
+            dt=1e-6,
+        )
+        ts = msprime.sim_ancestry(10, model=model, population_size=1000, random_seed=2)
+        assert ts.num_trees == 1
+        for tree in ts.trees():
+            assert tree.num_roots == 1
+
+    def test_neutral_fixation_recomb(self):
+        N = 1e6
+        model = msprime.NeutralFixation(
+            position=5,
+            start_frequency=1.0 / (2 * N),
+            end_frequency=1.0 - (1.0 / (2 * N)),
+            dt=1e-6,
+        )
+        ts = msprime.sim_ancestry(
+            5,
+            model=model,
+            population_size=1000,
+            recombination_rate=1,
+            sequence_length=10,
+            random_seed=2,
+        )
+        assert ts.num_trees > 1
+
+    def test_neutral_fixation_same_seed(self):
+        model = msprime.NeutralFixation(
+            position=0.5, start_frequency=0.6, end_frequency=0.7, dt=1e-6
+        )
+        ts1 = msprime.sim_ancestry(5, model=model, random_seed=2)
+        ts2 = msprime.sim_ancestry(5, model=model, random_seed=2)
+        assert ts1.equals(ts2, ignore_provenance=True)
+
+    def test_neutral_fixation_start_time_complete(self):
+        sweep_model = msprime.NeutralFixation(
+            position=0.5,
+            start_frequency=0.01,
+            end_frequency=0.99,
+            dt=1e-6,
+        )
+        ts = msprime.sim_ancestry(
+            10,
+            population_size=1000,
+            recombination_rate=2,
+            sequence_length=10,
+            model=[msprime.StandardCoalescent(duration=0.1), sweep_model, "hudson"],
+            random_seed=2,
+        )
+        assert all(tree.num_roots == 1 for tree in ts.trees())
+
+    def test_neutral_start_time_incomplete(self):
+        # Short sweep that doesn't make complete coalescence.
+        sweep_model = msprime.NeutralFixation(
+            position=0.5, start_frequency=0.69, end_frequency=0.7, dt=1e-6
+        )
+        ts = msprime.sim_ancestry(
+            10,
+            population_size=1000,
+            recombination_rate=2,
+            sequence_length=10,
+            model=[msprime.StandardCoalescent(duration=0.1), sweep_model],
+            random_seed=3,
+        )
+        assert any(tree.num_roots > 1 for tree in ts.trees())
+
+    def test_neutral_fixation_model_change_time_complete(self):
+        # Short sweep that doesn't coalesce followed
+        # by Hudson phase to finish up coalescent
+        sweep_model = msprime.NeutralFixation(
+            position=5, start_frequency=0.69, end_frequency=0.72, dt=1e-6
+        )
+        ts = msprime.sim_ancestry(
+            10,
+            population_size=1000,
+            sequence_length=10,
+            recombination_rate=2,
+            model=[sweep_model, "hudson"],
+            random_seed=2,
+        )
+        assert all(tree.num_roots == 1 for tree in ts.trees())
+
+        ts = msprime.sim_ancestry(
+            10,
+            population_size=1000,
+            recombination_rate=2,
+            model=sweep_model,
+            random_seed=2,
+            sequence_length=10,
+            discrete_genome=False,
+        )
+        assert any(tree.num_roots > 1 for tree in ts.trees())
+
+    def test_many_fixations(self):
+        sweep_models = [
+            msprime.NeutralFixation(
+                position=j, start_frequency=0.69, end_frequency=0.7, dt=1e-6
+            )
+            for j in range(10)
+        ]
+        ts = msprime.sim_ancestry(
+            10,
+            population_size=1000,
+            sequence_length=10,
+            recombination_rate=0.2,
+            model=sweep_models + ["hudson"],
+            random_seed=2,
+        )
+        assert all(tree.num_roots == 1 for tree in ts.trees())
+
+    def test_many_neutral_fixations_regular_times_model_change(self):
+        models = []
+        for j in range(0, 10):
+            models.extend(
+                [
+                    # Start each sweep after 0.01 generations of Hudson
+                    msprime.StandardCoalescent(duration=0.01),
+                    msprime.NeutralFixation(
+                        position=j,
+                        start_frequency=0.69,
+                        end_frequency=0.7,
+                        dt=1e-6,
+                    ),
+                ]
+            )
+        # Complete the simulation with Hudson
+        models.append("hudson")
+        ts = msprime.sim_ancestry(
+            3,
+            population_size=1000,
+            sequence_length=10,
+            recombination_rate=0.2,
+            model=models,
+            random_seed=2,
+        )
+        assert all(tree.num_roots == 1 for tree in ts.trees())
+
+    def test_lots_of_fixations(self):
+        # What happens when we have a bunch of neutral fixations
+        sweep_model = msprime.NeutralFixation(
+            position=5,
+            start_frequency=0.69,
+            end_frequency=0.7,
             dt=1e-6,
         )
         # Start each sweep after 0.1 generations of Hudson
