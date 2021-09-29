@@ -2,6 +2,7 @@
 Python version of the simulation algorithm.
 """
 import argparse
+import dataclasses
 import heapq
 import logging
 import math
@@ -385,55 +386,34 @@ class Individual:
         return sum(len(s) for s in self.segments)
 
 
-class TrajectorySimulator:
-    """
-    Class to simulate an allele frequency trajectory on which to condition
-    the coalescent simulation.
-    """
-
-    def __init__(self, initial_freq, end_freq, alpha, time_slice):
-        self._initial_freq = initial_freq
-        self._end_freq = end_freq
-        self._alpha = alpha
-        self._time_slice = time_slice
-        self._reset()
-
-    def _reset(self):
-        self._allele_freqs = []
-        self._times = []
-
-    def _genic_selection_stochastic_forwards(self, dt, freq, alpha):
-        ux = (alpha * freq * (1 - freq)) / np.tanh(alpha * freq)
-        sign = 1 if random.random() < 0.5 else -1
-        freq += (ux * dt) + sign * np.sqrt(freq * (1.0 - freq) * dt)
-        return freq
-
-    def _simulate(self):
+class Trajectory:
+    def next_frequency(self, x, dt, current_size, rand):
         """
-        Proposes a sweep trajectory and returns the acceptance probability.
+        Compute the next allele frequency in the trajectory given the
+        current value x and population size after time dt using the
+        specified random value betweeen 0 and 1.
         """
-        x = self._end_freq  # backward time
-        current_size = 1
-        t_inc = self._time_slice
-        t = 0
-        while x > self._initial_freq:
-            self._allele_freqs.append(max(x, self._initial_freq))
-            self._times.append(t)
-            # just a note below
-            # current_size = self._size_calculator(t)
-            #
-            x = 1.0 - self._genic_selection_stochastic_forwards(
-                t_inc, 1.0 - x, self._alpha * current_size
-            )
-            t += self._time_slice
-        # will want to return current_size / N_max
-        # for prototype this always equals 1
-        return 1
+        raise NotImplementedError()  # pragma: no cover
 
-    def run(self):
-        while random.random() > self._simulate():
-            self.reset()
-        return self._allele_freqs, self._times
+
+@dataclasses.dataclass()
+class GenicSelectionTrajectory:
+    alpha: float
+
+    def next_frequency(self, x, dt, current_size, rand):
+        alpha = current_size * self.alpha
+        ux = (alpha * x * (1 - x)) / np.tanh(alpha * x)
+        sign = 1 if rand < 0.5 else -1
+        return x + (ux * dt) + sign * np.sqrt(x * (1.0 - x) * dt)
+
+
+@dataclasses.dataclass()
+class Sweep:
+    position: float
+    initial_frequency: float
+    end_frequency: float
+    dt: float
+    trajectory: Trajectory
 
 
 class RateMap:
@@ -587,9 +567,8 @@ class Simulator:
         model="hudson",
         max_segments=100,
         num_labels=1,
-        sweep_trajectory=None,
+        sweep=None,
         full_arg=False,
-        time_slice=None,
         gene_conversion_rate=0.0,
         gene_conversion_length=1,
         discrete_genome=True,
@@ -615,6 +594,7 @@ class Simulator:
         self.num_labels = num_labels
         self.num_populations = N
         self.max_segments = max_segments
+        self.sweep = sweep
         self.full_arg = full_arg
         self.pedigree = None
         self.segment_stack = []
@@ -647,11 +627,6 @@ class Simulator:
         self.num_ca_events = 0
         self.num_re_events = 0
         self.num_gc_events = 0
-
-        # Sweep variables
-        self.sweep_site = (self.L // 2) - 1  # need to add options here
-        self.sweep_trajectory = sweep_trajectory
-        self.time_slice = time_slice
 
         self.modifier_events = [(sys.float_info.max, None, None)]
         for time, pop_id, new_size in population_size_changes:
@@ -989,13 +964,41 @@ class Simulator:
             assert non_empty_pops == X
         return self.finalise()
 
+    def propose_trajectory(self):
+        """
+        Proposes a sweep trajectory and returns the acceptance probability.
+        """
+        allele_freqs = []
+        times = []
+        sweep = self.sweep
+        x = sweep.end_frequency
+        current_size = 1
+        t = 0
+        while x > sweep.initial_frequency:
+            allele_freqs.append(max(x, sweep.initial_frequency))
+            times.append(t)
+            # just a note below
+            # current_size = self._size_calculator(t)
+            #
+            x = 1 - sweep.trajectory.next_frequency(
+                1 - x, sweep.dt, current_size, random.random()
+            )
+            t += sweep.dt
+        # will want to return current_size / N_max
+        # for prototype this always equals 1
+        return allele_freqs, times, 1
+
+    def simulate_sweep_trajectory(self):
+        allele_freqs, times, acceptance = self.propose_trajectory()
+        while random.random() > acceptance:
+            allele_freqs, times, acceptance = self.propose_trajectory()
+        return allele_freqs, times
+
     def single_sweep_simulate(self):
         """
-        Does a structed coalescent until end_freq is reached, using
-        information in self.weep_trajectory.
-
+        Does a structed coalescent until end_freq is reached.
         """
-        allele_freqs, times = self.sweep_trajectory
+        allele_freqs, times = self.simulate_sweep_trajectory()
         sweep_traj_step = 0
         x = allele_freqs[sweep_traj_step]
 
@@ -1018,7 +1021,7 @@ class Simulator:
             self.P[0].add(tmp, 1)
 
         # main loop time
-        t_inc_orig = self.time_slice
+        t_inc_orig = self.sweep.dt
         e_time = 0.0
         while self.ancestors_remain() and sweep_traj_step < len(times) - 1:
             self.verify()
@@ -1083,12 +1086,12 @@ class Simulator:
                             if r < e_sum / sweep_pop_tot_rate:
                                 # recomb in B
                                 self.hudson_recombination_event_sweep_phase(
-                                    1, self.sweep_site, x
+                                    1, self.sweep.position, x
                                 )
                             else:
                                 # recomb in b
                                 self.hudson_recombination_event_sweep_phase(
-                                    0, self.sweep_site, 1.0 - x
+                                    0, self.sweep.position, 1.0 - x
                                 )
         # clean up the labels at end
         for idx, u in enumerate(self.P[0].iter_label(1)):
@@ -2163,16 +2166,22 @@ def run_simulate(args):
         rates = args.recomb_rates
         recombination_map = RateMap(positions, rates)
     num_labels = 1
-    sweep_trajectory = None
+    sweep = None
     if args.model == "single_sweep":
         if num_populations > 1:
             raise ValueError("Multiple populations not currently supported")
         # Compute the trajectory
         if args.trajectory is None:
             raise ValueError("Must provide trajectory (init_freq, end_freq, alpha)")
-        init_freq, end_freq, alpha = args.trajectory
-        traj_sim = TrajectorySimulator(init_freq, end_freq, alpha, args.time_slice)
-        sweep_trajectory = traj_sim.run()
+        initial_frequency, end_frequency, alpha = args.trajectory
+        trajectory = GenicSelectionTrajectory(alpha)
+        sweep = Sweep(
+            position=m // 2 + 1,
+            initial_frequency=initial_frequency,
+            end_frequency=end_frequency,
+            dt=args.time_slice,
+            trajectory=trajectory,
+        )
         num_labels = 2
     random.seed(args.random_seed)
     np.random.seed(args.random_seed + 1)
@@ -2204,8 +2213,7 @@ def run_simulate(args):
         max_segments=100000,
         num_labels=num_labels,
         full_arg=args.full_arg,
-        sweep_trajectory=sweep_trajectory,
-        time_slice=args.time_slice,
+        sweep=sweep,
         gene_conversion_rate=gc_rate,
         gene_conversion_length=mean_tract_length,
         discrete_genome=args.discrete,

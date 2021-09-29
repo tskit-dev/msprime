@@ -158,23 +158,36 @@ typedef struct {
 /* Forward declaration */
 struct _msp_t;
 
+/* A generated trajectory realisation */
 typedef struct {
-    /* TODO document these parameters.*/
-    double start_frequency;
-    double end_frequency;
-    double s;
-    double dt;
-} genic_selection_trajectory_t;
+    tsk_size_t num_steps;
+    tsk_size_t max_steps;
+    double *time;
+    double *allele_frequency;
+} sweep_trajectory_t;
+
+typedef double (*next_frequency_func_t)(
+    double x, double dt, double pop_size, double rand, void *params);
 
 typedef struct _sweep_t {
     double position;
-    union {
-        /* Future trajectory simulation models would go here */
-        genic_selection_trajectory_t genic_selection_trajectory;
-    } trajectory_params;
-    int (*generate_trajectory)(struct _sweep_t *self, struct _msp_t *simulator,
-        size_t *num_steps, double **time, double **allele_frequency);
-    void (*print_state)(struct _sweep_t *self, FILE *out);
+    double start_frequency;
+    double end_frequency;
+    /* JK: Question for ADK: why isn't dt in units of generations? This would seem
+     * less confusing overall, since we're converting back into generations during
+     * the simulation anyway. We could also default it to 1 then, rather than
+     * requiring users to scale it by N (which is different to every other parameter
+     * we have */
+    double dt;
+    void *trajectory_params;
+    next_frequency_func_t next_frequency;
+    /* double (*next_frequency)( */
+    /*     double x, double dt, double pop_size, double rand, void *params); */
+    /* For simplicity store the paramters here for now. If things get complicated
+     * and some models have lots of different parameters we can put in a
+     * union which we manipulate to make sure there's always enough space
+     * to store the parameters. */
+    double s;
 } sweep_t;
 
 typedef struct _simulation_model_t {
@@ -262,6 +275,7 @@ typedef struct _msp_t {
     tsk_edge_t *buffered_edges;
     tsk_size_t num_buffered_edges;
     tsk_size_t max_buffered_edges;
+    sweep_trajectory_t trajectory;
     /* Methods for getting the waiting time until the next common ancestor
      * event and the event are defined by the simulation model */
     double (*get_common_ancestor_waiting_time)(
@@ -427,6 +441,9 @@ int msp_set_simulation_model_dtwf(msp_t *self);
 int msp_set_simulation_model_wf_ped(msp_t *self);
 int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
 int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
+int msp_set_simulation_model_sweep(msp_t *self, double position, double start_frequency,
+    double end_frequency, double dt, next_frequency_func_t next_frequency,
+    void *trajectory_params);
 int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     double start_frequency, double end_frequency, double s, double dt);
 
