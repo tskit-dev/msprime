@@ -292,6 +292,83 @@ def simulate_pedigree(
     return tables
 
 
+class TestSimPedigree:
+    """
+    Tests for the simple Wright-Fisher pedigree simulator.
+    """
+
+    def verify(self, tables):
+        tables.sequence_length = 10
+        # Check that we can simulate with it.
+        msprime.sim_ancestry(initial_state=tables, model="wf_ped", random_seed=2)
+
+    def test_zero_generations(self):
+        tables = pedigrees.sim_pedigree(population_size=10, end_time=0, random_seed=1)
+        assert len(tables.individuals) == 10
+        # print(tables)
+        assert np.all(tables.nodes.time) == 0
+        assert np.all(tables.nodes.flags) == tskit.NODE_IS_SAMPLE
+        assert np.all(tables.nodes.population) == 0
+        self.verify(tables)
+
+    @pytest.mark.parametrize("N", range(1, 5))
+    @pytest.mark.parametrize("num_generations", range(1, 5))
+    def test_n_generations(self, N, num_generations):
+        tables = pedigrees.sim_pedigree(
+            population_size=N, end_time=num_generations, random_seed=1
+        )
+        assert len(tables.individuals) == (num_generations + 1) * N
+
+        tables.sequence_length = 1
+        ts = tables.tree_sequence()
+
+        t = num_generations
+        # first N individuals are founders
+        for ind in range(N):
+            ind_obj = ts.individual(ind)
+            assert list(ind_obj.parents) == [-1, -1]
+            for node_id in ind_obj.nodes:
+                node_obj = ts.node(node_id)
+                assert node_obj.time == t
+
+        n = N
+        for _ in range(1, num_generations):
+            t -= 1
+            for ind in range(n, n + N):
+                ind_obj = ts.individual(ind)
+                for node_id in ind_obj.nodes:
+                    node_obj = ts.node(node_id)
+                    assert node_obj.time == t
+
+                # parents are from the previous generation
+                for parent in ind_obj.parents:
+                    parent_obj = ts.individual(parent)
+                    parent_node_obj = ts.node(parent_obj.nodes[0])
+                    assert parent_node_obj.time == t + 1
+
+            n += N
+        # Last N nodes are all samples
+        assert np.all(tables.nodes.flags[-2 * N :] == tskit.NODE_IS_SAMPLE)
+
+        self.verify(tables)
+
+    @pytest.mark.parametrize("num_generations", [1, 3, 7])
+    def test_end_time_like_dtwf(self, num_generations):
+        N = 10
+        ped_tables = pedigrees.sim_pedigree(
+            population_size=N, end_time=num_generations, random_seed=1
+        )
+        dtwf_ts = msprime.sim_ancestry(
+            100,
+            population_size=N,
+            end_time=num_generations,
+            random_seed=1,
+            model="dtwf",
+        )
+        assert ped_tables.nodes.time[0] == num_generations
+        assert dtwf_ts.tables.nodes.time[-1] == num_generations
+
+
 class TestPedigreeSimulation:
     """
     Tests for simple pedigree simulator
@@ -897,6 +974,46 @@ class TestSimulateThroughPedigreeReplicates(TestSimulateThroughPedigree):
             input_tables.individuals.assert_equals(output_tables.individuals)
             input_tables.nodes.assert_equals(output_tables.nodes)
         return replicates[0]
+
+
+class TestSimulateThroughPartialPedigree:
+    def test_one_parent_removed_each_individual(self):
+        tables = simulate_pedigree(
+            num_founders=5,
+            num_generations=5,
+            sequence_length=100,
+        )
+        parents = tables.individuals.parents
+        parents[0::2] = -1
+        tables.individuals.parents = parents
+
+        ts = msprime.sim_ancestry(
+            model="wf_ped",
+            initial_state=tables,
+            random_seed=42,
+        )
+        # We quickly reach deadends in the pedigree, just check that
+        # we've done something reasonably sensible.
+        assert ts.num_edges > 0
+
+    def test_10_percent_parents_removed(self):
+        tables = simulate_pedigree(
+            num_founders=5,
+            num_generations=10,
+            sequence_length=100,
+        )
+        parents = tables.individuals.parents
+        parents[0::10] = -1
+        tables.individuals.parents = parents
+
+        ts = msprime.sim_ancestry(
+            model="wf_ped",
+            initial_state=tables,
+            random_seed=42,
+        )
+        # We quickly reach deadends in the pedigree, just check that
+        # we've done something reasonably sensible.
+        assert ts.num_edges > 0
 
 
 class TestSimulateThroughPedigreeErrors:
