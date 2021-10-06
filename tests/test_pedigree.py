@@ -9,7 +9,44 @@ import pytest
 import tskit
 
 import msprime
+from msprime import _msprime
 from msprime import pedigrees
+
+
+def get_base_tables(sequence_length):
+    tables = tskit.TableCollection(sequence_length=sequence_length)
+    # Add single population for simplicity. We put in a schema to
+    # avoid warnings.
+    permissive_json = tskit.MetadataSchema(
+        {
+            "codec": "json",
+            "type": "object",
+            "properties": {},
+            "additionalProperties": True,
+        }
+    )
+    tables.populations.metadata_schema = permissive_json
+    tables.individuals.metadata_schema = permissive_json
+    tables.populations.add_row()
+    return tables
+
+
+def add_pedigree_individual(tables, time, parents=(-1, -1), is_sample=None):
+    parents = np.sort(parents).astype("int32")
+    ind_id = tables.individuals.add_row(parents=parents, flags=len(tables.individuals))
+    flags = 0
+    if is_sample is None:
+        flags = tskit.NODE_IS_SAMPLE if time == 0 else 0
+    elif is_sample:
+        flags = tskit.NODE_IS_SAMPLE
+    for _ in parents:
+        tables.nodes.add_row(
+            flags=flags,
+            time=time,
+            population=0,
+            individual=ind_id,
+        )
+    return ind_id
 
 
 class TestPedigree(unittest.TestCase):
@@ -220,12 +257,12 @@ def simulate_pedigree(
     random_seed: Random seed.
     """
     rng = np.random.RandomState(random_seed)
-    tables = tskit.TableCollection(sequence_length=sequence_length)
-    # Add single population for simplicity.
-    tables.populations.add_row()
+    tables = get_base_tables(sequence_length)
 
     def add_individual(generation, parents=(-1, -1)):
-        ind_id = tables.individuals.add_row(parents=parents)
+        ind_id = tables.individuals.add_row(
+            parents=parents, metadata={"original_id": len(tables.individuals)}
+        )
         time = num_generations - generation - 1
         for _ in parents:
             tables.nodes.add_row(
@@ -363,18 +400,94 @@ class TestPedigreeSimulation:
         tc.tree_sequence()  # creating tree sequence should succeed
 
 
+def join_pedigrees(tables_list):
+    """
+    Join together pedigrees in the specified lists of tables and return
+    the resulting pedigree.
+    """
+    tables = tables_list[0].copy()
+    for other_tables in tables_list[1:]:
+        num_individuals = len(tables.individuals)
+        for node in other_tables.nodes:
+            tables.nodes.append(
+                node.replace(individual=node.individual + num_individuals)
+            )
+        for individual in other_tables.individuals:
+            parents = individual.parents
+            for j in range(len(parents)):
+                if parents[j] != -1:
+                    parents[j] += num_individuals
+            tables.individuals.append(individual.replace(parents=parents))
+    return tables.tree_sequence()
+
+
+class TestJoinPedigrees:
+    def test_two_pedigrees(self):
+        tables1 = simulate_pedigree(
+            num_founders=2,
+            num_generations=2,
+            sequence_length=100,
+        )
+        tables2 = simulate_pedigree(
+            num_founders=5,
+            num_generations=5,
+            sequence_length=100,
+        )
+        joined = join_pedigrees([tables1, tables2])
+        assert joined.num_nodes == len(tables1.nodes) + len(tables2.nodes)
+        assert joined.num_individuals == len(tables1.individuals) + len(
+            tables2.individuals
+        )
+
+    def test_three_pedigrees(self):
+
+        tables1 = simulate_pedigree(
+            num_founders=2,
+            num_generations=2,
+            sequence_length=100,
+        )
+        tables2 = simulate_pedigree(
+            num_founders=5,
+            num_generations=5,
+            sequence_length=100,
+        )
+        tables3 = simulate_pedigree(
+            num_founders=7,
+            num_generations=1,
+            sequence_length=100,
+        )
+        all_tables = [tables1, tables2, tables3]
+        joined = join_pedigrees(all_tables)
+        assert joined.num_nodes == sum(len(tables.nodes) for tables in all_tables)
+        assert joined.num_individuals == sum(
+            len(tables.individuals) for tables in all_tables
+        )
+
+
 class TestSimulateThroughPedigree:
-    def verify(self, input_tables):
+    def verify(self, input_tables, recombination_rate=0):
         initial_state = input_tables.tree_sequence()
-        ts = msprime.sim_ancestry(
+
+        # print()
+        # print(list(input_tables.individuals.parents))
+        # time = [
+        #     input_tables.nodes.time[ind.nodes[0]]
+        #     for ind in initial_state.individuals()
+        # ]
+        # print(time)
+
+        # Using this low-level interface to make debugging easier. It's the
+        # same effect as calling ts = msprime.sim_ancestry(...)
+        sim = msprime.ancestry._parse_sim_ancestry(
             model="wf_ped",
             initial_state=initial_state,
-            recombination_rate=0,
-            population_size=1,
+            recombination_rate=recombination_rate,
             random_seed=1,
         )
-        output_tables = ts.tables
-
+        sim.run()
+        # print(sim)
+        output_tables = tskit.TableCollection.fromdict(sim.tables.asdict())
+        ts = output_tables.tree_sequence()
         input_tables.individuals.assert_equals(output_tables.individuals)
         input_tables.nodes.assert_equals(output_tables.nodes)
 
@@ -392,172 +505,490 @@ class TestSimulateThroughPedigree:
                         ancestors[individual.id].add(parent_id)
                         for u in ts.individual(parent_id).parents:
                             stack.append(u)
-        # Not used because certain tests fail asserts
-        # tests failed: test_shallow[100,1000], test_deep, test_many_children,
-        # test_half_sibs, test_double_inbreeding_sibs
-        #
-        # # founder nodes have correct time
-        # founder_ids = {
-        #     ind.id for ind in ts.individuals() if len(ancestors[ind.id]) == 0
-        # }
-        # for founder in founder_ids:
-        #    for node_id in ts.individual(founder).nodes:
-        #        node = ts.node(node_id)
-        # for tree in ts.trees():
-        #     for node_id in tree.nodes():
-        #         node = ts.node(node_id)
-        #         individual = ts.individual(node.individual)
-        #         if tree.parent(node_id) != tskit.NULL:
-        #             parent_node = ts.node(tree.parent(node_id))
-        #             # tests failed: test_shallow[100,1000],
-        #             # test_deep, test_many_children, test_half_sibs
-        #             assert parent_node.individual in ancestors[individual.id]
-        #         else:
-        #             # tests failed: test_double_inbreeding_sibs
-        #             assert node.individual in founder_ids
+        founder_ids = {
+            ind.id for ind in ts.individuals() if len(ancestors[ind.id]) == 0
+        }
 
-    def add_individual(self, tables, time, parents=(-1, -1)):
-        parents = np.sort(parents).astype("int32")
-        ind_id = tables.individuals.add_row(
-            parents=parents, flags=len(tables.individuals)
-        )
-        for _ in parents:
-            tables.nodes.add_row(
-                flags=tskit.NODE_IS_SAMPLE if time == 0 else 0,
-                time=time,
-                population=0,
-                individual=ind_id,
-            )
-        return ind_id
+        for tree in ts.trees():
+            for root in tree.roots:
+                node = ts.node(root)
+                # If this is a unary root it must be from a founder.
+                if tree.num_children(root) == 1:
+                    assert node.individual in founder_ids
+            for node_id in tree.nodes():
+                node = ts.node(node_id)
+                individual = ts.individual(node.individual)
+                if tree.parent(node_id) != tskit.NULL:
+                    parent_node = ts.node(tree.parent(node_id))
+                    assert parent_node.individual in ancestors[individual.id] | {
+                        tskit.NULL
+                    }
+        return ts
 
-    @pytest.mark.parametrize("num_founders", [2, 3, 100, 1000])
-    def test_shallow(self, num_founders):
+    @pytest.mark.parametrize("num_founders", [2, 3, 5, 100])
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_shallow(self, num_founders, recombination_rate):
         tables = simulate_pedigree(
             num_founders=num_founders,
             num_children_prob=[0, 0, 1],
             num_generations=2,
             sequence_length=100,
         )
-        self.verify(tables)
+        self.verify(tables, recombination_rate)
 
     @pytest.mark.parametrize("num_founders", [2, 3, 10, 20])
-    def test_deep(self, num_founders):
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_deep(self, num_founders, recombination_rate):
+        tables = simulate_pedigree(
+            num_founders=num_founders,
+            num_children_prob=[0, 0, 1],
+            num_generations=6,  # Takes a long time if this is increased
+            sequence_length=100,
+        )
+        self.verify(tables, recombination_rate)
+
+    @pytest.mark.parametrize("num_founders", [2, 3])
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_very_deep(self, num_founders, recombination_rate):
         tables = simulate_pedigree(
             num_founders=num_founders,
             num_children_prob=[0, 0, 1],
             num_generations=16,  # Takes a long time if this is increased
-            sequence_length=100,
+            sequence_length=10,
         )
-        self.verify(tables)
+        self.verify(tables, recombination_rate)
 
     @pytest.mark.parametrize("num_founders", [2, 3, 10, 20])
-    def test_many_children(self, num_founders):
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_many_children(self, num_founders, recombination_rate):
         tables = simulate_pedigree(
             num_founders=num_founders,
             num_children_prob=[0] * 99
             + [1],  # Each pair of parents will always have 100 children
             num_generations=2,
         )
-        self.verify(tables)
+        self.verify(tables, recombination_rate)
 
-    @unittest.skip("Currently broken")
     @pytest.mark.parametrize("num_founders", [2, 3, 10, 20])
-    def test_unrelated(self, num_founders):
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_unrelated(self, num_founders, recombination_rate):
         tables = simulate_pedigree(
             num_founders=num_founders,
             num_children_prob=[0],
             num_generations=1,
         )
-        self.verify(tables)
+        self.verify(tables, recombination_rate)
 
-    @unittest.skip("Currently broken")
-    def test_duo(self):
-        tables = tskit.TableCollection(sequence_length=100)
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_two_pedigrees(self, recombination_rate):
+        tables1 = simulate_pedigree(
+            num_founders=5,
+            num_generations=5,
+            sequence_length=100,
+        )
+        tables2 = simulate_pedigree(
+            num_founders=3,
+            num_generations=8,
+            sequence_length=100,
+        )
+        joined = join_pedigrees([tables1, tables2])
+        ts = self.verify(joined.tables, recombination_rate)
+        for tree in ts.trees():
+            assert tree.num_roots >= 2
+
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_two_pedigrees_different_times(self, recombination_rate):
+        tables1 = simulate_pedigree(
+            num_founders=5,
+            num_generations=5,
+            sequence_length=100,
+        )
+        tables2 = simulate_pedigree(
+            num_founders=3,
+            num_generations=8,
+            sequence_length=100,
+        )
+        # The pedigree in tables2 starts at 1 generation ago
+        tables2.nodes.time += 1
+        joined = join_pedigrees([tables1, tables2])
+        ts = self.verify(joined.tables, recombination_rate)
+        for tree in ts.trees():
+            assert tree.num_roots >= 2
+            for root in tree.roots:
+                assert not tree.is_sample(root)
+
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_two_pedigrees_non_overlapping_times(self, recombination_rate):
+        tables1 = simulate_pedigree(
+            num_founders=15,
+            num_generations=3,
+            sequence_length=100,
+        )
+        tables2 = simulate_pedigree(
+            num_founders=6,
+            num_generations=5,
+            sequence_length=100,
+        )
+        # The pedigree in tables2 starts at 1 generation ago
+        tables2.nodes.time += 5
+        joined = join_pedigrees([tables1, tables2])
+        joined.dump("joined_ped.ts")
+        ts = self.verify(joined.tables, recombination_rate)
+        for tree in ts.trees():
+            assert tree.num_roots >= 2
+            for root in tree.roots:
+                assert not tree.is_sample(root)
+
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_duo(self, recombination_rate):
+        tables = get_base_tables(100)
+
+        parent = add_pedigree_individual(tables, time=1)
+        add_pedigree_individual(tables, time=0, parents=[parent, -1])
+
+        self.verify(tables, recombination_rate)
+
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_trio(self, recombination_rate):
+        tables = get_base_tables(100)
+
+        gen0 = [add_pedigree_individual(tables, time=1) for _ in range(2)]
+        add_pedigree_individual(tables, time=0, parents=gen0)
+
+        self.verify(tables, recombination_rate)
+
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_mixed_generation_parents(self, recombination_rate):
+        tables = get_base_tables(100)
+
+        gen0 = [add_pedigree_individual(tables, time=2) for _ in range(2)]
+        gen1 = [add_pedigree_individual(tables, time=1, parents=gen0)]
+        add_pedigree_individual(tables, time=0, parents=(gen0[0], gen1[0]))
+
+        self.verify(tables, recombination_rate)
+
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_inbreeding_sibs(self, recombination_rate):
+        tables = get_base_tables(100)
+
+        parents = [add_pedigree_individual(tables, time=2) for _ in range(2)]
+        sibs = [
+            add_pedigree_individual(tables, time=1, parents=parents) for _ in range(2)
+        ]
+        add_pedigree_individual(tables, time=0, parents=sibs)
+
+        self.verify(tables, recombination_rate)
+
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_double_inbreeding_sibs(self, recombination_rate):
+        tables = get_base_tables(100)
+
+        parents = [add_pedigree_individual(tables, time=3) for _ in range(2)]
+        sibs1 = [
+            add_pedigree_individual(tables, time=2, parents=parents) for _ in range(2)
+        ]
+        sibs2 = [
+            add_pedigree_individual(tables, time=1, parents=sibs1) for _ in range(2)
+        ]
+        add_pedigree_individual(tables, time=0, parents=sibs2)
+
+        self.verify(tables, recombination_rate)
+
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_half_sibs(self, recombination_rate):
+        tables = get_base_tables(100)
+
+        parents = [add_pedigree_individual(tables, time=1) for _ in range(3)]
+        add_pedigree_individual(tables, time=0, parents=parents[:2])
+        add_pedigree_individual(tables, time=0, parents=parents[1:])
+
+        self.verify(tables, recombination_rate)
+
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_inbreeding_half_sibs(self, recombination_rate):
+        tables = get_base_tables(100)
+
+        parents = [add_pedigree_individual(tables, time=2) for _ in range(3)]
+        half_sib1 = add_pedigree_individual(tables, time=1, parents=parents[:2])
+        half_sib2 = add_pedigree_individual(tables, time=1, parents=parents[1:])
+        add_pedigree_individual(tables, time=0, parents=(half_sib1, half_sib2))
+
+        self.verify(tables, recombination_rate)
+
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_oedipus(self, recombination_rate):
+        tables = get_base_tables(100)
+
+        parents = [add_pedigree_individual(tables, time=2) for _ in range(2)]
+        offspring = add_pedigree_individual(tables, time=1, parents=parents)
+        add_pedigree_individual(tables, time=0, parents=(parents[0], offspring))
+
+        self.verify(tables, recombination_rate)
+
+    def test_large_family(self):
+        tables = get_base_tables(100)
+
+        parents = [add_pedigree_individual(tables, time=1) for _ in range(2)]
+        for _ in range(50):
+            add_pedigree_individual(tables, time=0, parents=parents)
+        ts = self.verify(tables)
+        assert ts.num_trees == 1
+        parent_nodes = {0, 1, 2, 3}
+        assert set(ts.first().roots) <= parent_nodes
+
+    def test_large_family_different_times(self):
+        tables = get_base_tables(100)
+        n = 20
+        p1 = add_pedigree_individual(tables, time=n + 1)
+        p2 = add_pedigree_individual(tables, time=n + 2)
+        for j in range(n):
+            add_pedigree_individual(tables, time=j, parents=[p1, p2], is_sample=True)
+        ts = self.verify(tables)
+        assert ts.num_trees == 1
+        parent_nodes = {0, 1, 2, 3}
+        assert set(ts.first().roots) <= parent_nodes
+
+    def test_ancient_sample(self):
+        tables = get_base_tables(100)
+        parents = [add_pedigree_individual(tables, time=2) for _ in range(2)]
+        add_pedigree_individual(tables, time=0, parents=parents)
+        add_pedigree_individual(tables, time=1, parents=parents, is_sample=True)
+        ts = self.verify(tables)
+        assert ts.num_trees == 1
+        parent_nodes = {0, 1, 2, 3}
+        assert set(ts.first().roots) <= parent_nodes
+
+    def test_no_time_zero_samples(self):
+        tables = get_base_tables(100)
+        parents = [add_pedigree_individual(tables, time=2) for _ in range(2)]
+        add_pedigree_individual(tables, time=1, parents=parents, is_sample=True)
+        add_pedigree_individual(tables, time=1, parents=parents, is_sample=True)
+        ts = self.verify(tables)
+        assert ts.num_trees == 1
+        parent_nodes = {0, 1, 2, 3}
+        assert set(ts.first().roots) <= parent_nodes
+
+    def test_just_samples(self):
+        tables = get_base_tables(100)
+        add_pedigree_individual(tables, time=0, is_sample=True)
+        add_pedigree_individual(tables, time=1, is_sample=True)
+        ts = self.verify(tables)
+        assert ts.num_trees == 1
+        parent_nodes = {0, 1, 2, 3}
+        assert set(ts.first().roots) == parent_nodes
+
+
+class TestSimulateThroughPedigreeEventByEvent(TestSimulateThroughPedigree):
+    def verify(self, input_tables, recombination_rate=0):
+        ts1 = msprime.sim_ancestry(
+            model="wf_ped",
+            initial_state=input_tables,
+            recombination_rate=recombination_rate,
+            random_seed=1,
+        )
+        sim = msprime.ancestry._parse_sim_ancestry(
+            model="wf_ped",
+            initial_state=input_tables,
+            recombination_rate=recombination_rate,
+            random_seed=1,
+        )
+        sim.run(event_chunk=1)
+        output_tables = tskit.TableCollection.fromdict(sim.tables.asdict())
+        output_tables.assert_equals(ts1.tables, ignore_provenance=True)
+        return ts1
+
+
+class TestContinueSimulateThroughPedigree(TestSimulateThroughPedigree):
+    """
+    Can we extend the simulations of the pedigree as we'd expect?
+    """
+
+    def verify(self, input_tables, recombination_rate=0):
+
+        ts1 = msprime.sim_ancestry(
+            model="wf_ped",
+            initial_state=input_tables,
+            recombination_rate=recombination_rate,
+            random_seed=42,
+        )
+        # print(ts1.draw_text())
+        ts2 = msprime.sim_ancestry(
+            initial_state=ts1, population_size=1, random_seed=1234
+        )
+        for tree in ts2.trees():
+            assert tree.num_roots == 1
+            for node_id in tree.nodes():
+                if tree.num_children(node_id) == 1:
+                    # Any unary nodes should be associated with a pedigree
+                    # founder.
+                    node = ts2.node(node_id)
+                    assert node.individual != tskit.NULL
+                    individual = ts2.individual(node.individual)
+                    assert list(individual.parents) == [tskit.NULL, tskit.NULL]
+        tables1 = ts1.tables
+        tables2 = ts2.tables
+        tables1.individuals.assert_equals(
+            tables2.individuals[: len(tables1.individuals)]
+        )
+        tables1.nodes.assert_equals(tables2.nodes[: len(tables1.nodes)])
+
+        return ts1
+
+    def test_family_different_times(self):
+        # Check that we're picking up ancient samples correctly from the
+        # pedigree simulation by having two different parents at very
+        # different times, and a small population size. This should guarantee
+        # that the nodes for the first parent coalesces first.
+        #
+        # 28.00┊   10    ┊
+        #      ┊  ┏━┻━┓  ┊
+        # 23.00┊  ┃   9  ┊
+        #      ┊  ┃  ┏┻┓ ┊
+        # 20.00┊  ┃  3 2 ┊
+        #      ┊  ┃  ┃ ┃ ┊
+        # 4.00 ┊  8  ┃ ┃ ┊
+        #      ┊ ┏┻┓ ┃ ┃ ┊
+        # 2.00 ┊ 0 1 ┃ ┃ ┊
+        #      ┊ ┃ ┃ ┃ ┃ ┊
+        # 1.00 ┊ ┃ 6 ┃ 7 ┊
+        #      ┊ ┃   ┃   ┊
+        # 0.00 ┊ 4   5   ┊
+        #      0.00     100.00
+        tables = get_base_tables(100)
+        n = 2
+        p1 = add_pedigree_individual(tables, time=n)
+        p2 = add_pedigree_individual(tables, time=10 * n)
+        for j in range(n):
+            add_pedigree_individual(tables, time=j, parents=[p1, p2], is_sample=True)
+        ts1 = self.verify(tables)
+        ts2 = msprime.sim_ancestry(
+            initial_state=ts1, population_size=5, model="dtwf", random_seed=1234
+        )
+        assert ts2.num_trees == 1
+        tree = ts2.first()
+        # The youngest parent nodes should coalesce
+        assert tree.parent(0) == tree.parent(1)
+
+
+class TestSimulateThroughPedigreeReplicates(TestSimulateThroughPedigree):
+    def verify(self, input_tables, recombination_rate=0):
+        num_replicates = 5
+        replicates = list(
+            msprime.sim_ancestry(
+                model="wf_ped",
+                initial_state=input_tables,
+                recombination_rate=recombination_rate,
+                random_seed=42,
+                num_replicates=num_replicates,
+            )
+        )
+
+        ts1 = msprime.sim_ancestry(
+            model="wf_ped",
+            initial_state=input_tables,
+            recombination_rate=recombination_rate,
+            random_seed=42,
+        )
+        ts1.tables.assert_equals(replicates[0].tables, ignore_provenance=True)
+
+        assert len(replicates) == num_replicates
+        for ts in replicates:
+            output_tables = ts.tables
+            input_tables.individuals.assert_equals(output_tables.individuals)
+            input_tables.nodes.assert_equals(output_tables.nodes)
+        return replicates[0]
+
+
+class TestSimulateThroughPedigreeErrors:
+    def test_parents_are_samples(self):
+        tables = get_base_tables(100)
+        parents = [
+            add_pedigree_individual(tables, time=1, is_sample=True) for _ in range(2)
+        ]
+        add_pedigree_individual(tables, parents=parents, time=0)
+
+        with pytest.raises(_msprime.LibraryError, match="1855"):
+            msprime.sim_ancestry(
+                initial_state=tables,
+                model="wf_ped",
+            )
+
+    @pytest.mark.parametrize("num_parents", [0, 1, 3])
+    def test_not_two_parents(self, num_parents):
+        tables = get_base_tables(100)
+        parents = [add_pedigree_individual(tables, time=1) for _ in range(num_parents)]
+        add_pedigree_individual(tables, parents=parents, time=0)
+        with pytest.raises(_msprime.InputError, match="exactly two parents"):
+            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
+
+    @pytest.mark.parametrize("num_nodes", [0, 1, 3])
+    def test_not_two_nodes(self, num_nodes):
+        tables = get_base_tables(100)
+        ind = tables.individuals.add_row(parents=[-1, -1])
+        for _ in range(num_nodes):
+            tables.nodes.add_row(
+                flags=tskit.NODE_IS_SAMPLE, time=0, individual=ind, population=0
+            )
+        with pytest.raises(_msprime.InputError, match="exactly two nodes"):
+            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
+
+    def test_node_times_disagree(self):
+        tables = get_base_tables(100)
+        ind = tables.individuals.add_row(parents=[-1, -1])
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, time=0, individual=ind, population=0
+        )
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, time=1, individual=ind, population=0
+        )
+        with pytest.raises(_msprime.InputError, match="times for the two nodes"):
+            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
+
+    def test_node_populations_disagree(self):
+        tables = get_base_tables(100)
         tables.populations.add_row()
+        ind = tables.individuals.add_row(parents=[-1, -1])
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, time=0, individual=ind, population=0
+        )
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, time=0, individual=ind, population=1
+        )
+        with pytest.raises(_msprime.InputError, match="populations for the two nodes"):
+            # FIXME working around limitations in high-level API for now.
+            demography = msprime.Demography.isolated_model([1, 1])
+            msprime.sim_ancestry(
+                initial_state=tables, demography=demography, model="wf_ped"
+            )
 
-        parent = self.add_individual(tables, time=1)
-        self.add_individual(tables, time=0, parents=[parent, -1])
+    def test_no_samples(self):
+        tables = get_base_tables(100)
+        ind = tables.individuals.add_row(parents=[-1, -1])
+        tables.nodes.add_row(flags=0, time=0, individual=ind, population=0)
+        tables.nodes.add_row(flags=0, time=0, individual=ind, population=0)
+        with pytest.raises(_msprime.InputError, match="samples"):
+            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
 
-        tables.build_index()
-        self.verify(tables)
+    def test_pedigree_time_travel(self):
+        tables = get_base_tables(100)
+        parents = [add_pedigree_individual(tables, time=0) for _ in range(2)]
+        add_pedigree_individual(tables, time=1, parents=parents, is_sample=True)
+        with pytest.raises(_msprime.InputError, match="time for a parent must be"):
+            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
 
-    def test_trio(self):
-        tables = tskit.TableCollection(sequence_length=100)
-        tables.populations.add_row()
-
-        gen0 = [self.add_individual(tables, time=1) for _ in range(2)]
-        self.add_individual(tables, time=0, parents=gen0)
-
-        tables.build_index()
-        self.verify(tables)
-
-    def test_mixed_generation_parents(self):
-        tables = tskit.TableCollection(sequence_length=100)
-        tables.populations.add_row()
-
-        gen0 = [self.add_individual(tables, time=2) for _ in range(2)]
-        gen1 = [self.add_individual(tables, time=1, parents=gen0)]
-        self.add_individual(tables, time=0, parents=(gen0[0], gen1[0]))
-
-        tables.build_index()
-        self.verify(tables)
-
-    def test_inbreeding_sibs(self):
-        tables = tskit.TableCollection(sequence_length=100)
-        tables.populations.add_row()
-
-        parents = [self.add_individual(tables, time=2) for _ in range(2)]
-        sibs = [self.add_individual(tables, time=1, parents=parents) for _ in range(2)]
-        self.add_individual(tables, time=0, parents=sibs)
-
-        tables.build_index()
-        self.verify(tables)
-
-    def test_double_inbreeding_sibs(self):
-        tables = tskit.TableCollection(sequence_length=100)
-        tables.populations.add_row()
-
-        parents = [self.add_individual(tables, time=3) for _ in range(2)]
-        sibs1 = [self.add_individual(tables, time=2, parents=parents) for _ in range(2)]
-        sibs2 = [self.add_individual(tables, time=1, parents=sibs1) for _ in range(2)]
-        self.add_individual(tables, time=0, parents=sibs2)
-
-        tables.build_index()
-        self.verify(tables)
-
-    def test_half_sibs(self):
-        tables = tskit.TableCollection(sequence_length=100)
-        tables.populations.add_row()
-
-        parents = [self.add_individual(tables, time=1) for _ in range(3)]
-        self.add_individual(tables, time=0, parents=parents[:2])
-        self.add_individual(tables, time=0, parents=parents[1:])
-
-        tables.build_index()
-        self.verify(tables)
-
-    def test_inbreeding_half_sibs(self):
-        tables = tskit.TableCollection(sequence_length=100)
-        tables.populations.add_row()
-
-        parents = [self.add_individual(tables, time=2) for _ in range(3)]
-        half_sib1 = self.add_individual(tables, time=1, parents=parents[:2])
-        half_sib2 = self.add_individual(tables, time=1, parents=parents[1:])
-        self.add_individual(tables, time=0, parents=(half_sib1, half_sib2))
-
-        tables.build_index()
-        self.verify(tables)
-
-    def test_oedipus(self):
-        tables = tskit.TableCollection(sequence_length=100)
-        tables.populations.add_row()
-
-        parents = [self.add_individual(tables, time=2) for _ in range(2)]
-        offspring = self.add_individual(tables, time=1, parents=parents)
-        self.add_individual(tables, time=0, parents=(parents[0], offspring))
-
-        tables.build_index()
-        self.verify(tables)
+    @pytest.mark.parametrize("num_founders", [2, 3, 10, 20])
+    def test_all_samples(self, num_founders):
+        tables = simulate_pedigree(
+            num_founders=num_founders,
+            num_children_prob=[0, 0, 1],
+            num_generations=6,
+            sequence_length=100,
+        )
+        flags = tables.nodes.flags
+        flags[:] = tskit.NODE_IS_SAMPLE
+        tables.nodes.flags = flags
+        with pytest.raises(_msprime.LibraryError, match="1855"):
+            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
 
 
 if __name__ == "__main__":

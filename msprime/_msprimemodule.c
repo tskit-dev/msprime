@@ -1078,8 +1078,8 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     PyObject *beta_s = NULL;
     PyObject *sweep_genic_selection_s = NULL;
     PyObject *value;
-    int is_hudson, is_dtwf, is_smc, is_smc_prime, is_dirac, is_beta, is_sweep_genic_selection;
-    int is_wf_ped;
+    int is_hudson, is_dtwf, is_smc, is_smc_prime, is_dirac, is_beta,
+        is_sweep_genic_selection, is_wf_ped;
     double psi, c, alpha, truncation_point;
 
     hudson_s = Py_BuildValue("s", "hudson");

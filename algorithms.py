@@ -126,6 +126,9 @@ class Segment:
         self.label = 0
         self.index = index
 
+    def __repr__(self):
+        return repr((self.left, self.right, self.node))
+
     @staticmethod
     def show_chain(seg):
         s = ""
@@ -270,8 +273,6 @@ class Population:
         return self._ancestors[indv.label].index(indv)
 
 
-# TODO this needs to be refactored and cleaned up. The class
-# currently does very litte.
 class Pedigree:
     """
     Class representing a pedigree for use with the DTWF model, as implemented
@@ -280,109 +281,63 @@ class Pedigree:
 
     def __init__(self, tables):
         self.ploidy = 2
-        self.num_individuals = 0
-        self.node_individual_map = {}
-        self.inds = []
-        self.samples = []
-        self.num_samples = 0
-        self.ind_heap = []
-        self.is_climbing = False
-        # Stores most recently merged segment
-        self.merged_segment = None
+        self.individuals = []
 
         ts = tables.tree_sequence()
-        tsk_id_map = {tskit.NULL: None}
         for tsk_ind in ts.individuals():
-            if len(tsk_ind.nodes) > 0:
-                assert len(tsk_ind.nodes) == self.ploidy
-                assert len(tsk_ind.parents) == self.ploidy
-                time = ts.node(tsk_ind.nodes[0]).time
-                flags = ts.node(tsk_ind.nodes[0]).flags
-                # All nodes must be equivalent
-                assert len({ts.node(node).flags for node in tsk_ind.nodes}) == 1
-                assert len({ts.node(node).time for node in tsk_ind.nodes}) == 1
-                assert len({ts.node(node).population for node in tsk_ind.nodes}) == 1
-                ind = Individual(ploidy=self.ploidy, nodes=tsk_ind.nodes)
-                tsk_id_map[tsk_ind.id] = ind
-                for node in tsk_ind.nodes:
-                    self.node_individual_map[node] = ind
-                ind.id = len(self.inds)
-                ind.parents = [tsk_id_map[parent] for parent in tsk_ind.parents]
-                ind.time = time
-                self.inds.append(ind)
-                if flags & tskit.NODE_IS_SAMPLE != 0:
-                    self.samples.append(ind)
-        self.num_samples = len(self.samples)
-        self.num_individuals = len(self.inds)
+            assert len(tsk_ind.nodes) == self.ploidy
+            assert len(tsk_ind.parents) == self.ploidy
+            time = ts.node(tsk_ind.nodes[0]).time
+            # All nodes must be equivalent
+            assert len({ts.node(node).flags for node in tsk_ind.nodes}) == 1
+            assert len({ts.node(node).time for node in tsk_ind.nodes}) == 1
+            assert len({ts.node(node).population for node in tsk_ind.nodes}) == 1
+            ind = Individual(
+                tsk_ind.id,
+                ploidy=self.ploidy,
+                nodes=list(tsk_ind.nodes),
+                parents=list(tsk_ind.parents),
+                time=time,
+            )
+            assert ind.id == len(self.individuals)
+            self.individuals.append(ind)
 
-    def push_ind(self, ind):
-        """
-        Adds an individual to the heap queue
-        """
-        assert ind.queued is False
-        ind.queued = True
-        heapq.heappush(self.ind_heap, ind)
-
-    def pop_ind(self):
-        """
-        Pops the most recent individual off the heap queue
-        """
-        ind = heapq.heappop(self.ind_heap)
-        assert ind.queued
-        ind.queued = False
-        return ind
+    def print_state(self):
+        print("Pedigree")
+        print("-------")
+        print("Individuals = ")
+        for ind in self.individuals:
+            print("\t", ind)
+        print("-------")
 
 
 class Individual:
     """
-    Class representing a diploid individual in the DTWF model. Trying to make
-    arbitrary ploidy possible at some point in the future.
+    Class representing a diploid individual in the DTWF pedigree model.
     """
 
-    def __init__(self, ploidy=2, nodes=None):
-        self.id = None  # This is the index of the individual in pedigree.inds
+    def __init__(self, id_, *, ploidy, nodes, parents, time):
+        self.id = id_
         self.ploidy = ploidy
-        self.parents = [None for i in range(ploidy)]
-        self.segments = [[] for i in range(ploidy)]
-        self.sex = None
-        self.time = -1
-        self.queued = False
         self.nodes = nodes
-        assert len(nodes) == ploidy
-
-        # For debugging - to ensure we only merge once
-        self.merged = False
+        self.parents = parents
+        self.time = time
+        self.common_ancestors = [[] for i in range(ploidy)]
 
     def __str__(self):
-        parents = []
-        for p in self.parents:
-            if p is not None:
-                parents.append(str(p.id))
-            else:
-                parents.append("None")
-
-        parents_str = ",".join(parents)
-
         return (
             f"(ID: {self.id}, time: {self.time}, "
-            + f"parents: {parents_str}, nodes: {self.nodes})"
+            + f"parents: {self.parents}, nodes: {self.nodes}, "
+            + f"common_ancestors: {self.common_ancestors})"
         )
 
-    def __repr__(self):
-        return self.__str__()
-
-    def __lt__(self, other):
-        return self.time < other.time
-
-    def add_segment(self, seg, parent_ix):
+    def add_common_ancestor(self, head, ploid):
         """
-        Adds a segment to a parental segment heap, which allows easy merging
-        later.
+        Adds the specified ancestor (represented by the head of a segment
+        chain) to the list of ancestors that find a common ancestor in
+        the specified ploid of this individual.
         """
-        heapq.heappush(self.segments[parent_ix], (seg.left, seg))
-
-    def num_lineages(self):
-        return sum(len(s) for s in self.segments)
+        heapq.heappush(self.common_ancestors[ploid], (head.left, head))
 
 
 class TrajectorySimulator:
@@ -825,8 +780,43 @@ class Simulator:
         Finalises the simulation returns an msprime tree sequence object.
         """
         self.flush_edges()
-        ts = self.tables.tree_sequence()
-        return ts
+
+        # Insert unary edges for any remainining lineages.
+        current_time = self.t
+        for population in self.P:
+            for ancestor in population.iter_ancestors():
+                node = tskit.NULL
+                # See if there is already a node in this ancestor at the
+                # current time
+                seg = ancestor
+                while seg is not None:
+                    if self.tables.nodes[seg.node].time == current_time:
+                        node = seg.node
+                        break
+                    seg = seg.next
+                if node == tskit.NULL:
+                    # Add a new node for the current ancestor
+                    node = self.tables.nodes.add_row(
+                        flags=0, time=current_time, population=population.id
+                    )
+                # Add in edges pointing to this ancestor
+                seg = ancestor
+                while seg is not None:
+                    if seg.node != node:
+                        self.tables.edges.add_row(seg.left, seg.right, node, seg.node)
+                    seg = seg.next
+
+        # Need to work around limitations in tskit Python API to prevent
+        # individuals from getting unsorted:
+        # https://github.com/tskit-dev/tskit/issues/1726
+        ind_col = self.tables.nodes.individual
+        ind_table = self.tables.individuals.copy()
+        self.tables.sort()
+        self.tables.individuals.clear()
+        for ind in ind_table:
+            self.tables.individuals.append(ind)
+        self.tables.nodes.individual = ind_col
+        return self.tables.tree_sequence()
 
     def simulate(self, end_time):
         self.verify()
@@ -987,7 +977,6 @@ class Simulator:
 
             X = {pop.id for pop in self.P if pop.get_num_ancestors() > 0}
             assert non_empty_pops == X
-        return self.finalise()
 
     def single_sweep_simulate(self):
         """
@@ -1101,7 +1090,6 @@ class Simulator:
         Simulates through the provided pedigree, stopping at the top.
         """
         self.pedigree = Pedigree(self.tables)
-        assert self.pedigree is not None
         self.dtwf_climb_pedigree()
 
     def dtwf_simulate(self):
@@ -1173,6 +1161,67 @@ class Simulator:
                     mig_dest = k
                     self.migration_event(mig_source, mig_dest)
 
+    def process_pedigree_common_ancestors(self, ind, ploid):
+        """
+        Merge the ancestral material that has been inherited on this "ploid"
+        (i.e., single genome, chromosome strand, tskit node) of this
+        individual, then recombine and distribute the remaining ancestral
+        material among its parent ploids.
+        """
+        common_ancestors = ind.common_ancestors[ploid]
+        if len(common_ancestors) == 0:
+            # No ancestral material inherited on this ploid of this individual
+            return
+
+        # All the segment chains in common_ancestors reach a common
+        # ancestor in this ploid of this individual. First we remove
+        # them from the populations they are stored in:
+        for _, anc in common_ancestors:
+            pop = self.P[anc.population]
+            pop.remove_individual(anc)
+
+        # Merge together these lists of ancestral segments to create the
+        # monoploid genome for this ploid of this individual.
+        # If any coalescences occur, they use the corresponding node ID.
+        # FIXME update the population/label here
+        node = ind.nodes[ploid]
+        genome = self.merge_ancestors(common_ancestors, 0, 0, node)
+        if ind.parents[ploid] == tskit.NULL:
+            # If this individual is a founder we need to make sure that all
+            # lineages that are present are marked with unary nodes to show
+            # where they emerged from the pedigree. These can then be
+            # picked up as ancient samples by later simulations. Note that
+            # pedigree simulations are a special case here in that we
+            # don't want to extend unary edges to the last time point in the
+            # simulation because we are *not* simulating the entire
+            # population process, only the subset that we have information
+            # about within the pedigree.
+            seg = genome
+            while seg is not None:
+                if seg.node != node:
+                    self.store_edge(seg.left, seg.right, parent=node, child=seg.node)
+                seg = seg.next
+            pop.remove_individual(genome)
+        else:
+            # If this individual is not a founder, it inherited the current
+            # monoploid genome as a gamete from one parent. This gamete was
+            # created by recombining between the parent's monoploid genomes
+            # to create two independent lines of ancestry.
+            parent = self.pedigree.individuals[ind.parents[ploid]]
+            parent_ancestry = self.dtwf_recombine(genome)
+            for parent_ploid in range(ind.ploidy):
+                seg = parent_ancestry[parent_ploid]
+                if seg is not None:
+                    # Add this segment chain of ancestry to the accumulating
+                    # set in the parent on the corresponding ploid.
+                    parent.add_common_ancestor(seg, ploid=parent_ploid)
+                    if seg != genome:
+                        # Add the recombined ancestor to the population
+                        pop.add(seg)
+
+        self.flush_edges()
+        self.verify()
+
     def dtwf_climb_pedigree(self):
         """
         Simulates transmission of ancestral material through a pre-specified
@@ -1180,74 +1229,21 @@ class Simulator:
         """
         assert self.num_populations == 1  # Single pop/pedigree for now
         pop = self.P[0]
-        for i in range(pop.get_num_ancestors() - 1, -1, -1):
-            anc = pop.remove(i)
-            ind = self.pedigree.node_individual_map[anc.node]
-            # FIXME this is icky - what do we use parent_ix for? There
-            # must be a better way of doing this.
-            parent_ix = i % self.pedigree.ploidy
-            ind.add_segment(anc, parent_ix=parent_ix)
 
-        # Add samples to queue to prepare for climbing
-        for ind in self.pedigree.samples:
-            self.pedigree.push_ind(ind)
+        # Go through the extant lineages and gather the ancestral material
+        # into the corresponding pedigree individuals.
+        for anc in pop.iter_ancestors():
+            node = self.tables.nodes[anc.node]
+            assert node.individual != tskit.NULL
+            ind = self.pedigree.individuals[node.individual]
+            ind.add_common_ancestor(anc, ploid=ind.nodes.index(anc.node))
 
-        self.pedigree.is_climbing = True
-
-        # Store founders for adding back to population when climbing is done
-        founder_lineages = []
-
-        while len(self.pedigree.ind_heap) > 0:
-            next_ind = self.pedigree.pop_ind()
-            self.t = next_ind.time
-            assert next_ind.num_lineages() > 0
-            assert next_ind.merged is False
-
-            for segments, parent, node in zip(
-                next_ind.segments, next_ind.parents, next_ind.nodes
-            ):
-
-                # This parent may not have contributed any ancestral material
-                # to the samples.
-                if len(segments) == 0:
-                    continue
-
-                # Merge segments inherited from this ind and recombine
-                self.merge_ancestors(segments, 0, 0, node)
-                merged_head = self.pedigree.merged_segment
-                self.pedigree.merged_segment = None
-                assert merged_head.prev is None
-
-                # If parent is None, we are at a pedigree founder and we add
-                # to founder lineages and add unary edges for any nodes
-                # that did not coalesce.
-                if parent is None:
-                    founder_lineages.append(merged_head)
-                    x = merged_head
-                    while x is not None:
-                        if x.node != node:
-                            self.store_edge(x.left, x.right, node, x.node)
-                            x.node = node
-                        x = x.next
-                else:
-                    # Recombine and climb segments to parents.
-                    segs_pair = self.dtwf_recombine(merged_head)
-                    for i, seg in enumerate(segs_pair):
-                        if seg is not None:
-                            assert seg.prev is None
-                            parent.add_segment(seg, parent_ix=i)
-                    if not parent.queued:
-                        self.pedigree.push_ind(parent)
-                self.flush_edges()
-
-            next_ind.merged = True
-
-        self.pedigree.is_climbing = False
-
-        # Add lineages back to population.
-        for lineage in founder_lineages:
-            self.P[0].add(lineage)
-        self.verify()
+        # Visit pedigree individuals in time order.
+        visit_order = sorted(self.pedigree.individuals, key=lambda x: (x.time, x.id))
+        for ind in visit_order:
+            self.t = ind.time
+            for ploid in range(ind.ploidy):
+                self.process_pedigree_common_ancestors(ind, ploid)
 
     def store_arg_edges(self, segment):
         u = len(self.tables.nodes) - 1
@@ -1727,6 +1723,7 @@ class Simulator:
         coalescence = False
         alpha = None
         z = None
+        merged_head = None
         while len(H) > 0:
             alpha = None
             left = H[0][0]
@@ -1788,16 +1785,8 @@ class Simulator:
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
                 if z is None:
-                    # TODO refactor this so that we're returning alpha
-                    # as the head of the stored segment chain rather than
-                    # using the pedigree state.
-                    # Pedigrees don't currently track lineages in Populations,
-                    # so keep reference to merged segments instead.
-                    if self.pedigree is not None and self.pedigree.is_climbing:
-                        assert self.pedigree.merged_segment is None
-                        self.pedigree.merged_segment = alpha
-                    else:
-                        pop.add(alpha, label)
+                    pop.add(alpha, label)
+                    merged_head = alpha
                 else:
                     if self.full_arg:
                         defrag_required |= z.right == alpha.left
@@ -1817,6 +1806,7 @@ class Simulator:
             self.defrag_segment_chain(z)
         if coalescence:
             self.defrag_breakpoints()
+        return merged_head
 
     def defrag_segment_chain(self, z):
         y = z
@@ -1978,6 +1968,8 @@ class Simulator:
             print("\t", row)
         for population in self.P:
             population.print_state()
+        if self.pedigree is not None:
+            self.pedigree.print_state()
         print("Overlap counts", len(self.S))
         for k, x in self.S.items():
             print("\t", k, "\t:\t", x)

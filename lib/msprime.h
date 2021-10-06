@@ -106,35 +106,31 @@ typedef struct {
     tsk_id_t *potential_destinations;
 } population_t;
 
+#define MSP_MAX_PED_PLOIDY 2
+
 /* Note: we might want to make a distinction here between "individual"
  * and "pedigree individual". We might want to have a more generic
  * individual type at some point which just consists of an array of
  * ploidy segment pointers (one head for each strand). This struct
  * is quite specialised for the purpose of running the pedigree
  * simulation. */
-typedef struct individual_t_t {
+typedef struct {
     tsk_id_t id;
-    /* Note: probably simpler to make parents a list of tsk_id_ts,
-     * save a bit of pointer fiddling */
-    struct individual_t_t **parents;
-    avl_tree_t *segments;
-    int sex;
+    tsk_size_t ploidy;
     double time;
-    bool queued;
-    tsk_id_t *nodes;
-    // For debugging, to ensure we only merge once.
-    bool merged;
+    population_id_t population;
+    tsk_id_t parents[MSP_MAX_PED_PLOIDY];
+    tsk_id_t nodes[MSP_MAX_PED_PLOIDY];
+    avl_tree_t common_ancestors[MSP_MAX_PED_PLOIDY];
 } individual_t;
 
 typedef struct {
-    individual_t *inds;
-    size_t num_inds;
-    /* JK We don't need the samples any more, as we can derive this
-     * from the tables. */
-    individual_t **samples;
-    size_t num_samples;
-    avl_tree_t ind_heap;
-    int state;
+    individual_t *individuals;
+    individual_t **visit_order;
+    /* The number of nodes in the input pedigree. */
+    tsk_size_t num_nodes;
+    tsk_size_t num_individuals;
+    tsk_id_t next_individual;
 } pedigree_t;
 
 typedef struct {
@@ -208,7 +204,7 @@ typedef struct _msp_t {
     uint32_t num_labels;
     uint32_t ploidy;
     double start_time;
-    pedigree_t *pedigree;
+    pedigree_t pedigree;
     /* Initial state for replication */
     segment_t **root_segments;
     overlap_count_t *initial_overlaps;

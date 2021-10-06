@@ -884,6 +884,7 @@ def _parse_sim_ancestry(
 
     models = _parse_model_arg(model)
     is_dtwf = isinstance(models[0], DiscreteTimeWrightFisher)
+    is_pedigree = isinstance(models[0], WrightFisherPedigree)
 
     # Check the demography. If no demography is specified, we default to a
     # single-population model with a given population size.
@@ -897,7 +898,7 @@ def _parse_sim_ancestry(
                     "explicitly, either using the population_size or demography "
                     "arguments."
                 )
-        if initial_state is not None:
+        if initial_state is not None and not is_pedigree:
             if population_size is None:
                 raise ValueError(
                     "Must specify either a demography object or a population_size "
@@ -1448,19 +1449,7 @@ class Simulator(_msprime.Simulator):
                     f'"{placeholder}"', str(replicate_index)
                 )
                 tables.provenances.add_row(replicate_provenance)
-
-            # There are rare cases when we are simulating from
-            # awkward initial states where the tables we produce in the
-            # simulation are not correctly sorted. The simplest course
-            # of action here to just let it fail and sort.
-            # https://github.com/tskit-dev/msprime/issues/1606
-            try:
-                ts = tables.tree_sequence()
-            except tskit.LibraryError:
-                # TODO add a warning? This is probably badly formed input
-                # so it seems reasonable to issue a warning.
-                tables.sort()
-                ts = tables.tree_sequence()
+            ts = tables.tree_sequence()
             yield ts
             self.reset()
 

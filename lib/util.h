@@ -81,8 +81,7 @@
 #define MSP_ERR_DTWF_ZERO_POPULATION_SIZE                           -36
 #define MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK                         -37
 #define MSP_ERR_BAD_PROPORTION                                      -38
-#define MSP_ERR_BAD_PEDIGREE_NUM_SAMPLES                            -39
-#define MSP_ERR_BAD_PEDIGREE_ID                                     -40
+/* REUSE 39 and 40 */
 #define MSP_ERR_BAD_BETA_MODEL_ALPHA                                -41
 #define MSP_ERR_BAD_TRUNCATION_POINT                                -42
 #define MSP_ERR_BAD_RATE_VALUE                                      -43
@@ -124,6 +123,15 @@
 #define MSP_ERR_POPULATION_CURRENTLY_ACTIVE                         -80
 #define MSP_ERR_DEACTIVATE_INACTIVE_POPULATION                      -81
 #define MSP_ERR_DEACTIVATE_PREVIOUSLY_ACTIVE_POPULATION             -82
+#define MSP_ERR_BAD_PEDIGREE_NUM_SAMPLES                            -83
+#define MSP_ERR_OTHER_MODELS_WITH_PED                               -84
+#define MSP_ERR_EMPTY_PEDIGREE                                      -85
+#define MSP_ERR_PEDIGREE_IND_NODE_TIME_DISAGREE                     -86
+#define MSP_ERR_PEDIGREE_IND_NODE_POPULATION_DISAGREE               -87
+#define MSP_ERR_PEDIGREE_TIME_TRAVEL                                -88
+#define MSP_ERR_PEDIGREE_IND_NOT_DIPLOID                            -89
+#define MSP_ERR_PEDIGREE_IND_NOT_TWO_PARENTS                        -90
+#define MSP_ERR_PEDIGREE_INTERNAL_SAMPLE                            -91
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */
