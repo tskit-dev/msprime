@@ -88,6 +88,7 @@ from matplotlib import pyplot
 
 import msprime
 import msprime.cli as cli
+import msprime.pedigrees as pedigrees
 from msprime.demography import _matrix_exponential
 
 # Force matplotlib to not use any Xwindows backend.
@@ -1642,100 +1643,253 @@ class SweepAnalytical(Test):
         pyplot.close("all")
 
 
-# FIXME disabling these for now because the pedigree file that
-# they depend on doesn't exist. (Tests won't be picked up unless
-# they subclass Test.)
+class DtwfVsPedigree(Test):
+    """
+    Running a simulation through a pedigree with population size N
+    should be identical to running a DTWF simulation of the same
+    size.
+    """
 
-
-class DtwfPedigreeVsCoalescent:
-    def run_dtwf_pedigree_comparison(self, **kwargs):
+    def run_dtwf_pedigree_comparison(
+        self, N, end_time, sequence_length=1, recombination_rate=0, num_replicates=100
+    ):
         df = pd.DataFrame()
-        pedigree = kwargs["pedigree"]
-        assert kwargs["sample_size"] % 2 == 0
-        sample_size = kwargs["sample_size"]
-        sample_size_diploid = sample_size // 2
-        for model in ["wf_ped", "dtwf"]:
-            kwargs["model"] = model
-            kwargs["pedigree"] = None
-            kwargs["sample_size"] = sample_size
-            if model == "wf_ped":
-                kwargs["sample_size"] = sample_size_diploid
-                kwargs["pedigree"] = pedigree
 
-                des = []
-                if "demographic_events" in kwargs:
-                    des = kwargs["demographic_events"]
-                max_ped_time = max(pedigree.times)
-                des.append(msprime.SimulationModelChange(max_ped_time, "dtwf"))
-                des = sorted(des, key=lambda x: x.time)
-                kwargs["demographic_events"] = des
+        def replicates_data(replicates, model):
 
-            logging.debug(f"Running: {kwargs}")
             data = collections.defaultdict(list)
-            replicates = msprime.simulate(**kwargs)
             for ts in replicates:
                 t_mrca = np.zeros(ts.num_trees)
+                num_roots = np.zeros(ts.num_trees)
+                t_intervals = []
                 for tree in ts.trees():
-                    t_mrca[tree.index] = tree.time(tree.root)
+                    t_mrca[tree.index] = max(tree.time(root) for root in tree.roots)
+                    t_intervals.append(tree.interval)
+                    num_roots[tree.index] = tree.num_roots
+                data["num_roots"].append(np.mean(num_roots))
                 data["tmrca_mean"].append(np.mean(t_mrca))
                 data["num_trees"].append(ts.num_trees)
+                data["intervals"].append(t_intervals)
                 data["model"].append(model)
-            df = df.append(pd.DataFrame(data))
+            return pd.DataFrame(data)
 
-        df_wf_ped = df[df.model == "wf_ped"]
+        dtwf_replicates = msprime.sim_ancestry(
+            samples=N,
+            population_size=N,
+            end_time=end_time,
+            recombination_rate=recombination_rate,
+            sequence_length=sequence_length,
+            model="dtwf",
+            num_replicates=num_replicates,
+        )
+        df = df.append(replicates_data(dtwf_replicates, "dtwf"))
+
+        for _ in range(num_replicates):
+            pedigree = pedigrees.sim_pedigree(population_size=N, end_time=end_time)
+            pedigree.sequence_length = sequence_length
+            ts_ped = msprime.sim_ancestry(
+                initial_state=pedigree,
+                recombination_rate=recombination_rate,
+                model="wf_ped",
+            )
+            df = df.append(replicates_data([ts_ped], "dtwf|ped"))
+
+        return df
+
+    def plot_coalescent_stats(self, df):
+
+        df_ped = df[df.model == "dtwf|ped"]
         df_dtwf = df[df.model == "dtwf"]
-        for stat in ["tmrca_mean", "num_trees"]:
-            v1 = df_wf_ped[stat]
-            v2 = df_dtwf[stat]
-            sm.graphics.qqplot(v1)
-            sm.qqplot_2samples(v1, v2, line="45")
+        for stat in ["tmrca_mean", "num_trees", "num_roots"]:
+            plot_qq(df_ped[stat], df_dtwf[stat])
+            pyplot.xlabel("dtwf|ped")
+            pyplot.ylabel("dtwf")
             f = self.output_dir / f"{stat}.png"
             pyplot.savefig(f, dpi=72)
             pyplot.close("all")
 
-    def test_dtwf_vs_pedigree_single_locus(self):
-        pedigree_file = "tests/data/pedigrees/wf_100Ne_10000gens.txt"
-        pedigree = msprime.Pedigree.read_txt(pedigree_file, time_col=3)
+        ped_breakpoints = all_breakpoints_in_replicates(df_ped["intervals"])
+        dtwf_breakpoints = all_breakpoints_in_replicates(df_dtwf["intervals"])
+        if len(ped_breakpoints) > 0 or len(dtwf_breakpoints) > 0:
+            plot_breakpoints_hist(ped_breakpoints, dtwf_breakpoints, "ped", "dtwf")
+            pyplot.savefig(self.output_dir / "breakpoints.png", dpi=72)
+            pyplot.close("all")
 
-        self.run_dtwf_pedigree_comparison(
-            "dtwf_vs_pedigree_single_locus",
-            sample_size=10,
-            Ne=100,
-            num_replicates=400,
-            length=1,
-            pedigree=pedigree,
-            recombination_rate=0,
-            mutation_rate=1e-8,
+    def _run(self, **kwargs):
+        df = self.run_dtwf_pedigree_comparison(**kwargs)
+        self.plot_coalescent_stats(df)
+
+    def test_dtwf_vs_pedigree_single_locus_n50(self):
+        self._run(N=50, end_time=500, num_replicates=100)
+
+    def test_dtwf_vs_pedigree_single_locus_n500(self):
+        self._run(N=500, end_time=500, num_replicates=100)
+
+    def test_dtwf_vs_pedigree_short_region_many_roots(self):
+        self._run(
+            N=500,
+            end_time=100,
+            num_replicates=100,
+            sequence_length=100,
+            recombination_rate=0.0001,
         )
 
-    def test_dtwf_vs_pedigree_short_region(self):
-        pedigree_file = "tests/data/pedigrees/wf_100Ne_10000gens.txt"
-        pedigree = msprime.Pedigree.read_txt(pedigree_file, time_col=3)
-
-        self.run_dtwf_pedigree_comparison(
-            "dtwf_vs_pedigree_short_region",
-            sample_size=10,
-            Ne=100,
-            num_replicates=400,
-            length=1e6,
-            pedigree=pedigree,
-            recombination_rate=1e-8,
-            mutation_rate=1e-8,
+    def test_dtwf_vs_pedigree_short_region_few_roots(self):
+        self._run(
+            N=10,
+            end_time=1000,
+            num_replicates=100,
+            sequence_length=100,
+            recombination_rate=0.0001,
         )
 
-    def test_dtwf_vs_pedigree_long_region(self):
-        pedigree_file = "tests/data/pedigrees/wf_100Ne_10000gens.txt"
-        pedigree = msprime.Pedigree.read_txt(pedigree_file, time_col=3)
+    def test_dtwf_vs_pedigree_recomb_discrete_hotspots(self):
+        recombination_map = msprime.RateMap(
+            position=[0, 100, 500, 900, 1200, 1500, 2000],
+            rate=[0.00001, 0, 0.0002, 0.00005, 0, 0.001],
+        )
+        self._run(
+            N=1000,
+            end_time=1000,
+            sequence_length=recombination_map.sequence_length,
+            recombination_rate=recombination_map,
+            num_replicates=100,
+        )
 
-        self.run_dtwf_pedigree_comparison(
-            "dtwf_vs_pedigree_long_region",
-            sample_size=10,
-            Ne=100,
-            num_replicates=200,
-            length=1e8,
-            pedigree=pedigree,
-            recombination_rate=1e-8,
-            mutation_rate=1e-8,
+
+class DtwfVsRecapitatedPedigree(Test):
+    """
+    Running a simulation through a pedigree with population size N
+    and then recapitating with a DTWF model should be identical
+    to running a DTWF simulation of the same size.
+    """
+
+    def run_dtwf_pedigree_comparison(
+        self,
+        N,
+        end_time,
+        sequence_length=1,
+        recombination_rate=0,
+        num_replicates=100,
+        drop_fraction=0,
+    ):
+        df = pd.DataFrame()
+
+        def replicates_data(replicates, model):
+
+            data = collections.defaultdict(list)
+            for ts in replicates:
+                t_mrca = np.zeros(ts.num_trees)
+                num_roots = np.zeros(ts.num_trees)
+                t_intervals = []
+                for tree in ts.trees():
+                    t_mrca[tree.index] = tree.time(tree.root)
+                    t_intervals.append(tree.interval)
+                    num_roots[tree.index] = tree.num_roots
+                data["tmrca_mean"].append(np.mean(t_mrca))
+                data["num_trees"].append(ts.num_trees)
+                data["intervals"].append(t_intervals)
+                data["model"].append(model)
+            return pd.DataFrame(data)
+
+        dtwf_replicates = msprime.sim_ancestry(
+            samples=N,
+            population_size=N,
+            recombination_rate=recombination_rate,
+            sequence_length=sequence_length,
+            model="dtwf",
+            num_replicates=num_replicates,
+        )
+        df = df.append(replicates_data(dtwf_replicates, "dtwf"))
+
+        for _ in range(num_replicates):
+            pedigree = pedigrees.sim_pedigree(population_size=N, end_time=end_time)
+            pedigree.sequence_length = sequence_length
+            if drop_fraction > 0:
+                k = int(1 / drop_fraction)
+                # drop every kth parent. Should lead to chunks of the pedigree being
+                # unreachable and therefore test how we'll we work when we have
+                # partial pedigree information
+                parents = pedigree.individuals.parents
+                parents[1::k] = -1
+                pedigree.individuals.parents = parents
+            ts_ped = msprime.sim_ancestry(
+                initial_state=pedigree,
+                recombination_rate=recombination_rate,
+                model="wf_ped",
+            )
+            ts_final = msprime.sim_ancestry(
+                population_size=N,
+                initial_state=ts_ped,
+                recombination_rate=recombination_rate,
+            )
+            df = df.append(replicates_data([ts_final], "dtwf|ped"))
+
+        return df
+
+    def plot_coalescent_stats(self, df):
+
+        df_ped = df[df.model == "dtwf|ped"]
+        df_dtwf = df[df.model == "dtwf"]
+        for stat in ["tmrca_mean", "num_trees"]:
+            plot_qq(df_ped[stat], df_dtwf[stat])
+            pyplot.xlabel("dtwf|ped")
+            pyplot.ylabel("dtwf")
+            f = self.output_dir / f"{stat}.png"
+            pyplot.savefig(f, dpi=72)
+            pyplot.close("all")
+
+        ped_breakpoints = all_breakpoints_in_replicates(df_ped["intervals"])
+        dtwf_breakpoints = all_breakpoints_in_replicates(df_dtwf["intervals"])
+        if len(ped_breakpoints) > 0 or len(dtwf_breakpoints) > 0:
+            plot_breakpoints_hist(ped_breakpoints, dtwf_breakpoints, "ped", "dtwf")
+            pyplot.savefig(self.output_dir / "breakpoints.png", dpi=72)
+            pyplot.close("all")
+
+    def _run(self, **kwargs):
+        df = self.run_dtwf_pedigree_comparison(**kwargs)
+        self.plot_coalescent_stats(df)
+
+    def test_dtwf_vs_recapitated_pedigree_single_locus_n50(self):
+        self._run(N=50, end_time=100, num_replicates=400)
+
+    # NOTE there are known problems here with incomplete pedigrees and how
+    # they are dealt with during recapitation. See
+    # https://github.com/tskit-dev/msprime/issues/1865
+
+    def test_dtwf_vs_recapitated_pedigree_single_locus_n50_drop_tenth(self):
+        self._run(N=50, end_time=100, num_replicates=400, drop_fraction=0.1)
+
+    def test_dtwf_vs_recapitated_pedigree_single_locus_n50_drop_half(self):
+        self._run(N=50, end_time=100, num_replicates=400, drop_fraction=0.5)
+
+    def test_dtwf_vs_recapitated_pedigree_n50_L100(self):
+        self._run(
+            N=50,
+            end_time=100,
+            sequence_length=100,
+            recombination_rate=0.001,
+            num_replicates=400,
+        )
+
+    def test_dtwf_vs_recapitated_pedigree_n50_L100_drop_tenth(self):
+        self._run(
+            N=50,
+            end_time=100,
+            sequence_length=100,
+            recombination_rate=0.001,
+            num_replicates=400,
+            drop_fraction=0.1,
+        )
+
+    def test_dtwf_vs_recapitated_pedigree_n50_L100_drop_half(self):
+        self._run(
+            N=50,
+            end_time=100,
+            sequence_length=100,
+            recombination_rate=0.001,
+            num_replicates=400,
+            drop_fraction=0.5,
         )
 
 

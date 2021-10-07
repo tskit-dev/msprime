@@ -17,14 +17,81 @@
 # along with msprime.  If not, see <http://www.gnu.org/licenses/>.
 #
 """
-Module responsible managing pedigree definitions.
+Pedigree utilities.
 """
 import collections
 import inspect
 import os
 
 import numpy as np
+import tskit
 
+
+def sim_pedigree(
+    *,
+    population_size=None,
+    sequence_length=None,
+    random_seed=None,
+    num_replicates=None,
+    end_time=None,
+):
+    # Internal utility for generating pedigree data. This function is not
+    # part of the public API and subject to arbitrary changes/removal
+    # in the future.
+
+    tables = tskit.TableCollection(
+        sequence_length=-1 if sequence_length is None else sequence_length
+    )
+    # TODO we should be using the demography class here to set up the
+    # population metadata
+    permissive_json = tskit.MetadataSchema(
+        {
+            "codec": "json",
+            "type": "object",
+            "properties": {},
+            "additionalProperties": True,
+        }
+    )
+    tables.populations.metadata_schema = permissive_json
+    # tables.individuals.metadata_schema = permissive_json
+    tables.populations.add_row()
+
+    population = np.array([tskit.NULL], dtype=np.int32)
+    rng = np.random.RandomState(random_seed)
+
+    # To make the semantics compatible with dtwf, the end_time means the
+    # *end* of generation end_time
+    for time in reversed(range(end_time + 1)):
+        N = population_size  # This could be derived from the Demography
+        # Make the current generation
+        progeny = len(tables.individuals) + np.arange(N, dtype=np.int32)
+
+        # NB this is *with* replacement, so 1 / N chance of selfing
+        parents = rng.choice(population, (N, 2))
+        tables.individuals.append_columns(
+            flags=np.zeros(N, dtype=np.uint32),
+            parents=parents.reshape(N * 2),
+            parents_offset=np.arange(N + 1, dtype=np.uint32) * 2,
+        )
+        node_individual = np.zeros(2 * N, dtype=np.int32)
+        node_individual[0::2] = progeny
+        node_individual[1::2] = progeny
+        flags_value = 0 if time > 0 else tskit.NODE_IS_SAMPLE
+        tables.nodes.append_columns(
+            flags=np.full(2 * N, flags_value, dtype=np.uint32),
+            time=np.full(2 * N, time, dtype=np.float64),
+            population=np.full(2 * N, 0, dtype=np.int32),
+            individual=node_individual,
+        )
+        population = progeny
+
+    return tables
+
+
+#####
+# All code below is scheduled for deletion:
+# https://github.com/tskit-dev/msprime/issues/1856
+#####
 
 # NOTE This functionality is preliminary and undocumented. It
 # *will change*.
