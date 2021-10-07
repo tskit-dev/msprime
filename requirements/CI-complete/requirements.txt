@@ -9,6 +9,9 @@ numpy==1.21.2
 pytest==6.2.4
 pytest-cov==2.12.1
 pytest-xdist==2.3.0
+# https://github.com/tskit-dev/msprime/issues/1860
+# Required by python_jsonschema_objects
+jsonschema<4.0
 python_jsonschema_objects==0.4.0
 scipy==1.7.1
 stdpopsim==0.1.2
