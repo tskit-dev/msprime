@@ -93,22 +93,6 @@ def sim_pedigree(
 # https://github.com/tskit-dev/msprime/issues/1856
 #####
 
-# NOTE This functionality is preliminary and undocumented. It
-# *will change*.
-
-# TODO the main thing we need to do here is get rid of the 1-based
-# IDs and the "individual" column so that it maps directly into the
-# individual table in tskit. We can integrate with PED files by
-# putting in a null individual if necessary, but it's horribly
-# confusing working with external IDs here.
-
-# Another major issue here is that the sampling strategy is
-# bound up with the representation of the pedigree itself. We should
-# remove any idea of sampling from this class and instead make the
-# samples argument to simulate specify *individual* IDs, ie.
-# ts = msprime.sim_ancestry([0, 1], pedigree=pedigree)
-# sets the individuals 0 and 1 to be the samples.
-
 
 class Pedigree:
     """
@@ -441,3 +425,63 @@ class Pedigree:
             for key in inspect.signature(self.__init__).parameters.keys()
             if hasattr(self, key)
         }
+
+
+def parse_fam(fam_file):
+    """
+    Parse PLINK .fam file and convert to tskit IndividualTable.
+    Assumes fam file contains five columns: FID, IID, PAT, MAT, SEX
+    :param fam_file: PLINK .fam file object
+    :param tskit.TableCollection tc: TableCollection with IndividualTable to
+        which the individuals will be added
+    """
+    individuals = np.loadtxt(
+        fname=fam_file,
+        dtype=str,
+        ndmin=2,  # read file as 2-D table
+        usecols=(0, 1, 2, 3, 4),  # only keep FID, IID, PAT, MAT, SEX columns
+    )  # requires same number of columns in each row, i.e. not ragged
+
+    id_map = {}  # dict for translating PLINK ID to tskit IndividualTable ID
+    for tskit_id, (plink_fid, plink_iid, _pat, _mat, _sex) in enumerate(individuals):
+        # include space between strings to ensure uniqueness
+        plink_id = f"{plink_fid} {plink_iid}"
+        if plink_id in id_map:
+            raise ValueError("Duplicate PLINK ID: {plink_id}")
+        id_map[plink_id] = tskit_id
+    id_map["0"] = -1  # -1 is used in tskit to denote "missing"
+
+    tc = tskit.TableCollection(1)
+    tb = tc.individuals
+    tb.metadata_schema = tskit.MetadataSchema(
+        {
+            "codec": "json",
+            "type": "object",
+            "properties": {
+                "plink_fid": {"type": "string"},
+                "plink_iid": {"type": "string"},
+                "sex": {"type": "integer"},
+            },
+            "required": ["plink_fid", "plink_iid", "sex"],
+            "additionalProperties": True,
+        }
+    )
+    for plink_fid, plink_iid, pat, mat, sex in individuals:
+        sex = int(sex)
+        if not (sex in range(3)):
+            raise ValueError(
+                "Sex must be one of the following: 0 (unknown), 1 (male), 2 (female)"
+            )
+        metadata_dict = {"plink_fid": plink_fid, "plink_iid": plink_iid, "sex": sex}
+        pat_id = f"{plink_fid} {pat}" if pat != "0" else pat
+        mat_id = f"{plink_fid} {mat}" if mat != "0" else mat
+        tb.add_row(
+            parents=[
+                id_map[pat_id],
+                id_map[mat_id],
+            ],
+            metadata=metadata_dict,
+        )
+    tc.sort()
+
+    return tb
