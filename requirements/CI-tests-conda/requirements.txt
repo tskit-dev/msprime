@@ -1,7 +1,7 @@
 # https://github.com/tskit-dev/msprime/issues/1860
 # Version < 4 is required by python_jsonschema_objects,
 # but demes will pull in the latest so we pin here.
-jsonschema<4.0
+jsonschema<5.0
 gsl
 tskit==0.3.7
 stdpopsim==0.1.2
