@@ -8,7 +8,7 @@ pytest==6.2.5
 pytest-xdist==2.4.0
 # https://github.com/tskit-dev/msprime/issues/1860
 # Required by python_jsonschema_objects
-jsonschema<4.0
+jsonschema<5.0
 python_jsonschema_objects==0.4.0
 scipy==1.7.1
 tskit==0.3.7
