@@ -6,7 +6,7 @@ hypothesis==6.23.2
 mypy==0.910 
 newick==1.3.0
 numpy==1.21.2
-pytest==6.2.4
+pytest==6.2.5
 pytest-cov==3.0.0
 pytest-xdist==2.3.0
 # https://github.com/tskit-dev/msprime/issues/1860
