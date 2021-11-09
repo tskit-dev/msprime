@@ -1852,7 +1852,7 @@ to {func}`.sim_ancestry`:
 
 ```{code-cell}
 ts = msprime.sim_ancestry(4, population_size=10, model="dtwf", random_seed=7)
-SVG(ts.draw_svg(y_axis=True, tree_height_scale="log_time"))
+SVG(ts.draw_svg(y_axis=True, time_scale="log_time"))
 ```
 
 There are a few important points to note here:
@@ -1900,7 +1900,7 @@ ts = msprime.sim_ancestry(
     ],
     random_seed=4
 )
-SVG(ts.draw_svg(y_axis=True, tree_height_scale="log_time"))
+SVG(ts.draw_svg(y_axis=True, time_scale="log_time"))
 ```
 
 Because of the integer node times, we can see here that most of the coalescent
