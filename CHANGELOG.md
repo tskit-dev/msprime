@@ -7,6 +7,12 @@
 - Support for running full ARG simulations with gene conversion
   ({pr}`1801`, {issue}`1773`, {user}`JereKoskela`).
 
+**Bug fixes**:
+
+- Fix bug in full ARG simulation with missing regions of the genome,
+  where ARG nodes were not correctly returned. ({issue}`1893`,
+  {user}`jeromekelleher`, {user}`hyl317`)
+
 ## [1.0.2] - 2021-06-29
 
 Improved Demes support and minor bugfixes.
