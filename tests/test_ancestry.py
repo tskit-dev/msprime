@@ -2139,6 +2139,18 @@ class TestUnknownGenomeRegions:
         assert tree.interval == (9, 10)
         assert tree.num_roots == ts.num_samples
 
+    def test_sim_ancestry_unknown_left_full_arg(self):
+        rate_map = msprime.RateMap(position=[0, 1, 10], rate=[np.nan, 1])
+        ts = msprime.sim_ancestry(
+            4, recombination_rate=rate_map, record_full_arg=True, random_seed=1
+        )
+        assert ts.num_trees > 2
+        tree = ts.first()
+        assert tree.interval == (0, 1)
+        assert tree.num_roots == ts.num_samples
+        flags = ts.tables.nodes.flags
+        assert np.sum(flags == msprime.NODE_IS_RE_EVENT) > 0
+
     def test_sim_ancestry_unknown_mid(self):
         rate_map = msprime.RateMap(position=[0, 1, 9, 10], rate=[0, np.nan, 0])
         with pytest.raises(ValueError, match="Missing regions of the genome"):

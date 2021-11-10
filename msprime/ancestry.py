@@ -1442,7 +1442,9 @@ class Simulator(_msprime.Simulator):
                 )
             tables = tskit.TableCollection.fromdict(self.tables.asdict())
             if len(self.missing_intervals) > 0:
-                tables.delete_intervals(self.missing_intervals, record_provenance=False)
+                tables.delete_intervals(
+                    self.missing_intervals, simplify=False, record_provenance=False
+                )
             replicate_provenance = None
             if encoded_provenance is not None:
                 replicate_provenance = encoded_provenance.replace(
