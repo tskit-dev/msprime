@@ -1331,6 +1331,21 @@ def sim_mutations(
     else:
         seed = int(seed)
 
+    parameters = dict(
+        command="sim_mutations",
+        tree_sequence=tree_sequence,
+        rate=rate,
+        model=model,
+        start_time=start_time,
+        end_time=end_time,
+        discrete_genome=discrete_genome,
+        keep=keep,
+        random_seed=seed,
+    )
+    encoded_provenance = provenance.json_encode_provenance(
+        provenance.get_provenance_dict(parameters)
+    )
+
     if rate is None:
         rate = 0
     try:
@@ -1349,17 +1364,6 @@ def sim_mutations(
     keep = core._parse_flag(keep, default=True)
 
     model = mutation_model_factory(model)
-
-    argspec = inspect.getargvalues(inspect.currentframe())
-    parameters = {
-        "command": "sim_mutations",
-        **{arg: argspec.locals[arg] for arg in argspec.args},
-    }
-    parameters["random_seed"] = seed
-    encoded_provenance = provenance.json_encode_provenance(
-        provenance.get_provenance_dict(parameters)
-    )
-
     rng = _msprime.RandomGenerator(seed)
     lwt = _msprime.LightweightTableCollection()
     lwt.fromdict(tables.asdict())

@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.0.3] - 2021-XX-XX
+## [1.0.3] - 2021-11-12
 
 **New features**:
 
@@ -12,6 +12,10 @@
 - Fix bug in full ARG simulation with missing regions of the genome,
   where ARG nodes were not correctly returned. ({issue}`1893`,
   {user}`jeromekelleher`, {user}`hyl317`)
+
+- Fix memory leak when running ``sim_ancestry`` in a loop
+  ({pr}`1904`, {issue}`1899`, {user}`jeromekelleher`, {user}`grahamgower`).
+
 
 ## [1.0.2] - 2021-06-29
 

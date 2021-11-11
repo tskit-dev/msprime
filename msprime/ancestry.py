@@ -25,7 +25,6 @@ import collections.abc
 import copy
 import dataclasses
 import enum
-import inspect
 import json
 import logging
 import math
@@ -411,28 +410,6 @@ def _parse_replicate_index(*, replicate_index, random_seed, num_replicates):
     return replicate_index
 
 
-def _build_provenance(command, random_seed, frame):
-    """
-    Builds a provenance dictionary suitable for use as the basis
-    of tree sequence provenance in replicate simulations. Uses the
-    specified stack frame to determine the values of the arguments
-    passed in, with a few exceptions.
-    """
-    argspec = inspect.getargvalues(frame)
-    # num_replicates is excluded as provenance is per replicate
-    # replicate index is excluded as it is inserted for each replicate
-    parameters = {
-        "command": command,
-        **{
-            arg: argspec.locals[arg]
-            for arg in argspec.args
-            if arg not in ["num_replicates", "replicate_index"]
-        },
-    }
-    parameters["random_seed"] = random_seed
-    return provenance.get_provenance_dict(parameters)
-
-
 def simulate(
     sample_size=None,
     *,
@@ -579,8 +556,31 @@ def simulate(
     random_seed = _parse_random_seed(random_seed)
     provenance_dict = None
     if record_provenance:
-        frame = inspect.currentframe()
-        provenance_dict = _build_provenance("simulate", random_seed, frame)
+        parameters = dict(
+            command="simulate",
+            sample_size=sample_size,
+            Ne=Ne,
+            length=length,
+            recombination_rate=recombination_rate,
+            recombination_map=recombination_map,
+            mutation_rate=mutation_rate,
+            population_configurations=population_configurations,
+            pedigree=pedigree,
+            migration_matrix=migration_matrix,
+            demographic_events=demographic_events,
+            samples=samples,
+            model=model,
+            record_migrations=record_migrations,
+            from_ts=from_ts,
+            start_time=start_time,
+            end_time=end_time,
+            record_full_arg=record_full_arg,
+            num_labels=num_labels,
+            random_seed=random_seed,
+            # num_replicates is excluded as provenance is per replicate
+            # replicate index is excluded as it is inserted for each replicate
+        )
+        provenance_dict = provenance.get_provenance_dict(parameters)
 
     if mutation_generator is not None:
         # This error was added in version 0.6.1.
@@ -1138,8 +1138,29 @@ def sim_ancestry(
     random_seed = _parse_random_seed(random_seed)
     provenance_dict = None
     if record_provenance:
-        frame = inspect.currentframe()
-        provenance_dict = _build_provenance("sim_ancestry", random_seed, frame)
+        parameters = dict(
+            command="sim_ancestry",
+            samples=samples,
+            demography=demography,
+            sequence_length=sequence_length,
+            discrete_genome=discrete_genome,
+            recombination_rate=recombination_rate,
+            gene_conversion_rate=gene_conversion_rate,
+            gene_conversion_tract_length=gene_conversion_tract_length,
+            population_size=population_size,
+            ploidy=ploidy,
+            model=model,
+            initial_state=initial_state,
+            start_time=start_time,
+            end_time=end_time,
+            record_migrations=record_migrations,
+            record_full_arg=record_full_arg,
+            num_labels=num_labels,
+            random_seed=random_seed,
+            # num_replicates is excluded as provenance is per replicate
+            # replicate index is excluded as it is inserted for each replicate
+        )
+        provenance_dict = provenance.get_provenance_dict(parameters)
     sim = _parse_sim_ancestry(
         samples=samples,
         sequence_length=sequence_length,
