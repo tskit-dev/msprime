@@ -20,6 +20,7 @@
 Module responsible for generating mutations on a given tree sequence.
 """
 import inspect
+import logging
 import sys
 
 import numpy as np
@@ -29,6 +30,8 @@ from . import core
 from . import intervals
 from . import provenance
 from msprime import _msprime
+
+logger: logging.Logger = logging.getLogger(__name__)
 
 _ACGT_ALLELES = ["A", "C", "G", "T"]
 _AMINO_ACIDS = [
@@ -1359,6 +1362,9 @@ def sim_mutations(
     encoded_provenance = provenance.json_encode_provenance(
         provenance.get_provenance_dict(parameters)
     )
+
+    # TODO it'd be nice to have better __str__ here for the named models
+    logger.info(f"Running mutation model {type(model)}")
 
     rng = _msprime.RandomGenerator(seed)
     lwt = _msprime.LightweightTableCollection()
