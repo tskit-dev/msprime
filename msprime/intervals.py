@@ -337,7 +337,7 @@ class RateMap(collections.abc.Mapping):
                 f"{right:.10g}",
                 f"{mid:.10g}",
                 f"{span:.10g}",
-                f"{rate:.2f}",
+                f"{rate:.2g}",
             ]
 
         def format_slice(start, end):
