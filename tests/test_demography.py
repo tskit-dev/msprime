@@ -6651,3 +6651,15 @@ class TestStdpopsimModels:
             if len(pop_map) == 1:
                 assert np.all(epoch_local.migration_matrix == 0)
                 assert np.all(epoch_sps.migration_matrix == 0)
+
+
+def test_lru_cache():
+    # Very basic test, as this is pulled directly from Python docs.
+    d = demog_mod.LruCache(2)
+    d[0] = 0
+    assert len(d) == 1
+    d[1] = 1
+    assert len(d) == 2
+    d[2] = 2
+    assert len(d) == 2
+    assert 0 not in d

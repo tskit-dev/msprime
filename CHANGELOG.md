@@ -7,6 +7,9 @@
 - Support for running full ARG simulations with gene conversion
   ({pr}`1801`, {issue}`1773`, {user}`JereKoskela`).
 
+- Improved performance when running many small simulations
+  ({pr}`1909`, {user}`jeromekelleher`.
+
 **Bug fixes**:
 
 - Fix bug in full ARG simulation with missing regions of the genome,
