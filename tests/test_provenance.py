@@ -19,7 +19,6 @@
 """
 Tests for the provenance information attached to tree sequences.
 """
-import inspect
 import json
 import logging
 
@@ -30,7 +29,6 @@ import tskit
 
 import msprime
 from msprime import _msprime
-from msprime import ancestry
 from msprime import pedigrees
 
 
@@ -47,41 +45,6 @@ class TestProvenance:
             "version": ".".join(map(str, _msprime.get_gsl_version()))
         }
         assert libs["tskit"] == {"version": tskit.__version__}
-
-
-class TestBuildProvenance:
-    """
-    Tests for the provenance dictionary building. This dictionary is used
-    to encode the parameters for the msprime simulations.
-    """
-
-    def test_basic(self):
-        def somefunc(a, b):
-            frame = inspect.currentframe()
-            return ancestry._build_provenance("cmd", 1234, frame)
-
-        d = somefunc(42, 43)
-        tskit.validate_provenance(d)
-        params = d["parameters"]
-        assert params["command"] == "cmd"
-        assert params["random_seed"] == 1234
-        assert params["a"] == 42
-        assert params["b"] == 43
-
-    def test_replicates(self):
-        def somefunc(*, a, b, num_replicates, replicate_index):
-            frame = inspect.currentframe()
-            return ancestry._build_provenance("the_cmd", 42, frame)
-
-        d = somefunc(b="b", a="a", num_replicates=100, replicate_index=1234)
-        tskit.validate_provenance(d)
-        params = d["parameters"]
-        assert params["command"] == "the_cmd"
-        assert params["random_seed"] == 42
-        assert params["a"] == "a"
-        assert params["b"] == "b"
-        assert not ("num_replicates" in d)
-        assert not ("replicate_index" in d)
 
 
 class ValidateSchemas:
@@ -216,7 +179,6 @@ class TestBuildObjects:
         assert decoded.parameters.start_time == 0
         assert decoded.parameters.end_time == 100
         assert not decoded.parameters.keep
-        assert decoded.parameters.model["__class__"] == "msprime.mutations.JC69"
 
     def test_mutate_model(self):
         ts = msprime.simulate(5, random_seed=1)
@@ -224,7 +186,7 @@ class TestBuildObjects:
         decoded = self.decode(ts.provenance(1).record)
         assert decoded.schema_version == "1.0.0"
         assert decoded.parameters.command == "sim_mutations"
-        assert decoded.parameters.model["__class__"] == "msprime.mutations.PAM"
+        assert decoded.parameters.model == "pam"
 
     def test_mutate_map(self):
         ts = msprime.simulate(5, random_seed=1)
@@ -252,9 +214,11 @@ class TestBuildObjects:
         assert decoded.schema_version == "1.0.0"
         assert decoded.parameters.command == "sim_mutations"
         assert decoded.parameters.random_seed == 1
-        assert decoded.parameters.rate == 2
-        assert decoded.parameters.start_time == 0
-        assert decoded.parameters.end_time == 100
+        # The dtype values change depending on platform, so not much
+        # point in trying to test exactly.
+        assert decoded.parameters.rate["__npgeneric__"] == "2"
+        assert decoded.parameters.start_time["__npgeneric__"] == "0"
+        assert decoded.parameters.end_time["__ndarray__"] == 100
 
 
 class TestParseProvenance:
@@ -364,6 +328,17 @@ class TestMutateRoundTrip(TestRoundTrip):
         ts = msprime.simulate(5, random_seed=1)
         rate_map = msprime.RateMap(position=[0, 0.5, 1], rate=[0, 1])
         ts = msprime.mutate(ts, rate=rate_map)
+        self.verify(ts)
+
+    def test_mutate_numpy(self):
+        ts = msprime.sim_ancestry(5, random_seed=1)
+        ts = msprime.sim_mutations(
+            ts,
+            rate=np.array([2])[0],
+            random_seed=np.array([1])[0],
+            start_time=np.array([0])[0],
+            end_time=np.array([100][0]),
+        )
         self.verify(ts)
 
 
