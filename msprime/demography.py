@@ -25,8 +25,9 @@ import collections
 import copy
 import dataclasses
 import enum
-import inspect
+import functools
 import itertools
+import json
 import logging
 import math
 import numbers
@@ -56,6 +57,48 @@ class IncompletePopulationMetadataWarning(UserWarning):
     Warning raised when we don't have sufficient information to fill
     out population metadata.
     """
+
+
+@functools.lru_cache(maxsize=16)
+def _build_population_table(demography):
+    """
+    Validating metadata in tskit is quite expensive, and we will often
+    be running lots of simulations with the same demography.
+    """
+    metadata_schema = tskit.MetadataSchema(
+        {
+            "codec": "json",
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "description": {"type": ["string", "null"]},
+            },
+            # The name and description fields are always filled out by
+            # msprime, so we tell downstream tools this by making them
+            # "required" by the schema.
+            "required": ["name", "description"],
+            "additionalProperties": True,
+        }
+    )
+    table = tskit.PopulationTable()
+    table.metadata_schema = metadata_schema
+    for population in demography.populations:
+        metadata = {
+            "name": population.name,
+            "description": population.description,
+        }
+        if population.extra_metadata is not None:
+            intersection = set(population.extra_metadata.keys()) & set(metadata.keys())
+            if len(intersection) > 0:
+                printed_list = list(sorted(intersection))
+                raise ValueError(
+                    f"Cannot set standard metadata key(s) {printed_list} "
+                    "using extra_metadata. Please set using the corresponding "
+                    "property of the Population class."
+                )
+            metadata.update(population.extra_metadata)
+        table.add_row(metadata=metadata)
+    return table
 
 
 def check_num_populations(num_populations):
@@ -1038,41 +1081,13 @@ class Demography(collections.abc.Mapping):
 
         :meta private:
         """
-        metadata_schema = tskit.MetadataSchema(
-            {
-                "codec": "json",
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "description": {"type": ["string", "null"]},
-                },
-                # The name and description fields are always filled out by
-                # msprime, so we tell downstream tools this by making them
-                # "required" by the schema.
-                "required": ["name", "description"],
-                "additionalProperties": True,
-            }
-        )
         assert len(tables.populations) == 0
-        tables.populations.metadata_schema = metadata_schema
-        for population in self.populations:
-            metadata = {
-                "name": population.name,
-                "description": population.description,
-            }
-            if population.extra_metadata is not None:
-                intersection = set(population.extra_metadata.keys()) & set(
-                    metadata.keys()
-                )
-                if len(intersection) > 0:
-                    printed_list = list(sorted(intersection))
-                    raise ValueError(
-                        f"Cannot set standard metadata key(s) {printed_list} "
-                        "using extra_metadata. Please set using the corresponding "
-                        "property of the Population class."
-                    )
-                metadata.update(population.extra_metadata)
-            tables.populations.add_row(metadata=metadata)
+        population_table = _build_population_table(self)
+        tables.populations.metadata_schema = population_table.metadata_schema
+        tables.populations.set_columns(
+            metadata=population_table.metadata,
+            metadata_offset=population_table.metadata_offset,
+        )
 
     def insert_extra_populations(self, tables):
         """
@@ -1155,6 +1170,9 @@ class Demography(collections.abc.Mapping):
         :rtype: .DemographyDebugger
         """
         return DemographyDebugger(demography=self)
+
+    def __hash__(self):
+        return hash(json.dumps(self.asdict(), sort_keys=True))
 
     def __eq__(self, other):
         try:
@@ -2835,11 +2853,7 @@ class DemographicEvent:
         raise NotImplementedError()
 
     def asdict(self):
-        return {
-            key: getattr(self, key)
-            for key in inspect.signature(self.__init__).parameters.keys()
-            if hasattr(self, key)
-        }
+        return self.get_ll_representation()
 
     def _convert_id(self, population_ref):
         """

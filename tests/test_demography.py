@@ -1637,7 +1637,7 @@ class TestDemographyTrajectories(unittest.TestCase):
         model = msprime.Demography()
         model.add_population(initial_size=N_A, name="A")
         model.add_population(initial_size=N_B, name="B")
-        model.migration_matrix = [[0, 0.5], [0.25, 0]]
+        model.migration_matrix = np.array([[0, 0.5], [0.25, 0]])
         ddb = model.debug()
         steps = np.linspace(0, 400, 401)
         rates, PP = ddb.coalescence_rate_trajectory(steps=steps, lineages={"A": 2})
@@ -1810,9 +1810,9 @@ class TestDemographyTrajectories(unittest.TestCase):
         model = msprime.Demography()
         for k, n, r in zip(pop_sizes, names, growth_rates):
             model.add_population(initial_size=k, name=n, growth_rate=r)
-        model.migration_matrix = [
-            [random.random() * (i != j) for j in range(N)] for i in range(N)
-        ]
+        model.migration_matrix = np.array(
+            [[random.random() * (i != j) for j in range(N)] for i in range(N)]
+        )
         for i in [0, 1]:
             n = random.uniform(0.01, 10)
             r = 0
@@ -4218,6 +4218,70 @@ class TestDemographyMapping:
             d["C"] = 2134
 
 
+class TestDemographyHash:
+    """
+    Tests that our hash definition works as expected.
+    """
+
+    def test_basic(self):
+        d1 = msprime.Demography.isolated_model([1])
+        d2 = msprime.Demography.isolated_model([1])
+        assert d1 == d2
+        assert hash(d1) == hash(d1)
+        assert hash(d1) == hash(d2)
+        d2 = msprime.Demography.isolated_model([1.01])
+        assert hash(d1) != hash(d2)
+
+    def test_numpy_values(self):
+        m1 = msprime.Demography.island_model(np.array([1, 1]), 1 / 3)
+        m2 = msprime.Demography.island_model([1, 1], 1 / 3)
+        assert hash(m1) == hash(m2)
+
+    def test_updates_properly(self):
+        d1 = msprime.Demography()
+        d1.add_population(name="A", initial_size=1)
+        d1.add_population(name="B", initial_size=2)
+
+        d2 = msprime.Demography()
+        d2.add_population(name="A", initial_size=1)
+        d2.add_population(name="B", initial_size=2)
+        assert hash(d1) == hash(d2)
+
+        d2.add_population(name="C", initial_size=3)
+        assert hash(d1) != hash(d2)
+
+    def test_extra_metadata(self):
+        d1 = msprime.Demography()
+        d1.add_population(name="A", initial_size=1)
+
+        d2 = msprime.Demography()
+        d2.add_population(name="A", initial_size=1, extra_metadata={"A": "B"})
+        assert hash(d1) != hash(d2)
+
+    def test_migration_rate(self):
+        m1 = msprime.Demography.island_model(np.array([1, 1]), 1 / 3)
+        m2 = msprime.Demography.island_model([1, 1], 0.33)
+        assert hash(m1) != hash(m2)
+
+    def test_event(self):
+        d1 = msprime.Demography()
+        d1.add_population(name="A", initial_size=100)
+        d1.add_population(name="B", initial_size=100)
+        d1.add_population(name="C", initial_size=100)
+        d1.add_population(name="ABC", initial_size=100)
+        d1.set_symmetric_migration_rate(["A", "B", "C"], 0.1)
+        d2 = d1.copy()
+        assert hash(d1) == hash(d2)
+        d1.add_population_split(10, derived=["A", "B", "C"], ancestral="ABC")
+        assert hash(d1) != hash(d2)
+
+    def test_all_events(self):
+        d1 = all_events_example_demography(integer_ids=True)
+        d2 = d1.copy()
+        d1.add_population(name="XYZ", initial_size=1234)
+        assert hash(d1) != hash(d2)
+
+
 class TestDemographyObject:
     """
     Basic tests for the demography object.
@@ -4227,6 +4291,7 @@ class TestDemographyObject:
         m1 = msprime.Demography.island_model([1, 1], 1 / 3)
         m2 = msprime.Demography.island_model([1, 1], 1 / 3)
         assert m1 == m2
+        assert hash(m1) == hash(m2)
         assert m2 == m1
         assert m1 == m1
         assert not (m1 != m2)
@@ -4241,6 +4306,7 @@ class TestDemographyObject:
         m3 = msprime.Demography.island_model([1, 1], 1 / 3 + 0.001)
         assert m1 != m3
         assert m3 != m1
+        assert hash(m1) != hash(m3)
 
         assert m1 != msprime.Demography.isolated_model([1])
         assert m1 != msprime.Demography.isolated_model([1, 1])
@@ -4248,10 +4314,13 @@ class TestDemographyObject:
 
         m1.add_event(demog_mod.SymmetricMigrationRateChange(1, [0, 1], 0.1))
         assert m1 != m2
+        assert hash(m1) != hash(m2)
         m2.add_event(demog_mod.SymmetricMigrationRateChange(1, [0, 1], 0.1))
         assert m1 == m2
+        assert hash(m1) == hash(m2)
         m1.events[0].rate = 0.01
         assert m1 != m2
+        assert hash(m1) != hash(m2)
 
     def test_debug(self):
         model = msprime.Demography.island_model([1, 1], 1 / 3)
@@ -4559,6 +4628,242 @@ class TestDemographyObject:
         assert validated["A"].initially_active
         assert validated["B"].initially_active
         assert not validated["C"].initially_active
+
+    def test_asdict(self):
+        demography = msprime.Demography.from_species_tree(
+            "(popA:10.0,popB:10.0)", initial_size=1000
+        )
+        expected = {
+            "populations": [
+                {
+                    "initial_size": 1000.0,
+                    "growth_rate": 0.0,
+                    "name": "popA",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": None,
+                    "initially_active": None,
+                    "id": 0,
+                },
+                {
+                    "initial_size": 1000.0,
+                    "growth_rate": 0.0,
+                    "name": "popB",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": None,
+                    "initially_active": None,
+                    "id": 1,
+                },
+                {
+                    "initial_size": 1000.0,
+                    "growth_rate": 0.0,
+                    "name": "pop_2",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": 10.0,
+                    "initially_active": False,
+                    "id": 2,
+                },
+            ],
+            "events": [
+                {
+                    "type": "population_split",
+                    "time": 10.0,
+                    "derived": [0, 1],
+                    "ancestral": 2,
+                },
+            ],
+            "migration_matrix": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+        }
+        assert expected == demography.asdict()
+
+    def test_all_events_asdict(self):
+        d = all_events_example_demography()
+        expected = {
+            "populations": [
+                {
+                    "initial_size": 10.0,
+                    "growth_rate": 0.0,
+                    "name": "pop_0",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": None,
+                    "initially_active": None,
+                    "id": 0,
+                },
+                {
+                    "initial_size": 10.0,
+                    "growth_rate": 0.0,
+                    "name": "pop_1",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": None,
+                    "initially_active": None,
+                    "id": 1,
+                },
+                {
+                    "initial_size": 10.0,
+                    "growth_rate": 0.0,
+                    "name": "pop_2",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": None,
+                    "initially_active": None,
+                    "id": 2,
+                },
+                {
+                    "initial_size": 10.0,
+                    "growth_rate": 0.0,
+                    "name": "pop_3",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": None,
+                    "initially_active": None,
+                    "id": 3,
+                },
+                {
+                    "initial_size": 10.0,
+                    "growth_rate": 0.0,
+                    "name": "pop_4",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": None,
+                    "initially_active": None,
+                    "id": 4,
+                },
+                {
+                    "initial_size": 10.0,
+                    "growth_rate": 0.0,
+                    "name": "pop_5",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": 0.4,
+                    "initially_active": False,
+                    "id": 5,
+                },
+                {
+                    "initial_size": 10.0,
+                    "growth_rate": 0.0,
+                    "name": "pop_6",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": None,
+                    "initially_active": None,
+                    "id": 6,
+                },
+                {
+                    "initial_size": 10.0,
+                    "growth_rate": 0.0,
+                    "name": "pop_7",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": None,
+                    "initially_active": None,
+                    "id": 7,
+                },
+                {
+                    "initial_size": 10.0,
+                    "growth_rate": 0.0,
+                    "name": "pop_8",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": None,
+                    "initially_active": None,
+                    "id": 8,
+                },
+                {
+                    "initial_size": 10.0,
+                    "growth_rate": 0.0,
+                    "name": "pop_9",
+                    "description": "",
+                    "extra_metadata": {},
+                    "default_sampling_time": None,
+                    "initially_active": None,
+                    "id": 9,
+                },
+            ],
+            "events": [
+                {
+                    "type": "population_parameters_change",
+                    "time": 0.1,
+                    "population": -1,
+                    "initial_size": 2,
+                },
+                {
+                    "type": "population_parameters_change",
+                    "time": 0.1,
+                    "population": -1,
+                    "growth_rate": 10,
+                },
+                {
+                    "type": "migration_rate_change",
+                    "time": 0.2,
+                    "migration_rate": 1,
+                    "source": 0,
+                    "dest": 1,
+                },
+                {
+                    "type": "symmetric_migration_rate_change",
+                    "time": 0.3,
+                    "populations": [0, 1],
+                    "rate": 0.5,
+                },
+                {
+                    "type": "migration_rate_change",
+                    "time": 0.4,
+                    "migration_rate": 0,
+                    "source": -1,
+                    "dest": -1,
+                },
+                {
+                    "type": "mass_migration",
+                    "time": 0.4,
+                    "source": 1,
+                    "dest": 0,
+                    "proportion": 0.5,
+                },
+                {
+                    "type": "population_split",
+                    "time": 0.4,
+                    "derived": [3, 4],
+                    "ancestral": 5,
+                },
+                {
+                    "type": "admixture",
+                    "time": 0.45,
+                    "derived": 7,
+                    "ancestral": [8, 9],
+                    "proportions": [0.5, 0.5],
+                },
+                {
+                    "type": "instantaneous_bottleneck",
+                    "time": 0.5,
+                    "population": 0,
+                    "strength": 100,
+                },
+                {"type": "census_event", "time": 0.55},
+                {
+                    "type": "simple_bottleneck",
+                    "time": 0.56,
+                    "population": 1,
+                    "proportion": 0.1,
+                },
+            ],
+            "migration_matrix": [
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            ],
+        }
+        assert d.asdict() == expected
 
 
 class TestDemographyCopy:
