@@ -2,13 +2,17 @@
 
 ## [1.0.3] - 2021-11-12
 
+This is a bugfix release recommended for all users.
+
 **New features**:
 
 - Support for running full ARG simulations with gene conversion
   ({pr}`1801`, {issue}`1773`, {user}`JereKoskela`).
 
 - Improved performance when running many small simulations
-  ({pr}`1909`, {user}`jeromekelleher`.
+  ({pr}`1909`, {user}`jeromekelleher`.)
+
+- Update to tskit C API 0.99.14 ({pr}`1829`).
 
 **Bug fixes**:
 
@@ -18,6 +22,9 @@
 
 - Fix memory leak when running ``sim_ancestry`` in a loop
   ({pr}`1904`, {issue}`1899`, {user}`jeromekelleher`, {user}`grahamgower`).
+
+- Fix printing small values in rate maps ({pr}`1906`, {issue}`1905`,
+  {user}`petrelharp`).
 
 
 ## [1.0.2] - 2021-06-29
