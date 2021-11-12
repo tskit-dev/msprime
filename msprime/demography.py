@@ -27,6 +27,7 @@ import dataclasses
 import enum
 import inspect
 import itertools
+import json
 import logging
 import math
 import numbers
@@ -56,6 +57,78 @@ class IncompletePopulationMetadataWarning(UserWarning):
     Warning raised when we don't have sufficient information to fill
     out population metadata.
     """
+
+
+class LruCache(collections.OrderedDict):
+    # LRU example from the OrderedDict documentation
+    def __init__(self, maxsize=128, *args, **kwds):
+        self.maxsize = maxsize
+        super().__init__(*args, **kwds)
+
+    def __getitem__(self, key):
+        value = super().__getitem__(key)
+        self.move_to_end(key)
+        return value
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        if len(self) > self.maxsize:
+            oldest = next(iter(self))
+            del self[oldest]
+
+
+_population_table_cache = LruCache(16)
+
+
+def _build_population_table(populations):
+    """
+    Return a tskit PopulationTable instance encoding the metadata for the
+    specified populations. Because encoding metadata is quite expensive
+    we maintain an LRU cache.
+    """
+    population_metadata = []
+    for population in populations:
+        metadata = {
+            "name": population.name,
+            "description": population.description,
+        }
+        if population.extra_metadata is not None:
+            intersection = set(population.extra_metadata.keys()) & set(metadata.keys())
+            if len(intersection) > 0:
+                printed_list = list(sorted(intersection))
+                raise ValueError(
+                    f"Cannot set standard metadata key(s) {printed_list} "
+                    "using extra_metadata. Please set using the corresponding "
+                    "property of the Population class."
+                )
+            metadata.update(population.extra_metadata)
+        population_metadata.append(metadata)
+
+    # The only thing we store in the Population table is the metadata, so
+    # we cache based on this.
+    key = json.dumps(population_metadata, sort_keys=True)
+    if key not in _population_table_cache:
+        table = tskit.PopulationTable()
+        table.metadata_schema = tskit.MetadataSchema(
+            {
+                "codec": "json",
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "description": {"type": ["string", "null"]},
+                },
+                # The name and description fields are always filled out by
+                # msprime, so we tell downstream tools this by making them
+                # "required" by the schema.
+                "required": ["name", "description"],
+                "additionalProperties": True,
+            }
+        )
+        for metadata in population_metadata:
+            table.add_row(metadata=metadata)
+        _population_table_cache[key] = table
+
+    return _population_table_cache[key]
 
 
 def check_num_populations(num_populations):
@@ -1038,41 +1111,13 @@ class Demography(collections.abc.Mapping):
 
         :meta private:
         """
-        metadata_schema = tskit.MetadataSchema(
-            {
-                "codec": "json",
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "description": {"type": ["string", "null"]},
-                },
-                # The name and description fields are always filled out by
-                # msprime, so we tell downstream tools this by making them
-                # "required" by the schema.
-                "required": ["name", "description"],
-                "additionalProperties": True,
-            }
-        )
         assert len(tables.populations) == 0
-        tables.populations.metadata_schema = metadata_schema
-        for population in self.populations:
-            metadata = {
-                "name": population.name,
-                "description": population.description,
-            }
-            if population.extra_metadata is not None:
-                intersection = set(population.extra_metadata.keys()) & set(
-                    metadata.keys()
-                )
-                if len(intersection) > 0:
-                    printed_list = list(sorted(intersection))
-                    raise ValueError(
-                        f"Cannot set standard metadata key(s) {printed_list} "
-                        "using extra_metadata. Please set using the corresponding "
-                        "property of the Population class."
-                    )
-                metadata.update(population.extra_metadata)
-            tables.populations.add_row(metadata=metadata)
+        population_table = _build_population_table(self.populations)
+        tables.populations.metadata_schema = population_table.metadata_schema
+        tables.populations.set_columns(
+            metadata=population_table.metadata,
+            metadata_offset=population_table.metadata_offset,
+        )
 
     def insert_extra_populations(self, tables):
         """
