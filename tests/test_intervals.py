@@ -328,8 +328,19 @@ class TestDisplay:
         ┌──────────────────────────────────┐
         │left  │right  │  mid│  span│  rate│
         ├──────────────────────────────────┤
-        │0     │10     │    5│    10│  0.10│
+        │0     │10     │    5│    10│   0.1│
         └──────────────────────────────────┘
+        """
+        assert textwrap.dedent(s) == str(rate_map)
+
+    def test_str_scinot(self):
+        rate_map = msprime.RateMap(position=[0, 10], rate=[0.000001])
+        s = """
+        ┌───────────────────────────────────┐
+        │left  │right  │  mid│  span│   rate│
+        ├───────────────────────────────────┤
+        │0     │10     │    5│    10│  1e-06│
+        └───────────────────────────────────┘
         """
         assert textwrap.dedent(s) == str(rate_map)
 
