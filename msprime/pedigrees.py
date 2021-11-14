@@ -26,6 +26,64 @@ import os
 import numpy as np
 import tskit
 
+from msprime import demography as demog_mod
+
+
+class PedigreeBuilder:
+    def __init__(self, demography=None):
+        if demography is None:
+            demography = demog_mod.Demography.isolated_model([1])
+        self.demography = demography
+        self.tables = tskit.TableCollection(0)
+        demography.insert_populations(self.tables)
+
+        assert len(self.tables.individuals) == 0
+        self.tables.individuals.metadata_schema = tskit.MetadataSchema(
+            {
+                "codec": "json",
+                "type": "object",
+                "properties": {},
+                "additionalProperties": True,
+            }
+        )
+
+    def add_individual(
+        self, *, time, is_sample=None, parents=None, population=None, metadata=None
+    ):
+        if is_sample is None:
+            # By default, individuals at time 0 are marked as samples
+            is_sample = time == 0
+
+        if parents is None:
+            parents = [-1, -1]
+        if len(parents) != 2:
+            raise ValueError("Must have exactly two parents")
+
+        ind_id = self.tables.individuals.add_row(parents=parents, metadata=metadata)
+        if population is None:
+            if self.demography.num_populations == 1:
+                population = 0
+            else:
+                raise ValueError(
+                    "Must specify the population for each individual in a "
+                    "multi-population demography"
+                )
+        population = self.demography[population].id
+        flags = tskit.NODE_IS_SAMPLE if is_sample else 0
+        for _ in range(2):
+            self.tables.nodes.add_row(
+                flags=flags, time=time, individual=ind_id, population=population
+            )
+        return ind_id
+
+    def finalise(self, sequence_length):
+        copy = self.tables.copy()
+        copy.sequence_length = sequence_length
+        # Not strictly necessary, but it's useful when the tables are written
+        # to file and are loaded as as a tree sequence.
+        copy.build_index()
+        return copy
+
 
 def sim_pedigree(
     *,
@@ -39,22 +97,10 @@ def sim_pedigree(
     # part of the public API and subject to arbitrary changes/removal
     # in the future.
 
-    tables = tskit.TableCollection(
-        sequence_length=-1 if sequence_length is None else sequence_length
-    )
-    # TODO we should be using the demography class here to set up the
-    # population metadata
-    permissive_json = tskit.MetadataSchema(
-        {
-            "codec": "json",
-            "type": "object",
-            "properties": {},
-            "additionalProperties": True,
-        }
-    )
-    tables.populations.metadata_schema = permissive_json
-    # tables.individuals.metadata_schema = permissive_json
-    tables.populations.add_row()
+    # We use the builder to get a standard set of tables, but bypass
+    # it so that we can use numpy methods add to it more efficiently.
+    tables = PedigreeBuilder().tables
+    tables.sequence_length = -1 if sequence_length is None else sequence_length
 
     population = np.array([tskit.NULL], dtype=np.int32)
     rng = np.random.RandomState(random_seed)
