@@ -1470,7 +1470,8 @@ msp_print_individual(msp_t *self, individual_t *ind, FILE *out)
 {
     size_t j;
 
-    fprintf(out, "\tID: %d - Time: %f, Parents: [", ind->id, ind->time);
+    fprintf(out, "\tID: %d; time: %f, population: %d, Parents: [", ind->id, ind->time,
+        ind->population);
     for (j = 0; j < self->ploidy; j++) {
         fprintf(out, " %d", ind->parents[j]);
     }
@@ -2203,6 +2204,7 @@ msp_pedigree_initialise(msp_t *self)
     segment_t *segment;
     avl_node_t *a;
     label_id_t label = 0;
+    tsk_size_t j;
 
     if (self->next_demographic_event != NULL || self->store_full_arg) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
@@ -2217,24 +2219,23 @@ msp_pedigree_initialise(msp_t *self)
         ret = MSP_ERR_DTWF_GC_NOT_SUPPORTED;
         goto out;
     }
-    tsk_bug_assert(self->num_labels == 1);      // Only support single label for now
-    tsk_bug_assert(self->num_populations == 1); // Only support single pop for now
+    tsk_bug_assert(self->num_labels == 1);
     tsk_bug_assert(self->ploidy == 2);
 
     /* We're not using the mass indexes, so no point in maintaining them */
     tsk_bug_assert(self->recomb_mass_index == NULL);
     tsk_bug_assert(self->gc_mass_index == NULL);
 
-    pop = &self->populations[0];
-
-    for (a = pop->ancestors[label].head; a != NULL; a = a->next) {
-        segment = (segment_t *) a->item;
-        ret = msp_pedigree_add_sample_ancestry(self, segment);
-        if (ret != 0) {
-            goto out;
+    for (j = 0; j < self->num_populations; j++) {
+        pop = &self->populations[j];
+        for (a = pop->ancestors[label].head; a != NULL; a = a->next) {
+            segment = (segment_t *) a->item;
+            ret = msp_pedigree_add_sample_ancestry(self, segment);
+            if (ret != 0) {
+                goto out;
+            }
         }
     }
-
     self->pedigree.next_individual = 0;
 out:
     return ret;
@@ -3204,8 +3205,25 @@ msp_merge_n_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
 {
     int ret = 0;
     const size_t num_common_ancestors = avl_count(Q);
+    population_t *current_pop;
+    avl_node_t *a, *avl_node;
     segment_t *merged_head = NULL;
     segment_t *u, *v;
+
+    /* Migrate any of the child segments to this population, if necessary */
+    for (a = Q->head; a != NULL; a = a->next) {
+        u = (segment_t *) a->item;
+        if (u->population != population_id) {
+            current_pop = &self->populations[u->population];
+            avl_node = avl_search(&current_pop->ancestors[label], u);
+            tsk_bug_assert(avl_node != NULL);
+            ret = msp_move_individual(
+                self, avl_node, &current_pop->ancestors[label], population_id, label);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
 
     if (num_common_ancestors == 1) {
         merged_head = msp_priority_queue_pop(self, Q);
@@ -3224,6 +3242,10 @@ msp_merge_n_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     if (ret_merged_head != NULL) {
         *ret_merged_head = merged_head;
     }
+    if (merged_head != NULL) {
+        tsk_bug_assert(merged_head->population == population_id);
+    }
+out:
     return ret;
 }
 
@@ -4272,8 +4294,9 @@ msp_pedigree_process_common_ancestors(msp_t *self, individual_t *ind, tsk_size_t
     const tsk_size_t ploidy = self->ploidy;
     tsk_size_t j;
 
-    /* FIXME - what population and label should we use ? */
-    ret = msp_merge_n_ancestors(self, common_ancestors, 0, 0, node, &genome);
+    /* FIXME - assuming 1 label here */
+    ret = msp_merge_n_ancestors(
+        self, common_ancestors, ind->population, 0, node, &genome);
     if (ret != 0) {
         goto out;
     }

@@ -15,13 +15,16 @@ from msprime import _msprime
 from msprime import pedigrees
 
 
-def get_base_tables(sequence_length):
-    tables = pedigrees.PedigreeBuilder().tables
+def get_base_tables(sequence_length, num_populations=1):
+    demography = msprime.Demography.isolated_model([1] * num_populations)
+    tables = pedigrees.PedigreeBuilder(demography).tables
     tables.sequence_length = sequence_length
     return tables
 
 
-def add_pedigree_individual(tables, time, parents=(-1, -1), is_sample=None):
+def add_pedigree_individual(
+    tables, time, parents=(-1, -1), is_sample=None, population=0
+):
     parents = np.sort(parents).astype("int32")
     ind_id = tables.individuals.add_row(parents=parents, flags=len(tables.individuals))
     flags = 0
@@ -33,7 +36,7 @@ def add_pedigree_individual(tables, time, parents=(-1, -1), is_sample=None):
         tables.nodes.add_row(
             flags=flags,
             time=time,
-            population=0,
+            population=population,
             individual=ind_id,
         )
     return ind_id
@@ -1083,6 +1086,43 @@ class TestSimulateThroughPedigreeErrors:
         tables.nodes.flags = flags
         with pytest.raises(_msprime.LibraryError, match="1855"):
             msprime.sim_ancestry(initial_state=tables, model="wf_ped")
+
+
+class TestSimulateThroughPedigreeMultiplePops:
+    def test_trio_parents_different_pops(self):
+        tables = get_base_tables(100, num_populations=2)
+        parents = [
+            add_pedigree_individual(tables, time=2, population=j) for j in range(2)
+        ]
+        add_pedigree_individual(tables, time=0, parents=parents)
+        demography = msprime.Demography.isolated_model([10, 10])
+
+        ts = msprime.sim_ancestry(
+            initial_state=tables, demography=demography, model="wf_ped", random_seed=1
+        )
+        # Founders are in different populations so cannot coalesce
+        with pytest.raises(_msprime.LibraryError, match="Infinite waiting"):
+            msprime.sim_ancestry(initial_state=ts, demography=demography)
+
+    def test_trio_parents_same_pop(self):
+        tables = get_base_tables(100, num_populations=2)
+        parents = [
+            add_pedigree_individual(tables, time=2, population=1) for j in range(2)
+        ]
+        add_pedigree_individual(tables, time=0, parents=parents, population=0)
+        demography = msprime.Demography.isolated_model([10, 10])
+
+        ts = msprime.sim_ancestry(
+            initial_state=tables, demography=demography, model="wf_ped", random_seed=1
+        )
+        ts = msprime.sim_ancestry(initial_state=ts, demography=demography)
+        for j in range(4):
+            assert ts.node(j).population == 1
+        assert ts.node(4).population == 0
+        assert ts.node(5).population == 0
+        mrca = ts.node(6)
+        assert mrca.individual == -1
+        assert mrca.population == 1
 
 
 @dataclasses.dataclass

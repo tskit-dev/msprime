@@ -105,7 +105,8 @@ verify_complete_pedigree_simulation(
 
 static void
 verify_pedigree(double recombination_rate, unsigned long seed,
-    tsk_size_t num_individuals, tsk_id_t *parents, double *time, tsk_flags_t *is_sample)
+    tsk_size_t num_individuals, tsk_id_t *parents, double *time, tsk_flags_t *is_sample,
+    tsk_id_t *population)
 {
     int ret;
     int ploidy = 2;
@@ -117,8 +118,8 @@ verify_pedigree(double recombination_rate, unsigned long seed,
     gsl_rng *rng = safe_rng_alloc();
     bool coalescence = false;
 
-    ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_individuals, parents, time, is_sample);
+    ret = build_pedigree_sim(&msp, &tables, rng, 100, ploidy, num_individuals, parents,
+        time, is_sample, population);
     /* tsk_table_collection_print_state(&tables, stdout); */
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     num_nodes = msp.tables->nodes.num_rows;
@@ -176,7 +177,7 @@ test_trio(void)
     tsk_id_t parents[] = { -1, -1, -1, -1, 0, 1 };
     double time[] = { 1, 1, 0 };
 
-    verify_pedigree(0, 1, 3, parents, time, NULL);
+    verify_pedigree(0, 1, 3, parents, time, NULL, NULL);
 }
 
 static void
@@ -185,8 +186,8 @@ test_three_generations(void)
     tsk_id_t parents[] = { -1, -1, -1, -1, -1, -1, -1, -1, 0, 1, 2, 3, 4, 5 };
     double time[] = { 2, 2, 2, 2, 1, 1, 0 };
 
-    verify_pedigree(0, 1234, 7, parents, time, NULL);
-    verify_pedigree(0.1, 1234, 7, parents, time, NULL);
+    verify_pedigree(0, 1234, 7, parents, time, NULL, NULL);
+    verify_pedigree(0.1, 1234, 7, parents, time, NULL, NULL);
 }
 
 static void
@@ -197,8 +198,8 @@ test_sibs(void)
     int seed;
 
     for (seed = 1; seed < 10; seed++) {
-        verify_pedigree(1, seed, 4, parents, time, NULL);
-        verify_pedigree(0, seed, 4, parents, time, NULL);
+        verify_pedigree(1, seed, 4, parents, time, NULL, NULL);
+        verify_pedigree(0, seed, 4, parents, time, NULL, NULL);
     }
 }
 
@@ -211,8 +212,8 @@ test_ancient_sample(void)
     int seed;
 
     for (seed = 1; seed < 10; seed++) {
-        verify_pedigree(0.1, seed, 4, parents, time, is_sample);
-        verify_pedigree(0, seed, 4, parents, time, is_sample);
+        verify_pedigree(0.1, seed, 4, parents, time, is_sample, NULL);
+        verify_pedigree(0, seed, 4, parents, time, is_sample, NULL);
     }
 }
 
@@ -223,8 +224,8 @@ test_large_family(void)
     size_t n = sizeof(large_family_time) / sizeof(*large_family_time);
 
     for (seed = 1; seed < 10; seed++) {
-        verify_pedigree(1, seed, n, large_family_parents, large_family_time, NULL);
-        verify_pedigree(0, seed, n, large_family_parents, large_family_time, NULL);
+        verify_pedigree(1, seed, n, large_family_parents, large_family_time, NULL, NULL);
+        verify_pedigree(0, seed, n, large_family_parents, large_family_time, NULL, NULL);
     }
 }
 
@@ -234,8 +235,8 @@ test_unrelated_n3(void)
     tsk_id_t parents[] = { -1, -1, -1, -1, -1, -1 };
     double time[] = { 0.0, 0.0, 0.0 };
 
-    verify_pedigree(0, 1, 3, parents, time, NULL);
-    verify_pedigree(0.1, 1, 3, parents, time, NULL);
+    verify_pedigree(0, 1, 3, parents, time, NULL, NULL);
+    verify_pedigree(0.1, 1, 3, parents, time, NULL, NULL);
 }
 
 static void
@@ -243,8 +244,8 @@ test_very_deep_n2(void)
 {
     size_t n = sizeof(very_deep_n2_time) / sizeof(*very_deep_n2_time);
 
-    verify_pedigree(0, 1, n, very_deep_n2_parents, very_deep_n2_time, NULL);
-    verify_pedigree(0.1, 1, n, very_deep_n2_parents, very_deep_n2_time, NULL);
+    verify_pedigree(0, 1, n, very_deep_n2_parents, very_deep_n2_time, NULL, NULL);
+    verify_pedigree(0.1, 1, n, very_deep_n2_parents, very_deep_n2_time, NULL, NULL);
 }
 
 static void
@@ -252,8 +253,8 @@ test_two_pedigrees(void)
 {
     size_t n = sizeof(two_pedigrees_time) / sizeof(*two_pedigrees_time);
 
-    verify_pedigree(0, 1, n, two_pedigrees_parents, two_pedigrees_time, NULL);
-    verify_pedigree(0.1, 1, n, two_pedigrees_parents, two_pedigrees_time, NULL);
+    verify_pedigree(0, 1, n, two_pedigrees_parents, two_pedigrees_time, NULL, NULL);
+    verify_pedigree(0.1, 1, n, two_pedigrees_parents, two_pedigrees_time, NULL, NULL);
 }
 
 static void
@@ -263,8 +264,8 @@ test_deep_n2(void)
         = { -1, -1, -1, -1, 0, 1, 0, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7, 6, 7, 8, 9, 8, 9 };
     double time[] = { 5.0, 5.0, 4.0, 4.0, 3.0, 3.0, 2.0, 2.0, 1.0, 1.0, 0.0, 0.0 };
 
-    verify_pedigree(0, 1, 12, parents, time, NULL);
-    verify_pedigree(0.1, 1, 12, parents, time, NULL);
+    verify_pedigree(0, 1, 12, parents, time, NULL, NULL);
+    verify_pedigree(0.1, 1, 12, parents, time, NULL, NULL);
 }
 
 static void
@@ -272,8 +273,8 @@ test_deep_n10(void)
 {
     size_t n = sizeof(deep_n10_time) / sizeof(*deep_n10_time);
 
-    verify_pedigree(0, 1, n, deep_n10_parents, deep_n10_time, NULL);
-    verify_pedigree(0.1, 1, n, deep_n10_parents, deep_n10_time, NULL);
+    verify_pedigree(0, 1, n, deep_n10_parents, deep_n10_time, NULL, NULL);
+    verify_pedigree(0.1, 1, n, deep_n10_parents, deep_n10_time, NULL, NULL);
 }
 
 static void
@@ -316,8 +317,8 @@ test_shallow_n100(void)
     size_t n = sizeof(time) / sizeof(*time);
 
     for (int seed = 1; seed < 5; seed++) {
-        verify_pedigree(0, seed, n, parents, time, NULL);
-        verify_pedigree(0.1, seed, n, parents, time, NULL);
+        verify_pedigree(0, seed, n, parents, time, NULL, NULL);
+        verify_pedigree(0.1, seed, n, parents, time, NULL, NULL);
     }
 }
 
@@ -333,10 +334,10 @@ test_event_by_event(void)
     int ret;
 
     ret = build_pedigree_sim(&msp1, &tables1, rng1, 100, ploidy, num_inds,
-        deep_n10_parents, deep_n10_time, NULL);
+        deep_n10_parents, deep_n10_time, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = build_pedigree_sim(&msp2, &tables2, rng2, 100, ploidy, num_inds,
-        deep_n10_parents, deep_n10_time, NULL);
+        deep_n10_parents, deep_n10_time, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_initialise(&msp1);
@@ -378,10 +379,10 @@ test_generation_by_generation(void)
     int ret;
 
     ret = build_pedigree_sim(&msp1, &tables1, rng1, 100, ploidy, num_inds,
-        deep_n10_parents, deep_n10_time, NULL);
+        deep_n10_parents, deep_n10_time, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = build_pedigree_sim(&msp2, &tables2, rng2, 100, ploidy, num_inds,
-        deep_n10_parents, deep_n10_time, NULL);
+        deep_n10_parents, deep_n10_time, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_initialise(&msp1);
@@ -426,7 +427,7 @@ test_replicates(void)
     int j, ret;
 
     ret = build_pedigree_sim(&msp, &tables, rng, 100, ploidy, num_inds,
-        large_family_parents, large_family_time, NULL);
+        large_family_parents, large_family_time, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_initialise(&msp);
@@ -486,7 +487,7 @@ test_replicates_ancient_samples(void)
     int j, ret;
 
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_initialise(&msp);
@@ -538,7 +539,7 @@ test_replicates_early_exit(void)
     int j, k, ploid, ret;
 
     ret = build_pedigree_sim(&msp, &tables, rng, 100, ploidy, num_inds,
-        large_family_parents, large_family_time, NULL);
+        large_family_parents, large_family_time, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_initialise(&msp);
@@ -596,7 +597,7 @@ test_replicates_exit_coalescence(void)
     int j, ret;
 
     ret = build_pedigree_sim(&msp, &tables, rng, 100, ploidy, num_inds,
-        very_deep_n2_parents, very_deep_n2_time, NULL);
+        very_deep_n2_parents, very_deep_n2_time, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_initialise(&msp);
@@ -638,18 +639,19 @@ test_errors(void)
     tsk_id_t parents[] = { -1, -1, -1, -1, 0, 0, 1, 1 };
     double time[] = { 1, 1, 0, 0 };
     tsk_flags_t is_sample[] = { 0, 0, 1, 1 };
+    tsk_id_t population[] = { 0, 0, 0, 0 };
     msp_t msp;
     tsk_table_collection_t tables;
     gsl_rng *rng = safe_rng_alloc();
 
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tsk_table_collection_free(&tables);
     msp_free(&msp);
 
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, 1, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, 1, num_inds, parents, time, is_sample, population);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
@@ -658,14 +660,14 @@ test_errors(void)
     msp_free(&msp);
 
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, 0, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, 0, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_EMPTY_PEDIGREE);
     tsk_table_collection_free(&tables);
     msp_free(&msp);
 
     /* Any demographic events during the pedigree sim are errors */
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_add_population_parameters_change(&msp, 0.5, 0, 1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -678,7 +680,7 @@ test_errors(void)
 
     /* Record full ARG is an error */
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_store_full_arg(&msp, true);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -691,7 +693,7 @@ test_errors(void)
 
     /* non-zero GC rate is an error */
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_gene_conversion_rate(&msp, 1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -704,7 +706,7 @@ test_errors(void)
 
     parents[0] = -2;
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, msp_set_tsk_error(TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS));
     ret = msp_initialise(&msp);
     tsk_table_collection_free(&tables);
@@ -712,7 +714,7 @@ test_errors(void)
 
     parents[0] = 100;
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, msp_set_tsk_error(TSK_ERR_INDIVIDUAL_OUT_OF_BOUNDS));
     ret = msp_initialise(&msp);
     tsk_table_collection_free(&tables);
@@ -722,7 +724,7 @@ test_errors(void)
     is_sample[2] = 0;
     is_sample[3] = 0;
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_INSUFFICIENT_SAMPLES);
     tsk_table_collection_free(&tables);
     msp_free(&msp);
@@ -731,7 +733,7 @@ test_errors(void)
 
     /* Different times for two nodes in an individual */
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     msp_free(&msp);
     tables.nodes.time[0] = 0.001;
@@ -744,7 +746,7 @@ test_errors(void)
 
     /* Different populations for two nodes in an individual */
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     msp_free(&msp);
     tsk_population_table_add_row(&tables.populations, NULL, 0);
@@ -758,7 +760,7 @@ test_errors(void)
 
     /* non diploid individuals is an error */
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     msp_free(&msp);
     tables.nodes.individual[0] = TSK_NULL;
@@ -771,7 +773,7 @@ test_errors(void)
 
     /* not having two parents is an error */
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     msp_free(&msp);
     tsk_individual_table_add_row(&tables.individuals, 0, NULL, 0, NULL, 0, NULL, 0);
@@ -784,7 +786,7 @@ test_errors(void)
 
     time[2] = 1;
     ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample);
+        &msp, &tables, rng, 100, ploidy, num_inds, parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_PEDIGREE_TIME_TRAVEL);
     time[2] = 0;
     tsk_table_collection_free(&tables);
@@ -804,7 +806,8 @@ test_internal_samples(void)
     tsk_table_collection_t tables;
     gsl_rng *rng = safe_rng_alloc();
 
-    ret = build_pedigree_sim(&msp, &tables, rng, 100, 2, 3, parents, time, is_sample);
+    ret = build_pedigree_sim(
+        &msp, &tables, rng, 100, 2, 3, parents, time, is_sample, NULL);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
@@ -826,7 +829,7 @@ test_combined_with_other_models(void)
     int ret;
 
     ret = build_pedigree_sim(&msp, &tables, rng, 100, ploidy, num_inds,
-        large_family_parents, large_family_time, NULL);
+        large_family_parents, large_family_time, NULL, NULL);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(msp.model.type, MSP_MODEL_WF_PED);
 
@@ -847,6 +850,28 @@ test_combined_with_other_models(void)
     tsk_table_collection_free(&tables);
     msp_free(&msp);
     gsl_rng_free(rng);
+}
+
+static void
+test_trio_same_pop(void)
+{
+
+    tsk_id_t parents[] = { -1, -1, -1, -1, 0, 1 };
+    double time[] = { 1, 1, 0 };
+    tsk_id_t population[] = { 2, 2, 2 };
+
+    verify_pedigree(0, 1, 3, parents, time, NULL, population);
+}
+
+static void
+test_trio_child_different_pop(void)
+{
+
+    tsk_id_t parents[] = { -1, -1, -1, -1, 0, 1 };
+    double time[] = { 1, 1, 0 };
+    tsk_id_t population[] = { 2, 2, 1 };
+
+    verify_pedigree(0, 1, 3, parents, time, NULL, population);
 }
 
 int
@@ -875,6 +900,8 @@ main(int argc, char **argv)
         { "test_errors", test_errors },
         { "test_combined_with_other_models", test_combined_with_other_models },
 
+        { "test_trio_same_pop", test_trio_same_pop },
+        { "test_trio_child_different_pop", test_trio_child_different_pop },
         CU_TEST_INFO_NULL,
     };
 

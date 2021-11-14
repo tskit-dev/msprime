@@ -963,6 +963,89 @@ class TestSimulationState(LowLevelTestCase):
         assert math.isinf(next_event_time)
 
 
+def add_pedigree_individual(tables, population, time, parents=(-1, -1)):
+    ind = tables.individuals.add_row(parents=parents)
+    for _ in range(2):
+        tables.nodes.add_row(
+            time=time,
+            flags=int(time == 0),
+            population=population,
+            individual=ind,
+        )
+
+
+class TestPedigreeSimState:
+    def test_trio_no_coal(self):
+        tables = tskit.TableCollection(10)
+        tables.populations.add_row()
+        tables.populations.add_row()
+        tables.populations.add_row()
+
+        add_pedigree_individual(tables, 0, 1)
+        add_pedigree_individual(tables, 1, 1)
+        add_pedigree_individual(tables, 2, 0, parents=[0, 1])
+
+        ll_tables = _msprime.LightweightTableCollection(tables.sequence_length)
+        ll_tables.fromdict(tables.asdict())
+        sim = _msprime.Simulator(
+            ll_tables,
+            random_generator=_msprime.RandomGenerator(1),
+            model={"name": "wf_ped"},
+        )
+        ancestors = sim.ancestors
+        assert len(sim.ancestors) == 2
+        for anc in ancestors:
+            assert len(anc) == 1
+            assert anc[0][-1] == 2  # population == 2
+
+        sim.run()
+        ancestors = sim.ancestors
+        assert len(ancestors) == 2
+        populations = []
+        for anc in ancestors:
+            assert len(anc) == 1
+            populations.append(anc[0][-1])
+        # Ancestry should have migrated to populations 0 and 1.
+        # Note this test might break if the samples happen to coalesce
+        assert sorted(populations) == [0, 1]
+
+    def test_large_family(self):
+        tables = tskit.TableCollection(10)
+        tables.populations.add_row()
+        tables.populations.add_row()
+        tables.populations.add_row()
+
+        add_pedigree_individual(tables, 0, 1)
+        add_pedigree_individual(tables, 1, 1)
+        n = 50
+        for _ in range(n):
+            add_pedigree_individual(tables, 2, 0, parents=[0, 1])
+
+        ll_tables = _msprime.LightweightTableCollection(tables.sequence_length)
+        ll_tables.fromdict(tables.asdict())
+        sim = _msprime.Simulator(
+            ll_tables,
+            random_generator=_msprime.RandomGenerator(1),
+            model={"name": "wf_ped"},
+        )
+        ancestors = sim.ancestors
+        assert len(sim.ancestors) == 2 * n
+        for anc in ancestors:
+            assert len(anc) == 1
+            assert anc[0][-1] == 2  # population == 2
+
+        sim.run()
+        ancestors = sim.ancestors
+        assert len(ancestors) == 4
+        populations = []
+        for anc in ancestors:
+            assert len(anc) == 1
+            populations.append(anc[0][-1])
+        # Ancestry should have migrated to populations 0 and 1.
+        # Note this test might break if the samples happen to coalesce
+        assert sorted(set(populations)) == [0, 1]
+
+
 class TestSimulator(LowLevelTestCase):
     """
     Tests for the low-level interface to the simulator.
