@@ -1140,6 +1140,24 @@ class TestSimulateThroughPedigreeMultiplePops:
         # Should be able to coalesce due to the added population split
         ts = msprime.sim_ancestry(initial_state=ts, demography=demography)
 
+    def test_trio_parents_different_pops_with_migrations(self):
+        tables = get_base_tables(100, num_populations=2)
+        parents = [
+            add_pedigree_individual(tables, time=2, population=j) for j in range(2)
+        ]
+        add_pedigree_individual(tables, time=0, parents=parents)
+        demography = msprime.Demography.isolated_model([10, 10])
+        demography.add_symmetric_migration_rate_change(
+            time=0, populations=[0, 1], rate=0.1
+        )
+
+        ts = msprime.sim_ancestry(
+            initial_state=tables, demography=demography, model="wf_ped", random_seed=1
+        )
+
+        # Should be able to coalesce due to symmetric migration
+        ts = msprime.sim_ancestry(initial_state=ts, demography=demography)
+
 
 @dataclasses.dataclass
 class FamEntry:
