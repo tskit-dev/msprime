@@ -1124,6 +1124,22 @@ class TestSimulateThroughPedigreeMultiplePops:
         assert mrca.individual == -1
         assert mrca.population == 1
 
+    def test_trio_parents_different_pops_with_split(self):
+        tables = get_base_tables(100, num_populations=3)
+        parents = [
+            add_pedigree_individual(tables, time=2, population=j) for j in range(2)
+        ]
+        add_pedigree_individual(tables, time=0, parents=parents)
+        demography = msprime.Demography.isolated_model([10, 10, 10])
+        demography.add_population_split(time=10, derived=[0, 1], ancestral=2)
+
+        ts = msprime.sim_ancestry(
+            initial_state=tables, demography=demography, model="wf_ped", random_seed=1
+        )
+
+        # Should be able to coalesce due to the added population split
+        ts = msprime.sim_ancestry(initial_state=ts, demography=demography)
+
 
 @dataclasses.dataclass
 class FamEntry:
