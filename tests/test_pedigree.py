@@ -16,20 +16,8 @@ from msprime import pedigrees
 
 
 def get_base_tables(sequence_length):
-    tables = tskit.TableCollection(sequence_length=sequence_length)
-    # Add single population for simplicity. We put in a schema to
-    # avoid warnings.
-    permissive_json = tskit.MetadataSchema(
-        {
-            "codec": "json",
-            "type": "object",
-            "properties": {},
-            "additionalProperties": True,
-        }
-    )
-    tables.populations.metadata_schema = permissive_json
-    tables.individuals.metadata_schema = permissive_json
-    tables.populations.add_row()
+    tables = pedigrees.PedigreeBuilder().tables
+    tables.sequence_length = sequence_length
     return tables
 
 
@@ -259,23 +247,10 @@ def simulate_pedigree(
     random_seed: Random seed.
     """
     rng = np.random.RandomState(random_seed)
-    tables = get_base_tables(sequence_length)
+    builder = msprime.PedigreeBuilder()
 
-    def add_individual(generation, parents=(-1, -1)):
-        ind_id = tables.individuals.add_row(
-            parents=parents, metadata={"original_id": len(tables.individuals)}
-        )
-        time = num_generations - generation - 1
-        for _ in parents:
-            tables.nodes.add_row(
-                flags=tskit.NODE_IS_SAMPLE if time == 0 else 0,
-                time=time,
-                population=0,
-                individual=ind_id,
-            )
-        return ind_id
-
-    curr_gen = [add_individual(0) for _ in range(num_founders)]
+    time = num_generations - 1
+    curr_gen = [builder.add_individual(time=time) for _ in range(num_founders)]
     for generation in range(1, num_generations):
         num_pairs = len(curr_gen) // 2
         if num_pairs == 0 and num_children_prob[0] != 1:
@@ -283,15 +258,15 @@ def simulate_pedigree(
                 f"Not enough people to make children in generation {generation}"
             )
         all_parents = rng.choice(curr_gen, size=(num_pairs, 2), replace=False)
+        time -= 1
         curr_gen = []
         for parents in all_parents:
             num_children = rng.choice(len(num_children_prob), p=num_children_prob)
             for _ in range(num_children):
                 parents = np.sort(parents).astype(np.int32)
-                ind_id = add_individual(generation, parents=parents.astype(np.int32))
+                ind_id = builder.add_individual(time=time, parents=parents)
                 curr_gen.append(ind_id)
-    tables.build_index()
-    return tables
+    return builder.finalise(sequence_length)
 
 
 class TestSimPedigree:
@@ -1065,7 +1040,7 @@ class TestSimulateThroughPedigreeErrors:
 
     def test_node_populations_disagree(self):
         tables = get_base_tables(100)
-        tables.populations.add_row()
+        tables.populations.add_row({"name": "pop_1", "description": "Y"})
         ind = tables.individuals.add_row(parents=[-1, -1])
         tables.nodes.add_row(
             flags=tskit.NODE_IS_SAMPLE, time=0, individual=ind, population=0
@@ -1325,6 +1300,167 @@ class TestParseFam:
         for idx in range(2):
             assert np.array_equal(tb[idx].parents, [-1, -1])
         assert np.array_equal(tb[2].parents, [1, 0])
+
+
+class TestPedigreeBuilder:
+    def test_is_sample_default(self):
+        pb = pedigrees.PedigreeBuilder()
+        pb.add_individual(time=0)
+        pb.add_individual(time=0.0001)
+        pb.add_individual(time=1)
+        tables = pb.finalise(1)
+        zero_nodes = tables.nodes.time == 0
+        assert np.all(tables.nodes.flags[zero_nodes] == tskit.NODE_IS_SAMPLE)
+        non_zero_nodes = tables.nodes.time != 0
+        assert np.all(tables.nodes.flags[non_zero_nodes] == 0)
+
+    def test_is_sample_default_override(self):
+        pb = pedigrees.PedigreeBuilder()
+        pb.add_individual(time=0, is_sample=True)
+        pb.add_individual(time=0.0001, is_sample=True)
+        pb.add_individual(time=1, is_sample=True)
+        tables = pb.finalise(1)
+        assert np.all(tables.nodes.flags == tskit.NODE_IS_SAMPLE)
+
+    @pytest.mark.parametrize("parents", [[], [0], [0, 1, 2]])
+    def test_bad_parents_length(self, parents):
+        pb = pedigrees.PedigreeBuilder()
+        with pytest.raises(ValueError, match="exactly two parents"):
+            pb.add_individual(time=0, parents=parents)
+
+    def test_default_parents(self):
+        pb = pedigrees.PedigreeBuilder()
+        pb.add_individual(time=0)
+        tables = pb.finalise(1)
+        np.testing.assert_array_equal(tables.individuals[0].parents, [-1, -1])
+
+    @pytest.mark.parametrize(
+        "parents", [[0, 1], [0.0, 1.0], np.array([0, 1], dtype=np.int8)]
+    )
+    def test_parents(self, parents):
+        pb = pedigrees.PedigreeBuilder()
+        pb.add_individual(time=1)
+        pb.add_individual(time=1)
+        pb.add_individual(time=0, parents=parents)
+        tables = pb.finalise(1)
+        np.testing.assert_array_equal(tables.individuals[2].parents, parents)
+
+    def test_default_demography(self):
+        pb = pedigrees.PedigreeBuilder()
+        pb.add_individual(time=0)
+        ts = pb.finalise(1).tree_sequence()
+        assert ts.num_populations == 1
+        assert ts.population(0).metadata["name"] == "pop_0"
+        assert all(node.population == 0 for node in ts.nodes())
+
+    def test_one_pop_demography(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        pb = pedigrees.PedigreeBuilder(demography=demography)
+        pb.add_individual(time=0)
+        ts = pb.finalise(1).tree_sequence()
+        assert ts.num_populations == 1
+        assert ts.population(0).metadata["name"] == "A"
+        assert all(node.population == 0 for node in ts.nodes())
+
+    def test_two_pop_demography(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        pb = pedigrees.PedigreeBuilder(demography=demography)
+        ts = pb.finalise(1).tree_sequence()
+        assert ts.num_populations == 2
+        assert ts.population(0).metadata["name"] == "A"
+        assert ts.population(1).metadata["name"] == "B"
+
+    def test_two_pop_demography_population_required(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        pb = pedigrees.PedigreeBuilder(demography=demography)
+        with pytest.raises(ValueError, match="multi-population demography"):
+            pb.add_individual(time=0)
+
+    def test_two_pop_demography_populations_by_index(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        pb = pedigrees.PedigreeBuilder(demography=demography)
+        pb.add_individual(time=0, population=0)
+        pb.add_individual(time=0, population=1)
+        ts = pb.finalise(1).tree_sequence()
+        assert all(ts.node(u).population == 0 for u in [0, 1])
+        assert all(ts.node(u).population == 1 for u in [2, 3])
+
+    def test_two_pop_demography_populations_by_name(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        pb = pedigrees.PedigreeBuilder(demography=demography)
+        pb.add_individual(time=0, population="A")
+        pb.add_individual(time=0, population="B")
+        ts = pb.finalise(1).tree_sequence()
+        assert all(ts.node(u).population == 0 for u in [0, 1])
+        assert all(ts.node(u).population == 1 for u in [2, 3])
+
+    def test_node_individual_linkage(self):
+        pb = pedigrees.PedigreeBuilder()
+        pb.add_individual(time=0)
+        pb.add_individual(time=0)
+        tables = pb.finalise(1)
+        assert len(tables.individuals) == 2
+        assert len(tables.nodes) == 4
+        assert tables.nodes.individual[0] == 0
+        assert tables.nodes.individual[1] == 0
+        assert tables.nodes.individual[2] == 1
+        assert tables.nodes.individual[3] == 1
+
+    @pytest.mark.parametrize("sequence_length", [0.1, 1, 10.11])
+    def test_finalise_sequence_length(self, sequence_length):
+        pb = pedigrees.PedigreeBuilder()
+        tables = pb.finalise(sequence_length)
+        assert tables.sequence_length == sequence_length
+
+    def test_finalise_copy(self):
+        pb = pedigrees.PedigreeBuilder()
+        pb.add_individual(time=0)
+        t1 = pb.finalise(1)
+        t2 = pb.finalise(1)
+        assert t1 == t2
+        assert t1 is not t2
+
+    @pytest.mark.parametrize("time", [0, 1, 10.11, np.array([12345.6])[0]])
+    def test_time(self, time):
+        pb = pedigrees.PedigreeBuilder()
+        pb.add_individual(time=time)
+        t1 = pb.finalise(1)
+        assert np.all(t1.nodes.time == time)
+
+    @pytest.mark.parametrize(
+        "metadata", [{}, {"A": "B"}, {"A": [0, 1, 2]}, {"A": {"B": "C"}}]
+    )
+    def test_metadata(self, metadata):
+        pb = pedigrees.PedigreeBuilder()
+        pb.add_individual(time=0, metadata=metadata)
+        ts = pb.finalise(1).tree_sequence()
+        assert ts.individual(0).metadata == metadata
+
+    def test_add_individual_return_value(self):
+        pb = pedigrees.PedigreeBuilder()
+        n = 5
+        for j in range(n):
+            ind_id = pb.add_individual(time=0, metadata={"id": j})
+            assert ind_id == j
+        ts = pb.finalise(1).tree_sequence()
+        # double check that these are the IDs in the tables
+        for j in range(n):
+            assert ts.individual(j).metadata == {"id": j}
+
+    def test_indexed(self):
+        pb = pedigrees.PedigreeBuilder()
+        pb.add_individual(time=0)
+        t1 = pb.finalise(1)
+        assert t1.has_index()
 
 
 if __name__ == "__main__":

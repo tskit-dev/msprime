@@ -56,6 +56,7 @@ from msprime.demography import (
     Population,
 )
 
+from msprime.pedigrees import PedigreeBuilder
 from msprime.intervals import RateMap
 from msprime.likelihood import log_arg_likelihood, log_mutation_likelihood
 
@@ -130,6 +131,7 @@ __all__ = [
     "NODE_IS_GC_EVENT",
     "NUCLEOTIDES",
     "PAM",
+    "PedigreeBuilder",
     "Population",
     "PopulationConfiguration",
     "PopulationParametersChange",
