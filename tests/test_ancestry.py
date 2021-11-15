@@ -781,6 +781,7 @@ class TestParseSimAncestry:
             msprime.sim_ancestry(initial_state=ts1, random_seed=2)
 
     def test_initial_state(self):
+
         ts = msprime.sim_ancestry(10, end_time=0.01, random_seed=2)
         # Same if we use either the tables or tree sequence object.
         sim = ancestry._parse_sim_ancestry(initial_state=ts, population_size=1)
@@ -803,6 +804,83 @@ class TestParseSimAncestry:
         tables.populations.add_row()
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(2, initial_state=tables)
+
+
+class TestParseSimAncestryPedigree:
+    def test_pedigree_requires_initial_state(self):
+        with pytest.raises(ValueError, match="Must specify an input pedigree"):
+            ancestry._parse_sim_ancestry(model="wf_ped")
+
+    def test_pedigree_requires_no_demography(self):
+        demography = msprime.Demography.isolated_model([1])
+        with pytest.raises(ValueError, match="Cannot specify demography"):
+            ancestry._parse_sim_ancestry(model="wf_ped", demography=demography)
+
+    def test_pedigree_requires_no_population_size(self):
+        with pytest.raises(ValueError, match="Cannot specify population_size"):
+            ancestry._parse_sim_ancestry(model="wf_ped", population_size=1)
+
+    @pytest.mark.parametrize("ploidy", [1, 3])
+    def test_pedigree_requires_ploidy2(self, ploidy):
+        with pytest.raises(ValueError, match="must have ploidy=2"):
+            ancestry._parse_sim_ancestry(
+                model="wf_ped", initial_state=tskit.TableCollection(1), ploidy=ploidy
+            )
+
+    def test_pedigree_requires_no_samples(self):
+        with pytest.raises(ValueError, match="Cannot specify both samples and"):
+            ancestry._parse_sim_ancestry(
+                model="wf_ped", initial_state=tskit.TableCollection(1), samples=10
+            )
+
+    def test_pedigree_requires_no_gc(self):
+        pb = msprime.PedigreeBuilder()
+        with pytest.raises(ValueError, match="Gene conversion not supported"):
+            ancestry._parse_sim_ancestry(
+                model="wf_ped",
+                initial_state=pb.finalise(10),
+                gene_conversion_rate=1,
+                gene_conversion_tract_length=2,
+            )
+
+    def test_pedigree_requires_no_full_arg(self):
+        pb = msprime.PedigreeBuilder()
+        with pytest.raises(ValueError, match="Full ARG recording not supported"):
+            ancestry._parse_sim_ancestry(
+                model="wf_ped", initial_state=pb.finalise(10), record_full_arg=True
+            )
+
+    def test_pedigree_requires_no_record_migrations(self):
+        pb = msprime.PedigreeBuilder()
+        with pytest.raises(ValueError, match="Migration recording not supported"):
+            ancestry._parse_sim_ancestry(
+                model="wf_ped", initial_state=pb.finalise(10), record_migrations=True
+            )
+
+    def test_pedigree_requires_no_start_time(self):
+        pb = msprime.PedigreeBuilder()
+        with pytest.raises(ValueError, match="Cannot specify start_time"):
+            ancestry._parse_sim_ancestry(
+                model="wf_ped", initial_state=pb.finalise(10), start_time=1
+            )
+
+    def test_pedigree_with_following_model(self):
+        pb = msprime.PedigreeBuilder()
+        with pytest.raises(
+            ValueError, match="Cannot use FixedPedigree simulation in conjunction"
+        ):
+            ancestry._parse_sim_ancestry(
+                model=["wf_ped", "hudson"], initial_state=pb.finalise(10)
+            )
+
+    def test_pedigree_with_previous_model(self):
+        pb = msprime.PedigreeBuilder()
+        with pytest.raises(
+            ValueError, match="Cannot use FixedPedigree simulation in conjunction"
+        ):
+            ancestry._parse_sim_ancestry(
+                model=["hudson", "wf_ped"], initial_state=pb.finalise(10)
+            )
 
 
 class TestSimAncestrySamples:

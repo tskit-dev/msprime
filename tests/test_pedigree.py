@@ -1052,11 +1052,7 @@ class TestSimulateThroughPedigreeErrors:
             flags=tskit.NODE_IS_SAMPLE, time=0, individual=ind, population=1
         )
         with pytest.raises(_msprime.InputError, match="populations for the two nodes"):
-            # FIXME working around limitations in high-level API for now.
-            demography = msprime.Demography.isolated_model([1, 1])
-            msprime.sim_ancestry(
-                initial_state=tables, demography=demography, model="wf_ped"
-            )
+            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
 
     def test_no_samples(self):
         tables = get_base_tables(100)
@@ -1089,33 +1085,41 @@ class TestSimulateThroughPedigreeErrors:
 
 
 class TestSimulateThroughPedigreeMultiplePops:
-    def test_trio_parents_different_pops(self):
-        tables = get_base_tables(100, num_populations=2)
-        parents = [
-            add_pedigree_individual(tables, time=2, population=j) for j in range(2)
-        ]
-        add_pedigree_individual(tables, time=0, parents=parents)
+    def test_demography_raises_error(self):
         demography = msprime.Demography.isolated_model([10, 10])
+        pb = msprime.PedigreeBuilder(demography)
+        pb.add_individual(time=0, population=0)
+        tables = pb.finalise(1)
+        with pytest.raises(ValueError, match="Cannot specify demography"):
+            msprime.sim_ancestry(
+                initial_state=tables,
+                demography=demography,
+                model="wf_ped",
+                random_seed=1,
+            )
 
-        ts = msprime.sim_ancestry(
-            initial_state=tables, demography=demography, model="wf_ped", random_seed=1
-        )
+    def test_trio_parents_different_pops(self):
+        demography = msprime.Demography.isolated_model([10, 10])
+        pb = msprime.PedigreeBuilder(demography)
+        parents = [pb.add_individual(time=2, population=j) for j in range(2)]
+        pb.add_individual(time=0, parents=parents, population=0)
+        pedigree = pb.finalise(1)
+        ts = msprime.sim_ancestry(initial_state=pedigree, model="wf_ped", random_seed=1)
         # Founders are in different populations so cannot coalesce
         with pytest.raises(_msprime.LibraryError, match="Infinite waiting"):
-            msprime.sim_ancestry(initial_state=ts, demography=demography)
+            msprime.sim_ancestry(initial_state=ts, demography=demography, random_seed=2)
 
     def test_trio_parents_same_pop(self):
-        tables = get_base_tables(100, num_populations=2)
-        parents = [
-            add_pedigree_individual(tables, time=2, population=1) for j in range(2)
-        ]
-        add_pedigree_individual(tables, time=0, parents=parents, population=0)
         demography = msprime.Demography.isolated_model([10, 10])
+        pb = msprime.PedigreeBuilder(demography)
+        parents = [pb.add_individual(time=2, population=1) for j in range(2)]
+        pb.add_individual(time=0, parents=parents, population=0)
+        pedigree = pb.finalise(1)
 
+        ts = msprime.sim_ancestry(initial_state=pedigree, model="wf_ped", random_seed=1)
         ts = msprime.sim_ancestry(
-            initial_state=tables, demography=demography, model="wf_ped", random_seed=1
+            initial_state=ts, demography=demography, random_seed=2
         )
-        ts = msprime.sim_ancestry(initial_state=ts, demography=demography)
         for j in range(4):
             assert ts.node(j).population == 1
         assert ts.node(4).population == 0
@@ -1125,38 +1129,37 @@ class TestSimulateThroughPedigreeMultiplePops:
         assert mrca.population == 1
 
     def test_trio_parents_different_pops_with_split(self):
-        tables = get_base_tables(100, num_populations=3)
-        parents = [
-            add_pedigree_individual(tables, time=2, population=j) for j in range(2)
-        ]
-        add_pedigree_individual(tables, time=0, parents=parents)
         demography = msprime.Demography.isolated_model([10, 10, 10])
         demography.add_population_split(time=10, derived=[0, 1], ancestral=2)
+        pb = msprime.PedigreeBuilder(demography)
+        parents = [pb.add_individual(time=2, population=j) for j in range(2)]
+        pb.add_individual(time=0, parents=parents, population=0)
+        pedigree = pb.finalise(1)
 
-        ts = msprime.sim_ancestry(
-            initial_state=tables, demography=demography, model="wf_ped", random_seed=1
-        )
-
+        ts = msprime.sim_ancestry(initial_state=pedigree, model="wf_ped", random_seed=1)
         # Should be able to coalesce due to the added population split
-        ts = msprime.sim_ancestry(initial_state=ts, demography=demography)
+        ts = msprime.sim_ancestry(
+            initial_state=ts, demography=demography, random_seed=2
+        )
+        assert ts.node(6).time > 2
+        assert ts.node(6).population == 2
 
     def test_trio_parents_different_pops_with_migrations(self):
-        tables = get_base_tables(100, num_populations=2)
-        parents = [
-            add_pedigree_individual(tables, time=2, population=j) for j in range(2)
-        ]
-        add_pedigree_individual(tables, time=0, parents=parents)
         demography = msprime.Demography.isolated_model([10, 10])
         demography.add_symmetric_migration_rate_change(
             time=0, populations=[0, 1], rate=0.1
         )
+        pb = msprime.PedigreeBuilder(demography)
+        parents = [pb.add_individual(time=2, population=j) for j in range(2)]
+        pb.add_individual(time=0, parents=parents, population=0)
+        pedigree = pb.finalise(1)
 
-        ts = msprime.sim_ancestry(
-            initial_state=tables, demography=demography, model="wf_ped", random_seed=1
-        )
-
+        ts = msprime.sim_ancestry(initial_state=pedigree, model="wf_ped", random_seed=1)
         # Should be able to coalesce due to symmetric migration
-        ts = msprime.sim_ancestry(initial_state=ts, demography=demography)
+        ts = msprime.sim_ancestry(
+            initial_state=ts, demography=demography, random_seed=2
+        )
+        assert ts.node(6).time > 2
 
 
 @dataclasses.dataclass
