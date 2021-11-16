@@ -192,34 +192,23 @@ def _demography_factory(
     return demography.validate()
 
 
-def _build_initial_tables(*, sequence_length, samples, ploidy, demography, pedigree):
+def _build_initial_tables(*, sequence_length, samples, ploidy, demography):
     # NOTE: this is only used in the simulate() codepath.
     tables = tskit.TableCollection(sequence_length)
 
-    if pedigree is None:
-        for index, (population, time) in enumerate(samples):
-            tables.nodes.add_row(
-                flags=tskit.NODE_IS_SAMPLE,
-                time=time,
-                population=population,
+    for index, (population, time) in enumerate(samples):
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE,
+            time=time,
+            population=population,
+        )
+        if population < 0:
+            raise ValueError(f"Negative population ID in sample at index {index}")
+        if population >= demography.num_populations:
+            raise ValueError(
+                f"Invalid population reference '{population}' in sample "
+                f"at index {index}"
             )
-            if population < 0:
-                raise ValueError(f"Negative population ID in sample at index {index}")
-            if population >= demography.num_populations:
-                raise ValueError(
-                    f"Invalid population reference '{population}' in sample "
-                    f"at index {index}"
-                )
-    else:
-        # TODO This should be removed - pedigree code path should only be callable
-        # from sim_ancestry
-        for parents, time, is_sample in zip(
-            pedigree.parents, pedigree.time, pedigree.is_sample
-        ):
-            ind_id = tables.individuals.add_row(0, parents=parents)
-            node_flags = tskit.NODE_IS_SAMPLE if is_sample else 0
-            for _ in range(ploidy):
-                tables.nodes.add_row(node_flags, time, population=0, individual=ind_id)
 
     # This is for the simulate() code path so we don't add metadata schemas
     # and insert the user metadata in directly as encoded JSON, as before.
@@ -240,7 +229,6 @@ def _parse_simulate(
     recombination_rate=None,
     recombination_map=None,
     population_configurations=None,
-    pedigree=None,
     migration_matrix=None,
     samples=None,
     demographic_events=None,
@@ -345,12 +333,8 @@ def _parse_simulate(
         tables = _build_initial_tables(
             sequence_length=recombination_map.sequence_length,
             samples=samples,
-            # FIXME not clear how this is all working now. We shouldn't have
-            # the pedigree as a parameter here at all which would probably
-            # simplify things.
             ploidy=2,
             demography=demography,
-            pedigree=pedigree,
         )
     else:
         tables = from_ts.dump_tables()
@@ -419,7 +403,6 @@ def simulate(
     recombination_map=None,
     mutation_rate=None,
     population_configurations=None,
-    pedigree=None,
     migration_matrix=None,
     demographic_events=None,
     samples=None,
@@ -565,7 +548,6 @@ def simulate(
             recombination_map=recombination_map,
             mutation_rate=mutation_rate,
             population_configurations=population_configurations,
-            pedigree=pedigree,
             migration_matrix=migration_matrix,
             demographic_events=demographic_events,
             samples=samples,
@@ -620,7 +602,6 @@ def simulate(
         recombination_rate=recombination_rate,
         recombination_map=recombination_map,
         population_configurations=population_configurations,
-        pedigree=pedigree,
         migration_matrix=migration_matrix,
         demographic_events=demographic_events,
         samples=samples,

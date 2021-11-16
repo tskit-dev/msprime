@@ -29,7 +29,6 @@ import tskit
 
 import msprime
 from msprime import _msprime
-from msprime import pedigrees
 
 
 class TestProvenance:
@@ -284,29 +283,6 @@ class TestSimulateRoundTrip(TestRoundTrip):
             population_configurations=pop_configs,
             migration_matrix=[[0, 1], [1, 0]],
             demographic_events=[msprime.SimulationModelChange(time=10)],
-        )
-        self.verify(ts)
-
-    @pytest.mark.skip("Pedigrees broken")
-    def test_pedigree(self):
-        inds = np.array([1, 2, 3, 4, 5, 6])
-        parent_indices = np.array([4, 5, 4, 5, 4, 5, 4, 5, -1, -1, -1, -1]).reshape(
-            -1, 2
-        )
-        times = np.array([0, 0, 0, 0, 1, 1])
-        is_sample = np.array([1, 1, 1, 1, 0, 0])
-        t = max(times)
-        model = msprime.WrightFisherPedigree()
-        ped = pedigrees.Pedigree(
-            inds, parent_indices, times, is_sample, sex=None, ploidy=2
-        )
-        ts = msprime.simulate(
-            sample_size=4,
-            pedigree=ped,
-            demographic_events=[
-                msprime.SimulationModelChange(t, msprime.DiscreteTimeWrightFisher())
-            ],
-            model=model,
         )
         self.verify(ts)
 
