@@ -62,36 +62,41 @@ build_sim(msp_t *msp, tsk_table_collection_t *tables, gsl_rng *rng,
 int
 build_pedigree_sim(msp_t *msp, tsk_table_collection_t *tables, gsl_rng *rng,
     double sequence_length, size_t ploidy, size_t num_individuals, tsk_id_t *parents,
-    double *time, tsk_flags_t *is_sample)
+    double *time, tsk_flags_t *is_sample, tsk_id_t *population)
 {
     int ret;
     size_t j, k;
-    tsk_id_t ind_id;
+    tsk_id_t pop_id, ind_id, max_pop;
     tsk_flags_t flags;
 
     ret = tsk_table_collection_init(tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tables->sequence_length = sequence_length;
 
-    ret = tsk_population_table_add_row(&tables->populations, NULL, 0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
+    max_pop = 0;
     /* Insert the pedigree individuals */
     for (j = 0; j < num_individuals; j++) {
         ret = tsk_individual_table_add_row(
             &tables->individuals, 0, NULL, 0, parents + j * ploidy, ploidy, NULL, 0);
         CU_ASSERT_EQUAL_FATAL(ret, j);
         ind_id = ret;
+        pop_id = population == NULL ? 0 : population[j];
+        if (is_sample == NULL) {
+            flags = time[j] == 0;
+        } else {
+            flags = is_sample[j] ? TSK_NODE_IS_SAMPLE : 0;
+        }
         for (k = 0; k < ploidy; k++) {
-            if (is_sample == NULL) {
-                flags = time[j] == 0;
-            } else {
-                flags = is_sample[j] ? TSK_NODE_IS_SAMPLE : 0;
-            }
             ret = tsk_node_table_add_row(
-                &tables->nodes, flags, time[j], 0, ind_id, NULL, 0);
+                &tables->nodes, flags, time[j], pop_id, ind_id, NULL, 0);
             CU_ASSERT_FATAL(ret >= 0);
         }
+        max_pop = TSK_MAX(max_pop, pop_id);
+    }
+
+    for (j = 0; j <= max_pop; j++) {
+        ret = tsk_population_table_add_row(&tables->populations, NULL, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, j);
     }
     ret = msp_alloc(msp, tables, rng);
     if (ret != 0) {

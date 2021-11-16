@@ -57,7 +57,7 @@ int build_sim(msp_t *msp, tsk_table_collection_t *tables, gsl_rng *rng,
     size_t num_samples);
 int build_pedigree_sim(msp_t *msp, tsk_table_collection_t *tables, gsl_rng *rng,
     double sequence_length, size_t ploidy, size_t num_individuals, tsk_id_t *parents,
-    double *time, tsk_flags_t *is_sample);
+    double *time, tsk_flags_t *is_sample, tsk_id_t *population);
 gsl_rng *safe_rng_alloc(void);
 
 int test_main(CU_TestInfo *tests, int argc, char **argv);

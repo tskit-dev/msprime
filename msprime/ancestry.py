@@ -884,7 +884,43 @@ def _parse_sim_ancestry(
 
     models = _parse_model_arg(model)
     is_dtwf = isinstance(models[0], DiscreteTimeWrightFisher)
-    is_pedigree = isinstance(models[0], WrightFisherPedigree)
+    is_pedigree = any(isinstance(model, WrightFisherPedigree) for model in models)
+
+    if is_pedigree:
+        if demography is not None:
+            raise ValueError("Cannot specify demography for FixedPedigree simulation")
+        if population_size is not None:
+            raise ValueError(
+                "Cannot specify population_size for FixedPedigree simulation"
+            )
+        if initial_state is None:
+            raise ValueError(
+                "Must specify an input pedigree using the ``initial_state`` argument "
+                "for a FixedPedigree simulation"
+            )
+        if ploidy != 2:
+            raise ValueError("Fixed pedigree simulations must have ploidy=2")
+        if gene_conversion_map.total_mass != 0:
+            raise ValueError(
+                "Gene conversion not supported in FixedPedigree simulation"
+            )
+        if record_full_arg:
+            raise ValueError(
+                "Full ARG recording not supported in FixedPedigree simulation"
+            )
+        if record_migrations:
+            raise ValueError(
+                "Migration recording not supported in FixedPedigree simulation"
+            )
+        if start_time > 0:
+            raise ValueError("Cannot specify start_time in FixedPedigree simulation")
+        if len(models) > 1:
+            raise ValueError(
+                "Cannot use FixedPedigree simulation in conjunction with other models"
+            )
+        demography = demog.Demography.from_tree_sequence(
+            initial_state.tree_sequence(), initial_size=1
+        )
 
     # Check the demography. If no demography is specified, we default to a
     # single-population model with a given population size.
@@ -898,7 +934,7 @@ def _parse_sim_ancestry(
                     "explicitly, either using the population_size or demography "
                     "arguments."
                 )
-        if initial_state is not None and not is_pedigree:
+        if initial_state is not None:
             if population_size is None:
                 raise ValueError(
                     "Must specify either a demography object or a population_size "
