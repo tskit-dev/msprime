@@ -313,8 +313,8 @@ read_model_config(msp_t *msp, config_t *config)
         ret = msp_set_simulation_model_smc_prime(msp);
     } else if (strcmp(name, "dtwf") == 0) {
         ret = msp_set_simulation_model_dtwf(msp);
-    } else if (strcmp(name, "wf_ped") == 0) {
-        ret = msp_set_simulation_model_wf_ped(msp);
+    } else if (strcmp(name, "fixed_pedigree") == 0) {
+        ret = msp_set_simulation_model_fixed_pedigree(msp);
     } else if (strcmp(name, "dirac") == 0) {
         s = config_setting_get_member(setting, "psi");
         if (s == NULL) {

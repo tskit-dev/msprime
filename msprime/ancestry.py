@@ -60,7 +60,7 @@ def _model_factory(model: None | str | AncestryModel) -> AncestryModel:
         "smc": SmcApproxCoalescent(),
         "smc_prime": SmcPrimeApproxCoalescent(),
         "dtwf": DiscreteTimeWrightFisher(),
-        "wf_ped": WrightFisherPedigree(),
+        "fixed_pedigree": FixedPedigree(),
     }
     if model is None:
         model_instance = StandardCoalescent()
@@ -865,7 +865,7 @@ def _parse_sim_ancestry(
 
     models = _parse_model_arg(model)
     is_dtwf = isinstance(models[0], DiscreteTimeWrightFisher)
-    is_pedigree = any(isinstance(model, WrightFisherPedigree) for model in models)
+    is_pedigree = any(isinstance(model, FixedPedigree) for model in models)
 
     if is_pedigree:
         if demography is not None:
@@ -1693,7 +1693,7 @@ class DiscreteTimeWrightFisher(AncestryModel):
     name = "dtwf"
 
 
-class WrightFisherPedigree(AncestryModel):
+class FixedPedigree(AncestryModel):
     # TODO Complete documentation.
     # TODO Since the pedigree is a necessary parameter for this simulation
     # model and it cannot be used with any other model we should make it a
@@ -1701,10 +1701,10 @@ class WrightFisherPedigree(AncestryModel):
     # streamline a bunch of logic.
     """
     Backwards-time simulations through a pre-specified pedigree, with diploid
-    individuals and back-and-forth recombination. The string ``"wf_ped"`` can
+    individuals and back-and-forth recombination. The string ``"fixed_pedigree"`` can
     be used to refer to this model.
     """
-    name = "wf_ped"
+    name = "fixed_pedigree"
 
 
 class ParametricAncestryModel(AncestryModel):

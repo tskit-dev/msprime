@@ -26,7 +26,6 @@ import pytest
 import msprime
 from msprime import _msprime
 from msprime import ancestry
-from msprime import pedigrees
 
 
 nonparametric_model_classes = [
@@ -34,6 +33,7 @@ nonparametric_model_classes = [
     msprime.SmcApproxCoalescent,
     msprime.SmcPrimeApproxCoalescent,
     msprime.DiscreteTimeWrightFisher,
+    msprime.FixedPedigree,
 ]
 
 
@@ -66,9 +66,9 @@ class TestIntrospectionInterface:
         assert repr(model) == repr_s
         assert str(model) == repr_s
 
-    def test_wf_pedigree(self):
-        model = msprime.WrightFisherPedigree()
-        repr_s = "WrightFisherPedigree(duration=None)"
+    def test_fixed_pedigreeigree(self):
+        model = msprime.FixedPedigree()
+        repr_s = "FixedPedigree(duration=None)"
         assert repr(model) == repr_s
         assert str(model) == repr_s
 
@@ -113,7 +113,7 @@ class TestModelFactory:
             ("smc", msprime.SmcApproxCoalescent),
             ("smc_prime", msprime.SmcPrimeApproxCoalescent),
             ("dtwf", msprime.DiscreteTimeWrightFisher),
-            ("wf_ped", msprime.WrightFisherPedigree),
+            ("fixed_pedigree", msprime.FixedPedigree),
         ]
         for name, model_class in simulation_models:
             model = ancestry._model_factory(model=name.upper())
@@ -140,7 +140,7 @@ class TestModelFactory:
             msprime.SmcApproxCoalescent(),
             msprime.SmcPrimeApproxCoalescent(),
             msprime.DiscreteTimeWrightFisher(),
-            msprime.WrightFisherPedigree(),
+            msprime.FixedPedigree(),
             msprime.SweepGenicSelection(
                 position=0.5,
                 start_frequency=0.1,
@@ -506,20 +506,6 @@ class TestMultipleMergerModels:
         assert ts is not None
         self.verify_non_binary(ts)
 
-    @pytest.mark.skip("Pedigrees broken")
-    def test_wf_ped(self):
-        inds = np.array([1, 2, 3, 4])
-        parent_indices = np.array([2, 3, 2, 3, -1, -1, -1, -1]).reshape(-1, 2)
-        times = np.array([0, 0, 1, 1])
-        is_sample = np.array([1, 1, 0, 0])
-
-        model = msprime.WrightFisherPedigree()
-        ped = pedigrees.Pedigree(
-            inds, parent_indices, times, is_sample, sex=None, ploidy=2
-        )
-        ts = msprime.simulate(2, pedigree=ped, model=model)
-        assert ts is not None
-
 
 class TestDtwf:
     """
@@ -586,99 +572,6 @@ class TestMixedModels:
     """
     Tests that we can run mixed simulation models.
     """
-
-    @pytest.mark.skip("Pedigrees broken")
-    def test_ped_wf_single_locus(self):
-        inds = np.array([1, 2, 3, 4, 5, 6])
-        parent_indices = np.array([4, 5, 4, 5, 4, 5, 4, 5, -1, -1, -1, -1]).reshape(
-            -1, 2
-        )
-        times = np.array([0, 0, 0, 0, 1, 1])
-        is_sample = np.array([1, 1, 1, 1, 0, 0])
-        t = max(times)
-
-        model = msprime.WrightFisherPedigree()
-        ped = pedigrees.Pedigree(
-            inds, parent_indices, times, is_sample, sex=None, ploidy=2
-        )
-        ts = msprime.simulate(
-            sample_size=4,
-            Ne=2,
-            pedigree=ped,
-            model=model,
-            demographic_events=[msprime.SimulationModelChange(t, "dtwf")],
-        )
-        tree = ts.first()
-        assert tree.num_roots == 1
-        all_times = ts.tables.nodes.time
-        ped_times = all_times[np.logical_and(all_times > 0, all_times <= t)]
-        assert ped_times.shape[0] > 0
-        assert np.all(ped_times == np.floor(ped_times))
-        wf_times = all_times[all_times > t]
-        assert wf_times.shape[0] > 0
-
-    @pytest.mark.skip("Pedigrees broken")
-    def test_pedigree_unsupported_events(self):
-        inds = np.array([1, 2, 3, 4, 5, 6])
-        parent_indices = np.array([4, 5, 4, 5, 4, 5, 4, 5, -1, -1, -1, -1]).reshape(
-            -1, 2
-        )
-        times = np.array([0, 0, 0, 0, 1, 1])
-        is_sample = np.array([1, 1, 1, 1, 0, 0])
-        t = max(times)
-
-        ped = pedigrees.Pedigree(
-            inds, parent_indices, times, is_sample, sex=None, ploidy=2
-        )
-
-        bad_model_change = msprime.SimulationModelChange(
-            0.5, msprime.DiscreteTimeWrightFisher()
-        )
-        with pytest.raises(RuntimeError, match="not support interruption"):
-            msprime.simulate(
-                4,
-                pedigree=ped,
-                demographic_events=[bad_model_change],
-                model="wf_ped",
-            )
-        bad_demographic_event = msprime.PopulationParametersChange(t, initial_size=2)
-        with pytest.raises(_msprime.LibraryError):
-            msprime.simulate(
-                4,
-                pedigree=ped,
-                demographic_events=[bad_demographic_event],
-                model="wf_ped",
-            )
-
-    @pytest.mark.skip("Pedigrees broken")
-    def test_ped_wf_recombination(self):
-        inds = np.array([1, 2, 3, 4, 5, 6])
-        parent_indices = np.array([4, 5, 4, 5, 4, 5, 4, 5, -1, -1, -1, -1]).reshape(
-            -1, 2
-        )
-        times = np.array([0, 0, 0, 0, 1, 1])
-        is_sample = np.array([1, 1, 1, 1, 0, 0])
-        t = max(times)
-
-        model = msprime.WrightFisherPedigree()
-        ped = pedigrees.Pedigree(
-            inds, parent_indices, times, is_sample, sex=None, ploidy=2
-        )
-        ts = msprime.simulate(
-            sample_size=4,
-            pedigree=ped,
-            recombination_rate=0.1,
-            model=model,
-            demographic_events=[msprime.SimulationModelChange(time=1, model="dtwf")],
-        )
-        tree = ts.first()
-        assert tree.num_roots == 1
-        all_times = ts.tables.nodes.time
-        ped_times = all_times[np.logical_and(all_times > 0, all_times <= t)]
-        assert ped_times.shape[0] > 0
-        assert np.all(ped_times == np.floor(ped_times))
-        wf_times = all_times[all_times > t]
-        assert wf_times.shape[0] > 0
 
     def test_wf_hudson_single_locus(self):
         t = 10

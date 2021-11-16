@@ -1073,13 +1073,13 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     PyObject *smc_s = NULL;
     PyObject *smc_prime_s = NULL;
     PyObject *dtwf_s = NULL;
-    PyObject *wf_ped_s = NULL;
+    PyObject *fixed_pedigree_s = NULL;
     PyObject *dirac_s = NULL;
     PyObject *beta_s = NULL;
     PyObject *sweep_genic_selection_s = NULL;
     PyObject *value;
     int is_hudson, is_dtwf, is_smc, is_smc_prime, is_dirac, is_beta,
-        is_sweep_genic_selection, is_wf_ped;
+        is_sweep_genic_selection, is_fixed_pedigree;
     double psi, c, alpha, truncation_point;
 
     hudson_s = Py_BuildValue("s", "hudson");
@@ -1090,8 +1090,8 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     if (dtwf_s == NULL) {
         goto out;
     }
-    wf_ped_s = Py_BuildValue("s", "wf_ped");
-    if (wf_ped_s == NULL) {
+    fixed_pedigree_s = Py_BuildValue("s", "fixed_pedigree");
+    if (fixed_pedigree_s == NULL) {
         goto out;
     }
     smc_s = Py_BuildValue("s", "smc");
@@ -1138,12 +1138,12 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     if (is_dtwf) {
         err = msp_set_simulation_model_dtwf(self->sim);
     }
-    is_wf_ped = PyObject_RichCompareBool(py_name, wf_ped_s, Py_EQ);
-    if (is_wf_ped == -1) {
+    is_fixed_pedigree = PyObject_RichCompareBool(py_name, fixed_pedigree_s, Py_EQ);
+    if (is_fixed_pedigree == -1) {
         goto out;
     }
-    if (is_wf_ped) {
-        err = msp_set_simulation_model_wf_ped(self->sim);
+    if (is_fixed_pedigree) {
+        err = msp_set_simulation_model_fixed_pedigree(self->sim);
     }
 
     is_smc = PyObject_RichCompareBool(py_name, smc_s, Py_EQ);
@@ -1221,7 +1221,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     }
 
     if (! (is_hudson || is_dtwf || is_smc || is_smc_prime || is_dirac
-                || is_beta || is_sweep_genic_selection || is_wf_ped)) {
+                || is_beta || is_sweep_genic_selection || is_fixed_pedigree)) {
         PyErr_SetString(PyExc_ValueError, "Unknown simulation model");
         goto out;
     }
@@ -1233,7 +1233,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
 out:
     Py_XDECREF(hudson_s);
     Py_XDECREF(dtwf_s);
-    Py_XDECREF(wf_ped_s);
+    Py_XDECREF(fixed_pedigree_s);
     Py_XDECREF(smc_s);
     Py_XDECREF(smc_prime_s);
     Py_XDECREF(beta_s);

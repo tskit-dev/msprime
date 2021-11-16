@@ -990,7 +990,7 @@ class TestPedigreeSimState:
         sim = _msprime.Simulator(
             ll_tables,
             random_generator=_msprime.RandomGenerator(1),
-            model={"name": "wf_ped"},
+            model={"name": "fixed_pedigree"},
         )
         ancestors = sim.ancestors
         assert len(sim.ancestors) == 2
@@ -1026,7 +1026,7 @@ class TestPedigreeSimState:
         sim = _msprime.Simulator(
             ll_tables,
             random_generator=_msprime.RandomGenerator(1),
-            model={"name": "wf_ped"},
+            model={"name": "fixed_pedigree"},
         )
         ancestors = sim.ancestors
         assert len(sim.ancestors) == 2 * n

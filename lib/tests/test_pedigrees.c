@@ -739,7 +739,7 @@ test_errors(void)
     tables.nodes.time[0] = 0.001;
     CU_ASSERT_EQUAL_FATAL(msp_alloc(&msp, &tables, rng), 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_ploidy(&msp, 2), 0);
-    ret = msp_set_simulation_model_wf_ped(&msp);
+    ret = msp_set_simulation_model_fixed_pedigree(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_PEDIGREE_IND_NODE_TIME_DISAGREE);
     tsk_table_collection_free(&tables);
     msp_free(&msp);
@@ -753,7 +753,7 @@ test_errors(void)
     tables.nodes.population[0] = 1;
     CU_ASSERT_EQUAL_FATAL(msp_alloc(&msp, &tables, rng), 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_ploidy(&msp, 2), 0);
-    ret = msp_set_simulation_model_wf_ped(&msp);
+    ret = msp_set_simulation_model_fixed_pedigree(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_PEDIGREE_IND_NODE_POPULATION_DISAGREE);
     tsk_table_collection_free(&tables);
     msp_free(&msp);
@@ -766,7 +766,7 @@ test_errors(void)
     tables.nodes.individual[0] = TSK_NULL;
     CU_ASSERT_EQUAL_FATAL(msp_alloc(&msp, &tables, rng), 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_ploidy(&msp, 2), 0);
-    ret = msp_set_simulation_model_wf_ped(&msp);
+    ret = msp_set_simulation_model_fixed_pedigree(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_PEDIGREE_IND_NOT_DIPLOID);
     tsk_table_collection_free(&tables);
     msp_free(&msp);
@@ -779,7 +779,7 @@ test_errors(void)
     tsk_individual_table_add_row(&tables.individuals, 0, NULL, 0, NULL, 0, NULL, 0);
     CU_ASSERT_EQUAL_FATAL(msp_alloc(&msp, &tables, rng), 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_ploidy(&msp, 2), 0);
-    ret = msp_set_simulation_model_wf_ped(&msp);
+    ret = msp_set_simulation_model_fixed_pedigree(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_PEDIGREE_IND_NOT_TWO_PARENTS);
     tsk_table_collection_free(&tables);
     msp_free(&msp);
@@ -844,7 +844,7 @@ test_combined_with_other_models(void)
 
     /* This is cheating slightly because we should be testing if we throw the
      * error after simulating other models, but the effect is the same */
-    ret = msp_set_simulation_model_wf_ped(&msp);
+    ret = msp_set_simulation_model_fixed_pedigree(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_OTHER_MODELS_WITH_PED);
 
     tsk_table_collection_free(&tables);

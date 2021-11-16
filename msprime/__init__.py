@@ -44,7 +44,7 @@ from msprime.ancestry import (
     SmcPrimeApproxCoalescent,
     StandardCoalescent,
     SweepGenicSelection,
-    WrightFisherPedigree,
+    FixedPedigree,
 )
 
 from msprime.core import __version__
@@ -146,7 +146,7 @@ __all__ = [
     "SmcPrimeApproxCoalescent",
     "StandardCoalescent",
     "SweepGenicSelection",
-    "WrightFisherPedigree",
+    "FixedPedigree",
     "log_arg_likelihood",
     "log_mutation_likelihood",
     "mutate",

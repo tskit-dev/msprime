@@ -824,7 +824,7 @@ class Simulator:
             self.hudson_simulate(end_time)
         elif self.model == "dtwf":
             self.dtwf_simulate()
-        elif self.model == "wf_ped":
+        elif self.model == "fixed_pedigree":
             self.pedigree_simulate()
         elif self.model == "single_sweep":
             self.single_sweep_simulate()
@@ -2098,9 +2098,9 @@ class Simulator:
         Checks that the state of the simulator is consistent.
         """
         self.verify_segments()
-        if self.model != "wf_ped":
-            # The wf_ped model doesn't maintain a bunch of stuff. It would probably
-            # be simpler if it did.
+        if self.model != "fixed_pedigree":
+            # The fixed_pedigree model doesn't maintain a bunch of stuff.
+            # It would probably be simpler if it did.
             self.verify_overlaps()
             for label in range(self.num_labels):
                 if self.recomb_mass_index is None:

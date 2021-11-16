@@ -5349,7 +5349,7 @@ msp_get_model_name(msp_t *self)
             ret = "dtwf";
             break;
         case MSP_MODEL_WF_PED:
-            ret = "wf_ped";
+            ret = "fixed_pedigree";
             break;
         case MSP_MODEL_SWEEP:
             ret = "single-sweep";
@@ -7159,7 +7159,7 @@ msp_set_simulation_model_dtwf(msp_t *self)
 }
 
 int
-msp_set_simulation_model_wf_ped(msp_t *self)
+msp_set_simulation_model_fixed_pedigree(msp_t *self)
 {
     int ret;
     tsk_size_t j, k;

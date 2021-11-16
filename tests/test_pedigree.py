@@ -93,7 +93,9 @@ class TestSimPedigree:
     def verify(self, tables):
         tables.sequence_length = 10
         # Check that we can simulate with it.
-        msprime.sim_ancestry(initial_state=tables, model="wf_ped", random_seed=2)
+        msprime.sim_ancestry(
+            initial_state=tables, model="fixed_pedigree", random_seed=2
+        )
 
     def test_zero_generations(self):
         tables = pedigrees.sim_pedigree(population_size=10, end_time=0, random_seed=1)
@@ -349,7 +351,7 @@ class TestSimulateThroughPedigree:
         # Using this low-level interface to make debugging easier. It's the
         # same effect as calling ts = msprime.sim_ancestry(...)
         sim = msprime.ancestry._parse_sim_ancestry(
-            model="wf_ped",
+            model="fixed_pedigree",
             initial_state=initial_state,
             recombination_rate=recombination_rate,
             random_seed=1,
@@ -651,13 +653,13 @@ class TestSimulateThroughPedigree:
 class TestSimulateThroughPedigreeEventByEvent(TestSimulateThroughPedigree):
     def verify(self, input_tables, recombination_rate=0):
         ts1 = msprime.sim_ancestry(
-            model="wf_ped",
+            model="fixed_pedigree",
             initial_state=input_tables,
             recombination_rate=recombination_rate,
             random_seed=1,
         )
         sim = msprime.ancestry._parse_sim_ancestry(
-            model="wf_ped",
+            model="fixed_pedigree",
             initial_state=input_tables,
             recombination_rate=recombination_rate,
             random_seed=1,
@@ -676,7 +678,7 @@ class TestContinueSimulateThroughPedigree(TestSimulateThroughPedigree):
     def verify(self, input_tables, recombination_rate=0):
 
         ts1 = msprime.sim_ancestry(
-            model="wf_ped",
+            model="fixed_pedigree",
             initial_state=input_tables,
             recombination_rate=recombination_rate,
             random_seed=42,
@@ -745,7 +747,7 @@ class TestSimulateThroughPedigreeReplicates(TestSimulateThroughPedigree):
         num_replicates = 5
         replicates = list(
             msprime.sim_ancestry(
-                model="wf_ped",
+                model="fixed_pedigree",
                 initial_state=input_tables,
                 recombination_rate=recombination_rate,
                 random_seed=42,
@@ -754,7 +756,7 @@ class TestSimulateThroughPedigreeReplicates(TestSimulateThroughPedigree):
         )
 
         ts1 = msprime.sim_ancestry(
-            model="wf_ped",
+            model="fixed_pedigree",
             initial_state=input_tables,
             recombination_rate=recombination_rate,
             random_seed=42,
@@ -781,7 +783,7 @@ class TestSimulateThroughPartialPedigree:
         tables.individuals.parents = parents
 
         ts = msprime.sim_ancestry(
-            model="wf_ped",
+            model="fixed_pedigree",
             initial_state=tables,
             random_seed=42,
         )
@@ -800,7 +802,7 @@ class TestSimulateThroughPartialPedigree:
         tables.individuals.parents = parents
 
         ts = msprime.sim_ancestry(
-            model="wf_ped",
+            model="fixed_pedigree",
             initial_state=tables,
             random_seed=42,
         )
@@ -820,7 +822,7 @@ class TestSimulateThroughPedigreeErrors:
         with pytest.raises(_msprime.LibraryError, match="1855"):
             msprime.sim_ancestry(
                 initial_state=tables,
-                model="wf_ped",
+                model="fixed_pedigree",
             )
 
     @pytest.mark.parametrize("num_parents", [0, 1, 3])
@@ -829,7 +831,7 @@ class TestSimulateThroughPedigreeErrors:
         parents = [add_pedigree_individual(tables, time=1) for _ in range(num_parents)]
         add_pedigree_individual(tables, parents=parents, time=0)
         with pytest.raises(_msprime.InputError, match="exactly two parents"):
-            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
+            msprime.sim_ancestry(initial_state=tables, model="fixed_pedigree")
 
     @pytest.mark.parametrize("num_nodes", [0, 1, 3])
     def test_not_two_nodes(self, num_nodes):
@@ -840,7 +842,7 @@ class TestSimulateThroughPedigreeErrors:
                 flags=tskit.NODE_IS_SAMPLE, time=0, individual=ind, population=0
             )
         with pytest.raises(_msprime.InputError, match="exactly two nodes"):
-            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
+            msprime.sim_ancestry(initial_state=tables, model="fixed_pedigree")
 
     def test_node_times_disagree(self):
         tables = get_base_tables(100)
@@ -852,7 +854,7 @@ class TestSimulateThroughPedigreeErrors:
             flags=tskit.NODE_IS_SAMPLE, time=1, individual=ind, population=0
         )
         with pytest.raises(_msprime.InputError, match="times for the two nodes"):
-            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
+            msprime.sim_ancestry(initial_state=tables, model="fixed_pedigree")
 
     def test_node_populations_disagree(self):
         tables = get_base_tables(100)
@@ -865,7 +867,7 @@ class TestSimulateThroughPedigreeErrors:
             flags=tskit.NODE_IS_SAMPLE, time=0, individual=ind, population=1
         )
         with pytest.raises(_msprime.InputError, match="populations for the two nodes"):
-            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
+            msprime.sim_ancestry(initial_state=tables, model="fixed_pedigree")
 
     def test_no_samples(self):
         tables = get_base_tables(100)
@@ -873,14 +875,14 @@ class TestSimulateThroughPedigreeErrors:
         tables.nodes.add_row(flags=0, time=0, individual=ind, population=0)
         tables.nodes.add_row(flags=0, time=0, individual=ind, population=0)
         with pytest.raises(_msprime.InputError, match="samples"):
-            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
+            msprime.sim_ancestry(initial_state=tables, model="fixed_pedigree")
 
     def test_pedigree_time_travel(self):
         tables = get_base_tables(100)
         parents = [add_pedigree_individual(tables, time=0) for _ in range(2)]
         add_pedigree_individual(tables, time=1, parents=parents, is_sample=True)
         with pytest.raises(_msprime.InputError, match="time for a parent must be"):
-            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
+            msprime.sim_ancestry(initial_state=tables, model="fixed_pedigree")
 
     @pytest.mark.parametrize("num_founders", [2, 3, 10, 20])
     def test_all_samples(self, num_founders):
@@ -894,7 +896,7 @@ class TestSimulateThroughPedigreeErrors:
         flags[:] = tskit.NODE_IS_SAMPLE
         tables.nodes.flags = flags
         with pytest.raises(_msprime.LibraryError, match="1855"):
-            msprime.sim_ancestry(initial_state=tables, model="wf_ped")
+            msprime.sim_ancestry(initial_state=tables, model="fixed_pedigree")
 
 
 class TestSimulateThroughPedigreeMultiplePops:
@@ -907,7 +909,7 @@ class TestSimulateThroughPedigreeMultiplePops:
             msprime.sim_ancestry(
                 initial_state=tables,
                 demography=demography,
-                model="wf_ped",
+                model="fixed_pedigree",
                 random_seed=1,
             )
 
@@ -917,7 +919,9 @@ class TestSimulateThroughPedigreeMultiplePops:
         parents = [pb.add_individual(time=2, population=j) for j in range(2)]
         pb.add_individual(time=0, parents=parents, population=0)
         pedigree = pb.finalise(1)
-        ts = msprime.sim_ancestry(initial_state=pedigree, model="wf_ped", random_seed=1)
+        ts = msprime.sim_ancestry(
+            initial_state=pedigree, model="fixed_pedigree", random_seed=1
+        )
         # Founders are in different populations so cannot coalesce
         with pytest.raises(_msprime.LibraryError, match="Infinite waiting"):
             msprime.sim_ancestry(initial_state=ts, demography=demography, random_seed=2)
@@ -929,7 +933,9 @@ class TestSimulateThroughPedigreeMultiplePops:
         pb.add_individual(time=0, parents=parents, population=0)
         pedigree = pb.finalise(1)
 
-        ts = msprime.sim_ancestry(initial_state=pedigree, model="wf_ped", random_seed=1)
+        ts = msprime.sim_ancestry(
+            initial_state=pedigree, model="fixed_pedigree", random_seed=1
+        )
         ts = msprime.sim_ancestry(
             initial_state=ts, demography=demography, random_seed=2
         )
@@ -949,7 +955,9 @@ class TestSimulateThroughPedigreeMultiplePops:
         pb.add_individual(time=0, parents=parents, population=0)
         pedigree = pb.finalise(1)
 
-        ts = msprime.sim_ancestry(initial_state=pedigree, model="wf_ped", random_seed=1)
+        ts = msprime.sim_ancestry(
+            initial_state=pedigree, model="fixed_pedigree", random_seed=1
+        )
         # Should be able to coalesce due to the added population split
         ts = msprime.sim_ancestry(
             initial_state=ts, demography=demography, random_seed=2
@@ -967,7 +975,9 @@ class TestSimulateThroughPedigreeMultiplePops:
         pb.add_individual(time=0, parents=parents, population=0)
         pedigree = pb.finalise(1)
 
-        ts = msprime.sim_ancestry(initial_state=pedigree, model="wf_ped", random_seed=1)
+        ts = msprime.sim_ancestry(
+            initial_state=pedigree, model="fixed_pedigree", random_seed=1
+        )
         # Should be able to coalesce due to symmetric migration
         ts = msprime.sim_ancestry(
             initial_state=ts, demography=demography, random_seed=2
