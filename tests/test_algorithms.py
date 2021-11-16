@@ -186,7 +186,7 @@ class TestAlgorithms:
         with tempfile.TemporaryDirectory() as tmpdir:
             ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
             tables.dump(ts_path)
-            ts = self.run_script(f"0 --from-ts {ts_path} -r {r} --model=wf_ped")
+            ts = self.run_script(f"0 --from-ts {ts_path} -r {r} --model=fixed_pedigree")
         for node in ts.nodes():
             assert node.individual != tskit.NULL
         assert ts.num_samples == 2 * num_founders
@@ -235,7 +235,7 @@ class TestAlgorithms:
         with tempfile.TemporaryDirectory() as tmpdir:
             ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
             input_tables.dump(ts_path)
-            ts = self.run_script(f"0 --from-ts {ts_path} -r {r} --model=wf_ped")
+            ts = self.run_script(f"0 --from-ts {ts_path} -r {r} --model=fixed_pedigree")
         output_tables = ts.dump_tables()
         input_tables.individuals.assert_equals(output_tables.individuals)
         input_tables.nodes.assert_equals(output_tables.nodes[: len(input_tables.nodes)])
@@ -247,5 +247,5 @@ class TestAlgorithms:
         with tempfile.TemporaryDirectory() as tmpdir:
             ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
             tables.dump(ts_path)
-            ts = self.run_script(f"0 --from-ts {ts_path} -r 1 --model=wf_ped")
+            ts = self.run_script(f"0 --from-ts {ts_path} -r 1 --model=fixed_pedigree")
         assert len(ts.dump_tables().edges) == 0

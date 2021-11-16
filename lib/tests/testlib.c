@@ -106,7 +106,7 @@ build_pedigree_sim(msp_t *msp, tsk_table_collection_t *tables, gsl_rng *rng,
     if (ret != 0) {
         goto out;
     }
-    ret = msp_set_simulation_model_wf_ped(msp);
+    ret = msp_set_simulation_model_fixed_pedigree(msp);
 out:
     return ret;
 }
