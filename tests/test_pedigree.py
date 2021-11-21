@@ -1,7 +1,9 @@
 import collections
 import dataclasses
+import io
 import sys
 import tempfile
+import textwrap
 
 import numpy as np
 import pytest
@@ -1469,6 +1471,28 @@ class TestPedigreeBuilder:
         pb.add_individual(time=0)
         t1 = pb.finalise(1)
         assert t1.has_index()
+
+
+def parse_indented(text):
+    pb = msprime.PedigreeBuilder()
+    pb.parse_text(io.StringIO(textwrap.dedent(text)))
+    return pb.finalise(1)
+
+
+class TestParsePedigree:
+    def test_single_all_columns(self):
+        text = """\
+            # IID FID MID TIME IS_SAMPLE
+            X NA NA 0 1
+        """
+        tables = parse_indented(text)
+
+    def test_single_min_columns(self):
+        text = """\
+            # IID FID MID TIME
+            X NA NA 0
+        """
+        tables = parse_indented(text)
 
 
 if __name__ == "__main__":

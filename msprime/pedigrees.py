@@ -19,10 +19,76 @@
 """
 Pedigree utilities.
 """
+from __future__ import annotations
+
+import dataclasses
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Union
+
 import numpy as np
 import tskit
 
 from msprime import demography as demog_mod
+
+
+@dataclasses.dataclass
+class PedColumn:
+    name: str
+    arg_name: str = ""
+
+    def parse_value(self, value: str) -> str:
+        return value
+
+
+class IdColumn(PedColumn):
+    pass
+
+
+class NumericColumn(PedColumn):
+    def parse_value(self, value: str) -> float:
+        return float(value)
+
+
+class BooleanColumn(PedColumn):
+    def parse_value(self, value: str) -> bool:
+        return bool(int(value))
+
+
+def _parse_pedigree_header(header: str) -> list[PedColumn]:
+    tokens = header.split()
+    if tokens[0] != "#":
+        raise ValueError("First line must be the header and start with #")
+    required_cols = {
+        "IID": IdColumn("IID"),
+        "FID": IdColumn("FID"),
+        "MID": IdColumn("MID"),
+        "TIME": NumericColumn("TIME", "time"),
+    }
+    optional_cols = {
+        "IS_SAMPLE": BooleanColumn("IS_SAMPLE", "is_sample"),
+    }
+    if len(tokens) < len(required_cols) + 1:
+        raise ValueError(f"The {list(required_cols)} columns are required")
+    tokens = tokens[1:]
+    # Dicts are sorted since Python 3.7
+    if tokens[: len(required_cols)] != list(required_cols):
+        raise ValueError(f"The {list(required_cols)} columns are required")
+
+    columns = [required_cols[colname] for colname in required_cols]
+    for colname in tokens[len(required_cols) :]:
+        if colname not in optional_cols:
+            raise ValueError(f"Column {colname} not supported")
+        columns.append(optional_cols[colname])
+    return columns
+
+
+@dataclasses.dataclass
+class Individual:
+    external_id: str | None = None
+    parents: list[str | int] = dataclasses.field(default_factory=list)
+    metadata: dict = dataclasses.field(default_factory=dict)
 
 
 class PedigreeBuilder:
@@ -40,8 +106,19 @@ class PedigreeBuilder:
         if individuals_metadata_schema is not None:
             self.individuals.metadata_schema = individuals_metadata_schema
 
+    def set_parents(self, ind_id, parents):
+        row = self.tables.individuals[ind_id]
+        self.tables.individuals[ind_id] = row.replace(parents=parents)
+
     def add_individual(
-        self, *, time, is_sample=None, parents=None, population=None, metadata=None
+        self,
+        *,
+        time,
+        external_id=None,
+        is_sample=None,
+        parents=None,
+        population=None,
+        metadata=None,
     ):
         if is_sample is None:
             # By default, individuals at time 0 are marked as samples
@@ -51,6 +128,9 @@ class PedigreeBuilder:
             parents = [-1, -1]
         if len(parents) != 2:
             raise ValueError("Must have exactly two parents")
+
+        if external_id is not None:
+            metadata = {"external_id": external_id}
 
         ind_id = self.tables.individuals.add_row(parents=parents, metadata=metadata)
         if population is None:
@@ -90,6 +170,35 @@ class PedigreeBuilder:
             individual=node_individual,
         )
         return ind_ids
+
+    def _parse_pedigree_row(self, row: str, line_num: int, columns: list[PedColumn]):
+        tokens = row.split()
+        if len(tokens) != len(columns):
+            raise ValueError(f"Incorrect number of columns at line {line_num}: {row}")
+        external_id = tokens[0]
+        parents = tokens[1:3]
+        kwargs = {}
+        for value, column in zip(tokens[3:], columns[3:]):
+            # print(value, column)
+            kwargs[column.arg_name] = column.parse_value(value)
+            # print(column, value)
+            # column.validate(a
+
+        print(external_id, parents, kwargs)
+
+    def parse_text(self, ped_file):
+        """
+        Parse a text describing a pedigree used for input to the
+        :class:`.FixedPedigree` ancestry model.
+
+        # iid p0 p1 time time
+        """
+        # First line must be the header and contain the column headers
+        header = next(ped_file)
+        columns = _parse_pedigree_header(header)
+        print(columns)
+        for line_num, row in enumerate(ped_file, 1):
+            self._parse_pedigree_row(row, line_num, columns)
 
     def finalise(self, sequence_length):
         copy = self.tables.copy()
