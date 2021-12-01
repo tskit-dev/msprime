@@ -286,14 +286,14 @@ class TestFromYamlExamples:
             epochs:
               - start_size: 2000
         pulses:
-          - source: X
+          - sources: [X]
             dest: A
             time: 500
-            proportion: 0.1
-          - source: A
+            proportions: [0.1]
+          - sources: [A]
             dest: X
             time: 100
-            proportion: 0.2
+            proportions: [0.2]
         """
         d = self.from_yaml(yaml)
         assert d.num_populations == 2
@@ -340,10 +340,10 @@ class TestFromYamlExamples:
           - name: D
           - name: E
         pulses:
-          - {source: A, dest: B, time: 100, proportion: 0.1}
-          - {source: B, dest: C, time: 100, proportion: 0.2}
-          - {source: C, dest: D, time: 100, proportion: 0.3}
-          - {source: A, dest: E, time: 200, proportion: 0.4}
+          - {sources: [A], dest: B, time: 100, proportions: [0.1]}
+          - {sources: [B], dest: C, time: 100, proportions: [0.2]}
+          - {sources: [C], dest: D, time: 100, proportions: [0.3]}
+          - {sources: [A], dest: E, time: 200, proportions: [0.4]}
         """
         d = self.from_yaml(yaml)
         assert d.num_populations == 5
@@ -366,6 +366,24 @@ class TestFromYamlExamples:
         assert d.events[3].source == "E"
         assert d.events[3].dest == "A"
         assert d.events[3].proportion == 0.4
+
+    def test_multipulse(self):
+        b = demes.Builder(defaults=dict(epoch=dict(start_size=1)))
+        b.add_deme("a")
+        b.add_deme("b")
+        b.add_deme("c")
+        b.add_pulse(sources=["a", "b"], proportions=[0.1, 0.2], dest="c", time=1)
+        g = b.resolve()
+        d = msprime.Demography.from_demes(g)
+        assert len(d.events) == 2
+        assert isinstance(d.events[0], msprime.MassMigration)
+        assert isinstance(d.events[1], msprime.MassMigration)
+        assert d.events[0].source == "c"
+        assert d.events[0].dest == "a"
+        assert d.events[0].proportion == 0.1
+        assert d.events[1].source == "c"
+        assert d.events[1].dest == "b"
+        assert d.events[1].proportion == 0.2 / (1 - 0.1)
 
     def test_merger(self):
         yaml = """\
@@ -865,9 +883,9 @@ class TestToDemes:
         assert len(graph.pulses) == 1
         pulse = graph.pulses[0]
         assert pulse.time == 100
-        assert pulse.source == "pop_1"
+        assert pulse.sources[0] == "pop_1"
         assert pulse.dest == "pop_0"
-        assert pulse.proportion == 0.1
+        assert pulse.proportions[0] == 0.1
 
     @pytest.mark.filterwarnings(
         # demes warns about multiple pulses with the same time
@@ -884,21 +902,21 @@ class TestToDemes:
         assert len(graph.migrations) == 0
         assert len(graph.pulses) == 4
         pulses = graph.pulses
-        assert pulses[0].source == "pop_4"
+        assert pulses[0].sources[0] == "pop_4"
         assert pulses[0].dest == "pop_3"
-        assert pulses[0].proportion == 0.4
+        assert pulses[0].proportions[0] == 0.4
         assert pulses[0].time == 200
-        assert pulses[1].source == "pop_3"
+        assert pulses[1].sources[0] == "pop_3"
         assert pulses[1].dest == "pop_2"
-        assert pulses[1].proportion == 0.3
+        assert pulses[1].proportions[0] == 0.3
         assert pulses[1].time == 100
-        assert pulses[2].source == "pop_2"
+        assert pulses[2].sources[0] == "pop_2"
         assert pulses[2].dest == "pop_1"
-        assert pulses[2].proportion == 0.2
+        assert pulses[2].proportions[0] == 0.2
         assert pulses[2].time == 100
-        assert pulses[3].source == "pop_1"
+        assert pulses[3].sources[0] == "pop_1"
         assert pulses[3].dest == "pop_0"
-        assert pulses[3].proportion == 0.1
+        assert pulses[3].proportions[0] == 0.1
         assert pulses[3].time == 100
 
     def test_bad_pulse(self):
@@ -1017,6 +1035,49 @@ class TestToDemes:
         demog = msprime.Demography.isolated_model([1000])
         demog.add_census(100)
         demog.to_demes()
+
+    @pytest.mark.filterwarnings(
+        # demes warns about multiple pulses with the same time
+        "ignore:Multiple pulses:UserWarning"
+    )
+    def test_multipulse_roundtrip_two_sources(self):
+        b = demes.Builder(defaults=dict(epoch=dict(start_size=1)))
+        b.add_deme("a")
+        b.add_deme("b")
+        b.add_deme("c")
+        b.add_pulse(sources=["a", "b"], proportions=[0.1, 0.2], dest="c", time=1)
+        g = b.resolve()
+        d = msprime.Demography.from_demes(g)
+        g2 = d.to_demes()
+        assert len(g2.pulses) == 2
+        assert g2.pulses[0].sources[0] == "b"
+        assert g2.pulses[0].proportions[0] == 0.2 / (1 - 0.1)
+        assert g2.pulses[1].sources[0] == "a"
+        assert g2.pulses[1].proportions[0] == 0.1
+
+    @pytest.mark.filterwarnings(
+        # demes warns about multiple pulses with the same time
+        "ignore:Multiple pulses:UserWarning"
+    )
+    def test_multipulse_roundtrip_three_sources(self):
+        b = demes.Builder(defaults=dict(epoch=dict(start_size=1)))
+        b.add_deme("a")
+        b.add_deme("b")
+        b.add_deme("c")
+        b.add_deme("d")
+        b.add_pulse(
+            sources=["a", "b", "c"], proportions=[0.1, 0.2, 0.3], dest="d", time=1
+        )
+        g = b.resolve()
+        d = msprime.Demography.from_demes(g)
+        g2 = d.to_demes()
+        assert len(g2.pulses) == 3
+        assert g2.pulses[0].sources[0] == "c"
+        assert g2.pulses[0].proportions[0] == 0.3 / (1 - 0.1 - 0.2)
+        assert g2.pulses[1].sources[0] == "b"
+        assert g2.pulses[1].proportions[0] == 0.2 / (1 - 0.1)
+        assert g2.pulses[2].sources[0] == "a"
+        assert g2.pulses[2].proportions[0] == 0.1
 
 
 # class TestRoundTrip:

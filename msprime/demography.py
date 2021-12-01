@@ -1982,12 +1982,14 @@ class Demography(collections.abc.Mapping):
         # Add pulses in reverse order, so that pulses with the same time
         # correspond to the correct backwards-time mass migration ordering.
         for pulse in reversed(events.pop("pulses")):
-            demography.add_mass_migration(
-                time=pulse.time,
-                source=pulse.dest,
-                dest=pulse.source,
-                proportion=pulse.proportion,
-            )
+            sequential_props = _proportions_to_sequential(pulse.proportions)
+            for prop, source in zip(sequential_props, pulse.sources):
+                demography.add_mass_migration(
+                    time=pulse.time,
+                    source=pulse.dest,
+                    dest=source,
+                    proportion=prop,
+                )
         for merger in events.pop("mergers"):
             demography.add_admixture(
                 time=merger.time,
@@ -2710,9 +2712,9 @@ class Demography(collections.abc.Mapping):
             for lm in lineage_movements:
                 if (lm.source, lm.dest, lm.proportion) in pulses:
                     b.add_pulse(
-                        source=resolved[lm.dest].name,
+                        sources=[resolved[lm.dest].name],
                         dest=resolved[lm.source].name,
-                        proportion=lm.proportion,
+                        proportions=[lm.proportion],
                         time=time,
                     )
 

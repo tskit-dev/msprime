@@ -4,7 +4,7 @@ bintrees
 codecov
 coverage
 daiquiri
-demes>=0.1.2
+demes>=0.2.0
 demesdraw
 flake8
 hypothesis
