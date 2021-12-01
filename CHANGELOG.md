@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.4] - 2021-12-01
+
+**New features**:
+
+- Support for Demes 0.2.0, which introduces a change to how pulse
+  sources and proportions are specified.
+  ({pr}`1936`, {issue}`1930`, {user}`apragsdale`)
+
 ## [1.0.3] - 2021-11-12
 
 This is a bugfix release recommended for all users.
