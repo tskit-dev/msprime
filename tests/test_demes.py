@@ -99,6 +99,20 @@ class TestFromDemes:
         ooa2 = msprime.Demography._ooa_model().copy([d.name for d in g.demes])
         ooa2.assert_equivalent(ooa1)
 
+    def test_selfing_rate_unsupported(self):
+        b = demes.Builder()
+        b.add_deme("A", epochs=[dict(start_size=1, selfing_rate=0.1)])
+        graph = b.resolve()
+        with pytest.raises(ValueError, match="selfing_rate"):
+            msprime.Demography.from_demes(graph)
+
+    def test_cloning_rate_unsupported(self):
+        b = demes.Builder()
+        b.add_deme("A", epochs=[dict(start_size=1, cloning_rate=0.1)])
+        graph = b.resolve()
+        with pytest.raises(ValueError, match="cloning_rate"):
+            msprime.Demography.from_demes(graph)
+
 
 #    @hyp.settings(
 #        deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]

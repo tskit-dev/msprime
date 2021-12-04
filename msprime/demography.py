@@ -1904,6 +1904,18 @@ class Demography(collections.abc.Mapping):
         :rtype: .Demography
         """
 
+        # Check for Demes features that we don't support.
+        for deme in graph.demes:
+            for epoch in deme.epochs:
+                if epoch.selfing_rate != 0:
+                    raise ValueError(
+                        f"deme {deme.name}: non-zero selfing_rate not supported"
+                    )
+                if epoch.cloning_rate != 0:
+                    raise ValueError(
+                        f"deme {deme.name}: non-zero cloning_rate not supported"
+                    )
+
         def get_growth_rate(epoch):
             ret = 0
             if epoch.size_function not in ["constant", "exponential"]:
