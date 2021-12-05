@@ -1,5 +1,13 @@
 # Changelog
 
+
+**Bug fixes**:
+
+- Raise an error if `Demography.from_demes()` is passed a model
+  with non-zero `selfing_rate` or `cloning_rate` values (which msprime
+  does not support).
+  ({pr}`1938`, {issue}`1937`, {user}`grahamgower`).
+
 ## [1.0.4] - 2021-12-01
 
 **New features**:
