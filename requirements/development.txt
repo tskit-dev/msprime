@@ -7,7 +7,6 @@ daiquiri
 demes>=0.2.0
 demesdraw
 flake8
-hypothesis
 matplotlib>=3.4.0
 # More recent meson is too strict. See #1485.
 meson<=0.56
