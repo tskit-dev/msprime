@@ -29,9 +29,6 @@ import pytest
 
 import msprime
 
-# import hypothesis as hyp
-# from demes.hypothesis_strategies import graphs
-
 
 def validate_demes_demography(graph, demography):
     """
@@ -112,15 +109,6 @@ class TestFromDemes:
         graph = b.resolve()
         with pytest.raises(ValueError, match="cloning_rate"):
             msprime.Demography.from_demes(graph)
-
-
-#    @hyp.settings(
-#        deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
-#    )
-#    @hyp.given(graphs(size_functions=["constant", "exponential"]))
-#    def test_random_graph(self, graph):
-#        demography = msprime.Demography.from_demes(graph)
-#        validate_demes_demography(graph, demography)
 
 
 class TestFromYamlExamples:
@@ -1092,43 +1080,3 @@ class TestToDemes:
         assert g2.pulses[1].proportions[0] == 0.2 / (1 - 0.1)
         assert g2.pulses[2].sources[0] == "a"
         assert g2.pulses[2].proportions[0] == 0.1
-
-
-# class TestRoundTrip:
-#    def remove_selfing_and_cloning(self, graph):
-#        graph = copy.deepcopy(graph)
-#        for deme in graph.demes:
-#            for epoch in deme.epochs:
-#                epoch.selfing_rate = 0
-#                epoch.cloning_rate = 0
-#        return graph
-#
-#    @pytest.mark.filterwarnings(
-#        # demes warns about multiple pulses with the same time
-#        "ignore:Multiple pulses:UserWarning"
-#    )
-#    @hyp.settings(
-#        deadline=None, print_blob=True, suppress_health_check=[hyp.HealthCheck.too_slow]
-#    )
-#    @hyp.given(graphs(size_functions=["constant", "exponential"], min_deme_size=1))
-#    def test_random_graph(self, graph1):
-#        graph1 = graph1.in_generations()
-#        graph1 = self.remove_selfing_and_cloning(graph1)
-#        demography1 = msprime.Demography.from_demes(graph1)
-#        graph2 = demography1.to_demes()
-#        demography2 = msprime.Demography.from_demes(graph2)  # noqa: F841
-
-# XXX: We'd like to assert that the models are equivalent after
-# converting back and forth. However, hypothesis readily produces
-# examples with redundant epochs or migrations, which don't survive
-# the process of conversion. E.g.
-#
-#   time_units: generations
-#   demes:
-#     - name: A
-#       epochs:
-#         - {end_time: 100, start_size 1}
-#         - {end_time: 0, start_size 1}
-
-# graph2.assert_close(graph1)
-# demography2.assert_equivalent(demography1)
