@@ -1109,7 +1109,7 @@ class TestParseFam:
             FamEntry(iid="3", pat="1", mat="2"),
         ]
         tb = self.get_parsed_fam(entries=entries)
-        assert np.array_equal(tb[2].parents, [1, 0])
+        assert np.array_equal(tb[2].parents, [0, 1])
 
     def test_missing_parent_id(self):
         # KeyError raised if at least one parent (PAT) does not exist in dataset
@@ -1197,9 +1197,9 @@ class TestParseFam:
             tc.individuals.append(row)
         tc.tree_sequence()  # creating tree sequence should succeed
 
-        for idx in range(2):
-            assert np.array_equal(tb[idx].parents, [-1, -1])
-        assert np.array_equal(tb[2].parents, [1, 0])
+        assert np.array_equal(tb[0].parents, [1, 2])
+        assert np.array_equal(tb[1].parents, [-1, -1])
+        assert np.array_equal(tb[2].parents, [-1, -1])
 
 
 class TestPedigreeBuilder:
