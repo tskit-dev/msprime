@@ -1651,7 +1651,13 @@ class DtwfVsPedigree(Test):
     """
 
     def run_dtwf_pedigree_comparison(
-        self, N, end_time, sequence_length=1, recombination_rate=0, num_replicates=100
+        self,
+        N,
+        end_time,
+        sequence_length=1,
+        recombination_rate=0,
+        num_replicates=100,
+        pedigree_sim_direction="forward",
     ):
         df = pd.DataFrame()
 
@@ -1673,6 +1679,18 @@ class DtwfVsPedigree(Test):
                 data["model"].append(model)
             return pd.DataFrame(data)
 
+        for _ in range(num_replicates):
+            pedigree = pedigrees.sim_pedigree(
+                population_size=N, end_time=end_time, direction=pedigree_sim_direction
+            )
+            pedigree.sequence_length = sequence_length
+            ts_ped = msprime.sim_ancestry(
+                initial_state=pedigree,
+                recombination_rate=recombination_rate,
+                model="fixed_pedigree",
+            )
+            df = df.append(replicates_data([ts_ped], "dtwf|ped"))
+
         dtwf_replicates = msprime.sim_ancestry(
             samples=N,
             population_size=N,
@@ -1683,17 +1701,6 @@ class DtwfVsPedigree(Test):
             num_replicates=num_replicates,
         )
         df = df.append(replicates_data(dtwf_replicates, "dtwf"))
-
-        for _ in range(num_replicates):
-            pedigree = pedigrees.sim_pedigree(population_size=N, end_time=end_time)
-            pedigree.sequence_length = sequence_length
-            ts_ped = msprime.sim_ancestry(
-                initial_state=pedigree,
-                recombination_rate=recombination_rate,
-                model="wf_ped",
-            )
-            df = df.append(replicates_data([ts_ped], "dtwf|ped"))
-
         return df
 
     def plot_coalescent_stats(self, df):
@@ -1732,6 +1739,16 @@ class DtwfVsPedigree(Test):
             num_replicates=100,
             sequence_length=100,
             recombination_rate=0.0001,
+        )
+
+    def test_dtwf_vs_pedigree_short_region_many_roots_backward(self):
+        self._run(
+            N=500,
+            end_time=100,
+            num_replicates=100,
+            sequence_length=100,
+            recombination_rate=0.0001,
+            pedigree_sim_direction="backward",
         )
 
     def test_dtwf_vs_pedigree_short_region_few_roots(self):
@@ -1816,7 +1833,7 @@ class DtwfVsRecapitatedPedigree(Test):
             ts_ped = msprime.sim_ancestry(
                 initial_state=pedigree,
                 recombination_rate=recombination_rate,
-                model="wf_ped",
+                model="fixed_pedigree",
             )
             ts_final = msprime.sim_ancestry(
                 population_size=N,
