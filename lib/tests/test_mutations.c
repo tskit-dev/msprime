@@ -584,6 +584,7 @@ test_mutation_time(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     // error out when mutation has unknown time
+    tsk_mutation_table_clear(&tables.mutations);
     ret = tsk_mutation_table_add_row(
         &tables.mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "1", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
