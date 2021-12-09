@@ -3213,6 +3213,13 @@ msprime_get_gsl_version(PyObject *self)
 }
 
 static PyObject *
+msprime_get_tskit_c_version(PyObject *self)
+{
+    return Py_BuildValue("iii", TSK_VERSION_MAJOR, TSK_VERSION_MINOR,
+            TSK_VERSION_PATCH);
+}
+
+static PyObject *
 msprime_restore_gsl_error_handler(PyObject *self)
 {
     gsl_set_error_handler(old_gsl_error_handler);
@@ -3237,6 +3244,8 @@ static PyMethodDef msprime_methods[] = {
             "Computes the log-likelihood of an ARG." },
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
+    {"get_tskit_c_version", (PyCFunction) msprime_get_tskit_c_version, METH_NOARGS,
+            "Returns the tskit C library version we are compiled against." },
     {"restore_gsl_error_handler", (PyCFunction) msprime_restore_gsl_error_handler,
             METH_NOARGS, "Restores the GSL error handler to its value before module import." },
     {"unset_gsl_error_handler", (PyCFunction) msprime_unset_gsl_error_handler,
