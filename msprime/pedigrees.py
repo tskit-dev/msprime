@@ -185,6 +185,4 @@ def parse_fam(fam_file):
             ],
             metadata=metadata_dict,
         )
-    tc.sort()
-
     return tb
