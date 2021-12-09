@@ -65,7 +65,7 @@ class local_build_ext(build_ext):
 libdir = "lib"
 tskroot = os.path.join(libdir, "subprojects", "tskit")
 tskdir = os.path.join(tskroot, "tskit")
-kasdir = os.path.join(libdir, "subprojects", "kastore")
+kasdir = os.path.join(tskroot, "subprojects", "kastore")
 includes = ["lwt_interface", libdir, tskroot, tskdir, kasdir]
 
 configurator = PathConfigurator()
