@@ -1,5 +1,5 @@
 daiquiri==3.0.1
-demes==0.2.0
+demes==0.2.1
 demesdraw==0.2.0
 jupyter-book==0.12.1
 matplotlib==3.5.0
