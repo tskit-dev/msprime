@@ -45,6 +45,7 @@ from msprime.ancestry import (
     StandardCoalescent,
     SweepGenicSelection,
     FixedPedigree,
+    TimeUnitsMismatchWarning,
 )
 
 from msprime.core import __version__

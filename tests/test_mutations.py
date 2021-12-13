@@ -524,6 +524,18 @@ class TestSimMutations(MutateMixin):
                 for mutation in site.mutations:
                     assert mutation.derived_state == alleles[1]
 
+    @pytest.mark.parametrize("rate", [0, 1])
+    def test_uncalibrated_time_units(self, rate):
+        ts = msprime.sim_ancestry(8, random_seed=2)
+        tables = ts.dump_tables()
+        tables.time_units = "uncalibrated"
+        ts = tables.tree_sequence()
+        with pytest.raises(ValueError, match="uncalibrated"):
+            msprime.sim_mutations(ts, rate=rate, random_seed=1)
+        # Make sure also works on legacy interface
+        with pytest.raises(ValueError, match="uncalibrated"):
+            msprime.mutate(ts, rate=rate, random_seed=1)
+
     def test_zero_mutation_rate(self):
         ts = msprime.sim_ancestry(10, random_seed=1)
         mutated = msprime.sim_mutations(ts, 0)

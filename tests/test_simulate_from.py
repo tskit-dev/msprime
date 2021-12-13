@@ -598,6 +598,7 @@ class BaseEquivalanceMixin:
             model=self.model,
         )
         tables = tskit.TableCollection(ts1.sequence_length)
+        tables.time_units = "generations"
         tables.populations.add_row()
         for _ in range(n):
             tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
@@ -658,6 +659,7 @@ class BaseEquivalanceMixin:
             random_seed=seed,
         )
         tables = tskit.TableCollection(1)
+        tables.time_units = "generations"
         tables.populations.add_row()
         tables.populations.add_row()
         for _ in range(n):
@@ -952,6 +954,7 @@ class TestSimAncestryInterface:
 
     def test_extra_pops_no_metadata(self):
         tables = tskit.TableCollection(1)
+        tables.time_units = "generations"
         tables.populations.add_row()
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
@@ -970,6 +973,7 @@ class TestSimAncestryInterface:
 
     def test_extra_pops_struct_metadata(self):
         tables = tskit.TableCollection(1)
+        tables.time_units = "generations"
         tables.populations.metadata_schema = tskit.MetadataSchema(
             {
                 "codec": "struct",
@@ -999,6 +1003,7 @@ class TestSimAncestryInterface:
 
     def test_extra_pops_missing_name_metadata(self):
         tables = tskit.TableCollection(1)
+        tables.time_units = "generations"
         tables.populations.metadata_schema = tskit.MetadataSchema(
             {
                 "codec": "json",
@@ -1028,6 +1033,7 @@ class TestSimAncestryInterface:
 
     def test_extra_pops_missing_description_metadata(self):
         tables = tskit.TableCollection(1)
+        tables.time_units = "generations"
         tables.populations.metadata_schema = tskit.MetadataSchema(
             {
                 "codec": "json",
@@ -1057,6 +1063,7 @@ class TestSimAncestryInterface:
 
     def test_extra_pops_minimal_schema(self):
         tables = tskit.TableCollection(1)
+        tables.time_units = "generations"
         tables.populations.metadata_schema = tskit.MetadataSchema.permissive_json()
         tables.populations.add_row(metadata={"name": "X"})
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
@@ -1109,6 +1116,7 @@ class TestSimAncestryInterface:
 
     def test_extra_pops_set_extra_metadata(self):
         tables = tskit.TableCollection(1)
+        tables.time_units = "generations"
         tables.populations.metadata_schema = tskit.MetadataSchema(
             {
                 "codec": "json",

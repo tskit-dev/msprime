@@ -519,7 +519,9 @@ class TestParseSimAncestry:
             )
 
         # An initial state with a sequence_length that disagrees.
-        initial_state = tskit.TableCollection(1234).tree_sequence()
+        initial_state = tskit.TableCollection(1234)
+        initial_state.time_units = "generations"
+        initial_state = initial_state.tree_sequence()
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(initial_state=initial_state, sequence_length=1)
         with pytest.raises(ValueError):
@@ -753,12 +755,14 @@ class TestParseSimAncestry:
 
     def test_initial_state_errors(self):
         tables = tskit.TableCollection(1)
+        tables.time_units = "generations"
         tables.populations.add_row()
         # sequence_length doesn't match.
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(initial_state=tables, sequence_length=100)
         # Must have at least one population
         tables = tskit.TableCollection(1)
+        tables.time_units = "generations"
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(initial_state=tables)
         for bad_type in [[], "sdf", {}]:
@@ -801,6 +805,7 @@ class TestParseSimAncestry:
 
         # Specifying both is also an error.
         tables = tskit.TableCollection(1)
+        tables.time_units = "generations"
         tables.populations.add_row()
         with pytest.raises(ValueError):
             ancestry._parse_sim_ancestry(2, initial_state=tables)
@@ -822,18 +827,22 @@ class TestParseSimAncestryPedigree:
 
     @pytest.mark.parametrize("ploidy", [1, 3])
     def test_pedigree_requires_ploidy2(self, ploidy):
+        tables = tskit.TableCollection(1)
+        tables.time_units = "generations"
         with pytest.raises(ValueError, match="must have ploidy=2"):
             ancestry._parse_sim_ancestry(
                 model="fixed_pedigree",
-                initial_state=tskit.TableCollection(1),
+                initial_state=tables,
                 ploidy=ploidy,
             )
 
     def test_pedigree_requires_no_samples(self):
+        tables = tskit.TableCollection(1)
+        tables.time_units = "generations"
         with pytest.raises(ValueError, match="Cannot specify both samples and"):
             ancestry._parse_sim_ancestry(
                 model="fixed_pedigree",
-                initial_state=tskit.TableCollection(1),
+                initial_state=tables,
                 samples=10,
             )
 
@@ -2249,3 +2258,42 @@ class TestUnknownGenomeRegions:
         )
         with pytest.raises(ValueError, match="Missing regions of the genome"):
             msprime.sim_ancestry(2, recombination_rate=rate_map, random_seed=1)
+
+
+class TestTimeUnits:
+    def test_simulate_gives_generations(self):
+        ts = msprime.simulate(2, random_seed=1)
+        assert ts.time_units == "generations"
+
+    def test_sim_ancestry_gives_generations(self):
+        ts = msprime.sim_ancestry(2, random_seed=1)
+        assert ts.time_units == "generations"
+
+    @pytest.mark.parametrize("time_units", ["", "unknown", "mya", "ticks"])
+    def test_initial_state_warns_not_generations(self, time_units):
+        tables = msprime.sim_ancestry(2, end_time=0, random_seed=1).dump_tables()
+        tables.time_units = time_units
+        with pytest.warns(msprime.TimeUnitsMismatchWarning, match="time_units"):
+            ts = msprime.sim_ancestry(
+                initial_state=tables, population_size=10, random_seed=1
+            )
+        assert ts.time_units == time_units
+
+    def test_initial_state_suppress_message(self):
+        tables = msprime.sim_ancestry(2, end_time=0, random_seed=1).dump_tables()
+        tables.time_units = "ticks"
+        with warnings.catch_warnings(record=True) as w:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", msprime.TimeUnitsMismatchWarning)
+                msprime.sim_ancestry(
+                    initial_state=tables, population_size=10, random_seed=1
+                )
+        assert len(w) == 0
+
+    def test_initial_state_errors_uncalibrated(self):
+        tables = msprime.sim_ancestry(2, end_time=0, random_seed=1).dump_tables()
+        tables.time_units = tskit.TIME_UNITS_UNCALIBRATED
+        with pytest.raises(ValueError, match="time_units"):
+            msprime.sim_ancestry(
+                initial_state=tables, population_size=10, random_seed=1
+            )

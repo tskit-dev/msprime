@@ -31,6 +31,7 @@ class PedigreeBuilder:
             demography = demog_mod.Demography.isolated_model([1])
         self.demography = demography
         self.tables = tskit.TableCollection(0)
+        self.tables.time_units = "generations"
         demography.insert_populations(self.tables)
 
         assert len(self.tables.individuals) == 0
