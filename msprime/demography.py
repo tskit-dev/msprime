@@ -1132,8 +1132,8 @@ class Demography(collections.abc.Mapping):
         # the schema here, but there's none available right now.
         schema = tables.populations.metadata_schema.schema
         if schema is not None:
-            properties = schema["properties"]
-            additional_properties = schema["additionalProperties"]
+            properties = schema.get("properties", {})
+            additional_properties = schema.get("additionalProperties", True)
             name_in_metadata = "name" in properties or additional_properties
             description_in_metadata = (
                 "description" in properties or additional_properties
@@ -1817,7 +1817,11 @@ class Demography(collections.abc.Mapping):
         """
         demography = Demography()
         for pop_config in population_configurations:
-            demography._add_population_from_old_style(pop_config)
+            name = None
+            if pop_config.metadata is not None:
+                # If there's a name defined in the old-style metadata use that
+                name = pop_config.metadata.get("name", None)
+            demography._add_population_from_old_style(pop_config, name)
         if migration_matrix is not None:
             demography.migration_matrix = np.array(migration_matrix)
         if demographic_events is not None:
@@ -1846,6 +1850,14 @@ class Demography(collections.abc.Mapping):
         ``ignore_sample_size`` parameter is set to True, this check will
         not be performed and the sample sizes specified in the old-style
         :class:`.PopulationConfiguration` objects will be ignored.
+
+        Each :class:`.PopulationConfiguration` instance in the list of
+        ``population_configurations`` corresponds to the equivalent
+        :class:`.Population` object in the returned :class:`.Demography`.
+        If a PopulationConfiguration has ``metadata`` defined and this
+        dictionary contains a ``name`` field, this will be used as the
+        :class:`.Population` name. Otherwise, the default population
+        names will be used.
 
         Please see the :ref:`sec_ancestry_samples` section for details on
         how to specify sample locations in :func:`.sim_ancestry`.

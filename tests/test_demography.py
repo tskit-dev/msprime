@@ -3300,7 +3300,7 @@ class TestOldStylePopulationMetadata:
     def test_errors(self):
         for bad_metadata in [b"asdf", Exception]:
             pop_conf = msprime.PopulationConfiguration(2, metadata=bad_metadata)
-            with pytest.raises(TypeError):
+            with pytest.raises(AttributeError):
                 msprime.simulate(population_configurations=[pop_conf])
 
     def test_multi_population(self):
@@ -4732,6 +4732,24 @@ class TestDemographyFromOldStyle:
         assert demog.num_populations == 1
         assert list(demog.migration_matrix) == [[0]]
         assert list(demog.events) == []
+
+    def test_names_in_metadata(self):
+        pop_configs = [
+            msprime.PopulationConfiguration(metadata={"name": "A"}),
+            msprime.PopulationConfiguration(metadata={"name": "B"}),
+        ]
+        demog = msprime.Demography.from_old_style(population_configurations=pop_configs)
+        assert demog.populations[0].name == "A"
+        assert demog.populations[1].name == "B"
+
+    def test_names_in_metadata_mixed(self):
+        pop_configs = [
+            msprime.PopulationConfiguration(),
+            msprime.PopulationConfiguration(metadata={"name": "B"}),
+        ]
+        demog = msprime.Demography.from_old_style(population_configurations=pop_configs)
+        assert demog.populations[0].name == "pop_0"
+        assert demog.populations[1].name == "B"
 
     def test_pop_configs_defaults(self):
         for n in range(1, 5):

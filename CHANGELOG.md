@@ -1,5 +1,7 @@
 # Changelog
 
+**New features**:
+
 
 **Bug fixes**:
 
@@ -7,6 +9,14 @@
   with non-zero `selfing_rate` or `cloning_rate` values (which msprime
   does not support).
   ({pr}`1938`, {issue}`1937`, {user}`grahamgower`).
+
+- Do not assume Population metadata schemas contain the ``properties``
+  and ``additionalProperties`` attributes ({issue}`1947`, {pr}`1954`,
+  {user}`jeromekelleher`).
+
+- Read the population name from PopulationConfiguration ``metadata`` in
+  ``Demography.from_old_style`` ({issue}`1950`, {pr}`1954`,
+  {user}`jeromekelleher`)
 
 ## [1.0.4] - 2021-12-01
 
