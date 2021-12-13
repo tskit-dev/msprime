@@ -9,5 +9,5 @@ pytest-xdist==2.4.0
 # Required by python_jsonschema_objects
 jsonschema<5.0
 python_jsonschema_objects==0.4.1
-scipy==1.7.1
+scipy==1.7.3
 tskit==0.4.0
