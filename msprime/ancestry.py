@@ -1889,6 +1889,13 @@ class SweepGenicSelection(ParametricAncestryModel):
     Thus fitness of the heterozygote is intermediate to the
     two homozygotes.
 
+    .. warning:: Currently, models where `start_frequency` is
+       :math:`\\geq \\frac{1}{ploidy*N}`
+       will give incorrect results.  In practical terms, this issue means
+       that "sweeps from neutral standing genetic variation" are currently not
+       possible. The tracking issue for this on GitHub is
+       `here <https://github.com/tskit-dev/msprime/issues/1762>`_.
+
     The model is one of a structured coalescent where selective backgrounds are
     defined as in
     `Braverman et al. (1995) <https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1206652/>`_
