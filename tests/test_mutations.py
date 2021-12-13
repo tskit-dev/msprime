@@ -2168,3 +2168,37 @@ class TestDeprecatedApis:
         assert ts.num_sites == 0
         mts = msprime.mutate(ts, rate=1, random_seed=3)
         assert mts.num_sites > 0
+
+
+class TestInputUnmodified:
+    """
+    Check that things that shouldn't be touched by sim_mutations, aren't.
+    """
+
+    def test_refseq_just_data(self):
+        ts1 = msprime.sim_ancestry(2, sequence_length=10, random_seed=1)
+        tables = ts1.dump_tables()
+        tables.reference_sequence.data = "A" * 10
+        ts2 = msprime.sim_mutations(tables.tree_sequence(), rate=1, random_seed=2)
+        assert ts2.reference_sequence.data == "A" * 10
+        tables.reference_sequence.assert_equals(ts2.reference_sequence)
+
+    def test_refseq_all_fields(self):
+        ts1 = msprime.sim_ancestry(2, sequence_length=10, random_seed=1)
+        tables = ts1.dump_tables()
+        tables.reference_sequence.data = "A"
+        tables.reference_sequence.metadata_schema = (
+            tskit.MetadataSchema.permissive_json()
+        )
+        tables.reference_sequence.metadata = {"a": 1, "b": 2}
+        tables.reference_sequence.url = "http://stuff.stuff"
+        ts2 = msprime.sim_mutations(tables.tree_sequence(), rate=1, random_seed=2)
+        tables.reference_sequence.assert_equals(ts2.reference_sequence)
+
+    @pytest.mark.parametrize("time_units", ["", "generations", "mya"])
+    def test_time_units(self, time_units):
+        ts1 = msprime.sim_ancestry(2, sequence_length=10, random_seed=1)
+        tables = ts1.dump_tables()
+        tables.time_units = time_units
+        ts2 = msprime.sim_mutations(tables.tree_sequence(), rate=1, random_seed=2)
+        assert ts2.time_units == time_units
