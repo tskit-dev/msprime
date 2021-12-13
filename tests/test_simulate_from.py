@@ -1055,6 +1055,20 @@ class TestSimAncestryInterface:
         assert ts.population(0).metadata == {"name": "X"}
         assert ts.population(1).metadata == {"name": "Z"}
 
+    def test_extra_pops_minimal_schema(self):
+        tables = tskit.TableCollection(1)
+        tables.populations.metadata_schema = tskit.MetadataSchema.permissive_json()
+        tables.populations.add_row(metadata={"name": "X"})
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
+        d = msprime.Demography.from_tree_sequence(
+            tables.tree_sequence(), initial_size=1
+        )
+        d.add_population(name="Z", description="ZZ", initial_size=1)
+        ts = msprime.sim_ancestry(initial_state=tables, demography=d, random_seed=1)
+        assert ts.population(0).metadata == {"name": "X"}
+        assert ts.population(1).metadata == {"name": "Z", "description": "ZZ"}
+
     def test_extra_pops_missing_extra_metadata(self):
         tables = tskit.TableCollection(1)
         tables.populations.metadata_schema = tskit.MetadataSchema(

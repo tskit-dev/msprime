@@ -1132,8 +1132,8 @@ class Demography(collections.abc.Mapping):
         # the schema here, but there's none available right now.
         schema = tables.populations.metadata_schema.schema
         if schema is not None:
-            properties = schema["properties"]
-            additional_properties = schema["additionalProperties"]
+            properties = schema.get("properties", {})
+            additional_properties = schema.get("additionalProperties", True)
             name_in_metadata = "name" in properties or additional_properties
             description_in_metadata = (
                 "description" in properties or additional_properties
