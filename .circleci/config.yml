@@ -12,7 +12,7 @@ jobs:
           # we can invalidate the cache when we need to. Note that we need
           # to update the key in the ``save_cache`` block below also when
           # doing that.
-          key: msprime-{{ .Branch }}-v3
+          key: msprime-{{ .Branch }}-v4
       - run:
           name: Checkout submodules
           command: |
@@ -25,12 +25,11 @@ jobs:
             sudo apt-get update
             sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev ninja-build valgrind clang
             pip install --user -r requirements/CI-complete/requirements.txt
-            # FIXME pinning meson for now, https://github.com/tskit-dev/msprime/issues/1485
-            pip install --user build twine meson==0.56
+            pip install --user build twine meson
             # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
             echo 'export PATH=/home/circleci/.local/bin:$PATH' >> $BASH_ENV
       - save_cache:
-          key: msprime-{{ .Branch }}-v3
+          key: msprime-{{ .Branch }}-v4
           paths:
             - "/home/circleci/.local"
 
@@ -50,7 +49,7 @@ jobs:
       - run:
           name: Compile C with gcc
           command: |
-            CFLAGS=--coverage meson lib/ build-gcc && cd build-gcc && ninja
+            CFLAGS=--coverage meson lib/ build-gcc && ninja -C build-gcc
 
       - run:
           name: Run the low-level tests.

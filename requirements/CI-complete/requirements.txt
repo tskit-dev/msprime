@@ -14,4 +14,4 @@ jsonschema<4.0
 python_jsonschema_objects==0.4.1
 scipy==1.7.3
 stdpopsim==0.1.2
-tskit==0.3.7
+tskit==0.4.0

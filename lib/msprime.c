@@ -3390,7 +3390,8 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree, double left, double ri
     const population_id_t *restrict node_population = self->tables->nodes.population;
     label_id_t label = 0; /* For now only support label 0 */
 
-    for (root = tree->left_root; root != TSK_NULL; root = tree->right_sib[root]) {
+    for (root = tsk_tree_get_left_root(tree); root != TSK_NULL;
+         root = tree->right_sib[root]) {
         population = node_population[root];
         /* tskit will make sure that population references are good, but
          * we can still have NULL refs. */
@@ -3476,14 +3477,14 @@ msp_process_input_trees(msp_t *self)
         overlap_count = 0;
         if (num_roots > 1) {
             overlap_count = (uint32_t) num_roots;
-            ret = msp_allocate_root_segments(self, &tree, tree.left, tree.right,
-                self->root_segments, root_segments_tail);
+            ret = msp_allocate_root_segments(self, &tree, tree.interval.left,
+                tree.interval.right, self->root_segments, root_segments_tail);
             if (ret != 0) {
                 goto out;
             }
         }
         if (overlap_count != last_overlap_count) {
-            overlap->left = tree.left;
+            overlap->left = tree.interval.left;
             overlap->count = overlap_count;
             overlap++;
             last_overlap_count = overlap_count;

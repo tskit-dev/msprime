@@ -437,6 +437,11 @@ class TestModule:
         _msprime.restore_gsl_error_handler()
         _msprime.unset_gsl_error_handler()
 
+    def test_tsk_library_version(self):
+        tsk_version = _msprime.get_tskit_c_version()
+        # Update this when the tskit C library version changes
+        assert tsk_version == (0, 99, 15)
+
 
 def get_random_population_models(n):
     """

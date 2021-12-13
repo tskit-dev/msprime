@@ -117,7 +117,7 @@ out:
  * NB This returns a *borrowed reference*, so don't DECREF it!
  */
 static PyObject *
-get_dict_value(PyObject *dict, const char *key_str)
+get_required_dict_value(PyObject *dict, const char *key_str)
 {
     PyObject *ret = NULL;
 
@@ -138,7 +138,7 @@ get_dict_number(PyObject *dict, const char *key_str)
     PyObject *ret = NULL;
     PyObject *value;
 
-    value = get_dict_value(dict, key_str);
+    value = get_required_dict_value(dict, key_str);
     if (value == NULL) {
         goto out;
     }
@@ -162,11 +162,11 @@ parse_rate_map(PyObject *py_rate_map, size_t *ret_size,
     PyArrayObject *rate_array = NULL;
     npy_intp *dims, size;
 
-    position = get_dict_value(py_rate_map, "position");
+    position = get_required_dict_value(py_rate_map, "position");
     if (position == NULL) {
         goto out;
     }
-    rate = get_dict_value(py_rate_map, "rate");
+    rate = get_required_dict_value(py_rate_map, "rate");
     if (rate == NULL) {
         goto out;
     }
@@ -1115,7 +1115,7 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
 
-    py_name = get_dict_value(py_model, "name");
+    py_name = get_required_dict_value(py_model, "name");
     if (py_name == NULL) {
         goto out;
     }
@@ -1249,7 +1249,7 @@ Simulator_parse_activate_population_event(Simulator *self, double time, PyObject
     int err, population_id;
     PyObject *value;
 
-    value = get_dict_value(py_event, "population");
+    value = get_required_dict_value(py_event, "population");
     if (value == NULL) {
         goto out;
     }
@@ -1274,7 +1274,7 @@ Simulator_parse_population_split(Simulator *self, double time, PyObject *py_even
     int err, ancestral;
     npy_intp *dims;
 
-    value = get_dict_value(py_event, "derived");
+    value = get_required_dict_value(py_event, "derived");
     if (value == NULL) {
         goto out;
     }
@@ -1317,7 +1317,7 @@ Simulator_parse_admixture(Simulator *self, double time, PyObject *py_event)
     int err, derived;
     npy_intp *dims, N;
 
-    value = get_dict_value(py_event, "ancestral");
+    value = get_required_dict_value(py_event, "ancestral");
     if (value == NULL) {
         goto out;
     }
@@ -1334,7 +1334,7 @@ Simulator_parse_admixture(Simulator *self, double time, PyObject *py_event)
     }
     N = dims[0];
 
-    value = get_dict_value(py_event, "proportions");
+    value = get_required_dict_value(py_event, "proportions");
     if (value == NULL) {
         goto out;
     }
@@ -1384,7 +1384,7 @@ Simulator_parse_symmetric_migration_rate_change(Simulator *self,
     int err;
     npy_intp *dims;
 
-    value = get_dict_value(py_event, "populations");
+    value = get_required_dict_value(py_event, "populations");
     if (value == NULL) {
         goto out;
     }
@@ -1552,7 +1552,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             PyErr_SetString(PyExc_ValueError, "negative times not valid");
             goto out;
         }
-        type = get_dict_value(item, "type");
+        type = get_required_dict_value(item, "type");
         if (type == NULL) {
             goto out;
         }
@@ -3213,6 +3213,13 @@ msprime_get_gsl_version(PyObject *self)
 }
 
 static PyObject *
+msprime_get_tskit_c_version(PyObject *self)
+{
+    return Py_BuildValue("iii", TSK_VERSION_MAJOR, TSK_VERSION_MINOR,
+            TSK_VERSION_PATCH);
+}
+
+static PyObject *
 msprime_restore_gsl_error_handler(PyObject *self)
 {
     gsl_set_error_handler(old_gsl_error_handler);
@@ -3237,6 +3244,8 @@ static PyMethodDef msprime_methods[] = {
             "Computes the log-likelihood of an ARG." },
     {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
             "Returns the version of GSL we are linking against." },
+    {"get_tskit_c_version", (PyCFunction) msprime_get_tskit_c_version, METH_NOARGS,
+            "Returns the tskit C library version we are compiled against." },
     {"restore_gsl_error_handler", (PyCFunction) msprime_restore_gsl_error_handler,
             METH_NOARGS, "Restores the GSL error handler to its value before module import." },
     {"unset_gsl_error_handler", (PyCFunction) msprime_unset_gsl_error_handler,
