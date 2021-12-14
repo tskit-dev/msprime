@@ -1,7 +1,14 @@
 # Changelog
 
-**New features**:
+## [1.1.0] - 2021-12-14
 
+**New features**
+
+- Add support for tree sequence ``time_units`` field. The ``time_units`` will
+  be set to "generations" for the output of ``sim_ancestry`` (and ``simulate``),
+  unless the ``initial_state`` argument is used. In this case, the
+  ``time_units`` value will be inherited from the input.
+  ({pr}`1953`, {issue}`1951`, {issue}`1877`, {issue}`1948`, {user}`jeromekelleher`).
 
 **Bug fixes**:
 
@@ -17,6 +24,10 @@
 - Read the population name from PopulationConfiguration ``metadata`` in
   ``Demography.from_old_style`` ({issue}`1950`, {pr}`1954`,
   {user}`jeromekelleher`)
+
+**Maintenance **:
+
+- Update tskit to Python 0.4.0 and C 0.99.15.
 
 ## [1.0.4] - 2021-12-01
 

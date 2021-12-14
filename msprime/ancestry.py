@@ -30,6 +30,7 @@ import logging
 import math
 import sys
 import tempfile
+import warnings
 from typing import Any
 from typing import ClassVar
 
@@ -44,6 +45,15 @@ from . import provenance
 from msprime import _msprime
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+TIME_UNITS_GENERATIONS = "generations"
+
+
+class TimeUnitsMismatchWarning(UserWarning):
+    """
+    Warning raise when the time units specified in different parts of a
+    simulation do not match.
+    """
 
 
 def _model_factory(model: None | str | AncestryModel) -> AncestryModel:
@@ -195,6 +205,7 @@ def _demography_factory(
 def _build_initial_tables(*, sequence_length, samples, ploidy, demography):
     # NOTE: this is only used in the simulate() codepath.
     tables = tskit.TableCollection(sequence_length)
+    tables.time_units = TIME_UNITS_GENERATIONS
 
     for index, (population, time) in enumerate(samples):
         tables.nodes.add_row(
@@ -804,6 +815,20 @@ def _parse_sim_ancestry(
             raise TypeError(
                 "initial_state must either be a TreeSequence or TableCollection instance"
             )
+        if initial_state.time_units == tskit.TIME_UNITS_UNCALIBRATED:
+            raise ValueError(
+                "Cannot use a tree sequence with uncalibrated time_units as "
+                "the initial state"
+            )
+        if initial_state.time_units != TIME_UNITS_GENERATIONS:
+            message = (
+                f"The initial_state has time_units={initial_state.time_units} but "
+                "time is measured in generations in msprime. This may lead to "
+                "significant discrepancies between the timescales. "
+                "If you wish to suppress this warning, you can use, e.g., "
+                "warnings.simplefilter('ignore', msprime.TimeUnitsMismatchWarning)"
+            )
+            warnings.warn(message, TimeUnitsMismatchWarning)
 
     if sequence_length is None:
         # These are all the cases in which we derive the sequence_length
@@ -940,6 +965,7 @@ def _parse_sim_ancestry(
                 "Either the samples or initial_state arguments must be provided"
             )
         initial_state = tskit.TableCollection(sequence_length)
+        initial_state.time_units = TIME_UNITS_GENERATIONS
         demography.insert_populations(initial_state)
         if not init_for_debugger:
             sample_sets = _parse_samples(samples, demography)

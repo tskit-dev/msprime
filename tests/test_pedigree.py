@@ -266,6 +266,7 @@ class TestPedigreeSimulation:
             num_generations=10,
         )
         tc = tskit.TableCollection(1)
+        tc.time_units = "generations"
         tc.individuals.metadata_schema = tb.metadata_schema
         for row in tb:
             tc.individuals.append(row)

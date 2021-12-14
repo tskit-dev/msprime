@@ -1356,6 +1356,11 @@ def sim_mutations(
     if not isinstance(rate_map, intervals.RateMap):
         raise TypeError("rate must be a float or a RateMap")
 
+    if tables.time_units == tskit.TIME_UNITS_UNCALIBRATED:
+        raise ValueError(
+            "Simulating mutations doesn't make sense when time is uncalibrated"
+        )
+
     start_time = -sys.float_info.max if start_time is None else float(start_time)
     end_time = sys.float_info.max if end_time is None else float(end_time)
     if start_time > end_time:
