@@ -2124,7 +2124,7 @@ class Demography(collections.abc.Mapping):
             population. Must be either None (the default, resulting a zero
             growth rate) or an array with the same length as ``initial_size``.
         :return: A Demography object representing this model, suitable as
-            input to :func:`.simulate`.
+            input to :func:`.sim_ancestry`.
         :rtype: .Demography
         """
         initial_size = np.array(initial_size, dtype=np.float64)
@@ -2175,7 +2175,7 @@ class Demography(collections.abc.Mapping):
             population. Must be either None (the default, resulting a zero
             growth rate) or an array with the same length as ``initial_size``.
         :return: A Demography object representing this model, suitable as
-            input to :func:`.simulate`.
+            input to :func:`.sim_ancestry`.
         :rtype: Demography
         """
         model = Demography.isolated_model(initial_size, growth_rate=growth_rate)
@@ -2213,7 +2213,7 @@ class Demography(collections.abc.Mapping):
             populations is "circular" and migration takes place between the
             terminal demes.
         :return: A Demography object representing this model, suitable as
-            input to :func:`.simulate`.
+            input to :func:`.sim_ancestry`.
         :rtype: .Demography
         """
         initial_size = np.array(initial_size, dtype=np.float64)
