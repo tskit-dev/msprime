@@ -2258,6 +2258,7 @@ First we set up our models:
 import random
 random.seed(1234)
 L = 100
+Ne = 1e6
 
 models = []
 for _ in range(100):
@@ -2265,8 +2266,8 @@ for _ in range(100):
     models.append(
         msprime.SweepGenicSelection(
             position=random.randint(1, L - 1),
-            start_frequency=0.4,
-            end_frequency=0.5,
+            start_frequency=1 / (2 * Ne),
+            end_frequency=1.0 - 1 / (2 * Ne),
             s=0.01,
             dt=1e-6,
         )
