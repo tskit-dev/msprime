@@ -173,7 +173,7 @@ class TestSpeciesTreeRoundTrip:
             time_units=time_units,
             generation_time=generation_time,
         )
-        assert demography.num_populations == tree.num_nodes
+        assert demography.num_populations == tree.tree_sequence.num_nodes
         for pop in demography.populations:
             assert pop.initial_size == initial_size
             assert pop.growth_rate == 0
@@ -373,7 +373,7 @@ class TestStarbeastRoundTrip:
         if nexus is None:
             nexus = make_nexus(tree, pop_size_map)
         demography = species_trees.parse_starbeast(nexus, generation_time, time_units)
-        assert demography.num_populations == tree.num_nodes
+        assert demography.num_populations == tree.tree_sequence.num_nodes
         for pop in demography.populations:
             assert pop.growth_rate == 0
 
