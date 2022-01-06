@@ -1,7 +1,7 @@
+import collections
 import dataclasses
 import sys
 import tempfile
-from dataclasses import asdict
 
 import numpy as np
 import pytest
@@ -86,9 +86,145 @@ def simulate_pedigree(
 
 
 class TestSimPedigree:
+    @pytest.mark.parametrize("num_generations", [1, 3, 7])
+    @pytest.mark.parametrize("direction", ["backward", "forward"])
+    def test_end_time_like_dtwf(self, num_generations, direction):
+        N = 10
+        ped_tables = pedigrees.sim_pedigree(
+            population_size=N,
+            end_time=num_generations,
+            random_seed=1,
+            direction=direction,
+        )
+        dtwf_ts = msprime.sim_ancestry(
+            100,
+            population_size=N,
+            end_time=num_generations,
+            random_seed=1,
+            model="dtwf",
+        )
+        assert np.max(ped_tables.nodes.time) == num_generations
+        assert np.max(dtwf_ts.tables.nodes.time) == num_generations
+
+    @pytest.mark.parametrize("direction", ["BACKWARD", "", None])
+    def test_bad_time_direction(self, direction):
+        with pytest.raises(ValueError):
+            pedigrees.sim_pedigree(population_size=2, end_time=2, direction=direction)
+
+    @pytest.mark.parametrize("direction", ["backward", "forward"])
+    def test_no_metadata(self, direction):
+        tables = pedigrees.sim_pedigree(
+            population_size=2, end_time=2, random_seed=1, direction=direction
+        )
+        assert tables.individuals.metadata_schema.schema is None
+
+    @pytest.mark.parametrize("direction", ["backward", "forward"])
+    def test_random_equal_seed(self, direction):
+        t1 = pedigrees.sim_pedigree(
+            population_size=20, end_time=10, random_seed=5, direction=direction
+        )
+        t2 = pedigrees.sim_pedigree(
+            population_size=20, end_time=10, random_seed=5, direction=direction
+        )
+        t1.assert_equals(t2)
+
+    @pytest.mark.parametrize("direction", ["backward", "forward"])
+    def test_random_not_equal_seed(self, direction):
+        t1 = pedigrees.sim_pedigree(
+            population_size=20, end_time=10, random_seed=5, direction=direction
+        )
+        t2 = pedigrees.sim_pedigree(
+            population_size=20, end_time=10, random_seed=6, direction=direction
+        )
+        assert not t1.equals(t2)
+
+
+class TestSimPedigreeBackward:
     """
-    Tests for the simple Wright-Fisher pedigree simulator.
+    Tests for the simple backwards-time Wright-Fisher pedigree simulator.
     """
+
+    def verify(self, tables):
+        tables.sequence_length = 10
+        # Check that we can simulate with it.
+        msprime.sim_ancestry(
+            initial_state=tables, model="fixed_pedigree", random_seed=2
+        )
+
+    def sim_pedigree(self, population_size=10, end_time=10, num_samples=10):
+        return pedigrees.sim_pedigree(
+            population_size=population_size,
+            end_time=end_time,
+            num_samples=num_samples,
+            random_seed=1,
+            direction="backward",
+        )
+
+    def test_zero_generations(self):
+        tables = self.sim_pedigree(num_samples=10, end_time=0)
+        assert len(tables.individuals) == 10
+        assert np.all(tables.nodes.time) == 0
+        assert np.all(tables.nodes.flags) == tskit.NODE_IS_SAMPLE
+        assert np.all(tables.nodes.population) == 0
+        self.verify(tables)
+
+    @pytest.mark.parametrize("N", range(2, 6))
+    @pytest.mark.parametrize("num_generations", range(1, 5))
+    def test_n_generations(self, N, num_generations):
+        n = N - 1
+        tables = pedigrees.sim_pedigree(
+            num_samples=n,
+            population_size=N,
+            end_time=num_generations,
+            direction="backward",
+            random_seed=1,
+        )
+        assert len(tables.individuals) <= (num_generations + 1) * N
+
+        tables.sequence_length = 1
+        ts = tables.tree_sequence()
+
+        # Gather the individuals for each generation
+        individuals = collections.defaultdict(list)
+        individual_ids = collections.defaultdict(list)
+        for ind in ts.individuals():
+            time = ts.node(ind.nodes[0]).time
+            assert ts.node(ind.nodes[1]).time == time
+            individuals[time].append(ind)
+            individual_ids[time].append(ind.id)
+
+        assert len(individuals[0]) == n
+
+        for t in range(num_generations):
+            assert len(individuals[t]) <= N
+            for ind in individuals[t]:
+                for parent in ind.parents:
+                    assert parent in individual_ids[t + 1]
+
+        # first n individuals are samples
+        for ind in range(n):
+            ind_obj = ts.individual(ind)
+            for node_id in ind_obj.nodes:
+                node_obj = ts.node(node_id)
+                assert node_obj.time == 0
+                assert node_obj.is_sample()
+
+        for ind in individuals[num_generations]:
+            assert list(ind.parents) == [-1, -1]
+
+        self.verify(tables)
+
+
+class TestSimPedigreeForward:
+    """
+    Tests for the simple forwards-time Wright-Fisher pedigree simulator.
+    """
+
+    def test_num_samples_error(self):
+        with pytest.raises(ValueError):
+            pedigrees.sim_pedigree(
+                population_size=2, end_time=2, num_samples=1, random_seed=1
+            )
 
     def verify(self, tables):
         tables.sequence_length = 10
@@ -100,7 +236,6 @@ class TestSimPedigree:
     def test_zero_generations(self):
         tables = pedigrees.sim_pedigree(population_size=10, end_time=0, random_seed=1)
         assert len(tables.individuals) == 10
-        # print(tables)
         assert np.all(tables.nodes.time) == 0
         assert np.all(tables.nodes.flags) == tskit.NODE_IS_SAMPLE
         assert np.all(tables.nodes.population) == 0
@@ -110,7 +245,9 @@ class TestSimPedigree:
     @pytest.mark.parametrize("num_generations", range(1, 5))
     def test_n_generations(self, N, num_generations):
         tables = pedigrees.sim_pedigree(
-            population_size=N, end_time=num_generations, random_seed=1
+            population_size=N,
+            end_time=num_generations,
+            random_seed=1,
         )
         assert len(tables.individuals) == (num_generations + 1) * N
 
@@ -144,24 +281,7 @@ class TestSimPedigree:
             n += N
         # Last N nodes are all samples
         assert np.all(tables.nodes.flags[-2 * N :] == tskit.NODE_IS_SAMPLE)
-
         self.verify(tables)
-
-    @pytest.mark.parametrize("num_generations", [1, 3, 7])
-    def test_end_time_like_dtwf(self, num_generations):
-        N = 10
-        ped_tables = pedigrees.sim_pedigree(
-            population_size=N, end_time=num_generations, random_seed=1
-        )
-        dtwf_ts = msprime.sim_ancestry(
-            100,
-            population_size=N,
-            end_time=num_generations,
-            random_seed=1,
-            model="dtwf",
-        )
-        assert ped_tables.nodes.time[0] == num_generations
-        assert dtwf_ts.tables.nodes.time[-1] == num_generations
 
 
 class TestPedigreeSimulation:
@@ -234,25 +354,6 @@ class TestPedigreeSimulation:
             num_generations=2,
         )
         assert len(tb) == 2 + num_children
-
-    @pytest.mark.parametrize("num_children_prob", [[0.5, 0.5], [0, 0.5, 0.5]])
-    def test_expected_num_children(self, num_children_prob):
-        n_reps = 1000
-        num_founders = 2
-        num_children = []
-        for rep in range(n_reps):
-            tb = self.simple_sim(
-                num_founders=num_founders,
-                num_children_prob=num_children_prob,
-                num_generations=2,
-                random_seed=rep,
-            )
-            num_children.append(len(tb) - num_founders)
-        expected_num_children = sum(
-            prob * n
-            for prob, n in zip(num_children_prob, range(len(num_children_prob)))
-        )
-        assert np.mean(num_children) == pytest.approx(expected_num_children, rel=0.1)
 
     def test_bad_num_children_prob(self):
         with pytest.raises(ValueError):
@@ -996,7 +1097,9 @@ class FamEntry:
     phen: str = None
 
     def get_row(self, delimiter="\t"):
-        return delimiter.join([x for x in asdict(self).values() if x is not None])
+        return delimiter.join(
+            [x for x in dataclasses.asdict(self).values() if x is not None]
+        )
 
 
 class TestParseFam:
@@ -1042,7 +1145,7 @@ class TestParseFam:
 
     @pytest.mark.parametrize("n_cols", range(1, 5))
     def test_insufficient_cols(self, n_cols):
-        fields = list(asdict(FamEntry()))
+        fields = list(dataclasses.asdict(FamEntry()))
         entry = FamEntry(iid="1")
         for field in fields[n_cols:]:
             entry.__setattr__(field, None)
@@ -1341,13 +1444,17 @@ class TestPedigreeBuilder:
         "metadata", [{}, {"A": "B"}, {"A": [0, 1, 2]}, {"A": {"B": "C"}}]
     )
     def test_metadata(self, metadata):
-        pb = pedigrees.PedigreeBuilder()
+        pb = pedigrees.PedigreeBuilder(
+            individuals_metadata_schema=tskit.MetadataSchema.permissive_json()
+        )
         pb.add_individual(time=0, metadata=metadata)
         ts = pb.finalise(1).tree_sequence()
         assert ts.individual(0).metadata == metadata
 
     def test_add_individual_return_value(self):
-        pb = pedigrees.PedigreeBuilder()
+        pb = pedigrees.PedigreeBuilder(
+            individuals_metadata_schema=tskit.MetadataSchema.permissive_json()
+        )
         n = 5
         for j in range(n):
             ind_id = pb.add_individual(time=0, metadata={"id": j})

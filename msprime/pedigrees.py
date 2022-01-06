@@ -26,23 +26,19 @@ from msprime import demography as demog_mod
 
 
 class PedigreeBuilder:
-    def __init__(self, demography=None):
+    def __init__(self, demography=None, individuals_metadata_schema=None):
         if demography is None:
             demography = demog_mod.Demography.isolated_model([1])
         self.demography = demography
         self.tables = tskit.TableCollection(0)
         self.tables.time_units = "generations"
         demography.insert_populations(self.tables)
-
-        assert len(self.tables.individuals) == 0
-        self.tables.individuals.metadata_schema = tskit.MetadataSchema(
-            {
-                "codec": "json",
-                "type": "object",
-                "properties": {},
-                "additionalProperties": True,
-            }
-        )
+        # Work around https://github.com/tskit-dev/tskit/issues/2080
+        self.individuals = self.tables.individuals
+        self.nodes = self.tables.nodes
+        assert len(self.individuals) == 0
+        if individuals_metadata_schema is not None:
+            self.individuals.metadata_schema = individuals_metadata_schema
 
     def add_individual(
         self, *, time, is_sample=None, parents=None, population=None, metadata=None
@@ -73,6 +69,28 @@ class PedigreeBuilder:
             )
         return ind_id
 
+    def add_individuals(self, *, parents, time):
+        population = 0
+        flags = 0 if time > 0 else tskit.NODE_IS_SAMPLE
+
+        N = parents.shape[0]
+        ind_ids = np.arange(N, dtype=np.int32) + len(self.individuals)
+        self.individuals.append_columns(
+            flags=np.zeros(N, dtype=np.uint32),
+            parents=parents.reshape(2 * N),
+            parents_offset=np.arange(N + 1, dtype=np.uint32) * 2,
+        )
+        node_individual = np.zeros(2 * N, dtype=np.int32)
+        node_individual[0::2] = ind_ids
+        node_individual[1::2] = ind_ids
+        self.nodes.append_columns(
+            flags=np.full(2 * N, flags, dtype=np.uint32),
+            time=np.full(2 * N, time, dtype=np.float64),
+            population=np.full(2 * N, population, dtype=np.int32),
+            individual=node_individual,
+        )
+        return ind_ids
+
     def finalise(self, sequence_length):
         copy = self.tables.copy()
         copy.sequence_length = sequence_length
@@ -82,52 +100,94 @@ class PedigreeBuilder:
         return copy
 
 
-def sim_pedigree(
+def sim_pedigree_backward(
+    builder,
+    rng,
     *,
-    population_size=None,
-    sequence_length=None,
-    random_seed=None,
-    num_replicates=None,
-    end_time=None,
+    population_size,
+    num_samples,
+    end_time,
 ):
-    # Internal utility for generating pedigree data. This function is not
-    # part of the public API and subject to arbitrary changes/removal
-    # in the future.
+    ancestors = np.arange(num_samples, dtype=np.int32)
+    parent_offset = num_samples
 
-    # We use the builder to get a standard set of tables, but bypass
-    # it so that we can use numpy methods add to it more efficiently.
-    tables = PedigreeBuilder().tables
-    tables.sequence_length = -1 if sequence_length is None else sequence_length
+    # Because we don't have overlapping generations we can add the ancestors
+    # to the pedigree once the previous generation has been produced
+    for time in range(0, end_time):
+        population = np.arange(population_size, dtype=np.int32)
+        parents = rng.choice(population, (len(ancestors), 2))
+        unique_parents = np.unique(parents)
+        parent_ids = np.searchsorted(unique_parents, parents).astype(np.int32)
+        assert np.all(unique_parents[parent_ids] == parents)
+        a = builder.add_individuals(parents=parent_ids + parent_offset, time=time)
+        assert np.array_equal(a, ancestors)
+        ancestors = np.arange(len(unique_parents), dtype=np.int32) + parent_offset
+        parent_offset += len(ancestors)
+    # Add the founders
+    builder.add_individuals(
+        parents=np.full((len(ancestors), 2), tskit.NULL, dtype=np.int32), time=end_time
+    )
+    return builder.finalise(1)
 
+
+def sim_pedigree_forward(
+    builder,
+    rng,
+    *,
+    population_size,
+    end_time,
+):
     population = np.array([tskit.NULL], dtype=np.int32)
-    rng = np.random.RandomState(random_seed)
 
     # To make the semantics compatible with dtwf, the end_time means the
     # *end* of generation end_time
     for time in reversed(range(end_time + 1)):
         N = population_size  # This could be derived from the Demography
-        # Make the current generation
-        progeny = len(tables.individuals) + np.arange(N, dtype=np.int32)
-
         # NB this is *with* replacement, so 1 / N chance of selfing
         parents = rng.choice(population, (N, 2))
-        tables.individuals.append_columns(
-            flags=np.zeros(N, dtype=np.uint32),
-            parents=parents.reshape(N * 2),
-            parents_offset=np.arange(N + 1, dtype=np.uint32) * 2,
-        )
-        node_individual = np.zeros(2 * N, dtype=np.int32)
-        node_individual[0::2] = progeny
-        node_individual[1::2] = progeny
-        flags_value = 0 if time > 0 else tskit.NODE_IS_SAMPLE
-        tables.nodes.append_columns(
-            flags=np.full(2 * N, flags_value, dtype=np.uint32),
-            time=np.full(2 * N, time, dtype=np.float64),
-            population=np.full(2 * N, 0, dtype=np.int32),
-            individual=node_individual,
-        )
-        population = progeny
+        population = builder.add_individuals(parents=parents, time=time)
+    return builder.finalise(1)
 
+
+def sim_pedigree(
+    *,
+    population_size=None,
+    num_samples=None,
+    sequence_length=None,
+    random_seed=None,
+    end_time=None,
+    direction="forward",
+):
+    # Internal utility for generating pedigree data. This function is not
+    # part of the public API and subject to arbitrary changes/removal
+    # in the future.
+    num_samples = population_size if num_samples is None else num_samples
+    builder = PedigreeBuilder()
+    rng = np.random.RandomState(random_seed)
+
+    if direction == "forward":
+        if num_samples != population_size:
+            raise ValueError(
+                "num_samples must be equal to population_size for forward simulation"
+            )
+        tables = sim_pedigree_forward(
+            builder,
+            rng,
+            population_size=population_size,
+            end_time=end_time,
+        )
+    elif direction == "backward":
+        tables = sim_pedigree_backward(
+            builder,
+            rng,
+            population_size=population_size,
+            num_samples=num_samples,
+            end_time=end_time,
+        )
+    else:
+        raise ValueError("unknown time direction; choose 'backward' or 'forward'")
+
+    tables.sequence_length = -1 if sequence_length is None else sequence_length
     return tables
 
 
