@@ -22,10 +22,6 @@ Pedigree utilities.
 from __future__ import annotations
 
 import dataclasses
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Union
 
 import numpy as np
 import tskit
@@ -34,61 +30,61 @@ from msprime import demography as demog_mod
 
 
 @dataclasses.dataclass
-class PedColumn:
+class Column:
     name: str
-    arg_name: str = ""
 
     def parse_value(self, value: str) -> str:
         return value
 
 
-class IdColumn(PedColumn):
+class IdColumn(Column):
     pass
 
 
-class NumericColumn(PedColumn):
+class NumericColumn(Column):
     def parse_value(self, value: str) -> float:
         return float(value)
 
 
-class BooleanColumn(PedColumn):
+class BooleanColumn(Column):
     def parse_value(self, value: str) -> bool:
         return bool(int(value))
 
 
-def _parse_pedigree_header(header: str) -> list[PedColumn]:
+@dataclasses.dataclass
+class TextFileIndividual:
+    id: str  # noqa: A003
+    mother: str | None
+    father: str | None
+    time: float
+    is_sample: bool | None = None
+
+
+def _parse_pedigree_header(header: str) -> list[Column]:
     tokens = header.split()
     if tokens[0] != "#":
         raise ValueError("First line must be the header and start with #")
-    required_cols = {
-        "IID": IdColumn("IID"),
-        "FID": IdColumn("FID"),
-        "MID": IdColumn("MID"),
-        "TIME": NumericColumn("TIME", "time"),
-    }
-    optional_cols = {
-        "IS_SAMPLE": BooleanColumn("IS_SAMPLE", "is_sample"),
-    }
-    if len(tokens) < len(required_cols) + 1:
-        raise ValueError(f"The {list(required_cols)} columns are required")
+    required_cols = [
+        IdColumn("id"),
+        IdColumn("mother"),
+        IdColumn("father"),
+        NumericColumn("time"),
+    ]
+    optional_cols = [
+        BooleanColumn("is_sample"),
+    ]
+    col_names = [col.name for col in required_cols]
     tokens = tokens[1:]
-    # Dicts are sorted since Python 3.7
-    if tokens[: len(required_cols)] != list(required_cols):
-        raise ValueError(f"The {list(required_cols)} columns are required")
+    if tokens[: len(required_cols)] != col_names:
+        raise ValueError(f"The {col_names} columns are required")
 
-    columns = [required_cols[colname] for colname in required_cols]
+    columns = list(required_cols)
+    optional_col_map = {col.name: col for col in optional_cols}
     for colname in tokens[len(required_cols) :]:
-        if colname not in optional_cols:
-            raise ValueError(f"Column {colname} not supported")
-        columns.append(optional_cols[colname])
+        if colname not in optional_col_map:
+            raise ValueError(f"Column '{colname}' not supported")
+        columns.append(optional_col_map[colname])
     return columns
-
-
-@dataclasses.dataclass
-class Individual:
-    external_id: str | None = None
-    parents: list[str | int] = dataclasses.field(default_factory=list)
-    metadata: dict = dataclasses.field(default_factory=dict)
 
 
 class PedigreeBuilder:
@@ -106,15 +102,10 @@ class PedigreeBuilder:
         if individuals_metadata_schema is not None:
             self.individuals.metadata_schema = individuals_metadata_schema
 
-    def set_parents(self, ind_id, parents):
-        row = self.tables.individuals[ind_id]
-        self.tables.individuals[ind_id] = row.replace(parents=parents)
-
     def add_individual(
         self,
         *,
         time,
-        external_id=None,
         is_sample=None,
         parents=None,
         population=None,
@@ -128,9 +119,6 @@ class PedigreeBuilder:
             parents = [-1, -1]
         if len(parents) != 2:
             raise ValueError("Must have exactly two parents")
-
-        if external_id is not None:
-            metadata = {"external_id": external_id}
 
         ind_id = self.tables.individuals.add_row(parents=parents, metadata=metadata)
         if population is None:
@@ -171,35 +159,6 @@ class PedigreeBuilder:
         )
         return ind_ids
 
-    def _parse_pedigree_row(self, row: str, line_num: int, columns: list[PedColumn]):
-        tokens = row.split()
-        if len(tokens) != len(columns):
-            raise ValueError(f"Incorrect number of columns at line {line_num}: {row}")
-        external_id = tokens[0]
-        parents = tokens[1:3]
-        kwargs = {}
-        for value, column in zip(tokens[3:], columns[3:]):
-            # print(value, column)
-            kwargs[column.arg_name] = column.parse_value(value)
-            # print(column, value)
-            # column.validate(a
-
-        print(external_id, parents, kwargs)
-
-    def parse_text(self, ped_file):
-        """
-        Parse a text describing a pedigree used for input to the
-        :class:`.FixedPedigree` ancestry model.
-
-        # iid p0 p1 time time
-        """
-        # First line must be the header and contain the column headers
-        header = next(ped_file)
-        columns = _parse_pedigree_header(header)
-        print(columns)
-        for line_num, row in enumerate(ped_file, 1):
-            self._parse_pedigree_row(row, line_num, columns)
-
     def finalise(self, sequence_length):
         copy = self.tables.copy()
         copy.sequence_length = sequence_length
@@ -207,6 +166,93 @@ class PedigreeBuilder:
         # to file and are loaded as as a tree sequence.
         copy.build_index()
         return copy
+
+
+def parse_pedigree(text_file):
+    """
+    Parse a text describing a pedigree used for input to the
+    :class:`.FixedPedigree` ancestry model.
+
+    """
+    # First line must be the header and contain the column headers
+    header = next(text_file, None)
+    if header is None:
+        raise ValueError("Pedigree file must contain at least a header")
+    columns = _parse_pedigree_header(header)
+    individuals = []
+    tsk_id_map = {"NA": -1}
+    for tsk_id, row in enumerate(text_file):
+        line = tsk_id + 2
+        tokens = row.split()
+        if len(tokens) != len(columns):
+            raise ValueError(
+                "Incorrect number of columns "
+                f"(found={len(tokens)} need={len(columns)}) at line {line}: {row}"
+            )
+        kwargs = {}
+        for value, column in zip(tokens, columns):
+            try:
+                kwargs[column.name] = column.parse_value(value)
+            except ValueError as ve:
+                raise ValueError(
+                    f"Error parsing value for column '{column.name}' "
+                    f"on line {line}: {ve}"
+                )
+        ind = TextFileIndividual(**kwargs)
+        if ind.id == "NA":
+            raise ValueError(f"'NA' cannot be used as an individual ID (line {line})")
+        if ind.id in tsk_id_map:
+            raise ValueError(f"Duplicate ID at line {line}")
+        tsk_id_map[ind.id] = len(individuals)
+        individuals.append(ind)
+
+    # Convert the list of individuals to a tskit pedigree.
+    builder = PedigreeBuilder(
+        individuals_metadata_schema=tskit.MetadataSchema.permissive_json()
+    )
+    for ind in individuals:
+        parents = []
+        for parent in [ind.mother, ind.father]:
+            if parent not in tsk_id_map:
+                raise ValueError(
+                    f"Parent ID '{parent}' not defined (line {tsk_id_map[ind.id] + 2})"
+                )
+            parents.append(tsk_id_map[parent])
+        builder.add_individual(
+            parents=parents,
+            time=ind.time,
+            is_sample=ind.is_sample,
+            metadata={"file_id": ind.id},
+        )
+    return builder.finalise(1)
+
+
+def write_pedigree(ts, out):
+
+    print("# id mother father time is_sample", file=out)
+    for ind in ts.individuals():
+        if len(ind.nodes) != 2:
+            raise ValueError(
+                "Invalid pedigree format: each individual must be associated with "
+                "two nodes"
+            )
+        nodes = [ts.node(node) for node in ind.nodes]
+        time = {node.time for node in nodes}
+        is_sample = {node.is_sample() for node in nodes}
+        if len(time) != 1:
+            raise ValueError("Pedigree individuals must have the same node time")
+        if len(is_sample) != 1:
+            raise ValueError("Pedigree individuals must have the same sample status")
+        time = time.pop()
+        is_sample = is_sample.pop()
+        parents = []
+        for parent in ind.parents:
+            if parent == tskit.NULL:
+                parents.append("NA")
+            else:
+                parents.append(parent)
+
+        print(f"{ind.id}\t{parents[0]}\t{parents[1]}\t{time}\t{is_sample}", file=out)
 
 
 def sim_pedigree_backward(

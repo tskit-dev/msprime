@@ -1,8 +1,6 @@
 import collections
-import dataclasses
 import io
 import sys
-import tempfile
 import textwrap
 
 import numpy as np
@@ -1255,25 +1253,206 @@ class TestPedigreeBuilder:
 
 
 def parse_indented(text):
-    pb = msprime.PedigreeBuilder()
-    pb.parse_text(io.StringIO(textwrap.dedent(text)))
-    return pb.finalise(1)
+    return msprime.pedigrees.parse_pedigree(io.StringIO(textwrap.dedent(text)))
 
 
-class TestParsePedigree:
+class TestParsePedigreeExamples:
     def test_single_all_columns(self):
         text = """\
-            # IID FID MID TIME IS_SAMPLE
-            X NA NA 0 1
+        # id mother father time is_sample
+        X NA NA 0 1
         """
         tables = parse_indented(text)
+        assert len(tables.individuals) == 1
+        assert len(tables.nodes) == 2
+        assert list(tables.individuals[0].parents) == [-1, -1]
+        assert tables.nodes[0].time == 0
+        assert tables.nodes[0].flags == tskit.NODE_IS_SAMPLE
+        assert tables.individuals[0].metadata == {"file_id": "X"}
 
-    def test_single_min_columns(self):
+    def test_single_row_min_columns(self):
         text = """\
-            # IID FID MID TIME
-            X NA NA 0
+        # id mother father time
+        X NA NA 0
         """
         tables = parse_indented(text)
+        assert len(tables.individuals) == 1
+        assert len(tables.nodes) == 2
+        assert list(tables.individuals[0].parents) == [-1, -1]
+        assert tables.nodes[0].time == 0
+        assert tables.nodes[0].flags == tskit.NODE_IS_SAMPLE
+        assert tables.individuals[0].metadata == {"file_id": "X"}
+
+    def test_no_rows(self):
+        text = """\
+        # id mother father time is_sample
+        """
+        tables = parse_indented(text)
+        assert len(tables.individuals) == 0
+        assert len(tables.nodes) == 0
+
+    def test_trio(self):
+        text = """\
+        # id mother father time
+        child mom dad 0
+        mom NA NA 1
+        dad NA NA 1
+        """
+        tables = parse_indented(text)
+        assert len(tables.individuals) == 3
+        assert len(tables.nodes) == 6
+        assert tables.individuals[0].metadata["file_id"] == "child"
+        assert list(tables.individuals[0].parents) == [1, 2]
+        assert tables.individuals[1].metadata["file_id"] == "mom"
+        assert list(tables.individuals[1].parents) == [-1, -1]
+        assert tables.individuals[2].metadata["file_id"] == "dad"
+        assert list(tables.individuals[2].parents) == [-1, -1]
+
+
+class TestParsePedigreeErrors:
+    def test_empty_file(self):
+        with pytest.raises(ValueError, match="at least a header"):
+            parse_indented("")
+
+    def test_bad_header(self):
+        with pytest.raises(ValueError, match="start with #"):
+            parse_indented("id")
+
+    @pytest.mark.parametrize("column", ["id", "mother", "father", "time"])
+    def test_missing_required(self, column):
+        columns = [col for col in ["id", "mother", "father", "time"] if col != column]
+        header = "# " + " ".join(columns)
+        with pytest.raises(ValueError, match="columns are required"):
+            parse_indented(header)
+
+    def test_unknown_column(self):
+        text = """\
+        # id mother father time unknown_col
+        """
+        with pytest.raises(ValueError, match="'unknown_col' not supported"):
+            parse_indented(text)
+
+    def test_parital_row_min(self):
+        text = """\
+        # id mother father time
+        child
+        """
+        with pytest.raises(ValueError, match="Incorrect number of columns"):
+            parse_indented(text)
+
+    def test_parital_row_missing_optional(self):
+        text = """\
+        # id mother father time is_sample
+        child NA NA 0
+        """
+        with pytest.raises(ValueError, match="Incorrect number of columns"):
+            parse_indented(text)
+
+    def test_duplicate_id(self):
+        text = """\
+        # id mother father time
+        child NA NA 0
+        child NA NA 1
+        """
+        with pytest.raises(ValueError, match="Duplicate ID"):
+            parse_indented(text)
+
+    def test_missing_id(self):
+        text = """\
+        # id mother father time
+        child missing NA 0
+        """
+        with pytest.raises(ValueError, match="Parent ID 'missing' not defined"):
+            parse_indented(text)
+
+    def test_bad_time(self):
+        text = """\
+        # id mother father time
+        child NA NA bad_time
+        """
+        with pytest.raises(ValueError, match="value for column 'time' on line 2"):
+            parse_indented(text)
+
+    def test_bad_is_sample(self):
+        text = """\
+        # id mother father time is_sample
+        child NA NA 0 abcd
+        """
+        with pytest.raises(ValueError, match="value for column 'is_sample' on line 2"):
+            parse_indented(text)
+
+    def test_id_is_NA(self):
+        text = """\
+        # id mother father time
+        NA NA NA 0
+        """
+        with pytest.raises(ValueError, match="'NA' cannot be used"):
+            parse_indented(text)
+
+    def test_line_no(self):
+        text = """\
+        # id mother father time
+        me NA NA 0
+        NA NA NA 0
+        """
+        # People (and vim) usually count file lines from 1, so error on line 3
+        with pytest.raises(ValueError, match="line 3"):
+            parse_indented(text)
+
+
+class TestPedigreeTextRoundTrip:
+    def verify(self, pedigree):
+        buff = io.StringIO()
+        pedigrees.write_pedigree(pedigree.tree_sequence(), buff)
+        buff.seek(0)
+        parsed = pedigrees.parse_pedigree(buff)
+        pedigree.assert_equals(parsed, ignore_metadata=True)
+
+    @pytest.mark.parametrize("direction", ["backward", "forward"])
+    def test_sim_pedigree(self, direction):
+        ped_tables = pedigrees.sim_pedigree(
+            population_size=5,
+            end_time=5,
+            random_seed=1234,
+            direction=direction,
+            sequence_length=1,
+        )
+        self.verify(ped_tables)
+
+    def test_simulate_pedigree(self):
+        ped_tables = simulate_pedigree(
+            num_founders=20,
+            num_generations=5,
+            sequence_length=1,
+        )
+        self.verify(ped_tables)
+
+
+class TestWritePedigreeErrors:
+    @pytest.mark.parametrize("num_nodes", [0, 1, 3])
+    def test_incorrect_num_nodes(self, num_nodes):
+        tables = tskit.TableCollection(1)
+        tables.individuals.add_row(parents=[-1, -1])
+        for _ in range(num_nodes):
+            tables.nodes.add_row(time=0, individual=0)
+        with pytest.raises(ValueError, match="two nodes"):
+            pedigrees.write_pedigree(tables.tree_sequence(), io.StringIO())
+
+    def test_mismatched_node_times(self):
+        tables = tskit.TableCollection(1)
+        tables.individuals.add_row(parents=[-1, -1])
+        tables.nodes.add_row(flags=0, time=0, individual=0)
+        tables.nodes.add_row(flags=1, time=0, individual=0)
+        with pytest.raises(ValueError, match="same sample status"):
+            pedigrees.write_pedigree(tables.tree_sequence(), io.StringIO())
+
+    def test_mismatched_node_flags(self):
+        tables = tskit.TableCollection(1)
+        tables.individuals.add_row(parents=[-1, -1])
+        tables.nodes.add_row(time=0, individual=0)
+        tables.nodes.add_row(time=1, individual=0)
+        with pytest.raises(ValueError, match="same node time"):
+            pedigrees.write_pedigree(tables.tree_sequence(), io.StringIO())
 
 
 if __name__ == "__main__":
