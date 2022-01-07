@@ -1259,7 +1259,7 @@ def parse_indented(text):
 class TestParsePedigreeExamples:
     def test_single_all_columns(self):
         text = """\
-        # id mother father time is_sample
+        # id parent0 parent1 time is_sample
         X NA NA 0 1
         """
         tables = parse_indented(text)
@@ -1272,7 +1272,7 @@ class TestParsePedigreeExamples:
 
     def test_single_row_min_columns(self):
         text = """\
-        # id mother father time
+        # id parent0 parent1 time
         X NA NA 0
         """
         tables = parse_indented(text)
@@ -1285,7 +1285,7 @@ class TestParsePedigreeExamples:
 
     def test_no_rows(self):
         text = """\
-        # id mother father time is_sample
+        # id parent0 parent1 time is_sample
         """
         tables = parse_indented(text)
         assert len(tables.individuals) == 0
@@ -1293,7 +1293,7 @@ class TestParsePedigreeExamples:
 
     def test_trio(self):
         text = """\
-        # id mother father time
+        # id parent0 parent1 time
         child mom dad 0
         mom NA NA 1
         dad NA NA 1
@@ -1318,23 +1318,23 @@ class TestParsePedigreeErrors:
         with pytest.raises(ValueError, match="start with #"):
             parse_indented("id")
 
-    @pytest.mark.parametrize("column", ["id", "mother", "father", "time"])
+    @pytest.mark.parametrize("column", ["id", "parent0", "parent1", "time"])
     def test_missing_required(self, column):
-        columns = [col for col in ["id", "mother", "father", "time"] if col != column]
+        columns = [col for col in ["id", "parent0", "parent1", "time"] if col != column]
         header = "# " + " ".join(columns)
         with pytest.raises(ValueError, match="columns are required"):
             parse_indented(header)
 
     def test_unknown_column(self):
         text = """\
-        # id mother father time unknown_col
+        # id parent0 parent1 time unknown_col
         """
         with pytest.raises(ValueError, match="'unknown_col' not supported"):
             parse_indented(text)
 
     def test_parital_row_min(self):
         text = """\
-        # id mother father time
+        # id parent0 parent1 time
         child
         """
         with pytest.raises(ValueError, match="Incorrect number of columns"):
@@ -1342,7 +1342,7 @@ class TestParsePedigreeErrors:
 
     def test_parital_row_missing_optional(self):
         text = """\
-        # id mother father time is_sample
+        # id parent0 parent1 time is_sample
         child NA NA 0
         """
         with pytest.raises(ValueError, match="Incorrect number of columns"):
@@ -1350,7 +1350,7 @@ class TestParsePedigreeErrors:
 
     def test_duplicate_id(self):
         text = """\
-        # id mother father time
+        # id parent0 parent1 time
         child NA NA 0
         child NA NA 1
         """
@@ -1359,7 +1359,7 @@ class TestParsePedigreeErrors:
 
     def test_missing_id(self):
         text = """\
-        # id mother father time
+        # id parent0 parent1 time
         child missing NA 0
         """
         with pytest.raises(ValueError, match="Parent ID 'missing' not defined"):
@@ -1367,7 +1367,7 @@ class TestParsePedigreeErrors:
 
     def test_bad_time(self):
         text = """\
-        # id mother father time
+        # id parent0 parent1 time
         child NA NA bad_time
         """
         with pytest.raises(ValueError, match="value for column 'time' on line 2"):
@@ -1375,7 +1375,7 @@ class TestParsePedigreeErrors:
 
     def test_bad_is_sample(self):
         text = """\
-        # id mother father time is_sample
+        # id parent0 parent1 time is_sample
         child NA NA 0 abcd
         """
         with pytest.raises(ValueError, match="value for column 'is_sample' on line 2"):
@@ -1383,7 +1383,7 @@ class TestParsePedigreeErrors:
 
     def test_id_is_NA(self):
         text = """\
-        # id mother father time
+        # id parent0 parent1 time
         NA NA NA 0
         """
         with pytest.raises(ValueError, match="'NA' cannot be used"):
@@ -1391,7 +1391,7 @@ class TestParsePedigreeErrors:
 
     def test_line_no(self):
         text = """\
-        # id mother father time
+        # id parent0 parent1 time
         me NA NA 0
         NA NA NA 0
         """
