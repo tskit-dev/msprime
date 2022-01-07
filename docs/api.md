@@ -24,6 +24,7 @@ for discussion and examples of individual features.
   SmcApproxCoalescent
   SmcPrimeApproxCoalescent
   DiscreteTimeWrightFisher
+  FixedPedigree
   BetaCoalescent
   DiracCoalescent
   SweepGenicSelection
@@ -63,6 +64,9 @@ for discussion and examples of individual features.
 .. autosummary::
 
   RateMap
+  PedigreeBuilder
+  parse_pedigree
+
 
 ```
 
@@ -101,6 +105,11 @@ for discussion and examples of individual features.
 
 ```{eval-rst}
 .. autoclass:: msprime.DiscreteTimeWrightFisher
+```
+
+
+```{eval-rst}
+.. autoclass:: msprime.FixedPedigree
 ```
 
 ```{eval-rst}
@@ -253,3 +262,16 @@ The node was created by a census event. Please see the
 .. autofunction:: msprime.log_mutation_likelihood
 ```
 
+### Pedigrees
+
+```{eval-rst}
+.. autoclass:: msprime.PedigreeBuilder
+    :members:
+```
+
+```{eval-rst}
+.. autofunction:: msprime.parse_pedigree
+```
+
+```{eval-rst}
+.. autofunction:: msprime.write_pedigree

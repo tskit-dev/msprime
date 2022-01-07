@@ -51,6 +51,15 @@ class BooleanColumn(Column):
         return bool(int(value))
 
 
+class StringOrIntColumn(Column):
+    def parse_value(self, value: str) -> str | int:
+        try:
+            return int(value)
+        except ValueError:
+            pass
+        return value
+
+
 @dataclasses.dataclass
 class TextFileIndividual:
     id: str  # noqa: A003
@@ -58,9 +67,12 @@ class TextFileIndividual:
     parent1: str | None
     time: float
     is_sample: bool | None = None
+    population: int = 0
 
 
-def _parse_pedigree_header(header: str) -> list[Column]:
+def _parse_pedigree_header(
+    header: str, demography: None | demog_mod.Demography
+) -> list[Column]:
     tokens = header.split()
     if tokens[0] != "#":
         raise ValueError("First line must be the header and start with #")
@@ -70,8 +82,16 @@ def _parse_pedigree_header(header: str) -> list[Column]:
         IdColumn("parent1"),
         NumericColumn("time"),
     ]
+    demography = (
+        demog_mod.Demography.isolated_model([1]) if demography is None else demography
+    )
     optional_cols = [
         BooleanColumn("is_sample"),
+        # There is the potential for ambiguity here in the population column
+        # if the string name of the population was an integer not equal to
+        # its ID. However, the Demography class requires that population names
+        # are valid Python identifiers, so this can't happen in practice.
+        StringOrIntColumn("population"),
     ]
     col_names = [col.name for col in required_cols]
     tokens = tokens[1:]
@@ -87,17 +107,16 @@ def _parse_pedigree_header(header: str) -> list[Column]:
     return columns
 
 
-def parse_pedigree(text_file):
+def parse_pedigree(text_file, demography=None, sequence_length=None):
     """
     Parse a text describing a pedigree used for input to the
     :class:`.FixedPedigree` ancestry model.
-
     """
     # First line must be the header and contain the column headers
     header = next(text_file, None)
     if header is None:
         raise ValueError("Pedigree file must contain at least a header")
-    columns = _parse_pedigree_header(header)
+    columns = _parse_pedigree_header(header, demography=demography)
     individuals = []
     tsk_id_map = {"NA": -1}
     for tsk_id, row in enumerate(text_file):
@@ -127,7 +146,8 @@ def parse_pedigree(text_file):
 
     # Convert the list of individuals to a tskit pedigree.
     builder = PedigreeBuilder(
-        individuals_metadata_schema=tskit.MetadataSchema.permissive_json()
+        individuals_metadata_schema=tskit.MetadataSchema.permissive_json(),
+        demography=demography,
     )
     for ind in individuals:
         parents = []
@@ -142,13 +162,14 @@ def parse_pedigree(text_file):
             time=ind.time,
             is_sample=ind.is_sample,
             metadata={"file_id": ind.id},
+            population=ind.population,
         )
-    return builder.finalise(1)
+    return builder.finalise(sequence_length)
 
 
 def write_pedigree(ts, out):
 
-    print("# id parent0 parent1 time is_sample", file=out)
+    print("# id\tparent0\tparent1\ttime\tis_sample\tpopulation", file=out)
     for ind in ts.individuals():
         if len(ind.nodes) != 2:
             raise ValueError(
@@ -158,20 +179,28 @@ def write_pedigree(ts, out):
         nodes = [ts.node(node) for node in ind.nodes]
         time = {node.time for node in nodes}
         is_sample = {node.is_sample() for node in nodes}
+        population = {node.population for node in nodes}
         if len(time) != 1:
             raise ValueError("Pedigree individuals must have the same node time")
         if len(is_sample) != 1:
             raise ValueError("Pedigree individuals must have the same sample status")
+        if len(population) != 1:
+            raise ValueError("Pedigree individuals must have the same node population")
+
         time = time.pop()
         is_sample = is_sample.pop()
+        population = population.pop()
         parents = []
         for parent in ind.parents:
             if parent == tskit.NULL:
                 parents.append("NA")
             else:
                 parents.append(parent)
-
-        print(f"{ind.id}\t{parents[0]}\t{parents[1]}\t{time}\t{is_sample}", file=out)
+        print(
+            f"{ind.id}\t{parents[0]}\t{parents[1]}\t{time}\t{is_sample}\t"
+            f"{population}",
+            file=out,
+        )
 
 
 class PedigreeBuilder:
@@ -198,6 +227,9 @@ class PedigreeBuilder:
         population=None,
         metadata=None,
     ):
+        """
+        Adds the specified individual, returning its ID.
+        """
         if is_sample is None:
             # By default, individuals at time 0 are marked as samples
             is_sample = time == 0
@@ -246,12 +278,16 @@ class PedigreeBuilder:
         )
         return ind_ids
 
-    def finalise(self, sequence_length):
+    def finalise(self, sequence_length=None):
+        """
+        Returns the table collection representing the defined pedigree.
+        """
         copy = self.tables.copy()
-        copy.sequence_length = sequence_length
+        copy.sequence_length = 1
         # Not strictly necessary, but it's useful when the tables are written
         # to file and are loaded as as a tree sequence.
         copy.build_index()
+        copy.sequence_length = -1 if sequence_length is None else sequence_length
         return copy
 
 

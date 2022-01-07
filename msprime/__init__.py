@@ -57,7 +57,7 @@ from msprime.demography import (
     Population,
 )
 
-from msprime.pedigrees import PedigreeBuilder
+from msprime.pedigrees import PedigreeBuilder, parse_pedigree, write_pedigree
 from msprime.intervals import RateMap
 from msprime.likelihood import log_arg_likelihood, log_mutation_likelihood
 
@@ -151,9 +151,11 @@ __all__ = [
     "log_arg_likelihood",
     "log_mutation_likelihood",
     "mutate",
+    "parse_pedigree",
     "sim_ancestry",
     "sim_mutations",
     "simulate",
+    "write_pedigree",
 ]
 
 

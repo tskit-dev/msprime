@@ -1252,8 +1252,10 @@ class TestPedigreeBuilder:
         assert t1.has_index()
 
 
-def parse_indented(text):
-    return msprime.pedigrees.parse_pedigree(io.StringIO(textwrap.dedent(text)))
+def parse_indented(text, demography=None):
+    return msprime.parse_pedigree(
+        io.StringIO(textwrap.dedent(text)), demography=demography
+    )
 
 
 class TestParsePedigreeExamples:
@@ -1307,6 +1309,50 @@ class TestParsePedigreeExamples:
         assert list(tables.individuals[1].parents) == [-1, -1]
         assert tables.individuals[2].metadata["file_id"] == "dad"
         assert list(tables.individuals[2].parents) == [-1, -1]
+
+    def test_single_population_name(self):
+        text = """\
+        # id parent0 parent1 time population
+        A NA NA 0 pop_0
+        """
+        demography = msprime.Demography.isolated_model([1])
+        tables = parse_indented(text, demography=demography)
+        assert len(tables.individuals) == 1
+        assert tables.nodes[0].population == 0
+        assert tables.nodes[1].population == 0
+
+    def test_single_population_id(self):
+        text = """\
+        # id parent0 parent1 time population
+        A NA NA 0 0
+        """
+        demography = msprime.Demography.isolated_model([1])
+        tables = parse_indented(text, demography=demography)
+        assert len(tables.individuals) == 1
+        assert tables.nodes[0].population == 0
+        assert tables.nodes[1].population == 0
+
+    def test_two_populations_name(self):
+        text = """\
+        # id parent0 parent1 time population
+        A NA NA 0 pop_1
+        """
+        demography = msprime.Demography.isolated_model([1, 1])
+        tables = parse_indented(text, demography=demography)
+        assert len(tables.individuals) == 1
+        assert tables.nodes[0].population == 1
+        assert tables.nodes[1].population == 1
+
+    def test_two_populations_id(self):
+        text = """\
+        # id parent0 parent1 time population
+        A NA NA 0 1
+        """
+        demography = msprime.Demography.isolated_model([1, 1])
+        tables = parse_indented(text, demography=demography)
+        assert len(tables.individuals) == 1
+        assert tables.nodes[0].population == 1
+        assert tables.nodes[1].population == 1
 
 
 class TestParsePedigreeErrors:
@@ -1401,11 +1447,13 @@ class TestParsePedigreeErrors:
 
 
 class TestPedigreeTextRoundTrip:
-    def verify(self, pedigree):
+    def verify(self, pedigree, demography=None):
         buff = io.StringIO()
         pedigrees.write_pedigree(pedigree.tree_sequence(), buff)
         buff.seek(0)
-        parsed = pedigrees.parse_pedigree(buff)
+        parsed = pedigrees.parse_pedigree(
+            buff, demography, sequence_length=pedigree.sequence_length
+        )
         pedigree.assert_equals(parsed, ignore_metadata=True)
 
     @pytest.mark.parametrize("direction", ["backward", "forward"])
@@ -1426,6 +1474,20 @@ class TestPedigreeTextRoundTrip:
             sequence_length=1,
         )
         self.verify(ped_tables)
+
+    def test_two_populations(self):
+        t1 = pedigrees.sim_pedigree(
+            population_size=5,
+            end_time=3,
+            random_seed=1234,
+            sequence_length=1,
+        )
+        t1.populations.add_row({"name": "pop_1", "description": ""})
+        t2 = t1.copy()
+        t2.nodes.population = t2.nodes.population + 1
+        ped = join_pedigrees([t1, t2])
+        demography = msprime.Demography.isolated_model([1, 1])
+        self.verify(ped.tables, demography=demography)
 
 
 class TestWritePedigreeErrors:
@@ -1452,6 +1514,16 @@ class TestWritePedigreeErrors:
         tables.nodes.add_row(time=0, individual=0)
         tables.nodes.add_row(time=1, individual=0)
         with pytest.raises(ValueError, match="same node time"):
+            pedigrees.write_pedigree(tables.tree_sequence(), io.StringIO())
+
+    def test_mismatched_node_populations(self):
+        tables = tskit.TableCollection(1)
+        tables.individuals.add_row(parents=[-1, -1])
+        tables.populations.add_row()
+        tables.populations.add_row()
+        tables.nodes.add_row(time=0, individual=0, population=0)
+        tables.nodes.add_row(time=0, individual=0, population=1)
+        with pytest.raises(ValueError, match="same node population"):
             pedigrees.write_pedigree(tables.tree_sequence(), io.StringIO())
 
 

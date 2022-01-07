@@ -19,8 +19,28 @@ import msprime
 from IPython.display import SVG, set_matplotlib_formats
 from matplotlib import pyplot as plt
 import numpy as np
+import networkx as nx
 
 set_matplotlib_formats("svg")
+
+
+# Note: duplicating this from the version used in the pedigrees.md file.
+def draw_pedigree(ped_ts):
+
+    G = nx.DiGraph()
+    for ind in ped_ts.individuals():
+        time = ped_ts.node(ind.nodes[0]).time
+        pop = ped_ts.node(ind.nodes[0]).population
+        G.add_node(ind.id, time=time, population=pop)
+        for p in ind.parents:
+            if p != tskit.NULL:
+                G.add_edge(ind.id, p)
+    pos = nx.multipartite_layout(G, subset_key="time", align="horizontal")
+    colours = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    node_colours = [colours[node_attr["population"]] for node_attr in G.nodes.values()]
+    nx.draw_networkx(G, pos, with_labels=True, node_color=node_colours)
+    plt.show()
+
 ```
 
 (sec_ancestry)=
@@ -80,6 +100,9 @@ this.
 
 {class}`.DiscreteTimeWrightFisher`
 : Generation-by-generation Wright-Fisher
+
+{class}`.FixedPedigree`
+: Simulated conditioned on a given pedigree
 
 {class}`.BetaCoalescent`
 : Beta coalescent multiple-merger
@@ -1918,6 +1941,7 @@ See the {ref}`sec_ancestry_multiple_chromosomes` section for information
 on how to simulate multiple chromosomes using the DTWF.
 :::
 
+
 (sec_ancestry_models_multiple_mergers)=
 
 ### Multiple merger coalescents
@@ -2305,6 +2329,279 @@ The logging output of msprime can be very useful when working with
 multiple models. See the {ref}`sec_logging` section for more
 details.
 :::
+
+(sec_ancestry_models_fixed_pedigree)=
+
+### Fixed pedigree
+
+A pedigree defines how *individuals* relate to each other, and these individual
+relationships constrain how genomes are inherited. We can simulate ancestry
+conditioned on a fixed pedigree using the {class}`.FixedPedigree` ancestry
+model. In this model the transfer of genetic material from parent to
+child is determined by the pedigree. Recombination
+occurs randomly such that each of a diploid individual's two genomes
+is a mixture of one of it
+parents two genomes, but everything else is determined by the pedigree.
+
+:::{warning}
+It is important to note that there is no concept of a population genetic
+model "outside" of the pedigree in this model, and that there
+are significant caveats that one needs to be aware of in terms
+of dealing with incomplete pedigree information and the treatment
+of founders.
+Please see the {ref}`sec_ancestry_models_fixed_pedigree_completing`
+section for more information.
+:::
+
+#### Simple example
+
+First we define a small pedigree, which follows a sample of three
+individuals through four generations:
+
+```{seealso}
+See the {ref}`sec_pedigrees` section for details on this pedigree
+text format and information on how pedigrees are encoded in msprime
+via the individual and node tables.
+```
+
+```{code-cell}
+import io
+ped_txt = """\
+# id parent0 parent1 time is_sample
+0   5   4   0.0 1
+1   3   3   0.0 1
+2   3   4   0.0 1
+3   7   7   1.0 0
+4   8   8   1.0 0
+5   8   6   1.0 0
+6   9   10  2.0 0
+7   10  10  2.0 0
+8   9   9   2.0 0
+9   11  12  3.0 0
+10  11  12  3.0 0
+11  NA  NA  4.0 0
+12  NA  NA  4.0 0
+"""
+pedigree = msprime.parse_pedigree(io.StringIO(ped_txt), sequence_length=100)
+
+draw_pedigree(pedigree.tree_sequence())
+```
+:::{note} See the {ref}`sec_pedigrees_visualisation` section for a
+definition of the ``draw_pedigree`` function used here.
+:::
+
+We then use this pedigree information as the
+{ref}`initial state<sec_ancestry_initial_state>` for the simulation
+(note that we must set the sequence length on the pedigree tables
+before calling ``sim_ancestry``):
+
+```{code-cell}
+ped_ts = msprime.sim_ancestry(
+    initial_state=pedigree, model="fixed_pedigree", random_seed=41,
+    recombination_rate=0.001)
+node_labels = {node.id: f"{node.individual}({node.id})" for node in ped_ts.nodes()}
+SVG(ped_ts.draw_svg(y_axis=True,  node_labels=node_labels, size=(600,200)))
+```
+
+The output tree sequence contains the simulated genetic ancestry conditioned
+on this input pedigree, as shown in the trees above. Each node is labelled
+with it the individual ID it's associated with, and its ID.
+The simulation stops at time 4, and we are left with multiple
+roots, which correspond to the founder individuals. If you only
+need simulations of the genetic ancestry through the pedigree,
+then these trees can be used perfectly well in downstream
+applications (such as {ref}`sec_mutations`).
+See the {ref}`sec_ancestry_models_fixed_pedigree_completing`
+section for information (and caveats about) completing these simulations.
+
+:::{note}
+Because the input pedigree fully describes the simulation many features such as
+{ref}`demography<sec_demography>` are not available when we use the {class}`.FixedPedigree`
+model. The {class}`.FixedPedigree` model also cannot be combined with other
+{ref}`ancestry models<sec_ancestry_models>`.
+:::
+
+:::{warning}
+The output tree sequence also contains the full pedigree information
+provided as input. This may be important if you are performing
+simulations on pedigrees that are not freely available.
+:::
+
+It is straightforward to remove the pedigree information from an
+output tree sequence, if required:
+
+```{code-cell}
+tables = ped_ts.dump_tables()
+tables.individuals.clear()
+tables.nodes.individual = np.full_like(tables.nodes.individual, tskit.NULL)
+censored_ts = tables.tree_sequence()
+censored_ts
+```
+
+(sec_ancestry_models_fixed_pedigree_completing)=
+
+#### Completing fixed pedigree simulations
+
+If you wish to simulate ancestry older than what is defined in the
+pedigree, you can "complete" (or "recapitate") the within-pedigree
+simulation using the standard methods described in the
+{ref}`sec_ancestry_initial_state` section.
+
+Continuing the example in the previous section, we provide the simulated
+ancestry in ``ped_ts`` as the initial state for a {class}`.DiscreteTimeWrightFisher`
+simulation with a population size of 10:
+
+```{code-cell}
+final_ts = msprime.sim_ancestry(
+    initial_state=ped_ts, model="dtwf", population_size=10, random_seed=42)
+SVG(final_ts.draw_svg(y_axis=True,  size=(600,200)))
+```
+
+We can see that the nodes 22 and 23 representing the founder genomes
+from the input pedigree are used as the starting point for the DTWF simulation,
+which then finishes at generation 6 when the MRCA (node 26) is found.
+
+(sec_ancestry_models_fixed_pedigree_missing_data)=
+
+#### Missing data
+
+The previous example is very straightforward because the pedigree is
+complete and we can trace all individuals back to the same
+generation in the pedigree. The pedigrees we have in practice
+are usually not like this, in that there is a great deal of missing data.
+The consequence of this for the {class}`.FixedPedigree` simulations
+is that genetic material will often be at a "dead end" at many
+levels of the pedigree during a simulation.
+
+```{code-cell}
+ped_txt = """\
+# id parent0 parent1 time is_sample
+0   5   4   0.0 1
+1   3   3   0.0 1
+2   3   4   0.0 1
+3   7   7   1.0 0
+4   8   8   1.0 0
+5   8   6   1.0 0
+6   9   10  2.0 0
+7   NA  NA  2.0 0
+8   9   9   2.0 0
+9   11  12  3.0 0
+10  11  12  3.0 0
+11  NA  NA  4.0 0
+12  NA  NA  4.0 0
+"""
+pedigree = msprime.parse_pedigree(io.StringIO(ped_txt), sequence_length=100)
+
+draw_pedigree(pedigree.tree_sequence())
+```
+
+This pedigree has a dead end for individual 7, which is
+reflected in the trees that we output from the {class}`.FixedPedigree` simulation:
+
+```{code-cell}
+ped_ts = msprime.sim_ancestry(
+    initial_state=pedigree, model="fixed_pedigree", random_seed=41,
+    recombination_rate=0.001)
+node_labels = {node.id: f"{node.individual}({node.id})" for node in ped_ts.nodes()}
+SVG(ped_ts.draw_svg(y_axis=True,  node_labels=node_labels, size=(600,200)))
+```
+
+When we provide this tree sequence as the
+{ref}`initial state<sec_ancestry_initial_state>` of another simulation, we
+then effectively start the simulation at the earlier time point corresponding to
+individual 7. Ancestral material in older parts of the pedigree is then
+brought into the simulation in the same manner as
+{ref}`ancient samples<sec_ancestry_samples_sampling_time>` as we proceed backwards
+in time.
+
+:::{warning}
+It is important to note that although ancestral material for pedigree
+founders is introduced into the recapitation simulation at the correct time,
+no account is taken of the number of lineages present in the pedigree
+when calculating population sizes. Thus, the pedigree must be seen as
+entirely **external** to the population model simulated during recapitation.
+:::
+
+(sec_ancestry_models_fixed_pedigree_demography)=
+
+#### Pedigrees and demography
+
+For complex simulations in which our pedigree individuals (and
+founders, in particular) are drawn from different populations,
+we will want our follow-up recapitation simulations to use
+a {ref}`demographic model<sec_demography>`. In order to do this,
+we must define the demographic model *before* creating
+the input pedigree. For example, consider the following
+simple demography:
+
+```{code-cell}
+demography = msprime.Demography()
+demography.add_population(name="A", initial_size=10)
+demography.add_population(name="B", initial_size=20)
+demography.add_population(name="C", initial_size=100)
+demography.add_population_split(time=10, derived=["A", "B"], ancestral="C");
+```
+
+We when define a pedigree in which the individuals belong
+to the two "leaf" populations:
+
+
+```{code-cell}
+ped_txt = """\
+# id    parent0 parent1 time    is_sample   population
+0   9   11  0.0 1   A
+1   10  10  0.0 1   A
+2   6   7   0.0 1   A
+3   7   7   0.0 1   A
+4   8   9   0.0 1   A
+5   10  10  0.0 1   A
+6   14  14  1.0 0   A
+7   12  12  1.0 0   A
+8   16  17  1.0 0   A
+9   12  13  1.0 0   A
+10  14  12  1.0 0   A
+11  15  16  1.0 0   A
+12  NA  NA  2.0 0   A
+13  NA  NA  2.0 0   A
+14  NA  NA  2.0 0   A
+15  NA  NA  2.0 0   A
+16  NA  NA  2.0 0   A
+17  NA  NA  2.0 0   A
+18  23  22  0.0 1   B
+19  22  22  0.0 1   B
+20  21  22  0.0 1   B
+21  25  25  1.0 0   B
+22  24  25  1.0 0   B
+23  24  24  1.0 0   B
+24  27  26  2.0 0   B
+25  27  26  2.0 0   B
+26  30  28  3.0 0   B
+27  30  29  3.0 0   B
+28  31  32  4.0 0   B
+29  31  32  4.0 0   B
+30  32  31  4.0 0   B
+31  NA  NA  5.0 0   B
+32  NA  NA  5.0 0   B
+"""
+pedigree = msprime.parse_pedigree(
+    io.StringIO(ped_txt), demography=demography, sequence_length=100)
+
+draw_pedigree(pedigree.tree_sequence())
+```
+
+
+
+```{code-cell}
+ped_ts = msprime.sim_ancestry(
+    initial_state=pedigree, model="fixed_pedigree", random_seed=41)
+node_labels = {node.id: f"{node.individual}({node.id})" for node in ped_ts.nodes()}
+SVG(ped_ts.draw_svg(y_axis=True,  node_labels=node_labels, size=(600,200)))
+```
+
+:::{todo}
+This section is incomplete. https://github.com/tskit-dev/msprime/issues/2009
+:::
+
 
 (sec_ancestry_missing_data)=
 
