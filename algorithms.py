@@ -741,10 +741,14 @@ class Simulator:
             self.gc_mass_index[u.label].set_value(u.index, 0)
         self.segment_stack.append(u)
 
-    def store_node(self, population, flags=0):
+    def store_node(self, population, flags=0, metadata=None):
+        metadata = {} if metadata is None else metadata
         self.flush_edges()
         return self.tables.nodes.add_row(
-            time=self.t, flags=flags, population=population
+            time=self.t,
+            flags=flags,
+            population=population,
+            metadata=metadata,
         )
 
     def flush_edges(self):
@@ -797,7 +801,10 @@ class Simulator:
                 if node == tskit.NULL:
                     # Add a new node for the current ancestor
                     node = self.tables.nodes.add_row(
-                        flags=0, time=current_time, population=population.id
+                        flags=0,
+                        time=current_time,
+                        population=population.id,
+                        metadata={},
                     )
                 # Add in edges pointing to this ancestor
                 seg = ancestor
@@ -1381,9 +1388,13 @@ class Simulator:
         self.set_segment_mass(alpha)
         self.P[alpha.population].add(alpha, label)
         if self.full_arg:
-            self.store_node(lhs_tail.population, flags=msprime.NODE_IS_RE_EVENT)
+            self.store_node(
+                lhs_tail.population,
+                flags=msprime.NODE_IS_RE_EVENT,
+                metadata={"breakpoint": bp},
+            )
             self.store_arg_edges(lhs_tail)
-            self.store_node(alpha.population, flags=msprime.NODE_IS_RE_EVENT)
+            # self.store_node(alpha.population, flags=msprime.NODE_IS_RE_EVENT)
             self.store_arg_edges(alpha)
         ret = None
         if return_heads:
@@ -2171,11 +2182,15 @@ def run_simulate(args):
 
     if args.from_ts is None:
         tables = tskit.TableCollection(m)
+        tables.nodes.metadata_schema = tskit.MetadataSchema.permissive_json()
         for pop_id, sample_count in enumerate(sample_configuration):
             tables.populations.add_row()
             for _ in range(sample_count):
                 tables.nodes.add_row(
-                    flags=tskit.NODE_IS_SAMPLE, time=0, population=pop_id
+                    flags=tskit.NODE_IS_SAMPLE,
+                    time=0,
+                    population=pop_id,
+                    metadata={},
                 )
     else:
         from_ts = tskit.load(args.from_ts)
