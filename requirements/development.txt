@@ -8,7 +8,7 @@ demes>=0.2.0
 demesdraw
 flake8
 matplotlib>=3.4.0
-meson
+meson>=0.57.0
 mock
 mypy
 ninja
