@@ -78,8 +78,8 @@ class TestAlgorithms:
         ts = self.run_script("30 -L 200 --full-arg")
         assert ts.num_trees > 1
         node_flags = ts.tables.nodes.flags
-        assert np.sum(node_flags == msprime.NODE_IS_RE_EVENT) > 0
-        assert np.sum(node_flags == msprime.NODE_IS_CA_EVENT) > 0
+        assert np.sum(node_flags == msprime.NODE_IS_RECOMBINANT) > 0
+        assert np.sum(node_flags == msprime.NODE_IS_NONGENETIC_CA) > 0
 
     def test_migration_full_arg(self):
         ts = self.run_script("10 -p 3 -g 0.1 --full-arg")

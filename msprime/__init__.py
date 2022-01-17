@@ -27,9 +27,9 @@ for more information.
 
 from msprime._msprime import (
     NODE_IS_CEN_EVENT,
-    NODE_IS_CA_EVENT,
+    NODE_IS_NONGENETIC_CA,
     NODE_IS_MIG_EVENT,
-    NODE_IS_RE_EVENT,
+    NODE_IS_RECOMBINANT,
     NODE_IS_GC_EVENT,
 )
 
@@ -125,10 +125,10 @@ __all__ = [
     "MatrixMutationModel",
     "MigrationRateChange",
     "MutationModel",
-    "NODE_IS_CA_EVENT",
+    "NODE_IS_NONGENETIC_CA",
     "NODE_IS_CEN_EVENT",
     "NODE_IS_MIG_EVENT",
-    "NODE_IS_RE_EVENT",
+    "NODE_IS_RECOMBINANT",
     "NODE_IS_GC_EVENT",
     "NUCLEOTIDES",
     "PAM",

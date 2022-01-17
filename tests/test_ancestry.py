@@ -103,13 +103,12 @@ class TestFullArg:
         flags = tree_sequence.tables.nodes.flags
         time = tree_sequence.tables.nodes.time
         # TODO add checks for migrations.
-        re_nodes = np.where(flags == msprime.NODE_IS_RE_EVENT)[0]
-        ca_nodes = np.where(flags == msprime.NODE_IS_CA_EVENT)[0]
+        re_nodes = np.where(flags == msprime.NODE_IS_RECOMBINANT)[0]
+        ca_nodes = np.where(flags == msprime.NODE_IS_NONGENETIC_CA)[0]
         gc_nodes = np.where(flags == msprime.NODE_IS_GC_EVENT)[0]
         coal_nodes = np.where(flags == 0)[0]
-        # There should be two recombination nodes for every event
-        assert np.array_equal(time[re_nodes[::2]], time[re_nodes[1::2]])  # Odd indexes
-        assert re_nodes.shape[0] / 2 == sim.num_recombination_events
+        # There should be one recombination node for every event
+        assert re_nodes.shape[0] == sim.num_recombination_events
         # There should be two gene conversion nodes for every effective event
         assert np.array_equal(time[gc_nodes[::2]], time[gc_nodes[1::2]])  # Odd indexes
         assert (
@@ -126,13 +125,12 @@ class TestFullArg:
         ts_simplified = tree_sequence.simplify()
         new_flags = ts_simplified.tables.nodes.flags
         new_time = ts_simplified.tables.nodes.time
-        assert np.sum(new_flags == msprime.NODE_IS_RE_EVENT) == 0
-        assert np.sum(new_flags == msprime.NODE_IS_CA_EVENT) == 0
+        assert np.sum(new_flags == msprime.NODE_IS_RECOMBINANT) == 0
+        assert np.sum(new_flags == msprime.NODE_IS_NONGENETIC_CA) == 0
         assert np.sum(new_flags == msprime.NODE_IS_GC_EVENT) == 0
         # All coal nodes from the original should be identical to the originals
         assert np.array_equal(time[coal_nodes], new_time[new_flags == 0])
         assert ts_simplified.num_nodes <= tree_sequence.num_nodes
-        assert ts_simplified.num_edges <= tree_sequence.num_edges
         return tree_sequence
 
     def test_no_recombination(self):
@@ -1909,7 +1907,7 @@ class TestSimAncestryInterface:
             record_full_arg=True,
         )
         flags = ts.tables.nodes.flags
-        assert np.sum(flags == msprime.NODE_IS_RE_EVENT) > 0
+        assert np.sum(flags == msprime.NODE_IS_RECOMBINANT) > 0
         for record_full_arg in [None, False]:
             ts = msprime.sim_ancestry(
                 4,
@@ -1919,7 +1917,7 @@ class TestSimAncestryInterface:
                 record_full_arg=record_full_arg,
             )
             flags = ts.tables.nodes.flags
-            assert np.sum(flags == msprime.NODE_IS_RE_EVENT) == 0
+            assert np.sum(flags == msprime.NODE_IS_RECOMBINANT) == 0
 
     def test_initial_tables_recapitate(self):
         # Simple recapitate scenario
@@ -2245,7 +2243,7 @@ class TestUnknownGenomeRegions:
         assert tree.interval == (0, 1)
         assert tree.num_roots == ts.num_samples
         flags = ts.tables.nodes.flags
-        assert np.sum(flags == msprime.NODE_IS_RE_EVENT) > 0
+        assert np.sum(flags == msprime.NODE_IS_RECOMBINANT) > 0
 
     def test_sim_ancestry_unknown_mid(self):
         rate_map = msprime.RateMap(position=[0, 1, 9, 10], rate=[0, np.nan, 0])

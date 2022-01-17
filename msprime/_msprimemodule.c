@@ -3330,8 +3330,8 @@ PyInit__msprime(void)
     Py_INCREF(MsprimeLibraryError);
     PyModule_AddObject(module, "LibraryError", MsprimeLibraryError);
 
-    PyModule_AddIntConstant(module, "NODE_IS_CA_EVENT", MSP_NODE_IS_CA_EVENT);
-    PyModule_AddIntConstant(module, "NODE_IS_RE_EVENT", MSP_NODE_IS_RE_EVENT);
+    PyModule_AddIntConstant(module, "NODE_IS_NONGENETIC_CA", MSP_NODE_IS_NONGENETIC_CA);
+    PyModule_AddIntConstant(module, "NODE_IS_RECOMBINANT", MSP_NODE_IS_RECOMBINANT);
     PyModule_AddIntConstant(module, "NODE_IS_GC_EVENT", MSP_NODE_IS_GC_EVENT);
     PyModule_AddIntConstant(module, "NODE_IS_MIG_EVENT", MSP_NODE_IS_MIG_EVENT);
     PyModule_AddIntConstant(module, "NODE_IS_CEN_EVENT", MSP_NODE_IS_CEN_EVENT);

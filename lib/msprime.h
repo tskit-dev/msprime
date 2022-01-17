@@ -52,8 +52,9 @@
 #define MSP_EXIT_MAX_TIME 2
 #define MSP_EXIT_MODEL_COMPLETE 3
 
-#define MSP_NODE_IS_RE_EVENT (1u << 17)
-#define MSP_NODE_IS_CA_EVENT (1u << 18)
+#define MSP_NODE_IS_RECOMBINANT (1u << 16)
+//#define MSP_NODE_IS_RE_EVENT (1u << 17)
+#define MSP_NODE_IS_NONGENETIC_CA (1u << 18)
 #define MSP_NODE_IS_MIG_EVENT (1u << 19)
 #define MSP_NODE_IS_CEN_EVENT (1u << 20)
 #define MSP_NODE_IS_GC_EVENT (1u << 21)
