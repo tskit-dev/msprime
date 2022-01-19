@@ -21,7 +21,7 @@ tskit>=0.4.0
 stdpopsim>=0.1.2 # Make sure we have correct version of OOA model
 scipy
 setuptools_scm
-sphinx<4
+sphinx>=4.4
 sphinx-argparse
 sphinx-issues
 jupyter-book
