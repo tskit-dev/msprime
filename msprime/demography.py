@@ -1197,7 +1197,7 @@ class Demography(collections.abc.Mapping):
         Returns a :class:`.DemographyDebugger` instance for this demography.
 
         :return: A DemographyDebugger object for this demography.
-        :rtype: .DemographyDebugger
+        :rtype: msprime.DemographyDebugger
         """
         return DemographyDebugger(demography=self)
 
@@ -1526,7 +1526,7 @@ class Demography(collections.abc.Mapping):
             if the branch lengths are not in units of generations, the generation time
             must be specified. This defaults to `None`.
         :return: A Demography object representing the specified species tree.
-        :rtype: .Demography
+        :rtype: msprime.Demography
         """
         return species_trees.parse_species_tree(
             tree,
@@ -1581,7 +1581,7 @@ class Demography(collections.abc.Mapping):
             ``"yr"``, respectively. This defaults to ``"myr"``.
         :return: A :class:`.Demography` instance that describing the information in the
             specified species tree.
-        :rtype: .Demography
+        :rtype: msprime.Demography
         """
         return species_trees.parse_starbeast(
             tree=tree,
@@ -1913,7 +1913,7 @@ class Demography(collections.abc.Mapping):
 
         :param demes.Graph graph: A demes graph.
         :return: A :class:`.Demography` instance corresponding to the demes model.
-        :rtype: .Demography
+        :rtype: msprime.Demography
         """
 
         # Check for Demes features that we don't support.
@@ -2092,7 +2092,7 @@ class Demography(collections.abc.Mapping):
             added populations, as a number of individuals (Default=0).
         :return: A Demography object representing the populations in the
             specified tree sequence.
-        :rtype: .Demography
+        :rtype: msprime.Demography
         """
         demography = Demography()
         for population in ts.populations():
@@ -2125,7 +2125,7 @@ class Demography(collections.abc.Mapping):
             growth rate) or an array with the same length as ``initial_size``.
         :return: A Demography object representing this model, suitable as
             input to :func:`.sim_ancestry`.
-        :rtype: .Demography
+        :rtype: msprime.Demography
         """
         initial_size = np.array(initial_size, dtype=np.float64)
         if len(initial_size.shape) != 1:
@@ -2176,7 +2176,7 @@ class Demography(collections.abc.Mapping):
             growth rate) or an array with the same length as ``initial_size``.
         :return: A Demography object representing this model, suitable as
             input to :func:`.sim_ancestry`.
-        :rtype: Demography
+        :rtype: msprime.Demography
         """
         model = Demography.isolated_model(initial_size, growth_rate=growth_rate)
         check_migration_rate(migration_rate)
@@ -2214,7 +2214,7 @@ class Demography(collections.abc.Mapping):
             terminal demes.
         :return: A Demography object representing this model, suitable as
             input to :func:`.sim_ancestry`.
-        :rtype: .Demography
+        :rtype: msprime.Demography
         """
         initial_size = np.array(initial_size, dtype=np.float64)
         if len(initial_size.shape) > 1:

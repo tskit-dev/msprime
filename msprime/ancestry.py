@@ -1164,7 +1164,7 @@ def sim_ancestry(
         the :ref:`sec_ancestry_models_specifying` section for more details,
         and the :ref:`sec_ancestry_models` section for the available models
         and examples.
-    :type model: str or .AncestryModel or list
+    :type model: str or msprime.AncestryModel or list
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
         iterator over the independent replicates simulated if the
