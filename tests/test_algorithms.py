@@ -34,7 +34,7 @@ def has_discrete_genome(ts):
     return edges_left and edges_right and migrations_left and migrations_right and sites
 
 
-@pytest.mark.skipif(IS_WINDOWS, reason="Bintrees isn't availble on windows")
+@pytest.mark.skipif(IS_WINDOWS, reason="Bintrees isn't available on windows")
 class TestAlgorithms:
     def run_script(self, cmd):
         # print("RUN", cmd)
@@ -52,6 +52,11 @@ class TestAlgorithms:
         assert not has_discrete_genome(ts)
         assert ts.sequence_length == 100
 
+    def test_defaults_metadata(self):
+        ts = self.run_script("10")
+        for node in ts.nodes():
+            assert node.metadata == {}
+
     def test_discrete(self):
         ts = self.run_script("10 -d")
         assert ts.num_trees > 1
@@ -62,6 +67,11 @@ class TestAlgorithms:
         assert ts.num_trees > 1
         assert not has_discrete_genome(ts)
         assert ts.sequence_length == 100
+
+    def test_dtwf_metadata(self):
+        ts = self.run_script("10 --model=dtwf")
+        for node in ts.nodes():
+            assert node.metadata == {}
 
     def test_dtwf_migration(self):
         ts = self.run_script("10 -r 0 --model=dtwf -p 2 -g 0.1")
@@ -80,6 +90,17 @@ class TestAlgorithms:
         node_flags = ts.tables.nodes.flags
         assert np.sum(node_flags == msprime.NODE_IS_RECOMBINANT) > 0
         assert np.sum(node_flags == msprime.NODE_IS_NONGENETIC_CA) > 0
+
+    def test_full_arg_metadata(self):
+        ts = self.run_script("30 -L 200 --full-arg")
+        assert ts.num_trees > 1
+        node_flags = ts.tables.nodes.flags
+        assert np.sum(node_flags == msprime.NODE_IS_RECOMBINANT) > 0
+        for node in ts.nodes():
+            if node.flags & msprime.NODE_IS_RECOMBINANT:
+                assert "breakpoint" in node.metadata
+            else:
+                assert node.metadata == {}
 
     def test_migration_full_arg(self):
         ts = self.run_script("10 -p 3 -g 0.1 --full-arg")
@@ -218,6 +239,7 @@ class TestAlgorithms:
                     assert node.individual in founder_ids
             for node_id in tree.nodes():
                 node = ts.node(node_id)
+                assert node.metadata == {}
                 individual = ts.individual(node.individual)
                 if tree.parent(node_id) != tskit.NULL:
                     parent_node = ts.node(tree.parent(node_id))

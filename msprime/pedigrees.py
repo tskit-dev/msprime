@@ -39,6 +39,9 @@ class PedigreeBuilder:
         assert len(self.individuals) == 0
         if individuals_metadata_schema is not None:
             self.individuals.metadata_schema = individuals_metadata_schema
+        # FIXME quick hack - we should use a standard metadata_schema from
+        # a function.
+        self.nodes.metadata_schema = tskit.MetadataSchema.permissive_json()
 
     def add_individual(
         self, *, time, is_sample=None, parents=None, population=None, metadata=None
