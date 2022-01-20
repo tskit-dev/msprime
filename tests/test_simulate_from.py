@@ -173,9 +173,11 @@ class TestBasicFunctionality:
         final_tables.nodes.truncate(len(from_tables.nodes))
         final_tables.edges.truncate(len(from_tables.edges))
         final_tables.migrations.truncate(len(from_tables.migrations))
-        final_tables.provenances.clear()
-        from_tables.provenances.clear()
-        assert final_tables == from_tables
+        # For simplicity we ignore metadata here, but the metadata in the node
+        # table can be significant.
+        final_tables.assert_equals(
+            from_tables, ignore_provenance=True, ignore_metadata=True
+        )
 
         if final_ts.num_migrations == 0:
             # Simplify doesn't support migrations at the moment so we don't
@@ -599,9 +601,12 @@ class BaseEquivalanceMixin:
         )
         tables = tskit.TableCollection(ts1.sequence_length)
         tables.time_units = "generations"
+        tables.nodes.metadata_schema = tskit.MetadataSchema.permissive_json()
         tables.populations.add_row()
         for _ in range(n):
-            tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
+            tables.nodes.add_row(
+                flags=tskit.NODE_IS_SAMPLE, time=0, population=0, metadata={}
+            )
         ts2 = msprime.simulate(
             from_ts=tables.tree_sequence(),
             start_time=0,
@@ -610,7 +615,7 @@ class BaseEquivalanceMixin:
             recombination_map=recombination_map,
             model=self.model,
         )
-        assert ts1.equals(ts2, ignore_provenance=True)
+        ts1.tables.assert_equals(ts2.tables, ignore_provenance=True)
 
     def test_single_locus_two_samples(self):
         for seed in range(1, 10):
@@ -660,10 +665,13 @@ class BaseEquivalanceMixin:
         )
         tables = tskit.TableCollection(1)
         tables.time_units = "generations"
+        tables.nodes.metadata_schema = tskit.MetadataSchema.permissive_json()
         tables.populations.add_row()
         tables.populations.add_row()
         for _ in range(n):
-            tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=0)
+            tables.nodes.add_row(
+                flags=tskit.NODE_IS_SAMPLE, time=0, population=0, metadata={}
+            )
         ts2 = msprime.simulate(
             from_ts=tables.tree_sequence(),
             start_time=0,
@@ -1216,13 +1224,12 @@ class TestSlimOutput:
         final_tables = final_ts.dump_tables()
         # Other tables should be equal up to the from_tables.
         final_tables.nodes.truncate(len(from_tables.nodes))
-        assert final_tables.nodes == from_tables.nodes
         final_tables.edges.truncate(len(from_tables.edges))
-        assert final_tables.edges == from_tables.edges
         # The mutation_rate parameter in simulate is not permitted, so we
         # should always have the same set of mutations before and after.
-        assert final_tables.sites == from_tables.sites
-        assert final_tables.mutations == from_tables.mutations
+        final_tables.assert_equals(
+            from_tables, ignore_provenance=True, ignore_metadata=True
+        )
         assert max(tree.num_roots for tree in final_ts.trees()) == 1
 
     def test_minimal_example_no_recombination(self):
