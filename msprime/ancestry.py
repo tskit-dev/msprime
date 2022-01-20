@@ -202,16 +202,23 @@ def _demography_factory(
     return demography.validate()
 
 
-def _build_initial_tables(*, sequence_length, samples, ploidy, demography):
+def _build_initial_tables(
+    *, sequence_length, samples, ploidy, demography, record_full_arg
+):
     # NOTE: this is only used in the simulate() codepath.
     tables = tskit.TableCollection(sequence_length)
     tables.time_units = TIME_UNITS_GENERATIONS
 
+    # For simplicity we set the same metadata_schema as the sim_ancestry
+    # code path. We previously made no use of metadata, so we can't
+    # be introducing problems.
+    set_node_metadata_schema(tables, record_full_arg=record_full_arg)
     for index, (population, time) in enumerate(samples):
         tables.nodes.add_row(
             flags=tskit.NODE_IS_SAMPLE,
             time=time,
             population=population,
+            metadata={},
         )
         if population < 0:
             raise ValueError(f"Negative population ID in sample at index {index}")
@@ -346,6 +353,7 @@ def _parse_simulate(
             samples=samples,
             ploidy=2,
             demography=demography,
+            record_full_arg=record_full_arg,
         )
     else:
         tables = from_ts.dump_tables()
@@ -684,6 +692,22 @@ def _parse_rate_map(rate_param, sequence_length, name):
     return rate_map
 
 
+def _empty_json_column(num_rows):
+    """
+    Return the (metadata, metadata_offset) numpy arrays representing the
+    specified number of rows of the string '{}'.
+
+    Note: we will hopefully be able to skip this once tskit supports
+    interpreting the empty string as empty metadata.
+    https://github.com/tskit-dev/tskit/issues/2064
+    """
+    data = np.zeros(2 * num_rows, dtype=np.int8)
+    data[0::2] = ord("{")
+    data[1::2] = ord("}")
+    offsets = np.arange(num_rows + 1, dtype=np.uint32) * 2
+    return data, offsets
+
+
 def _insert_sample_sets(sample_sets, demography, default_ploidy, tables):
     """
     Insert the samples described in the specified {population_id: num_samples}
@@ -708,11 +732,14 @@ def _insert_sample_sets(sample_sets, demography, default_ploidy, tables):
         ind_flags = np.zeros(n, dtype=np.uint32)
         tables.individuals.append_columns(flags=ind_flags)
         N = n * ploidy
+        metadata, metadata_offset = _empty_json_column(N)
         tables.nodes.append_columns(
             flags=np.full(N, tskit.NODE_IS_SAMPLE, dtype=np.uint32),
             time=np.full(N, time),
             population=np.full(N, population.id, dtype=np.int32),
             individual=node_individual,
+            metadata=metadata,
+            metadata_offset=metadata_offset,
         )
 
 
@@ -771,6 +798,15 @@ def _parse_samples(samples, demography):
             "the different forms."
         )
     return _parse_sample_sets(sample_sets, demography)
+
+
+def set_node_metadata_schema(tables, *, record_full_arg):
+    if tables.nodes.metadata_schema.schema is None:
+        schema = tskit.MetadataSchema.permissive_json()
+        tables.nodes.metadata_schema = schema
+    else:
+        # TODO warning?
+        pass
 
 
 def _parse_sim_ancestry(
@@ -1001,6 +1037,8 @@ def _parse_sim_ancestry(
                     f"state population table must be equal: {pop1.name} ≠ {pop2.name}"
                 )
         demography.insert_extra_populations(initial_state)
+
+    set_node_metadata_schema(initial_state, record_full_arg=record_full_arg)
 
     # It's useful to call _parse_sim_ancestry outside the context of the main
     # entry point - so we want to get good seeds in this case too.

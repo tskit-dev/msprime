@@ -47,7 +47,7 @@ build_sim(msp_t *msp, tsk_table_collection_t *tables, gsl_rng *rng,
             population = samples[j].population;
         }
         ret = tsk_node_table_add_row(
-            &tables->nodes, TSK_NODE_IS_SAMPLE, time, population, TSK_NULL, NULL, 0);
+            &tables->nodes, TSK_NODE_IS_SAMPLE, time, population, TSK_NULL, "{}", 2);
         CU_ASSERT_EQUAL_FATAL(ret, j);
     }
     for (j = 0; j < num_populations; j++) {
@@ -88,7 +88,7 @@ build_pedigree_sim(msp_t *msp, tsk_table_collection_t *tables, gsl_rng *rng,
         }
         for (k = 0; k < ploidy; k++) {
             ret = tsk_node_table_add_row(
-                &tables->nodes, flags, time[j], pop_id, ind_id, NULL, 0);
+                &tables->nodes, flags, time[j], pop_id, ind_id, "{}", 2);
             CU_ASSERT_FATAL(ret >= 0);
         }
         max_pop = TSK_MAX(max_pop, pop_id);

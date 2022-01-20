@@ -2295,3 +2295,45 @@ class TestTimeUnits:
             msprime.sim_ancestry(
                 initial_state=tables, population_size=10, random_seed=1
             )
+
+
+class TestNodeMetadata:
+    def test_simulate_sets_node_metadata(self):
+        ts = msprime.simulate(2, random_seed=1)
+        for node in ts.nodes():
+            assert node.metadata == {}
+
+    def test_sim_ancestry_sets_node_metadata(self):
+        ts = msprime.sim_ancestry(2, random_seed=1)
+        for node in ts.nodes():
+            assert node.metadata == {}
+
+    @pytest.mark.parametrize(
+        "schema",
+        [
+            tskit.MetadataSchema.permissive_json().schema,
+            {
+                "codec": "json",
+                "type": "object",
+                "properties": {"accession_number": {"type": "integer"}},
+            },
+            {
+                "codec": "json",
+                "type": "object",
+                "properties": {
+                    "accession_number": {"type": "integer"},
+                    "thing": {"type": "string"},
+                },
+                "additionalProperties": True,
+            },
+        ],
+    )
+    def test_initial_state_has_compatible_schema(self, schema):
+        tables = msprime.sim_ancestry(2, end_time=0, random_seed=1).dump_tables()
+        tables.nodes.metadata_schema = tskit.MetadataSchema(schema)
+        ts = msprime.sim_ancestry(
+            initial_state=tables, population_size=10, random_seed=1
+        )
+        assert ts.tables.nodes.metadata_schema.schema == schema
+        for node in ts.nodes():
+            assert len(node.metadata) >= 0

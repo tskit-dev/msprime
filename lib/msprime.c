@@ -36,6 +36,8 @@
 #define MSP_STATE_SIMULATING 2
 #define MSP_STATE_DEBUGGING 3
 
+#define EMPTY_METADATA "{}"
+
 /* Draw a random variable from a truncated Beta(a, b) distribution,
  * by rejecting draws above the truncation point x.
  */
@@ -1450,12 +1452,27 @@ msp_verify_pedigree(msp_t *self)
     }
 }
 
+static void
+msp_verify_nodes(msp_t *self)
+{
+    tsk_size_t j;
+    tsk_node_t node;
+    int ret;
+
+    for (j = 0; j < self->tables->nodes.num_rows; j++) {
+        ret = tsk_node_table_get_row(&self->tables->nodes, (tsk_id_t) j, &node);
+        tsk_bug_assert(ret == 0);
+        tsk_bug_assert(node.metadata_length >= 2);
+    }
+}
+
 void
 msp_verify(msp_t *self, int options)
 {
     msp_verify_initial_state(self);
     msp_verify_segments(self, options & MSP_VERIFY_BREAKPOINTS);
     msp_verify_overlaps(self);
+    msp_verify_nodes(self);
     if (self->model.type == MSP_MODEL_HUDSON && self->state == MSP_STATE_SIMULATING) {
         msp_verify_non_empty_populations(self);
         msp_verify_migration_destinations(self);
@@ -1781,8 +1798,8 @@ msp_store_node(msp_t *self, uint32_t flags, double time, population_id_t populat
     if (ret != 0) {
         goto out;
     }
-    ret = tsk_node_table_add_row(
-        &self->tables->nodes, flags, time, population_id, individual, NULL, 0);
+    ret = tsk_node_table_add_row(&self->tables->nodes, flags, time, population_id,
+        individual, EMPTY_METADATA, strlen(EMPTY_METADATA));
     if (ret < 0) {
         goto out;
     }
@@ -5161,8 +5178,8 @@ msp_insert_uncoalesced_edges(msp_t *self)
                 }
                 if (node == TSK_NULL) {
                     /* Add a node for this ancestor */
-                    node = tsk_node_table_add_row(
-                        nodes, 0, current_time, pop, TSK_NULL, NULL, 0);
+                    node = tsk_node_table_add_row(nodes, 0, current_time, pop, TSK_NULL,
+                        EMPTY_METADATA, strlen(EMPTY_METADATA));
                     if (node < 0) {
                         ret = msp_set_tsk_error(node);
                         goto out;
@@ -6433,7 +6450,8 @@ msp_census_event(msp_t *self, demographic_event_t *event)
                         goto out;
                     }
                     ret = tsk_node_table_add_row(&self->tables->nodes,
-                        MSP_NODE_IS_CEN_EVENT, event->time, i, TSK_NULL, NULL, 0);
+                        MSP_NODE_IS_CEN_EVENT, event->time, i, TSK_NULL, EMPTY_METADATA,
+                        strlen(EMPTY_METADATA));
                     if (ret < 0) {
                         goto out;
                     }
