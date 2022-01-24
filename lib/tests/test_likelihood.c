@@ -137,9 +137,6 @@ test_likelihood_zero_edges(void)
     tsk_table_collection_free(&tables);
 }
 
-/* Skipping these tests until the likelihood function is fixed
- * for dealing with single-node RE events */
-#if 0
 static void
 test_likelihood_three_leaves(void)
 {
@@ -680,24 +677,21 @@ test_likelihood_recombination_in_material_gap(void)
     tsk_treeseq_free(&ts);
     tsk_table_collection_free(&tables);
 }
-#endif
 
 int
 main(int argc, char **argv)
 {
-    CU_TestInfo tests[]
-        = { { "test_likelihood_errors", test_likelihood_errors },
-              { "test_likelihood_zero_edges", test_likelihood_zero_edges },
-#if 0
+    CU_TestInfo tests[] = {
+        { "test_likelihood_errors", test_likelihood_errors },
+        { "test_likelihood_zero_edges", test_likelihood_zero_edges },
         { "test_likelihood_three_leaves", test_likelihood_three_leaves },
         { "test_likelihood_two_mrcas", test_likelihood_two_mrcas },
         { "test_likelihood_material_overhang", test_likelihood_material_overhang },
         { "test_likelihood_material_gap", test_likelihood_material_gap },
         { "test_likelihood_recombination_in_material_gap",
             test_likelihood_recombination_in_material_gap },
-#endif
-              CU_TEST_INFO_NULL,
-          };
+        CU_TEST_INFO_NULL,
+    };
 
     return test_main(tests, argc, argv);
 }
