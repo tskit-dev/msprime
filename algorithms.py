@@ -1381,8 +1381,9 @@ class Simulator:
         self.set_segment_mass(alpha)
         self.P[alpha.population].add(alpha, label)
         if self.full_arg:
-            self.store_node(lhs_tail.population, flags=msprime.NODE_IS_RECOMBINANT)
+            self.store_node(lhs_tail.population, flags=msprime.NODE_IS_RE_EVENT)
             self.store_arg_edges(lhs_tail)
+            self.store_node(alpha.population, flags=msprime.NODE_IS_RE_EVENT)
             self.store_arg_edges(alpha)
         ret = None
         if return_heads:
@@ -1799,7 +1800,7 @@ class Simulator:
                 z = alpha
         if self.full_arg:
             if not coalescence:
-                self.store_node(pop_id, flags=msprime.NODE_IS_NONGENETIC_CA)
+                self.store_node(pop_id, flags=msprime.NODE_IS_CA_EVENT)
             self.store_arg_edges(z)
         if defrag_required:
             self.defrag_segment_chain(z)
@@ -1936,7 +1937,7 @@ class Simulator:
 
         if self.full_arg:
             if not coalescence:
-                self.store_node(population_index, flags=msprime.NODE_IS_NONGENETIC_CA)
+                self.store_node(population_index, flags=msprime.NODE_IS_CA_EVENT)
             self.store_arg_edges(z)
         if defrag_required:
             self.defrag_segment_chain(z)

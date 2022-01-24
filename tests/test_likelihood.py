@@ -54,7 +54,7 @@ def log_arg_likelihood(arg, recombination_rate, Ne=1):
         ret -= rate * (tables.nodes[parent].time - time)
         time = tables.nodes[parent].time
         child = tables.edges[edge].child
-        if tables.nodes[parent].flags == msprime.NODE_IS_RECOMBINANT:
+        if tables.nodes[parent].flags == msprime.NODE_IS_RE_EVENT:
             if recombination_rate == 0:
                 ret = -float("inf")
                 break
@@ -110,28 +110,32 @@ class TestKnownExamples:
             flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
         )
 
-        tables.edges.add_row(left=0, right=1, parent=3, child=2)
+        tables.edges.add_row(left=0, right=0.5, parent=3, child=2)
+        tables.edges.add_row(left=0.5, right=1, parent=4, child=2)
         tables.nodes.add_row(
-            flags=msprime.NODE_IS_RECOMBINANT, population=0, individual=-1, time=0.1
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
         )
 
-        tables.edges.add_row(left=0, right=1, parent=4, child=1)
-        tables.edges.add_row(left=0, right=0.5, parent=4, child=3)
+        tables.edges.add_row(left=0, right=1, parent=5, child=1)
+        tables.edges.add_row(left=0, right=0.5, parent=5, child=3)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=0.25)
 
-        tables.edges.add_row(left=0, right=1, parent=5, child=0)
-        tables.edges.add_row(left=0.5, right=1, parent=5, child=3)
+        tables.edges.add_row(left=0, right=1, parent=6, child=0)
+        tables.edges.add_row(left=0.5, right=1, parent=6, child=4)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=0.5)
 
-        tables.edges.add_row(left=0, right=1, parent=6, child=4)
-        tables.edges.add_row(left=0, right=1, parent=6, child=5)
+        tables.edges.add_row(left=0, right=1, parent=7, child=5)
+        tables.edges.add_row(left=0, right=1, parent=7, child=6)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=1)
 
         tables.mutations.add_row(site=0, node=0, derived_state="1")
         tables.mutations.add_row(site=1, node=1, derived_state="1")
         tables.mutations.add_row(site=2, node=3, derived_state="1")
         tables.mutations.add_row(site=3, node=0, derived_state="1")
-        tables.mutations.add_row(site=4, node=4, derived_state="1")
+        tables.mutations.add_row(site=4, node=5, derived_state="1")
 
         tables.sites.add_row(0.1, "0")
         tables.sites.add_row(0.2, "0")
@@ -174,27 +178,35 @@ class TestKnownExamples:
             flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
         )
 
-        tables.edges.add_row(left=0, right=1, parent=2, child=1)
+        tables.edges.add_row(left=0, right=0.5, parent=2, child=1)
+        tables.edges.add_row(left=0.5, right=1, parent=3, child=1)
         tables.nodes.add_row(
-            flags=msprime.NODE_IS_RECOMBINANT, population=0, individual=-1, time=0.1
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
         )
 
-        tables.edges.add_row(left=0, right=1, parent=3, child=0)
+        tables.edges.add_row(left=0, right=0.5, parent=4, child=0)
+        tables.edges.add_row(left=0.5, right=1, parent=5, child=0)
         tables.nodes.add_row(
-            flags=msprime.NODE_IS_RECOMBINANT, population=0, individual=-1, time=0.15
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.15
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.15
         )
 
-        tables.edges.add_row(left=0, right=0.5, parent=4, child=2)
-        tables.edges.add_row(left=0, right=0.5, parent=4, child=3)
+        tables.edges.add_row(left=0, right=0.5, parent=6, child=2)
+        tables.edges.add_row(left=0, right=0.5, parent=6, child=4)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=0.5)
 
-        tables.edges.add_row(left=0.5, right=1, parent=5, child=2)
-        tables.edges.add_row(left=0.5, right=1, parent=5, child=3)
+        tables.edges.add_row(left=0.5, right=1, parent=7, child=3)
+        tables.edges.add_row(left=0.5, right=1, parent=7, child=5)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=1)
 
         tables.mutations.add_row(site=0, node=1, derived_state="1")
-        tables.mutations.add_row(site=1, node=3, derived_state="1")
-        tables.mutations.add_row(site=2, node=2, derived_state="1")
+        tables.mutations.add_row(site=1, node=4, derived_state="1")
+        tables.mutations.add_row(site=2, node=3, derived_state="1")
 
         tables.sites.add_row(0.1, "0")
         tables.sites.add_row(0.2, "0")
@@ -234,31 +246,39 @@ class TestKnownExamples:
             flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
         )
 
-        tables.edges.add_row(left=0, right=1, parent=2, child=1)
+        tables.edges.add_row(left=0, right=0.5, parent=2, child=1)
+        tables.edges.add_row(left=0.5, right=1, parent=3, child=1)
         tables.nodes.add_row(
-            flags=msprime.NODE_IS_RECOMBINANT, population=0, individual=-1, time=0.1
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
         )
 
-        tables.edges.add_row(left=0, right=1, parent=3, child=0)
+        tables.edges.add_row(left=0, right=0.7, parent=4, child=0)
+        tables.edges.add_row(left=0.7, right=1, parent=5, child=0)
         tables.nodes.add_row(
-            flags=msprime.NODE_IS_RECOMBINANT, population=0, individual=-1, time=0.15
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.15
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.15
         )
 
-        tables.edges.add_row(left=0, right=0.5, parent=4, child=2)
-        tables.edges.add_row(left=0, right=0.7, parent=4, child=3)
+        tables.edges.add_row(left=0, right=0.5, parent=6, child=2)
+        tables.edges.add_row(left=0, right=0.7, parent=6, child=4)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=0.5)
 
-        tables.edges.add_row(left=0.5, right=1, parent=5, child=2)
-        tables.edges.add_row(left=0.7, right=1, parent=5, child=3)
+        tables.edges.add_row(left=0.5, right=1, parent=7, child=3)
+        tables.edges.add_row(left=0.7, right=1, parent=7, child=5)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=1)
 
-        tables.edges.add_row(left=0.5, right=0.7, parent=6, child=4)
-        tables.edges.add_row(left=0.5, right=0.7, parent=6, child=5)
+        tables.edges.add_row(left=0.5, right=0.7, parent=8, child=6)
+        tables.edges.add_row(left=0.5, right=0.7, parent=8, child=7)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=1.3)
 
         tables.mutations.add_row(site=0, node=1, derived_state="1")
-        tables.mutations.add_row(site=1, node=3, derived_state="1")
-        tables.mutations.add_row(site=2, node=2, derived_state="1")
+        tables.mutations.add_row(site=1, node=4, derived_state="1")
+        tables.mutations.add_row(site=2, node=3, derived_state="1")
 
         tables.sites.add_row(0.1, "0")
         tables.sites.add_row(0.6, "0")
@@ -300,34 +320,42 @@ class TestKnownExamples:
             flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
         )
 
-        tables.edges.add_row(left=0, right=1, parent=2, child=0)
+        tables.edges.add_row(left=0, right=0.3, parent=2, child=0)
+        tables.edges.add_row(left=0.3, right=1, parent=3, child=0)
         tables.nodes.add_row(
-            flags=msprime.NODE_IS_RECOMBINANT, population=0, individual=-1, time=0.1
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
         )
 
-        tables.edges.add_row(left=0.3, right=1, parent=3, child=2)
+        tables.edges.add_row(left=0.3, right=0.5, parent=4, child=3)
+        tables.edges.add_row(left=0.5, right=1, parent=5, child=3)
         tables.nodes.add_row(
-            flags=msprime.NODE_IS_RECOMBINANT, population=0, individual=-1, time=0.2
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.2
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.2
         )
 
-        tables.edges.add_row(left=0, right=0.3, parent=4, child=2)
-        tables.edges.add_row(left=0.5, right=1, parent=4, child=3)
+        tables.edges.add_row(left=0, right=0.3, parent=6, child=2)
+        tables.edges.add_row(left=0.5, right=1, parent=6, child=5)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=0.3)
 
-        tables.edges.add_row(left=0, right=1, parent=5, child=1)
-        tables.edges.add_row(left=0, right=0.3, parent=5, child=4)
-        tables.edges.add_row(left=0.5, right=1, parent=5, child=4)
+        tables.edges.add_row(left=0, right=1, parent=7, child=1)
+        tables.edges.add_row(left=0, right=0.3, parent=7, child=6)
+        tables.edges.add_row(left=0.5, right=1, parent=7, child=6)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=0.4)
 
-        tables.edges.add_row(left=0.3, right=0.5, parent=6, child=3)
-        tables.edges.add_row(left=0.3, right=0.5, parent=6, child=5)
+        tables.edges.add_row(left=0.3, right=0.5, parent=8, child=4)
+        tables.edges.add_row(left=0.3, right=0.5, parent=8, child=7)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=0.5)
 
         tables.mutations.add_row(site=0, node=2, derived_state="1")
-        tables.mutations.add_row(site=1, node=2, derived_state="1")
-        tables.mutations.add_row(site=2, node=5, derived_state="1")
-        tables.mutations.add_row(site=3, node=4, derived_state="1")
-        tables.mutations.add_row(site=4, node=3, derived_state="1")
+        tables.mutations.add_row(site=1, node=3, derived_state="1")
+        tables.mutations.add_row(site=2, node=7, derived_state="1")
+        tables.mutations.add_row(site=3, node=6, derived_state="1")
+        tables.mutations.add_row(site=4, node=5, derived_state="1")
 
         tables.sites.add_row(0.1, "0")
         tables.sites.add_row(0.35, "0")
@@ -370,42 +398,53 @@ class TestKnownExamples:
             flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
         )
 
-        tables.edges.add_row(left=0, right=1, parent=2, child=0)
+        tables.edges.add_row(left=0, right=0.3, parent=2, child=0)
+        tables.edges.add_row(left=0.3, right=1, parent=3, child=0)
         tables.nodes.add_row(
-            flags=msprime.NODE_IS_RECOMBINANT, population=0, individual=-1, time=0.1
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.1
         )
 
-        tables.edges.add_row(left=0.3, right=1, parent=3, child=2)
+        tables.edges.add_row(left=0.3, right=0.5, parent=4, child=3)
+        tables.edges.add_row(left=0.5, right=1, parent=5, child=3)
         tables.nodes.add_row(
-            flags=msprime.NODE_IS_RECOMBINANT, population=0, individual=-1, time=0.2
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.2
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.2
         )
 
-        tables.edges.add_row(left=0, right=0.3, parent=4, child=2)
-        tables.edges.add_row(left=0.5, right=1, parent=4, child=3)
+        tables.edges.add_row(left=0, right=0.3, parent=6, child=2)
+        tables.edges.add_row(left=0.5, right=1, parent=6, child=5)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=0.3)
 
-        tables.edges.add_row(left=0, right=0.3, parent=5, child=4)
-        tables.edges.add_row(left=0.5, right=1, parent=5, child=4)
+        tables.edges.add_row(left=0, right=0.3, parent=7, child=6)
+        tables.edges.add_row(left=0.5, right=1, parent=8, child=6)
         tables.nodes.add_row(
-            flags=msprime.NODE_IS_RECOMBINANT, population=0, individual=-1, time=0.4
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.4
+        )
+        tables.nodes.add_row(
+            flags=msprime.NODE_IS_RE_EVENT, population=0, individual=-1, time=0.4
         )
 
-        tables.edges.add_row(left=0.3, right=0.5, parent=6, child=3)
-        tables.edges.add_row(left=0.5, right=1, parent=6, child=5)
+        tables.edges.add_row(left=0.3, right=0.5, parent=9, child=4)
+        tables.edges.add_row(left=0.5, right=1, parent=9, child=8)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=0.5)
 
-        tables.edges.add_row(left=0, right=1, parent=7, child=1)
-        tables.edges.add_row(left=0, right=0.3, parent=7, child=5)
+        tables.edges.add_row(left=0, right=1, parent=10, child=1)
+        tables.edges.add_row(left=0, right=0.3, parent=10, child=7)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=0.6)
 
-        tables.edges.add_row(left=0.3, right=1, parent=8, child=6)
-        tables.edges.add_row(left=0.3, right=1, parent=8, child=7)
+        tables.edges.add_row(left=0.3, right=1, parent=11, child=9)
+        tables.edges.add_row(left=0.3, right=1, parent=11, child=10)
         tables.nodes.add_row(flags=0, population=0, individual=-1, time=0.7)
 
         tables.mutations.add_row(site=0, node=2, derived_state="1")
-        tables.mutations.add_row(site=1, node=2, derived_state="1")
-        tables.mutations.add_row(site=2, node=4, derived_state="1")
-        tables.mutations.add_row(site=3, node=3, derived_state="1")
+        tables.mutations.add_row(site=1, node=3, derived_state="1")
+        tables.mutations.add_row(site=2, node=6, derived_state="1")
+        tables.mutations.add_row(site=3, node=5, derived_state="1")
 
         tables.sites.add_row(0.1, "0")
         tables.sites.add_row(0.35, "0")

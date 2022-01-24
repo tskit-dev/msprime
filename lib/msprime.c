@@ -2328,14 +2328,20 @@ msp_store_arg_recombination(msp_t *self, segment_t *lhs_tail, segment_t *rhs)
 {
     int ret = 0;
 
-    /* Store a node for the recombinant child */
+    /* Store the edges for the LHS */
     ret = msp_store_node(
-        self, MSP_NODE_IS_RECOMBINANT, self->time, lhs_tail->population, TSK_NULL);
+        self, MSP_NODE_IS_RE_EVENT, self->time, lhs_tail->population, TSK_NULL);
     if (ret < 0) {
         goto out;
     }
     ret = msp_store_arg_edges(self, lhs_tail);
     if (ret != 0) {
+        goto out;
+    }
+    /* Store the edges for the RHS */
+    ret = msp_store_node(
+        self, MSP_NODE_IS_RE_EVENT, self->time, rhs->population, TSK_NULL);
+    if (ret < 0) {
         goto out;
     }
     ret = msp_store_arg_edges(self, rhs);
@@ -2923,7 +2929,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     if (self->store_full_arg) {
         if (!coalescence) {
             ret = msp_store_node(
-                self, MSP_NODE_IS_NONGENETIC_CA, self->time, population_id, TSK_NULL);
+                self, MSP_NODE_IS_CA_EVENT, self->time, population_id, TSK_NULL);
             if (ret < 0) {
                 goto out;
             }
@@ -3157,7 +3163,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     if (self->store_full_arg) {
         if (!coalescence) {
             ret = msp_store_node(
-                self, MSP_NODE_IS_NONGENETIC_CA, self->time, population_id, individual);
+                self, MSP_NODE_IS_CA_EVENT, self->time, population_id, individual);
             if (ret < 0) {
                 goto out;
             }
