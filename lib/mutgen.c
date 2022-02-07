@@ -202,7 +202,7 @@ mutation_matrix_choose_root_state(mutation_model_t *self, gsl_rng *rng, site_t *
 {
     int ret = 0;
     mutation_matrix_t params = self->params.mutation_matrix;
-    double u = gsl_ran_flat(rng, 0.0, 1.0);
+    double u = msp_gsl_ran_flat(rng, 0.0, 1.0);
     size_t j = probability_list_select(u, params.num_alleles, params.root_distribution);
     tsk_bug_assert(j < params.num_alleles);
     site->ancestral_state = params.alleles[j];
@@ -218,7 +218,7 @@ mutation_matrix_transition(mutation_model_t *self, gsl_rng *rng,
 {
     int ret = 0;
     mutation_matrix_t params = self->params.mutation_matrix;
-    double u = gsl_ran_flat(rng, 0.0, 1.0);
+    double u = msp_gsl_ran_flat(rng, 0.0, 1.0);
     double *probs;
     tsk_id_t j, pi;
 
@@ -1125,7 +1125,7 @@ mutgen_place_mutations(mutgen_t *self, bool discrete_sites)
                  * use up all of the doubles before it could happen and so we'd
                  * certainly run out of memory first. */
                 do {
-                    position = gsl_ran_flat(self->rng, site_left, site_right);
+                    position = msp_gsl_ran_flat(self->rng, site_left, site_right);
                     if (discrete_sites) {
                         position = floor(position);
                     }
@@ -1133,7 +1133,7 @@ mutgen_place_mutations(mutgen_t *self, bool discrete_sites)
                     avl_node = avl_search(&self->sites, &search);
                 } while (avl_node != NULL && !discrete_sites);
 
-                time = gsl_ran_flat(self->rng, branch_start, branch_end);
+                time = msp_gsl_ran_flat(self->rng, branch_start, branch_end);
                 tsk_bug_assert(site_left <= position && position < site_right);
                 tsk_bug_assert(branch_start <= time && time < branch_end);
                 if (avl_node != NULL) {
