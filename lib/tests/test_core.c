@@ -130,6 +130,39 @@ test_tskit_version(void)
     CU_ASSERT_EQUAL(TSK_VERSION_PATCH, 15);
 }
 
+static void
+test_gsl_ran_flat_patch(void)
+{
+    double left, right, x;
+    int i;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+
+    right = 85190021.000000;
+    left = nexttoward(right, 0.0);
+    gsl_rng_set(rng, 12345);
+    x = gsl_ran_flat(rng, left, right);
+    CU_ASSERT(!(right > x));
+    gsl_rng_set(rng, 12345);
+    x = msp_gsl_ran_flat(rng, left, right);
+    CU_ASSERT(right > x);
+    CU_ASSERT(left <= x);
+
+    left = 0.0;
+    right = 1.0;
+    for (i = 0; i < 1000; i++) {
+        x = msp_gsl_ran_flat(rng, left, right);
+        CU_ASSERT(left <= x);
+        CU_ASSERT(right > x);
+    }
+
+    left = 2.0;
+    right = 2.0;
+    x = msp_gsl_ran_flat(rng, left, right);
+    CU_ASSERT(left == x && right == x);
+
+    gsl_rng_free(rng);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -138,6 +171,7 @@ main(int argc, char **argv)
         { "test_strerror_tskit", test_strerror_tskit },
         { "test_probability_list_select", test_probability_list_select },
         { "test_tskit_version", test_tskit_version },
+        { "test_gsl_ran_flat_patch", test_gsl_ran_flat_patch },
         CU_TEST_INFO_NULL,
     };
 

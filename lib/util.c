@@ -25,6 +25,7 @@
 #include <errno.h>
 
 #include <gsl/gsl_math.h>
+#include <gsl/gsl_randist.h>
 
 #include <tskit/core.h>
 #include "util.h"
@@ -712,3 +713,28 @@ fast_search_free(fast_search_t *self)
 extern inline size_t sub_idx_1st_strict_upper_bound(
     const double *base, size_t start, size_t stop, double query);
 extern inline size_t fast_search_idx_strict_upper(fast_search_t *self, double query);
+
+/*   The gsl_ran_flat() function is supposed to output lo<=x<hi, but
+ *   sometimes (with probability <1e-9) we find x=hi.
+ *   This function includes a while loop to ensure x<hi.
+ *   https://github.com/tskit-dev/msprime/issues/1997
+ */
+double
+msp_gsl_ran_flat(gsl_rng *rng, double lo, double hi)
+{
+    double x;
+
+    /* The logic here requires that lo <= hi, but */
+    /* gsl_ran_flat produces output in this case. Keep */
+    /* this assert to make sure that msprime's usage */
+    /* has the required properties.  */
+    tsk_bug_assert(lo <= hi);
+    if (lo == hi) {
+        x = lo;
+    } else {
+        do {
+            x = gsl_ran_flat(rng, lo, hi);
+        } while (x >= hi);
+    }
+    return x;
+}

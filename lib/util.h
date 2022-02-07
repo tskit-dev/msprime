@@ -24,6 +24,8 @@
 #include <assert.h>
 #include <stdio.h>
 
+#include <gsl/gsl_randist.h>
+
 #include "tskit.h"
 
 #ifdef __GNUC__
@@ -165,6 +167,8 @@ typedef struct {
 int fast_search_alloc(fast_search_t *self, const double *values, size_t n_values);
 int fast_search_free(fast_search_t *self);
 inline size_t fast_search_idx_strict_upper(fast_search_t *self, double query);
+
+double msp_gsl_ran_flat(gsl_rng *rng, double lo, double hi);
 
 /***********************************
  * INLINE FUNCTION IMPLEMENTATIONS *
