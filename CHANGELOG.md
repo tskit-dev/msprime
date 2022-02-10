@@ -1,11 +1,17 @@
 # Changelog
 
-## [1.1.1] - 2022-02-xx
+Minor bugfix release.
+
+## [1.1.1] - 2022-02-10
 
 **Bug fixes**:
 - Fix (very) rare assertion trip caused by underlying GSL bug.
   ({issue}`1997`, {pr}`2000`, {user}`chriscrsmith `, {user}`molpopgen`,
   {user}`andrewkern`)
+
+**Maintenance **:
+
+- Various documentation improvements.
 
 ## [1.1.0] - 2021-12-14
 
