@@ -18,6 +18,7 @@ parts:
 - caption: Utilities
   chapters:
   - file: rate_maps
+  - file: pedigrees
   - file: likelihoods
   - file: logging
 - caption: Miscellaneous

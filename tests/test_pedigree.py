@@ -1,7 +1,7 @@
 import collections
-import dataclasses
+import io
 import sys
-import tempfile
+import textwrap
 
 import numpy as np
 import pytest
@@ -1087,225 +1087,6 @@ class TestSimulateThroughPedigreeMultiplePops:
         assert ts.node(6).time > 2
 
 
-@dataclasses.dataclass
-class FamEntry:
-    fid: str = "0"
-    iid: str = "0"
-    pat: str = "0"
-    mat: str = "0"
-    sex: str = "0"
-    phen: str = None
-
-    def get_row(self, delimiter="\t"):
-        return delimiter.join(
-            [x for x in dataclasses.asdict(self).values() if x is not None]
-        )
-
-
-class TestParseFam:
-    """
-    Tests for the parse_fam function.
-    """
-
-    def get_parsed_fam(self, entries, delimiter="\t"):
-        content = "\n".join([entry.get_row(delimiter=delimiter) for entry in entries])
-        with tempfile.TemporaryFile() as f:
-            f.write(bytes(content, "utf-8"))
-            f.seek(0)
-            return pedigrees.parse_fam(f)
-
-    def test_empty_file(self):
-        entries = []
-        with pytest.warns(UserWarning):
-            tb = self.get_parsed_fam(entries=entries)
-        assert len(tb) == 0
-
-    @pytest.mark.parametrize("iid", ["1", "a", "100", "abc"])
-    def test_single_line(self, iid):
-        entries = [FamEntry(iid=iid)]
-        tb = self.get_parsed_fam(entries=entries)
-        assert len(tb) == 1
-        assert np.array_equal(tb[0].parents, [-1, -1])
-        assert tb[0].metadata["plink_fid"] == "0"
-        assert tb[0].metadata["plink_iid"] == str(iid)
-        assert tb[0].metadata["sex"] == 0
-
-    @pytest.mark.parametrize("iids", [("1", "2"), ("a", "b")])
-    def test_multiple_line_file(self, iids):
-        # test both integer and string IIDs
-        iid1, iid2 = iids
-        entries = [FamEntry(iid=iid1), FamEntry(iid=iid2)]
-        tb = self.get_parsed_fam(entries=entries)
-        assert len(tb) == 2
-        for idx in range(2):
-            assert np.array_equal(tb[idx].parents, [-1, -1])
-            assert tb[idx].metadata["plink_fid"] == "0"
-            assert tb[idx].metadata["plink_iid"] == str(entries[idx].iid)
-            assert tb[idx].metadata["sex"] == 0
-
-    @pytest.mark.parametrize("n_cols", range(1, 5))
-    def test_insufficient_cols(self, n_cols):
-        fields = list(dataclasses.asdict(FamEntry()))
-        entry = FamEntry(iid="1")
-        for field in fields[n_cols:]:
-            entry.__setattr__(field, None)
-        with pytest.raises(IndexError):
-            self.get_parsed_fam(entries=[entry])
-
-    def test_unrelated_duplicate_iids(self):
-        # Individuals have the same IID, but are in different families
-        entries = [FamEntry(iid="1"), FamEntry(fid="1", iid="1")]
-        tb = self.get_parsed_fam(entries=entries)
-        assert len(tb) == 2
-        assert tb[0].metadata["plink_fid"] == "0"
-        assert tb[0].metadata["plink_iid"] == "1"
-        assert tb[1].metadata["plink_fid"] == "1"
-        assert tb[1].metadata["plink_iid"] == "1"
-
-    def test_duplicate_rows(self):
-        entries = [FamEntry(iid="1"), FamEntry(iid="1")]
-        with pytest.raises(ValueError):
-            self.get_parsed_fam(entries=entries)
-
-    def test_space_delimited(self):
-        entries = [FamEntry(iid="1")]
-        tb = self.get_parsed_fam(entries=entries, delimiter=" ")
-        assert np.array_equal(tb[0].parents, [-1, -1])
-        assert tb[0].metadata["plink_fid"] == "0"
-        assert tb[0].metadata["plink_iid"] == "1"
-        assert tb[0].metadata["sex"] == 0
-
-    def test_missing_phen_col(self):
-        entries = [FamEntry(iid="1", phen="1")]
-        tb = self.get_parsed_fam(entries=entries)
-
-        entries = [FamEntry(iid="1")]  # remove last column (PHEN column)
-        tb_missing = self.get_parsed_fam(entries=entries)
-
-        assert tb == tb_missing
-
-    @pytest.mark.parametrize("sex", [-2, 3, "F"])
-    def test_bad_sex_value(self, sex):
-        entries = [FamEntry(iid="1", sex=str(sex))]
-        with pytest.raises(ValueError):
-            self.get_parsed_fam(entries=entries)
-
-    def test_empty_sex_value(self):
-        entries = [FamEntry(iid="1", sex="")]
-        with pytest.raises(IndexError):
-            self.get_parsed_fam(entries=entries)
-
-    def test_single_family_map_parent_ids(self):
-        # PAT is mapped if the individual exists in the dataset
-        entries = [FamEntry(iid="1"), FamEntry(iid="2", pat="1")]
-        tb = self.get_parsed_fam(entries=entries)
-        assert np.array_equal(tb[1].parents, [0, -1])
-
-        # MAT is mapped if the individual exists in the dataset
-        entries = [FamEntry(iid="1"), FamEntry(iid="2", mat="1")]
-        tb = self.get_parsed_fam(entries=entries)
-        assert np.array_equal(tb[1].parents, [-1, 0])
-
-        # both parent IDs are remapped if the both parents exist in the dataset
-        entries = [
-            FamEntry(iid="1"),
-            FamEntry(iid="2"),
-            FamEntry(iid="3", pat="1", mat="2"),
-        ]
-        tb = self.get_parsed_fam(entries=entries)
-        assert np.array_equal(tb[2].parents, [0, 1])
-
-    def test_missing_parent_id(self):
-        # KeyError raised if at least one parent (PAT) does not exist in dataset
-        entries = [
-            FamEntry(iid="2"),
-            FamEntry(iid="3", pat="1", mat="2"),
-        ]
-        with pytest.raises(KeyError):
-            self.get_parsed_fam(entries=entries)
-
-        # KeyError raised if at least one parent (MAT) does not exist in dataset
-        entries = [
-            FamEntry(iid="1"),
-            FamEntry(iid="3", pat="1", mat="2"),
-        ]
-        with pytest.raises(KeyError):
-            self.get_parsed_fam(entries=entries)
-
-        # KeyError raised if both parents do not exist in dataset
-        entries = [FamEntry(iid="1", pat="2", mat="3")]
-        with pytest.raises(KeyError):
-            self.get_parsed_fam(entries=entries)
-
-    def test_multiple_family_map_parent_ids(self):
-        # parents mapped correctly when the same parent ID is used in different families
-        entries = [
-            FamEntry(iid="2"),
-            FamEntry(iid="1"),
-            FamEntry(fid="1", iid="2"),
-            FamEntry(fid="1", iid="1"),
-            FamEntry(iid="3", pat="1", mat="2"),
-            FamEntry(fid="1", iid="3", pat="1", mat="2"),
-        ]
-        tb = self.get_parsed_fam(entries=entries)
-        for idx in range(4):
-            assert np.array_equal(tb[idx].parents, [-1, -1])
-        assert np.array_equal(tb[4].parents, [1, 0])
-        assert np.array_equal(tb[5].parents, [3, 2])
-
-        # KeyError raised when FID does not match, even if parent ID matches
-        entries = [
-            FamEntry(iid="2"),
-            FamEntry(iid="1"),
-            FamEntry(iid="3", pat="1", mat="2"),
-            FamEntry(
-                fid="1", iid="1", pat="2", mat="3"
-            ),  # there is no parent with FID=1, IID=3
-            FamEntry(fid="1", iid="2"),
-        ]
-        with pytest.raises(KeyError):
-            self.get_parsed_fam(entries)
-
-    def test_grandparents(self):
-        entries = [
-            FamEntry(iid="4"),
-            FamEntry(iid="3"),
-            FamEntry(iid="2"),
-            FamEntry(iid="1"),
-            FamEntry(iid="6", pat="3", mat="4"),
-            FamEntry(iid="5", pat="1", mat="2"),
-            FamEntry(iid="7", pat="5", mat="6"),
-        ]
-        tb = self.get_parsed_fam(entries=entries)
-        assert np.array_equal(tb[4].parents, [1, 0])
-        assert np.array_equal(tb[5].parents, [3, 2])
-        assert np.array_equal(tb[6].parents, [5, 4])
-
-    def test_children_before_parents(self, tmp_path):
-        entries = [
-            FamEntry(iid="1", pat="2", mat="3"),
-            FamEntry(iid="2"),
-            FamEntry(iid="3"),
-        ]
-        content = "\n".join([entry.get_row() for entry in entries])
-        fam_path = f"{tmp_path}/test.fam"
-        with open(fam_path, "w+") as f:
-            f.write(content)
-            f.seek(0)
-            tb = pedigrees.parse_fam(f)
-
-        tc = tskit.TableCollection(1)
-        # Issue 1489 will make this better
-        tc.individuals.metadata_schema = tb.metadata_schema
-        for row in tb:
-            tc.individuals.append(row)
-        tc.tree_sequence()  # creating tree sequence should succeed
-
-        assert np.array_equal(tb[0].parents, [1, 2])
-        assert np.array_equal(tb[1].parents, [-1, -1])
-        assert np.array_equal(tb[2].parents, [-1, -1])
-
-
 class TestPedigreeBuilder:
     def test_is_sample_default(self):
         pb = pedigrees.PedigreeBuilder()
@@ -1469,6 +1250,281 @@ class TestPedigreeBuilder:
         pb.add_individual(time=0)
         t1 = pb.finalise(1)
         assert t1.has_index()
+
+
+def parse_indented(text, demography=None):
+    return msprime.parse_pedigree(
+        io.StringIO(textwrap.dedent(text)), demography=demography
+    )
+
+
+class TestParsePedigreeExamples:
+    def test_single_all_columns(self):
+        text = """\
+        # id parent0 parent1 time is_sample
+        X NA NA 0 1
+        """
+        tables = parse_indented(text)
+        assert len(tables.individuals) == 1
+        assert len(tables.nodes) == 2
+        assert list(tables.individuals[0].parents) == [-1, -1]
+        assert tables.nodes[0].time == 0
+        assert tables.nodes[0].flags == tskit.NODE_IS_SAMPLE
+        assert tables.individuals[0].metadata == {"file_id": "X"}
+
+    def test_single_row_min_columns(self):
+        text = """\
+        # id parent0 parent1 time
+        X NA NA 0
+        """
+        tables = parse_indented(text)
+        assert len(tables.individuals) == 1
+        assert len(tables.nodes) == 2
+        assert list(tables.individuals[0].parents) == [-1, -1]
+        assert tables.nodes[0].time == 0
+        assert tables.nodes[0].flags == tskit.NODE_IS_SAMPLE
+        assert tables.individuals[0].metadata == {"file_id": "X"}
+
+    def test_no_rows(self):
+        text = """\
+        # id parent0 parent1 time is_sample
+        """
+        tables = parse_indented(text)
+        assert len(tables.individuals) == 0
+        assert len(tables.nodes) == 0
+
+    def test_trio(self):
+        text = """\
+        # id parent0 parent1 time
+        child mom dad 0
+        mom NA NA 1
+        dad NA NA 1
+        """
+        tables = parse_indented(text)
+        assert len(tables.individuals) == 3
+        assert len(tables.nodes) == 6
+        assert tables.individuals[0].metadata["file_id"] == "child"
+        assert list(tables.individuals[0].parents) == [1, 2]
+        assert tables.individuals[1].metadata["file_id"] == "mom"
+        assert list(tables.individuals[1].parents) == [-1, -1]
+        assert tables.individuals[2].metadata["file_id"] == "dad"
+        assert list(tables.individuals[2].parents) == [-1, -1]
+
+    def test_single_population_name(self):
+        text = """\
+        # id parent0 parent1 time population
+        A NA NA 0 pop_0
+        """
+        demography = msprime.Demography.isolated_model([1])
+        tables = parse_indented(text, demography=demography)
+        assert len(tables.individuals) == 1
+        assert tables.nodes[0].population == 0
+        assert tables.nodes[1].population == 0
+
+    def test_single_population_id(self):
+        text = """\
+        # id parent0 parent1 time population
+        A NA NA 0 0
+        """
+        demography = msprime.Demography.isolated_model([1])
+        tables = parse_indented(text, demography=demography)
+        assert len(tables.individuals) == 1
+        assert tables.nodes[0].population == 0
+        assert tables.nodes[1].population == 0
+
+    def test_two_populations_name(self):
+        text = """\
+        # id parent0 parent1 time population
+        A NA NA 0 pop_1
+        """
+        demography = msprime.Demography.isolated_model([1, 1])
+        tables = parse_indented(text, demography=demography)
+        assert len(tables.individuals) == 1
+        assert tables.nodes[0].population == 1
+        assert tables.nodes[1].population == 1
+
+    def test_two_populations_id(self):
+        text = """\
+        # id parent0 parent1 time population
+        A NA NA 0 1
+        """
+        demography = msprime.Demography.isolated_model([1, 1])
+        tables = parse_indented(text, demography=demography)
+        assert len(tables.individuals) == 1
+        assert tables.nodes[0].population == 1
+        assert tables.nodes[1].population == 1
+
+
+class TestParsePedigreeErrors:
+    def test_empty_file(self):
+        with pytest.raises(ValueError, match="at least a header"):
+            parse_indented("")
+
+    def test_bad_header(self):
+        with pytest.raises(ValueError, match="start with #"):
+            parse_indented("id")
+
+    @pytest.mark.parametrize("column", ["id", "parent0", "parent1", "time"])
+    def test_missing_required(self, column):
+        columns = [col for col in ["id", "parent0", "parent1", "time"] if col != column]
+        header = "# " + " ".join(columns)
+        with pytest.raises(ValueError, match="columns are required"):
+            parse_indented(header)
+
+    def test_unknown_column(self):
+        text = """\
+        # id parent0 parent1 time unknown_col
+        """
+        with pytest.raises(ValueError, match="'unknown_col' not supported"):
+            parse_indented(text)
+
+    def test_parital_row_min(self):
+        text = """\
+        # id parent0 parent1 time
+        child
+        """
+        with pytest.raises(ValueError, match="Incorrect number of columns"):
+            parse_indented(text)
+
+    def test_parital_row_missing_optional(self):
+        text = """\
+        # id parent0 parent1 time is_sample
+        child NA NA 0
+        """
+        with pytest.raises(ValueError, match="Incorrect number of columns"):
+            parse_indented(text)
+
+    def test_duplicate_id(self):
+        text = """\
+        # id parent0 parent1 time
+        child NA NA 0
+        child NA NA 1
+        """
+        with pytest.raises(ValueError, match="Duplicate ID"):
+            parse_indented(text)
+
+    def test_missing_id(self):
+        text = """\
+        # id parent0 parent1 time
+        child missing NA 0
+        """
+        with pytest.raises(ValueError, match="Parent ID 'missing' not defined"):
+            parse_indented(text)
+
+    def test_bad_time(self):
+        text = """\
+        # id parent0 parent1 time
+        child NA NA bad_time
+        """
+        with pytest.raises(ValueError, match="value for column 'time' on line 2"):
+            parse_indented(text)
+
+    def test_bad_is_sample(self):
+        text = """\
+        # id parent0 parent1 time is_sample
+        child NA NA 0 abcd
+        """
+        with pytest.raises(ValueError, match="value for column 'is_sample' on line 2"):
+            parse_indented(text)
+
+    def test_id_is_NA(self):
+        text = """\
+        # id parent0 parent1 time
+        NA NA NA 0
+        """
+        with pytest.raises(ValueError, match="'NA' cannot be used"):
+            parse_indented(text)
+
+    def test_line_no(self):
+        text = """\
+        # id parent0 parent1 time
+        me NA NA 0
+        NA NA NA 0
+        """
+        # People (and vim) usually count file lines from 1, so error on line 3
+        with pytest.raises(ValueError, match="line 3"):
+            parse_indented(text)
+
+
+class TestPedigreeTextRoundTrip:
+    def verify(self, pedigree, demography=None):
+        buff = io.StringIO()
+        pedigrees.write_pedigree(pedigree.tree_sequence(), buff)
+        buff.seek(0)
+        parsed = pedigrees.parse_pedigree(
+            buff, demography, sequence_length=pedigree.sequence_length
+        )
+        pedigree.assert_equals(parsed, ignore_metadata=True)
+
+    @pytest.mark.parametrize("direction", ["backward", "forward"])
+    def test_sim_pedigree(self, direction):
+        ped_tables = pedigrees.sim_pedigree(
+            population_size=5,
+            end_time=5,
+            random_seed=1234,
+            direction=direction,
+            sequence_length=1,
+        )
+        self.verify(ped_tables)
+
+    def test_simulate_pedigree(self):
+        ped_tables = simulate_pedigree(
+            num_founders=20,
+            num_generations=5,
+            sequence_length=1,
+        )
+        self.verify(ped_tables)
+
+    def test_two_populations(self):
+        t1 = pedigrees.sim_pedigree(
+            population_size=5,
+            end_time=3,
+            random_seed=1234,
+            sequence_length=1,
+        )
+        t1.populations.add_row({"name": "pop_1", "description": ""})
+        t2 = t1.copy()
+        t2.nodes.population = t2.nodes.population + 1
+        ped = join_pedigrees([t1, t2])
+        demography = msprime.Demography.isolated_model([1, 1])
+        self.verify(ped.tables, demography=demography)
+
+
+class TestWritePedigreeErrors:
+    @pytest.mark.parametrize("num_nodes", [0, 1, 3])
+    def test_incorrect_num_nodes(self, num_nodes):
+        tables = tskit.TableCollection(1)
+        tables.individuals.add_row(parents=[-1, -1])
+        for _ in range(num_nodes):
+            tables.nodes.add_row(time=0, individual=0)
+        with pytest.raises(ValueError, match="two nodes"):
+            pedigrees.write_pedigree(tables.tree_sequence(), io.StringIO())
+
+    def test_mismatched_node_times(self):
+        tables = tskit.TableCollection(1)
+        tables.individuals.add_row(parents=[-1, -1])
+        tables.nodes.add_row(flags=0, time=0, individual=0)
+        tables.nodes.add_row(flags=1, time=0, individual=0)
+        with pytest.raises(ValueError, match="same sample status"):
+            pedigrees.write_pedigree(tables.tree_sequence(), io.StringIO())
+
+    def test_mismatched_node_flags(self):
+        tables = tskit.TableCollection(1)
+        tables.individuals.add_row(parents=[-1, -1])
+        tables.nodes.add_row(time=0, individual=0)
+        tables.nodes.add_row(time=1, individual=0)
+        with pytest.raises(ValueError, match="same node time"):
+            pedigrees.write_pedigree(tables.tree_sequence(), io.StringIO())
+
+    def test_mismatched_node_populations(self):
+        tables = tskit.TableCollection(1)
+        tables.individuals.add_row(parents=[-1, -1])
+        tables.populations.add_row()
+        tables.populations.add_row()
+        tables.nodes.add_row(time=0, individual=0, population=0)
+        tables.nodes.add_row(time=0, individual=0, population=1)
+        with pytest.raises(ValueError, match="same node population"):
+            pedigrees.write_pedigree(tables.tree_sequence(), io.StringIO())
 
 
 if __name__ == "__main__":

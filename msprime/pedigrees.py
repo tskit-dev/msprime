@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2019-2021 University of Oxford
+# Copyright (C) 2019-2022 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -19,10 +19,188 @@
 """
 Pedigree utilities.
 """
+from __future__ import annotations
+
+import dataclasses
+
 import numpy as np
 import tskit
 
 from msprime import demography as demog_mod
+
+
+@dataclasses.dataclass
+class Column:
+    name: str
+
+    def parse_value(self, value: str) -> str:
+        return value
+
+
+class IdColumn(Column):
+    pass
+
+
+class NumericColumn(Column):
+    def parse_value(self, value: str) -> float:
+        return float(value)
+
+
+class BooleanColumn(Column):
+    def parse_value(self, value: str) -> bool:
+        return bool(int(value))
+
+
+class StringOrIntColumn(Column):
+    def parse_value(self, value: str) -> str | int:
+        try:
+            return int(value)
+        except ValueError:
+            pass
+        return value
+
+
+@dataclasses.dataclass
+class TextFileIndividual:
+    id: str  # noqa: A003
+    parent0: str | None
+    parent1: str | None
+    time: float
+    is_sample: bool | None = None
+    population: int = 0
+
+
+def _parse_pedigree_header(
+    header: str, demography: None | demog_mod.Demography
+) -> list[Column]:
+    tokens = header.split()
+    if tokens[0] != "#":
+        raise ValueError("First line must be the header and start with #")
+    required_cols = [
+        IdColumn("id"),
+        IdColumn("parent0"),
+        IdColumn("parent1"),
+        NumericColumn("time"),
+    ]
+    demography = (
+        demog_mod.Demography.isolated_model([1]) if demography is None else demography
+    )
+    optional_cols = [
+        BooleanColumn("is_sample"),
+        # There is the potential for ambiguity here in the population column
+        # if the string name of the population was an integer not equal to
+        # its ID. However, the Demography class requires that population names
+        # are valid Python identifiers, so this can't happen in practice.
+        StringOrIntColumn("population"),
+    ]
+    col_names = [col.name for col in required_cols]
+    tokens = tokens[1:]
+    if tokens[: len(required_cols)] != col_names:
+        raise ValueError(f"The {col_names} columns are required")
+
+    columns = list(required_cols)
+    optional_col_map = {col.name: col for col in optional_cols}
+    for colname in tokens[len(required_cols) :]:
+        if colname not in optional_col_map:
+            raise ValueError(f"Column '{colname}' not supported")
+        columns.append(optional_col_map[colname])
+    return columns
+
+
+def parse_pedigree(text_file, demography=None, sequence_length=None):
+    """
+    Parse a text describing a pedigree used for input to the
+    :class:`.FixedPedigree` ancestry model.
+    """
+    # First line must be the header and contain the column headers
+    header = next(text_file, None)
+    if header is None:
+        raise ValueError("Pedigree file must contain at least a header")
+    columns = _parse_pedigree_header(header, demography=demography)
+    individuals = []
+    tsk_id_map = {"NA": -1}
+    for tsk_id, row in enumerate(text_file):
+        line = tsk_id + 2
+        tokens = row.split()
+        if len(tokens) != len(columns):
+            raise ValueError(
+                "Incorrect number of columns "
+                f"(found={len(tokens)} need={len(columns)}) at line {line}: {row}"
+            )
+        kwargs = {}
+        for value, column in zip(tokens, columns):
+            try:
+                kwargs[column.name] = column.parse_value(value)
+            except ValueError as ve:
+                raise ValueError(
+                    f"Error parsing value for column '{column.name}' "
+                    f"on line {line}: {ve}"
+                )
+        ind = TextFileIndividual(**kwargs)
+        if ind.id == "NA":
+            raise ValueError(f"'NA' cannot be used as an individual ID (line {line})")
+        if ind.id in tsk_id_map:
+            raise ValueError(f"Duplicate ID at line {line}")
+        tsk_id_map[ind.id] = len(individuals)
+        individuals.append(ind)
+
+    # Convert the list of individuals to a tskit pedigree.
+    builder = PedigreeBuilder(
+        individuals_metadata_schema=tskit.MetadataSchema.permissive_json(),
+        demography=demography,
+    )
+    for ind in individuals:
+        parents = []
+        for parent in [ind.parent0, ind.parent1]:
+            if parent not in tsk_id_map:
+                raise ValueError(
+                    f"Parent ID '{parent}' not defined (line {tsk_id_map[ind.id] + 2})"
+                )
+            parents.append(tsk_id_map[parent])
+        builder.add_individual(
+            parents=parents,
+            time=ind.time,
+            is_sample=ind.is_sample,
+            metadata={"file_id": ind.id},
+            population=ind.population,
+        )
+    return builder.finalise(sequence_length)
+
+
+def write_pedigree(ts, out):
+
+    print("# id\tparent0\tparent1\ttime\tis_sample\tpopulation", file=out)
+    for ind in ts.individuals():
+        if len(ind.nodes) != 2:
+            raise ValueError(
+                "Invalid pedigree format: each individual must be associated with "
+                "two nodes"
+            )
+        nodes = [ts.node(node) for node in ind.nodes]
+        time = {node.time for node in nodes}
+        is_sample = {node.is_sample() for node in nodes}
+        population = {node.population for node in nodes}
+        if len(time) != 1:
+            raise ValueError("Pedigree individuals must have the same node time")
+        if len(is_sample) != 1:
+            raise ValueError("Pedigree individuals must have the same sample status")
+        if len(population) != 1:
+            raise ValueError("Pedigree individuals must have the same node population")
+
+        time = time.pop()
+        is_sample = is_sample.pop()
+        population = population.pop()
+        parents = []
+        for parent in ind.parents:
+            if parent == tskit.NULL:
+                parents.append("NA")
+            else:
+                parents.append(parent)
+        print(
+            f"{ind.id}\t{parents[0]}\t{parents[1]}\t{time}\t{is_sample}\t"
+            f"{population}",
+            file=out,
+        )
 
 
 class PedigreeBuilder:
@@ -41,8 +219,17 @@ class PedigreeBuilder:
             self.individuals.metadata_schema = individuals_metadata_schema
 
     def add_individual(
-        self, *, time, is_sample=None, parents=None, population=None, metadata=None
+        self,
+        *,
+        time,
+        is_sample=None,
+        parents=None,
+        population=None,
+        metadata=None,
     ):
+        """
+        Adds the specified individual, returning its ID.
+        """
         if is_sample is None:
             # By default, individuals at time 0 are marked as samples
             is_sample = time == 0
@@ -91,12 +278,16 @@ class PedigreeBuilder:
         )
         return ind_ids
 
-    def finalise(self, sequence_length):
+    def finalise(self, sequence_length=None):
+        """
+        Returns the table collection representing the defined pedigree.
+        """
         copy = self.tables.copy()
-        copy.sequence_length = sequence_length
+        copy.sequence_length = 1
         # Not strictly necessary, but it's useful when the tables are written
         # to file and are loaded as as a tree sequence.
         copy.build_index()
+        copy.sequence_length = -1 if sequence_length is None else sequence_length
         return copy
 
 
@@ -189,61 +380,3 @@ def sim_pedigree(
 
     tables.sequence_length = -1 if sequence_length is None else sequence_length
     return tables
-
-
-def parse_fam(fam_file):
-    """
-    Parse PLINK .fam file and convert to tskit IndividualTable.
-    Assumes fam file contains five columns: FID, IID, PAT, MAT, SEX
-    :param fam_file: PLINK .fam file object
-    :param tskit.TableCollection tc: TableCollection with IndividualTable to
-        which the individuals will be added
-    """
-    individuals = np.loadtxt(
-        fname=fam_file,
-        dtype=str,
-        ndmin=2,  # read file as 2-D table
-        usecols=(0, 1, 2, 3, 4),  # only keep FID, IID, PAT, MAT, SEX columns
-    )  # requires same number of columns in each row, i.e. not ragged
-
-    id_map = {}  # dict for translating PLINK ID to tskit IndividualTable ID
-    for tskit_id, (plink_fid, plink_iid, _pat, _mat, _sex) in enumerate(individuals):
-        # include space between strings to ensure uniqueness
-        plink_id = f"{plink_fid} {plink_iid}"
-        if plink_id in id_map:
-            raise ValueError("Duplicate PLINK ID: {plink_id}")
-        id_map[plink_id] = tskit_id
-    id_map["0"] = -1  # -1 is used in tskit to denote "missing"
-
-    tc = tskit.TableCollection(1)
-    tb = tc.individuals
-    tb.metadata_schema = tskit.MetadataSchema(
-        {
-            "codec": "json",
-            "type": "object",
-            "properties": {
-                "plink_fid": {"type": "string"},
-                "plink_iid": {"type": "string"},
-                "sex": {"type": "integer"},
-            },
-            "required": ["plink_fid", "plink_iid", "sex"],
-            "additionalProperties": True,
-        }
-    )
-    for plink_fid, plink_iid, pat, mat, sex in individuals:
-        sex = int(sex)
-        if not (sex in range(3)):
-            raise ValueError(
-                "Sex must be one of the following: 0 (unknown), 1 (male), 2 (female)"
-            )
-        metadata_dict = {"plink_fid": plink_fid, "plink_iid": plink_iid, "sex": sex}
-        pat_id = f"{plink_fid} {pat}" if pat != "0" else pat
-        mat_id = f"{plink_fid} {mat}" if mat != "0" else mat
-        tb.add_row(
-            parents=[
-                id_map[pat_id],
-                id_map[mat_id],
-            ],
-            metadata=metadata_dict,
-        )
-    return tb
