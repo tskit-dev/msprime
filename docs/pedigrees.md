@@ -30,11 +30,11 @@ set_matplotlib_formats("svg")
 
 # Pedigrees
 
-Pedigrees describe parent-offspring relationships between individual organisms,
-and can be provided as input to contrain simulations of genetic ancestry
+Pedigrees describe parent-offspring relationships between individuals,
+and can be provided as input to constrain simulations of genetic ancestry
 (see the {ref}`sec_ancestry_models_fixed_pedigree` section for details).
-In this section we describe the data structures used to encode pedigree
-data in msprime, and the utilities used to create input pedigrees.
+In this section we describe the data structures used to encode pedigrees
+in msprime, and the utilities used to create input pedigrees.
 
 :::{todo}
 This page is incomplete. Needs another pass through.
@@ -57,9 +57,9 @@ of an individual's parents. Further information is stored in the
 {ref}`nodes<sec_data_model_definitions_node>` associated with the individual.
 
 :::{note}
-It is important to note that sample status, time and population information
-is associated with an individual's nodes, which is an artefact of
-tskit's node-centric design.
+It is important to note that sample status, time, and population information
+is associated with an individual's nodes (see the {ref}`sec_ancestry_ploidy`
+section for details), which is an artefact of tskit's node-centric design.
 :::
 
 It is possible to specify a pedigree model directly using tskit APIs,
@@ -82,8 +82,8 @@ The pedigree returned by the {meth}`~.PedigreeBuilder.finalise` method
 contains the pedigree information defined by the calls to
 {meth}`~.PedigreeBuilder.add_individual`. For this trio, we began by adding
 the parents, and because they are founders, we don't provide any information
-about their parents. Each call to returns the integer ID of
-newly added individual.
+about their parents. Each call to {meth}`~.PedigreeBuilder.add_individual`
+returns the integer ID of newly added individual.
 
 ### Requirements
 
@@ -139,15 +139,10 @@ ts = msprime.sim_ancestry(initial_state=pedigree, model="fixed_pedigree",
 SVG(ts.draw_svg())
 ```
 
-
-
 ## Visualising pedigrees
 
 ```{code-cell}
-
-
 def draw_pedigree(ped_ts):
-
     G = nx.DiGraph()
     for ind in ped_ts.individuals():
         time = ped_ts.node(ind.nodes[0]).time
@@ -163,9 +158,7 @@ tables = msprime.pedigrees.sim_pedigree(
 tables.individuals
 tables.sequence_length = 1
 
-
 draw_pedigree(tables.tree_sequence())
-
 ```
 
 
