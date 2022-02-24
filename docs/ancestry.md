@@ -117,6 +117,7 @@ this.
 
 
 (sec_ancestry_samples)=
+
 ## Specifying samples
 
 The `samples` argument to {func}`.sim_ancestry` defines the number
@@ -176,8 +177,8 @@ ts
 ```
 
 The keys in the dictionary can also be the string names of the
-population (see the {ref}`sec_demography_populations_identifiers` section
-), which is useful when we are simulating from empirically
+population (see the {ref}`sec_demography_populations_identifiers` section),
+which is useful when we are simulating from empirically
 estimated models. For example, here create a {class}`.Demography` object
 based on a species tree, and then draw samples using the species names.
 
@@ -308,6 +309,7 @@ See the  {ref}`sec_ancestry_initial_state` for more information
 on how to use this (advanced) feature.
 
 (sec_ancestry_demography)=
+
 ## Demography
 
 A {ref}`demographic model<sec_demography>` is a description of a
@@ -382,12 +384,12 @@ more CPU time and memory.
 ---
 
 (sec_ancestry_ploidy)=
+
 ## Ploidy
 
 The ``ploidy`` argument to {func}`.sim_ancestry` has two effects:
 
-1. It sets the default ploidy (i.e., number sample nodes) of sample
-individuals.
+1. It sets the default ploidy, that is, the number of nodes per sample individual.
 2. For continuous time coalescent models, it sets the time scale.
 
 Both of these are somewhat confusing, so let's look at them one at a time.
@@ -1279,6 +1281,7 @@ of the youngest root in the input trees.
 :::
 
 (sec_ancestry_event_order)=
+
 ### Order of event execution
 
 There are two different classes of event that happen in ancestry
@@ -1546,7 +1549,6 @@ using [SLiM](https://messerlab.org/slim/).
 
 (sec_ancestry_models)=
 
-
 ## Models
 
 The ancestry model determines the model under which the ancestral
@@ -1620,6 +1622,7 @@ the explicit class form so that the
 {ref}`sec_ancestry_models_specifying_duration` can be set.
 
 (sec_ancestry_models_specifying_duration)=
+
 #### Model duration
 
 Each ancestry model instance has a {attr}`~.AncestryModel.duration` associated
@@ -2334,14 +2337,13 @@ details.
 
 ### Fixed pedigree
 
-A pedigree defines how *individuals* relate to each other, and these individual
-relationships constrain how genomes are inherited. We can simulate ancestry
-conditioned on a fixed pedigree using the {class}`.FixedPedigree` ancestry
-model. In this model the transfer of genetic material from parent to
-child is determined by the pedigree. Recombination
-occurs randomly such that each of a diploid individual's two genomes
-is a mixture of one of it
-parents two genomes, but everything else is determined by the pedigree.
+A pedigree describes parent-offspring relationships between individuals, and
+these relationships constrain how genomes are inherited. We can simulate
+ancestry conditioned on a fixed pedigree using the {class}`.FixedPedigree`
+ancestry model. In this model the transfer of genetic material from parent to
+offspring is determined by the pedigree. Recombination occurs randomly such that
+each of a diploid individual's two genomes is a mixture of two corresponding
+parental genomes, but everything else is determined by the pedigree.
 
 :::{warning}
 It is important to note that there is no concept of a population genetic
@@ -2405,7 +2407,7 @@ SVG(ped_ts.draw_svg(y_axis=True,  node_labels=node_labels, size=(600,200)))
 
 The output tree sequence contains the simulated genetic ancestry conditioned
 on this input pedigree, as shown in the trees above. Each node is labelled
-with it the individual ID it's associated with, and its ID.
+with it the individual ID it's associated with, and its ID (as individual(node)).
 The simulation stops at time 4, and we are left with multiple
 roots, which correspond to the founder individuals. If you only
 need simulations of the genetic ancestry through the pedigree,
@@ -2416,9 +2418,9 @@ section for information (and caveats about) completing these simulations.
 
 :::{note}
 Because the input pedigree fully describes the simulation many features such as
-{ref}`demography<sec_demography>` are not available when we use the {class}`.FixedPedigree`
-model. The {class}`.FixedPedigree` model also cannot be combined with other
-{ref}`ancestry models<sec_ancestry_models>`.
+{ref}`demography<sec_demography>` are not available when we use the
+{class}`.FixedPedigree` model. The {class}`.FixedPedigree` model also cannot be
+combined with other {ref}`ancestry models<sec_ancestry_models>`.
 :::
 
 :::{warning}
@@ -2495,7 +2497,7 @@ pedigree = msprime.parse_pedigree(io.StringIO(ped_txt), sequence_length=100)
 draw_pedigree(pedigree.tree_sequence())
 ```
 
-This pedigree has a dead end for individual 7, which is
+This pedigree has a "dead end" for individual 7, which is
 reflected in the trees that we output from the {class}`.FixedPedigree` simulation:
 
 ```{code-cell}
@@ -2542,7 +2544,7 @@ demography.add_population(name="C", initial_size=100)
 demography.add_population_split(time=10, derived=["A", "B"], ancestral="C");
 ```
 
-We when define a pedigree in which the individuals belong
+We here define a pedigree in which the individuals belong
 to the two "leaf" populations:
 
 
@@ -2634,4 +2636,3 @@ demography.add_population(name="A", initial_size=1)
 demography.add_population(name="B", initial_size=1)
 msprime.sim_ancestry(samples={"A": 1, "B": 1}, demography=demography)
 ```
-
