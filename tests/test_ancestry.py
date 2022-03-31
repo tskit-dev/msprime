@@ -277,13 +277,13 @@ class TestSimulator:
 
     def test_event_chunk(self):
         sim = ancestry._parse_simulate(10)
-        for bad_chunk in [-(2 ** 32), -1, 0]:
+        for bad_chunk in [-(2**32), -1, 0]:
             with pytest.raises(ValueError):
                 sim.run(event_chunk=bad_chunk)
         sim.reset()
-        sim.run(event_chunk=2 ** 32 + 1)
+        sim.run(event_chunk=2**32 + 1)
         sim.reset()
-        sim.run(event_chunk=2 ** 64 + 1)
+        sim.run(event_chunk=2**64 + 1)
 
     def test_debug_func(self):
         sim = ancestry._parse_simulate(10)

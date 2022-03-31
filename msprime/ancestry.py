@@ -1418,7 +1418,7 @@ class Simulator(_msprime.Simulator):
         # number of events so that we end up with roughly 10 second slices
         # (say).
         if event_chunk is None:
-            event_chunk = 10 ** 4
+            event_chunk = 10**4
         if event_chunk <= 0:
             raise ValueError("Must have at least 1 event per chunk")
         logger.info("Running model %s until max time: %f", self.model, end_time)

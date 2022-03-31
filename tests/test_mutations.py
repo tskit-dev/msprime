@@ -393,9 +393,9 @@ class TestMutateRateMap:
             ts, rate=mut_map, random_seed=2, discrete_genome=False
         )
         site_pos = ts.tables.sites.position
-        for left, right, rate in zip(pos[:-1], pos[1:], rate):
+        for left, right, r in zip(pos[:-1], pos[1:], rate):
             n = np.sum(np.logical_and(site_pos >= left, site_pos < right))
-            assert (n > 0) == (rate > 0)
+            assert (n > 0) == (r > 0)
 
     def test_rate_map_applies_only_to_integers(self):
         ts = msprime.sim_ancestry(
@@ -1604,7 +1604,7 @@ class TestInfiniteAllelesMutationModel:
 
     def test_allele_overflow(self):
         ts = msprime.sim_ancestry(4, sequence_length=2, random_seed=5)
-        start_allele = 2 ** 64 - 1
+        start_allele = 2**64 - 1
         model = msprime.InfiniteAlleles(start_allele=start_allele)
         mts = msprime.sim_mutations(
             ts, rate=1, random_seed=32, model=model, discrete_genome=True

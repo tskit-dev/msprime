@@ -71,7 +71,7 @@ class TestRandomSeeds:
 
     def test_seed_conversion(self):
         num_random_tests = 100
-        for max_seed in [1024, 2 ** 16 - 1, 2 ** 32 - 1]:
+        for max_seed in [1024, 2**16 - 1, 2**32 - 1]:
             input_seeds = set()
             python_seeds = set()
             values = set()
@@ -1237,7 +1237,7 @@ class TestMspArgumentParser:
         assert args.tree_sequence == "out3.trees"
         assert args.recombination_rate == 6
         assert args.length == 10000
-        assert args.effective_population_size == 10 ** 5
+        assert args.effective_population_size == 10**5
         assert args.random_seed == 123
         assert args.compress
 

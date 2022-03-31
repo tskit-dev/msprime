@@ -120,9 +120,9 @@ def hk_f(n, z):
     """
     ret = 0
     if n == 2:
-        ret = (18 + z) / (z ** 2 + 13 * z + 18)
+        ret = (18 + z) / (z**2 + 13 * z + 18)
     else:
-        ret = sum(1 / j ** 2 for j in range(1, n)) * hk_f(2, z)
+        ret = sum(1 / j**2 for j in range(1, n)) * hk_f(2, z)
     return ret
 
 
@@ -343,7 +343,7 @@ class Test:
             pyplot.close("all")
 
     def get_ms_seeds(self):
-        max_seed = 2 ** 16
+        max_seed = 2**16
         seeds = [random.randint(1, max_seed) for j in range(3)]
         return ["-seed"] + list(map(str, seeds))
 
@@ -418,7 +418,7 @@ class MsTest(Test):
             "re_events": re_events,
             "gc_events": gc_events,
         }
-        for j in range(num_populations ** 2):
+        for j in range(num_populations**2):
             events = [mig_events[k][j] for k in range(replicates)]
             d[f"mig_events_{j}"] = events
         d["breakpoints"] = breakpoints
@@ -666,7 +666,7 @@ class MsRandom(MsTest):
         theta = random.uniform(1, 100)
         N = num_populations
         sample_sizes = [random.randint(2, 10) for _ in range(N)]
-        migration_matrix = [random.random() * (j % (N + 1) != 0) for j in range(N ** 2)]
+        migration_matrix = [random.random() * (j % (N + 1) != 0) for j in range(N**2)]
         structure = ""
         if num_populations > 1:
             structure = "-I {} {} -ma {}".format(
@@ -699,7 +699,7 @@ class MsRandom(MsTest):
         self._run()
 
     def test_ms_random_2(self):
-        self._run(num_replicates=10 ** 4, num_demographic_events=10)
+        self._run(num_replicates=10**4, num_demographic_events=10)
 
     def test_ms_random_2_pops1(self):
         self._run(num_populations=3)
@@ -726,7 +726,7 @@ class MsHotTest(MsTest):
 
 class DiscoalTest(Test):
     def get_discoal_seeds(self):
-        max_seed = 2 ** 16
+        max_seed = 2**16
         seeds = [random.randint(1, max_seed) for j in range(3)]
         return ["-d"] + list(map(str, seeds))
 
@@ -1161,7 +1161,7 @@ class MsmsSweeps(Test):
         sAA = saA = sel_pos = -1.0
         saA = -0.5
         refsize = 1
-        rand_seed = (random.randint(1, 2 ** 16),)
+        rand_seed = (random.randint(1, 2**16),)
 
         # parse arguments
         tokens = msms_cmd.split(" ")
@@ -2043,7 +2043,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
         self._run(
             samples={0: 10, 1: 10},
             demography=demography,
-            sequence_length=10 ** 6,
+            sequence_length=10**6,
             num_replicates=300,
             recombination_rate=1e-8,
         )
@@ -2500,7 +2500,7 @@ class RecombinationBreakpointTest(Test):
         pyplot.close("all")
 
     def test_xi_beta_breakpoints(self):
-        Ne = 10 ** 4
+        Ne = 10**4
         for alpha in [1.1, 1.3, 1.6, 1.9]:
             for p in [1, 2]:
                 self.verify_breakpoint_distribution(
@@ -2508,7 +2508,7 @@ class RecombinationBreakpointTest(Test):
                     sample_size=100,
                     Ne=Ne,
                     r=1e-7,
-                    L=10 ** 6,
+                    L=10**6,
                     ploidy=p,
                     model=msprime.BetaCoalescent(alpha=alpha),
                 )
@@ -2519,14 +2519,14 @@ class RecombinationBreakpointTest(Test):
                     sample_size=100,
                     Ne=Ne,
                     r=1e-7,
-                    L=10 ** 6,
+                    L=10**6,
                     ploidy=p,
                     model=msprime.BetaCoalescent(alpha=alpha),
                     growth_rate=0.05,
                 )
 
     def test_xi_dirac_breakpoints(self):
-        Ne = 10 ** 2
+        Ne = 10**2
         for psi in [0.1, 0.3, 0.6, 0.9]:
             for c in [1, 10]:
                 for p in [1, 2]:
@@ -2535,7 +2535,7 @@ class RecombinationBreakpointTest(Test):
                         sample_size=100,
                         Ne=Ne,
                         r=1e-8,
-                        L=10 ** 6,
+                        L=10**6,
                         ploidy=p,
                         model=msprime.DiracCoalescent(psi=psi, c=c),
                     )
@@ -2546,7 +2546,7 @@ class RecombinationBreakpointTest(Test):
                         sample_size=100,
                         Ne=Ne,
                         r=1e-7,
-                        L=10 ** 6,
+                        L=10**6,
                         ploidy=p,
                         model=msprime.DiracCoalescent(psi=psi, c=c),
                         growth_rate=0.05,
@@ -2557,27 +2557,27 @@ class RecombinationBreakpointTest(Test):
             self.verify_breakpoint_distribution(
                 "single_pop_n_50",
                 sample_size=50,
-                Ne=10 ** 4,
+                Ne=10**4,
                 r=1e-8,
-                L=10 ** 6,
+                L=10**6,
                 ploidy=p,
                 model="hudson",
             )
             self.verify_breakpoint_distribution(
                 "single_pop_n_100",
                 sample_size=100,
-                Ne=10 ** 4,
+                Ne=10**4,
                 r=1e-8,
-                L=10 ** 6,
+                L=10**6,
                 ploidy=p,
                 model="hudson",
             )
             self.verify_breakpoint_distribution(
                 "single_pop_n_100_growth",
                 sample_size=100,
-                Ne=10 ** 4,
+                Ne=10**4,
                 r=1e-7,
-                L=10 ** 6,
+                L=10**6,
                 ploidy=p,
                 model="hudson",
                 growth_rate=0.05,
@@ -2635,7 +2635,7 @@ class RecombinationMutationTest(Test):
                     Ne=Ne,
                     r=1e-8,
                     m=1e-8,
-                    L=10 ** 6,
+                    L=10**6,
                     ploidy=p,
                     model=msprime.BetaCoalescent(alpha=alpha),
                 )
@@ -2651,7 +2651,7 @@ class RecombinationMutationTest(Test):
                         Ne=Ne,
                         r=1e-8,
                         m=1e-8,
-                        L=10 ** 6,
+                        L=10**6,
                         ploidy=p,
                         model=msprime.DiracCoalescent(psi=psi, c=c),
                     )
@@ -2664,7 +2664,7 @@ class RecombinationMutationTest(Test):
                 Ne=10000,
                 r=1e-8,
                 m=1e-8,
-                L=10 ** 6,
+                L=10**6,
                 ploidy=p,
                 model="hudson",
             )
@@ -3608,8 +3608,8 @@ class HudsonAnalytical(Test):
             predicted_mean[k] = theta
             # From Wakely, eqn (4.14), pg. 101
             predicted_var[k] = (n + 1) * theta / (3 * (n - 1)) + 2 * (
-                n ** 2 + n + 3
-            ) * theta ** 2 / (9 * n * (n - 1))
+                n**2 + n + 3
+            ) * theta**2 / (9 * n * (n - 1))
             mean[k] = np.mean(pi)
             var[k] = np.var(pi)
 
@@ -3868,8 +3868,8 @@ class HudsonAnalytical(Test):
         Runs the check for number of trees using the CLI.
         """
         r = 1e-8  # Per generation recombination rate.
-        num_loci = np.linspace(100, 10 ** 5, 10).astype(int)
-        Ne = 10 ** 4
+        num_loci = np.linspace(100, 10**5, 10).astype(int)
+        Ne = 10**4
         n = 100
         rho = r * 4 * Ne * (num_loci - 1)
         num_replicates = 100
@@ -4073,7 +4073,7 @@ class DemographyDebugger(Test):
         npops = 3
         num_models = 10
         for k in range(num_models):
-            pop_sizes = [Ne] * (npops - 1) + [Ne * (2 ** k)]
+            pop_sizes = [Ne] * (npops - 1) + [Ne * (2**k)]
             migration_matrix = [
                 [2 ** (k - 4) * ((i - j) % npops == 1) / Ne for j in range(npops)]
                 for i in range(npops)
@@ -4098,7 +4098,7 @@ class DemographyDebugger(Test):
         num_models = 16
         change_times = [j * Ne / 4 for j in range(8)]
         for k in range(num_models):
-            pop_sizes = [Ne] * (npops - 1) + [Ne * (2 ** k)]
+            pop_sizes = [Ne] * (npops - 1) + [Ne * (2**k)]
             migration_matrix = [
                 [10 * ((i - j) % npops == 1) / Ne for j in range(npops)]
                 for i in range(npops)
@@ -4182,8 +4182,8 @@ class SmcTest(Test):
         Runs the check for number of trees using the CLI.
         """
         r = 1e-8  # Per generation recombination rate.
-        num_loci = np.linspace(100, 10 ** 5, 10).astype(int)
-        Ne = 10 ** 4
+        num_loci = np.linspace(100, 10**5, 10).astype(int)
+        Ne = 10**4
         n = 100
         rho = r * 4 * Ne * (num_loci - 1)
         num_replicates = 1000
@@ -4239,8 +4239,8 @@ class SmcTest(Test):
         using the API. We compare this with scrm using the SMC as a check.
         """
         r = 1e-8  # Per generation recombination rate.
-        L = np.linspace(100, 10 ** 5, 10).astype(int)
-        Ne = 10 ** 4
+        L = np.linspace(100, 10**5, 10).astype(int)
+        Ne = 10**4
         n = 100
         rho = r * 4 * Ne * (L - 1)
         num_replicates = 10000
@@ -5735,23 +5735,23 @@ class OlderMsprimeTest(Test):
         self._run(10000, sample_size=100)
 
     def test_msprime_n1e4_no_recomb(self):
-        self._run(1000, sample_size=10 ** 4)
+        self._run(1000, sample_size=10**4)
 
     def test_msprime_n1e3_long_genome(self):
         self._run(
-            1000, sample_size=10 ** 2, Ne=10 ** 4, recombination_rate=1e-8, length=1e6
+            1000, sample_size=10**2, Ne=10**4, recombination_rate=1e-8, length=1e6
         )
 
     def test_msprime_n1e2_long_genome(self):
         self._run(
-            2000, sample_size=10 ** 2, Ne=10 ** 4, recombination_rate=1e-8, length=1e6
+            2000, sample_size=10**2, Ne=10**4, recombination_rate=1e-8, length=1e6
         )
 
     def test_msprime_n10_long_genome(self):
-        self._run(1000, sample_size=10, Ne=10 ** 4, recombination_rate=1e-8, length=1e6)
+        self._run(1000, sample_size=10, Ne=10**4, recombination_rate=1e-8, length=1e6)
 
     def test_msprime_n2_long_genome(self):
-        self._run(1000, sample_size=2, Ne=10 ** 4, recombination_rate=1e-8, length=1e7)
+        self._run(1000, sample_size=2, Ne=10**4, recombination_rate=1e-8, length=1e7)
 
 
 class InstantaneousBottleneckExpectedSfs(Test):

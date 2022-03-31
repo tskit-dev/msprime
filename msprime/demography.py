@@ -3554,7 +3554,7 @@ def _matrix_exponential(A, n=5):
         # nscales is the number of scaling-and-squaring steps:
         # we compute exp(tA) and then square the result nscales times
         nscales = int(max(0, np.ceil(np.log2(dmax) - np.log2(0.2))))
-        t = dmax / (2 ** nscales)
+        t = dmax / (2**nscales)
         # Now, exp(tA) = exp(-t) * (I + tP + (tP)^2 / 2 + ...)
         # and the k-th term in this sum is Pk=(tP/k times the previous)
         Pk = np.eye(A.shape[0])
@@ -3562,7 +3562,7 @@ def _matrix_exponential(A, n=5):
             Pk = (t / k) * np.matmul(P, Pk)
             expA = expA + Pk
         expA *= np.exp(-t)
-        expA = np.linalg.matrix_power(expA, 2 ** nscales)
+        expA = np.linalg.matrix_power(expA, 2**nscales)
     return expA
 
 
@@ -4326,8 +4326,8 @@ class DemographyDebugger:
 
     def _calculate_coalescence_rate_trajectory(self, steps, num_samples, min_pop_size):
         num_pops = self.num_populations
-        P = np.zeros([num_pops ** 2, num_pops ** 2])
-        IA = np.array(range(num_pops ** 2)).reshape([num_pops, num_pops])
+        P = np.zeros([num_pops**2, num_pops**2])
+        IA = np.array(range(num_pops**2)).reshape([num_pops, num_pops])
         Identity = np.eye(num_pops)
         for x in range(num_pops):
             for y in range(num_pops):
@@ -4363,7 +4363,7 @@ class DemographyDebugger:
             time = steps_b[j]
             dt = steps_b[j + 1] - steps_b[j]
             N, M = self._pop_size_and_migration_at_t(time)
-            C = np.zeros([num_pops ** 2, num_pops ** 2])
+            C = np.zeros([num_pops**2, num_pops**2])
             for idx in range(num_pops):
                 C[IA[idx, idx], IA[idx, idx]] = 1 / (2 * max(min_pop_size, N[idx]))
             dM = np.diag([sum(s) for s in M])
@@ -4372,11 +4372,11 @@ class DemographyDebugger:
                     a = mmo.source
                     b = mmo.dest
                     p = mmo.proportion
-                    S = np.eye(num_pops ** 2, num_pops ** 2)
+                    S = np.eye(num_pops**2, num_pops**2)
                     for x in range(num_pops):
                         if x == a:
                             S[IA[a, a], IA[a, b]] = S[IA[a, a], IA[b, a]] = p * (1 - p)
-                            S[IA[a, a], IA[b, b]] = p ** 2
+                            S[IA[a, a], IA[b, b]] = p**2
                             S[IA[a, a], IA[a, a]] = (1 - p) ** 2
                         else:
                             S[IA[x, a], IA[x, b]] = S[IA[a, x], IA[b, x]] = p

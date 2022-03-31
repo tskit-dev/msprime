@@ -61,7 +61,7 @@ class TestMatrixExponential:
 
     def test_diagonal_minus_row_sum(self):
         for k in range(2, 5):
-            A = np.arange(k ** 2).reshape(k, k)
+            A = np.arange(k**2).reshape(k, k)
             np.fill_diagonal(A, -1 * np.sum(A, 1) + np.diag(A))
             self.verify(A)
 

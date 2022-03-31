@@ -90,7 +90,7 @@ class TestIsInteger:
         good_values = [
             -1,
             0,
-            10 ** 6,
+            10**6,
             100_000,
             0x123,
             1.0,
