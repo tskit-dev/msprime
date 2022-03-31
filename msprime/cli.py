@@ -153,7 +153,7 @@ def generate_seeds():
     """
     # Pull three numbers from the SystemRandom generator
     rng = random.SystemRandom()
-    return [rng.randint(0, 2 ** 31) for _ in range(3)]
+    return [rng.randint(0, 2**31) for _ in range(3)]
 
 
 def get_single_seed(seeds):
@@ -169,7 +169,7 @@ def get_single_seed(seeds):
         m.update(f"{s}:".encode())
     # Now take the integer value of this modulo 2^32, as this is
     # the largest seed value we'll accept.
-    return int(m.hexdigest(), 16) % (2 ** 32)
+    return int(m.hexdigest(), 16) % (2**32)
 
 
 def hotspots_to_recomb_map(hotspots, background_rate, seq_length):
@@ -382,7 +382,7 @@ def convert_migration_matrix(parser, input_matrix, num_populations):
     """
     Converts the specified migration matrix into the internal format.
     """
-    if len(input_matrix) != num_populations ** 2:
+    if len(input_matrix) != num_populations**2:
         parser.error("Must be num_populations^2 migration matrix entries")
     migration_matrix = [
         [0 for j in range(num_populations)] for k in range(num_populations)

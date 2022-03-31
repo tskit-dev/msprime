@@ -279,7 +279,7 @@ def get_generations_per_branch_length_unit(time_units, generation_time):
     if time_units == "gen":
         generations_per_branch_length_unit = 1
     elif time_units == "myr":
-        generations_per_branch_length_unit = 10 ** 6 / generation_time
+        generations_per_branch_length_unit = 10**6 / generation_time
     else:
         generations_per_branch_length_unit = 1 / generation_time
     return generations_per_branch_length_unit

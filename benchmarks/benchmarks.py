@@ -59,9 +59,9 @@ class LargeSimulationBenchmark:
 class Hudson(LargeSimulationBenchmark):
     def _run_large_sample_size(self):
         msprime.simulate(
-            sample_size=10 ** 6,
+            sample_size=10**6,
             length=1e7,
-            Ne=10 ** 4,
+            Ne=10**4,
             recombination_rate=1e-8,
             random_seed=42,
         )
@@ -76,7 +76,7 @@ class Hudson(LargeSimulationBenchmark):
         msprime.simulate(
             sample_size=100,
             length=1e8,
-            Ne=10 ** 4,
+            Ne=10**4,
             recombination_rate=1e-8,
             random_seed=42,
         )
@@ -91,7 +91,7 @@ class Hudson(LargeSimulationBenchmark):
         msprime.sim_ancestry(
             sample_size=100,
             length=1e8,
-            Ne=10 ** 4,
+            Ne=10**4,
             gene_conversion_rate=1e-8,
             # 100Kb tract length.
             gene_conversion_tract_length=100 * 1e3,
@@ -107,7 +107,7 @@ class Hudson(LargeSimulationBenchmark):
     def _run_human_chr22(self):
         msprime.simulate(
             sample_size=100,
-            Ne=10 ** 4,
+            Ne=10**4,
             recombination_map=self.recomb_map_chr22,
             random_seed=234,
         )
@@ -119,7 +119,7 @@ class Hudson(LargeSimulationBenchmark):
         self._run_human_chr22()
 
     def _run_many_replicates(self):
-        for _ in msprime.simulate(10, num_replicates=10 ** 5, random_seed=1234):
+        for _ in msprime.simulate(10, num_replicates=10**5, random_seed=1234):
             pass
 
     def time_many_replicates(self):
@@ -136,7 +136,7 @@ class DTWF(LargeSimulationBenchmark):
     def _run_large_population_size(self):
         msprime.simulate(
             sample_size=1000,
-            Ne=10 ** 6,
+            Ne=10**6,
             length=1e5,
             recombination_rate=1e-8,
             random_seed=42,
@@ -153,7 +153,7 @@ class DTWF(LargeSimulationBenchmark):
     def _run_long_sequence_length(self):
         msprime.simulate(
             sample_size=100,
-            Ne=10 ** 4,
+            Ne=10**4,
             length=1e7,
             recombination_rate=1e-8,
             random_seed=42,
@@ -171,7 +171,7 @@ class DTWF(LargeSimulationBenchmark):
     def _run_human_chr22(self):
         msprime.simulate(
             sample_size=100,
-            Ne=10 ** 4,
+            Ne=10**4,
             recombination_map=self.recomb_map_chr22,
             random_seed=234,
             end_time=10000,
@@ -188,7 +188,7 @@ class DTWF(LargeSimulationBenchmark):
         reps = msprime.simulate(
             10,
             Ne=100,
-            num_replicates=10 ** 5,
+            num_replicates=10**5,
             random_seed=1234,
             model="dtwf",
             end_time=100,

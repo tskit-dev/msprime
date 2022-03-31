@@ -77,7 +77,7 @@ def get_random_seed() -> int:
         # current time if this is not available. Thus, our seed rng should
         # be unique, even across different processes.
         _seed_rng_map[pid] = random.Random()
-    return _seed_rng_map[pid].randint(1, 2 ** 32 - 1)
+    return _seed_rng_map[pid].randint(1, 2**32 - 1)
 
 
 def set_seed_rng_seed(seed: int):

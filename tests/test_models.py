@@ -751,7 +751,7 @@ class TestMixedModels:
     def test_models_out_of_order(self):
         with pytest.raises(ValueError, match="durations must be >= 0"):
             msprime.simulate(
-                Ne=10 ** 6,
+                Ne=10**6,
                 sample_size=10,
                 model="hudson",
                 demographic_events=[

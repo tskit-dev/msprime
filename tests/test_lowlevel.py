@@ -645,7 +645,7 @@ class TestSimulationState(LowLevelTestCase):
     def verify_random_parameters(self, seed):
         rng = random.Random(seed)
         n = rng.randint(2, 100)
-        m = rng.randint(1, 10 ** 6)
+        m = rng.randint(1, 10**6)
         rho = rng.uniform(0, 1000)
         N = rng.randint(1, 4)
         store_migrations = rng.choice([True, False])
@@ -659,7 +659,7 @@ class TestSimulationState(LowLevelTestCase):
         start_time = rng.uniform(0, demographic_events[0]["time"])
         num_sampless = [0 for j in range(N)]
         num_sampless[0] = n
-        random_seed = rng.randint(0, 2 ** 31)
+        random_seed = rng.randint(0, 2**31)
         segment_block_size = rng.randint(1, 100)
         node_mapping_block_size = rng.randint(1, 100)
         avl_node_block_size = rng.randint(1, 100)
@@ -784,7 +784,7 @@ class TestSimulationState(LowLevelTestCase):
             model = get_simulation_model()
         # These tests don't work for n == 2
         assert n > 2
-        random_seed = random.randint(0, 2 ** 31)
+        random_seed = random.randint(0, 2**31)
         sim = make_sim(
             samples=n,
             sequence_length=m,
@@ -1277,7 +1277,7 @@ class TestSimulator(LowLevelTestCase):
 
         # Check for other type specific errors.
         with pytest.raises(OverflowError):
-            make_sim(avl_node_block_size=2 ** 65)
+            make_sim(avl_node_block_size=2**65)
 
     def test_num_labels(self):
         for num_labels in range(1, 10):
@@ -1829,7 +1829,7 @@ class TestSimulator(LowLevelTestCase):
         event_generators = [get_size_change_event, get_growth_rate_change_event]
         # Check for bad population ids.
         for event_generator in event_generators:
-            for bad_pop_id in [-2, 1, 10 ** 6]:
+            for bad_pop_id in [-2, 1, 10**6]:
                 event = event_generator(population=bad_pop_id)
                 with pytest.raises(_msprime.InputError):
                     f([event])
@@ -1840,7 +1840,7 @@ class TestSimulator(LowLevelTestCase):
                 events = [event_generator(), event]
                 with pytest.raises(_msprime.InputError):
                     f(events, k)
-        for bad_pop_id in [-2, 1, 10 ** 6]:
+        for bad_pop_id in [-2, 1, 10**6]:
             event = get_mass_migration_event(source=bad_pop_id)
             with pytest.raises(_msprime.InputError):
                 f([event])
@@ -2152,7 +2152,7 @@ class TestSimulator(LowLevelTestCase):
 
         with pytest.raises(ValueError, match="at least one derived"):
             f([])
-        for too_large in [100, 101, 10 ** 6]:
+        for too_large in [100, 101, 10**6]:
             with pytest.raises(_msprime.InputError, match="more than 100"):
                 f(range(too_large))
             with pytest.raises(_msprime.InputError, match="more than 100"):
@@ -2186,7 +2186,7 @@ class TestSimulator(LowLevelTestCase):
 
         with pytest.raises(ValueError, match="at least one ancestral"):
             f([], [])
-        for too_large in [100, 101, 10 ** 6]:
+        for too_large in [100, 101, 10**6]:
             with pytest.raises(_msprime.InputError, match="more than 100"):
                 f(range(too_large), range(too_large))
             with pytest.raises(_msprime.InputError, match="more than 100"):
@@ -2307,7 +2307,7 @@ class TestSimulator(LowLevelTestCase):
         for repeated in [[0, 0], [0, 1, 2, 0]]:
             with pytest.raises(_msprime.InputError, match="Cannot set diagonal"):
                 f(repeated)
-        for bad_pop in [5, -1, 2 ** 30]:
+        for bad_pop in [5, -1, 2**30]:
             with pytest.raises(_msprime.InputError, match="Bad migration matrix index"):
                 f([0, bad_pop])
         for too_short in [[], [1]]:
@@ -2442,19 +2442,19 @@ class TestRandomGenerator:
                 _msprime.RandomGenerator(bad_type)
 
     def test_seed_bounds(self):
-        for bad_value in [0, 2 ** 32]:
+        for bad_value in [0, 2**32]:
             gen = _msprime.RandomGenerator()
             with pytest.raises(ValueError):
                 gen.seed = bad_value
 
-        for overflow in [-1, -2, 2 ** 64]:
+        for overflow in [-1, -2, 2**64]:
             gen = _msprime.RandomGenerator()
             with pytest.raises(OverflowError):
                 gen.seed = overflow
 
     def test_seed(self):
 
-        for s in [1, 10, 2 ** 32 - 1]:
+        for s in [1, 10, 2**32 - 1]:
             rng = _msprime.RandomGenerator()
             rng.seed = s
             assert rng.seed == s
@@ -2496,7 +2496,7 @@ class TestRandomGenerator:
 
     def test_flat_single(self):
         rng3 = _msprime.RandomGenerator()
-        for seed in [1, 2, 2 ** 32 - 1]:
+        for seed in [1, 2, 2**32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
             rng3.seed = seed
@@ -2509,7 +2509,7 @@ class TestRandomGenerator:
 
     def test_flat_array(self):
         rng3 = _msprime.RandomGenerator()
-        for seed in [1, 2, 2 ** 32 - 1]:
+        for seed in [1, 2, 2**32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
             rng3.seed = seed
@@ -2535,7 +2535,7 @@ class TestRandomGenerator:
 
     def test_poisson_single(self):
         rng3 = _msprime.RandomGenerator()
-        for seed in [1, 2, 2 ** 32 - 1]:
+        for seed in [1, 2, 2**32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
             rng3.seed = seed
@@ -2548,7 +2548,7 @@ class TestRandomGenerator:
 
     def test_poisson_array(self):
         rng3 = _msprime.RandomGenerator(1)
-        for seed in [1, 2, 2 ** 32 - 1]:
+        for seed in [1, 2, 2**32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
             rng3.seed = seed
@@ -2572,11 +2572,11 @@ class TestRandomGenerator:
 
     def test_uniform_int_single(self):
         rng3 = _msprime.RandomGenerator(1)
-        for seed in [1, 2, 2 ** 32 - 1]:
+        for seed in [1, 2, 2**32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
             rng3.seed = seed
-            values = [-1, 0, 1, 2, 10, 100, 2 ** 31]
+            values = [-1, 0, 1, 2, 10, 100, 2**31]
             for n in values:
                 x = rng1.uniform_int(n)
                 assert x.shape == (1,)
@@ -2585,7 +2585,7 @@ class TestRandomGenerator:
 
     def test_uniform_int_array(self):
         rng3 = _msprime.RandomGenerator(1)
-        for seed in [1, 2, 2 ** 32 - 1]:
+        for seed in [1, 2, 2**32 - 1]:
             rng1 = _msprime.RandomGenerator(seed)
             rng2 = _msprime.RandomGenerator(seed)
             rng3.seed = seed
@@ -2766,13 +2766,13 @@ class TestSLiMMutationModel:
             model.next_id
 
     def test_type(self):
-        for mutation_type in [0, 10, 2 ** 31 - 1]:
+        for mutation_type in [0, 10, 2**31 - 1]:
             model = _msprime.SLiMMutationModel(type=mutation_type)
             assert model.type == mutation_type
             assert model.next_id == 0
 
     def test_next_id(self):
-        for next_id in [0, 10, 2 ** 63 - 1]:
+        for next_id in [0, 10, 2**63 - 1]:
             model = _msprime.SLiMMutationModel(0, next_id=next_id)
             assert model.type == 0
             assert model.next_id == next_id
@@ -2803,15 +2803,15 @@ class TestInfiniteAllelesMutationModel:
             model.next_allele
 
     def test_start_allele(self):
-        for start_allele in [0, 10, 2 ** 64 - 1]:
+        for start_allele in [0, 10, 2**64 - 1]:
             iamm = _msprime.InfiniteAllelesMutationModel(start_allele)
             assert iamm.start_allele == start_allele
             assert iamm.next_allele == start_allele
 
     def test_start_allele_overflow(self):
-        for start_allele in [2 ** 64, 2 ** 65 + 1]:
+        for start_allele in [2**64, 2**65 + 1]:
             iamm = _msprime.InfiniteAllelesMutationModel(start_allele)
-            assert iamm.start_allele == start_allele % 2 ** 64
+            assert iamm.start_allele == start_allele % 2**64
 
 
 class TestSimMutations:
