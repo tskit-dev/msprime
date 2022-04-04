@@ -1259,21 +1259,21 @@ class TestMspArgumentParser:
         args = parser.parse_args(["ancestry", "10"])
         assert args.output is sys.stdout
         args = parser.parse_args(["ancestry", "10", "-o", "-"])
-        assert args.output is sys.stdout
+        assert args.output is sys.stdout or args.output is sys.stdout.buffer
 
     def test_mutations_stdout(self):
         parser = cli.get_msp_parser()
         args = parser.parse_args(["mutations", "10"])
         assert args.output is sys.stdout
         args = parser.parse_args(["mutations", "10", "-o", "-"])
-        assert args.output is sys.stdout
+        assert args.output is sys.stdout or args.output is sys.stdout.buffer
 
     def test_mutations_stdin(self):
         parser = cli.get_msp_parser()
         args = parser.parse_args(["mutations", "10"])
         assert args.input is sys.stdin
         args = parser.parse_args(["mutations", "10", "-"])
-        assert args.input is sys.stdin
+        assert args.input is sys.stdin or args.input is sys.stdin.buffer
 
     def test_mut_default_values(self):
         parser = cli.get_msp_parser()
