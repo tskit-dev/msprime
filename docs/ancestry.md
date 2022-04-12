@@ -663,7 +663,7 @@ SVG(ts.draw_svg())
 assert 1 < ts.num_trees < 5
 ```
 
-We can also simulate a continous genome by setting
+Alternatively, we can simulate a continous genome by setting
 `discrete_genome=False`:
 
 ```{code-cell}
@@ -683,14 +683,6 @@ positions. Simulating a continuous genome sequence can be useful for
 theoretical work, but we recommend using discrete coordinates for most
 purposes.
 
-:::{note}
-With a discrete genome and a recombination rate of {math}`r`,
-the expected number of recombinations per unit time and per unit
-length is {math}`1-e^{-r}`. Therefore the total map length for a
-segment of length {math}`L` and recombination rate {math}`r`
-is {math}`L (1 - e^{-r})`
-and so {math}`Lr (1 - r/2) < L (1 - e^{-r}) < Lr`.
-:::
 
 (sec_ancestry_multiple_chromosomes)=
 
@@ -700,12 +692,13 @@ Msprime does not directly support simulating multiple chromosomes
 simultaneously, but we can emulate it using a single linear genome split into
 chromosome segments. Multiple chromosomes are modelled by specifying
 a recombination map with single base-pair segments with recombination
-probability 1/2 separating adjacent chromosomes. The probability that
-a recombination breakpoint occurs over one unit of time at a given base pair
-that has recombination rate {math}`r` is {math}`1-e^{-r}`. Thus, we set the
-recombination rate in the base pair segments separating chromosomes to
-{math}`\log(2)`. This ensures that the recombination probability each
-generation is 1/2.
+probability 1/2 separating adjacent chromosomes.
+The probability that two chromosomes are co-inherited across {math}`t` generations
+is {math}`2^{-t}`. In the Poisson model of recombination used by msprime, the
+probability of co-inheritance across {math}`t` generations of two adjacent base
+pairs separated by a recombination rate {math}`r` per base pair is {math}`e^{-rt}`.
+To make these agree, we set the recombination rate in the base pair segments
+separating chromosomes to {math}`\log(2)`.
 
 #### Do I need to do this?
 
