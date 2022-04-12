@@ -96,7 +96,7 @@ returns the integer ID of newly added individual.
 The methods described in {ref}`sec_pedigrees_encoding` are general and
 allow for arbitrary metadata to be associated with individuals. It
 is often convenient to work with a text based representation of
-the pedigree, which is supported by the {func}`.parse_pedigree`.
+the pedigree, which is supported by the {func}`.parse_pedigree` function.
 
 ### Basic structure
 
@@ -104,8 +104,8 @@ the pedigree, which is supported by the {func}`.parse_pedigree`.
 txt = """\
 # id parent0 parent1 time
 child mom dad 0
-mom NA NA 1
-dad NA NA 1
+mom    .   .  1
+dad    .   .  1
 """
 pedigree = msprime.parse_pedigree(io.StringIO(txt))
 display(pedigree.individuals)
@@ -122,8 +122,8 @@ import io
 txt = """\
 # id parent0 parent1 time
 child mom dad 0
-mom NA NA 1
-dad NA NA 1
+mom    .   .  1
+dad    .   .  1
 """
 pedigree = msprime.parse_pedigree(io.StringIO(txt))
 display(pedigree.individuals)

@@ -2381,8 +2381,8 @@ ped_txt = """\
 8   9   9   2.0 0
 9   11  12  3.0 0
 10  11  12  3.0 0
-11  NA  NA  4.0 0
-12  NA  NA  4.0 0
+11  .   .   4.0 0
+12  .   .   4.0 0
 """
 pedigree = msprime.parse_pedigree(io.StringIO(ped_txt), sequence_length=100)
 
@@ -2485,12 +2485,12 @@ ped_txt = """\
 4   8   8   1.0 0
 5   8   6   1.0 0
 6   9   10  2.0 0
-7   NA  NA  2.0 0
+7   .   .   2.0 0
 8   9   9   2.0 0
 9   11  12  3.0 0
 10  11  12  3.0 0
-11  NA  NA  4.0 0
-12  NA  NA  4.0 0
+11  .   .   4.0 0
+12  .   .   4.0 0
 """
 pedigree = msprime.parse_pedigree(io.StringIO(ped_txt), sequence_length=100)
 
@@ -2563,12 +2563,12 @@ ped_txt = """\
 9   12  13  1.0 0   A
 10  14  12  1.0 0   A
 11  15  16  1.0 0   A
-12  NA  NA  2.0 0   A
-13  NA  NA  2.0 0   A
-14  NA  NA  2.0 0   A
-15  NA  NA  2.0 0   A
-16  NA  NA  2.0 0   A
-17  NA  NA  2.0 0   A
+12  .   .   2.0 0   A
+13  .   .   2.0 0   A
+14  .   .   2.0 0   A
+15  .   .   2.0 0   A
+16  .   .   2.0 0   A
+17  .   .   2.0 0   A
 18  23  22  0.0 1   B
 19  22  22  0.0 1   B
 20  21  22  0.0 1   B
@@ -2582,8 +2582,8 @@ ped_txt = """\
 28  31  32  4.0 0   B
 29  31  32  4.0 0   B
 30  32  31  4.0 0   B
-31  NA  NA  5.0 0   B
-32  NA  NA  5.0 0   B
+31  .   .   5.0 0   B
+32  .   .   5.0 0   B
 """
 pedigree = msprime.parse_pedigree(
     io.StringIO(ped_txt), demography=demography, sequence_length=100)

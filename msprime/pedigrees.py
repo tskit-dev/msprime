@@ -118,7 +118,7 @@ def parse_pedigree(text_file, demography=None, sequence_length=None):
         raise ValueError("Pedigree file must contain at least a header")
     columns = _parse_pedigree_header(header, demography=demography)
     individuals = []
-    tsk_id_map = {"NA": -1}
+    tsk_id_map = {".": -1}
     for tsk_id, row in enumerate(text_file):
         line = tsk_id + 2
         tokens = row.split()
@@ -137,8 +137,8 @@ def parse_pedigree(text_file, demography=None, sequence_length=None):
                     f"on line {line}: {ve}"
                 )
         ind = TextFileIndividual(**kwargs)
-        if ind.id == "NA":
-            raise ValueError(f"'NA' cannot be used as an individual ID (line {line})")
+        if ind.id == ".":
+            raise ValueError(f"'.' cannot be used as an individual ID (line {line})")
         if ind.id in tsk_id_map:
             raise ValueError(f"Duplicate ID at line {line}")
         tsk_id_map[ind.id] = len(individuals)
@@ -193,7 +193,7 @@ def write_pedigree(ts, out):
         parents = []
         for parent in ind.parents:
             if parent == tskit.NULL:
-                parents.append("NA")
+                parents.append(".")
             else:
                 parents.append(parent)
         print(
