@@ -2,6 +2,10 @@
 
 Minor bugfix release.
 
+## [1.2.0] - 2022-04-XX
+
+UPCOMING
+
 ## [1.1.1] - 2022-02-10
 
 **Bug fixes**:
@@ -9,7 +13,7 @@ Minor bugfix release.
   ({issue}`1997`, {pr}`2000`, {user}`chriscrsmith `, {user}`molpopgen`,
   {user}`andrewkern`)
 
-**Maintenance **:
+**Maintenance**:
 
 - Various documentation improvements.
 
@@ -38,7 +42,7 @@ Minor bugfix release.
   ``Demography.from_old_style`` ({issue}`1950`, {pr}`1954`,
   {user}`jeromekelleher`)
 
-**Maintenance **:
+**Maintenance**:
 
 - Update tskit to Python 0.4.0 and C 0.99.15.
 
