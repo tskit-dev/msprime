@@ -4962,7 +4962,11 @@ msp_run_sweep(msp_t *self)
                               ? 0
                               : fenwick_get_total(&self->recomb_mass_index[label]);
             sweep_pop_sizes[j] = avl_count(&self->populations[0].ancestors[label]);
-            rec_rates[j] = recomb_mass;
+            /* We can get small negative rates by numerical jitter which causes
+             * problems in later calculations and leads to assertion trips.
+             * See https://github.com/tskit-dev/msprime/issues/1966
+             */
+            rec_rates[j] = TSK_MAX(0, recomb_mass);
         }
 
         event_prob = 1.0;
@@ -4986,14 +4990,15 @@ msp_run_sweep(msp_t *self)
             /* doing this to build in generality if we want >1 pop */
 
             total_rate = sweep_pop_tot_rate;
-            /* debug prints below
-            printf("pop_size: %g sweep_dt: %g sweep_pop_sizes[1]: %g sweep_pop_sizes[1]:
-            %g\n", \ pop_size, sweep_dt, sweep_pop_sizes[0], sweep_pop_sizes[1]);
-            printf("x: %g p_rec_b: %g p_rec_B: %g p_coal_b: %g p_coal_B: %g\n", \
-                    allele_frequency[curr_step], p_rec_b, p_rec_B, p_coal_b, p_coal_B);
+            /* DEBUG
+            printf("pop_size: %g sweep_dt: %g sweep_pop_sizes[1]: %g "
+                   "sweep_pop_sizes[1]: %g\n",
+                pop_size, sweep_dt, sweep_pop_sizes[0], sweep_pop_sizes[1]);
+            printf("x: %g p_rec_b: %g p_rec_B: %g p_coal_b: %g p_coal_B: %g\n",
+                allele_frequency[curr_step], p_rec_b, p_rec_B, p_coal_b, p_coal_B);
             printf("rec_rates[0]: %g rec_rates[1]: %g ploidy: %d\n", rec_rates[0],
-            rec_rates[1], \ self->ploidy); printf("event_prob: %g rand: %g\n",
-            event_prob, event_rand);
+                rec_rates[1], self->ploidy);
+            printf("event_prob: %g rand: %g\n", event_prob, event_rand);
             */
             event_prob *= 1.0 - total_rate;
             curr_step++;
