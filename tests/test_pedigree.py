@@ -1262,7 +1262,7 @@ class TestParsePedigreeExamples:
     def test_single_all_columns(self):
         text = """\
         # id parent0 parent1 time is_sample
-        X NA NA 0 1
+        X . . 0 1
         """
         tables = parse_indented(text)
         assert len(tables.individuals) == 1
@@ -1275,7 +1275,7 @@ class TestParsePedigreeExamples:
     def test_single_row_min_columns(self):
         text = """\
         # id parent0 parent1 time
-        X NA NA 0
+        X . . 0
         """
         tables = parse_indented(text)
         assert len(tables.individuals) == 1
@@ -1297,8 +1297,8 @@ class TestParsePedigreeExamples:
         text = """\
         # id parent0 parent1 time
         child mom dad 0
-        mom NA NA 1
-        dad NA NA 1
+        mom . . 1
+        dad . . 1
         """
         tables = parse_indented(text)
         assert len(tables.individuals) == 3
@@ -1313,7 +1313,7 @@ class TestParsePedigreeExamples:
     def test_single_population_name(self):
         text = """\
         # id parent0 parent1 time population
-        A NA NA 0 pop_0
+        A . . 0 pop_0
         """
         demography = msprime.Demography.isolated_model([1])
         tables = parse_indented(text, demography=demography)
@@ -1324,7 +1324,7 @@ class TestParsePedigreeExamples:
     def test_single_population_id(self):
         text = """\
         # id parent0 parent1 time population
-        A NA NA 0 0
+        A . . 0 0
         """
         demography = msprime.Demography.isolated_model([1])
         tables = parse_indented(text, demography=demography)
@@ -1335,7 +1335,7 @@ class TestParsePedigreeExamples:
     def test_two_populations_name(self):
         text = """\
         # id parent0 parent1 time population
-        A NA NA 0 pop_1
+        A . . 0 pop_1
         """
         demography = msprime.Demography.isolated_model([1, 1])
         tables = parse_indented(text, demography=demography)
@@ -1346,7 +1346,7 @@ class TestParsePedigreeExamples:
     def test_two_populations_id(self):
         text = """\
         # id parent0 parent1 time population
-        A NA NA 0 1
+        A . . 0 1
         """
         demography = msprime.Demography.isolated_model([1, 1])
         tables = parse_indented(text, demography=demography)
@@ -1389,7 +1389,7 @@ class TestParsePedigreeErrors:
     def test_parital_row_missing_optional(self):
         text = """\
         # id parent0 parent1 time is_sample
-        child NA NA 0
+        child . . 0
         """
         with pytest.raises(ValueError, match="Incorrect number of columns"):
             parse_indented(text)
@@ -1397,8 +1397,8 @@ class TestParsePedigreeErrors:
     def test_duplicate_id(self):
         text = """\
         # id parent0 parent1 time
-        child NA NA 0
-        child NA NA 1
+        child . . 0
+        child . . 1
         """
         with pytest.raises(ValueError, match="Duplicate ID"):
             parse_indented(text)
@@ -1406,7 +1406,7 @@ class TestParsePedigreeErrors:
     def test_missing_id(self):
         text = """\
         # id parent0 parent1 time
-        child missing NA 0
+        child missing . 0
         """
         with pytest.raises(ValueError, match="Parent ID 'missing' not defined"):
             parse_indented(text)
@@ -1414,7 +1414,7 @@ class TestParsePedigreeErrors:
     def test_bad_time(self):
         text = """\
         # id parent0 parent1 time
-        child NA NA bad_time
+        child . . bad_time
         """
         with pytest.raises(ValueError, match="value for column 'time' on line 2"):
             parse_indented(text)
@@ -1422,24 +1422,24 @@ class TestParsePedigreeErrors:
     def test_bad_is_sample(self):
         text = """\
         # id parent0 parent1 time is_sample
-        child NA NA 0 abcd
+        child . . 0 abcd
         """
         with pytest.raises(ValueError, match="value for column 'is_sample' on line 2"):
             parse_indented(text)
 
-    def test_id_is_NA(self):
+    def test_id_is_dot(self):
         text = """\
         # id parent0 parent1 time
-        NA NA NA 0
+        . . . 0
         """
-        with pytest.raises(ValueError, match="'NA' cannot be used"):
+        with pytest.raises(ValueError, match="'.' cannot be used"):
             parse_indented(text)
 
     def test_line_no(self):
         text = """\
         # id parent0 parent1 time
-        me NA NA 0
-        NA NA NA 0
+        me . . 0
+        . . . 0
         """
         # People (and vim) usually count file lines from 1, so error on line 3
         with pytest.raises(ValueError, match="line 3"):
