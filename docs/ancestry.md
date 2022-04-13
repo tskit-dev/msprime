@@ -2394,8 +2394,8 @@ definition of the ``draw_pedigree`` function used here.
 
 We then use this pedigree information as the
 {ref}`initial state<sec_ancestry_initial_state>` for the simulation
-(note that we must set the sequence length on the pedigree tables
-before calling ``sim_ancestry``):
+(note that we set the sequence length on the pedigree tables
+when we called {func}`.parse_pedigree`):
 
 ```{code-cell}
 ped_ts = msprime.sim_ancestry(
@@ -2590,8 +2590,6 @@ pedigree = msprime.parse_pedigree(
 
 draw_pedigree(pedigree.tree_sequence())
 ```
-
-
 
 ```{code-cell}
 ped_ts = msprime.sim_ancestry(

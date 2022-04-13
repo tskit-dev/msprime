@@ -48,7 +48,11 @@ class NumericColumn(Column):
 
 class BooleanColumn(Column):
     def parse_value(self, value: str) -> bool:
-        return bool(int(value))
+        if value == "0":
+            return False
+        if value == "1":
+            return True
+        raise ValueError("Only 0 or 1 values are supported")
 
 
 class StringOrIntColumn(Column):
@@ -107,10 +111,51 @@ def _parse_pedigree_header(
     return columns
 
 
-def parse_pedigree(text_file, demography=None, sequence_length=None):
+def parse_pedigree(
+    text_file,
+    *,
+    demography: None | demog_mod.Demography = None,
+    sequence_length: None | float = None,
+) -> tskit.TableCollection:
     """
-    Parse a text describing a pedigree used for input to the
-    :class:`.FixedPedigree` ancestry model.
+    Parse a text file describing a pedigree used for input to the
+    :class:`.FixedPedigree` ancestry model. See the
+    :ref:`sec_pedigrees_encoding` section for more information
+    on the data encoding used for pedigrees.
+
+    .. seealso::
+        See the :ref:`sec_pedigrees_file_format_definition` section for
+        a detailed description of the columns and formatting requirements
+        for this file format.
+
+    The returned :class:`tskit.TableCollection` will contain an
+    individual and two nodes for each data row in the input file.
+    The individual will have a metadata field ``file_id`` containing
+    the value of the ``id`` column in the input. Individuals
+    (and their corresponding nodes) are added to the tables in the
+    order seen in the file. There is no ordering requirement for
+    parents and children.
+
+    If a :class:`.Demography` instance is provided to the ``demography``
+    parameter, this is used to translate and validate
+    :ref:`population identifiers<sec_demography_populations_identifiers>`
+    in the ``population`` column, and is also used to
+    fill the population table in the output :class:`tskit.TableCollection`.
+    See the :ref:`sec_ancestry_models_fixed_pedigree_demography` section for
+    more information on the interaction between demography and
+    :class:`.FixedPedigree` simulations.
+
+    :param text_file: A file-like object to read from.
+    :param demography: The :class:`.Demography` defining populations
+        referred to in the ``populations`` column, if specified. If
+        None (the default) a demography consisting of one
+        population is used (and only population 0 can be referred to).
+    :param float sequence_length: If specified, set the
+        ``sequence_length`` property of the returned TableCollection
+        to this value.
+    :return: The :class:`tskit.TableCollection` object containing the
+        corresponding pedigree data.
+    :rtype: :class:`tskit.TableCollection`
     """
     # First line must be the header and contain the column headers
     header = next(text_file, None)
@@ -146,6 +191,8 @@ def parse_pedigree(text_file, demography=None, sequence_length=None):
 
     # Convert the list of individuals to a tskit pedigree.
     builder = PedigreeBuilder(
+        # TODO the schema should document the file_id attribute. Once we have
+        # better API support in tskit we can add this.
         individuals_metadata_schema=tskit.MetadataSchema.permissive_json(),
         demography=demography,
     )
@@ -204,6 +251,33 @@ def write_pedigree(ts, out):
 
 
 class PedigreeBuilder:
+    """
+    Utility for building pedigrees in the format required for input to
+    the :class:`.FixedPedigree` ancestry model.
+
+    .. seealso::
+        See the :ref:`sec_pedigrees` section for more information on
+        how pedigrees are described and imported in msprime.
+
+    Example::
+
+        pb = msprime.PedigreeBuilder()
+        mom_id = pb.add_individual(time=1)
+        dad_id = pb.add_individual(time=1)
+        pb.add_individual(time=0, parents=[mom_id, dad_id], is_sample=True)
+        pedigree_tables = pb.finalise()
+
+    :param demography: The :class:`.Demography` defining populations
+        referred to in the ``populations`` column, if specified. If
+        None (the default) a demography consisting of one
+        population is used (and only population 0 can be referred to).
+    :param tskit.MetadataSchema individuals_metadata_schema: If specified,
+        set the ``metadata_schema`` for the individuals table in the
+        final table collection. Must be an instance of
+        :class:`tskit.MetadataSchema` See the :ref:`sec_pedigrees_metadata`
+        section for more information.
+    """
+
     def __init__(self, demography=None, individuals_metadata_schema=None):
         if demography is None:
             demography = demog_mod.Demography.isolated_model([1])
@@ -226,9 +300,34 @@ class PedigreeBuilder:
         parents=None,
         population=None,
         metadata=None,
-    ):
+    ) -> int:
         """
-        Adds the specified individual, returning its ID.
+        Adds an individual with the specified properties, returning its ID.
+
+        :param float time: The time for this individual measured in generations ago.
+        :param bool is_sample: If True, the new individual is marked as a sample;
+            if False, the individual is not marked as a sample. If None (the default)
+            the individual is marked as a sample if its ``time`` is zero.
+            Parent IDs are not checked, and may refer to individuals not yet
+            added to the tables.
+        :param list(int) parents: The integer IDs of the specified individual's
+            parents. Exactly two parents must be specified. If None (the default),
+            the individual is treated as a founder by setting its parents to
+            ``[-1, -1]``.
+        :param str|int population: The population to associated with this
+            individual. The value can be a string or integer, following the
+            usual
+            :ref:`population identifier<sec_demography_populations_identifiers>`
+            rules. If None (the default), a population ID of 0 will be assigned
+            if the :class:`.Demography` associated with this PedigreeBuilder has a
+            single population (the default). If the demography has more than
+            one population, then a population must be explicitly specified for
+            each individual.
+        :param dict|bytes metadata: Any metadata to associate with the
+            new individual. See the :ref:`sec_pedigrees_metadata` section
+            for more information.
+        :return: The ID of the newly added individual.
+        :rtype: int
         """
         if is_sample is None:
             # By default, individuals at time 0 are marked as samples
@@ -278,9 +377,18 @@ class PedigreeBuilder:
         )
         return ind_ids
 
-    def finalise(self, sequence_length=None):
+    def finalise(self, sequence_length=None) -> tskit.TableCollection:
         """
-        Returns the table collection representing the defined pedigree.
+        Returns the :class:`tskit.TableCollection` describing the pedigree
+        defined by calls to :meth:`.add_individual`.
+
+        The state of the pedigree builder is not modified by this method.
+
+        :param float sequence_length: If specified, set the ``sequence_length``
+            property of the returned TableCollection to this value. If
+            ``None`` (the default) the ``sequence_length`` is ``-1``.
+        :return: The TableCollection defining the pedigree.
+        :rtype: tskit.TableCollection
         """
         copy = self.tables.copy()
         copy.sequence_length = 1
