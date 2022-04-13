@@ -1,10 +1,12 @@
 # Changelog
 
-Minor bugfix release.
-
 ## [1.2.0] - 2022-04-XX
 
 UPCOMING
+
+**Bug fixes**:
+- Fix rare assertion trip in the single sweep model caused by numerical jitter.
+  ({issue}`1966`, {pr}`2038`, {user}`jeromekelleher `, {user}`molpopgen`)
 
 ## [1.1.1] - 2022-02-10
 
