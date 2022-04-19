@@ -2347,10 +2347,9 @@ parental genomes, but everything else is determined by the pedigree.
 
 :::{warning}
 It is important to note that there is no concept of a population genetic
-model "outside" of the pedigree in this model, and that there
-are significant caveats that one needs to be aware of in terms
-of dealing with incomplete pedigree information and the treatment
-of founders.
+model "outside" of the pedigree in this model, and there
+are significant caveats when dealing with incomplete pedigree information
+and the treatment of founders.
 Please see the {ref}`sec_ancestry_models_fixed_pedigree_completing`
 section for more information.
 :::
@@ -2423,6 +2422,8 @@ Because the input pedigree fully describes the simulation many features such as
 combined with other {ref}`ancestry models<sec_ancestry_models>`.
 :::
 
+#### Censoring pedigree information
+
 :::{warning}
 The output tree sequence also contains the full pedigree information
 provided as input. This may be important if you are performing
@@ -2456,7 +2457,7 @@ simulation with a population size of 10:
 ```{code-cell}
 final_ts = msprime.sim_ancestry(
     initial_state=ped_ts, model="dtwf", population_size=10, random_seed=42)
-SVG(final_ts.draw_svg(y_axis=True,  size=(600,200)))
+SVG(final_ts.draw_svg(y_axis=True, size=(600,200)))
 ```
 
 We can see that the nodes 22 and 23 representing the founder genomes
@@ -2465,12 +2466,12 @@ which then finishes at generation 6 when the MRCA (node 26) is found.
 
 (sec_ancestry_models_fixed_pedigree_missing_data)=
 
-#### Missing data
+#### Missing pedigree data
 
 The previous example is very straightforward because the pedigree is
 complete and we can trace all individuals back to the same
 generation in the pedigree. The pedigrees we have in practice
-are usually not like this, in that there is a great deal of missing data.
+are usually not like this, and there is a great deal of missing data.
 The consequence of this for the {class}`.FixedPedigree` simulations
 is that genetic material will often be at a "dead end" at many
 levels of the pedigree during a simulation.
@@ -2544,8 +2545,8 @@ demography.add_population(name="C", initial_size=100)
 demography.add_population_split(time=10, derived=["A", "B"], ancestral="C");
 ```
 
-We here define a pedigree in which the individuals belong
-to the two "leaf" populations:
+We define a pedigree in which the individuals belong
+to the two "leaf" populations, A and B:
 
 
 ```{code-cell}
@@ -2590,6 +2591,11 @@ pedigree = msprime.parse_pedigree(
 
 draw_pedigree(pedigree.tree_sequence())
 ```
+We can see that the pedigree is split into two sub-pedigrees for the
+two populations, and the founders for the two populations exist
+at different times (2 and 5 generations ago for A and B, respectively).
+Running the {class}`.FixedPedigree` simulation, we can see that the
+trees reflect this structure:
 
 ```{code-cell}
 ped_ts = msprime.sim_ancestry(
@@ -2598,10 +2604,38 @@ node_labels = {node.id: f"{node.individual}({node.id})" for node in ped_ts.nodes
 SVG(ped_ts.draw_svg(y_axis=True,  node_labels=node_labels, size=(600,200)))
 ```
 
-:::{todo}
-This section is incomplete. https://github.com/tskit-dev/msprime/issues/2009
-:::
+When we complete this simulation we must use a {class}`.Demography` object
+that matches the populations defined in the original pedigree tables. The
+simplest way to do this is define the demography first, and use the same
+object throughout as we have done here:
 
+```{code-cell}
+full_ts = msprime.sim_ancestry(
+    initial_state=ped_ts, demography=demography, random_seed=42, model="dtwf")
+node_labels = {
+    node.id: f"{node.id}:{full_ts.population(node.population).metadata['name']}"
+    for node in full_ts.nodes()}
+SVG(full_ts.draw_svg(
+    y_axis=True,  node_labels=node_labels, size=(600,300), time_scale="rank"))
+```
+Here we have changed the node labelling in the trees to show the name of the
+population of each node. We can see that all of the early nodes are in the
+populations defined from the pedigree. When the recapitation simulation begins,
+all nodes are assigned into the relevant populations and the simulation proceeds
+from there under the defined demography. In this demographic model, populations
+A and B split from C 10 generations ago, and so the remaining lineages in populations
+A and B evolve independently until this time. We can see that older coalescences
+all happen within population C, as stipulated by the demographic model.
+
+:::{warning}
+The same caveats that we noted
+{ref}`above<sec_ancestry_models_fixed_pedigree_missing_data>` about missing
+data in the pedigree apply: although the remaining ancestral lineages
+will join the simulation at the correct times and in the
+specified population, *no account* is taken
+of the number of extant lineages from the pedigree when computing
+population sizes.
+:::
 
 (sec_ancestry_missing_data)=
 
