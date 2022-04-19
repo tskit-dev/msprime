@@ -1378,7 +1378,7 @@ class TestParsePedigreeErrors:
         with pytest.raises(ValueError, match="'unknown_col' not supported"):
             parse_indented(text)
 
-    def test_parital_row_min(self):
+    def test_partial_row_min(self):
         text = """\
         # id parent0 parent1 time
         child
@@ -1386,7 +1386,7 @@ class TestParsePedigreeErrors:
         with pytest.raises(ValueError, match="Incorrect number of columns"):
             parse_indented(text)
 
-    def test_parital_row_missing_optional(self):
+    def test_partial_row_missing_optional(self):
         text = """\
         # id parent0 parent1 time is_sample
         child . . 0
@@ -1427,6 +1427,14 @@ class TestParsePedigreeErrors:
         with pytest.raises(ValueError, match="value for column 'is_sample' on line 2"):
             parse_indented(text)
 
+    def test_is_sample_non_01(self):
+        text = """\
+        # id parent0 parent1 time is_sample
+        child . . 0 2
+        """
+        with pytest.raises(ValueError, match="value for column 'is_sample' on line 2"):
+            parse_indented(text)
+
     def test_id_is_dot(self):
         text = """\
         # id parent0 parent1 time
@@ -1452,7 +1460,7 @@ class TestPedigreeTextRoundTrip:
         pedigrees.write_pedigree(pedigree.tree_sequence(), buff)
         buff.seek(0)
         parsed = pedigrees.parse_pedigree(
-            buff, demography, sequence_length=pedigree.sequence_length
+            buff, demography=demography, sequence_length=pedigree.sequence_length
         )
         pedigree.assert_equals(parsed, ignore_metadata=True)
 

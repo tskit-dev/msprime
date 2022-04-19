@@ -272,6 +272,3 @@ The node was created by a census event. Please see the
 ```{eval-rst}
 .. autofunction:: msprime.parse_pedigree
 ```
-
-```{eval-rst}
-.. autofunction:: msprime.write_pedigree

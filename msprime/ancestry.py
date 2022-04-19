@@ -1720,16 +1720,28 @@ class DiscreteTimeWrightFisher(AncestryModel):
 
 
 class FixedPedigree(AncestryModel):
-    # TODO Complete documentation.
-    # TODO Since the pedigree is a necessary parameter for this simulation
-    # model and it cannot be used with any other model we should make it a
-    # parametric model where the parameter is the pedigree. This would
-    # streamline a bunch of logic.
     """
     Backwards-time simulations through a pre-specified pedigree, with diploid
     individuals and back-and-forth recombination. The string ``"fixed_pedigree"`` can
     be used to refer to this model.
+
+    The model has no parameters, but requires that the
+    :ref:`initial_state<sec_ancestry_initial_state>` parameter is provided to
+    :func:`.sim_ancestry` and that it contains a valid pedigree. See the
+    :ref:`sec_pedigrees` section for more information on the required
+    encoding and methods for translating existing pedigrees into this format.
+
+    Unlike other :ref:`ancestry models<sec_ancestry_models>`, the
+    :class:`FixedPedigree` cannot be combined with other simulation models, and
+    special attention must be paid to the role of founders when
+    :ref:`recapitating these
+    simulations<sec_ancestry_models_fixed_pedigree_completing>`.
+
+    See the :ref:`sec_ancestry_models_fixed_pedigree` section for more information
+    for more information and examples of running simulations within a
+    fixed pedigree.
     """
+
     name = "fixed_pedigree"
 
 
