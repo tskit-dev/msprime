@@ -90,6 +90,7 @@ jobs:
             python setup.py sdist
             python setup.py check
             python -m twine check dist/*.tar.gz --strict
+            rm dist/*
             python -m build
 
       - run:
