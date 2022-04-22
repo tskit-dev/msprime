@@ -28,19 +28,10 @@ jobs:
       - name: Install deps
         run: |
           brew install gsl
-          # Upgrade pip to get bdist_wheel
-          pip install --upgrade pip
-          pip install setuptools wheel
-          # Instead of letting setup.py install a newer numpy we install it here
-          # using the oldest supported version for ABI compatibility
-          pip install oldest-supported-numpy
-      - name: Build C extension
-        run: |
-          python -VV
-          python setup.py build_ext --inplace
+          pip install --upgrade pip build
       - name: Build Wheel
         run: |
-          python setup.py bdist_wheel
+          python -m build --wheel
       - name: Delocate to bundle dynamic libs
         run: |
           pip install delocate
@@ -65,7 +56,8 @@ jobs:
       - name: Build sdist
         shell: bash
         run: |
-          python setup.py sdist
+          pip install --upgrade pip build
+          python -m build --sdist
       - name: Upload sdist
         uses: actions/upload-artifact@v2
         with:

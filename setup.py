@@ -3,9 +3,9 @@ import platform
 import subprocess
 from warnings import warn
 
+import numpy
 from setuptools import Extension
 from setuptools import setup
-from setuptools.command.build_ext import build_ext
 
 
 CONDA_PREFIX = os.getenv("MSP_CONDA_PREFIX", None)
@@ -46,20 +46,6 @@ class PathConfigurator:
         for token in output:
             if token.startswith("-L"):
                 self.library_dirs.append(token[2:])
-
-
-# Obscure magic required to allow numpy be used as an 'setup_requires'.
-# Based on https://stackoverflow.com/questions/19919905
-class local_build_ext(build_ext):
-    def finalize_options(self):
-        build_ext.finalize_options(self)
-        import builtins
-
-        # Prevent numpy from thinking it is still in its setup process:
-        builtins.__NUMPY_SETUP__ = False
-        import numpy
-
-        self.include_dirs.append(numpy.get_include())
 
 
 libdir = "lib"
@@ -107,7 +93,7 @@ _msprime_module = Extension(
     extra_compile_args=["-std=c99"],
     libraries=libraries,
     define_macros=defines,
-    include_dirs=includes + configurator.include_dirs,
+    include_dirs=includes + configurator.include_dirs + [numpy.get_include()],
     library_dirs=configurator.library_dirs,
 )
 
@@ -116,7 +102,5 @@ setup(
     # The package name along with all the other metadata is specified in setup.cfg
     # However, GitHub's dependency graph can't see the package unless we put this here.
     name="msprime",
-    use_scm_version={"write_to": "msprime/_version.py"},
     ext_modules=[_msprime_module],
-    cmdclass={"build_ext": local_build_ext},
 )
