@@ -6087,6 +6087,29 @@ class TestFromOldStyleMap:
         d2.add_population_split(1, derived=["A"], ancestral="B")
         d1.assert_equivalent(d2)
 
+    def test_two_pop_merge_into_first_with_additional_events(self):
+        d1 = msprime.Demography.from_old_style(
+            [
+                msprime.PopulationConfiguration(initial_size=1),
+                msprime.PopulationConfiguration(initial_size=1),
+            ],
+            migration_matrix=[[0, 0.1], [0.1, 0]],
+            demographic_events=[
+                msprime.MassMigration(1, source=1, dest=0),
+                msprime.MigrationRateChange(1, rate=0),
+                msprime.PopulationParametersChange(1, initial_size=2, population_id=0),
+            ],
+            population_map=[{"A": 0, "B": 1}, {"A": 0}],
+        )
+        d2 = msprime.Demography()
+        d2.add_population(initial_size=1, name="A", initially_active=True)
+        d2.add_population(initial_size=1, name="B")
+        d2.set_migration_rate(source="A", dest="B", rate=0.1)
+        d2.set_migration_rate(source="B", dest="A", rate=0.1)
+        d2.add_population_split(1, derived=["B"], ancestral="A")
+        d2.add_population_parameters_change(1, population="A", initial_size=2)
+        d1.assert_equivalent(d2)
+
     def test_two_pop_tree_no_mass_migration(self):
         with pytest.raises(ValueError, match="Insufficient MassMigrations"):
             msprime.Demography.from_old_style(

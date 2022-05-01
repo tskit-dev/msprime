@@ -1725,9 +1725,10 @@ class Demography(collections.abc.Mapping):
                     sequential_proportions = []
                     old_derived_id = last_epoch_id_map[derived]
                     for event in events:
-                        if event.source == old_derived_id:
-                            ancestral.append(old_id_map[event.dest])
-                            sequential_proportions.append(event.proportion)
+                        if isinstance(event, MassMigration):
+                            if event.source == old_derived_id:
+                                ancestral.append(old_id_map[event.dest])
+                                sequential_proportions.append(event.proportion)
                     proportions = _sequential_to_proportions(sequential_proportions)
                     if math.isclose(sum(proportions), 1):
                         if len(ancestral) == 1:
