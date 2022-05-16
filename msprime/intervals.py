@@ -468,9 +468,10 @@ class RateMap(collections.abc.Mapping):
         contain a single header line (which is ignored). Each subsequent line
         then contains a physical position (in base pairs) and either a genetic
         map position (in centiMorgans) or a recombination rate (in centiMorgans
-        per megabase); the rate between the current physical position
-        (inclusive) and the physical position on the next line (exclusive) is
-        taken as constant. By default, the second column of the file is taken
+        per megabase). The value in the rate column in a given line gives the
+        constant rate between the physical position in that line (inclusive) and the
+        physical position on the next line (exclusive).
+        By default, the second column of the file is taken
         as the physical position and the fourth column is taken as the genetic
         position, as seen in the following sample of the format::
 
