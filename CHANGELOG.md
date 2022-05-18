@@ -1,12 +1,24 @@
 # Changelog
 
-## [1.2.0] - 2022-04-XX
+## [1.2.0] - 2022-05-18
 
-UPCOMING
+**New features**
+
+- Add the `FixedPedigree` ancestry model and various infrastructure for
+  importing pedigree information into msprime.
 
 **Bug fixes**:
+
 - Fix rare assertion trip in the single sweep model caused by numerical jitter.
   ({issue}`1966`, {pr}`2038`, {user}`jeromekelleher `, {user}`molpopgen`)
+
+- Fix edge case in `Demography.from_old_style()`
+  ({issue}`2047`, {pr}`2048`, {user}`grahamgower`)
+
+**Maintenance**:
+
+- Documentation improvements ({pr}`2054`, {pr}`2033`, {pr}`2011`
+  {user}`petrelharp`, {user}`gregorgorjanc`)
 
 ## [1.1.1] - 2022-02-10
 
