@@ -93,7 +93,9 @@ jobs:
         run: |
           python -VV
           # Install the local wheel
-          pip install msprime --only-binary msprime -f .
+          pip install msprime
+          pip uninstall --yes msprime
+          pip install msprime --no-index --only-binary msprime -f .
           python -c "import msprime"
           msp simulate 10 tmp.trees
           tskit info tmp.trees
@@ -118,7 +120,9 @@ jobs:
         run: |
           python -VV
           # Install the local wheel
-          pip install msprime --only-binary msprime -f .
+          pip install msprime
+          pip uninstall --yes msprime
+          pip install msprime --no-index --only-binary msprime -f .
           python -c "import msprime"
           msp simulate 10 tmp.trees
           tskit info tmp.trees
