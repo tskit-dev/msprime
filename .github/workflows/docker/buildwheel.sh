@@ -21,12 +21,14 @@ git config --global --add safe.directory /project
 # Fetch the full history as we'll be missing tags otherwise.
 git fetch --unshallow
 for V in "${PYTHON_VERSIONS[@]}"; do
+    git reset --hard
+    git clean -fd
     PYBIN=/opt/python/$V/bin
     rm -rf build/       # Avoid lib build by one Python is used by another
     $PYBIN/python -m venv env
     source env/bin/activate
-    python -m pip install --upgrade build
-    SETUPTOOLS_SCM_DEBUG=1 python -m build
+    $PYBIN/python -m pip install --upgrade build
+    SETUPTOOLS_SCM_DEBUG=1 $PYBIN/python -m build
 done
 
 cd dist
