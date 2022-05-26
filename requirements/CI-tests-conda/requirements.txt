@@ -3,6 +3,6 @@
 # but demes will pull in the latest so we pin here.
 jsonschema<4.0
 gsl
-tskit==0.4.0
+tskit==0.5.0
 stdpopsim==0.1.2
 demes==0.2.1

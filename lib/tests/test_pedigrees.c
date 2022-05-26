@@ -87,7 +87,7 @@ verify_complete_pedigree_simulation(
     ret = msp_finalise_tables(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = tsk_treeseq_init(&ts, &tables_copy, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables_copy, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = tsk_tree_init(&tree, &ts, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -150,7 +150,7 @@ verify_pedigree(double recombination_rate, unsigned long seed,
     verify_complete_pedigree_simulation(&tables, recombination_rate);
 
     /* Is this a valid tree sequence? */
-    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     /* tsk_table_collection_print_state(&tables, stdout); */
 
@@ -439,7 +439,7 @@ test_replicates(void)
         CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
         msp_verify(&msp, 0);
 
-        ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tsk_tree_init(&tree, &ts, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -501,7 +501,7 @@ test_replicates_ancient_samples(void)
         ret = msp_finalise_tables(&msp);
         CU_ASSERT_EQUAL(ret, 0);
 
-        ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tsk_tree_init(&tree, &ts, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -563,7 +563,7 @@ test_replicates_early_exit(void)
             CU_ASSERT_EQUAL(total_offspring, 50);
         }
 
-        ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tsk_tree_init(&tree, &ts, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -609,7 +609,7 @@ test_replicates_exit_coalescence(void)
         CU_ASSERT_EQUAL(ret, MSP_EXIT_COALESCENCE);
         msp_print_state(&msp, _devnull);
 
-        ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tsk_tree_init(&tree, &ts, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);

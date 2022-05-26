@@ -1,6 +1,6 @@
 [wrap-file]
-directory = tskit-0.99.15
+directory = tskit-1.0.0
 
-source_url = https://github.com/tskit-dev/tskit/releases/download/C_0.99.15/tskit-0.99.15.tar.xz
-source_filename = tskit-0.99.15.tar.xz
-source_hash = 83c38e78c1f508cfae9096d89b46421f58b63e1ca71cc1e5c6f981552f33ef87
+source_url = https://github.com/tskit-dev/tskit/releases/download/C_1.0.0/tskit-1.0.0.tar.xz
+source_filename = tskit-1.0.0.tar.xz
+source_hash = f8a085fc6ef170706b76a307e18be4ab425f31a1f50fa9765ab2c2d81eef65c2

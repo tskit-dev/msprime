@@ -1219,7 +1219,7 @@ test_mixed_hudson_dtwf(void)
     ret = msp_finalise_tables(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tsk_treeseq_print_state(&ts, _devnull);
     tsk_treeseq_free(&ts);
@@ -1285,7 +1285,7 @@ test_mixed_hudson_smc(void)
     ret = msp_finalise_tables(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tsk_treeseq_print_state(&ts, _devnull);
     tsk_treeseq_free(&ts);
@@ -1357,7 +1357,7 @@ run_gc_simulation(double sequence_length, double gc_rate, double tract_length,
     msp_free(&msp);
 
     /* Make sure we can build a tree sequence out of the result */
-    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     tsk_treeseq_free(&ts);
 
@@ -2852,7 +2852,7 @@ test_simulation_replicates(void)
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = mutgen_generate(&mutgen, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         tsk_treeseq_print_state(&ts, _devnull);
         mutgen_print_state(&mutgen, _devnull);
@@ -3052,7 +3052,7 @@ verify_simulate_from(int model, rate_map_t *recomb_map,
         CU_ASSERT_TRUE(msp_is_completed(&msp));
         ret = msp_finalise_tables(&msp);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-        ret = tsk_treeseq_init(&final, &tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_init(&final, &tables, TSK_TS_INIT_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
 
         ret = tsk_tree_init(&tree, &final, 0);

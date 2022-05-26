@@ -3446,7 +3446,7 @@ msp_process_input_trees(msp_t *self)
     memset(&ts, 0, sizeof(ts));
     memset(&tree, 0, sizeof(tree));
 
-    ret = tsk_treeseq_init(&ts, self->tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, self->tables, TSK_TS_INIT_BUILD_INDEXES);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
@@ -7178,7 +7178,7 @@ msp_set_simulation_model_fixed_pedigree(msp_t *self)
     const tsk_size_t num_nodes = self->tables->nodes.num_rows;
     pedigree_t *pedigree = &self->pedigree;
 
-    ret = tsk_treeseq_init(&ts, self->tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, self->tables, TSK_TS_INIT_BUILD_INDEXES);
     if (ret != 0) {
         ret = msp_set_tsk_error(ret);
         goto out;
