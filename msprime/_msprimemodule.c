@@ -3189,7 +3189,7 @@ msprime_log_likelihood_arg(PyObject *self, PyObject *args, PyObject *kwds)
 
     /* Note: this will be inefficient here if we're building indexes for large
      * tables. */
-    err = tsk_treeseq_init(&ts, tables->tables, TSK_BUILD_INDEXES);
+    err = tsk_treeseq_init(&ts, tables->tables, TSK_TS_INIT_BUILD_INDEXES);
     if (err != 0) {
         handle_tskit_library_error(err);
         goto out;

@@ -440,7 +440,7 @@ class TestModule:
     def test_tsk_library_version(self):
         tsk_version = _msprime.get_tskit_c_version()
         # Update this when the tskit C library version changes
-        assert tsk_version == (0, 99, 15)
+        assert tsk_version == (1, 0, 0)
 
 
 def get_random_population_models(n):

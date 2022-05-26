@@ -830,7 +830,7 @@ run_simulate(
         if (ret != 0) {
             fatal_msprime_error(ret, __LINE__);
         }
-        ret = tsk_treeseq_init(&tree_seq, &tables, TSK_BUILD_INDEXES);
+        ret = tsk_treeseq_init(&tree_seq, &tables, TSK_TS_INIT_BUILD_INDEXES);
         if (ret != 0) {
             fatal_tskit_error(ret, __LINE__);
         }

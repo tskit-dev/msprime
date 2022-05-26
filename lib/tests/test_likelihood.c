@@ -53,7 +53,7 @@ test_likelihood_errors(void)
     ret = tsk_mutation_table_add_row(
         &tables.mutations, 0, 1, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Ne <= 0 is an error */
@@ -91,7 +91,7 @@ test_likelihood_zero_edges(void)
         &tables.nodes, TSK_NODE_IS_SAMPLE, 0.0, TSK_NULL, TSK_NULL, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
 
-    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Zero edges should give a likelihood of zero */
@@ -115,7 +115,7 @@ test_likelihood_zero_edges(void)
     ret = tsk_mutation_table_add_row(
         &tables.mutations, 0, 0, -1, TSK_UNKNOWN_TIME, "C", 1, NULL, 0);
     CU_ASSERT_FATAL(ret >= 0);
-    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     /* Zero edges should give a likelihood of zero */
@@ -225,7 +225,7 @@ test_likelihood_three_leaves(void)
 
     tsk_population_table_add_row(&tables.populations, NULL, 0);
 
-    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (i = 0; i < 3; i++) {
@@ -330,7 +330,7 @@ test_likelihood_two_mrcas(void)
 
     tsk_population_table_add_row(&tables.populations, NULL, 0);
 
-    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (i = 0; i < 3; i++) {
@@ -440,7 +440,7 @@ test_likelihood_material_overhang(void)
     CU_ASSERT_FATAL(ret >= 0);
 
     tsk_population_table_add_row(&tables.populations, NULL, 0);
-    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (i = 0; i < 3; i++) {
@@ -564,7 +564,7 @@ test_likelihood_material_gap(void)
     CU_ASSERT_FATAL(ret >= 0);
 
     tsk_population_table_add_row(&tables.populations, NULL, 0);
-    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (i = 0; i < 3; i++) {
@@ -698,7 +698,7 @@ test_likelihood_recombination_in_material_gap(void)
     CU_ASSERT_FATAL(ret >= 0);
 
     tsk_population_table_add_row(&tables.populations, NULL, 0);
-    ret = tsk_treeseq_init(&ts, &tables, TSK_BUILD_INDEXES);
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (i = 0; i < 3; i++) {
