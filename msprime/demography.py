@@ -777,7 +777,9 @@ class Demography(collections.abc.Mapping):
         time, and to extract other information related to these haplotypes: for
         instance to trace the local ancestry of a sample back to a set of
         contemporaneous ancestors, or to assess whether a subset of samples has
-        coalesced more recently than the census time.
+        coalesced more recently than the census time. (However, these added
+        nodes will only represent the portions of ancestral genomes inherited
+        by the samples, rather than complete ancestral genomes.)
 
         See :ref:`sec_ancestry_census_events` for more details.
 
