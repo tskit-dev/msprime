@@ -93,3 +93,6 @@ tmp__NOBACKUP__
 
 # Mac stuff
 .DS_Store
+
+# vscode stuff
+.vscode

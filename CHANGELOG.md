@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.2.1] - 2022-XX-XX
+
+**New features**
+
+- Add a `MicrosatMutationModel` mutation model class, that
+  represents a generalized interface for constructing mutational
+  models appropriate to STRs. In addition 3 specific microsat models
+  are added `SMM`, `TPM`, and `EL2`.  
+  ({issue}`2013`, {user}`andrewkern`).
+
 ## [1.2.0] - 2022-05-18
 
 **New features**
@@ -10,7 +20,7 @@
 **Bug fixes**:
 
 - Fix rare assertion trip in the single sweep model caused by numerical jitter.
-  ({issue}`1966`, {pr}`2038`, {user}`jeromekelleher `, {user}`molpopgen`)
+  ({issue}`1966`, {pr}`2038`, {user}`jeromekelleher`, {user}`molpopgen`)
 
 - Fix edge case in `Demography.from_old_style()`
   ({issue}`2047`, {pr}`2048`, {user}`grahamgower`)
@@ -23,8 +33,9 @@
 ## [1.1.1] - 2022-02-10
 
 **Bug fixes**:
+
 - Fix (very) rare assertion trip caused by underlying GSL bug.
-  ({issue}`1997`, {pr}`2000`, {user}`chriscrsmith `, {user}`molpopgen`,
+  ({issue}`1997`, {pr}`2000`, {user}`chriscrsmith`, {user}`molpopgen`,
   {user}`andrewkern`)
 
 **Maintenance**:
@@ -94,7 +105,6 @@ This is a bugfix release recommended for all users.
 - Fix printing small values in rate maps ({pr}`1906`, {issue}`1905`,
   {user}`petrelharp`).
 
-
 ## [1.0.2] - 2021-06-29
 
 Improved Demes support and minor bugfixes.
@@ -125,7 +135,6 @@ Minor feature release with experimental Demes support.
 
 - Initial support for Demes via the ``Demography.from_demes`` method.
   ({pr}`1662`, {issue}`1675`, {user}`jeromekelleher`, {user}`apragsdale`)
-
 
 ## [1.0.0] - 2021-04-14
 
@@ -331,6 +340,7 @@ Alpha release for testing the tskit/msprime split.
 Minor bugfix release.
 
 **New features**:
+
 - Add provenance recording option to simplify (#601)
 - Minor performance improvement (#598)
 
@@ -450,7 +460,7 @@ compatible, however.
 - The `SparseTree.mutations()` and `TreeSequence.mutations()` iterators no
   longer support tuple-like access to values. For example, code like
 
-  >   > for x, u, j in ts.mutations():
+  > > for x, u, j in ts.mutations():
   >
   > : print("mutation at position", x, "node = ", u)
   >
@@ -561,14 +571,14 @@ upcoming functionality.
 - The tuples returned by the `mutations` method contains an element.
   This will break code doing things like
 
-  >   > for pos, node in ts.mutations():
+  > > for pos, node in ts.mutations():
   >
   > : print(pos, node)
   >
   For better forward compatibility, code should use named attributes
   rather than positional access:
 
-  >   > for mutation in ts.mutations():
+  > > for mutation in ts.mutations():
   >
   > : print(mutation.position, mutation.node)
   >
@@ -794,4 +804,3 @@ populations.
 - Added a {}`get_pairwise_diversity` method to the TreeSequence
   class to efficiently calculate the population genetics
   statistic pi.
-

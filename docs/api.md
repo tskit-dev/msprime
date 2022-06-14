@@ -12,8 +12,8 @@ for discussion and examples of individual features.
 ```{eval-rst}
 .. currentmodule:: msprime
 ```
-### Ancestry
 
+### Ancestry
 
 ```{eval-rst}
 .. autosummary::
@@ -44,6 +44,10 @@ for discussion and examples of individual features.
   PAM
   BinaryMutationModel
   MatrixMutationModel
+  MicrosatMutationModel
+  SMM
+  TPM
+  EL2
   InfiniteAlleles
   SLiMMutationModel
 ```
@@ -102,11 +106,9 @@ for discussion and examples of individual features.
 .. autoclass:: msprime.SmcPrimeApproxCoalescent
 ```
 
-
 ```{eval-rst}
 .. autoclass:: msprime.DiscreteTimeWrightFisher
 ```
-
 
 ```{eval-rst}
 .. autoclass:: msprime.FixedPedigree
@@ -126,7 +128,6 @@ for discussion and examples of individual features.
 
 ### Mutations
 
-
 ```{eval-rst}
 .. autofunction:: msprime.sim_mutations
 ```
@@ -139,6 +140,22 @@ for discussion and examples of individual features.
 
 ```{eval-rst}
 .. autoclass:: msprime.MatrixMutationModel()
+```
+
+```{eval-rst}
+.. autoclass:: msprime.MicrosatMutationModel()
+```
+
+```{eval-rst}
+.. autoclass:: msprime.SMM()
+```
+
+```{eval-rst}
+.. autoclass:: msprime.TPM()
+```
+
+```{eval-rst}
+.. autoclass:: msprime.EL2()
 ```
 
 ```{eval-rst}
@@ -177,7 +194,6 @@ for discussion and examples of individual features.
 ```{eval-rst}
 .. autoclass:: msprime.SLiMMutationModel()
 ```
-
 
 (sec_api_node_flags)=
 
@@ -227,14 +243,12 @@ The node was created by a census event. Please see the
 
 ### Rate maps
 
-
 ```{eval-rst}
 .. autoclass:: msprime.RateMap
     :members:
 ```
 
 ### Demography
-
 
 ```{eval-rst}
 .. autoclass:: msprime.Demography()
