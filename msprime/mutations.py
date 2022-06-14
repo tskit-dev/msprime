@@ -199,6 +199,315 @@ class BinaryMutationModel(MatrixMutationModel):
         super().__init__(alleles, root_distribution, transition_matrix)
 
 
+def general_microsat_rate_matrix(s, u, v, p, m, lo, hi):
+    """
+    Construct the general microsat rate matrix associated
+    with the Sainudiin et al. (2004) parameterization.
+    While the original paper implements a continuous time markov chain,
+    here we implement the jump process rate matrix equivalent for consistency
+    with the :class:`.MatrixMutationModel`.
+
+    In particular if :math:`q_{ij}` is an element of the originally defined
+    transition matrix, we define :math:`M = \\max_i \\left( \\sum_j q_{ij} \\right)`.
+    Then, as a :class:`.MatrixMutationModel` this model has the transition
+    matrix :math:`P_{ij} = q_{ij} / M`, and :math:`P_{ii} = 1 - \\sum_{j\\neq i} P_{ij}`.
+
+    :param float s: strength of length dependence on mutation rate
+     (i.e. s=0 uniform rate)
+    :param float u: constant bias parameter; U ~ (0, 1)
+    :param float v: linear bias parameter; v ~ (-inf, inf)
+    :param float p: probability of a single step mutation
+    :param float m: success prob of truncated gamma distribution
+    :param int lo: lower bound on repeat number
+    :param int hi: upper bound on repeat number
+
+    :return: rate matrix
+
+    """
+
+    # Helper functions for the Sainudiin et al. rate matrix
+    def alpha_microsat(i, u, v, lo):
+        return max(0, min(1, u - (v * (i - lo))))
+
+    def beta_microsat(i, s, lo):
+        """
+        beta helper function from Sainudiin et al. (2004)
+        represents the mutation rate from allele i
+        :param float s: strength of length dependence on mutation rate
+        (i.e. s=0 uniform rate)
+        :param int lo: lower bound
+        :param int hi: upper bound
+        """
+        return 1 + ((i - lo) * s)
+
+    def gamma_microsat(m, i, j, lo, hi):
+        """
+        gamma helper function from Sainudiin et al. (2004)
+        :param float m: prob success
+        :param int i: in-state
+        :param int j: out-state
+        :param int lo: lower bound of microsat repeat length distribution
+        :param int hi: upper bound of microsat repeat length distribution
+        """
+        num = m * (1 - m) ** (np.abs(i - j) - 1)
+        if lo <= i < j <= hi:
+            denom = 1 - (1 - m) ** (hi - i)
+        elif lo <= j < i <= hi:
+            denom = 1 - (1 - m) ** (i - lo)
+        else:
+            raise TypeError("microsat model error. i and j must be between lo and hi")
+
+        return num / denom
+
+    nalleles = hi - lo + 1
+    rate_matrix = np.zeros((nalleles, nalleles))
+    for i in range(lo, hi + 1):
+        for j in range(lo, hi + 1):
+            # shift coords to account for 0-indexing in rate matrix
+            ii = i - lo
+            jj = j - lo
+            if i == j - 1:
+                rate_matrix[ii, jj] = (
+                    beta_microsat(i, s, lo)
+                    * alpha_microsat(i, u, v, lo)
+                    * (p + ((1 - p) * gamma_microsat(m, i, j, lo, hi)))
+                )
+            elif i < j - 1:
+                rate_matrix[ii, jj] = (
+                    beta_microsat(i, s, lo)
+                    * alpha_microsat(i, u, v, lo)
+                    * (1 - p)
+                    * gamma_microsat(m, i, j, lo, hi)
+                )
+            elif i == j + 1:
+                rate_matrix[ii, jj] = (
+                    beta_microsat(i, s, lo)
+                    * (1 - alpha_microsat(i, u, v, lo))
+                    * (p + ((1 - p) * gamma_microsat(m, i, j, lo, hi)))
+                )
+            elif i > j + 1:
+                rate_matrix[ii, jj] = (
+                    beta_microsat(i, s, lo)
+                    * (1 - alpha_microsat(i, u, v, lo))
+                    * (1 - p)
+                    * gamma_microsat(m, i, j, lo, hi)
+                )
+            else:
+                rate_matrix[ii, jj] = 0
+    # scale by max row sum; then normalize to 1
+    row_sums = rate_matrix.sum(axis=1, dtype="float64")
+    alpha = max(row_sums)
+    rate_matrix /= alpha
+    row_sums = rate_matrix.sum(axis=1, dtype="float64")
+    np.fill_diagonal(rate_matrix, 1.0 - row_sums)
+    return rate_matrix
+
+
+class MicrosatMutationModel(MatrixMutationModel):
+    """
+    General class for Microsatellite mutation models
+    which parameterizes the transition matrix describing
+    changes among alleles using 5 parameters according
+    to the model of Sainudiin et al. (2004).
+
+    Concretely, mutation rates under this model are computed as follows.
+    Let ``qij`` be the transition rate from equation (3) in Sainudiin et al,
+    and let ``M`` be the largest row sum of the matrix whose i,j-th entry
+    is ``qij`` and whose diagonals are zero. Then if the mutation rate
+    passed to :func:`.sim_mutations` is ``m``, the mutation rate from
+    allele ``i`` to allele `j`` is ``m * qij / M``.
+
+    :param float s: strength of length dependence on mutation rate
+        (i.e. s=0 uniform rate)
+    :param float u: constant bias parameter; must be between 0 and 1
+    :param float v: linear bias parameter
+    :param float p: probability of a single step mutation
+    :param float m: 1 / (mean multistep mutation size)
+    :param int lo: lower bound on repeat number
+    :param int hi: upper bound on repeat number
+    :param list[float] root_distribution: An array of float values of length hi-lo+1
+        which should sum to 1, and give the probabilities used to choose
+        the ancestral state of each microsatellite.
+        Defaults to the stationary distribution of the model.
+
+    """
+
+    def __init__(
+        self,
+        s=0,
+        u=0.5,
+        v=0.0,
+        p=1.0,
+        m=1.0,
+        lo=2,
+        hi=50,
+        root_distribution=None,
+    ):
+        if np.isinf(lo):
+            raise ValueError("lo is infinite")
+        if np.isinf(hi):
+            raise ValueError("hi is infinite")
+        if lo > hi:
+            raise ValueError("lo > hi")
+        if not lo >= 0:
+            raise ValueError("lo must be >= 0")
+        if s <= -1 / (hi - lo + 1):
+            raise ValueError("s must be > -1/(hi-lo+1)")
+        if u <= 0 or u >= 1:
+            raise ValueError("u must be between 0 and 1")
+        if type(lo) == float:
+            lo = int(lo)
+        if type(hi) == float:
+            hi = int(hi)
+        alleles = [str(int(x)) for x in range(lo, hi + 1)]
+        transition_matrix = general_microsat_rate_matrix(s, u, v, p, m, lo, hi)
+        if root_distribution is None:
+            # solve for stationary distribution
+            S, U = np.linalg.eig(transition_matrix.T)
+            U = np.real_if_close(U, tol=1)
+            stationary = np.array(U[:, np.where(np.abs(S - 1.0) < 1e-8)[0][0]])
+            stationary = stationary / np.sum(stationary)
+            root_distribution = stationary
+        super().__init__(alleles, root_distribution, transition_matrix)
+
+
+class SMM(MicrosatMutationModel):
+    """
+    Stepwise mutation model (Ohta and Kimura, 1978),
+    for microsatellite repeat number.
+
+    This is a :class:`.MicrosatMutationModel` with alleles ``[lo, .. , hi]``,
+    a root distribution (stationary distribution by default),
+    and a transition matrix that allows only mutations that
+    change the number of repeats by +/- 1: concretely, if the mutation
+    rate is ``m``, then an allele ``k`` mutates to ``k+1`` and ``k-1``
+    at rate ``m/2`` each,
+    except that mutations above ``hi`` or below ``lo`` result in no change.
+
+    Note that the values of ``lo`` and ``hi`` are in units of repeat number,
+    and are unrelated to repeat length
+    (e.g., the repeat itself can be dinucleotide, tri-nucleotide, etcetera).
+
+    :param int lo: lower bound of the microsatellite repeat copy number
+    :param int hi: upper bound of the microsatellite repeat copy number
+    :param list[float] root_distribution: An array of float values of length hi-lo+1
+        which should sum to 1, and give the probabilities used to choose
+        the ancestral state of each microsatellite.
+        Defaults to the value of stationary distribution
+        of the model.
+
+    """
+
+    def __init__(self, lo=2, hi=50, root_distribution=None):
+        # SMM specific parameters
+        s = 0
+        u = 0.5
+        v = 0
+        p = 0
+        m = 1
+        super().__init__(s, u, v, p, m, lo, hi, root_distribution)
+
+
+class TPM(MicrosatMutationModel):
+    """
+    Two-phase mutation model of DiRienzo et al., (1994),
+    https://doi.org/10.1073/pnas.91.8.3166
+
+    This models evolution of microsatellite repeat number in a manner
+    that allows for multi-step mutations in copy number of microsatellite repeats.
+    This is parameterized by `p` the probability of a single step mutation,
+    and `m` the success probability of the truncated gamma distribution
+    describing the distribution of longer steps such that the
+    mean multi-step mutation is length `1/m`.
+    For this model both `p` and `m` need to be set to < 1.0.
+
+    This is a :class:`.MicrosatMutationModel` with alleles ``[lo, .. , hi]``.
+    For a precise definition of the mutation rates, see :class:`.MicrosatMutationModel`
+    with ``s=0``, ``u=0.5``, and ``v=0``.
+    Default values of other parameters in the model
+    are those estimated in Sainudiin et al. (2004).
+
+    Note that the values of ``lo`` and ``hi`` are in units of repeat number,
+    and are unrelated to repeat length
+    (e.g., the repeat itself can be dinucleotide, tri-nucleotide, etcetera).
+
+    :param float p: probability of a single step mutation
+    :param float m: success prob of truncated gamma distribution
+    :param int lo: lower bound of the microsatellite repeat copy number
+    :param int hi: upper bound of the microsatellite repeat copy number
+    :param list[float] root_distribution: An array of float values of length hi-lo+1
+        which should sum to 1. These values are used to determine the ancestral state of
+        each microsatellite. Defaults to the stationary distribution
+        of the model
+
+    """
+
+    def __init__(self, p=0.9, m=0.93, lo=2, hi=50, root_distribution=None):
+        if not (0 < p < 1.0):
+            raise ValueError("p must be between 0 and 1")
+        if not (0 < m < 1.0):
+            raise ValueError("m must be between 0 and 1")
+        # TPM-specific fixed params
+        s = 0
+        u = 0.5
+        v = 0
+        super().__init__(s, u, v, p, m, lo, hi, root_distribution)
+
+
+class EL2(MicrosatMutationModel):
+    """
+    Equal rate, linear biased, two-phase mutation model of Garza et al., (1995),
+    [10.1093/oxfordjournals.molbev.a040239] as parameterized by
+    the Sainudiin et al. (2004) model.
+
+    This models evolution of microsatellite repeat number in a manner
+    that allows for multi-step mutations in copy number of microsatellite repeats.
+    This is parameterized by `p` the probability of a single step mutation,
+    and `m` the success probability of the truncated gamma distribution
+    describing the distribution of longer steps such that the
+    mean multi-step mutation is length `1/m`.
+    For this model both `p` and `m` need to be set to < 1.0.
+
+    In addition EL2 has a constant bias parameter `u`, where
+    :math:`0 < u < 1` and a linear bias parameter `v`, where
+    :math:`-\\infty < v < \\infty`.
+
+    This is a :class:`.MicrosatMutationModel` with alleles ``[lo, .. , hi]``
+    For a precise definition of the mutation rates, see :class:`.MicrosatMutationModel`
+    with ``s=0``.
+    Default values for other parameters of the model
+    are those estimated in Sainudiin et al. (2004).
+
+    Note that the values of ``lo`` and ``hi`` are in units of repeat number,
+    and are unrelated to repeat length
+    (e.g., the repeat itself can be dinucleotide, tri-nucleotide, etcetera).
+
+    :param float p: probability of a single step mutation
+    :param float m: success prob of truncated gamma distribution
+    :param float u: constant bias parameter
+    :param float v: linear bias parameter
+    :param int lo: lower bound of the microsatellite repeat copy number
+    :param int hi: upper bound of the microsatellite repeat copy number
+    :param list[float] root_distribution: An array of float values of length hi-lo+1
+        which should sum to 1. These values are used to determine the ancestral state of
+        each microsatellite. Defaults to the stationary distribution
+        of the model
+
+    """
+
+    def __init__(self, m=0.43, u=0.68, v=0.037, lo=2, hi=50, root_distribution=None):
+        if not (0 < m < 1.0):
+            raise ValueError("m must be between 0 and 1")
+        if not (0 < u < 1.0):
+            raise ValueError("u must be between 0 and 1")
+        if not (-np.inf < v < np.inf):
+            raise ValueError("v must be between -inf and inf")
+        # EL2 specific params
+        p = 0.0
+        s = 0
+        super().__init__(s, u, v, p, m, lo, hi, root_distribution)
+
+
 class JC69(MatrixMutationModel):
     """
     Jukes-Cantor mutation model (Jukes and Cantor 1969). Based on the standard ACGT

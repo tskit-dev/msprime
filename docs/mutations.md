@@ -43,13 +43,16 @@ For example, here we simulate the ancestry of two diploids (and therefore
 four sample genomes) and store the resulting {class}`tskit.TreeSequence`
 object in the ``ts`` variable. We then simulate some mutations on
 that tree sequence, and show the resulting tree with mutations:
+
 ```{code-cell}
 ts = msprime.sim_ancestry(2, sequence_length=100, random_seed=1234)
 mts = msprime.sim_mutations(ts, rate=0.01, random_seed=5678)
 SVG(mts.draw_svg())
 ```
+
 We can see the variation data produced by these mutations most simply
 via the {meth}`tskit.TreeSequence.variants` method:
+
 ```{code-cell}
 for var in mts.variants():
     print(var.site.position, var.alleles, var.genotypes, sep="\t")
@@ -63,7 +66,6 @@ for more information.
 ---
 
 ## Quick reference
-
 
 {func}`.sim_mutations`
 : Add simulated mutations to a tree sequence
@@ -93,6 +95,15 @@ for more information.
 
 {class}`.MatrixMutationModel` (General finite state model)
 : Superclass of mutation models with a finite set of states
+
+{class}`.SMM` (Microsatellites)
+: Stepwise mutation model for microsatellites
+
+{class}`.TPM` (Microsatellites)
+: Equal rate, two-phase model for microsatellites
+
+{class}`.EL2` (Microsatellites)
+: Equal rate, two-phase, linear bias model for microsatellites
 
 {class}`.InfiniteAlleles` (Integers)
 : A generic infinite-alleles mutation model
@@ -153,8 +164,6 @@ position of the {class}`.RateMap` is the same as the
 
 :::
 
-
-
 (sec_mutations_discrete)=
 
 ## Discrete or continuous
@@ -181,7 +190,7 @@ mts.tables.sites.position
 :::{note}
 
 Using `discrete_genome=False` means that the mutation model will conform
-to the classic _infinite sites_ assumption, where each mutation in the simulation
+to the classic *infinite sites* assumption, where each mutation in the simulation
 occurs at a new site.
 
 :::
@@ -222,7 +231,6 @@ print(mts.tables.mutations.time)
 
 As explained in {ref}`the following section <sec_mutations_existing>`, reversing the order of these two
 lines will result in an error, as older mutations must be added first.
-
 
 (sec_mutations_silent)=
 
@@ -301,7 +309,6 @@ print(f"The tree sequence has {num_silent} silent mutations,\n"
 
 Indeed, 1182 - 75 = 1107.
 
-
 (sec_mutations_existing)=
 
 ## Existing mutations
@@ -371,7 +378,6 @@ The default Jukes-Cantor model will mutate an ``A`` to either a ``C``, ``G``, or
 with equal probability, which we can check by looking at the *transition matrix*,
 whose rows give the probability that each allele mutates into each other allele
 (see {ref}`sec_mutations_matrix_mutations_models` for more):
-
 
 ```{code-cell}
 jc69 = msprime.JC69()
@@ -457,7 +463,6 @@ Here's the takeaways from this section:
     for more details.
 ```
 
-
 (sec_mutations_models)=
 
 ## Models
@@ -476,6 +481,9 @@ Here are the available models; they are documented in more detail below.
 - {class}`.BLOSUM62`: The BLOSUM62 model of time-reversible amino acid mutation
 - {class}`.PAM`: The PAM model of time-reversible amino acid mutation
 - {class}`.MatrixMutationModel`: Superclass of the specific mutation models with a finite set of states
+- {class}`.SMM`: Stepwise mutation model for microsatellite repeat copy number. Ohta and Kimura ('73)
+- {class}`.TPM`: Two-phase mutation model for microsatellite repeat copy number. DiRienzo et al. ('94)
+- {class}`.EL2`: Two-phase mutation model, equal rate, linear bias model for microsatellite repeat copy number. Garza et al. ('95)
 - {class}`.InfiniteAlleles`: A generic infinite-alleles mutation model
 - {class}`.SLiMMutationModel`: An infinite-alleles model of mutation producing SLiM-style mutations
 
@@ -611,7 +619,6 @@ Pt = scipy.linalg.expm(t * rate * Q)[i,j]
 If the top of a branch of length {math}`t` has allele {math}`i`,
 the bottom of the branch has allele {math}`j` with probability `Pt[i,j]`.
 
-
 (sec_mutations_adjusting_for_silent)=
 
 #### Adjusting mutation rates for silent mutations
@@ -661,8 +668,64 @@ print(f"Genetic diversity: {theta}.")
 
 That's pretty close to 0.001! The difference is within statistical error.
 
-
 (sec_mutations_mutation_infinite_alleles)=
+
+### Microsatellite Mutation Models
+
+We have implemented a number of mutational models that are commonly used
+to model the evolution of microsatellite repeats.
+The basic idea here is that the number of copies of a given repeat is
+tracked, and its evolution over time subject to one of a number of potential
+biases.
+
+Consider the [Combined DNA Index System](https://en.wikipedia.org/wiki/Combined_DNA_Index_System) (CODIS), a US National database
+of genotypes maintained by the justice system for use in forensic DNA analysis.
+The CODIS system relies on 20 core microsatellite loci, that are unlinked across
+the human genome. Let's simulate a sample of 20 individuals at 20 unlinked loci,
+and then apply the {class}`.SMM` model to the sample.
+
+Finally we will summarize variation across our loci, by
+iterating through the variants at each position / locus.
+We will print the position of the locus, then a list of allelic states, followed
+by haploid genotypes for each chromosome at that site.
+
+```{code-cell} python
+
+ts = msprime.sim_ancestry(20, random_seed=2, sequence_length=20,
+    recombination_rate=0.5, population_size=100_000)
+model = msprime.SMM(1, 10)
+mts = msprime.sim_mutations(ts, rate=1e-5, model=model, random_seed=1)
+for var in mts.variants():
+    print("Site at:", var.site.position)
+    print("    Alleles:", var.alleles)
+    print("    Genotypes:", var.genotypes)
+```
+
+We can also look at the dependence of the variance in repeat
+number on mutation rate under the SMM model. Much has been
+written over the years on how to estimate the mutation
+rate from the variance in repeat number
+(e.g., [Zhivotovsky and Feldman, 1995](https://pubmed.ncbi.nlm.nih.gov/8524801/)),
+so let's simulate that signal:
+
+```{code-cell} python
+from matplotlib import pyplot as plt
+
+rates = [1e-2,1e-3, 1e-4, 1e-5, 1e-6]
+model = msprime.SMM()
+vars = []
+ts = msprime.sim_ancestry(100, random_seed=2, sequence_length=1, population_size=100_000)
+for r in rates:
+    mts = msprime.sim_mutations(ts, rate=r, model=model, random_seed=1)
+    vars.append(mts.genotype_matrix().var())
+
+plt.plot(rates, vars)
+plt.xlabel('mutation rate')
+plt.ylabel('variance in repeat number')
+```
+
+So here we are seeing a clear relationship between the variance
+in repeat number and mutation rate, as expected. 🔥🔥🔥
 
 ### Infinite Alleles Mutation Models
 
@@ -694,7 +757,6 @@ Apparently, there were 20 mutations at this site, but the alleles present in the
 "13" (in five copies), "17" (in two copies), and one copy each of "14", "15", "19", and "20".
 Note that all other mutations on the tree are not observed in the population as they have
 been are "overwritten" by subsequent mutations.
-
 
 :::{warning}
 
@@ -776,7 +838,6 @@ SVG(t.draw_svg(mutation_labels=ml, node_labels={}, size=(400, 300)))
 
 ```
 
-
 Note what has happened here: on the top branch on the right side of the tree,
 with the first model we added two mutations: first a mutation with ID `0`,
 then a mutation with ID `3`.
@@ -789,4 +850,3 @@ This was already present in the tree sequence, so its derived state is not modif
 has "erased" the type 2 mutations `100` and `102`.
 If you want a different arrangement,
 you can go back and edit the derived states (and metadata) as you like.
-
