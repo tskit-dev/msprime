@@ -758,6 +758,49 @@ plt.ylabel('Variance in repeat number');
 So here we are seeing a clear relationship between the variance
 in repeat number and mutation rate, as expected. 🔥🔥🔥
 
+#### A more complicated microsatellite model
+In the 1990s a lot of work went in to describing patterns of
+mutation at microsatellite loci, and a number of models were
+put forward described various biases in expansion vs contraction,
+mutistep mutations, and mutation rate biases. We have implemented 
+a general parameterization of microsatellite mutation models
+developed in [Sainudiin et al. (2004)](https://doi.org/10.1534/genetics.103.022665) that allows users fine grained control of microsatellite mutation.
+
+One such model is the equal rate, linear biased, two-phase
+mutation model of [Garza et al. (1995)](https://doi.org/10.1093/oxfordjournals.molbev.a040239)
+that we have implemented in {class}`.EL2`. Let's simulate large
+samples under this model with different strengths of linear bias, 
+and compare the distribution of allele sizes we get back.
+
+```{code-cell} python
+from matplotlib import pyplot as plt
+from scipy import stats
+
+biases = np.logspace(-7, 1, num=9)
+ts = msprime.sim_ancestry(1000, random_seed=2, sequence_length=1, population_size=100_000)
+for v in biases:
+    model = msprime.EL2(
+            # these are values of m and u from Sainudiin et al. (2004)
+            m=0.01,
+            u=0.68,
+            v=v,
+        )
+    mts = msprime.sim_mutations(ts, rate=1e-3, model=model)
+    C = copy_number_matrix(mts)
+    kde = stats.gaussian_kde(C.flatten())
+    x = np.linspace(2, 51)
+    plt.plot(x, kde(x), label=f'v={v}')
+plt.xlabel('copy number')
+plt.ylabel('frequency')
+plt.legend()
+plt.show();
+```
+From these simulations we can see that the linear bias parameter `v`
+has a strong effect on the distribution of allele frequencies we
+might expect from our model. Care should be taken when choosing
+parameters for your own simulations. Potentially appropriate
+values for dinucleotide repeats in humans and chimp could be taken
+from Table 2 of [Sainudiin et al. (2004)](https://doi.org/10.1534/genetics.103.022665), but we offer no guarantees and your mileage may vary. 
 ### Infinite Alleles Mutation Models
 
 You can also use a model of *infinite alleles* mutation: where each new mutation produces a unique,

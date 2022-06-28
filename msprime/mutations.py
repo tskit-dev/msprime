@@ -323,7 +323,9 @@ class MicrosatMutationModel(MatrixMutationModel):
     (e.g., the repeat itself can be dinucleotide, tri-nucleotide, etcetera).
 
     The default values for ``lo`` and ``hi`` are chosen based on
-    FIXME.
+    nothing particular, other than repeat number need be greater than 1,
+    for geneticists to declare them a repeat. Be sure to set ``lo`` and ``hi``
+    to the correct values for your organism / locus of interest.
 
     :param float s: strength of length dependence on mutation rate.
         Defaults to 0, i.e., no length dependence.
@@ -431,12 +433,10 @@ class TPM(MicrosatMutationModel):
     This is a :class:`.MicrosatMutationModel` with alleles ``[lo, .. , hi]``.
     For a precise definition of the mutation rates, see :class:`.MicrosatMutationModel`
     with ``s=0``, ``u=0.5``, and ``v=0``.
-    Default values for ``p`` and ``m``
-    are those estimated by
-    `Sainudiin et al. (2004) <https://doi.org/10.1534/genetics.103.022665>`_
+    See :class:`.MicrosatMutationModel` for further details of parameterization.
 
-    :param float p: Probability of a single step mutation. (Default=0.9)
-    :param float m: Success prob of truncated gamma distribution. (Default=0.93)
+    :param float p: Probability of a single step mutation.
+    :param float m: Success prob of truncated gamma distribution.
     :param int lo: Repeat number lower bound. See the documentation for
         :class:`.MicrosatMutationModel` for details.
     :param int hi: Repeat number upper bound. See the documentation for
@@ -445,9 +445,11 @@ class TPM(MicrosatMutationModel):
         :class:`.MicrosatMutationModel` for details.
     """
 
-    def __init__(self, *, p=None, m=None, lo=None, hi=None, root_distribution=None):
-        p = 0.9 if p is None else p
-        m = 0.93 if m is None else m
+    def __init__(self, *, p, m, lo=None, hi=None, root_distribution=None):
+        if p is None:
+            raise ValueError("p must be specified")
+        if m is None:
+            raise ValueError("m must be specified")
         if not (0 < p < 1.0):
             raise ValueError("p must be between 0 and 1")
         if not (0 < m < 1.0):
@@ -466,11 +468,17 @@ class EL2(MicrosatMutationModel):
 
     This models evolution of microsatellite repeat number in a manner
     that allows for multi-step mutations in copy number.
-    This is parameterized by `p` the probability of a single step mutation,
-    and `m` the success probability of the truncated gamma distribution
+    This is parameterized by `m` the success probability of
+    the truncated gamma distribution
     describing the distribution of longer steps, such that the
-    mean multi-step mutation is length `1/m`.
-    For this model both `p` and `m` need to be set to < 1.0.
+    mean multi-step mutation is length `1/m`. `u` the constant
+    bias parameter which determines bias (if any) in expansion or
+    contraction of the repeat number, and `v` the linear bias
+    parameter which determines mutation rate variation associated
+    with repeat number.
+    For this model `m` need to be set to < 1.0,
+    and `u` needs to be set to between 0 and 1.
+    and `v` can take any real, positive or negative value.
 
     See :class:`.MicrosatMutationModel` for details on the  constant
     bias parameter `u` and a linear bias parameter `v`.
@@ -478,12 +486,11 @@ class EL2(MicrosatMutationModel):
     This is a :class:`.MicrosatMutationModel` with alleles ``[lo, .. , hi]``
     For a precise definition of the mutation rates,
     see :class:`.MicrosatMutationModel`
-    with ``s=0``. Default values for ``m``, ``u`` and ``v``
-    are those estimated by Sainudiin et al. (2004).
+    with ``s=0``.
 
-    :param float m: Success prob of truncated gamma distribution (0.43).
-    :param float u: Constant bias parameter (Default=0.68).
-    :param float v: Linear bias parameter (Default=0.037).
+    :param float m: Success prob of truncated gamma distribution.
+    :param float u: Constant bias parameter.
+    :param float v: Linear bias parameter.
     :param int lo: Repeat number lower bound. See the documentation for
         :class:`.MicrosatMutationModel` for details.
     :param int hi: Repeat number upper bound. See the documentation for
@@ -492,12 +499,14 @@ class EL2(MicrosatMutationModel):
         :class:`.MicrosatMutationModel` for details.
     """
 
-    def __init__(
-        self, *, m=None, u=None, v=None, lo=None, hi=None, root_distribution=None
-    ):
-        m = 0.43 if m is None else m
-        u = 0.68 if u is None else u
-        v = 0.037 if v is None else v
+    def __init__(self, *, m, u, v, lo=None, hi=None, root_distribution=None):
+
+        if m is None:
+            raise ValueError("m must be specified")
+        if u is None:
+            raise ValueError("u must be specified")
+        if v is None:
+            raise ValueError("v must be specified")
         if not (0 < m < 1.0):
             raise ValueError("m must be between 0 and 1")
         if not (0 < u < 1.0):
