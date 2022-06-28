@@ -413,6 +413,22 @@ class TestMatrixMutationModel:
                 assert np.abs(exp - a_ratio) < 1e-6
 
     @pytest.mark.parametrize(
+        "m, u, v, p, s, lo, hi",
+        [
+            (1.0, 0.62, 0.015, 0, 0.88, 1, 10.0),
+            (0.43, 0.68, 0.037, 1.0, 0.5, 3.0, 10),
+            (0.83, 0.58, 0.37, 0, 0.88, 1, 20),
+            (0.03, 0.18, 0.5, 1.0, 1, 1, 4),
+        ],
+    )
+    def test_MicrosatMutationModel(self, m, u, v, p, s, lo, hi):
+        model = msprime.MicrosatMutationModel(s=s, u=u, v=v, p=p, m=m, lo=lo, hi=hi)
+        self.validate_model(model)
+        self.validate_stationary(model)
+
+
+class TestMicrosatModels:
+    @pytest.mark.parametrize(
         "m, u, v, p, s",
         [
             (1.0, 0.62, 0.015, 0, 0.88),
@@ -421,10 +437,10 @@ class TestMatrixMutationModel:
             (0.43, 0.68, 0.037, 1.0, 0.88),
         ],
     )
-    def test_MicrosatMutationModel(self, m, u, v, p, s):
+    def test_transition_matrix(self, m, u, v, p, s):
         lo = 1
         hi = 10
-        model = msprime.MicrosatMutationModel(s, u, v, p, m, lo, hi)
+        model = msprime.MicrosatMutationModel(s=s, u=u, v=v, p=p, m=m, lo=lo, hi=hi)
         row_sums = model.transition_matrix.sum(axis=1)
         d = row_sums - model.transition_matrix.diagonal()
         betas = [1 + ((i - lo) * s) for i in range(lo, hi + 1)]
@@ -447,41 +463,30 @@ class TestMatrixMutationModel:
             (0.43, 10, 0.037, 0, 0.88, 1, 5),
         ],
     )
-    def test_bad_MicrosatMutationModel(self, m, u, v, p, s, lo, hi):
+    def test_bad_params(self, m, u, v, p, s, lo, hi):
         with pytest.raises(ValueError):
-            msprime.MicrosatMutationModel(s, u, v, p, m, lo, hi)
+            msprime.MicrosatMutationModel(s=s, u=u, v=v, p=p, m=m, lo=lo, hi=hi)
 
-    @pytest.mark.parametrize(
-        "m, u, v, p, s, lo, hi",
-        [
-            (1.0, 0.62, 0.015, 0, 0.88, 1, 10.0),
-            (0.43, 0.68, 0.037, 1.0, 0.5, 3.0, 10),
-            (0.83, 0.58, 0.37, 0, 0.88, 1, 20),
-            (0.03, 0.18, 0.5, 1.0, 1, 1, 4),
-        ],
-    )
-    def test_good_params_MicrosatMutationModel(self, m, u, v, p, s, lo, hi):
-        model = msprime.MicrosatMutationModel(s, u, v, p, m, lo, hi)
-        self.validate_model(model)
-        self.validate_stationary(model)
+    def test_bad_TPM_p_value(self):
+        with pytest.raises(ValueError, match="p must be"):
+            msprime.TPM(p=1.1)
 
-    def test_bad_TPM_params(self):
-        with pytest.raises(ValueError):
-            msprime.TPM(1.1, 0.9, 2, 9)
-        with pytest.raises(ValueError):
-            msprime.TPM(0.9, 1.1, 2, 9)
+    def test_bad_TPM_m_value(self):
+        with pytest.raises(ValueError, match="m must be"):
+            msprime.TPM(m=1.1)
 
-    def test_bad_EL2_params(self):
-        with pytest.raises(ValueError):
-            msprime.EL2(1.1, 0.9, 0.1, 0.1, 2, 9)
-        with pytest.raises(ValueError):
-            msprime.EL2(0.9, 1.1, 0.1, 0.1, 2, 9)
-        with pytest.raises(ValueError):
-            msprime.EL2(0.9, 0.9, -0.1, 0.1, 2, 9)
-        with pytest.raises(ValueError):
-            msprime.EL2(0.9, 0.9, 0.1, np.inf, 2, 9)
-        with pytest.raises(ValueError):
-            msprime.EL2(0.9, 0.9, np.inf, np.inf, 2, 9)
+    def test_bad_EL2_m_value(self):
+        with pytest.raises(ValueError, match="m must be"):
+            msprime.EL2(m=1.1)
+
+    def test_bad_EL2_u_value(self):
+        with pytest.raises(ValueError, match="u must be"):
+            msprime.EL2(u=1.1)
+
+    @pytest.mark.parametrize("v", [np.inf, np.nan])
+    def test_bad_EL2_v_value(self, v):
+        with pytest.raises(ValueError, match="finite"):
+            msprime.EL2(v=v)
 
 
 class TestMutateRateMap:

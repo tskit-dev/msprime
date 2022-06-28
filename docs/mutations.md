@@ -681,19 +681,22 @@ biases.
 Consider the [Combined DNA Index System](https://en.wikipedia.org/wiki/Combined_DNA_Index_System) (CODIS), a US National database
 of genotypes maintained by the justice system for use in forensic DNA analysis.
 The CODIS system relies on 20 core microsatellite loci, that are unlinked across
-the human genome. Let's simulate a sample of 20 individuals at 20 unlinked loci,
+the human genome. Let's simulate a sample of 5 individuals at 20 unlinked loci,
 and then apply the {class}`.SMM` model to the sample.
+After running the simulation we then examine the variation across the loci, by
+iterating through the variants.
 
-Finally we will summarize variation across our loci, by
-iterating through the variants at each position / locus.
-We will print the position of the locus, then a list of allelic states, followed
-by haploid genotypes for each chromosome at that site.
+```{note}
+The alleles in {class}`.MicrosatMutationModel`s such as this represent the
+copy number of the repeat, not the actual sequences observed. See below for some basic
+techniques for working with this kind of data.
+```
 
 ```{code-cell} python
 
-ts = msprime.sim_ancestry(20, random_seed=2, sequence_length=20,
+ts = msprime.sim_ancestry(5, random_seed=2, sequence_length=20,
     recombination_rate=0.5, population_size=100_000)
-model = msprime.SMM(1, 10)
+model = msprime.SMM(lo=1, hi=10)
 mts = msprime.sim_mutations(ts, rate=1e-5, model=model, random_seed=1)
 for var in mts.variants():
     print("Site at:", var.site.position)
@@ -701,8 +704,36 @@ for var in mts.variants():
     print("    Genotypes:", var.genotypes)
 ```
 
-We can also look at the dependence of the variance in repeat
-number on mutation rate under the SMM model. Much has been
+#### Working with copy numbers
+
+In order to perform some statistical analysis of microsatellite models,
+we need a function to convert the output of msprime into something that
+we can work with easily. The variation data is returned using the
+tskit {meth}`tskit.TreeSequence.variants` method, which uses an array of
+alleles (the different states observed at a site) and an array of
+"genotypes", which are the observations at that site for all of the samples.
+Usually, we think of alleles as being nucleotides or amino acids which
+are represented as strings. In this case, however, the alleles
+represent copy-numbers which are still represented as strings. So,
+to get the observed copy numbers, we must convert the alleles
+to a numeric type, and obtain the actual observations by
+indexing into this array. This is done in the following function:
+
+```{code-cell} python
+def copy_number_matrix(ts):
+    """
+    Returns the copy number matrix from the specified tree sequence
+    simulated under a MicrosatMutationModel.
+    """
+    C = np.zeros((ts.num_sites, ts.num_samples), dtype=int)
+    for var in ts.variants():
+        alleles = np.array([int(allele) for allele in var.alleles])
+        C[var.site.id] = alleles[var.genotypes]
+    return C
+```
+
+Using this new tool, we can now look at the dependence of the variance in repeat
+number on mutation rate under the {class}`.SMM` model. Much has been
 written over the years on how to estimate the mutation
 rate from the variance in repeat number
 (e.g., [Zhivotovsky and Feldman, 1995](https://pubmed.ncbi.nlm.nih.gov/8524801/)),
@@ -711,17 +742,17 @@ so let's simulate that signal:
 ```{code-cell} python
 from matplotlib import pyplot as plt
 
-rates = [1e-2,1e-3, 1e-4, 1e-5, 1e-6]
-model = msprime.SMM()
-vars = []
+rates = np.linspace(1e-2, 1e-4, num=20)
+variances = []
 ts = msprime.sim_ancestry(100, random_seed=2, sequence_length=1, population_size=100_000)
 for r in rates:
-    mts = msprime.sim_mutations(ts, rate=r, model=model, random_seed=1)
-    vars.append(mts.genotype_matrix().var())
+    mts = msprime.sim_mutations(ts, rate=r, model=msprime.SMM(), random_seed=1)
+    C = copy_number_matrix(mts)
+    variances.append(C.var())
 
-plt.plot(rates, vars)
-plt.xlabel('mutation rate')
-plt.ylabel('variance in repeat number')
+plt.plot(rates, variances)
+plt.xlabel('Mutation rate')
+plt.ylabel('Variance in repeat number');
 ```
 
 So here we are seeing a clear relationship between the variance
