@@ -5919,6 +5919,80 @@ class InstantaneousBottleneckCoalescenceTime(Test):
         self._run(2)
 
 
+def copy_number_matrix(ts):
+    """
+    Returns the copy number matrix from the specified tree sequence
+    simulated under a MicrosatMutationModel.
+    """
+    if ts.num_mutations == 0:
+        x = np.empty((ts.num_samples, ts.num_samples))
+        x.fill(np.nan)
+        return x
+    C = np.zeros((ts.num_sites, ts.num_samples), dtype=int)
+    for var in ts.variants():
+        alleles = np.array([int(allele) for allele in var.alleles])
+        C[var.site.id] = alleles[var.genotypes]
+    return C
+
+
+def mean_squared_dist_from(x_array, u):
+    """
+    Returns the mean squared distance of each element in x_array from u
+    """
+    if x_array.shape[0] == 0:
+        return np.nan
+    return np.nanmean((x_array - u) ** 2)
+
+
+class MicrosatAnalytical(Test):
+    """
+    Analytical comparisons wrt to microsatellites
+    """
+
+    def test_SMM_variance(self):
+        """
+        Under the strict SMM model we expect the
+        Variance in repeat number of a sample
+        to be equal to 4Nu. This result has
+        been derived a number of times but a good
+        citation is Goldstein et al (1995)
+        https://doi.org/10.1093%2Fgenetics%2F139.1.463
+        """
+
+        rates = np.linspace(1e-5, 1e-2, num=10)
+        avg_variances = []
+        expected = []
+        N = 1000
+        nsamp = 500
+        nreps = 100
+        # root distribution pinned to allele 250
+        rd = np.zeros(500)
+        rd[249] = 1
+        mod = msprime.SMM(lo=1, hi=500, root_distribution=rd)
+        for r in rates:
+            reps = msprime.sim_ancestry(
+                ploidy=1,
+                samples=nsamp,
+                num_replicates=nreps,
+                population_size=N,
+                sequence_length=1,
+            )
+            variances = []
+            for ts in reps:
+                mts = msprime.sim_mutations(ts, rate=r, model=mod)
+                C = copy_number_matrix(mts)
+                variances.append(mean_squared_dist_from(C.flatten(), 250))
+            avg_variances.append(np.nanmean(variances))
+            expected.append(2 * N * r)
+        # avg_variances[0] = 0
+        sm.qqplot_2samples(np.array(expected), np.array(avg_variances), line="45")
+        pyplot.xlabel("expected variance in repeat number")
+        pyplot.ylabel("observed variance in repeat number")
+        f = self.output_dir / "microsat_variance.png"
+        pyplot.savefig(f, dpi=72)
+        pyplot.close("all")
+
+
 ###############################################
 # Infrastructure for running the tests and CLI
 ###############################################
