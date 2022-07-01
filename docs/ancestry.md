@@ -688,9 +688,58 @@ purposes.
 
 ### Multiple chromosomes
 
-Msprime does not directly support simulating multiple chromosomes
+#### Do I need to do this?
+
+The main purpose of simulating multiple chromosomes together (instead of
+running independent simulations for each chromosome) is to capture
+correlations between trees on distinct chromosomes. In many scenarios,
+**simulating multiple chromosomes may not be necessary**, and independent
+simulations may be preferable as they will be much more efficient.
+
+That being said, this section describes how to simulate data over
+multiple chromosomes, or more generally, over multiple regions
+with free recombination between them. 
+
+#### Using a fixed pedigree
+
+The most natural way to simulate multiple regions with free recombination for
+a set of sampled individuals is by simulating through a known pedigree. The
+{ref}`fixed pedigree <sec_ancestry_models_fixed_pedigree>` simulation model
+constrains simulated genomic regions by an input pedigree, which specifies
+parent-offspring relationships. Since autosomal genetic material in an
+offspring has equal chance of being inherited from either their mother or their
+father, independent simulations through the same pedigree ensures that those
+regions are inherited from different parents or from the same parent each with
+probability 1/2. This ensures free recombination between independent
+simulations.
+
+We often do not have a full pedigree, but instead have a pedigree that
+extends some number of generations into the past. Because a recombination
+fraction of 1/2 between regions causes correlations between chromosomes to
+decay rapidly, even shallow pedigrees containing just a handful of generations
+should broadly capture expected levels of correlations. At the termination of
+the pedigree, the simulation can be completed using the DTWF, Hudson, or other
+model. See {ref}`example 1 <sec_multi_chrom_example_1>` below for a small
+example of this procedure, and more details on completing pedigree simulations
+can be found in the {ref}`Fixed pedigree <sec_ancestry_models_fixed_pedigree>`
+section.
+
+Why might simulating multiple chromosomes using a pedigree be preferable to
+other simulation options? First, there is no need to concatenate recombination
+maps for multiple chromosomes, as each region is simulated independently. This
+also results in simpler, reusable code which can be parallelized. Finally, this
+approach improves efficiency over a single larger simulation of multiple
+concatenated chromosomes, as computational costs scale as the square of the
+sequence length.
+
+#### Simulations without a fixed pedigree
+
+Without a pedigree, we can use other simulation models in msprime such as
+{ref}`DTWF <sec_ancestry_models_dtwf>` and the 
+{ref}`multiple merger coalescent <sec_ancestry_models_multiple_mergers>`.
+These models do not directly support simulating multiple chromosomes
 simultaneously, but we can emulate it using a single linear genome split into
-chromosome segments. Multiple chromosomes are modelled by specifying
+chromosome segments. In this case, multiple chromosomes are modelled by specifying
 a recombination map with single base-pair segments with recombination
 probability 1/2 separating adjacent chromosomes.
 The probability that two chromosomes are co-inherited across {math}`t` generations
@@ -699,14 +748,6 @@ probability of co-inheritance across {math}`t` generations of two adjacent base
 pairs separated by a recombination rate {math}`r` per base pair is {math}`e^{-rt}`.
 To make these agree, we set the recombination rate in the base pair segments
 separating chromosomes to {math}`\log(2)`.
-
-#### Do I need to do this?
-
-The main purpose of simulating multiple chromosomes together (instead of
-running independent simulations for each chromosome) is to capture
-correlations between trees on distinct chromosomes. In many scenarios,
-**simulating multiple chromosomes may not be necessary**, and independent
-simulations may be preferable as they will be much more efficient.
 
 [Nelson et al. 2020](https://doi.org/10.1371/journal.pgen.1008619) describes
 a few cases where simulating multiple chromosomes using the DTWF is important
@@ -740,7 +781,70 @@ we *strongly* recommend against it, as chromosome divisions cannot be defined
 as discrete break points and the simulation will be very inefficient.
 :::
 
-#### Example
+(sec_multi_chrom_example_1)=
+
+#### Example 1: simulating with a pedigree
+
+In this example, we simulate genomic data for a pair of first cousins in
+a small pedigree extending 3 (?) generations into the past. See {ref}`here
+<sec_ancestry_models_fixed_pedigree>` for details on specifying, importing, and
+simulating using pedigrees.
+
+Let's first specify our pedigree:
+
+```{code-cell}
+import io
+import tskit
+ped_txt = """\
+# id parent0 parent1 time is_sample
+0   2   3   0.0 1
+1   4   5   0.0 1
+2   6   7   1.0 0
+3   8   9   1.0 0
+4   6   7   1.0 0
+5   10  11  1.0 0
+6   .   .   2.0 0
+7   .   .   2.0 0
+8   .   .   2.0 0
+9   .   .   2.0 0
+10  .   .   2.0 0
+11  .   .   2.0 0
+"""
+pedigree = msprime.parse_pedigree(io.StringIO(ped_txt), sequence_length=100)
+
+draw_pedigree(pedigree.tree_sequence())
+```
+
+Then suppose we would like to simulate three chromosomes of differing lengths
+and recombination rates. In practice, we might have recombination
+maps for each chromosome, but the general strategy remains the same.
+
+```{code-cell}
+Ls = [1000000, 2000000, 3000000]
+rs = [1e-8, 2e-8, 3e-8]
+
+ts_chroms = []
+pedigree = msprime.parse_pedigree(io.StringIO(ped_txt), sequence_length=1)
+
+for i, (L, r) in enumerate(zip(Ls, rs)):
+    pedigree.sequence_length = L
+    ped_ts = msprime.sim_ancestry(
+        initial_state=pedigree, model="fixed_pedigree",
+        recombination_rate=r, random_seed=i+1)
+    ts_chroms.append(
+        msprime.sim_ancestry(
+            initial_state=ped_ts, population_size=1000,
+            recombination_rate=r, model="dtwf", random_seed=i+100))
+
+for i, ts in enumerate(ts_chroms):
+    print(f"chromosome {i} has length {ts.sequence_length} and {ts.num_trees} trees")
+```
+
+This results in three chromosomes of the desired lengths.
+
+(sec_multi_chrom_example_2)=
+
+#### Example 2: simulating without a pedigree
 
 We first set up the chromosome coordinates, recombination rates, and the
 corresponding recombination map. The following defines a recombination map for
@@ -817,6 +921,22 @@ chrom_ts
 This gives us a list of tree sequences, one for each chromosome, in the order
 that they were stitched together in the initial recombination map.
 
+:::{note}
+Many recombination maps inferred from data will contain regions at the start
+and end of the chromosome where recombination rates could not be inferred.
+These regions typically are assigned rate values of NaN. If we were to
+concatenate multiple recombination maps that have flanking NaN regions, the
+resulting maps would have regions with NaN rates in the interior of the map,
+which will produce an error when using such a map in simulations.
+
+These regions typically represent unassay-able segments of the chromosome, and
+simulated genetic material in these regions should be discarded in downstream
+analyses. Thus, the suggested approach is to modify the recombination maps to
+set rates to zero in these flanking regions, concatenate the maps as shown in
+this example, and then remove those regions of the resulting tree sequences by
+calling `ts.delete_intervals(nan_intervals)`, where `nan_intervals` is a list
+containing `[start, end]` values for each NaN flanking region.
+:::
 
 ## Recording more information
 
