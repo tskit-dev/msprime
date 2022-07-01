@@ -93,9 +93,6 @@ for more information.
 {class}`.BinaryMutationModel` (Binary ancestral/derived)
 : Binary mutation model with two flip-flopping alleles: "0" and "1".
 
-{class}`.MatrixMutationModel` (General finite state model)
-: Superclass of mutation models with a finite set of states
-
 {class}`.SMM` (Microsatellites)
 : Stepwise mutation model for microsatellites
 
@@ -110,6 +107,9 @@ for more information.
 
 {class}`.SLiMMutationModel` (Integers)
 : An infinite-alleles model producing SLiM-style mutations
+
+{class}`.MatrixMutationModel` (General finite state model)
+: Superclass of mutation models with a finite set of states
 
 ---
 
@@ -501,7 +501,7 @@ in these models see {ref}`sec_mutations_matrix_mutation_models_details`.
 
 (sec_mutations_matrix_mutation_models_details)=
 
-### Mutation Matrix Models Details
+#### Mutation Matrix Models Details
 
 Mutation matrix models are specified by three things: an alphabet,
 a root distribution, and a transition matrix.
@@ -522,7 +522,7 @@ You can define your own, but you probably don't need to:
 there are several mutation matrix models already implemented in `msprime`,
 using binary (0/1), nucleotide, or amino acid alphabets:
 
-### Defining your own finite-sites model
+#### Defining your own finite-sites model
 
 If you want to define your own {class}`.MatrixMutationModel`, you have a good
 deal of freedom. For instance, here's a "decomposition/growth/disturbance"
@@ -560,7 +560,7 @@ for v in mts.variants():
 
 (sec_mutations_matrix_mutation_theory)=
 
-### Parameterisation of Matrix Mutation Models
+#### Parameterisation of Matrix Mutation Models
 
 Mutation matrix models are specified by three things: an alphabet,
 a root distribution, and a transition matrix.
@@ -668,7 +668,8 @@ print(f"Genetic diversity: {theta}.")
 
 That's pretty close to 0.001! The difference is within statistical error.
 
-(sec_mutations_mutation_infinite_alleles)=
+
+(sec_mutations_microsats)=
 
 ### Microsatellite Mutation Models
 
@@ -678,7 +679,8 @@ The basic idea here is that the number of copies of a given repeat is
 tracked, and its evolution over time subject to one of a number of potential
 biases.
 
-Consider the [Combined DNA Index System](https://en.wikipedia.org/wiki/Combined_DNA_Index_System) (CODIS), a US National database
+Consider the [Combined DNA Index System](https://en.wikipedia.org/wiki/Combined_DNA_Index_System) 
+(CODIS), a US National database
 of genotypes maintained by the justice system for use in forensic DNA analysis.
 The CODIS system relies on 20 core microsatellite loci, that are unlinked across
 the human genome. Let's simulate a sample of 5 individuals at 20 unlinked loci,
@@ -759,14 +761,17 @@ So here we are seeing a clear relationship between the variance
 in repeat number and mutation rate, as expected. 🔥🔥🔥
 
 #### A more complicated microsatellite model
-In the 1990s a lot of work went in to describing patterns of
-mutation at microsatellite loci, and a number of models were
-put forward described various biases in expansion vs contraction,
-mutistep mutations, and mutation rate biases. We have implemented 
-a general parameterization of microsatellite mutation models
-developed in [Sainudiin et al. (2004)](https://doi.org/10.1534/genetics.103.022665) that allows users fine grained control of microsatellite mutation.
 
-One such model is the equal rate, linear biased, two-phase
+In the 1990s a lot of work went in to describing patterns of
+mutation at microsatellite loci, and several models were
+put forward describing various biases in expansion vs contraction,
+mutistep mutations, and mutation rate biases. The 
+{class}`.MicrosatMutationModel` implements the general parameterization 
+of microsatellite mutation models developed in 
+[Sainudiin et al. (2004)](https://doi.org/10.1534/genetics.103.022665),
+allowing users fine grained control of microsatellite mutation.
+
+One concrete instance of this general model is the equal rate, linear biased, two-phase
 mutation model of [Garza et al. (1995)](https://doi.org/10.1093/oxfordjournals.molbev.a040239)
 that we have implemented in {class}`.EL2`. Let's simulate large
 samples under this model with different strengths of linear bias, 
@@ -777,14 +782,11 @@ from matplotlib import pyplot as plt
 from scipy import stats
 
 biases = np.logspace(-7, 1, num=9)
-ts = msprime.sim_ancestry(1000, random_seed=2, sequence_length=1, population_size=100_000)
+ts = msprime.sim_ancestry(
+    1000, random_seed=2, sequence_length=1, population_size=100_000)
 for v in biases:
-    model = msprime.EL2(
-            # these are values of m and u from Sainudiin et al. (2004)
-            m=0.01,
-            u=0.68,
-            v=v,
-        )
+    # these are values of m and u from Sainudiin et al. (2004)
+    model = msprime.EL2(m=0.01, u=0.68, v=v)
     mts = msprime.sim_mutations(ts, rate=1e-3, model=model)
     C = copy_number_matrix(mts)
     kde = stats.gaussian_kde(C.flatten())
@@ -800,7 +802,10 @@ has a strong effect on the distribution of allele frequencies we
 might expect from our model. Care should be taken when choosing
 parameters for your own simulations. Potentially appropriate
 values for dinucleotide repeats in humans and chimp could be taken
-from Table 2 of [Sainudiin et al. (2004)](https://doi.org/10.1534/genetics.103.022665), but we offer no guarantees and your mileage may vary. 
+from Table 2 of [Sainudiin et al. (2004)](https://doi.org/10.1534/genetics.103.022665), 
+but we offer no guarantees and your mileage may vary. 
+
+(sec_mutations_mutation_infinite_alleles)=
 ### Infinite Alleles Mutation Models
 
 You can also use a model of *infinite alleles* mutation: where each new mutation produces a unique,
