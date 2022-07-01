@@ -311,6 +311,9 @@ class MicrosatMutationModel(MatrixMutationModel):
     to the model of
     `Sainudiin et al. (2004) <https://doi.org/10.1534/genetics.103.022665>`_
 
+    .. seealso:: See the :ref:`sec_mutations_microsats` section for more details
+       and examples.
+
     Concretely, mutation rates under this model are computed as follows.
     Let ``qij`` be the transition rate from equation (3) in Sainudiin et al,
     and let ``M`` be the largest row sum of the matrix whose i,j-th entry
@@ -322,10 +325,12 @@ class MicrosatMutationModel(MatrixMutationModel):
     and are unrelated to repeat length
     (e.g., the repeat itself can be dinucleotide, tri-nucleotide, etcetera).
 
-    The default values for ``lo`` and ``hi`` are chosen based on
-    nothing particular, other than repeat number need be greater than 1,
-    for geneticists to declare them a repeat. Be sure to set ``lo`` and ``hi``
-    to the correct values for your organism / locus of interest.
+    .. warning::
+        The default values for ``lo`` and ``hi`` are chosen arbitrarily.
+        The default of ``lo=2`` is chosed because repeat number need be greater
+        than for it to be considered a repeat. Please ensure
+        that you set ``lo`` and ``hi``
+        to the appropriate values for your organism / locus of interest.
 
     :param float s: strength of length dependence on mutation rate.
         Defaults to 0, i.e., no length dependence.
@@ -446,10 +451,6 @@ class TPM(MicrosatMutationModel):
     """
 
     def __init__(self, *, p, m, lo=None, hi=None, root_distribution=None):
-        if p is None:
-            raise ValueError("p must be specified")
-        if m is None:
-            raise ValueError("m must be specified")
         if not (0 < p < 1.0):
             raise ValueError("p must be between 0 and 1")
         if not (0 < m < 1.0):
@@ -500,13 +501,6 @@ class EL2(MicrosatMutationModel):
     """
 
     def __init__(self, *, m, u, v, lo=None, hi=None, root_distribution=None):
-
-        if m is None:
-            raise ValueError("m must be specified")
-        if u is None:
-            raise ValueError("u must be specified")
-        if v is None:
-            raise ValueError("v must be specified")
         if not (0 < m < 1.0):
             raise ValueError("m must be between 0 and 1")
         if not (0 < u < 1.0):

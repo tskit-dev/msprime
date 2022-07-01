@@ -479,16 +479,13 @@ class TestMicrosatModels:
         with pytest.raises(ValueError, match="m must be"):
             msprime.TPM(m=1.1, p=0.9)
 
-    @pytest.mark.parametrize(
-        "m, p",
-        [
-            (0.9, None),
-            (None, 0.9),
-        ],
-    )
-    def test_bad_TMP_missing_defaults(self, m, p):
-        with pytest.raises(ValueError):
-            msprime.TPM(m=m, p=p)
+    def test_bad_TPM_missing_m(self):
+        with pytest.raises(TypeError):
+            msprime.TPM(p=0.1)
+
+    def test_bad_TPM_missing_p(self):
+        with pytest.raises(TypeError):
+            msprime.TPM(m=0.1)
 
     def test_bad_EL2_m_value(self):
         with pytest.raises(ValueError, match="m must be"):
@@ -498,17 +495,17 @@ class TestMicrosatModels:
         with pytest.raises(ValueError, match="u must be"):
             msprime.EL2(m=0.9, u=1.1, v=0.6)
 
-    @pytest.mark.parametrize(
-        "m, u, v",
-        [
-            (0.9, 0.9, None),
-            (0.9, None, 0.9),
-            (None, 0.9, 0.9),
-        ],
-    )
-    def test_bad_EL2_missing_defaults(self, m, u, v):
-        with pytest.raises(ValueError):
-            msprime.EL2(m=m, u=u, v=v)
+    def test_bad_EL2_missing_m(self):
+        with pytest.raises(TypeError):
+            msprime.EL2(u=0.6, v=0.5)
+
+    def test_bad_EL2_missing_u(self):
+        with pytest.raises(TypeError):
+            msprime.EL2(m=0.6, v=0.5)
+
+    def test_bad_EL2_missing_v(self):
+        with pytest.raises(TypeError):
+            msprime.EL2(m=0.6, u=0.5)
 
     @pytest.mark.parametrize("v", [np.inf, np.nan])
     def test_bad_EL2_v_value(self, v):
