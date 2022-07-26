@@ -116,9 +116,10 @@ msp_strerror_internal(int err)
             break;
         case MSP_ERR_TIME_TRAVEL:
             ret = "The simulation model supplied resulted in a parent node having "
-                  "a time value <= to its child. This can occur either as a result "
-                  "of multiple bottlenecks happening at the same time or because of "
-                  "numerical imprecision with very small population sizes.";
+                  "a time value <= to its child. This can occur as a result of "
+                  "multiple bottlenecks happening at the same time, multiple census "
+                  "events at the same time or numerical imprecision with very small"
+                  "population sizes.";
             break;
         case MSP_ERR_INTEGRATION_FAILED:
             ret = "GSL numerical integration failed. Please check the stderr for "
