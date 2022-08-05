@@ -38,6 +38,8 @@ sphinx:
     - sphinxarg.ext
 
     config:
+      html_theme: tskit_book_theme
+      pygments_style: monokai
       myst_enable_extensions:
       - colon_fence
       - deflist
