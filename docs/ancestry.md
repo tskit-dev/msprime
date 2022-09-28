@@ -786,9 +786,9 @@ as discrete break points and the simulation will be very inefficient.
 #### Example 1: simulating with a pedigree
 
 In this example, we simulate genomic data for a pair of first cousins in
-a small pedigree extending 3 (?) generations into the past. See {ref}`here
-<sec_ancestry_models_fixed_pedigree>` for details on specifying, importing, and
-simulating using pedigrees.
+a small pedigree extending 3 generations into the past. See
+{ref}`here <sec_ancestry_models_fixed_pedigree>` for details on specifying,
+importing, and simulating using pedigrees.
 
 Let's first specify our pedigree:
 
