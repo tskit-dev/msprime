@@ -18,6 +18,7 @@ pytest
 pytest-cov
 pytest-xdist
 tskit>=0.4.0
+tskit-book-theme
 stdpopsim>=0.1.2 # Make sure we have correct version of OOA model
 scipy
 setuptools_scm
