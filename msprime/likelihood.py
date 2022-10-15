@@ -21,6 +21,8 @@ Module responsible for computing likelihoods.
 """
 import math
 
+import numpy as np
+
 from msprime import _msprime
 
 
@@ -136,6 +138,14 @@ def log_arg_likelihood(ts, recombination_rate, Ne=1):
         sequence contains at least one recombination event, then returns
         `-DBL_MAX`.
     """
+    for tree in ts.trees():
+        if np.any(tree.num_children_array > 2):
+            raise ValueError(
+                "ARG likelihood encountered a polytomy."
+                " Tree sequences must contain binary mergers only for"
+                " valid likelihood evaluation."
+            )
+
     # Get the tables into the format we need to interchange with the low-level code.
     lw_tables = _msprime.LightweightTableCollection()
     lw_tables.fromdict(ts.tables.asdict())
