@@ -169,6 +169,33 @@ class TestKnownExamples:
                 msprime.log_mutation_likelihood(arg, t),
             )
 
+    def test_arg_likelihood_error_handling(self):
+        tables = tskit.TableCollection(sequence_length=1)
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
+        tables.nodes.add_row(
+            flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
+        )
+        tables.nodes.add_row(flags=0, population=0, individual=-1, time=1)
+
+        tables.edges.add_row(left=0, right=1, parent=3, child=0)
+        tables.edges.add_row(left=0, right=1, parent=3, child=1)
+        tables.edges.add_row(left=0, right=1, parent=3, child=2)
+        tables.populations.add_row()
+        arg = tables.tree_sequence()
+
+        with pytest.raises(
+            ValueError,
+            match="ARG likelihood encountered a polytomy."
+            " Tree sequences must contain binary mergers only for"
+            " valid likelihood evaluation.",
+        ):
+            msprime.log_arg_likelihood(arg, 1)
+
     def test_multiple_mrcas(self):
         tables = tskit.TableCollection(sequence_length=1)
         tables.nodes.add_row(
