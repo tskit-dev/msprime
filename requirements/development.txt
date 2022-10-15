@@ -17,7 +17,7 @@ pre-commit
 pytest
 pytest-cov
 pytest-xdist
-tskit>=0.4.0
+tskit>=0.5.2
 tskit-book-theme
 stdpopsim>=0.1.2 # Make sure we have correct version of OOA model
 scipy

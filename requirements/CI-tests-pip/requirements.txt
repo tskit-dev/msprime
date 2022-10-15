@@ -9,4 +9,4 @@ pytest-xdist==2.4.0
 jsonschema<5.0
 python_jsonschema_objects==0.4.1
 scipy==1.7.3
-tskit==0.5.0
+tskit==0.5.3
