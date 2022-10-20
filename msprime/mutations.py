@@ -327,9 +327,11 @@ class MicrosatMutationModel(MatrixMutationModel):
 
     .. warning::
         The default values for ``lo`` and ``hi`` are chosen arbitrarily.
-        The default of ``lo=2`` is chosed because repeat number need be greater
-        than for it to be considered a repeat. Please ensure
-        that you set ``lo`` and ``hi``
+        The default of ``lo=1`` is chosen so that all states might be
+        represented, but please note that in empirical data,
+        microsatellite loci are often ascertained based on
+        the number of repeats observed.
+        Please ensure that you set ``lo`` and ``hi``
         to the appropriate values for your organism / locus of interest.
 
     :param float s: strength of length dependence on mutation rate.
@@ -364,7 +366,7 @@ class MicrosatMutationModel(MatrixMutationModel):
         v = 0.0 if v is None else v
         p = 1.0 if p is None else p
         m = 1.0 if m is None else m
-        lo = 2 if lo is None else lo
+        lo = 1 if lo is None else lo
         hi = 50 if hi is None else hi
 
         params = [s, u, v, p, m, lo, hi]
