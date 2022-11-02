@@ -10,6 +10,8 @@
   are added `SMM`, `TPM`, and `EL2`.  
   ({issue}`2013`, {user}`andrewkern`).
 
+- Add support for Python 3.11 ({pr}`2120`, {user}`benjeffery`).
+
 ## [1.2.0] - 2022-05-18
 
 **New features**
