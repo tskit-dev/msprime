@@ -125,15 +125,16 @@ class Segment:
         self.population = None
         self.label = 0
         self.index = index
+        self.ancestral_to = -1
 
     def __repr__(self):
-        return repr((self.left, self.right, self.node))
+        return repr((self.left, self.right, self.node, self.ancestral_to))
 
     @staticmethod
     def show_chain(seg):
         s = ""
         while seg is not None:
-            s += f"[{seg.left}, {seg.right}: {seg.node}], "
+            s += f"[{seg.left}, {seg.right}: {seg.node}, {seg.ancestral_to}], "
             seg = seg.next
         return s[:-2]
 
@@ -475,7 +476,13 @@ class OverlapCounter:
             curr_interval = curr_interval.next
         raise ValueError("Bad overlap count chain")
 
-    def increment_interval(self, left, right):
+    def yield_overlap_check(self):
+        curr_interval = self.overlaps
+        while curr_interval is not None:
+            yield (curr_interval.node, curr_interval.ancestral_to)
+            curr_interval = curr_interval.next
+
+    def increment_interval(self, left, right, ancestral_to):
         """
         Increment the count that spans the interval
         [left, right), creating additional intervals in overlaps
@@ -486,14 +493,17 @@ class OverlapCounter:
             if curr_interval.left == left:
                 if curr_interval.right <= right:
                     curr_interval.node += 1
+                    curr_interval.ancestral_to += ancestral_to
                     left = curr_interval.right
                     curr_interval = curr_interval.next
                 else:
                     self._split(curr_interval, right)
                     curr_interval.node += 1
+                    curr_interval.ancestral_to += ancestral_to
                     break
             else:
-                if curr_interval.right < left:
+                # verify this changed < to <= !!!!
+                if curr_interval.right <= left:
                     curr_interval = curr_interval.next
                 else:
                     self._split(curr_interval, left)
@@ -505,7 +515,7 @@ class OverlapCounter:
         from breakpoint to seg.right. Set the original segment's
         right endpoint to breakpoint
         """
-        right = self._make_segment(bp, seg.right, seg.node)
+        right = self._make_segment(bp, seg.right, seg.node, seg.ancestral_to)
         if seg.next is not None:
             seg.next.prev = right
             right.next = seg.next
@@ -513,11 +523,12 @@ class OverlapCounter:
         seg.next = right
         seg.right = bp
 
-    def _make_segment(self, left, right, count):
+    def _make_segment(self, left, right, count, ancestral_to=0):
         seg = Segment(0)
         seg.left = left
         seg.right = right
         seg.node = count
+        seg.ancestral_to = ancestral_to
         return seg
 
 
@@ -591,7 +602,7 @@ class Simulator:
             self.gc_mass_index = [
                 FenwickTree(self.max_segments) for j in range(num_labels)
             ]
-        self.S = bintrees.AVLTree()
+
         for pop in self.P:
             pop.set_start_size(population_sizes[pop.id])
             pop.set_growth_rate(population_growth_rates[pop.id], 0)
@@ -640,36 +651,35 @@ class Simulator:
     def initialise(self, ts):
         root_time = np.max(self.tables.nodes.time)
         self.t = root_time
+        self.num_samples = ts.num_samples
 
         root_segments_head = [None for _ in range(ts.num_nodes)]
         root_segments_tail = [None for _ in range(ts.num_nodes)]
-        last_S = -1
+
         for tree in ts.trees():
             left, right = tree.interval
-            S = 0 if tree.num_roots == 1 else tree.num_roots
-            if S != last_S:
-                self.S[left] = S
-                last_S = S
             # If we have 1 root this is a special case and we don't add in
             # any ancestral segments to the state.
             if tree.num_roots > 1:
                 for root in tree.roots:
                     population = ts.node(root).population
+                    ancestral_to = tree.num_samples(root)
                     if root_segments_head[root] is None:
-                        seg = self.alloc_segment(left, right, root, population)
+                        seg = self.alloc_segment(
+                            left, right, root, population, ancestral_to
+                        )
                         root_segments_head[root] = seg
                         root_segments_tail[root] = seg
                     else:
                         tail = root_segments_tail[root]
-                        if tail.right == left:
+                        if tail.right == left and tail.ancestral_to == ancestral_to:
                             tail.right = right
                         else:
                             seg = self.alloc_segment(
-                                left, right, root, population, tail
+                                left, right, root, population, ancestral_to, tail
                             )
                             tail.next = seg
                             root_segments_tail[root] = seg
-        self.S[self.L] = -1
 
         # Insert the segment chains into the algorithm state.
         for node in range(ts.num_nodes):
@@ -702,6 +712,7 @@ class Simulator:
         right,
         node,
         population,
+        ancestral_to,
         prev=None,
         next=None,  # noqa: A002
         label=0,
@@ -717,6 +728,7 @@ class Simulator:
         s.next = next
         s.prev = prev
         s.label = label
+        s.ancestral_to = ancestral_to
         return s
 
     def copy_segment(self, segment):
@@ -725,6 +737,7 @@ class Simulator:
             right=segment.right,
             node=segment.node,
             population=segment.population,
+            ancestral_to=segment.ancestral_to,
             next=segment.next,
             prev=segment.prev,
             label=segment.label,
@@ -1619,8 +1632,8 @@ class Simulator:
         Chooses breakpoints and returns segments sorted by inheritance
         direction, by iterating through segment chain starting with x
         """
-        u = self.alloc_segment(-1, -1, -1, -1, None, None)
-        v = self.alloc_segment(-1, -1, -1, -1, None, None)
+        u = self.alloc_segment(-1, -1, -1, -1, -1, None, None)
+        v = self.alloc_segment(-1, -1, -1, -1, -1, None, None)
         seg_tails = [u, v]
 
         # TODO Should this be the recombination rate going foward from x.left?
@@ -1738,7 +1751,11 @@ class Simulator:
             if len(X) == 1:
                 x = X[0]
                 if len(H) > 0 and H[0][0] < x.right:
-                    alpha = self.alloc_segment(x.left, H[0][0], x.node, x.population)
+                    # what type of event??
+                    # what should ancestral_to be?
+                    alpha = self.alloc_segment(
+                        x.left, H[0][0], x.node, x.population, x.ancestral_to
+                    )
                     alpha.label = label
                     x.left = H[0][0]
                     heapq.heappush(H, (x.left, x))
@@ -1752,24 +1769,14 @@ class Simulator:
                 if new_node_id == -1:
                     coalescence = True
                     new_node_id = self.store_node(pop_id)
-                # We must also break if the next left value is less than
-                # any of the right values in the current overlap set.
-                if left not in self.S:
-                    j = self.S.floor_key(left)
-                    self.S[left] = self.S[j]
-                if r_max not in self.S:
-                    j = self.S.floor_key(r_max)
-                    self.S[r_max] = self.S[j]
-                # Update the number of extant segments.
-                if self.S[left] == len(X):
-                    self.S[left] = 0
-                    right = self.S.succ_key(left)
-                else:
-                    right = left
-                    while right < r_max and self.S[right] != len(X):
-                        self.S[right] -= len(X) - 1
-                        right = self.S.succ_key(right)
-                    alpha = self.alloc_segment(left, right, new_node_id, pop_id)
+
+                ancestral_to = sum(x.ancestral_to for x in X)
+                right = r_max
+                if ancestral_to != self.num_samples:
+                    alpha = self.alloc_segment(
+                        left, right, new_node_id, pop_id, ancestral_to
+                    )
+
                 # Update the heaps and make the record.
                 for x in X:
                     self.store_edge(left, right, new_node_id, x.node)
@@ -1804,15 +1811,18 @@ class Simulator:
             self.store_arg_edges(z)
         if defrag_required:
             self.defrag_segment_chain(z)
-        if coalescence:
-            self.defrag_breakpoints()
+
         return merged_head
 
     def defrag_segment_chain(self, z):
         y = z
         while y.prev is not None:
             x = y.prev
-            if x.right == y.left and x.node == y.node:
+            if (
+                x.right == y.left
+                and x.node == y.node
+                and x.ancestral_to == y.ancestral_to
+            ):
                 x.right = y.right
                 x.next = y.next
                 if y.next is not None:
@@ -1820,17 +1830,6 @@ class Simulator:
                 self.set_segment_mass(x)
                 self.free_segment(y)
             y = x
-
-    def defrag_breakpoints(self):
-        # Defrag the breakpoints set
-        j = 0
-        k = 0
-        while k < self.L:
-            k = self.S.succ_key(j)
-            if self.S[j] == self.S[k]:
-                del self.S[k]
-            else:
-                j = k
 
     def common_ancestor_event(self, population_index, label):
         """
@@ -1883,28 +1882,20 @@ class Simulator:
                     # segment
                     left = x.left
                     r_max = min(x.right, y.right)
-                    if left not in self.S:
-                        j = self.S.floor_key(left)
-                        self.S[left] = self.S[j]
-                    if r_max not in self.S:
-                        j = self.S.floor_key(r_max)
-                        self.S[r_max] = self.S[j]
-                    # Update the number of extant segments.
-                    if self.S[left] == 2:
-                        self.S[left] = 0
-                        right = self.S.succ_key(left)
-                    else:
-                        right = left
-                        while right < r_max and self.S[right] != 2:
-                            self.S[right] -= 1
-                            right = self.S.succ_key(right)
+
+                    ancestral_to = x.ancestral_to + y.ancestral_to
+                    right = r_max
+
+                    if ancestral_to != self.num_samples:
                         alpha = self.alloc_segment(
                             left=left,
                             right=right,
                             node=u,
                             population=population_index,
+                            ancestral_to=ancestral_to,
                             label=label,
                         )
+
                     self.store_edge(left, right, u, x.node)
                     self.store_edge(left, right, u, y.node)
                     # Now trim the ends of x and y to the right sizes.
@@ -1941,8 +1932,6 @@ class Simulator:
             self.store_arg_edges(z)
         if defrag_required:
             self.defrag_segment_chain(z)
-        if coalescence:
-            self.defrag_breakpoints()
 
     def print_state(self, verify=False):
         print("State @ time ", self.t)
@@ -1970,9 +1959,7 @@ class Simulator:
             population.print_state()
         if self.pedigree is not None:
             self.pedigree.print_state()
-        print("Overlap counts", len(self.S))
-        for k, x in self.S.items():
-            print("\t", k, "\t:\t", x)
+
         for label in range(self.num_labels):
             if self.recomb_mass_index is not None:
                 print(
@@ -2018,6 +2005,7 @@ class Simulator:
                         assert u.left >= prev.right
                         assert u.label == head.label
                         assert u.population == head.population
+                        assert 1 <= u.ancestral_to < self.num_samples
                         prev = u
                         u = u.next
 
@@ -2027,43 +2015,17 @@ class Simulator:
             for label in range(self.num_labels):
                 for u in pop.iter_label(label):
                     while u is not None:
-                        overlap_counter.increment_interval(u.left, u.right)
+                        overlap_counter.increment_interval(
+                            u.left, u.right, u.ancestral_to
+                        )
                         u = u.next
 
-        for pos, count in self.S.items():
-            if pos != self.L:
-                assert count == overlap_counter.overlaps_at(pos)
-
-        assert self.S[self.L] == -1
-        # Check the ancestry tracking.
-        A = bintrees.AVLTree()
-        A[0] = 0
-        A[self.L] = -1
-        for pop in self.P:
-            for label in range(self.num_labels):
-                for u in pop.iter_label(label):
-                    while u is not None:
-                        if u.left not in A:
-                            k = A.floor_key(u.left)
-                            A[u.left] = A[k]
-                        if u.right not in A:
-                            k = A.floor_key(u.right)
-                            A[u.right] = A[k]
-                        k = u.left
-                        while k < u.right:
-                            A[k] += 1
-                            k = A.succ_key(k)
-                        u = u.next
-        # Now, defrag A
-        j = 0
-        k = 0
-        while k < self.L:
-            k = A.succ_key(j)
-            if A[j] == A[k]:
-                del A[k]
-            else:
-                j = k
-        assert list(A.items()) == list(self.S.items())
+        # OverlapCounter tracks info on all positions (0, self.L) even when
+        # there is no more ancestral material in that section -> count=0
+        assert all(
+            anc_to == self.num_samples if count > 0 else anc_to == 0
+            for count, anc_to in overlap_counter.yield_overlap_check()
+        )
 
     def verify_mass_index(self, label, mass_index, rate_map, compute_left_bound):
         assert mass_index is not None
