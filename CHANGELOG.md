@@ -10,6 +10,10 @@
   are added `SMM`, `TPM`, and `EL2`.  
   ({issue}`2013`, {user}`andrewkern`).
 
+- Raise an error if `log_arg_likelihood` is called on a recombinant tree
+  sequence that has no recombination nodes (({issue}`2123`, {pr}`2124`,
+  {user}`hyanwong`)
+
 ## [1.2.0] - 2022-05-18
 
 **New features**

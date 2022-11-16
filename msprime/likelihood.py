@@ -145,6 +145,11 @@ def log_arg_likelihood(ts, recombination_rate, Ne=1):
                 " Tree sequences must contain binary mergers only for"
                 " valid likelihood evaluation."
             )
+    if ts.num_trees > 1 and not np.any(ts.nodes_flags & _msprime.NODE_IS_RE_EVENT):
+        raise ValueError(
+            "ARG likelihood only valid for tree sequences where recombinations"
+            " have been recorded via nodes flagged with `NODE_IS_RE_EVENT`."
+        )
 
     # Get the tables into the format we need to interchange with the low-level code.
     lw_tables = _msprime.LightweightTableCollection()
