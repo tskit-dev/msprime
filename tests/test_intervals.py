@@ -672,7 +672,7 @@ class TestReadHapmap:
         assert np.allclose(rm.rate, [np.nan, 1e-8, 5e-8], equal_nan=True)
 
     def test_read_hapmap_from_filename(self, tmp_path):
-        with open(tmp_path / "hapfile.txt", "wt") as hapfile:
+        with open(tmp_path / "hapfile.txt", "w") as hapfile:
             hapfile.write(
                 """\
                 HEADER

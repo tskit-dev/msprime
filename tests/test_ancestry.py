@@ -1309,7 +1309,8 @@ class TestParseSimulate:
 
             def f(matrix):
                 return ancestry._parse_simulate(
-                    population_configurations=pop_configs, migration_matrix=matrix
+                    population_configurations=pop_configs,  # noqa: B023
+                    migration_matrix=matrix,
                 )
 
             matrix = [[(j + k) * int(j != k) for j in range(N)] for k in range(N)]
