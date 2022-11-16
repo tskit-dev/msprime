@@ -169,7 +169,7 @@ class TestKnownExamples:
                 msprime.log_mutation_likelihood(arg, t),
             )
 
-    def test_arg_likelihood_error_handling(self):
+    def test_arg_likelihood_polytomy_handling(self):
         tables = tskit.TableCollection(sequence_length=1)
         tables.nodes.add_row(
             flags=tskit.NODE_IS_SAMPLE, population=0, individual=-1, time=0
@@ -195,6 +195,19 @@ class TestKnownExamples:
             " valid likelihood evaluation.",
         ):
             msprime.log_arg_likelihood(arg, 1)
+
+    def test_arg_likelihood_no_re_node_handling(self):
+        tables = tskit.TableCollection(sequence_length=1)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0)
+        tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0)
+        tables.nodes.add_row(flags=0, time=1)
+        tables.nodes.add_row(flags=0, time=2)
+        tables.edges.add_row(left=0, right=0.5, parent=2, child=0)
+        tables.edges.add_row(left=0.5, right=1, parent=3, child=0)
+        tables.edges.add_row(left=0, right=1, parent=3, child=1)
+        bad_arg = tables.tree_sequence()
+        with pytest.raises(ValueError, match="NODE_IS_RE_EVENT"):
+            msprime.log_arg_likelihood(bad_arg, 1)
 
     def test_multiple_mrcas(self):
         tables = tskit.TableCollection(sequence_length=1)
