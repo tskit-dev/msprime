@@ -82,6 +82,7 @@ typedef struct segment_t_t {
     size_t id;
     struct segment_t_t *prev;
     struct segment_t_t *next;
+    size_t ancestral_to;
 } segment_t;
 
 typedef struct {
@@ -207,7 +208,6 @@ typedef struct _msp_t {
     pedigree_t pedigree;
     /* Initial state for replication */
     segment_t **root_segments;
-    overlap_count_t *initial_overlaps;
     simulation_model_t initial_model;
     double *initial_migration_matrix;
     population_t *initial_populations;
@@ -231,6 +231,7 @@ typedef struct _msp_t {
     sampling_event_t *sampling_events;
     size_t num_sampling_events;
     size_t next_sampling_event;
+    size_t num_samples;
     /* Demographic events */
     struct demographic_event_t_t *demographic_events_head;
     struct demographic_event_t_t *demographic_events_tail;
@@ -242,7 +243,6 @@ typedef struct _msp_t {
     population_t *populations;
     avl_tree_t non_empty_populations;
     avl_tree_t breakpoints;
-    avl_tree_t overlap_counts;
     /* We keep an independent Fenwick tree for each label */
     fenwick_t *recomb_mass_index;
     fenwick_t *gc_mass_index;

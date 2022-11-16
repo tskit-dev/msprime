@@ -38,6 +38,8 @@ test_single_locus_simulation(void)
     memset(samples, 0, n * sizeof(sample_t));
     ret = build_sim(&msp, &tables, rng, 1, 1, samples, n);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(msp.num_samples, n);
+
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -91,6 +93,7 @@ test_single_locus_two_populations(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_mass_migration(&msp, t2, 1, 0, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(msp.num_samples, n);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -156,6 +159,7 @@ test_single_locus_many_populations(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_mass_migration(&msp, 30.0, 0, num_populations - 1, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL(msp.num_samples, n);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
 
@@ -3022,6 +3026,7 @@ verify_simulate_from(int model, rate_map_t *recomb_map,
     tsk_tree_t tree;
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
+    tsk_size_t num_samples;
 
     ret = tsk_table_collection_copy(from_tables, &tables, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -3054,7 +3059,8 @@ verify_simulate_from(int model, rate_map_t *recomb_map,
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         ret = tsk_treeseq_init(&final, &tables, TSK_TS_INIT_BUILD_INDEXES);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-
+        num_samples = tsk_treeseq_get_num_samples(&final);
+        CU_ASSERT_EQUAL(msp.num_samples, num_samples);
         ret = tsk_tree_init(&tree, &final, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         for (ret = tsk_tree_first(&tree); ret == 1; ret = tsk_tree_next(&tree)) {

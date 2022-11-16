@@ -502,7 +502,6 @@ class OverlapCounter:
                     curr_interval.ancestral_to += ancestral_to
                     break
             else:
-                # verify this changed < to <= !!!!
                 if curr_interval.right <= left:
                     curr_interval = curr_interval.next
                 else:
@@ -1751,8 +1750,6 @@ class Simulator:
             if len(X) == 1:
                 x = X[0]
                 if len(H) > 0 and H[0][0] < x.right:
-                    # what type of event??
-                    # what should ancestral_to be?
                     alpha = self.alloc_segment(
                         x.left, H[0][0], x.node, x.population, x.ancestral_to
                     )

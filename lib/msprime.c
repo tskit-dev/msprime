@@ -661,7 +661,8 @@ out:
 
 static segment_t *MSP_WARN_UNUSED
 msp_alloc_segment(msp_t *self, double left, double right, tsk_id_t value,
-    population_id_t population, label_id_t label, segment_t *prev, segment_t *next)
+    population_id_t population, label_id_t label, segment_t *prev, segment_t *next,
+    size_t ancestral_to)
 {
     segment_t *seg = NULL;
 
@@ -700,6 +701,7 @@ msp_alloc_segment(msp_t *self, double left, double right, tsk_id_t value,
     seg->value = value;
     seg->population = population;
     seg->label = label;
+    seg->ancestral_to = ancestral_to;
 out:
     return seg;
 }
@@ -708,7 +710,7 @@ static segment_t *MSP_WARN_UNUSED
 msp_copy_segment(msp_t *self, const segment_t *seg)
 {
     return msp_alloc_segment(self, seg->left, seg->right, seg->value, seg->population,
-        seg->label, seg->prev, seg->next);
+        seg->label, seg->prev, seg->next, seg->ancestral_to);
 }
 
 /* Top level allocators and initialisation */
@@ -717,6 +719,7 @@ int
 msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng)
 {
     int ret = -1;
+    size_t num_samples = 0;
 
     memset(self, 0, sizeof(msp_t));
     if (rng == NULL || tables == NULL) {
@@ -737,6 +740,10 @@ msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng)
         ret = MSP_ERR_BAD_SEQUENCE_LENGTH;
         goto out;
     }
+    for (tsk_size_t j = 0; j < tables->nodes.num_rows; j++) {
+        num_samples += (tables->nodes.flags[j] & TSK_NODE_IS_SAMPLE);
+    }
+    self->num_samples = num_samples;
     self->num_populations = (uint32_t) self->tables->populations.num_rows;
     if (self->num_populations == 0) {
         ret = MSP_ERR_ZERO_POPULATIONS;
@@ -769,7 +776,6 @@ msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng)
     self->segment_block_size = 1024;
     /* set up the AVL trees */
     avl_init_tree(&self->breakpoints, cmp_node_mapping, NULL);
-    avl_init_tree(&self->overlap_counts, cmp_node_mapping, NULL);
     avl_init_tree(&self->non_empty_populations, cmp_pointer, NULL);
     /* Set up the demographic events */
     self->demographic_events_head = NULL;
@@ -871,7 +877,6 @@ msp_free(msp_t *self)
     msp_safe_free(self->sampling_events);
     msp_safe_free(self->buffered_edges);
     msp_safe_free(self->root_segments);
-    msp_safe_free(self->initial_overlaps);
     msp_safe_free(self->pedigree.individuals);
     msp_safe_free(self->pedigree.visit_order);
     /* free the object heaps */
@@ -1136,6 +1141,8 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
                     tsk_bug_assert(u->label == (label_id_t) k);
                     tsk_bug_assert(u->left < u->right);
                     tsk_bug_assert(u->right <= self->sequence_length);
+                    tsk_bug_assert(
+                        1 <= u->ancestral_to && u->ancestral_to < self->num_samples);
                     if (u->prev != NULL) {
                         tsk_bug_assert(u->prev->next == u);
                     }
@@ -1154,7 +1161,6 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
             label_segments == object_heap_get_num_allocated(&self->segment_heap[k]));
     }
     total_avl_nodes = msp_get_num_ancestors(self) + avl_count(&self->breakpoints)
-                      + avl_count(&self->overlap_counts)
                       + avl_count(&self->non_empty_populations);
     for (j = 0; j < self->pedigree.num_individuals; j++) {
         ind = &self->pedigree.individuals[j];
@@ -1210,6 +1216,7 @@ overlap_counter_alloc(overlap_counter_t *self, double seq_length, int initial_co
     overlaps->value = initial_count;
     overlaps->population = 0;
     overlaps->label = 0;
+    overlaps->ancestral_to = 0;
 
     self->seq_length = seq_length;
     self->overlaps = overlaps;
@@ -1232,20 +1239,19 @@ overlap_counter_free(overlap_counter_t *self)
     }
 }
 
-/* Find the number of segments that overlap at the given position */
-static uint32_t
-overlap_counter_overlaps_at(overlap_counter_t *self, double pos)
+/* Verify whether for or every interval in
+ * overlap_counter->ancestral_to equals num_samples or 0
+ */
+static void
+overlap_counter_verify_ancestral_to(overlap_counter_t *self, tsk_size_t num_samples)
 {
-    tsk_bug_assert(pos >= 0 && pos < self->seq_length);
+    size_t expected_count;
     segment_t *curr_overlap = self->overlaps;
-    while (curr_overlap->next != NULL) {
-        if (curr_overlap->left <= pos && pos < curr_overlap->right) {
-            break;
-        }
+    while (curr_overlap != NULL) {
+        expected_count = (curr_overlap->value > 0) ? num_samples : 0;
+        tsk_bug_assert(curr_overlap->ancestral_to == expected_count);
         curr_overlap = curr_overlap->next;
     }
-
-    return (uint32_t) curr_overlap->value;
 }
 
 /* Split the segment at breakpoint and add in another segment
@@ -1263,6 +1269,7 @@ overlap_counter_split_segment(segment_t *seg, double breakpoint)
     right_seg->value = seg->value;
     right_seg->population = 0;
     right_seg->label = 0;
+    right_seg->ancestral_to = seg->ancestral_to;
 
     if (seg->next != NULL) {
         right_seg->next = seg->next;
@@ -1277,22 +1284,26 @@ overlap_counter_split_segment(segment_t *seg, double breakpoint)
  * [left, right), creating additional intervals if necessary.
  */
 static void
-overlap_counter_increment_interval(overlap_counter_t *self, double left, double right)
+overlap_counter_increment_interval(
+    overlap_counter_t *self, double left, double right, size_t ancestral_to)
 {
     segment_t *curr_interval = self->overlaps;
     while (left < right) {
         if (curr_interval->left == left) {
             if (curr_interval->right <= right) {
                 curr_interval->value++;
+                curr_interval->ancestral_to += ancestral_to;
                 left = curr_interval->right;
                 curr_interval = curr_interval->next;
             } else {
                 overlap_counter_split_segment(curr_interval, right);
                 curr_interval->value++;
+                curr_interval->ancestral_to += ancestral_to;
                 break;
             }
         } else {
-            if (curr_interval->right < left) {
+            // same issue as algorithms.py
+            if (curr_interval->right <= left) {
                 curr_interval = curr_interval->next;
             } else {
                 overlap_counter_split_segment(curr_interval, left);
@@ -1306,11 +1317,12 @@ static void
 msp_verify_overlaps(msp_t *self)
 {
     avl_node_t *node;
-    node_mapping_t *nm;
+    // node_mapping_t *nm;
     sampling_event_t se;
     segment_t *u;
     size_t j;
-    uint32_t label, count;
+    uint32_t label; //, count;
+
     overlap_counter_t counter;
 
     int ok = overlap_counter_alloc(&counter, self->sequence_length, 0);
@@ -1320,7 +1332,8 @@ msp_verify_overlaps(msp_t *self)
     for (j = self->next_sampling_event; j < self->num_sampling_events; j++) {
         se = self->sampling_events[j];
         for (u = self->root_segments[se.sample]; u != NULL; u = u->next) {
-            overlap_counter_increment_interval(&counter, u->left, u->right);
+            overlap_counter_increment_interval(
+                &counter, u->left, u->right, u->ancestral_to);
         }
     }
 
@@ -1329,16 +1342,15 @@ msp_verify_overlaps(msp_t *self)
             for (node = (&self->populations[j].ancestors[label])->head; node != NULL;
                  node = node->next) {
                 for (u = (segment_t *) node->item; u != NULL; u = u->next) {
-                    overlap_counter_increment_interval(&counter, u->left, u->right);
+                    overlap_counter_increment_interval(
+                        &counter, u->left, u->right, u->ancestral_to);
                 }
             }
         }
     }
-    for (node = self->overlap_counts.head; node->next != NULL; node = node->next) {
-        nm = (node_mapping_t *) node->item;
-        count = overlap_counter_overlaps_at(&counter, nm->position);
-        tsk_bug_assert(nm->value == count);
-    }
+
+    /* For each position in counter.ancestral_to == self.num_samples or 0*/
+    overlap_counter_verify_ancestral_to(&counter, self->num_samples);
 
     overlap_counter_free(&counter);
 }
@@ -1400,22 +1412,9 @@ msp_verify_migration_destinations(msp_t *self)
 static void
 msp_verify_initial_state(msp_t *self)
 {
-    overlap_count_t *overlap;
-    double last_overlap_left = -1;
+    // overlap_count_t *overlap;
     tsk_size_t j;
     segment_t *head, *seg, *prev;
-
-    for (overlap = self->initial_overlaps; overlap->left < self->sequence_length;
-         overlap++) {
-        tsk_bug_assert(overlap->left > last_overlap_left);
-        last_overlap_left = overlap->left;
-    }
-    /* Last overlap should be a sentinal */
-    overlap->left = self->sequence_length;
-    overlap->count = UINT32_MAX;
-
-    /* First overlap should be 0 */
-    tsk_bug_assert(self->initial_overlaps->left == 0);
 
     /* Check the root segments */
     for (j = 0; j < self->input_position.nodes; j++) {
@@ -1523,21 +1522,6 @@ msp_print_root_segments(msp_t *self, FILE *out)
     }
 }
 
-static void
-msp_print_initial_overlaps(msp_t *self, FILE *out)
-{
-    overlap_count_t *overlap;
-
-    fprintf(out, "Initial overlaps\n");
-
-    for (overlap = self->initial_overlaps; overlap->left < self->sequence_length;
-         overlap++) {
-        fprintf(out, "\t%f -> %d\n", overlap->left, (int) overlap->count);
-    }
-    tsk_bug_assert(overlap->left == self->sequence_length);
-    fprintf(out, "\t%f -> %d\n", overlap->left, (int) overlap->count);
-}
-
 int
 msp_print_state(msp_t *self, FILE *out)
 {
@@ -1583,7 +1567,6 @@ msp_print_state(msp_t *self, FILE *out)
     rate_map_print_state(&self->gc_map, out);
     msp_pedigree_print_state(self, out);
     msp_print_root_segments(self, out);
-    msp_print_initial_overlaps(self, out);
     fprintf(out, "Sampling events:\n");
     for (j = 0; j < self->num_sampling_events; j++) {
         if (j == self->next_sampling_event) {
@@ -1692,11 +1675,7 @@ msp_print_state(msp_t *self, FILE *out)
         nm = (node_mapping_t *) a->item;
         fprintf(out, "\t%.14g -> %d\n", nm->position, (int) nm->value);
     }
-    fprintf(out, "Overlap count = %d\n", avl_count(&self->overlap_counts));
-    for (a = self->overlap_counts.head; a != NULL; a = a->next) {
-        nm = (node_mapping_t *) a->item;
-        fprintf(out, "\t%.14g -> %d\n", nm->position, (int) nm->value);
-    }
+
     fprintf(out, "Tables = \n");
     tsk_table_collection_print_state(self->tables, out);
 
@@ -1908,8 +1887,8 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         new_ind = NULL;
         y = NULL;
         for (x = ind; x != NULL; x = x->next) {
-            y = msp_alloc_segment(
-                self, x->left, x->right, x->value, x->population, dest_label, y, NULL);
+            y = msp_alloc_segment(self, x->left, x->right, x->value, x->population,
+                dest_label, y, NULL, x->ancestral_to);
             if (new_ind == NULL) {
                 new_ind = y;
             } else {
@@ -1972,105 +1951,6 @@ msp_remove_non_empty_population(msp_t *self, tsk_id_t population)
     return ret;
 }
 
-/*
- * Inserts a new overlap_count at the specified locus left, mapping to the
- * specified number of overlapping segments b.
- */
-static int MSP_WARN_UNUSED
-msp_insert_overlap_count(msp_t *self, double left, uint32_t count)
-{
-    int ret = 0;
-    avl_node_t *node = msp_alloc_avl_node(self);
-    node_mapping_t *m = msp_alloc_node_mapping(self);
-
-    if (node == NULL || m == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-    m->position = left;
-    m->value = count;
-    avl_init_node(node, m);
-    node = avl_insert_node(&self->overlap_counts, node);
-    tsk_bug_assert(node != NULL);
-out:
-    return ret;
-}
-
-/*
- * Inserts a new overlap_count at the specified locus, and copies its
- * node mapping from the containing overlap_count.
- */
-static int MSP_WARN_UNUSED
-msp_copy_overlap_count(msp_t *self, double k)
-{
-    int ret;
-    node_mapping_t search, *nm;
-    avl_node_t *node;
-
-    search.position = k;
-    avl_search_closest(&self->overlap_counts, &search, &node);
-    tsk_bug_assert(node != NULL);
-    nm = (node_mapping_t *) node->item;
-    if (nm->position > k) {
-        node = node->prev;
-        tsk_bug_assert(node != NULL);
-        nm = (node_mapping_t *) node->item;
-    }
-    ret = msp_insert_overlap_count(self, k, nm->value);
-    return ret;
-}
-
-static int
-msp_compress_overlap_counts(msp_t *self, double l, double r)
-{
-    int ret = 0;
-    avl_node_t *node1, *node2;
-    node_mapping_t search, *nm1, *nm2;
-
-    search.position = l;
-    node1 = avl_search(&self->overlap_counts, &search);
-    tsk_bug_assert(node1 != NULL);
-    if (node1->prev != NULL) {
-        node1 = node1->prev;
-    }
-    node2 = node1->next;
-    do {
-        nm1 = (node_mapping_t *) node1->item;
-        nm2 = (node_mapping_t *) node2->item;
-        if (nm1->value == nm2->value) {
-            avl_unlink_node(&self->overlap_counts, node2);
-            msp_free_avl_node(self, node2);
-            msp_free_node_mapping(self, nm2);
-            node2 = node1->next;
-        } else {
-            node1 = node2;
-            node2 = node2->next;
-        }
-    } while (node2 != NULL && nm2->position <= r);
-    return ret;
-}
-
-static int MSP_WARN_UNUSED
-msp_conditional_compress_overlap_counts(msp_t *self, double l, double r)
-{
-    int ret = 0;
-    double covered_fraction = (r - l) / self->sequence_length;
-
-    /* This is a heuristic to prevent us spending a lot of time pointlessly
-     * trying to defragment during the early stages of the simulation.
-     * 5% of the overall length seems like a good value and leads to
-     * a ~15% time reduction when doing large simulations.
-     */
-    if (covered_fraction < 0.05) {
-        ret = msp_compress_overlap_counts(self, l, r);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-out:
-    return ret;
-}
-
 /* Defragment the segment chain ending in z by squashing any redundant
  * segments together */
 static int MSP_WARN_UNUSED
@@ -2081,7 +1961,8 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
     y = z;
     while (y->prev != NULL) {
         x = y->prev;
-        if (x->right == y->left && x->value == y->value) {
+        if (x->right == y->left && x->value == y->value
+            && x->ancestral_to == y->ancestral_to) {
             x->right = y->right;
             x->next = y->next;
             if (y->next != NULL) {
@@ -2273,8 +2154,8 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
             } else {
                 tail = seg_tails[ix];
             }
-            z = msp_alloc_segment(
-                self, k, x->right, x->value, x->population, x->label, tail, x->next);
+            z = msp_alloc_segment(self, k, x->right, x->value, x->population, x->label,
+                tail, x->next, x->ancestral_to);
             if (z == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -2474,7 +2355,7 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
     if (y->left < breakpoint) {
         tsk_bug_assert(breakpoint < y->right);
         alpha = msp_alloc_segment(self, breakpoint, y->right, y->value, y->population,
-            y->label, NULL, y->next);
+            y->label, NULL, y->next, y->ancestral_to);
         if (alpha == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -2774,16 +2655,14 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     bool coalescence = false;
     bool defrag_required = false;
     tsk_id_t v;
-    double l, r, l_min, r_max;
-    avl_node_t *node;
-    node_mapping_t *nm, search;
+    double l, r, r_max;
     segment_t *x, *y, *z, *alpha, *beta, *merged_head;
+    size_t ancestral_to;
 
     x = a;
     y = b;
     merged_head = NULL;
     /* Keep GCC happy */
-    l_min = 0;
     r_max = 0;
 
     /* update recomb mass and get ready for loop */
@@ -2811,7 +2690,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 alpha->next = NULL;
             } else if (x->left != y->left) {
                 alpha = msp_alloc_segment(self, x->left, y->left, x->value,
-                    x->population, x->label, NULL, NULL);
+                    x->population, x->label, NULL, NULL, x->ancestral_to);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -2820,9 +2699,10 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
             } else {
                 l = x->left;
                 r_max = GSL_MIN(x->right, y->right);
+                r = r_max;
                 if (!coalescence) {
                     coalescence = true;
-                    l_min = l;
+                    // l_min = l;
                     if (new_node_id == TSK_NULL) {
                         new_node_id = msp_store_node(
                             self, 0, self->time, population_id, TSK_NULL);
@@ -2833,50 +2713,17 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                     }
                 }
                 v = new_node_id;
-                /* Insert overlap counts for bounds, if necessary */
-                search.position = l;
-                node = avl_search(&self->overlap_counts, &search);
-                if (node == NULL) {
-                    ret = msp_copy_overlap_count(self, l);
-                    if (ret < 0) {
-                        goto out;
-                    }
-                }
-                search.position = r_max;
-                node = avl_search(&self->overlap_counts, &search);
-                if (node == NULL) {
-                    ret = msp_copy_overlap_count(self, r_max);
-                    if (ret < 0) {
-                        goto out;
-                    }
-                }
-                /* Now get overlap count at the left */
-                search.position = l;
-                node = avl_search(&self->overlap_counts, &search);
-                tsk_bug_assert(node != NULL);
-                nm = (node_mapping_t *) node->item;
-                if (nm->value == 2) {
-                    nm->value = 0;
-                    node = node->next;
-                    tsk_bug_assert(node != NULL);
-                    nm = (node_mapping_t *) node->item;
-                    r = nm->position;
-                } else {
-                    r = l;
-                    while (nm->value != 2 && r < r_max) {
-                        nm->value--;
-                        node = node->next;
-                        tsk_bug_assert(node != NULL);
-                        nm = (node_mapping_t *) node->item;
-                        r = nm->position;
-                    }
+                ancestral_to = x->ancestral_to + y->ancestral_to;
+
+                if (ancestral_to != self->num_samples) {
                     alpha = msp_alloc_segment(
-                        self, l, r, v, population_id, label, NULL, NULL);
+                        self, l, r, v, population_id, label, NULL, NULL, ancestral_to);
                     if (alpha == NULL) {
                         ret = MSP_ERR_NO_MEMORY;
                         goto out;
                     }
                 }
+
                 tsk_bug_assert(v != x->value);
                 ret = msp_store_edge(self, l, r, v, x->value);
                 if (ret != 0) {
@@ -2945,12 +2792,6 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
             goto out;
         }
     }
-    if (coalescence) {
-        ret = msp_conditional_compress_overlap_counts(self, l_min, r_max);
-        if (ret != 0) {
-            goto out;
-        }
-    }
     if (ret_merged_head != NULL) {
         *ret_merged_head = merged_head;
     }
@@ -3002,13 +2843,13 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     bool coalescence = false;
     bool defrag_required = false;
     uint32_t j, h;
-    double l, r, r_max, next_l, l_min;
+    double l, r, r_max, next_l;
     avl_node_t *node;
-    node_mapping_t *nm, search;
     segment_t *x, *z, *alpha;
     segment_t **H = NULL;
     segment_t *merged_head = NULL;
     tsk_id_t individual = TSK_NULL;
+    size_t ancestral_to;
 
     H = malloc(avl_count(Q) * sizeof(segment_t *));
     if (H == NULL) {
@@ -3016,7 +2857,6 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         goto out;
     }
     r_max = 0; /* keep compiler happy */
-    l_min = 0;
     z = NULL;
     merged_head = NULL;
     while (avl_count(Q) > 0) {
@@ -3042,7 +2882,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             x = H[0];
             if (node != NULL && next_l < x->right) {
                 alpha = msp_alloc_segment(self, x->left, next_l, x->value, x->population,
-                    x->label, NULL, NULL);
+                    x->label, NULL, NULL, x->ancestral_to);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -3062,7 +2902,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         } else {
             coalescence = true;
             if (new_node_id == TSK_NULL) {
-                l_min = l;
+                // l_min = l;
                 new_node_id
                     = msp_store_node(self, 0, self->time, population_id, individual);
                 if (new_node_id < 0) {
@@ -3070,51 +2910,20 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     goto out;
                 }
             }
-            /* Insert overlap counts for bounds, if necessary */
-            search.position = l;
-            node = avl_search(&self->overlap_counts, &search);
-            if (node == NULL) {
-                ret = msp_copy_overlap_count(self, l);
-                if (ret < 0) {
-                    goto out;
-                }
+            ancestral_to = 0;
+            for (j = 0; j < h; j++) {
+                ancestral_to += H[j]->ancestral_to;
             }
-            search.position = r_max;
-            node = avl_search(&self->overlap_counts, &search);
-            if (node == NULL) {
-                ret = msp_copy_overlap_count(self, r_max);
-                if (ret < 0) {
-                    goto out;
-                }
-            }
-            /* Update the extant segments and allocate alpha if the interval
-             * has not coalesced. */
-            search.position = l;
-            node = avl_search(&self->overlap_counts, &search);
-            tsk_bug_assert(node != NULL);
-            nm = (node_mapping_t *) node->item;
-            if (nm->value == h) {
-                nm->value = 0;
-                node = node->next;
-                tsk_bug_assert(node != NULL);
-                nm = (node_mapping_t *) node->item;
-                r = nm->position;
-            } else {
-                r = l;
-                while (nm->value != h && r < r_max) {
-                    nm->value -= h - 1;
-                    node = node->next;
-                    tsk_bug_assert(node != NULL);
-                    nm = (node_mapping_t *) node->item;
-                    r = nm->position;
-                }
-                alpha = msp_alloc_segment(
-                    self, l, r, new_node_id, population_id, label, NULL, NULL);
+            r = r_max;
+            if (ancestral_to != self->num_samples) {
+                alpha = msp_alloc_segment(self, l, r, new_node_id, population_id, label,
+                    NULL, NULL, ancestral_to);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
                 }
             }
+
             /* Store the edges and update the priority queue */
             for (j = 0; j < h; j++) {
                 x = H[j];
@@ -3175,12 +2984,6 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     }
     if (defrag_required) {
         ret = msp_defrag_segment_chain(self, z);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    if (coalescence) {
-        ret = msp_conditional_compress_overlap_counts(self, l_min, r_max);
         if (ret != 0) {
             goto out;
         }
@@ -3299,12 +3102,7 @@ msp_reset_memory_state(msp_t *self)
         msp_free_avl_node(self, node);
         msp_free_node_mapping(self, nm);
     }
-    for (node = self->overlap_counts.head; node != NULL; node = node->next) {
-        nm = (node_mapping_t *) node->item;
-        avl_unlink_node(&self->overlap_counts, node);
-        msp_free_avl_node(self, node);
-        msp_free_node_mapping(self, nm);
-    }
+
     return ret;
 }
 
@@ -3389,6 +3187,7 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree, double left, double ri
     population_id_t population;
     const population_id_t *restrict node_population = self->tables->nodes.population;
     label_id_t label = 0; /* For now only support label 0 */
+    tsk_size_t num_samples;
 
     for (root = tsk_tree_get_left_root(tree); root != TSK_NULL;
          root = tree->right_sib[root]) {
@@ -3399,9 +3198,10 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree, double left, double ri
             ret = MSP_ERR_POPULATION_OUT_OF_BOUNDS;
             goto out;
         }
+        ret = tsk_tree_get_num_samples(tree, root, &num_samples);
         if (root_segments_head[root] == NULL) {
             seg = msp_alloc_segment(
-                self, left, right, root, population, label, NULL, NULL);
+                self, left, right, root, population, label, NULL, NULL, num_samples);
             if (seg == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -3410,11 +3210,11 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree, double left, double ri
             root_segments_tail[root] = seg;
         } else {
             tail = root_segments_tail[root];
-            if (tail->right == left) {
+            if (tail->right == left && tail->ancestral_to == num_samples) {
                 tail->right = right;
             } else {
                 seg = msp_alloc_segment(
-                    self, left, right, root, population, label, tail, NULL);
+                    self, left, right, root, population, label, tail, NULL, num_samples);
                 if (seg == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -3435,10 +3235,8 @@ msp_process_input_trees(msp_t *self)
     int t_iter;
     tsk_treeseq_t ts;
     tsk_tree_t tree;
-    uint32_t overlap_count, last_overlap_count;
-    tsk_size_t num_trees, num_roots;
+    tsk_size_t num_roots;
     const size_t num_nodes = self->tables->nodes.num_rows;
-    overlap_count_t *overlap;
     segment_t **root_segments_tail = NULL;
 
     /* Initialise the memory for the tree and tree sequence so we can
@@ -3451,15 +3249,12 @@ msp_process_input_trees(msp_t *self)
         ret = msp_set_tsk_error(ret);
         goto out;
     }
-    num_trees = tsk_treeseq_get_num_trees(&ts);
 
     root_segments_tail = calloc(num_nodes + 1, sizeof(*root_segments_tail));
     self->root_segments = calloc(num_nodes + 1, sizeof(*self->root_segments));
     /* We can't have more than num_trees intervals, and allow for one sentinel */
-    self->initial_overlaps = calloc(num_trees + 1, sizeof(*self->initial_overlaps));
 
-    if (self->root_segments == NULL || root_segments_tail == NULL
-        || self->initial_overlaps == NULL) {
+    if (self->root_segments == NULL || root_segments_tail == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -3470,56 +3265,25 @@ msp_process_input_trees(msp_t *self)
         goto out;
     }
 
-    overlap = self->initial_overlaps;
-    last_overlap_count = UINT32_MAX;
     for (t_iter = tsk_tree_first(&tree); t_iter == 1; t_iter = tsk_tree_next(&tree)) {
         num_roots = tsk_tree_get_num_roots(&tree);
-        overlap_count = 0;
         if (num_roots > 1) {
-            overlap_count = (uint32_t) num_roots;
             ret = msp_allocate_root_segments(self, &tree, tree.interval.left,
                 tree.interval.right, self->root_segments, root_segments_tail);
             if (ret != 0) {
                 goto out;
             }
         }
-        if (overlap_count != last_overlap_count) {
-            overlap->left = tree.interval.left;
-            overlap->count = overlap_count;
-            overlap++;
-            last_overlap_count = overlap_count;
-        }
     }
     if (t_iter != 0) {
         ret = msp_set_tsk_error(t_iter);
         goto out;
     }
-    overlap->left = self->sequence_length;
-    overlap->count = UINT32_MAX;
 
 out:
     tsk_treeseq_free(&ts);
     tsk_tree_free(&tree);
     msp_safe_free(root_segments_tail);
-    return ret;
-}
-
-static int
-msp_reset_population_state(msp_t *self)
-{
-    int ret = 0;
-    overlap_count_t *overlap = self->initial_overlaps;
-    while (true) {
-        ret = msp_insert_overlap_count(self, overlap->left, overlap->count);
-        if (ret != 0) {
-            goto out;
-        }
-        if (overlap->left == self->sequence_length) {
-            break;
-        }
-        overlap++;
-    }
-out:
     return ret;
 }
 
@@ -3666,11 +3430,6 @@ msp_reset(msp_t *self)
     }
     tsk_bug_assert(self->tables->populations.num_rows == self->num_populations);
 
-    ret = msp_reset_population_state(self);
-    if (ret != 0) {
-        goto out;
-    }
-
     self->next_demographic_event = self->demographic_events_head;
     memcpy(
         self->migration_matrix, self->initial_migration_matrix, N * N * sizeof(double));
@@ -3772,7 +3531,6 @@ msp_initialise_simulation_state(msp_t *self)
             cmp_sampling_event);
     }
 
-    /* ret = msp_compress_overlap_counts(self, 0, self->sequence_length); */
 out:
     msp_safe_free(samples);
     return ret;
