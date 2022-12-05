@@ -261,6 +261,13 @@ msp_set_store_full_arg(msp_t *self, bool store_full_arg)
 }
 
 int
+msp_set_store_unary(msp_t *self, bool store_unary)
+{
+    self->store_unary = store_unary;
+    return 0;
+}
+
+int
 msp_set_ploidy(msp_t *self, int ploidy)
 {
     int ret = 0;
@@ -764,6 +771,7 @@ msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng)
     /* Set the memory defaults */
     self->store_migrations = false;
     self->store_full_arg = false;
+    self->store_unary = false;
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
@@ -1826,11 +1834,14 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-msp_store_arg_edges(msp_t *self, segment_t *z)
+msp_store_arg_edges(msp_t *self, segment_t *z, tsk_id_t u)
 {
     int ret = 0;
-    tsk_id_t u = (tsk_id_t) msp_get_num_nodes(self) - 1;
     segment_t *x;
+
+    if (u == TSK_NULL) {
+        u = (tsk_id_t) msp_get_num_nodes(self) - 1;
+    }
 
     /* Store edges to the left */
     x = z;
@@ -1884,7 +1895,7 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         if (ret < 0) {
             goto out;
         }
-        ret = msp_store_arg_edges(self, ind);
+        ret = msp_store_arg_edges(self, ind, TSK_NULL);
         if (ret != 0) {
             goto out;
         }
@@ -2334,7 +2345,7 @@ msp_store_arg_recombination(msp_t *self, segment_t *lhs_tail, segment_t *rhs)
     if (ret < 0) {
         goto out;
     }
-    ret = msp_store_arg_edges(self, lhs_tail);
+    ret = msp_store_arg_edges(self, lhs_tail, TSK_NULL);
     if (ret != 0) {
         goto out;
     }
@@ -2344,7 +2355,7 @@ msp_store_arg_recombination(msp_t *self, segment_t *lhs_tail, segment_t *rhs)
     if (ret < 0) {
         goto out;
     }
-    ret = msp_store_arg_edges(self, rhs);
+    ret = msp_store_arg_edges(self, rhs, TSK_NULL);
     if (ret != 0) {
         goto out;
     }
@@ -2368,11 +2379,11 @@ msp_store_arg_gene_conversion(
         if (ret < 0) {
             goto out;
         }
-        ret = msp_store_arg_edges(self, tail);
+        ret = msp_store_arg_edges(self, tail, TSK_NULL);
         if (ret != 0) {
             goto out;
         }
-        ret = msp_store_arg_edges(self, head);
+        ret = msp_store_arg_edges(self, head, TSK_NULL);
         if (ret != 0) {
             goto out;
         }
@@ -2382,7 +2393,7 @@ msp_store_arg_gene_conversion(
         if (ret < 0) {
             goto out;
         }
-        ret = msp_store_arg_edges(self, alpha);
+        ret = msp_store_arg_edges(self, alpha, TSK_NULL);
         if (ret != 0) {
             goto out;
         }
@@ -2934,9 +2945,17 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 goto out;
             }
         }
-        ret = msp_store_arg_edges(self, z);
+        // is specified new_node_id impossible when recording full_arg?
+        ret = msp_store_arg_edges(self, z, TSK_NULL);
         if (ret != 0) {
             goto out;
+        }
+    } else {
+        if (self->store_unary && coalescence) {
+            ret = msp_store_arg_edges(self, z, new_node_id);
+            if (ret < 0) {
+                goto out;
+            }
         }
     }
     if (defrag_required) {
@@ -3168,7 +3187,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                 goto out;
             }
         }
-        ret = msp_store_arg_edges(self, z);
+        ret = msp_store_arg_edges(self, z, TSK_NULL);
         if (ret != 0) {
             goto out;
         }

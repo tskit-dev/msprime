@@ -249,6 +249,7 @@ def _parse_simulate(
     start_time=None,
     end_time=None,
     record_full_arg=False,
+    record_unary=False,
     num_labels=None,
     random_seed=None,
 ):
@@ -361,6 +362,7 @@ def _parse_simulate(
         models=models,
         store_migrations=record_migrations,
         store_full_arg=record_full_arg,
+        store_unary=record_unary,
         start_time=start_time,
         end_time=end_time,
         num_labels=num_labels,
@@ -427,6 +429,7 @@ def simulate(
     start_time=None,
     end_time=None,
     record_full_arg=False,
+    record_unary=False,
     num_labels=None,
     record_provenance=True,
 ):
@@ -529,6 +532,8 @@ def simulate(
         arising from common ancestor and recombination events in the output
         tree sequence. This will result in unary nodes (i.e., nodes in marginal
         trees that have only one child). Defaults to False.
+    :param bool record_unary: If True, retain all ancestry for any nodes that
+        are coalescent nodes anywhere in the sequence. Defaults to False.
     :param model: The simulation model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
         a ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
@@ -568,6 +573,7 @@ def simulate(
             start_time=start_time,
             end_time=end_time,
             record_full_arg=record_full_arg,
+            record_unary=record_unary,
             num_labels=num_labels,
             random_seed=random_seed,
             # num_replicates is excluded as provenance is per replicate
@@ -622,6 +628,7 @@ def simulate(
         start_time=start_time,
         end_time=end_time,
         record_full_arg=record_full_arg,
+        record_unary=record_unary,
         num_labels=num_labels,
         random_seed=random_seed,
     )
@@ -790,6 +797,7 @@ def _parse_sim_ancestry(
     end_time=None,
     record_migrations=None,
     record_full_arg=None,
+    record_unary=None,
     num_labels=None,
     random_seed=None,
     init_for_debugger=False,
@@ -806,6 +814,7 @@ def _parse_sim_ancestry(
     end_time = math.inf if end_time is None else float(end_time)
     discrete_genome = core._parse_flag(discrete_genome, default=True)
     record_full_arg = core._parse_flag(record_full_arg, default=False)
+    record_unary = core._parse_flag(record_unary, default=False)
     record_migrations = core._parse_flag(record_migrations, default=False)
 
     if initial_state is not None:
@@ -1018,6 +1027,7 @@ def _parse_sim_ancestry(
         models=models,
         store_migrations=record_migrations,
         store_full_arg=record_full_arg,
+        store_unary=record_unary,
         start_time=start_time,
         end_time=end_time,
         num_labels=num_labels,
@@ -1042,6 +1052,7 @@ def sim_ancestry(
     end_time=None,
     record_migrations=None,
     record_full_arg=None,
+    record_unary=None,
     num_labels=None,
     random_seed=None,
     num_replicates=None,
@@ -1125,6 +1136,8 @@ def sim_ancestry(
         tree sequence. This will result in unary nodes (i.e., nodes in marginal
         trees that have only one child). Defaults to False.
         See the :ref:`sec_ancestry_full_arg` section for examples.
+    :param bool record_unary: If True, retain all ancestry for any nodes that
+        are coalescent nodes anywhere in the sequence. Defaults to False.
     :param bool record_migrations: If True, record all migration events
         that occur in the :ref:`tskit:sec_migration_table_definition` of
         the output tree sequence. Defaults to False.
@@ -1198,6 +1211,7 @@ def sim_ancestry(
             end_time=end_time,
             record_migrations=record_migrations,
             record_full_arg=record_full_arg,
+            record_unary=record_unary,
             num_labels=num_labels,
             random_seed=random_seed,
             # num_replicates is excluded as provenance is per replicate
@@ -1220,6 +1234,7 @@ def sim_ancestry(
         end_time=end_time,
         record_migrations=record_migrations,
         record_full_arg=record_full_arg,
+        record_unary=record_unary,
         num_labels=num_labels,
         random_seed=random_seed,
     )
@@ -1283,6 +1298,7 @@ class Simulator(_msprime.Simulator):
         models=None,
         store_migrations=False,
         store_full_arg=False,
+        store_unary=False,
         start_time=None,
         end_time=None,
         num_labels=None,
@@ -1325,6 +1341,7 @@ class Simulator(_msprime.Simulator):
             demographic_events=ll_demographic_events,
             store_migrations=store_migrations,
             store_full_arg=store_full_arg,
+            store_unary=store_unary,
             num_labels=num_labels,
             segment_block_size=segment_block_size,
             avl_node_block_size=avl_node_block_size,
