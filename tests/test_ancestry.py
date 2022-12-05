@@ -228,6 +228,36 @@ class TestFullArg:
         self.verify(sim)
 
 
+class TestStoreUnary:
+    def test_recombination_n25(self):
+        ts = msprime.sim_ancestry(
+            samples=25,
+            sequence_length=100,
+            recombination_rate=1,
+            record_unary=True,
+        )
+        self.verify_store_unary(ts)
+
+    def verify_store_unary(self, ts):
+        min_children = np.zeros(ts.num_nodes, dtype=int)
+        max_children = np.zeros_like(min_children)
+
+        for tree in ts.trees():
+            for i in range(ts.num_nodes):
+                n = tree.num_children_array[i]
+                if n > 0:
+                    if min_children[i] > 0:
+                        min_children[i] = min(min_children[i], n)
+                    else:
+                        min_children[i] = n
+                    max_children[i] = max(max_children[i], n)
+
+        assert np.any(min_children == 1)
+        for minc, maxc in zip(min_children, max_children):
+            if minc == 1:
+                assert maxc >= 2
+
+
 class TestSimulator:
     """
     Runs tests on the underlying Simulator object.

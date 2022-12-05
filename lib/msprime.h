@@ -195,6 +195,7 @@ typedef struct _msp_t {
     simulation_model_t model;
     bool store_migrations;
     bool store_full_arg;
+    bool store_unary;
     double sequence_length;
     bool discrete_genome;
     rate_map_t recomb_map;
@@ -429,6 +430,7 @@ int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
 int msp_set_start_time(msp_t *self, double start_time);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
+int msp_set_store_unary(msp_t *self, bool store_unary);
 int msp_set_ploidy(msp_t *self, int ploidy);
 int msp_set_recombination_map(msp_t *self, size_t size, double *position, double *rate);
 int msp_set_recombination_rate(msp_t *self, double rate);

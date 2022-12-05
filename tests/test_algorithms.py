@@ -34,6 +34,26 @@ def has_discrete_genome(ts):
     return edges_left and edges_right and migrations_left and migrations_right and sites
 
 
+def verify_unary(ts):
+    min_children = np.zeros(ts.num_nodes, dtype=int)
+    max_children = np.zeros_like(min_children)
+
+    for tree in ts.trees():
+        for i in range(ts.num_nodes):
+            n = tree.num_children_array[i]
+            if n > 0:
+                if min_children[i] > 0:
+                    min_children[i] = min(min_children[i], n)
+                else:
+                    min_children[i] = n
+                max_children[i] = max(max_children[i], n)
+
+    assert np.any(min_children == 1)
+    for minc, maxc in zip(min_children, max_children):
+        if minc == 1:
+            assert maxc >= 2
+
+
 @pytest.mark.skipif(IS_WINDOWS, reason="Bintrees isn't availble on windows")
 class TestAlgorithms:
     def run_script(self, cmd):
@@ -86,6 +106,14 @@ class TestAlgorithms:
         assert ts.num_trees > 1
         node_flags = ts.tables.nodes.flags
         assert np.sum(node_flags == msprime.NODE_IS_MIG_EVENT) > 0
+
+    def test_store_unary(self):
+        ts = self.run_script("10 --store-unary")
+        assert ts.num_samples == 10
+        assert ts.num_trees > 1
+        assert not has_discrete_genome(ts)
+        assert ts.sequence_length == 100
+        verify_unary(ts)
 
     def test_gc(self):
         ts = self.run_script("10 -c 0.4 2 -d")

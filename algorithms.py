@@ -544,6 +544,7 @@ class Simulator:
         num_labels=1,
         sweep_trajectory=None,
         full_arg=False,
+        store_unary=False,
         time_slice=None,
         gene_conversion_rate=0.0,
         gene_conversion_length=1,
@@ -571,6 +572,7 @@ class Simulator:
         self.num_populations = N
         self.max_segments = max_segments
         self.full_arg = full_arg
+        self.store_unary = store_unary
         self.pedigree = None
         self.segment_stack = []
         self.segments = [None for j in range(self.max_segments + 1)]
@@ -1245,8 +1247,9 @@ class Simulator:
             for ploid in range(ind.ploidy):
                 self.process_pedigree_common_ancestors(ind, ploid)
 
-    def store_arg_edges(self, segment):
-        u = len(self.tables.nodes) - 1
+    def store_arg_edges(self, segment, u=None):
+        if u is None:
+            u = len(self.tables.nodes) - 1
         # Store edges pointing to current node to the left
         x = segment
         while x is not None:
@@ -1937,8 +1940,10 @@ class Simulator:
 
         if self.full_arg:
             if not coalescence:
-                self.store_node(population_index, flags=msprime.NODE_IS_CA_EVENT)
-            self.store_arg_edges(z)
+                u = self.store_node(population_index, flags=msprime.NODE_IS_CA_EVENT)
+            self.store_arg_edges(z, u)
+        elif self.store_unary and coalescence:
+            self.store_arg_edges(z, u)
         if defrag_required:
             self.defrag_segment_chain(z)
         if coalescence:
@@ -2196,6 +2201,7 @@ def run_simulate(args):
         max_segments=100000,
         num_labels=num_labels,
         full_arg=args.full_arg,
+        store_unary=args.store_unary,
         sweep_trajectory=sweep_trajectory,
         time_slice=args.time_slice,
         gene_conversion_rate=gc_rate,
@@ -2273,6 +2279,12 @@ def add_simulator_arguments(parser):
         action="store_true",
         default=False,
         help="Store the full ARG with all recombination and common ancestor nodes",
+    )
+    parser.add_argument(
+        "--store-unary",
+        action="store_true",
+        default=False,
+        help="Store unary nodes.",
     )
     parser.add_argument(
         "--time-slice",

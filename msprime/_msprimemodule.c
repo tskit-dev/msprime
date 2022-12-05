@@ -1766,7 +1766,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "population_configuration", "migration_matrix",
         "demographic_events", "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time",
-        "store_full_arg", "num_labels", "gene_conversion_rate",
+        "store_full_arg", "store_unary", "num_labels", "gene_conversion_rate",
         "gene_conversion_tract_length", "discrete_genome",
         "ploidy", NULL};
     PyObject *migration_matrix = NULL;
@@ -1784,6 +1784,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t num_populations = 1;
     int store_migrations = false;
     int store_full_arg = false;
+    int store_unary = false;
     int discrete_genome = true;
     double start_time = -1;
     double gene_conversion_rate = 0;
@@ -1793,7 +1794,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     self->sim = NULL;
     self->random_generator = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds,
-            "O!O!|O!O!OO!O!nnnidinddii", kwlist,
+            "O!O!|O!O!OO!O!nnnidiinddii", kwlist,
             &LightweightTableCollectionType, &tables,
             &RandomGeneratorType, &random_generator,
             /* optional */
@@ -1804,7 +1805,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyDict_Type, &py_model,
             &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &store_migrations, &start_time,
-            &store_full_arg, &num_labels,
+            &store_full_arg, &store_unary, &num_labels,
             &gene_conversion_rate, &gene_conversion_tract_length,
             &discrete_genome, &ploidy)) {
         goto out;
@@ -1926,6 +1927,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         }
     }
     msp_set_store_full_arg(self->sim, store_full_arg);
+    msp_set_store_unary(self->sim, store_unary);
 
     sim_ret = msp_initialise(self->sim);
     if (sim_ret != 0) {
