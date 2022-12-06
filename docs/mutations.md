@@ -433,7 +433,7 @@ Above, we produced ``mts`` by mutating with the default Jukes-Cantor model
 at rate 1.5. Here, we produced ``mts1`` (and ``mts2``) using Jukes-Cantor
 but with 25% of the mutations silent.
 This means that to produce an set of mutations equivalent to ``mts``
-that includes silent mutations, we need to use the parent-independent
+that includes silent mutations, we need to use the state-independent
 Jukes-Cantor model with rate {math}`1/(1-0.25) = 4/3` times higher:
 
 ```{code-cell}
@@ -448,17 +448,17 @@ but is only 75% as big for ``mts1``:
 
 ```{code-cell}
 print(f"Nucleotide diversity for default JC69 with rate {rate}: {mts.diversity():.4f}")
-print(f"              parent-independent JC69 with rate {rate}: {mts1.diversity():.4f}")
-print(f"              parent-independent JC69 with rate {rate * 4/3}: {mts_with_silent.diversity():.4f}")
+print(f"               state-independent JC69 with rate {rate}: {mts1.diversity():.4f}")
+print(f"               state-independent JC69 with rate {rate * 4/3}: {mts_with_silent.diversity():.4f}")
 ```
 
 Here's the takeaways from this section:
 
 ```{attention}
 1. If you're going to add mutations to the same tree sequence more than once,
-    you should use the ``parent_independent`` mutation models
+    you should use the ``state_independent`` mutation models
     (or carefully consider the consequences).
-2. If you use a parent-independent model, you need to make your mutation rate higher,
+2. If you use a state-independent model, you need to make your mutation rate higher,
     to account for the silent mutations. See {ref}`sec_mutations_adjusting_for_silent`
     for more details.
 ```
