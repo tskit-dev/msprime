@@ -901,6 +901,16 @@ def _parse_sim_ancestry(
     is_dtwf = isinstance(models[0], DiscreteTimeWrightFisher)
     is_pedigree = any(isinstance(model, FixedPedigree) for model in models)
 
+    if record_full_arg:
+        if is_dtwf:
+            raise ValueError(
+                "Full ARG recording not supported in DiscreteTimeWrightFisher simulation"
+            )
+        if is_pedigree:
+            raise ValueError(
+                "Full ARG recording not supported in FixedPedigree simulation"
+            )
+
     if is_pedigree:
         if demography is not None:
             raise ValueError("Cannot specify demography for FixedPedigree simulation")
@@ -918,10 +928,6 @@ def _parse_sim_ancestry(
         if gene_conversion_map.total_mass != 0:
             raise ValueError(
                 "Gene conversion not supported in FixedPedigree simulation"
-            )
-        if record_full_arg:
-            raise ValueError(
-                "Full ARG recording not supported in FixedPedigree simulation"
             )
         if record_migrations:
             raise ValueError(

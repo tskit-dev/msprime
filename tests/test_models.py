@@ -560,6 +560,20 @@ class TestUnsupportedFullArg:
 
     def test_dtwf(self):
         for model in [msprime.DiscreteTimeWrightFisher()]:
+            with pytest.raises(
+                ValueError, match="not supported in DiscreteTimeWrightFisher"
+            ):
+                msprime.sim_ancestry(
+                    10,
+                    model=model,
+                    record_full_arg=True,
+                )
+
+    def test_dtwf_simulate(self):
+        """
+        Old "simulate" command gives a less descriptive error message
+        """
+        for model in [msprime.DiscreteTimeWrightFisher()]:
             with pytest.raises(_msprime.LibraryError):
                 msprime.simulate(
                     10,
