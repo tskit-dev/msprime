@@ -2784,6 +2784,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     int ret = 0;
     bool coalescence = false;
     bool defrag_required = false;
+    bool store_edge = false;
     tsk_id_t v;
     double l, r, l_min, r_max;
     avl_node_t *node;
@@ -2938,6 +2939,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
         }
     }
     if (self->store_full_arg) {
+        store_edge = true;
         if (!coalescence) {
             ret = msp_store_node(
                 self, MSP_NODE_IS_CA_EVENT, self->time, population_id, TSK_NULL);
@@ -2945,17 +2947,29 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 goto out;
             }
         }
-        // is specified new_node_id impossible when recording full_arg?
-        ret = msp_store_arg_edges(self, z, TSK_NULL);
+
+    } else {
+        if (self->store_unary) {
+            if (new_node_id != TSK_NULL) {
+                store_edge = true;
+            } else {
+                if (self->model.type == MSP_MODEL_DTWF) {
+                    new_node_id = msp_store_node(
+                        self, MSP_NODE_IS_CA_EVENT, self->time, population_id, TSK_NULL);
+                    ret = (int) new_node_id;
+                    if (ret < 0) {
+                        goto out;
+                    }
+                    store_edge = true;
+                }
+            }
+        }
+    }
+
+    if (store_edge) {
+        ret = msp_store_arg_edges(self, z, new_node_id);
         if (ret != 0) {
             goto out;
-        }
-    } else {
-        if (self->store_unary && coalescence) {
-            ret = msp_store_arg_edges(self, z, new_node_id);
-            if (ret < 0) {
-                goto out;
-            }
         }
     }
     if (defrag_required) {
@@ -3020,6 +3034,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     int ret = MSP_ERR_GENERIC;
     bool coalescence = false;
     bool defrag_required = false;
+    bool store_edge = false;
     uint32_t j, h;
     double l, r, r_max, next_l, l_min;
     avl_node_t *node;
@@ -3180,6 +3195,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         }
     }
     if (self->store_full_arg) {
+        store_edge = true;
         if (!coalescence) {
             ret = msp_store_node(
                 self, MSP_NODE_IS_CA_EVENT, self->time, population_id, individual);
@@ -3187,7 +3203,27 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                 goto out;
             }
         }
-        ret = msp_store_arg_edges(self, z, TSK_NULL);
+    } else {
+        if (self->store_unary) {
+            if (new_node_id != TSK_NULL) {
+                store_edge = true;
+            } else {
+                if (self->model.type == MSP_MODEL_DTWF) {
+                    // PASS_THROUGH_EVENT have been dealth with in merge_n_ancestors
+                    new_node_id = msp_store_node(self, MSP_NODE_IS_CA_EVENT, self->time,
+                        population_id, individual);
+                    ret = (int) new_node_id;
+                    if (ret < 0) {
+                        goto out;
+                    }
+                    store_edge = true;
+                }
+            }
+        }
+    }
+
+    if (store_edge) {
+        ret = msp_store_arg_edges(self, z, new_node_id);
         if (ret != 0) {
             goto out;
         }
@@ -3246,6 +3282,21 @@ msp_merge_n_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
 
     if (num_common_ancestors == 1) {
         merged_head = msp_priority_queue_pop(self, Q);
+        if (self->store_unary) {
+            if (self->model.type == MSP_MODEL_DTWF) {
+                new_node_id = msp_store_node(
+                    /*FIXME: not a CA_EVENT but PASS_THROUGH_EVENT*/
+                    self, MSP_NODE_IS_CA_EVENT, self->time, population_id, TSK_NULL);
+                ret = (int) new_node_id;
+                if (ret < 0) {
+                    goto out;
+                }
+            }
+            ret = msp_store_arg_edges(self, merged_head, new_node_id);
+            if (ret != 0) {
+                goto out;
+            }
+        }
     } else if (num_common_ancestors >= 2) {
         msp_remove_individuals_from_population(self, Q);
         if (num_common_ancestors == 2) {

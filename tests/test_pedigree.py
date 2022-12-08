@@ -1535,6 +1535,61 @@ class TestWritePedigreeErrors:
             pedigrees.write_pedigree(tables.tree_sequence(), io.StringIO())
 
 
+class TestPedigreeUnary:
+    def test_pedigree_unary(self):
+        initial_state = simulate_pedigree(
+            num_founders=3, num_generations=5, sequence_length=100
+        )
+        ts = msprime.sim_ancestry(
+            recombination_rate=0.1,
+            model="fixed_pedigree",
+            record_unary=True,
+            initial_state=initial_state,
+        )
+        self.verify_pedigree_unary(ts)
+
+    def test_pedigree_unary_simple(self):
+        sequence_length = 100
+        pb = msprime.PedigreeBuilder()
+        mmid = pb.add_individual(time=2)
+        mdid = pb.add_individual(time=2)
+        dmid = pb.add_individual(time=2)
+        ddid = pb.add_individual(time=2)
+        mid = pb.add_individual(time=1, parents=[mmid, mdid])
+        did = pb.add_individual(time=1, parents=[dmid, ddid])
+        pb.add_individual(time=0, parents=[mid, did], is_sample=True)
+        pedigree = pb.finalise(sequence_length)
+        ts = msprime.sim_ancestry(
+            recombination_rate=0.1,
+            model="fixed_pedigree",
+            record_unary=True,
+            initial_state=pedigree,
+        )
+        self.verify_pedigree_unary(ts)
+
+    def verify_pedigree_unary(self, ts):
+        direct_ancestors = [set() for _ in range(ts.num_nodes)]
+
+        # collect all direct ancestors for each node
+        # assuming the initial tables are not modified by the
+        # pedigree simulation
+        for node in ts.nodes():
+            individual = ts.individual(node.individual)
+            for parent_id in individual.parents:
+                if parent_id != tskit.NULL:
+                    parent = ts.individual(parent_id)
+                    for parent_node in parent.nodes:
+                        direct_ancestors[node.id].add(parent_node)
+
+        # assert that in each marginal tree all nodes a parent from
+        # the constructed set
+        for tree in ts.trees():
+            for node_id in tree.nodes():
+                if tree.parent(node_id) != tskit.NULL:
+                    direct_ancestor = direct_ancestors[node_id]
+                    assert tree.parent(node_id) in direct_ancestor
+
+
 if __name__ == "__main__":
     # Easy way to output a simulated pedigree for command line testing.
     # Run with python3 tests/test_pedigree.py NUM_FOUNDERS NUM_GENERATIONS > out.trees

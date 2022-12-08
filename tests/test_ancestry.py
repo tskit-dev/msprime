@@ -408,6 +408,34 @@ class TestStoreUnary:
         tree.next()
         assert tree.parent_array[left_root] == tree.root
 
+    def verify_dtwf_unary(self, ts):
+        # assert all nodes in each tree and subtree only differ one generation
+        for tree in ts.trees():
+            queue = [tree.root]
+            while queue:
+                parent = queue.pop(0)
+                time = tree.time(parent) - 1
+                num_children = 0
+                for child in tree.children(parent):
+                    assert tree.time(child) == time
+                    queue.append(child)
+                    num_children += 1
+                if num_children == 0:
+                    assert tree.time(parent) == 0
+
+    def test_dtwf_store_unary(self):
+        ts = msprime.sim_ancestry(
+            10,
+            population_size=100,
+            model="dtwf",
+            ploidy=2,
+            random_seed=1234,
+            recombination_rate=1,
+            sequence_length=100,
+            record_unary=True,
+        )
+        self.verify_dtwf_unary(ts)
+
 
 class TestSimulator:
     """

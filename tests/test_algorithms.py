@@ -54,6 +54,43 @@ def verify_unary(ts):
             assert maxc >= 2
 
 
+def verify_pedigree_unary(ts):
+    direct_ancestors = [set() for _ in range(ts.num_nodes)]
+
+    # collect all direct ancestors for each node
+    for node in ts.nodes():
+        individual = ts.individual(node.individual)
+        for parent_id in individual.parents:
+            if parent_id != tskit.NULL:
+                parent = ts.individual(parent_id)
+                for parent_node in parent.nodes:
+                    direct_ancestors[node.id].add(parent_node)
+
+    # assert that in each marginal tree all nodes a parent from
+    # the constructed set
+    for tree in ts.trees():
+        for node_id in tree.nodes():
+            if tree.parent(node_id) != tskit.NULL:
+                direct_ancestor = direct_ancestors[node_id]
+                assert tree.parent(node_id) in direct_ancestor
+
+
+def verify_dtwf_unary(ts):
+    # assert all nodes in each tree and subtree only differ one generation
+    for tree in ts.trees():
+        queue = [tree.root]
+        while queue:
+            parent = queue.pop(0)
+            time = tree.time(parent) - 1
+            num_children = 0
+            for child in tree.children(parent):
+                assert tree.time(child) == time
+                queue.append(child)
+                num_children += 1
+            if num_children == 0:
+                assert tree.time(parent) == 0
+
+
 @pytest.mark.skipif(IS_WINDOWS, reason="Bintrees isn't availble on windows")
 class TestAlgorithms:
     def run_script(self, cmd):
@@ -93,6 +130,13 @@ class TestAlgorithms:
         ts = self.run_script("10 -d --model=dtwf")
         assert ts.num_trees > 1
         assert has_discrete_genome(ts)
+
+    def test_dtwf_store_unary(self):
+        ts = self.run_script("10 --model=dtwf --store-unary")
+        assert ts.num_trees > 1
+        assert not has_discrete_genome(ts)
+        assert ts.sequence_length == 100
+        verify_dtwf_unary(ts)
 
     def test_full_arg(self):
         ts = self.run_script("30 -L 200 --full-arg")
@@ -277,3 +321,13 @@ class TestAlgorithms:
             tables.dump(ts_path)
             ts = self.run_script(f"0 --from-ts {ts_path} -r 1 --model=fixed_pedigree")
         assert len(ts.dump_tables().edges) == 0
+
+    def test_store_unary_pedigree(self):
+        tables = simulate_pedigree(num_founders=4, num_generations=10)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
+            tables.dump(ts_path)
+            ts = self.run_script(
+                f"0 --from-ts {ts_path} -r 1 --model=fixed_pedigree --store-unary"
+            )
+        verify_pedigree_unary(ts)

@@ -1140,6 +1140,10 @@ class Simulator:
                 for h in H:
                     segments_to_merge = len(h)
                     if segments_to_merge == 1:
+                        if self.store_unary:
+                            # FIXME: should be flagged as a PASS_TRHOUGH_EVENT
+                            new_node_id = self.store_node(pop_idx)
+                            self.store_arg_edges(h[0][1], new_node_id)
                         h = []
                     elif segments_to_merge >= 2:
                         for _, individual in h:
@@ -1247,8 +1251,8 @@ class Simulator:
             for ploid in range(ind.ploidy):
                 self.process_pedigree_common_ancestors(ind, ploid)
 
-    def store_arg_edges(self, segment, u=None):
-        if u is None:
+    def store_arg_edges(self, segment, u=-1):
+        if u == -1:
             u = len(self.tables.nodes) - 1
         # Store edges pointing to current node to the left
         x = segment
@@ -1724,6 +1728,7 @@ class Simulator:
         pop = self.P[pop_id]
         defrag_required = False
         coalescence = False
+        store_edge = False
         alpha = None
         z = None
         merged_head = None
@@ -1802,9 +1807,20 @@ class Simulator:
                 self.set_segment_mass(alpha)
                 z = alpha
         if self.full_arg:
+            store_edge = True
             if not coalescence:
-                self.store_node(pop_id, flags=msprime.NODE_IS_CA_EVENT)
-            self.store_arg_edges(z)
+                new_node_id = self.store_node(pop_id, flags=msprime.NODE_IS_CA_EVENT)
+
+        elif self.store_unary:
+            if new_node_id != -1:
+                store_edge = True
+            elif self.model == "dtwf":
+                # PASS_THROUGH_EVENT has been dealt with in merge_n_ancestors
+                new_node_id = self.store_node(pop_id, flags=msprime.NODE_IS_CA_EVENT)
+                store_edge = True
+
+        if store_edge:
+            self.store_arg_edges(z, new_node_id)
         if defrag_required:
             self.defrag_segment_chain(z)
         if coalescence:
@@ -1853,6 +1869,8 @@ class Simulator:
         z = None
         coalescence = False
         defrag_required = False
+        store_edge = False
+        u = -1
         while x is not None or y is not None:
             alpha = None
             if x is None or y is None:
@@ -1939,10 +1957,17 @@ class Simulator:
                 z = alpha
 
         if self.full_arg:
+            store_edge = True
             if not coalescence:
                 u = self.store_node(population_index, flags=msprime.NODE_IS_CA_EVENT)
-            self.store_arg_edges(z, u)
-        elif self.store_unary and coalescence:
+        elif self.store_unary:
+            if u != -1:
+                store_edge = True
+            elif self.model == "dtwf":
+                u = self.store_node(population_index)
+                store_edge = True
+
+        if store_edge:
             self.store_arg_edges(z, u)
         if defrag_required:
             self.defrag_segment_chain(z)

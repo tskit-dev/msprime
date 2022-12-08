@@ -104,9 +104,31 @@ verify_complete_pedigree_simulation(
 }
 
 static void
+verify_store_unary(tsk_table_collection_t *tables)
+{
+    tsk_size_t num_edges, num_edges_simple;
+    int ret;
+    tsk_treeseq_t ts;
+
+    /* verify whether there is at least one unary node */
+    num_edges = tables->edges.num_rows;
+    ret = tsk_table_collection_simplify(
+        tables, NULL, 0, TSK_SIMPLIFY_KEEP_INPUT_ROOTS, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    num_edges_simple = tables->edges.num_rows;
+    CU_ASSERT_TRUE(num_edges_simple < num_edges);
+    /* Is this a valid tree sequence? */
+    ret = tsk_treeseq_init(&ts, tables, TSK_TS_INIT_BUILD_INDEXES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    /* tsk_table_collection_print_state(tables, stdout); */
+
+    tsk_treeseq_free(&ts);
+}
+
+static void
 verify_pedigree(double recombination_rate, unsigned long seed,
     tsk_size_t num_individuals, tsk_id_t *parents, double *time, tsk_flags_t *is_sample,
-    tsk_id_t *population)
+    tsk_id_t *population, bool store_unary)
 {
     int ret;
     int ploidy = 2;
@@ -125,6 +147,8 @@ verify_pedigree(double recombination_rate, unsigned long seed,
     num_nodes = msp.tables->nodes.num_rows;
     ret = msp_set_recombination_rate(&msp, recombination_rate);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_store_unary(&msp, store_unary);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -163,6 +187,10 @@ verify_pedigree(double recombination_rate, unsigned long seed,
     }
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
+    if (store_unary) {
+        verify_store_unary(&tables);
+    }
+
     tsk_tree_free(&tree);
     tsk_treeseq_free(&ts);
     gsl_rng_free(rng);
@@ -177,7 +205,7 @@ test_trio(void)
     tsk_id_t parents[] = { -1, -1, -1, -1, 0, 1 };
     double time[] = { 1, 1, 0 };
 
-    verify_pedigree(0, 1, 3, parents, time, NULL, NULL);
+    verify_pedigree(0, 1, 3, parents, time, NULL, NULL, false);
 }
 
 static void
@@ -186,8 +214,8 @@ test_three_generations(void)
     tsk_id_t parents[] = { -1, -1, -1, -1, -1, -1, -1, -1, 0, 1, 2, 3, 4, 5 };
     double time[] = { 2, 2, 2, 2, 1, 1, 0 };
 
-    verify_pedigree(0, 1234, 7, parents, time, NULL, NULL);
-    verify_pedigree(0.1, 1234, 7, parents, time, NULL, NULL);
+    verify_pedigree(0, 1234, 7, parents, time, NULL, NULL, false);
+    verify_pedigree(0.1, 1234, 7, parents, time, NULL, NULL, false);
 }
 
 static void
@@ -198,8 +226,8 @@ test_sibs(void)
     int seed;
 
     for (seed = 1; seed < 10; seed++) {
-        verify_pedigree(1, seed, 4, parents, time, NULL, NULL);
-        verify_pedigree(0, seed, 4, parents, time, NULL, NULL);
+        verify_pedigree(1, seed, 4, parents, time, NULL, NULL, false);
+        verify_pedigree(0, seed, 4, parents, time, NULL, NULL, false);
     }
 }
 
@@ -212,8 +240,8 @@ test_ancient_sample(void)
     int seed;
 
     for (seed = 1; seed < 10; seed++) {
-        verify_pedigree(0.1, seed, 4, parents, time, is_sample, NULL);
-        verify_pedigree(0, seed, 4, parents, time, is_sample, NULL);
+        verify_pedigree(0.1, seed, 4, parents, time, is_sample, NULL, false);
+        verify_pedigree(0, seed, 4, parents, time, is_sample, NULL, false);
     }
 }
 
@@ -224,8 +252,10 @@ test_large_family(void)
     size_t n = sizeof(large_family_time) / sizeof(*large_family_time);
 
     for (seed = 1; seed < 10; seed++) {
-        verify_pedigree(1, seed, n, large_family_parents, large_family_time, NULL, NULL);
-        verify_pedigree(0, seed, n, large_family_parents, large_family_time, NULL, NULL);
+        verify_pedigree(
+            1, seed, n, large_family_parents, large_family_time, NULL, NULL, false);
+        verify_pedigree(
+            0, seed, n, large_family_parents, large_family_time, NULL, NULL, false);
     }
 }
 
@@ -235,8 +265,8 @@ test_unrelated_n3(void)
     tsk_id_t parents[] = { -1, -1, -1, -1, -1, -1 };
     double time[] = { 0.0, 0.0, 0.0 };
 
-    verify_pedigree(0, 1, 3, parents, time, NULL, NULL);
-    verify_pedigree(0.1, 1, 3, parents, time, NULL, NULL);
+    verify_pedigree(0, 1, 3, parents, time, NULL, NULL, false);
+    verify_pedigree(0.1, 1, 3, parents, time, NULL, NULL, false);
 }
 
 static void
@@ -244,8 +274,11 @@ test_very_deep_n2(void)
 {
     size_t n = sizeof(very_deep_n2_time) / sizeof(*very_deep_n2_time);
 
-    verify_pedigree(0, 1, n, very_deep_n2_parents, very_deep_n2_time, NULL, NULL);
-    verify_pedigree(0.1, 1, n, very_deep_n2_parents, very_deep_n2_time, NULL, NULL);
+    verify_pedigree(0, 1, n, very_deep_n2_parents, very_deep_n2_time, NULL, NULL, false);
+    verify_pedigree(
+        0.1, 1, n, very_deep_n2_parents, very_deep_n2_time, NULL, NULL, false);
+    verify_pedigree(
+        0.1, 1, n, very_deep_n2_parents, very_deep_n2_time, NULL, NULL, true);
 }
 
 static void
@@ -253,8 +286,10 @@ test_two_pedigrees(void)
 {
     size_t n = sizeof(two_pedigrees_time) / sizeof(*two_pedigrees_time);
 
-    verify_pedigree(0, 1, n, two_pedigrees_parents, two_pedigrees_time, NULL, NULL);
-    verify_pedigree(0.1, 1, n, two_pedigrees_parents, two_pedigrees_time, NULL, NULL);
+    verify_pedigree(
+        0, 1, n, two_pedigrees_parents, two_pedigrees_time, NULL, NULL, false);
+    verify_pedigree(
+        0.1, 1, n, two_pedigrees_parents, two_pedigrees_time, NULL, NULL, false);
 }
 
 static void
@@ -264,8 +299,9 @@ test_deep_n2(void)
         = { -1, -1, -1, -1, 0, 1, 0, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7, 6, 7, 8, 9, 8, 9 };
     double time[] = { 5.0, 5.0, 4.0, 4.0, 3.0, 3.0, 2.0, 2.0, 1.0, 1.0, 0.0, 0.0 };
 
-    verify_pedigree(0, 1, 12, parents, time, NULL, NULL);
-    verify_pedigree(0.1, 1, 12, parents, time, NULL, NULL);
+    verify_pedigree(0, 1, 12, parents, time, NULL, NULL, false);
+    verify_pedigree(0.1, 1, 12, parents, time, NULL, NULL, false);
+    verify_pedigree(0.1, 1, 12, parents, time, NULL, NULL, true);
 }
 
 static void
@@ -273,8 +309,9 @@ test_deep_n10(void)
 {
     size_t n = sizeof(deep_n10_time) / sizeof(*deep_n10_time);
 
-    verify_pedigree(0, 1, n, deep_n10_parents, deep_n10_time, NULL, NULL);
-    verify_pedigree(0.1, 1, n, deep_n10_parents, deep_n10_time, NULL, NULL);
+    verify_pedigree(0, 1, n, deep_n10_parents, deep_n10_time, NULL, NULL, false);
+    verify_pedigree(0.1, 1, n, deep_n10_parents, deep_n10_time, NULL, NULL, false);
+    verify_pedigree(1, 1, n, deep_n10_parents, deep_n10_time, NULL, NULL, true);
 }
 
 static void
@@ -317,8 +354,8 @@ test_shallow_n100(void)
     size_t n = sizeof(time) / sizeof(*time);
 
     for (int seed = 1; seed < 5; seed++) {
-        verify_pedigree(0, seed, n, parents, time, NULL, NULL);
-        verify_pedigree(0.1, seed, n, parents, time, NULL, NULL);
+        verify_pedigree(0, seed, n, parents, time, NULL, NULL, false);
+        verify_pedigree(0.1, seed, n, parents, time, NULL, NULL, false);
     }
 }
 
@@ -860,7 +897,7 @@ test_trio_same_pop(void)
     double time[] = { 1, 1, 0 };
     tsk_id_t population[] = { 2, 2, 2 };
 
-    verify_pedigree(0, 1, 3, parents, time, NULL, population);
+    verify_pedigree(0, 1, 3, parents, time, NULL, population, false);
 }
 
 static void
@@ -871,7 +908,7 @@ test_trio_child_different_pop(void)
     double time[] = { 1, 1, 0 };
     tsk_id_t population[] = { 2, 2, 1 };
 
-    verify_pedigree(0, 1, 3, parents, time, NULL, population);
+    verify_pedigree(0, 1, 3, parents, time, NULL, population, false);
 }
 
 int

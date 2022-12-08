@@ -825,6 +825,49 @@ test_dtwf_multi_locus_simulation(void)
 }
 
 static void
+test_dtwf_multi_locus_simulation_unary(void)
+{
+    int ret;
+    const char *model_name;
+    uint32_t n = 100;
+    msp_t msp;
+    tsk_size_t num_edges, num_edges_simple;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+
+    ret = build_sim(&msp, &tables, rng, 100, 1, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(&msp, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, n, 0, true);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_store_unary(&msp, true);
+    CU_ASSERT_EQUAL(ret, 0);
+    model_name = msp_get_model_name(&msp);
+    CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp, 0);
+
+    // verify whether there is at least one unary node
+    num_edges = tables.edges.num_rows;
+    ret = tsk_table_collection_simplify(&tables, NULL, 0, 0, NULL);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    num_edges_simple = tables.edges.num_rows;
+    CU_ASSERT_TRUE(num_edges_simple < num_edges);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_dtwf_deterministic(void)
 {
     int j, ret;
@@ -3573,6 +3616,8 @@ main(int argc, char **argv)
 
         { "test_dtwf_single_locus_simulation", test_dtwf_single_locus_simulation },
         { "test_dtwf_multi_locus_simulation", test_dtwf_multi_locus_simulation },
+        { "test_dtwf_multi_locus_simulation_unary",
+            test_dtwf_multi_locus_simulation_unary },
         { "test_dtwf_deterministic", test_dtwf_deterministic },
         { "test_dtwf_simultaneous_historical_samples",
             test_dtwf_simultaneous_historical_samples },
