@@ -492,12 +492,13 @@ Here are the available models; they are documented in more detail below.
 ### Matrix Mutation Models
 
 These classes are defined by an alphabet of possible alleles (`alleles`); an array of
-probabilities that determines how likely each allele is to be the root, ancestral allele
-(`root_distribution`); and a transition matrix specifying the probability for each allele
-to mutate to every other allele. Each class has specific values of these parameters to
-create the specific model. For your own custom model these parameters can be set using
+probabilities that determines how likely each allele is to be the root or ancestral
+allele (`root_distribution`); and a `transition_matrix` specifying the probabilities,
+given a mutation has occurred, that each allele will mutate to every other allele.
+Each class generates particular values for these parameters to create the specific model.
+For your own custom model these parameters can be set using
 {class}`msprime.MatrixMutationModel`. For more detail about how mutations are simulated
-in these models see {ref}`sec_mutations_matrix_mutation_models_details`.
+in these models see {ref}`sec_mutations_matrix_mutation_theory`.
 
 (sec_mutations_matrix_mutation_models_details)=
 
@@ -540,8 +541,9 @@ model = msprime.MatrixMutationModel(
                          [0.0, 0.8, 0.2],
                          [1.0, 0.0, 0.0]]
 )
+rate = 2
 ts = msprime.sim_ancestry(6, population_size=10, random_seed=2, sequence_length=7)
-mts = msprime.sim_mutations(ts, rate=2, random_seed=1, model=model)
+mts = msprime.sim_mutations(ts, rate=rate, random_seed=1, model=model)
 
 ```
 
@@ -551,10 +553,8 @@ As a result, roughly 5/7th of the states will be 🎄, with the remainder
 divided evenly between 💩 and 🔥. Here is the resulting "genotype matrix":
 
 ```{code-cell}
-
 for v in mts.variants():
    print("".join(v.alleles[k] for k in v.genotypes))
-
 
 ```
 
@@ -562,19 +562,7 @@ for v in mts.variants():
 
 #### Parameterisation of Matrix Mutation Models
 
-Mutation matrix models are specified by three things: an alphabet,
-a root distribution, and a transition matrix.
-These leave one free parameter: an overall mutation rate,
-specified by the mutation `rate` in the call to {func}`.sim_mutations`.
-Concisely,
-the underlying model of mutation is a continuous-time Markov chain on the alphabet,
-started by a draw from `root_distribution`, and
-with instantaneous transition rate from `i` to `j` that is equal to
-`rate` multiplied by `transition_matrix[i,j]`.
-The `root distribution` and every row in the `transition_matrix`
-must give *probabilities*, i.e., they must be nonnegative numbers summing to 1.
-
-To interpret these parameters,
+To interpret the `root_distribution` and `transition_matrix` parameters,
 it helps to know how the underlying mutational process is implemented.
 First, mutations are placed on the tree,
 with a mean density equal to the `rate`, per unit of time and sequence length.
@@ -596,28 +584,43 @@ contains nonzero entries, then the mutated tree sequence will
 (probably) contain silent mutations.
 
 Some facts about Markov chains are useful to interpret the statistics
-of these mutation models.
-First, suppose we have tabulated all mutations, and so for each pair of alleles
-{math}`i` and {math}`j` we have the proportion of mutations that caused an {math}`i \to j` change.
-If allele {math}`i` mutates to a different allele, the chance it mutates to allele {math}`j`
-is proportional to `transition_matrix[i,j]` but excluding the diagonal (no-change) entry,
-so is equal to `transition_matrix[i,j] / (1 - transition_matrix[i,i])`.
+of these mutation models. First, suppose we have tabulated all mutations, and so
+for each pair of alleles {math}`i` and {math}`j` we have the proportion of mutations
+that caused an {math}`i \to j` change. If allele {math}`i` mutates to a different allele,
+the chance it mutates to allele {math}`j` is proportional to `transition_matrix[i,j]` but
+excluding the diagonal (no-change) entry, so is equal to
+`transition_matrix[i,j] / (1 - transition_matrix[i,i])`.
 Second, suppose that an ancestor carries allele {math}`i` at a given position.
-The probability that her descendant some time {math}`t` in the future carries allele {math}`j` at that position
-is given by a matrix exponential of
-the scaled [infinitesimal rate matrix](<https://en.wikipedia.org/wiki/Transition_rate_matrix>) of the Markov chain,
-which can be computed as follows:
+The probability {math}`P(t)` that her descendant some time {math}`t` in the future
+carries allele {math}`j` can be found using the scaled
+[infinitesimal rate matrix](<https://en.wikipedia.org/wiki/Transition_rate_matrix>) of
+the Markov chain, {math}`Q`, and taking its matrix exponential:
 
-```{code-block} python
+```{code-cell} python
 import scipy
 
-Q = (transition_matrix - np.eye(len(alleles)))
-Pt = scipy.linalg.expm(t * rate * Q)[i,j]
+Q = model.transition_matrix - np.eye(len(model.alleles))
+t = 0.1  # time
+scaled_Q = t * rate * Q
+Pt = scipy.linalg.expm(scaled_Q)
 
+
+print("P(t) = probs of allele change along a branch of length", t)
+print()
+print("    ----  End  state ----")
+print(" ".join(f"{s:>6}" for s in model.alleles))
+for i, s in enumerate(model.alleles):
+    print(f"{s} " + " ".join(f"{Pt[i,j]:.5f}" for j in range(len(model.alleles))))
 ```
 
 If the top of a branch of length {math}`t` has allele {math}`i`,
-the bottom of the branch has allele {math}`j` with probability `Pt[i,j]`.
+the bottom of the branch has allele {math}`j` with probability `Pt[i,j]`. Note that
+these values are sometimes called the "transition probabilities" for a branch, and
+therefore you may see the matrix {math}`P(t)` also being refered to as a
+"transition matrix"; this should not be confused with the probabilities of a single
+mutation resulting in each allele type, as specified via the `transition_matrix`
+parameter and stored under that name as an attribute of the underlying
+{class}`msprime.MatrixMutationModel`.
 
 (sec_mutations_adjusting_for_silent)=
 
