@@ -493,8 +493,8 @@ Here are the available models; they are documented in more detail below.
 
 These classes are defined by an alphabet of possible alleles (`alleles`); an array of
 probabilities that determines how likely each allele is to be the root or ancestral
-allele (`root_distribution`); and a `transition_matrix` specifying the probabilities,
-given a mutation has occurred, that each allele will mutate to every other allele.
+allele (`root_distribution`); and a `transition_matrix` specifying the probabilities
+with which a given mutation changes each allele into each other allele.
 Each class generates particular values for these parameters to create the specific model.
 For your own custom model these parameters can be set using
 {class}`msprime.MatrixMutationModel`. For more detail about how mutations are simulated
