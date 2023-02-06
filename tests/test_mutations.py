@@ -2387,3 +2387,29 @@ class TestInputUnmodified:
         tables.time_units = time_units
         ts2 = msprime.sim_mutations(tables.tree_sequence(), rate=1, random_seed=2)
         assert ts2.time_units == time_units
+
+
+class TestNonStandardTopologies:
+    def test_record_unary(self):
+        ts = msprime.sim_ancestry(
+            20,
+            sequence_length=10,
+            random_seed=2,
+            record_unary=True,
+            recombination_rate=1,
+        )
+        assert ts.num_trees > 1
+        mutated = msprime.sim_mutations(ts, 2, random_seed=1234)
+        assert mutated.num_mutations > 0
+
+    def test_full_arg(self):
+        ts = msprime.sim_ancestry(
+            20,
+            sequence_length=10,
+            random_seed=2,
+            record_full_arg=True,
+            recombination_rate=1,
+        )
+        assert ts.num_trees > 1
+        mutated = msprime.sim_mutations(ts, 2, random_seed=1234)
+        assert mutated.num_mutations > 0
