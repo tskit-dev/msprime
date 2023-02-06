@@ -1277,3 +1277,45 @@ class TestBugExamples:
         d.add_population_split(T - 1, derived=[0], ancestral=1)
         with pytest.raises(_msprime.InputError, match="from an inactive"):
             msprime.sim_ancestry(initial_state=ts, demography=d)
+
+
+class TestNonStandardTopologies:
+    def test_record_unary(self):
+        ts = msprime.sim_ancestry(
+            20, sequence_length=100, random_seed=4, recombination_rate=0.1, end_time=0.5
+        )
+        assert ts.num_trees > 1
+        roots = set()
+        for tree in ts.trees():
+            for root in tree.roots:
+                if tree.num_children(root) == 1:
+                    roots.add(root)
+        rts = msprime.sim_ancestry(
+            initial_state=ts,
+            random_seed=4,
+            recombination_rate=0.1,
+            population_size=1,
+            record_unary=True,
+        )
+        assert rts.num_trees - ts.num_trees > 0
+        rts_simplified = rts.simplify()
+        assert rts.num_nodes == rts_simplified.num_nodes + len(roots)
+
+    def test_full_arg(self):
+        ts = msprime.sim_ancestry(
+            20, sequence_length=100, random_seed=2, recombination_rate=0.1, end_time=0.5
+        )
+        assert ts.num_trees > 1
+        rts = msprime.sim_ancestry(
+            initial_state=ts,
+            random_seed=2,
+            recombination_rate=1,
+            population_size=1,
+            record_full_arg=True,
+        )
+        assert rts.num_trees - ts.num_trees > 0
+        flags = rts.tables.nodes.flags
+        re_nodes = np.where(flags == msprime.NODE_IS_RE_EVENT)[0]
+        ca_nodes = np.where(flags == msprime.NODE_IS_CA_EVENT)[0]
+        assert np.sum(re_nodes) > 0
+        assert np.sum(ca_nodes) > 0

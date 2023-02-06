@@ -229,16 +229,16 @@ class TestFullArg:
 
 
 class TestStoreUnary:
-    def test_recombination_n25(self):
-        ts = msprime.sim_ancestry(
-            samples=25,
-            sequence_length=100,
-            recombination_rate=1,
-            record_unary=True,
-        )
-        self.verify_store_unary(ts)
+    """
+    Tests for recording unary nodes.
+    """
 
     def verify_store_unary(self, ts):
+        self.verify_min_max_children(ts)
+        tss = ts.simplify()
+        self.verify_simple_stats(ts, tss)
+
+    def verify_min_max_children(self, ts):
         min_children = np.zeros(ts.num_nodes, dtype=int)
         max_children = np.zeros_like(min_children)
 
@@ -256,6 +256,157 @@ class TestStoreUnary:
         for minc, maxc in zip(min_children, max_children):
             if minc == 1:
                 assert maxc >= 2
+
+    def verify_simple_stats(self, ts, ts_simplified):
+        assert ts.num_samples == ts_simplified.num_samples
+        assert ts.num_nodes == ts_simplified.num_nodes
+
+    def test_unary(self):
+        for n in [25, 50, 100]:
+            ts = msprime.sim_ancestry(
+                samples=n,
+                sequence_length=100,
+                recombination_rate=0.1,
+                record_unary=True,
+            )
+            self.verify_store_unary(ts)
+
+    def test_unary_smc(self):
+        for n in [25, 50, 100]:
+            ts = msprime.sim_ancestry(
+                samples=n,
+                sequence_length=100,
+                recombination_rate=0.1,
+                record_unary=True,
+                model="smc",
+            )
+            self.verify_store_unary(ts)
+
+    def test_unary_smc_prime(self):
+        for n in [25, 50, 100]:
+            ts = msprime.sim_ancestry(
+                samples=n,
+                sequence_length=100,
+                recombination_rate=0.1,
+                record_unary=True,
+                model="smc_prime",
+            )
+            self.verify_store_unary(ts)
+
+    def test_unary_sweep_coalescence(self):
+        N = 1e6
+        model = msprime.SweepGenicSelection(
+            position=0.5,
+            start_frequency=1.0 / (2 * N),
+            end_frequency=1.0 - (1.0 / (2 * N)),
+            s=100,
+            dt=1e-6,
+        )
+        ts = msprime.sim_ancestry(
+            10,
+            recombination_rate=1e-4,
+            model=[model, "hudson"],
+            population_size=N,
+            sequence_length=100,
+            record_unary=True,
+            random_seed=6974,
+        )
+        assert ts.num_trees > 1
+        assert all(tree.num_roots == 1 for tree in ts.trees())
+        self.verify_store_unary(ts)
+
+    def test_multimerger(self):
+        demography = msprime.Demography()
+        demography.add_population(initial_size=10_000)
+        demography.add_instantaneous_bottleneck(time=0.1, population=0, strength=5)
+        ts = msprime.sim_ancestry(
+            samples=20,
+            sequence_length=100,
+            recombination_rate=0.1,
+            record_unary=True,
+            demography=demography,
+        )
+        self.verify_store_unary(ts)
+
+    def test_unary_gene_conversion(self):
+        rate = 100
+        sim = ancestry._parse_sim_ancestry(
+            10,
+            sequence_length=100,
+            gene_conversion_rate=rate,
+            gene_conversion_tract_length=5,
+            record_unary=True,
+        )
+        sim.run()
+        assert sim.num_gene_conversion_events > 1
+        ts = tskit.TableCollection.fromdict(sim.tables.asdict()).tree_sequence()
+        self.verify_store_unary(ts)
+
+    def test_no_recombination(self):
+        # no recombination -> no unary nodes
+        ts = msprime.sim_ancestry(
+            samples=25,
+            sequence_length=100,
+            record_unary=True,
+        )
+        tss = ts.simplify()
+        assert ts.equals(tss, ignore_provenance=True)
+
+    def test_predefined_scenario(self):
+        # initial state
+        # 1.50┊ 5  6  ┊ 5  7  ┊
+        #     ┊ ┃  ┃  ┊ ┃  ┃  ┊
+        # 0.70┊ ┃  ┃  ┊ ┃  4  ┊
+        #     ┊ ┃  ┃  ┊ ┃ ┏┻┓ ┊
+        # 0.50┊ ┃  3  ┊ ┃ ┃ ┃ ┊
+        #     ┊ ┃ ┏┻┓ ┊ ┃ ┃ ┃ ┊
+        # 0.00┊ 0 1 2 ┊ 0 1 2 ┊
+        #     0       5      10
+        # completed simulation
+        #     ┊       ┊   9   ┊
+        #     ┊       ┊ ┏━┻┓  ┊
+        #     ┊   8   ┊ 8  ┃  ┊
+        #     ┊ ┏━┻┓  ┊ ┃  ┃  ┊
+        #     ┊ 5  6  ┊ 5  7  ┊
+        #     ┊ ┃  ┃  ┊ ┃  ┃  ┊
+        #     ┊ ┃  ┃  ┊ ┃  4  ┊
+        #     ┊ ┃  ┃  ┊ ┃ ┏┻┓ ┊
+        #     ┊ ┃  3  ┊ ┃ ┃ ┃ ┊
+        #     ┊ ┃ ┏┻┓ ┊ ┃ ┃ ┃ ┊
+        #     ┊ 0 1 2 ┊ 0 1 2 ┊
+        #     0       5      10
+
+        tables = tskit.TableCollection(sequence_length=10)
+        tables.time_units = "generations"
+        tables.nodes.set_columns(
+            time=np.array([0, 0, 0, 0.5, 0.7, 1.5, 1.5, 1.5]),
+            flags=np.array([1, 1, 1, 0, 0, 0, 0, 0], dtype="uint32"),
+            population=np.array([0, 0, 0, 0, 0, 1, 1, 0], dtype="int32"),
+        )
+        tables.edges.set_columns(
+            left=np.array([0, 0, 5, 5, 0, 0, 5]),
+            right=np.array([5, 5, 10, 10, 10, 5, 10]),
+            parent=np.array([3, 3, 4, 4, 5, 6, 7], dtype="int32"),
+            child=np.array([1, 2, 1, 2, 0, 3, 4], dtype="int32"),
+        )
+        tables.populations.add_row()
+        tables.populations.add_row()
+        demography = msprime.Demography()
+        demography.add_population(initial_size=100)
+        demography.add_population(initial_size=100)
+        demography.add_mass_migration(1e6, source=1, dest=0, proportion=1.0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            simulator = msprime.ancestry._parse_sim_ancestry(
+                initial_state=tables, demography=demography, record_unary=True
+            )
+        simulator._run_until(event_chunk=1, end_time=math.inf)
+        new_tables = tskit.TableCollection.fromdict(simulator.tables.asdict())
+        ts = new_tables.tree_sequence()
+        tree = ts.first()
+        left_root = tree.root
+        tree.next()
+        assert tree.parent_array[left_root] == tree.root
 
 
 class TestSimulator:
