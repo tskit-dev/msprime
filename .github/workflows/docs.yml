@@ -17,37 +17,34 @@ env:
 jobs:
   build-deploy-docs:
     name: Docs
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.6.0
+        uses: styfle/cancel-workflow-action@0.11.0
         with:
           access_token: ${{ github.token }}
 
-      - uses: actions/checkout@v2
-        # As we are using pull-request-target which uses the workflow from the base
-        # of the PR, we need to be specific
+      - uses: actions/checkout@v3
         with:
-            ref: ${{ github.event.pull_request.head.ref }}
-            repository: ${{ github.event.pull_request.head.repo.full_name }}
-            submodules: true
+          submodules: true
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
-          python-version: 3.8
+          python-version: "3.10"
 
-      - uses: actions/cache@v2
-        id: cache
+      - uses: actions/cache@v3
+        id: venv-cache
         with:
           path: venv
-          key: docs-venv-v2-${{ hashFiles('requirements/CI-docs/requirements.txt') }}
+          key: docs-venv-v7-${{ hashFiles('requirements/CI-docs/requirements.txt') }}
 
-      - name: Build virtualenv
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: python -m venv venv
-
-      - name: Install deps
-        run: venv/bin/activate && pip install -r requirements/CI-docs/requirements.txt
+      - name: Create venv and install deps (one by one to avoid conflict errors)
+        if: steps.venv-cache.outputs.cache-hit != 'true'
+        run: |
+          python -m venv venv
+          . venv/bin/activate
+          pip install --upgrade pip wheel
+          cat requirements/CI-docs/requirements.txt | sed -e '/^\s*#.*$/d' -e '/^\s*$/d' | xargs -n 1 pip install --no-dependencies
 
       - name: Install GSL
         if: env.BUILD_GSL == 'true'
@@ -55,10 +52,15 @@ jobs:
 
       - name: Build C module
         if: env.MAKE_TARGET
-        run: venv/bin/activate && make $MAKE_TARGET
+        run: |
+          . venv/bin/activate
+          make $MAKE_TARGET
 
       - name: Build Docs
-        run: venv/bin/activate && cd docs && make dist
+        run: |
+          . venv/bin/activate
+          cd docs
+          make
 
       - name: Trigger docs site rebuild
         if: github.ref == 'refs/heads/main'
