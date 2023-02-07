@@ -25,8 +25,17 @@ These pre-built binary packages are built using
    installation!
 2. Set up the [conda-forge channel](<https://conda-forge.org/>) using
    `conda config --add channels conda-forge`.
-3. Install msprime: `conda install msprime`.
-4. Try it out: `msp --version`.
+3. Create a [conda environment](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) and install msprime into it:
+    `conda create -n msprime-env msprime`
+4. [Activate](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#activating-an-environment)
+    the environment: `conda activate msprime-env`
+5. Try out msprime: `msp --version`.
+
+
+```{warning}
+Always use an environment when installing conda packages as installing
+can lead to many difficult to debug issues.
+```
 
 There are several different ways to obtain `conda`. Please see the
 [anaconda installation documentation](<https://docs.anaconda.com/anaconda/install/>)
@@ -86,18 +95,18 @@ Type "help", "copyright", "credits" or "license" for more information.
 >>> import msprime
 >>> ts = msprime.sim_ancestry(3)
 >>> print(ts.draw_text())
-3.18┊      10     ┊  
-    ┊    ┏━━┻━━┓  ┊  
-2.08┊    9     ┃  ┊  
-    ┊  ┏━┻━┓   ┃  ┊  
-0.80┊  ┃   ┃   8  ┊  
-    ┊  ┃   ┃  ┏┻┓ ┊  
-0.42┊  ┃   7  ┃ ┃ ┊  
-    ┊  ┃  ┏┻┓ ┃ ┃ ┊  
-0.34┊  6  ┃ ┃ ┃ ┃ ┊  
-    ┊ ┏┻┓ ┃ ┃ ┃ ┃ ┊  
-0.00┊ 0 4 1 3 2 5 ┊  
-  0.00          1.00 
+3.18┊      10     ┊
+    ┊    ┏━━┻━━┓  ┊
+2.08┊    9     ┃  ┊
+    ┊  ┏━┻━┓   ┃  ┊
+0.80┊  ┃   ┃   8  ┊
+    ┊  ┃   ┃  ┏┻┓ ┊
+0.42┊  ┃   7  ┃ ┃ ┊
+    ┊  ┃  ┏┻┓ ┃ ┃ ┊
+0.34┊  6  ┃ ┃ ┃ ┃ ┊
+    ┊ ┏┻┓ ┃ ┃ ┃ ┃ ┊
+0.00┊ 0 4 1 3 2 5 ┊
+  0.00          1.00
 ```
 
 Please see the [conda documentation](<https://conda.io/docs/index.html>) for
@@ -188,7 +197,7 @@ In particular, installation of [GNU Scientific
 Library](<http://www.gnu.org/software/gsl/>) (GSL) is sometimes needed:
 
 ```{eval-rst}
-.. glossary:: 
+.. glossary::
 
     Debian/Ubuntu
         ::
