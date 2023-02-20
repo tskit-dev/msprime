@@ -3521,6 +3521,66 @@ class ArgRecordTest(Test):
         self._run(sample_size=100, recombination_rate=2, model=model)
 
 
+class UnaryRecordTest(Test):
+    """
+    Check that we get the same distributions of nodes and edges when
+    we simplify a graph with unary nodes as we get in a direct simulation.
+    """
+
+    def _run(self, num_replicates=1000, **kwargs):
+        ts_node_counts = np.array([])
+        unary_node_counts = np.array([])
+        ts_tree_counts = np.array([])
+        unary_tree_counts = np.array([])
+        ts_edge_counts = np.array([])
+        unary_edge_counts = np.array([])
+        for ts in msprime.sim_ancestry(num_replicates=num_replicates, **kwargs):
+            ts_node_counts = np.append(ts_node_counts, ts.num_nodes)
+            ts_tree_counts = np.append(ts_tree_counts, ts.num_trees)
+            ts_edge_counts = np.append(ts_edge_counts, ts.num_edges)
+
+        reps = msprime.sim_ancestry(
+            num_replicates=num_replicates, record_unary=True, **kwargs
+        )
+        for unary_ts in reps:
+            unary_ts = unary_ts.simplify()
+            unary_node_counts = np.append(unary_node_counts, unary_ts.num_nodes)
+            unary_tree_counts = np.append(unary_tree_counts, unary_ts.num_trees)
+            unary_edge_counts = np.append(unary_edge_counts, unary_ts.num_edges)
+
+        pp_ts = sm.ProbPlot(ts_node_counts)
+        pp_arg = sm.ProbPlot(unary_node_counts)
+        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
+        pyplot.savefig(self.output_dir / "nodes.png", dpi=72)
+
+        pp_ts = sm.ProbPlot(ts_tree_counts)
+        pp_arg = sm.ProbPlot(unary_tree_counts)
+        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
+        pyplot.savefig(self.output_dir / "num_trees.png", dpi=72)
+
+        pp_ts = sm.ProbPlot(ts_edge_counts)
+        pp_arg = sm.ProbPlot(unary_edge_counts)
+        sm.qqplot_2samples(pp_ts, pp_arg, line="45")
+        pyplot.savefig(self.output_dir / "edges.png", dpi=72)
+        pyplot.close("all")
+
+    def test_unary_continuous_n10_rho_20(self):
+        self._run(
+            samples=10, recombination_rate=20, discrete_genome=False, sequence_length=1
+        )
+
+    def test_unary_hudson_n1000_rho_0_002(self):
+        self._run(samples=1000, recombination_rate=0.002, sequence_length=100)
+
+    def test_unary_beta_n100_rho_0_002(self):
+        model = msprime.BetaCoalescent(alpha=1.1)
+        self._run(samples=2, recombination_rate=0.002, model=model, sequence_length=100)
+
+    def test_unary_dirac_n100_rho_0_002(self):
+        model = msprime.DiracCoalescent(psi=0.9, c=1)
+        self._run(samples=10, recombination_rate=0.2, model=model, sequence_length=100)
+
+
 class HudsonAnalytical(Test):
     """
     Miscellaneous tests for the hudson model where we verify against
