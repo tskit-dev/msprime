@@ -38,7 +38,7 @@ def check_newick_import():
         raise ImportError(
             "The 'newick' module is required for species tree parsing. "
             "If you installed msprime using conda, please install the "
-            "newick module using `conda install -c bioconda newick` or "
+            "newick module using `conda install -c bioconda python-newick` or "
             "'pip install newick'. If you installed msprime using pip "
             "newick should have been automatically installed; please "
             "open an issue on GitHub with details of your installation."
