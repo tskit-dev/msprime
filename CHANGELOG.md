@@ -14,6 +14,10 @@
   sequence that has no recombination nodes (({issue}`2123`, {pr}`2124`,
   {user}`hyanwong`)
 
+- Add ability to record specific node types with the `additional_nodes`
+  flag as well as record edges for coalescing nodes along non-coalescing segments. ({issue}`2128`, {issue}`2132`, {pr}`2162`,
+  {user}`GertjanBisschop`)
+
 ## [1.2.0] - 2022-05-18
 
 **New features**

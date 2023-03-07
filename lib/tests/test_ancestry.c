@@ -671,7 +671,7 @@ test_multi_locus_store_unary_simple(void)
     ret = build_sim(&msp, &tables, rng, 100, 1, NULL, n);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 10), 0);
-    ret = msp_set_store_unary(&msp, true);
+    ret = msp_set_coalescing_segments_only(&msp, false);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -1609,6 +1609,54 @@ test_beta_coalescent_bad_parameters(void)
 
     msp_free(&msp);
     tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
+test_multiple_mergers_unary_nodes(void)
+{
+    int ret;
+    uint32_t n = 10;
+    long seed = 11;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    tsk_size_t num_edges, num_edges_simple;
+    double beta_params[2] = { 1.1, 0.5 };
+    /* TODO what are good psi parameters here? */
+    double psi_params[2] = { 0.9, 10 };
+
+    for (int j = 0; j < 2; j++) {
+        gsl_rng_set(rng, seed);
+        ret = build_sim(&msp, &tables, rng, 100, 1, NULL, n);
+        CU_ASSERT_EQUAL(ret, 0);
+        CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 1), 0);
+        ret = msp_set_coalescing_segments_only(&msp, false);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_initialise(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        if (j == 0) {
+            ret = msp_set_simulation_model_dirac(&msp, psi_params[0], psi_params[1]);
+        } else {
+            ret = msp_set_simulation_model_beta(&msp, beta_params[0], beta_params[1]);
+        }
+
+        ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+        CU_ASSERT_EQUAL(ret, 0);
+        msp_verify(&msp, 0);
+
+        CU_ASSERT_TRUE(msp_get_num_breakpoints(&msp) > 0);
+        // verify whether there is at least one unary node
+        num_edges = tables.edges.num_rows;
+        ret = tsk_table_collection_simplify(&tables, NULL, 0, 0, NULL);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        num_edges_simple = tables.edges.num_rows;
+        CU_ASSERT_TRUE(num_edges_simple < num_edges);
+
+        ret = msp_free(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        tsk_table_collection_free(&tables);
+    }
     gsl_rng_free(rng);
 }
 
@@ -3550,6 +3598,138 @@ test_population_size_start_time(void)
     gsl_rng_free(rng);
 }
 
+static void
+test_additional_nodes_mig(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    sample_t samples[] = { { 0, 0.0 }, { 0, 0.0 }, { 1, 40.0 } };
+    tsk_table_collection_t tables;
+    tsk_node_table_t *nodes;
+    size_t num_migrations, num_nodes;
+    uint32_t n = 3;
+    double t0 = 30.0;
+    double t1 = 30.5;
+    double t2 = 40.5;
+    int i = 0;
+    double times[] = { t0, t1, t2 };
+
+    ret = build_sim(&msp, &tables, rng, 1, 2, samples, n);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_discrete_genome(&msp, false), 0);
+    ret = msp_set_store_migrations(&msp, true);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_mass_migration(&msp, t0, 0, 1, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_mass_migration(&msp, t1, 1, 0, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_add_mass_migration(&msp, t2, 1, 0, 1.0);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_additional_nodes(&msp, MSP_NODE_IS_MIG_EVENT);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_coalescing_segments_only(&msp, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    msp_print_state(&msp, _devnull);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp, 0);
+    msp_print_state(&msp, _devnull);
+
+    nodes = &msp.tables->nodes;
+    num_migrations = msp_get_num_migrations(&msp);
+    CU_ASSERT_EQUAL_FATAL(num_migrations, 3);
+    // compare migration table to recorded nodes
+    num_nodes = msp_get_num_nodes(&msp);
+
+    for (int j = 0; j < num_nodes; j++) {
+        if (nodes->flags[j] & MSP_NODE_IS_MIG_EVENT) {
+            CU_ASSERT_EQUAL(nodes->time[j], times[i]);
+            i += 1;
+        }
+    }
+    CU_ASSERT_EQUAL(i, num_migrations);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_additional_nodes_re_ca_gc(void)
+{
+    int ret;
+    uint32_t n = 10;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    tsk_size_t num_nodes_array[] = { 0, 0, 0 };
+    tsk_size_t num_events[3];
+    tsk_size_t num_nodes;
+    tsk_node_table_t *nodes;
+
+    ret = build_sim(&msp, &tables, rng, 100, 1, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 10), 0);
+    ret = msp_set_gene_conversion_rate(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_gene_conversion_tract_length(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_set_additional_nodes(
+        &msp, MSP_NODE_IS_RE_EVENT | MSP_NODE_IS_CA_EVENT | MSP_NODE_IS_GC_EVENT);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_set_coalescing_segments_only(&msp, false);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp, 0);
+
+    nodes = &msp.tables->nodes;
+    num_nodes = msp_get_num_nodes(&msp);
+
+    for (int j = 0; j < num_nodes; j++) {
+        switch (nodes->flags[j]) {
+            case MSP_NODE_IS_RE_EVENT:
+                num_nodes_array[0] += 1;
+                break;
+            case MSP_NODE_IS_CA_EVENT:
+                num_nodes_array[1] += 1;
+                break;
+            case MSP_NODE_IS_GC_EVENT:
+                num_nodes_array[2] += 1;
+                break;
+            case 0:
+                num_nodes_array[1] += 1;
+                break;
+        }
+    }
+
+    num_events[0] = 2 * msp_get_num_recombination_events(&msp);
+    num_events[1] = msp_get_num_common_ancestor_events(&msp);
+    num_events[2] = 2
+                    * (msp_get_num_internal_gene_conversion_events(&msp)
+                          - msp_get_num_noneffective_gene_conversion_events(&msp));
+
+    for (int i = 0; i < 3; i++) {
+        CU_ASSERT_TRUE(num_events[i] > 0);
+        CU_ASSERT_EQUAL(num_events[i], num_nodes_array[i]);
+    }
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -3596,6 +3776,7 @@ main(int argc, char **argv)
         { "test_multiple_mergers_growth_rate", test_multiple_mergers_growth_rate },
         { "test_dirac_coalescent_bad_parameters", test_dirac_coalescent_bad_parameters },
         { "test_beta_coalescent_bad_parameters", test_beta_coalescent_bad_parameters },
+        { "test_multipe_mergers_unary_nodes", test_multiple_mergers_unary_nodes },
 
         { "test_simulator_getters_setters", test_simulator_getters_setters },
         { "test_demographic_events", test_demographic_events },
@@ -3634,7 +3815,8 @@ main(int argc, char **argv)
         { "test_simulate_init_errors", test_simulate_init_errors },
         { "test_zero_population_size", test_zero_population_size },
         { "test_population_size_start_time", test_population_size_start_time },
-
+        { "test_additional_nodes_mig", test_additional_nodes_mig },
+        { "test_additional_nodes_re_ca_gc", test_additional_nodes_re_ca_gc },
         CU_TEST_INFO_NULL,
     };
 

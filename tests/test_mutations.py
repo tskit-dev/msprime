@@ -2395,7 +2395,7 @@ class TestNonStandardTopologies:
             20,
             sequence_length=10,
             random_seed=2,
-            record_unary=True,
+            coalescing_segments_only=False,
             recombination_rate=1,
         )
         assert ts.num_trees > 1

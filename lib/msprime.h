@@ -57,6 +57,7 @@
 #define MSP_NODE_IS_MIG_EVENT (1u << 19)
 #define MSP_NODE_IS_CEN_EVENT (1u << 20)
 #define MSP_NODE_IS_GC_EVENT (1u << 21)
+#define MSP_NODE_IS_PASS_THROUGH (1u << 22)
 
 /* Flags for verify */
 #define MSP_VERIFY_BREAKPOINTS (1 << 1)
@@ -195,7 +196,8 @@ typedef struct _msp_t {
     simulation_model_t model;
     bool store_migrations;
     bool store_full_arg;
-    bool store_unary;
+    uint32_t additional_nodes;
+    bool coalescing_segments_only;
     double sequence_length;
     bool discrete_genome;
     rate_map_t recomb_map;
@@ -430,7 +432,8 @@ int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
 int msp_set_start_time(msp_t *self, double start_time);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
-int msp_set_store_unary(msp_t *self, bool store_unary);
+int msp_set_additional_nodes(msp_t *self, uint32_t additional_nodes);
+int msp_set_coalescing_segments_only(msp_t *self, bool coalescing_segments_only);
 int msp_set_ploidy(msp_t *self, int ploidy);
 int msp_set_recombination_map(msp_t *self, size_t size, double *position, double *rate);
 int msp_set_recombination_rate(msp_t *self, double rate);

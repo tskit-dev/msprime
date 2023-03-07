@@ -122,6 +122,8 @@ class TestFullArg:
                 ca_nodes.shape[0] + coal_nodes.shape[0]
                 == sim.num_common_ancestor_events
             )
+        else:
+            assert ca_nodes.shape[0] > 0
         # After simplification, all the RE, GC, and CA nodes should be gone.
         ts_simplified = tree_sequence.simplify()
         new_flags = ts_simplified.tables.nodes.flags
@@ -179,11 +181,31 @@ class TestFullArg:
     def test_multimerger(self):
         sim = ancestry._parse_simulate(
             100,
-            recombination_rate=0.1,
+            recombination_rate=10,
             record_full_arg=True,
             demographic_events=[
                 msprime.InstantaneousBottleneck(time=0.1, population=0, strength=5)
             ],
+        )
+        self.verify(sim, multiple_mergers=True)
+
+    def test_multimerger_beta(self):
+        sim = ancestry._parse_sim_ancestry(
+            100,
+            recombination_rate=0.1,
+            record_full_arg=True,
+            sequence_length=10,
+            model=msprime.BetaCoalescent(alpha=1.1),
+        )
+        self.verify(sim, multiple_mergers=True)
+
+    def test_multimerger_dirac(self):
+        sim = ancestry._parse_sim_ancestry(
+            100,
+            recombination_rate=0.1,
+            record_full_arg=True,
+            sequence_length=10,
+            model=msprime.DiracCoalescent(psi=0.5, c=5),
         )
         self.verify(sim, multiple_mergers=True)
 
@@ -267,7 +289,7 @@ class TestStoreUnary:
                 samples=n,
                 sequence_length=100,
                 recombination_rate=0.1,
-                record_unary=True,
+                coalescing_segments_only=False,
             )
             self.verify_store_unary(ts)
 
@@ -277,7 +299,7 @@ class TestStoreUnary:
                 samples=n,
                 sequence_length=100,
                 recombination_rate=0.1,
-                record_unary=True,
+                coalescing_segments_only=False,
                 model="smc",
             )
             self.verify_store_unary(ts)
@@ -288,7 +310,7 @@ class TestStoreUnary:
                 samples=n,
                 sequence_length=100,
                 recombination_rate=0.1,
-                record_unary=True,
+                coalescing_segments_only=False,
                 model="smc_prime",
             )
             self.verify_store_unary(ts)
@@ -308,7 +330,7 @@ class TestStoreUnary:
             model=[model, "hudson"],
             population_size=N,
             sequence_length=100,
-            record_unary=True,
+            coalescing_segments_only=False,
             random_seed=6974,
         )
         assert ts.num_trees > 1
@@ -323,7 +345,7 @@ class TestStoreUnary:
             samples=20,
             sequence_length=100,
             recombination_rate=0.1,
-            record_unary=True,
+            coalescing_segments_only=False,
             demography=demography,
         )
         self.verify_store_unary(ts)
@@ -335,7 +357,7 @@ class TestStoreUnary:
             sequence_length=100,
             gene_conversion_rate=rate,
             gene_conversion_tract_length=5,
-            record_unary=True,
+            coalescing_segments_only=False,
         )
         sim.run()
         assert sim.num_gene_conversion_events > 1
@@ -345,9 +367,7 @@ class TestStoreUnary:
     def test_no_recombination(self):
         # no recombination -> no unary nodes
         ts = msprime.sim_ancestry(
-            samples=25,
-            sequence_length=100,
-            record_unary=True,
+            samples=25, sequence_length=100, coalescing_segments_only=False
         )
         tss = ts.simplify()
         assert ts.equals(tss, ignore_provenance=True)
@@ -398,7 +418,9 @@ class TestStoreUnary:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             simulator = msprime.ancestry._parse_sim_ancestry(
-                initial_state=tables, demography=demography, record_unary=True
+                initial_state=tables,
+                demography=demography,
+                coalescing_segments_only=False,
             )
         simulator._run_until(event_chunk=1, end_time=math.inf)
         new_tables = tskit.TableCollection.fromdict(simulator.tables.asdict())
@@ -407,6 +429,235 @@ class TestStoreUnary:
         left_root = tree.root
         tree.next()
         assert tree.parent_array[left_root] == tree.root
+
+
+class TestAdditionalNodes:
+    """
+    Tests for recording the full ARG.
+    """
+
+    def verify(self, sim, multiple_mergers=False, additional_nodes=None):
+        sim.random_generator.seed = 21
+        sim.run()
+        tree_sequence = next(sim.run_replicates(1))
+        # Check if we have multiple merger somewhere.
+        found = False
+        for edgeset in tree_sequence.edgesets():
+            if len(edgeset.children) > 2:
+                found = True
+                break
+        assert multiple_mergers == found
+
+        flags = tree_sequence.tables.nodes.flags
+        time = tree_sequence.tables.nodes.time
+        re_nodes = np.where(flags == msprime.NODE_IS_RE_EVENT)[0]
+        ca_nodes = np.where(flags == msprime.NODE_IS_CA_EVENT)[0]
+        gc_nodes = np.where(flags == msprime.NODE_IS_GC_EVENT)[0]
+        mig_nodes = np.where(flags == msprime.NODE_IS_MIG_EVENT)[0]
+        coal_nodes = np.where(flags == 0)[0]
+
+        if additional_nodes is None:
+            additional_nodes = msprime.NodeType(0)
+        for name, member in msprime.NodeType.__members__.items():
+            value = (member & additional_nodes).value
+            if value > 0:
+                if name == "FULL_ARG":
+                    pass
+                elif name == "RECOMBINANT":
+                    # There should be two recombination nodes for every event
+                    assert np.array_equal(
+                        time[re_nodes[::2]], time[re_nodes[1::2]]
+                    )  # Odd indexes
+                    assert re_nodes.shape[0] / 2 == sim.num_recombination_events
+                elif name == "GENE_CONVERSION":
+                    # There should be two gene conversion nodes for every effective event
+                    assert np.array_equal(
+                        time[gc_nodes[::2]], time[gc_nodes[1::2]]
+                    )  # Odd indexes
+                    assert (
+                        gc_nodes.shape[0] / 2
+                        == sim.num_internal_gene_conversion_events
+                        - sim.num_noneffective_gene_conversion_events
+                    )
+                elif name == "COMMON_ANCESTOR":
+                    if not multiple_mergers:
+                        assert (
+                            ca_nodes.shape[0] + coal_nodes.shape[0]
+                            == sim.num_common_ancestor_events
+                        )
+                    else:
+                        assert ca_nodes.shape[0] > 0
+                elif name == "MIGRANT":
+                    assert np.sum(mig_nodes) > 0
+                else:
+                    raise (ValueError)
+
+        # After simplification, all the RE, GC, and CA nodes should be gone.
+        ts_simplified = tree_sequence.simplify()
+        new_flags = ts_simplified.tables.nodes.flags
+        new_time = ts_simplified.tables.nodes.time
+        assert np.sum(new_flags == msprime.NODE_IS_RE_EVENT) == 0
+        assert np.sum(new_flags == msprime.NODE_IS_CA_EVENT) == 0
+        assert np.sum(new_flags == msprime.NODE_IS_GC_EVENT) == 0
+        # All coal nodes from the original should be identical to the originals
+        assert np.array_equal(time[coal_nodes], new_time[new_flags == 0])
+        assert ts_simplified.num_nodes <= tree_sequence.num_nodes
+        assert ts_simplified.num_edges <= tree_sequence.num_edges
+        return tree_sequence
+
+    def test_no_recombination(self):
+        node_type = msprime.NodeType.COMMON_ANCESTOR
+        sim = ancestry._parse_sim_ancestry(
+            10, additional_nodes=node_type, coalescing_segments_only=False
+        )
+        ts = self.verify(sim)
+        ts_simplified = ts.simplify()
+        t1 = ts.tables
+        t2 = ts_simplified.tables
+        assert t1.nodes == t2.nodes
+        assert t1.edges == t2.edges
+
+    def test_recombination_re(self):
+        node_type = msprime.NodeType.RECOMBINANT
+        sim = ancestry._parse_sim_ancestry(
+            25,
+            recombination_rate=1,
+            sequence_length=1,
+            discrete_genome=False,
+            additional_nodes=node_type,
+            coalescing_segments_only=False,
+        )
+        self.verify(sim, additional_nodes=node_type)
+
+    def test_recombination_ca(self):
+        node_type = msprime.NodeType.COMMON_ANCESTOR
+        sim = ancestry._parse_sim_ancestry(
+            5,
+            discrete_genome=False,
+            sequence_length=1,
+            recombination_rate=10,
+            additional_nodes=node_type,
+            coalescing_segments_only=False,
+        )
+        self.verify(sim, additional_nodes=node_type)
+
+    def test_recombination_mig(self):
+        node_type = msprime.NodeType.MIGRANT
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=5)
+        demography.add_population(name="B", initial_size=5)
+        demography.set_symmetric_migration_rate(populations=("A", "B"), rate=0.1)
+        sim = ancestry._parse_sim_ancestry(
+            samples={0: 2, 1: 2},
+            discrete_genome=False,
+            sequence_length=1,
+            recombination_rate=10,
+            additional_nodes=node_type,
+            coalescing_segments_only=False,
+            demography=demography,
+        )
+        self.verify(sim, additional_nodes=node_type)
+
+    def test_recombination_re_ca(self):
+        node_type = msprime.NodeType.COMMON_ANCESTOR | msprime.NodeType.RECOMBINANT
+        sim = ancestry._parse_sim_ancestry(
+            5,
+            discrete_genome=False,
+            sequence_length=1,
+            recombination_rate=10,
+            additional_nodes=node_type,
+            coalescing_segments_only=False,
+        )
+        self.verify(sim, additional_nodes=node_type)
+
+    def test_recombination_ca_mig(self):
+        node_type = msprime.NodeType.COMMON_ANCESTOR | msprime.NodeType.MIGRANT
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=5)
+        demography.add_population(name="B", initial_size=5)
+        demography.set_symmetric_migration_rate(populations=("A", "B"), rate=0.1)
+        sim = ancestry._parse_sim_ancestry(
+            samples={0: 2, 1: 2},
+            recombination_rate=10,
+            sequence_length=1,
+            discrete_genome=False,
+            additional_nodes=node_type,
+            coalescing_segments_only=False,
+            demography=demography,
+        )
+        self.verify(sim, additional_nodes=node_type)
+
+    def test_recombination_re_mig(self):
+        node_type = msprime.NodeType.RECOMBINANT | msprime.NodeType.MIGRANT
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1)
+        demography.add_population(name="B", initial_size=1)
+        demography.set_symmetric_migration_rate(populations=("A", "B"), rate=0.1)
+        sim = ancestry._parse_sim_ancestry(
+            samples=[
+                msprime.SampleSet(2, population="A"),
+                msprime.SampleSet(2, population="B"),
+            ],
+            sequence_length=1,
+            discrete_genome=False,
+            recombination_rate=10,
+            additional_nodes=node_type,
+            coalescing_segments_only=False,
+            demography=demography,
+        )
+        self.verify(sim, additional_nodes=node_type)
+
+    def test_multimerger(self):
+        node_type = msprime.NodeType.RECOMBINANT
+        demography = msprime.Demography()
+        demography.add_population(initial_size=1000)
+        demography.add_instantaneous_bottleneck(time=0.1, population=0, strength=5)
+        sim = ancestry._parse_sim_ancestry(
+            100,
+            sequence_length=1,
+            discrete_genome=False,
+            recombination_rate=0.010,
+            additional_nodes=node_type,
+            coalescing_segments_only=False,
+            demography=demography,
+        )
+        self.verify(sim, multiple_mergers=True, additional_nodes=node_type)
+
+    def test_multimerger_beta(self):
+        node_type = msprime.NodeType.RECOMBINANT
+        sim = ancestry._parse_sim_ancestry(
+            100,
+            recombination_rate=0.1,
+            additional_nodes=node_type,
+            coalescing_segments_only=False,
+            sequence_length=10,
+            model=msprime.BetaCoalescent(alpha=1.1),
+        )
+        self.verify(sim, multiple_mergers=True, additional_nodes=node_type)
+
+    def test_multimerger_dirac(self):
+        node_type = msprime.NodeType.RECOMBINANT
+        sim = ancestry._parse_sim_ancestry(
+            100,
+            recombination_rate=0.1,
+            additional_nodes=node_type,
+            coalescing_segments_only=False,
+            sequence_length=10,
+            model=msprime.DiracCoalescent(psi=0.5, c=5),
+        )
+        self.verify(sim, multiple_mergers=True, additional_nodes=node_type)
+
+    def test_gene_conversion(self):
+        node_type = msprime.NodeType.GENE_CONVERSION
+        sim = ancestry._parse_sim_ancestry(
+            25,
+            gene_conversion_rate=1,
+            gene_conversion_tract_length=1,
+            sequence_length=10,
+            additional_nodes=node_type,
+            coalescing_segments_only=False,
+        )
+        self.verify(sim, additional_nodes=node_type)
 
 
 class TestSimulator:
@@ -840,10 +1091,11 @@ class TestParseSimAncestry:
     def test_record_full_arg(self):
         # default is False
         sim = ancestry._parse_sim_ancestry(10)
-        assert not sim.record_full_arg
-        for record_full_arg in [True, False]:
+        assert sim.additional_nodes == 0
+        node_values = [sum(2**i for i in (17, 18, 19, 21)), 0]
+        for record_full_arg, node_value in zip([True, False], node_values):
             sim = ancestry._parse_sim_ancestry(10, record_full_arg=record_full_arg)
-            assert sim.record_full_arg == bool(record_full_arg)
+            assert sim.additional_nodes == node_value
 
         for truthy in [0, []]:
             with pytest.raises(TypeError):
@@ -1720,6 +1972,30 @@ class TestParseSimulate:
                 ]
             )
 
+    def test_bad_additional_node_flag(self):
+        with pytest.raises(
+            ValueError,
+            match="Set coalescing_segments_only to False when recording "
+            "additional_nodes.",
+        ):
+            msprime.sim_ancestry(10, additional_nodes=msprime.NodeType.COMMON_ANCESTOR)
+        with pytest.raises(
+            ValueError,
+            match="additional_nodes should be an instance of msprime.NodeType.",
+        ):
+            msprime.sim_ancestry(10, additional_nodes=1 << 17)
+
+    def test_bad_full_arg_flag(self):
+        with pytest.raises(
+            ValueError, match="Cannot set both record_full_arg and additional_nodes."
+        ):
+            msprime.sim_ancestry(
+                10,
+                additional_nodes=msprime.NodeType.COMMON_ANCESTOR,
+                record_full_arg=True,
+                coalescing_segments_only=None,
+            )
+
 
 class TestSimAncestryInterface:
     """
@@ -2128,6 +2404,13 @@ class TestSimAncestryInterface:
             t1.provenances.clear()
             t2.provenances.clear()
             assert t1 == t2
+
+    def test_bad_additional_node_flag(self):
+        with pytest.raises(ValueError):
+            msprime.sim_ancestry(
+                10,
+                additional_nodes=msprime.NodeType.COMMON_ANCESTOR,
+            )
 
 
 class TestSimulateInterface:

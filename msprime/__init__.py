@@ -46,6 +46,7 @@ from msprime.ancestry import (
     SweepGenicSelection,
     FixedPedigree,
     TimeUnitsMismatchWarning,
+    NodeType,
 )
 
 from msprime.core import __version__
@@ -138,6 +139,7 @@ __all__ = [
     "NODE_IS_MIG_EVENT",
     "NODE_IS_RE_EVENT",
     "NODE_IS_GC_EVENT",
+    "NodeType",
     "NUCLEOTIDES",
     "PAM",
     "PedigreeBuilder",

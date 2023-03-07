@@ -249,7 +249,6 @@ def _parse_simulate(
     start_time=None,
     end_time=None,
     record_full_arg=False,
-    record_unary=False,
     num_labels=None,
     random_seed=None,
 ):
@@ -351,6 +350,18 @@ def _parse_simulate(
     else:
         tables = from_ts.dump_tables()
 
+    if record_full_arg:
+        coalescing_segments_only = False
+        additional_nodes = NodeType(
+            NodeType.RECOMBINANT
+            | NodeType.COMMON_ANCESTOR
+            | NodeType.MIGRANT
+            | NodeType.GENE_CONVERSION
+        )
+    else:
+        coalescing_segments_only = True
+        additional_nodes = None
+
     # It's useful to call _parse_simulate outside the context of the main
     # entry point - so we want to get good seeds in this case too.
     random_seed = _parse_random_seed(random_seed)
@@ -361,8 +372,8 @@ def _parse_simulate(
         recombination_map=recombination_map,
         models=models,
         store_migrations=record_migrations,
-        store_full_arg=record_full_arg,
-        store_unary=record_unary,
+        additional_nodes=additional_nodes,
+        coalescing_segments_only=coalescing_segments_only,
         start_time=start_time,
         end_time=end_time,
         num_labels=num_labels,
@@ -429,7 +440,6 @@ def simulate(
     start_time=None,
     end_time=None,
     record_full_arg=False,
-    record_unary=False,
     num_labels=None,
     record_provenance=True,
 ):
@@ -532,8 +542,6 @@ def simulate(
         arising from common ancestor and recombination events in the output
         tree sequence. This will result in unary nodes (i.e., nodes in marginal
         trees that have only one child). Defaults to False.
-    :param bool record_unary: If True, retain all ancestry for any nodes that
-        are coalescent nodes anywhere in the sequence. Defaults to False.
     :param model: The simulation model to use.
         This can either be a string (e.g., ``"smc_prime"``) or an instance of
         a ancestry model class (e.g, ``msprime.DiscreteTimeWrightFisher()``.
@@ -573,7 +581,6 @@ def simulate(
             start_time=start_time,
             end_time=end_time,
             record_full_arg=record_full_arg,
-            record_unary=record_unary,
             num_labels=num_labels,
             random_seed=random_seed,
             # num_replicates is excluded as provenance is per replicate
@@ -628,7 +635,6 @@ def simulate(
         start_time=start_time,
         end_time=end_time,
         record_full_arg=record_full_arg,
-        record_unary=record_unary,
         num_labels=num_labels,
         random_seed=random_seed,
     )
@@ -797,7 +803,8 @@ def _parse_sim_ancestry(
     end_time=None,
     record_migrations=None,
     record_full_arg=None,
-    record_unary=None,
+    additional_nodes=None,
+    coalescing_segments_only=None,
     num_labels=None,
     random_seed=None,
     init_for_debugger=False,
@@ -814,7 +821,36 @@ def _parse_sim_ancestry(
     end_time = math.inf if end_time is None else float(end_time)
     discrete_genome = core._parse_flag(discrete_genome, default=True)
     record_full_arg = core._parse_flag(record_full_arg, default=False)
-    record_unary = core._parse_flag(record_unary, default=False)
+
+    if record_full_arg:
+        if coalescing_segments_only is not None:
+            raise ValueError(
+                "Cannot set both coalescing_segments_only and record_full_arg."
+            )
+        if additional_nodes is not None:
+            raise ValueError("Cannot set both record_full_arg and additional_nodes.")
+        coalescing_segments_only = False
+        additional_nodes = NodeType(
+            NodeType.RECOMBINANT
+            | NodeType.COMMON_ANCESTOR
+            | NodeType.MIGRANT
+            | NodeType.GENE_CONVERSION
+        )
+    coalescing_segments_only = core._parse_flag(coalescing_segments_only, default=True)
+    if additional_nodes is None:
+        additional_nodes = NodeType(0)
+    else:
+        if not isinstance(additional_nodes, NodeType):
+            raise ValueError(
+                "additional_nodes should be an instance of msprime.NodeType."
+            )
+        if additional_nodes.value > 0:
+            if coalescing_segments_only:
+                raise ValueError(
+                    "Set coalescing_segments_only to False when recording"
+                    " additional_nodes."
+                )
+
     record_migrations = core._parse_flag(record_migrations, default=False)
 
     if initial_state is not None:
@@ -1026,8 +1062,8 @@ def _parse_sim_ancestry(
         demography=demography,
         models=models,
         store_migrations=record_migrations,
-        store_full_arg=record_full_arg,
-        store_unary=record_unary,
+        additional_nodes=additional_nodes,
+        coalescing_segments_only=coalescing_segments_only,
         start_time=start_time,
         end_time=end_time,
         num_labels=num_labels,
@@ -1052,7 +1088,8 @@ def sim_ancestry(
     end_time=None,
     record_migrations=None,
     record_full_arg=None,
-    record_unary=None,
+    additional_nodes=None,
+    coalescing_segments_only=None,
     num_labels=None,
     random_seed=None,
     num_replicates=None,
@@ -1136,8 +1173,12 @@ def sim_ancestry(
         tree sequence. This will result in unary nodes (i.e., nodes in marginal
         trees that have only one child). Defaults to False.
         See the :ref:`sec_ancestry_full_arg` section for examples.
-    :param bool record_unary: If True, retain all ancestry for any nodes that
-        are coalescent nodes anywhere in the sequence. Defaults to False.
+    :param NodeType additional_nodes: Retain all ancestry for any node
+        of the specified type. This will result in unary nodes.
+        Defaults to class `msprime.NodeType(0)`.
+    :param bool coalescing_segments_only: If False, retain all ancestry for any
+        nodes that are coalescent nodes anywhere in the sequence. This will result in
+        unary nodes. Defaults to True.
     :param bool record_migrations: If True, record all migration events
         that occur in the :ref:`tskit:sec_migration_table_definition` of
         the output tree sequence. Defaults to False.
@@ -1211,7 +1252,8 @@ def sim_ancestry(
             end_time=end_time,
             record_migrations=record_migrations,
             record_full_arg=record_full_arg,
-            record_unary=record_unary,
+            additional_nodes=additional_nodes,
+            coalescing_segments_only=coalescing_segments_only,
             num_labels=num_labels,
             random_seed=random_seed,
             # num_replicates is excluded as provenance is per replicate
@@ -1234,7 +1276,8 @@ def sim_ancestry(
         end_time=end_time,
         record_migrations=record_migrations,
         record_full_arg=record_full_arg,
-        record_unary=record_unary,
+        additional_nodes=additional_nodes,
+        coalescing_segments_only=coalescing_segments_only,
         num_labels=num_labels,
         random_seed=random_seed,
     )
@@ -1275,6 +1318,21 @@ class ExitReason(enum.IntEnum):
     """
 
 
+class NodeType(enum.Flag):
+    """
+    Specify the type of node for which you want to track ancestry.
+    """
+
+    RECOMBINANT = 1 << 17
+    COMMON_ANCESTOR = 1 << 18
+    MIGRANT = 1 << 19
+    GENE_CONVERSION = 1 << 21
+    PASS_THROUGH = 1 << 22
+
+    def asdict(self):
+        return {"__class__": "msprime.NodeType", "value": self.value}
+
+
 class Simulator(_msprime.Simulator):
     """
     Class to simulate trees under a variety of population models.
@@ -1297,8 +1355,8 @@ class Simulator(_msprime.Simulator):
         random_generator,
         models=None,
         store_migrations=False,
-        store_full_arg=False,
-        store_unary=False,
+        additional_nodes=None,
+        coalescing_segments_only=True,
         start_time=None,
         end_time=None,
         num_labels=None,
@@ -1313,6 +1371,8 @@ class Simulator(_msprime.Simulator):
 
         if num_labels is None:
             num_labels = self._choose_num_labels(models)
+        if additional_nodes is None:
+            additional_nodes = NodeType(0)
 
         # Now, convert the high-level values into their low-level
         # counterparts.
@@ -1340,8 +1400,8 @@ class Simulator(_msprime.Simulator):
             population_configuration=ll_population_configuration,
             demographic_events=ll_demographic_events,
             store_migrations=store_migrations,
-            store_full_arg=store_full_arg,
-            store_unary=store_unary,
+            additional_nodes=additional_nodes.value,
+            coalescing_segments_only=coalescing_segments_only,
             num_labels=num_labels,
             segment_block_size=segment_block_size,
             avl_node_block_size=avl_node_block_size,
