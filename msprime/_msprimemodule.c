@@ -1766,9 +1766,9 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "population_configuration", "migration_matrix",
         "demographic_events", "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time",
-        "store_full_arg", "store_unary", "num_labels", "gene_conversion_rate",
-        "gene_conversion_tract_length", "discrete_genome",
-        "ploidy", NULL};
+        "additional_nodes", "coalescing_segments_only",
+        "num_labels", "gene_conversion_rate", "gene_conversion_tract_length", 
+        "discrete_genome", "ploidy", NULL};
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
@@ -1783,8 +1783,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     Py_ssize_t num_labels = 1;
     Py_ssize_t num_populations = 1;
     int store_migrations = false;
-    int store_full_arg = false;
-    int store_unary = false;
+    unsigned long additional_nodes = 0;
+    int coalescing_segments_only = true;
     int discrete_genome = true;
     double start_time = -1;
     double gene_conversion_rate = 0;
@@ -1794,7 +1794,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     self->sim = NULL;
     self->random_generator = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds,
-            "O!O!|O!O!OO!O!nnnidiinddii", kwlist,
+            "O!O!|O!O!OO!O!nnnidkinddii", kwlist,
             &LightweightTableCollectionType, &tables,
             &RandomGeneratorType, &random_generator,
             /* optional */
@@ -1805,7 +1805,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &PyDict_Type, &py_model,
             &avl_node_block_size, &segment_block_size,
             &node_mapping_block_size, &store_migrations, &start_time,
-            &store_full_arg, &store_unary, &num_labels,
+            &additional_nodes, &coalescing_segments_only, &num_labels,
             &gene_conversion_rate, &gene_conversion_tract_length,
             &discrete_genome, &ploidy)) {
         goto out;
@@ -1926,9 +1926,9 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-    msp_set_store_full_arg(self->sim, store_full_arg);
-    msp_set_store_unary(self->sim, store_unary);
-
+    msp_set_additional_nodes(self->sim, (uint32_t) additional_nodes);
+    msp_set_coalescing_segments_only(self->sim, coalescing_segments_only);
+    
     sim_ret = msp_initialise(self->sim);
     if (sim_ret != 0) {
         handle_input_error("initialise", sim_ret);
@@ -2069,17 +2069,16 @@ out:
 }
 
 static PyObject *
-Simulator_get_record_full_arg(Simulator *self, void *closure)
+Simulator_get_additional_nodes(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("i",  self->sim->store_full_arg);
+    ret = Py_BuildValue("k",  self->sim->additional_nodes);
 out:
     return ret;
 }
-
 
 static PyObject *
 Simulator_get_num_populations(Simulator *self, void *closure)
@@ -3010,9 +3009,9 @@ static PyGetSetDef Simulator_getsetters[] = {
     {"record_migrations",
             (getter) Simulator_get_record_migrations, NULL,
             "True if the simulator should store migration records." },
-    {"record_full_arg",
-            (getter) Simulator_get_record_full_arg, NULL,
-            "True if the simulator should store the full ARG." },
+    {"additional_nodes",
+            (getter) Simulator_get_additional_nodes, NULL,
+            "The numeric value of the stored NodeType." },
     {"discrete_genome",
             (getter) Simulator_get_discrete_genome, NULL,
             "True if the simulator has a discrete genome." },

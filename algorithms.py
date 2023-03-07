@@ -543,8 +543,8 @@ class Simulator:
         max_segments=100,
         num_labels=1,
         sweep_trajectory=None,
-        full_arg=False,
-        store_unary=False,
+        coalescing_segments_only=True,
+        additional_nodes=None,
         time_slice=None,
         gene_conversion_rate=0.0,
         gene_conversion_length=1,
@@ -571,8 +571,10 @@ class Simulator:
         self.num_labels = num_labels
         self.num_populations = N
         self.max_segments = max_segments
-        self.full_arg = full_arg
-        self.store_unary = store_unary
+        self.coalescing_segments_only = coalescing_segments_only
+        self.additional_nodes = msprime.NodeType(additional_nodes)
+        if self.additional_nodes.value > 0:
+            assert not self.coalescing_segments_only
         self.pedigree = None
         self.segment_stack = []
         self.segments = [None for j in range(self.max_segments + 1)]
@@ -1276,7 +1278,7 @@ class Simulator:
         index = random.randint(0, source.get_num_ancestors(label) - 1)
         x = source.remove(index, label)
         dest.add(x, label)
-        if self.full_arg:
+        if self.additional_nodes.value & msprime.NODE_IS_MIG_EVENT > 0:
             self.store_node(k, flags=msprime.NODE_IS_MIG_EVENT)
             self.store_arg_edges(x)
         # Set the population id for each segment also.
@@ -1383,7 +1385,7 @@ class Simulator:
             lhs_tail = x
         self.set_segment_mass(alpha)
         self.P[alpha.population].add(alpha, label)
-        if self.full_arg:
+        if self.additional_nodes.value & msprime.NODE_IS_RE_EVENT > 0:
             self.store_node(lhs_tail.population, flags=msprime.NODE_IS_RE_EVENT)
             self.store_arg_edges(lhs_tail)
             self.store_node(alpha.population, flags=msprime.NODE_IS_RE_EVENT)
@@ -1791,7 +1793,9 @@ class Simulator:
                     pop.add(alpha, label)
                     merged_head = alpha
                 else:
-                    if self.full_arg:
+                    if (coalescence and not self.coalescing_segments_only) or (
+                        self.additional_nodes.value & msprime.NODE_IS_CA_EVENT > 0
+                    ):
                         defrag_required |= z.right == alpha.left
                     else:
                         defrag_required |= (
@@ -1801,10 +1805,14 @@ class Simulator:
                 alpha.prev = z
                 self.set_segment_mass(alpha)
                 z = alpha
-        if self.full_arg:
-            if not coalescence:
+        if coalescence:
+            if not self.coalescing_segments_only:
+                self.store_arg_edges(z)
+        else:
+            if self.additional_nodes.value & msprime.NODE_IS_CA_EVENT > 0:
                 self.store_node(pop_id, flags=msprime.NODE_IS_CA_EVENT)
-            self.store_arg_edges(z)
+                self.store_arg_edges(z)
+
         if defrag_required:
             self.defrag_segment_chain(z)
         if coalescence:
@@ -1927,7 +1935,9 @@ class Simulator:
                 if z is None:
                     pop.add(alpha, label)
                 else:
-                    if self.full_arg:
+                    if (coalescence and not self.coalescing_segments_only) or (
+                        self.additional_nodes.value & msprime.NODE_IS_CA_EVENT > 0
+                    ):
                         defrag_required |= z.right == alpha.left
                     else:
                         defrag_required |= (
@@ -1938,12 +1948,14 @@ class Simulator:
                 self.set_segment_mass(alpha)
                 z = alpha
 
-        if self.full_arg:
-            if not coalescence:
+        if coalescence:
+            if not self.coalescing_segments_only:
+                self.store_arg_edges(z, u)
+        else:
+            if self.additional_nodes.value & msprime.NODE_IS_CA_EVENT > 0:
                 u = self.store_node(population_index, flags=msprime.NODE_IS_CA_EVENT)
-            self.store_arg_edges(z, u)
-        elif self.store_unary and coalescence:
-            self.store_arg_edges(z, u)
+                self.store_arg_edges(z, u)
+
         if defrag_required:
             self.defrag_segment_chain(z)
         if coalescence:
@@ -2200,8 +2212,8 @@ def run_simulate(args):
         census_times=args.census_time,
         max_segments=100000,
         num_labels=num_labels,
-        full_arg=args.full_arg,
-        store_unary=args.store_unary,
+        coalescing_segments_only=not args.all_segments,
+        additional_nodes=args.additional_nodes,
         sweep_trajectory=sweep_trajectory,
         time_slice=args.time_slice,
         gene_conversion_rate=gc_rate,
@@ -2275,16 +2287,16 @@ def add_simulator_arguments(parser):
         help="Parameters for the allele frequency trajectory simulation",
     )
     parser.add_argument(
-        "--full-arg",
+        "--all-segments",
         action="store_true",
         default=False,
-        help="Store the full ARG with all recombination and common ancestor nodes",
+        help="Only record edges along coalescing segments.",
     )
     parser.add_argument(
-        "--store-unary",
-        action="store_true",
-        default=False,
-        help="Store unary nodes.",
+        "--additional_nodes",
+        type=int,
+        default=0,
+        help="Record edges along all segments for coalescing nodes.",
     )
     parser.add_argument(
         "--time-slice",

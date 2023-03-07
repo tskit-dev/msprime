@@ -95,25 +95,74 @@ class TestAlgorithms:
         assert has_discrete_genome(ts)
 
     def test_full_arg(self):
-        ts = self.run_script("30 -L 200 --full-arg")
+        node_value = sum(2**i for i in (17, 18, 19, 21))
+        ts = self.run_script(
+            f"30 -L 200 --additional_nodes {node_value} --all-segments"
+        )
         assert ts.num_trees > 1
         node_flags = ts.tables.nodes.flags
         assert np.sum(node_flags == msprime.NODE_IS_RE_EVENT) > 0
         assert np.sum(node_flags == msprime.NODE_IS_CA_EVENT) > 0
 
     def test_migration_full_arg(self):
-        ts = self.run_script("10 -p 3 -g 0.1 --full-arg")
+        node_value = sum(2**i for i in (17, 18, 19, 21))
+        ts = self.run_script(
+            f"10 -p 3 -g 0.1 --additional_nodes {node_value} --all-segments"
+        )
         assert ts.num_trees > 1
         node_flags = ts.tables.nodes.flags
         assert np.sum(node_flags == msprime.NODE_IS_MIG_EVENT) > 0
 
     def test_store_unary(self):
-        ts = self.run_script("10 --store-unary")
+        ts = self.run_script("10 --all-segments")
         assert ts.num_samples == 10
         assert ts.num_trees > 1
         assert not has_discrete_genome(ts)
         assert ts.sequence_length == 100
         verify_unary(ts)
+
+    def test_store_common_ancestor(self):
+        node_value = 1 << 18
+        ts = self.run_script(
+            f"10 -r 0.5 --additional_nodes {node_value} --all-segments"
+        )
+        assert ts.num_samples == 10
+        assert ts.num_trees > 1
+        assert ts.sequence_length == 100
+        node_flags = ts.tables.nodes.flags
+        assert np.sum(node_flags == msprime.NODE_IS_CA_EVENT) > 0
+
+    def test_store_recombinant(self):
+        node_value = 1 << 17
+        ts = self.run_script(f"10 --additional_nodes {node_value} --all-segments")
+        assert ts.num_samples == 10
+        assert ts.num_trees > 1
+        assert ts.sequence_length == 100
+        node_flags = ts.tables.nodes.flags
+        assert np.sum(node_flags == msprime.NODE_IS_RE_EVENT) > 0
+
+    def test_store_migrant(self):
+        node_value = 1 << 19
+        ts = self.run_script(
+            f"10 -p 3 -g 0.1 --additional_nodes {node_value} --all-segments"
+        )
+        assert ts.num_samples == 10
+        assert ts.num_trees > 1
+        assert ts.sequence_length == 100
+        node_flags = ts.tables.nodes.flags
+        assert np.sum(node_flags == msprime.NODE_IS_MIG_EVENT) > 0
+
+    def test_store_ca_re(self):
+        node_value = 1 << 17 | 1 << 18
+        ts = self.run_script(
+            f"10 -p 3 -g 0.1 -r 0.1 --additional_nodes {node_value} --all-segments"
+        )
+        assert ts.num_samples == 10
+        assert ts.num_trees > 1
+        assert ts.sequence_length == 100
+        node_flags = ts.tables.nodes.flags
+        assert np.sum(node_flags == msprime.NODE_IS_CA_EVENT) > 0
+        assert np.sum(node_flags == msprime.NODE_IS_RE_EVENT) > 0
 
     def test_gc(self):
         ts = self.run_script("10 -c 0.4 2 -d")

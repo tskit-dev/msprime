@@ -291,6 +291,15 @@ class TestSimulateRoundTrip(TestRoundTrip):
         ts = msprime.simulate(from_ts=from_ts, random_seed=2)
         self.verify(ts)
 
+    def test_additional_nodes(self):
+        ts = msprime.sim_ancestry(
+            10,
+            random_seed=1234,
+            additional_nodes=msprime.NodeType(1 << 17),
+            coalescing_segments_only=False,
+        )
+        self.verify(ts)
+
 
 class TestMutateRoundTrip(TestRoundTrip):
     def test_mutate_round_trip(self):

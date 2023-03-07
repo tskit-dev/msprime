@@ -256,14 +256,25 @@ msp_set_store_migrations(msp_t *self, bool store_migrations)
 int
 msp_set_store_full_arg(msp_t *self, bool store_full_arg)
 {
-    self->store_full_arg = store_full_arg;
+    if (store_full_arg) {
+        self->additional_nodes = MSP_NODE_IS_RE_EVENT | MSP_NODE_IS_CA_EVENT
+                                 | MSP_NODE_IS_MIG_EVENT | MSP_NODE_IS_GC_EVENT;
+        self->coalescing_segments_only = false;
+    }
     return 0;
 }
 
 int
-msp_set_store_unary(msp_t *self, bool store_unary)
+msp_set_additional_nodes(msp_t *self, uint32_t additional_nodes)
 {
-    self->store_unary = store_unary;
+    self->additional_nodes = additional_nodes;
+    return 0;
+}
+
+int
+msp_set_coalescing_segments_only(msp_t *self, bool coalescing_segments_only)
+{
+    self->coalescing_segments_only = coalescing_segments_only;
     return 0;
 }
 
@@ -770,8 +781,8 @@ msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng)
     self->start_time = -DBL_MAX;
     /* Set the memory defaults */
     self->store_migrations = false;
-    self->store_full_arg = false;
-    self->store_unary = false;
+    self->additional_nodes = 0;
+    self->coalescing_segments_only = true;
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
@@ -1889,7 +1900,7 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
     avl_unlink_node(source, node);
     msp_free_avl_node(self, node);
 
-    if (self->store_full_arg) {
+    if (self->additional_nodes & MSP_NODE_IS_MIG_EVENT) {
         ret = msp_store_node(
             self, MSP_NODE_IS_MIG_EVENT, self->time, dest_pop, TSK_NULL);
         if (ret < 0) {
@@ -2217,7 +2228,7 @@ msp_pedigree_initialise(msp_t *self)
     label_id_t label = 0;
     tsk_size_t j;
 
-    if (self->next_demographic_event != NULL || self->store_full_arg) {
+    if (self->next_demographic_event != NULL || self->additional_nodes > 0) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
@@ -2520,7 +2531,7 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
     if (ret != 0) {
         goto out;
     }
-    if (self->store_full_arg) {
+    if (self->additional_nodes & MSP_NODE_IS_RE_EVENT) {
         ret = msp_store_arg_recombination(self, lhs_tail, alpha);
         if (ret != 0) {
             goto out;
@@ -2731,7 +2742,7 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
     } else {
         self->num_noneffective_gc_events++;
     }
-    if (self->store_full_arg) {
+    if (self->additional_nodes & MSP_NODE_IS_GC_EVENT) {
         ret = msp_store_arg_gene_conversion(self, tail, alpha, head);
         if (ret != 0) {
             goto out;
@@ -2922,7 +2933,8 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 }
                 merged_head = alpha;
             } else {
-                if (self->store_full_arg) {
+                if ((self->additional_nodes & MSP_NODE_IS_CA_EVENT)
+                    || (!self->coalescing_segments_only && coalescence)) {
                     // we pre-empt the fact that values will be set equal later
                     defrag_required |= z->right == alpha->left;
                 } else {
@@ -2937,27 +2949,27 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
             z = alpha;
         }
     }
-    if (self->store_full_arg) {
-        if (!coalescence) {
-            ret = msp_store_node(
-                self, MSP_NODE_IS_CA_EVENT, self->time, population_id, TSK_NULL);
-            if (ret < 0) {
-                goto out;
-            }
-        }
-        // is specified new_node_id impossible when recording full_arg?
-        ret = msp_store_arg_edges(self, z, TSK_NULL);
-        if (ret != 0) {
-            goto out;
-        }
-    } else {
-        if (self->store_unary && coalescence) {
+    if (coalescence) {
+        if (!self->coalescing_segments_only) {
             ret = msp_store_arg_edges(self, z, new_node_id);
             if (ret < 0) {
                 goto out;
             }
         }
+    } else {
+        if (self->additional_nodes & MSP_NODE_IS_CA_EVENT) {
+            ret = msp_store_node(
+                self, MSP_NODE_IS_CA_EVENT, self->time, population_id, TSK_NULL);
+            if (ret < 0) {
+                goto out;
+            }
+            ret = msp_store_arg_edges(self, z, TSK_NULL);
+            if (ret != 0) {
+                goto out;
+            }
+        }
     }
+
     if (defrag_required) {
         ret = msp_defrag_segment_chain(self, z);
         if (ret != 0) {
@@ -3165,7 +3177,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     goto out;
                 }
             } else {
-                if (self->store_full_arg) {
+                if ((self->additional_nodes & MSP_NODE_IS_CA_EVENT)
+                    || (!self->coalescing_segments_only && coalescence)) {
                     // we pre-empt the fact that values will be set equal later
                     defrag_required |= z->right == alpha->left;
                 } else {
@@ -3179,17 +3192,24 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             z = alpha;
         }
     }
-    if (self->store_full_arg) {
-        if (!coalescence) {
+    if (coalescence) {
+        if (!self->coalescing_segments_only) {
+            ret = msp_store_arg_edges(self, z, new_node_id);
+            if (ret < 0) {
+                goto out;
+            }
+        }
+    } else {
+        if (self->additional_nodes & MSP_NODE_IS_CA_EVENT) {
             ret = msp_store_node(
                 self, MSP_NODE_IS_CA_EVENT, self->time, population_id, individual);
             if (ret < 0) {
                 goto out;
             }
-        }
-        ret = msp_store_arg_edges(self, z, TSK_NULL);
-        if (ret != 0) {
-            goto out;
+            ret = msp_store_arg_edges(self, z, TSK_NULL);
+            if (ret != 0) {
+                goto out;
+            }
         }
     }
     if (defrag_required) {
@@ -4118,7 +4138,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     msp_set_segment_mass(self, alpha);
     tsk_bug_assert(alpha->prev == NULL);
     ret = msp_insert_individual(self, alpha);
-    if (self->store_full_arg) {
+    if (self->additional_nodes & MSP_NODE_IS_GC_EVENT) {
         ret = msp_store_arg_gene_conversion(self, NULL, y, alpha);
         if (ret != 0) {
             goto out;
@@ -5112,7 +5132,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = MSP_ERR_BAD_STATE;
         goto out;
     }
-    if (self->store_full_arg
+    if (self->additional_nodes > 0
         && !(self->model.type == MSP_MODEL_HUDSON || self->model.type == MSP_MODEL_SMC
                || self->model.type == MSP_MODEL_SMC_PRIME
                || self->model.type == MSP_MODEL_BETA

@@ -3083,11 +3083,13 @@ class TestLikelihood:
     def get_arg(self):
         L = 20
         rate_map = uniform_rate_map(L=L, rate=2)
+        node_value = sum(2**i for i in (17, 18, 19, 21))
         sim = make_sim(
             samples=5,
             sequence_length=L,
             recombination_map=rate_map,
-            store_full_arg=True,
+            additional_nodes=node_value,
+            coalescing_segments_only=False,
         )
         sim.run()
         _msprime.sim_mutations(

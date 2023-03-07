@@ -87,6 +87,26 @@ for discussion and examples of individual features.
     :members:
 ```
 
+```{eval-rst}
+.. autoclass:: msprime.NodeType
+    :members:
+
+    .. autoattribute:: RECOMBINANT
+         :annotation: = NodeType(1<<17)
+
+    .. autoattribute:: COMMON_ANCESTOR
+         :annotation: = NodeType(1<<18)
+
+    .. autoattribute:: MIGRANT
+         :annotation: = NodeType(1<<19)
+
+    .. autoattribute:: GENE_CONVERSION
+         :annotation: = NodeType(1<<21)
+
+    .. autoattribute:: PASS_THROUGH
+         :annotation: = NodeType(1<<22)
+```
+
 #### Models
 
 ```{eval-rst}

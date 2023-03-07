@@ -1295,7 +1295,7 @@ class TestNonStandardTopologies:
             random_seed=4,
             recombination_rate=0.1,
             population_size=1,
-            record_unary=True,
+            coalescing_segments_only=False,
         )
         assert rts.num_trees - ts.num_trees > 0
         rts_simplified = rts.simplify()
