@@ -4247,7 +4247,7 @@ class DemographyDebugger:
     ):
         """
         Calculate the mean coalescence rates and proportions
-        of uncoalesced lineages between the specified sample lineages,
+        of uncoalesced lineages between pairs of the specified sample lineages,
         at each of the times ago listed by steps, in this demographic model.
         Sample lineages are specified as a mapping from
         populations to the number of **monoploid** sample genomes present in
