@@ -35,7 +35,6 @@ pull_request_rules:
       queue:
         name: default
         method: rebase
-        rebase_fallback: none
         update_method: rebase
 
   - name: Remove label after merge
