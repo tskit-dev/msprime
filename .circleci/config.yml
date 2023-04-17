@@ -1,6 +1,7 @@
 version: 2.1
 orbs:
   codecov: codecov/codecov@3.2.4
+
 jobs:
   build:
     docker:
@@ -41,13 +42,14 @@ jobs:
             make allchecks
 
       - run:
-          name: Run highlevel tests and upload coverage
+          name: Run highlevel tests
           # Run tests without background threads
           command: |
             pytest --cov=msprime --cov-report=xml --cov-branch -n 0 tests
 
       - codecov/upload:
           flags: python
+          token: CODECOV_TOKEN
 
       - run:
             name: Delete coverage
@@ -82,6 +84,7 @@ jobs:
 
       - codecov/upload:
           flags: C
+          token: CODECOV_TOKEN
 
       - run:
           name: Valgrind for C tests.
