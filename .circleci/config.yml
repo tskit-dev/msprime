@@ -45,8 +45,14 @@ jobs:
           # Run tests without background threads
           command: |
             pytest --cov=msprime --cov-report=xml --cov-branch -n 0 tests
-            codecov -X gcov -F python
-            rm .coverage
+
+      - codecov/upload:
+          flags: python
+
+      - run:
+            name: Delete coverage
+            command: |
+              rm .coverage
 
       - run:
           name: Compile C with gcc
@@ -73,7 +79,9 @@ jobs:
             gcov -pb ./libmsprime.a.p/likelihood.c.gcno ../lib/likelihood.c
             gcov -pb ./libmsprime.a.p/rate_map.c.gcno ../lib/rate_map.c
             cd ..
-            codecov -X gcov -F C
+
+      - codecov/upload:
+          flags: C
 
       - run:
           name: Valgrind for C tests.
