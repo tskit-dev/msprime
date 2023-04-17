@@ -1,7 +1,6 @@
 docutils==0.15  # issue with 0.17, https://github.com/tskit-dev/msprime/issues/1625
 asv
 bintrees
-codecov
 coverage
 daiquiri
 demes>=0.2.0

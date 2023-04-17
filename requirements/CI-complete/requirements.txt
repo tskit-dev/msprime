@@ -1,5 +1,4 @@
 bintrees==2.2.0
-codecov==2.1.12
 daiquiri==3.0.1
 demes==0.2.1
 mypy==0.910 
