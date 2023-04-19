@@ -556,9 +556,18 @@ that migration rates are confusing and come back to check the
 documentation whenever you need to work with them.
 :::
 
-Fortunately, asymmetric migration rates are rare in practice
-and we can instead use the
-{meth}`.Demography.set_symmetric_migration_rate` and
+Looking back through time,
+a lineage moves from one population to another
+when the individual that lineage is in was born,
+at which point the lineage moves to the parent.
+So, the migration rate of lineages from `j` to `k`
+is the proportion of population `j` that is replaced
+by offspring of individuals in population `k`, per generation
+(since this is the probability that the lineage we are
+following happens to have a parent in `k`).
+
+If you have symmetric rates you needn't worry about mixing things up;
+set these with the {meth}`.Demography.set_symmetric_migration_rate` and
 {meth}`.Demography.add_symmetric_migration_rate_change` methods
 to set the migration rate in *both* directions. This has the
 advantage of reducing duplication in our code, as well as
