@@ -3540,7 +3540,10 @@ class UnaryRecordTest(Test):
             ts_edge_counts = np.append(ts_edge_counts, ts.num_edges)
 
         reps = msprime.sim_ancestry(
-            num_replicates=num_replicates, record_unary=True, **kwargs
+            num_replicates=num_replicates,
+            coalescing_segments_only=False,
+            additional_nodes=msprime.NodeType.MIGRANT,
+            **kwargs,
         )
         for unary_ts in reps:
             unary_ts = unary_ts.simplify()
@@ -3579,6 +3582,20 @@ class UnaryRecordTest(Test):
     def test_unary_dirac_n100_rho_0_002(self):
         model = msprime.DiracCoalescent(psi=0.9, c=1)
         self._run(samples=10, recombination_rate=0.2, model=model, sequence_length=100)
+
+    def test_unary_migration(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=5)
+        demography.add_population(name="B", initial_size=5)
+        demography.set_symmetric_migration_rate(populations=("A", "B"), rate=0.01)
+        samples = {0: 2, 1: 2}
+        self._run(
+            samples=samples,
+            demography=demography,
+            discrete_genome=False,
+            sequence_length=1,
+            recombination_rate=0.5,
+        )
 
 
 class HudsonAnalytical(Test):
