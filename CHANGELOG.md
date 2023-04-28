@@ -18,6 +18,9 @@
   flag as well as record edges for coalescing nodes along non-coalescing segments. ({issue}`2128`, {issue}`2132`, {pr}`2162`,
   {user}`GertjanBisschop`)
 
+- Enable `additional_nodes` and `coalescing_segments_only` flags for `DTWF` and `FIXED_PEDIDGREE`  models ({issue}`2129`, {issue}`2133`, {issue}`2167`, {pr}`2176`,
+  {user}`GertjanBisschop`)
+
 ## [1.2.0] - 2022-05-18
 
 **New features**

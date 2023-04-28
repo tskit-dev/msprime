@@ -1845,6 +1845,31 @@ out:
 }
 
 static int MSP_WARN_UNUSED
+msp_store_coalescence_edge(
+    msp_t *self, double left, double right, tsk_id_t parent, tsk_id_t child)
+{
+    int ret = 0;
+
+    if (self->model.type == MSP_MODEL_DTWF || self->model.type == MSP_MODEL_WF_PED) {
+        if (self->additional_nodes & MSP_NODE_IS_RE_EVENT) {
+            // parent and child can be equal
+            // don't store edges
+            if (parent == child) {
+                return ret;
+            }
+        }
+    }
+
+    tsk_bug_assert(parent != child);
+    ret = msp_store_edge(self, left, right, parent, child);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
 msp_store_arg_edges(msp_t *self, segment_t *z, tsk_id_t u)
 {
     int ret = 0;
@@ -1878,6 +1903,43 @@ msp_store_arg_edges(msp_t *self, segment_t *z, tsk_id_t u)
             x->value = u;
         }
         x = x->next;
+    }
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
+msp_store_additional_nodes_edges(msp_t *self, segment_t *z, tsk_id_t u, uint32_t flag,
+    population_id_t population_id, tsk_id_t individual, tsk_id_t *new_node_id)
+{
+
+    int ret = 0;
+
+    if (self->additional_nodes & flag) {
+        if (u == TSK_NULL) {
+            ret = msp_store_node(self, flag, self->time, population_id, individual);
+            if (ret < 0) {
+                goto out;
+            }
+            *new_node_id = ret;
+        } else {
+            ret = msp_flush_edges(self);
+            if (ret != 0) {
+                goto out;
+            }
+            // don't mark sample nodes as PASS_THROUGH
+            if (!(self->tables->nodes.flags[u] == TSK_NODE_IS_SAMPLE
+                    && flag == MSP_NODE_IS_PASS_THROUGH)) {
+                self->tables->nodes.flags[u] |= flag;
+            }
+            *new_node_id = u;
+        }
+        ret = msp_store_arg_edges(self, z, u);
+        if (ret < 0) {
+            goto out;
+        }
+    } else {
+        *new_node_id = u;
     }
 out:
     return ret;
@@ -2228,7 +2290,7 @@ msp_pedigree_initialise(msp_t *self)
     label_id_t label = 0;
     tsk_size_t j;
 
-    if (self->next_demographic_event != NULL || self->additional_nodes > 0) {
+    if (self->next_demographic_event != NULL) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
@@ -2264,7 +2326,8 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
+msp_dtwf_recombine(
+    msp_t *self, segment_t *x, segment_t **u, segment_t **v, tsk_id_t *ind_nodes)
 {
     int ret = 0;
     int ix;
@@ -2272,6 +2335,7 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     segment_t *y, *z, *tail;
     segment_t s1, s2;
     segment_t *seg_tails[] = { &s1, &s2 };
+    segment_t **rec_heads[MSP_MAX_PED_PLOIDY] = { u, v };
 
     k = msp_dtwf_generate_breakpoint(self, x->left);
     s1.next = NULL;
@@ -2341,6 +2405,18 @@ msp_dtwf_recombine(msp_t *self, segment_t *x, segment_t **u, segment_t **v)
     // Remove sentinal segments
     *u = s1.next;
     *v = s2.next;
+
+    if (*u != NULL && *v != NULL) {
+
+        for (int i = 0; i < MSP_MAX_PED_PLOIDY; i++) {
+            ret = msp_store_additional_nodes_edges(self, *rec_heads[i], ind_nodes[i],
+                MSP_NODE_IS_RE_EVENT, (*rec_heads[i])->population, TSK_NULL,
+                &ind_nodes[i]);
+            if (ret < 0) {
+                goto out;
+            }
+        }
+    }
 out:
     return ret;
 }
@@ -2852,6 +2928,11 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                             ret = (int) new_node_id;
                             goto out;
                         }
+                    } else {
+                        ret = msp_flush_edges(self);
+                        if (ret != 0) {
+                            goto out;
+                        }
                     }
                 }
                 v = new_node_id;
@@ -2899,12 +2980,11 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                         goto out;
                     }
                 }
-                tsk_bug_assert(v != x->value);
-                ret = msp_store_edge(self, l, r, v, x->value);
+                ret = msp_store_coalescence_edge(self, l, r, v, x->value);
                 if (ret != 0) {
                     goto out;
                 }
-                ret = msp_store_edge(self, l, r, v, y->value);
+                ret = msp_store_coalescence_edge(self, l, r, v, y->value);
                 if (ret != 0) {
                     goto out;
                 }
@@ -2957,16 +3037,10 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
             }
         }
     } else {
-        if (self->additional_nodes & MSP_NODE_IS_CA_EVENT) {
-            ret = msp_store_node(
-                self, MSP_NODE_IS_CA_EVENT, self->time, population_id, TSK_NULL);
-            if (ret < 0) {
-                goto out;
-            }
-            ret = msp_store_arg_edges(self, z, TSK_NULL);
-            if (ret != 0) {
-                goto out;
-            }
+        ret = msp_store_additional_nodes_edges(self, z, new_node_id,
+            MSP_NODE_IS_CA_EVENT, population_id, TSK_NULL, &new_node_id);
+        if (ret < 0) {
+            goto out;
         }
     }
 
@@ -3091,14 +3165,21 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                 }
             }
         } else {
-            coalescence = true;
-            if (new_node_id == TSK_NULL) {
-                l_min = l;
-                new_node_id
-                    = msp_store_node(self, 0, self->time, population_id, individual);
-                if (new_node_id < 0) {
-                    ret = (int) new_node_id;
-                    goto out;
+            if (!coalescence) {
+                coalescence = true;
+                if (new_node_id == TSK_NULL) {
+                    l_min = l;
+                    new_node_id
+                        = msp_store_node(self, 0, self->time, population_id, individual);
+                    if (new_node_id < 0) {
+                        ret = (int) new_node_id;
+                        goto out;
+                    }
+                } else {
+                    ret = msp_flush_edges(self);
+                    if (ret != 0) {
+                        goto out;
+                    }
                 }
             }
             /* Insert overlap counts for bounds, if necessary */
@@ -3149,8 +3230,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             /* Store the edges and update the priority queue */
             for (j = 0; j < h; j++) {
                 x = H[j];
-                tsk_bug_assert(new_node_id != x->value);
-                ret = msp_store_edge(self, l, r, new_node_id, x->value);
+                ret = msp_store_coalescence_edge(self, l, r, new_node_id, x->value);
                 if (ret != 0) {
                     goto out;
                 }
@@ -3200,16 +3280,10 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             }
         }
     } else {
-        if (self->additional_nodes & MSP_NODE_IS_CA_EVENT) {
-            ret = msp_store_node(
-                self, MSP_NODE_IS_CA_EVENT, self->time, population_id, individual);
-            if (ret < 0) {
-                goto out;
-            }
-            ret = msp_store_arg_edges(self, z, TSK_NULL);
-            if (ret != 0) {
-                goto out;
-            }
+        ret = msp_store_additional_nodes_edges(self, z, new_node_id,
+            MSP_NODE_IS_CA_EVENT, population_id, individual, &new_node_id);
+        if (ret < 0) {
+            goto out;
         }
     }
     if (defrag_required) {
@@ -3266,7 +3340,14 @@ msp_merge_n_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
 
     if (num_common_ancestors == 1) {
         merged_head = msp_priority_queue_pop(self, Q);
+        ret = msp_store_additional_nodes_edges(self, merged_head, new_node_id,
+            MSP_NODE_IS_PASS_THROUGH, population_id, TSK_NULL, &new_node_id);
+        if (ret < 0) {
+            goto out;
+        }
     } else if (num_common_ancestors >= 2) {
+        // counting ca_events can be added here instead
+        self->num_ca_events++;
         msp_remove_individuals_from_population(self, Q);
         if (num_common_ancestors == 2) {
             u = msp_priority_queue_pop(self, Q);
@@ -4333,6 +4414,7 @@ msp_pedigree_process_common_ancestors(msp_t *self, individual_t *ind, tsk_size_t
     segment_t *genome, *parent_ancestry[MSP_MAX_PED_PLOIDY], *seg;
     const tsk_size_t ploidy = self->ploidy;
     tsk_size_t j;
+    tsk_id_t *parent_nodes;
 
     /* FIXME - assuming 1 label here */
     ret = msp_merge_n_ancestors(
@@ -4366,8 +4448,9 @@ msp_pedigree_process_common_ancestors(msp_t *self, individual_t *ind, tsk_size_t
             }
         } else {
             if (rate_map_get_total_mass(&self->recomb_map) > 0) {
-                ret = msp_dtwf_recombine(
-                    self, genome, &parent_ancestry[0], &parent_ancestry[1]);
+                parent_nodes = self->pedigree.individuals[parent].nodes;
+                ret = msp_dtwf_recombine(self, genome, &parent_ancestry[0],
+                    &parent_ancestry[1], parent_nodes);
                 if (ret != 0) {
                     goto out;
                 }
@@ -4494,6 +4577,7 @@ msp_dtwf_generation(msp_t *self)
     avl_tree_t Q[2];
     /* Only support single structured coalescent label for now. */
     label_id_t label = 0;
+    tsk_id_t parent_nodes[MSP_MAX_PED_PLOIDY];
 
     for (i = 0; i < 2; i++) {
         avl_init_tree(&Q[i], cmp_segment_queue, NULL);
@@ -4529,9 +4613,10 @@ msp_dtwf_generation(msp_t *self)
             s = segment_mem + segment_mem_offset;
             segment_mem_offset++;
             p = (uint32_t) gsl_rng_uniform_int(self->rng, N);
-            if (parents[p] != NULL) {
-                self->num_ca_events++;
-            }
+            // note: this also counts pass_through events
+            // if (parents[p] != NULL) {
+            //    self->num_ca_events++;
+            //}
             s->next = parents[p];
             s->node = a;
             parents[p] = s;
@@ -4539,13 +4624,16 @@ msp_dtwf_generation(msp_t *self)
 
         // Iterate through offspring of parent k, adding to avl_tree
         for (k = 0; k < N; k++) {
+            for (i = 0; i < 2; i++) {
+                parent_nodes[i] = TSK_NULL;
+            }
             for (s = parents[k]; s != NULL; s = s->next) {
                 node = s->node;
                 x = (segment_t *) node->item;
                 // Recombine ancestor
                 // TODO Should this be the recombination rate going foward from x.left?
                 if (rate_map_get_total_mass(&self->recomb_map) > 0) {
-                    ret = msp_dtwf_recombine(self, x, &u[0], &u[1]);
+                    ret = msp_dtwf_recombine(self, x, &u[0], &u[1], parent_nodes);
                     if (ret != 0) {
                         goto out;
                     }
@@ -4576,7 +4664,7 @@ msp_dtwf_generation(msp_t *self)
             // Merge segments in each parental chromosome
             for (i = 0; i < 2; i++) {
                 ret = msp_merge_n_ancestors(
-                    self, &Q[i], (population_id_t) j, label, TSK_NULL, NULL);
+                    self, &Q[i], (population_id_t) j, label, parent_nodes[i], NULL);
                 if (ret != 0) {
                     goto out;
                 }
@@ -5132,16 +5220,6 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = MSP_ERR_BAD_STATE;
         goto out;
     }
-    if (self->additional_nodes > 0
-        && !(self->model.type == MSP_MODEL_HUDSON || self->model.type == MSP_MODEL_SMC
-               || self->model.type == MSP_MODEL_SMC_PRIME
-               || self->model.type == MSP_MODEL_BETA
-               || self->model.type == MSP_MODEL_DIRAC)) {
-        /* We currently only support the full ARG recording on the standard
-         * coalescent, SMC, or multiple merger coalescents. */
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
-        goto out;
-    }
 
     if (msp_is_completed(self)) {
         /* If the simulation is completed, run() is a no-op for
@@ -5272,7 +5350,8 @@ msp_finalise_tables(msp_t *self)
         }
     }
     ret = tsk_table_collection_build_index(self->tables, 0);
-    if (ret == TSK_ERR_EDGES_NOT_SORTED_PARENT_TIME) {
+    if (ret == TSK_ERR_EDGES_NOT_SORTED_PARENT_TIME
+        || ret == TSK_ERR_EDGES_NONCONTIGUOUS_PARENTS) {
         /* There are rare cases when we are simulating from awkward initial
          * states where the tables we produce in the simulation are not
          * correctly sorted. The simplest course of action here to just let it

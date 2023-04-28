@@ -280,6 +280,8 @@ def _parse_simulate(
             models[-1].duration = mce.time - current_time
             models.append(mce.model)
             current_time = mce.time
+    is_dtwf = isinstance(models[0], DiscreteTimeWrightFisher)
+    is_pedigree = any(isinstance(model, FixedPedigree) for model in models)
 
     demography = _demography_factory(
         Ne, population_configurations, migration_matrix, demographic_events
@@ -351,6 +353,10 @@ def _parse_simulate(
         tables = from_ts.dump_tables()
 
     if record_full_arg:
+        if is_dtwf or is_pedigree:
+            raise ValueError(
+                "Full ARG recording not supported in FixedPedigree and DTWF simulation"
+            )
         coalescing_segments_only = False
         additional_nodes = NodeType(
             NodeType.RECOMBINANT
@@ -822,6 +828,10 @@ def _parse_sim_ancestry(
     discrete_genome = core._parse_flag(discrete_genome, default=True)
     record_full_arg = core._parse_flag(record_full_arg, default=False)
 
+    models = _parse_model_arg(model)
+    is_dtwf = isinstance(models[0], DiscreteTimeWrightFisher)
+    is_pedigree = any(isinstance(model, FixedPedigree) for model in models)
+
     if record_full_arg:
         if coalescing_segments_only is not None:
             raise ValueError(
@@ -830,12 +840,17 @@ def _parse_sim_ancestry(
         if additional_nodes is not None:
             raise ValueError("Cannot set both record_full_arg and additional_nodes.")
         coalescing_segments_only = False
-        additional_nodes = NodeType(
-            NodeType.RECOMBINANT
-            | NodeType.COMMON_ANCESTOR
-            | NodeType.MIGRANT
-            | NodeType.GENE_CONVERSION
-        )
+        if is_dtwf or is_pedigree:
+            raise ValueError(
+                "Full ARG recording not supported in FixedPedigree and DTWF simulation"
+            )
+        else:
+            additional_nodes = NodeType(
+                NodeType.RECOMBINANT
+                | NodeType.COMMON_ANCESTOR
+                | NodeType.MIGRANT
+                | NodeType.GENE_CONVERSION
+            )
     coalescing_segments_only = core._parse_flag(coalescing_segments_only, default=True)
     if additional_nodes is None:
         additional_nodes = NodeType(0)
@@ -849,6 +864,19 @@ def _parse_sim_ancestry(
                 raise ValueError(
                     "Set coalescing_segments_only to False when recording"
                     " additional_nodes."
+                )
+
+        if is_dtwf:
+            if additional_nodes.value & NodeType.MIGRANT.value:
+                raise ValueError(
+                    "Recording MIGRANT nodes is currently not supported in"
+                    " DTWF simulation."
+                )
+        if is_pedigree:
+            if additional_nodes.value & NodeType.MIGRANT.value:
+                raise ValueError(
+                    "Recording MIGRANT nodes is not supported in "
+                    "FixedPedigree simulation."
                 )
 
     record_migrations = core._parse_flag(record_migrations, default=False)
@@ -933,10 +961,6 @@ def _parse_sim_ancestry(
     if ploidy < 1:
         raise ValueError("ploidy must be >= 1")
 
-    models = _parse_model_arg(model)
-    is_dtwf = isinstance(models[0], DiscreteTimeWrightFisher)
-    is_pedigree = any(isinstance(model, FixedPedigree) for model in models)
-
     if is_pedigree:
         if demography is not None:
             raise ValueError("Cannot specify demography for FixedPedigree simulation")
@@ -954,10 +978,6 @@ def _parse_sim_ancestry(
         if gene_conversion_map.total_mass != 0:
             raise ValueError(
                 "Gene conversion not supported in FixedPedigree simulation"
-            )
-        if record_full_arg:
-            raise ValueError(
-                "Full ARG recording not supported in FixedPedigree simulation"
             )
         if record_migrations:
             raise ValueError(

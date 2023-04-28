@@ -3336,6 +3336,7 @@ PyInit__msprime(void)
     PyModule_AddIntConstant(module, "NODE_IS_GC_EVENT", MSP_NODE_IS_GC_EVENT);
     PyModule_AddIntConstant(module, "NODE_IS_MIG_EVENT", MSP_NODE_IS_MIG_EVENT);
     PyModule_AddIntConstant(module, "NODE_IS_CEN_EVENT", MSP_NODE_IS_CEN_EVENT);
+    PyModule_AddIntConstant(module, "NODE_IS_PASS_THROUGH", MSP_NODE_IS_PASS_THROUGH);
 
     PyModule_AddIntConstant(module, "EXIT_COALESCENCE", MSP_EXIT_COALESCENCE);
     PyModule_AddIntConstant(module, "EXIT_MAX_EVENTS", MSP_EXIT_MAX_EVENTS);

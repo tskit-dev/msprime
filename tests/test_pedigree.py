@@ -1087,6 +1087,219 @@ class TestSimulateThroughPedigreeMultiplePops:
         assert ts.node(6).time > 2
 
 
+class TestSimulateAdditionalNodes:
+    def verify_pedigree_unary(self, ts, initial_state):
+        # verifies whether for each step in the pedigree and for each
+        # marginal tree there is an edge recorded for each ploid to
+        # either one of the parent's ploids
+
+        direct_ancestors = [set() for _ in range(initial_state.nodes.num_rows)]
+
+        # collect all direct ancestors for each node
+        for node_id, node in enumerate(initial_state.nodes):
+            individual = ts.individual(node.individual)
+            for parent_id in individual.parents:
+                if parent_id != tskit.NULL:
+                    parent = ts.individual(parent_id)
+                    for parent_node in parent.nodes:
+                        direct_ancestors[node_id].add(parent_node)
+
+        # assert that in each marginal tree all nodes a parent from
+        # the constructed set
+        for tree in ts.trees():
+            for node_id in tree.nodes():
+                if tree.parent(node_id) != tskit.NULL:
+                    direct_ancestor = direct_ancestors[node_id]
+                    assert tree.parent(node_id) in direct_ancestor
+
+    def verify_pedigree_recombination(self, tables):
+        children = collections.defaultdict(set)
+        for edge in tables.edges:
+            children[edge.child].add(edge.parent)
+        for parents in children.values():
+            num_parents = len(parents)
+            if num_parents == 2:
+                for parent in parents:
+                    assert tables.nodes[parent].flags & msprime.NODE_IS_RE_EVENT > 0
+            else:
+                assert num_parents == 1
+
+    def verify_pedigree(self, sim, additional_nodes):
+        sim.run()
+        output_tables = tskit.TableCollection.fromdict(sim.tables.asdict())
+        ts = output_tables.tree_sequence()
+
+        flags = ts.tables.nodes.flags
+        assert np.all(flags[-ts.num_samples :] == 1)
+        time = ts.tables.nodes.time
+        # nodes can be multiple things at the same time
+        ca_nodes = np.where(np.bitwise_and(flags, msprime.NODE_IS_CA_EVENT))[0]
+        re_nodes = np.where(np.bitwise_and(flags, msprime.NODE_IS_RE_EVENT))[0]
+        pt_nodes = np.where(np.bitwise_and(flags, msprime.NODE_IS_PASS_THROUGH))[0]
+        for name, member in msprime.NodeType.__members__.items():
+            value = (member & additional_nodes).value
+            if value > 0:
+                if name == "RECOMBINANT":
+                    assert np.array_equal(time[re_nodes[::2]], time[re_nodes[1::2]])
+                    self.verify_pedigree_recombination(output_tables)
+                elif name == "COMMON_ANCESTOR":
+                    for tree in ts.trees():
+                        assert np.all(tree.num_children_array[ca_nodes] <= 1)
+                elif name == "PASS_THROUGH":
+                    for tree in ts.trees():
+                        assert np.all(tree.num_children_array[pt_nodes] <= 1)
+                else:
+                    raise (ValueError)
+
+        return ts
+
+    def test_record_migrant_error(self):
+        node_value = msprime.NODE_IS_MIG_EVENT | msprime.NODE_IS_PASS_THROUGH
+        additional_nodes = msprime.NodeType(node_value)
+        initial_state = simulate_pedigree(
+            num_founders=3, num_generations=5, sequence_length=100
+        )
+        with pytest.raises(
+            ValueError,
+            match="Recording MIGRANT nodes is not supported in "
+            "FixedPedigree simulation.",
+        ):
+            _ = msprime.sim_ancestry(
+                recombination_rate=0.1,
+                model="fixed_pedigree",
+                additional_nodes=additional_nodes,
+                coalescing_segments_only=False,
+                initial_state=initial_state,
+            )
+
+    def test_pedigree_full_arg(self):
+        initial_state = simulate_pedigree(
+            num_founders=3, num_generations=5, sequence_length=100
+        )
+        with pytest.raises(
+            ValueError,
+            match="Full ARG recording not supported in FixedPedigree and "
+            "DTWF simulation",
+        ):
+            _ = msprime.sim_ancestry(
+                initial_state=initial_state,
+                model="fixed_pedigree",
+                record_full_arg=True,
+            )
+        with pytest.raises(
+            ValueError,
+            match="Full ARG recording not supported in FixedPedigree and "
+            "DTWF simulation",
+        ):
+            _ = msprime.simulate(
+                from_ts=initial_state.tree_sequence(),
+                model="fixed_pedigree",
+                record_full_arg=True,
+            )
+
+    def test_pedigree_unary(self):
+        node_values = [
+            msprime.NODE_IS_RE_EVENT,
+            msprime.NODE_IS_CA_EVENT | msprime.NODE_IS_PASS_THROUGH,
+            None,
+        ]
+        node_values[-1] = node_values[0] | node_values[1]
+        for node_value in node_values:
+            additional_nodes = msprime.NodeType(node_value)
+            initial_state = simulate_pedigree(
+                num_founders=3, num_generations=5, sequence_length=100
+            )
+            sim = msprime.ancestry._parse_sim_ancestry(
+                recombination_rate=0.1,
+                model="fixed_pedigree",
+                additional_nodes=additional_nodes,
+                coalescing_segments_only=False,
+                initial_state=initial_state,
+                random_seed=1234,
+            )
+            ts = self.verify_pedigree(sim, additional_nodes)
+            self.verify_pedigree_unary(ts, initial_state)
+
+    def test_pedigree_unary_simple(self):
+        node_value = (
+            msprime.NODE_IS_RE_EVENT
+            | msprime.NODE_IS_CA_EVENT
+            | msprime.NODE_IS_PASS_THROUGH
+        )
+        additional_nodes = msprime.NodeType(node_value)
+        sequence_length = 100
+        pb = msprime.PedigreeBuilder()
+        mmid = pb.add_individual(time=2)
+        mdid = pb.add_individual(time=2)
+        dmid = pb.add_individual(time=2)
+        ddid = pb.add_individual(time=2)
+        mid = pb.add_individual(time=1, parents=[mmid, mdid])
+        did = pb.add_individual(time=1, parents=[dmid, ddid])
+        pb.add_individual(time=0, parents=[mid, did], is_sample=True)
+        pedigree = pb.finalise(sequence_length)
+        ts = msprime.sim_ancestry(
+            recombination_rate=0.1,
+            model="fixed_pedigree",
+            additional_nodes=additional_nodes,
+            coalescing_segments_only=False,
+            initial_state=pedigree,
+        )
+        self.verify_pedigree_unary(ts, pedigree)
+
+    def test_deep_pedigree(self):
+        node_value = (
+            msprime.NODE_IS_PASS_THROUGH
+            | msprime.NODE_IS_RE_EVENT
+            | msprime.NODE_IS_CA_EVENT
+        )
+        additional_nodes = msprime.NodeType(node_value)
+        initial_state = simulate_pedigree(
+            num_founders=10,
+            num_children_prob=[0, 0, 1],
+            num_generations=6,  # Takes a long time if this is increased
+            sequence_length=100,
+        )
+        sim = msprime.ancestry._parse_sim_ancestry(
+            recombination_rate=0.1,
+            model="fixed_pedigree",
+            additional_nodes=additional_nodes,
+            coalescing_segments_only=False,
+            initial_state=initial_state,
+            random_seed=1234,
+        )
+        ts = self.verify_pedigree(sim, additional_nodes)
+        self.verify_pedigree_unary(ts, initial_state)
+
+    def test_deep_pedigree_2(self):
+        node_values = [
+            msprime.NODE_IS_PASS_THROUGH | msprime.NODE_IS_CA_EVENT,
+            msprime.NODE_IS_PASS_THROUGH | msprime.NODE_IS_RE_EVENT,
+            None,
+        ]
+        node_values[-1] = node_values[0] | node_values[1]
+        for node_value in node_values:
+            additional_nodes = msprime.NodeType(node_value)
+            initial_state = simulate_pedigree(
+                num_founders=10,
+                num_children_prob=[0, 0, 0.7, 0.3],
+                num_generations=6,  # Takes a long time if this is increased
+                sequence_length=100,
+            )
+            sim = msprime.ancestry._parse_sim_ancestry(
+                recombination_rate=1e-2,
+                model="fixed_pedigree",
+                additional_nodes=additional_nodes,
+                coalescing_segments_only=False,
+                initial_state=initial_state,
+                random_seed=52,
+            )
+            ts = self.verify_pedigree(sim, additional_nodes)
+            if (additional_nodes.value & msprime.NODE_IS_PASS_THROUGH) and (
+                additional_nodes.value & msprime.NODE_IS_CA_EVENT
+            ):
+                self.verify_pedigree_unary(ts, initial_state)
+
+
 class TestPedigreeBuilder:
     def test_is_sample_default(self):
         pb = pedigrees.PedigreeBuilder()
