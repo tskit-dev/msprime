@@ -3730,6 +3730,108 @@ test_additional_nodes_re_ca_gc(void)
     tsk_table_collection_free(&tables);
 }
 
+static void
+test_dtwf_additional_nodes(void)
+{
+    int ret;
+    const char *model_name;
+    uint32_t n = 100;
+    msp_t msp;
+    tsk_size_t num_edges, num_edges_simple;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    uint32_t additional_nodes[4]
+        = { MSP_NODE_IS_PASS_THROUGH, MSP_NODE_IS_PASS_THROUGH | MSP_NODE_IS_RE_EVENT,
+              MSP_NODE_IS_RE_EVENT | MSP_NODE_IS_CA_EVENT,
+              MSP_NODE_IS_PASS_THROUGH | MSP_NODE_IS_RE_EVENT | MSP_NODE_IS_CA_EVENT };
+
+    for (int i = 0; i < 4; i++) {
+        ret = build_sim(&msp, &tables, rng, 100, 1, NULL, n);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_initialise(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_recombination_rate(&msp, 1);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        ret = msp_set_simulation_model_dtwf(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_population_configuration(&msp, 0, n, 0, true);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_additional_nodes(&msp, additional_nodes[i]);
+        CU_ASSERT_EQUAL(ret, 0);
+        ret = msp_set_coalescing_segments_only(&msp, false);
+        CU_ASSERT_EQUAL(ret, 0);
+        model_name = msp_get_model_name(&msp);
+        CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
+
+        ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+        CU_ASSERT_EQUAL(ret, 0);
+        msp_verify(&msp, 0);
+        ret = msp_finalise_tables(&msp);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        // verify whether there is at least one unary node
+        num_edges = tables.edges.num_rows;
+        ret = tsk_table_collection_simplify(&tables, NULL, 0, 0, NULL);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+        num_edges_simple = tables.edges.num_rows;
+        CU_ASSERT_TRUE(num_edges_simple < num_edges);
+
+        ret = msp_free(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        tsk_table_collection_free(&tables);
+    }
+    gsl_rng_free(rng);
+}
+
+static void
+test_dtwf_historical_samples_additional_nodes(void)
+{
+    int ret;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    sample_t samples[] = { { 0, 0 }, { 0, 1.1 }, { 0, 1.2 } };
+    tsk_node_table_t *nodes;
+    uint32_t n = 3;
+    tsk_table_collection_t tables;
+    uint32_t additional_nodes
+        = MSP_NODE_IS_PASS_THROUGH | MSP_NODE_IS_RE_EVENT | MSP_NODE_IS_CA_EVENT;
+
+    gsl_rng_set(rng, 5);
+
+    ret = build_sim(&msp, &tables, rng, 100, 1, samples, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_dtwf(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 0, 100, 0, true);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(&msp, 0.1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_additional_nodes(&msp, additional_nodes);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_coalescing_segments_only(&msp, false);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    msp_print_state(&msp, _devnull);
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp, 0);
+    msp_print_state(&msp, _devnull);
+
+    nodes = &msp.tables->nodes;
+    CU_ASSERT_EQUAL(nodes->flags[0], TSK_NODE_IS_SAMPLE);
+    CU_ASSERT_EQUAL(nodes->flags[1], TSK_NODE_IS_SAMPLE);
+    CU_ASSERT_EQUAL(nodes->flags[2], TSK_NODE_IS_SAMPLE);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -3817,6 +3919,9 @@ main(int argc, char **argv)
         { "test_population_size_start_time", test_population_size_start_time },
         { "test_additional_nodes_mig", test_additional_nodes_mig },
         { "test_additional_nodes_re_ca_gc", test_additional_nodes_re_ca_gc },
+        { "test_dtwf_additional_nodes", test_dtwf_additional_nodes },
+        { "test_dtwf_historical_samples_additional_nodes",
+            test_dtwf_historical_samples_additional_nodes },
         CU_TEST_INFO_NULL,
     };
 

@@ -553,21 +553,6 @@ class TestDtwf:
             assert right < 50 or right > 100
 
 
-class TestUnsupportedFullArg:
-    """
-    Full ARG recording isn't supported on the discrete time Wright-Fisher model
-    """
-
-    def test_dtwf(self):
-        for model in [msprime.DiscreteTimeWrightFisher()]:
-            with pytest.raises(_msprime.LibraryError):
-                msprime.simulate(
-                    10,
-                    model=model,
-                    record_full_arg=True,
-                )
-
-
 class TestMixedModels:
     """
     Tests that we can run mixed simulation models.

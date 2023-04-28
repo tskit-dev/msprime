@@ -31,6 +31,7 @@ from msprime._msprime import (
     NODE_IS_MIG_EVENT,
     NODE_IS_RE_EVENT,
     NODE_IS_GC_EVENT,
+    NODE_IS_PASS_THROUGH,
 )
 
 from msprime.ancestry import (

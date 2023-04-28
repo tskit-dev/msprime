@@ -19,6 +19,7 @@
 """
 Test cases for basic ancestry simulation operations.
 """
+import collections
 import datetime
 import json
 import logging
@@ -450,10 +451,10 @@ class TestAdditionalNodes:
 
         flags = tree_sequence.tables.nodes.flags
         time = tree_sequence.tables.nodes.time
-        re_nodes = np.where(flags == msprime.NODE_IS_RE_EVENT)[0]
-        ca_nodes = np.where(flags == msprime.NODE_IS_CA_EVENT)[0]
-        gc_nodes = np.where(flags == msprime.NODE_IS_GC_EVENT)[0]
-        mig_nodes = np.where(flags == msprime.NODE_IS_MIG_EVENT)[0]
+        re_nodes = np.where(np.bitwise_and(flags, msprime.NODE_IS_RE_EVENT))[0]
+        ca_nodes = np.where(np.bitwise_and(flags, msprime.NODE_IS_CA_EVENT))[0]
+        gc_nodes = np.where(np.bitwise_and(flags, msprime.NODE_IS_GC_EVENT))[0]
+        mig_nodes = np.where(np.bitwise_and(flags, msprime.NODE_IS_MIG_EVENT))[0]
         coal_nodes = np.where(flags == 0)[0]
 
         if additional_nodes is None:
@@ -461,9 +462,7 @@ class TestAdditionalNodes:
         for name, member in msprime.NodeType.__members__.items():
             value = (member & additional_nodes).value
             if value > 0:
-                if name == "FULL_ARG":
-                    pass
-                elif name == "RECOMBINANT":
+                if name == "RECOMBINANT":
                     # There should be two recombination nodes for every event
                     assert np.array_equal(
                         time[re_nodes[::2]], time[re_nodes[1::2]]
@@ -489,6 +488,8 @@ class TestAdditionalNodes:
                         assert ca_nodes.shape[0] > 0
                 elif name == "MIGRANT":
                     assert np.sum(mig_nodes) > 0
+                elif name == "PASS_THROUGH":
+                    pass
                 else:
                     raise (ValueError)
 
@@ -504,6 +505,62 @@ class TestAdditionalNodes:
         assert ts_simplified.num_nodes <= tree_sequence.num_nodes
         assert ts_simplified.num_edges <= tree_sequence.num_edges
         return tree_sequence
+
+    def verify_dtwf(self, sim, additional_nodes):
+        # additional checks needed here
+        sim.random_generator.seed = 21
+        sim.run()
+        ts = next(sim.run_replicates(1))
+
+        flags = ts.tables.nodes.flags
+        assert np.all(flags[: ts.num_samples] == 1)
+        time = ts.tables.nodes.time
+        # nodes can be multiple things at the same time
+        ca_nodes = np.where(np.bitwise_and(flags, msprime.NODE_IS_CA_EVENT))[0]
+        re_nodes = np.where(np.bitwise_and(flags, msprime.NODE_IS_RE_EVENT))[0]
+        pt_nodes = np.where(np.bitwise_and(flags, msprime.NODE_IS_PASS_THROUGH))[0]
+        for name, member in msprime.NodeType.__members__.items():
+            value = (member & additional_nodes).value
+            if value > 0:
+                if name == "RECOMBINANT":
+                    assert np.array_equal(time[re_nodes[::2]], time[re_nodes[1::2]])
+                    self.verify_dtwf_recombination(ts.tables)
+                elif name == "COMMON_ANCESTOR":
+                    for tree in ts.trees():
+                        assert np.all(tree.num_children_array[ca_nodes] <= 1)
+                elif name == "PASS_THROUGH":
+                    for tree in ts.trees():
+                        assert np.all(tree.num_children_array[pt_nodes] <= 1)
+                else:
+                    raise (ValueError)
+
+        return ts
+
+    def verify_dtwf_pass_through(self, ts):
+        for tree in ts.trees():
+            queue = [tree.root]
+            while queue:
+                parent = queue.pop(0)
+                time = tree.time(parent) - 1
+                num_children = 0
+                for child in tree.children(parent):
+                    assert tree.time(child) == time
+                    queue.append(child)
+                    num_children += 1
+                if num_children == 0:
+                    assert tree.time(parent) == 0
+
+    def verify_dtwf_recombination(self, tables):
+        children = collections.defaultdict(set)
+        for edge in tables.edges:
+            children[edge.child].add(edge.parent)
+        for parents in children.values():
+            num_parents = len(parents)
+            if num_parents == 2:
+                for parent in parents:
+                    assert tables.nodes[parent].flags & msprime.NODE_IS_RE_EVENT
+            else:
+                assert num_parents == 1
 
     def test_no_recombination(self):
         node_type = msprime.NodeType.COMMON_ANCESTOR
@@ -658,6 +715,70 @@ class TestAdditionalNodes:
             coalescing_segments_only=False,
         )
         self.verify(sim, additional_nodes=node_type)
+
+    def test_dtwf_mig(self):
+        node_type = msprime.NodeType.MIGRANT
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=5)
+        demography.add_population(name="B", initial_size=5)
+        demography.set_symmetric_migration_rate(populations=("A", "B"), rate=0.1)
+        with pytest.raises(
+            ValueError,
+            match="Recording MIGRANT nodes is currently"
+            " not supported in DTWF simulation.",
+        ):
+            _ = ancestry._parse_sim_ancestry(
+                samples={0: 2, 1: 2},
+                discrete_genome=False,
+                sequence_length=1,
+                recombination_rate=10,
+                additional_nodes=node_type,
+                coalescing_segments_only=False,
+                demography=demography,
+                model="dtwf",
+            )
+
+    def test_dtwf_full_arg(self):
+        with pytest.raises(
+            ValueError,
+            match="Full ARG recording not supported in FixedPedigree and "
+            "DTWF simulation",
+        ):
+            _ = msprime.sim_ancestry(5, model="dtwf", record_full_arg=True)
+        with pytest.raises(
+            ValueError,
+            match="Full ARG recording not supported in FixedPedigree and "
+            "DTWF simulation",
+        ):
+            _ = msprime.simulate(
+                5, model=msprime.DiscreteTimeWrightFisher(), record_full_arg=True
+            )
+
+    def test_dtwf_store_additional_nodes(self):
+        node_values = [
+            msprime.NODE_IS_RE_EVENT | msprime.NODE_IS_PASS_THROUGH,
+            msprime.NODE_IS_CA_EVENT | msprime.NODE_IS_PASS_THROUGH,
+            None,
+        ]
+        node_values[-1] = node_values[0] | node_values[1]
+        for node_value in node_values:
+            additional_nodes = msprime.NodeType(node_value)
+            sim = ancestry._parse_sim_ancestry(
+                10,
+                population_size=100,
+                model="dtwf",
+                ploidy=2,
+                recombination_rate=1e-3,
+                random_seed=1234,
+                sequence_length=100,
+                additional_nodes=additional_nodes,
+                coalescing_segments_only=False,
+            )
+            ts = self.verify_dtwf(sim, additional_nodes)
+            if (additional_nodes.value & msprime.NODE_IS_PASS_THROUGH) and (
+                additional_nodes.value & msprime.NODE_IS_CA_EVENT
+            ):
+                self.verify_dtwf_pass_through(ts)
 
 
 class TestSimulator:
