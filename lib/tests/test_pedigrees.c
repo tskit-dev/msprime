@@ -117,6 +117,8 @@ verify_pedigree(double recombination_rate, unsigned long seed,
     tsk_tree_t tree;
     gsl_rng *rng = safe_rng_alloc();
     bool coalescence = false;
+    size_t num_samples = 0;
+    size_t j;
 
     ret = build_pedigree_sim(&msp, &tables, rng, 100, ploidy, num_individuals, parents,
         time, is_sample, population);
@@ -127,6 +129,14 @@ verify_pedigree(double recombination_rate, unsigned long seed,
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    for (j = 0; j < num_individuals; j++) {
+        if (is_sample == NULL) {
+            num_samples += (time[j] == 0) * ploidy;
+        } else {
+            num_samples += is_sample[j] * ploidy;
+        }
+    }
+    CU_ASSERT_EQUAL(msp.num_samples, num_samples);
 
     /* msp_print_state(&msp, stdout); */
 
