@@ -860,7 +860,7 @@ class Simulator:
         self.segment_stack.append(u)
 
     def store_node(self, population, flags=0):
-        self.flush_edges()
+        # self.flush_edges()
         self.tables.nodes.add_row(time=self.t, flags=flags, population=population)
 
     def flush_edges(self):
@@ -868,12 +868,11 @@ class Simulator:
         Flushes the edges in the edge buffer to the table, squashing any adjacent edges.
         """
         if len(self.edge_buffer) > 0:
-            parent = len(self.tables.nodes) - 1
             self.edge_buffer.sort(key=lambda e: (e.child, e.left))
             left = self.edge_buffer[0].left
             right = self.edge_buffer[0].right
             child = self.edge_buffer[0].child
-            assert self.edge_buffer[0].parent == parent
+            parent = self.edge_buffer[0].parent
             for e in self.edge_buffer[1:]:
                 assert e.parent == parent
                 if e.left != right or e.child != child:
@@ -888,6 +887,12 @@ class Simulator:
         """
         Stores the specified edge to the output tree sequence.
         """
+        if len(self.edge_buffer) > 0:
+            last_edge = self.edge_buffer[-1]
+        else:
+            last_edge = tskit.Edge(-1, -1, -1, -1)
+        if last_edge.parent != parent:
+            self.flush_edges()
         self.edge_buffer.append(
             tskit.Edge(left=left, right=right, parent=parent, child=child)
         )
@@ -1759,7 +1764,7 @@ class Simulator:
         for pop in self.P:
             for ancestor in pop.iter_ancestors():
                 seg = ancestor
-                self.flush_edges()
+                # self.flush_edges()
                 u = self.tables.nodes.add_row(
                     time=time, flags=msprime.NODE_IS_CEN_EVENT, population=pop.id
                 )
