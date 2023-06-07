@@ -780,6 +780,11 @@ class Simulator:
         """
         Stores the specified edge to the output tree sequence.
         """
+        if len(self.edge_buffer) > 0:
+            last_edge = self.edge_buffer[-1]
+            if last_edge.parent != parent:
+                self.flush_edges()
+
         self.edge_buffer.append(
             tskit.Edge(left=left, right=right, parent=parent, child=child)
         )
@@ -1731,7 +1736,6 @@ class Simulator:
         for pop in self.P:
             for ancestor in pop.iter_ancestors():
                 seg = ancestor
-                self.flush_edges()
                 u = self.tables.nodes.add_row(
                     time=time, flags=msprime.NODE_IS_CEN_EVENT, population=pop.id
                 )
@@ -1757,7 +1761,6 @@ class Simulator:
             if new_node_id == -1:
                 new_node_id = self.store_node(z.population, flags=flag)
             else:
-                self.flush_edges()
                 self.update_node_flag(new_node_id, flag)
             self.store_arg_edges(z, new_node_id)
         return new_node_id
@@ -1798,8 +1801,6 @@ class Simulator:
                 coalescence = True
                 if new_node_id == -1:
                     new_node_id = self.store_node(pop_id)
-                else:
-                    self.flush_edges()
                 # We must also break if the next left value is less than
                 # any of the right values in the current overlap set.
                 if left not in self.S:
@@ -1944,8 +1945,6 @@ class Simulator:
                         if u == -1:
                             self.store_node(population_index)
                             u = len(self.tables.nodes) - 1
-                        else:
-                            self.flush_edges()
                     # Put in breakpoints for the outer edges of the coalesced
                     # segment
                     left = x.left

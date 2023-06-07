@@ -1814,9 +1814,19 @@ msp_store_edge(msp_t *self, double left, double right, tsk_id_t parent, tsk_id_t
 {
     int ret = 0;
     tsk_edge_t *edge;
+    tsk_edge_t last_edge;
     const double *node_time = self->tables->nodes.time;
 
     tsk_bug_assert(parent < (tsk_id_t) self->tables->nodes.num_rows);
+    if (self->num_buffered_edges > 0) {
+        last_edge = self->buffered_edges[self->num_buffered_edges - 1];
+        if (last_edge.parent != parent) {
+            ret = msp_flush_edges(self);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
     if (self->num_buffered_edges == self->max_buffered_edges - 1) {
         /* Grow the array */
         self->max_buffered_edges *= 2;
@@ -1923,10 +1933,6 @@ msp_store_additional_nodes_edges(msp_t *self, segment_t *z, tsk_id_t u, uint32_t
             }
             *new_node_id = ret;
         } else {
-            ret = msp_flush_edges(self);
-            if (ret != 0) {
-                goto out;
-            }
             // don't mark sample nodes as PASS_THROUGH
             if (!(self->tables->nodes.flags[u] == TSK_NODE_IS_SAMPLE
                     && flag == MSP_NODE_IS_PASS_THROUGH)) {
@@ -2928,11 +2934,6 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                             ret = (int) new_node_id;
                             goto out;
                         }
-                    } else {
-                        ret = msp_flush_edges(self);
-                        if (ret != 0) {
-                            goto out;
-                        }
                     }
                 }
                 v = new_node_id;
@@ -3173,11 +3174,6 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                         = msp_store_node(self, 0, self->time, population_id, individual);
                     if (new_node_id < 0) {
                         ret = (int) new_node_id;
-                        goto out;
-                    }
-                } else {
-                    ret = msp_flush_edges(self);
-                    if (ret != 0) {
                         goto out;
                     }
                 }
@@ -3804,6 +3800,7 @@ msp_reset(msp_t *self)
     self->num_rejected_ca_events = 0;
     self->num_trapped_re_events = 0;
     self->num_multiple_re_events = 0;
+    self->num_buffered_edges = 0;
     memset(self->num_migration_events, 0, N * N * sizeof(size_t));
 
     if (self->start_time < DBL_MAX) {
@@ -6557,10 +6554,6 @@ msp_census_event(msp_t *self, demographic_event_t *event)
 
                 while (seg != NULL) {
                     // Add an edge to the edge table.
-                    ret = msp_flush_edges(self);
-                    if (ret != 0) {
-                        goto out;
-                    }
                     ret = tsk_node_table_add_row(&self->tables->nodes,
                         MSP_NODE_IS_CEN_EVENT, event->time, i, TSK_NULL, NULL, 0);
                     if (ret < 0) {
