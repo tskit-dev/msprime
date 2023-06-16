@@ -92,19 +92,22 @@ for discussion and examples of individual features.
     :members:
 
     .. autoattribute:: RECOMBINANT
-         :annotation: = NodeType(1<<17)
+         :annotation: = msprime.NodeType(1<<17)
 
     .. autoattribute:: COMMON_ANCESTOR
-         :annotation: = NodeType(1<<18)
+         :annotation: = msprime.NodeType(1<<18)
 
     .. autoattribute:: MIGRANT
-         :annotation: = NodeType(1<<19)
+         :annotation: = msprime.NodeType(1<<19)
+
+    .. autoattribute: CENSUS
+        :annotation: = msprime.NodeType(1<<20)
 
     .. autoattribute:: GENE_CONVERSION
-         :annotation: = NodeType(1<<21)
+         :annotation: = msprime.NodeType(1<<21)
 
     .. autoattribute:: PASS_THROUGH
-         :annotation: = NodeType(1<<22)
+         :annotation: = msprime.NodeType(1<<22)
 ```
 
 #### Models
@@ -227,21 +230,30 @@ with all other nodes having a flags value of 0.
 Msprime defines some extra flags that help us to identify particular
 nodes in some situations:
 
+```{eval-rst}
+.. note::
+    These flags have been deprecated in favour of using 
+    :class:`NodeType<NodeType>`. This is not a breaking change. The 
+    constant associated with each flag remains the same. However, working 
+    with flags should be more intuitive now that we are relying on the 
+    :class:`python:enum.Flag` functionality.
+```    
+
 ```{data} msprime.NODE_IS_RE_EVENT
 
 The node is an ARG recombination event. Each recombination event is marked
 with two nodes, one identifying the individual providing the genetic
 material to the left of the breakpoint and the other providing the genetic
-material the right. Only present if the ``record_full_arg`` option is
-specified.
+material the right. Present either with the ``record_full_arg`` flag or when
+adding recombination to the ``additional_nodes`` to be stored.
 
 ```
 
 ```{data} msprime.NODE_IS_CA_EVENT
 
 The node is an ARG common ancestor event that did not result in
-marginal coalescence. Only present if the ``record_full_arg`` option is
-specified.
+marginal coalescence. Present either with the ``record_full_arg`` flag or when
+adding common ancestor events to the ``additional_nodes`` to be stored.
 
 ```
 
@@ -249,8 +261,8 @@ specified.
 
 The node is an ARG migration event identifying the individual that migrated.
 Can be used in combination with the ``record_migrations`` option.
-Only present if the ``record_full_arg`` option is
-specified.
+Present either with the ``record_full_arg`` flag or when adding migration 
+events to the ``additional_nodes`` to be stored.
 
 ```
 
@@ -258,6 +270,23 @@ specified.
 
 The node was created by a census event. Please see the
 {ref}`sec_ancestry_census_events` section for more details.
+
+```
+
+```{data} msprime.NODE_IS_GC_EVENT
+
+The node was created by a gene conversion event.
+
+```
+
+```{data} msprime.NODE_IS_PASS_THROUGH
+
+The node identifies an ancestral genome/ploid through which the ancestral
+material of only a single lineage passed (so no coalescence or common 
+ancestor event). Can be used in combination with the ``record_migrations`` option.
+Only present when storing pass through events using the 
+``additional_nodes`` option. And only compatible with ``DTWF``
+and ``FixedPedigree`` models.
 
 ```
 

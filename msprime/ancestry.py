@@ -1340,12 +1340,15 @@ class ExitReason(enum.IntEnum):
 
 class NodeType(enum.Flag):
     """
-    Specify the type of node for which you want to track ancestry.
+    Specify the type of node for which you want to track ancestry. Extends
+    the :class:`python:enum.Flag` class. The NodeType can be specified by
+    means of bitwise operators on the members of the enumeration.
     """
 
     RECOMBINANT = 1 << 17
     COMMON_ANCESTOR = 1 << 18
     MIGRANT = 1 << 19
+    CENSUS = 1 << 20
     GENE_CONVERSION = 1 << 21
     PASS_THROUGH = 1 << 22
 
