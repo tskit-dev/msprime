@@ -19,9 +19,12 @@ of genome sequence evolution.
 Besides this manual, there are a number of other resources
 available for learning about {program}`tskit` and {program}`msprime`:
 
-- The [tskit tutorials](https://tskit.dev/tutorials) site contains
-  in-depth tutorials on different aspects of {program}`msprime` simulations
-  as well as how to analyse simulated {program}`tskit` tree sequences.
+- The [tskit tutorials](https://tskit.dev/tutorials) site provides an
+  introduction to the tree sequence format used by {program}`msprime`,
+  as well as in-depth tutorials
+  on more [advanced {program}`msprime` topics](tutorials:sec_msprime) and
+  examples of how to [analyse](tutorials:sec_analysing_tree_sequences)
+  simulated {program}`tskit` tree sequences.
 
 - Our [Discussions board](https://github.com/tskit-dev/msprime/discussions)
   is a great place to ask questions like "how do I do X" or "what's the best
