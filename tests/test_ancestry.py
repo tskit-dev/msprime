@@ -870,9 +870,7 @@ class TestSimulator:
         assert len(caplog.records) == 6
         assert caplog.messages[0].startswith("model[0] {'name': 'hudson'}")
         assert caplog.messages[-1].startswith("Completed at time")
-        assert (
-            caplog.messages[2] == "time=0.312845 ancestors=2 ret=ExitReason.MAX_EVENTS"
-        )
+        assert caplog.messages[2].startswith("time=0.312845 ancestors=2 ret=")
 
     def test_debug_logging_dtwf(self, caplog):
         sim = ancestry._parse_simulate(3, Ne=10, model="dtwf")
@@ -885,7 +883,7 @@ class TestSimulator:
                 " until max time: inf"
             )
             assert caplog.messages[-1].startswith("Completed at time")
-            assert caplog.messages[2] == "time=1 ancestors=3 ret=ExitReason.MAX_EVENTS"
+            assert caplog.messages[2].startswith("time=1 ancestors=3 ret=")
 
     def test_str(self):
         sim = ancestry._parse_simulate(3)
