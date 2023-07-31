@@ -100,7 +100,7 @@ for discussion and examples of individual features.
     .. autoattribute:: MIGRANT
          :annotation: = msprime.NodeType(1<<19)
 
-    .. autoattribute: CENSUS
+    .. autoattribute:: CENSUS
         :annotation: = msprime.NodeType(1<<20)
 
     .. autoattribute:: GENE_CONVERSION
