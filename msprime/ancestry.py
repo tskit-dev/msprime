@@ -1198,7 +1198,8 @@ def sim_ancestry(
         Defaults to class `msprime.NodeType(0)`.
     :param bool coalescing_segments_only: If False, retain all ancestry for any
         nodes that are coalescent nodes anywhere in the sequence. This will result in
-        unary nodes. Defaults to True.
+        unary nodes. Should be set to False when :ref:`recording additional nodes
+        <sec_ancestry_additional_nodes>`. Defaults to True.
     :param bool record_migrations: If True, record all migration events
         that occur in the :ref:`tskit:sec_migration_table_definition` of
         the output tree sequence. Defaults to False.
@@ -1343,6 +1344,8 @@ class NodeType(enum.Flag):
     Specify the type of node for which you want to track ancestry. Extends
     the :class:`python:enum.Flag` class. The NodeType can be specified by
     means of bitwise operators on the members of the enumeration.
+    See :ref:`additional nodes <sec_ancestry_additional_nodes>` for a
+    definition of each of the different node types.
     """
 
     RECOMBINANT = 1 << 17

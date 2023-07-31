@@ -958,17 +958,24 @@ do not result in marginal coalescences. For some purposes, however,
 we want record information on other events of interest, not just the mimimal 
 representation of its outcome.
 
-The `additional_nodes` and `coalescing_segments_only` options serve this exact 
-purpose. These options allow us to record the nodes associated with a custom 
-subset of all events we might observe in the history of a sample. Besides 
-samples and coalescence events, nodes can now also represent common 
-ancestor events, recombination, gene conversion, migration, and pass through 
-events. The example below and the next few paragraphs provide a guide on how 
+The `additional_nodes` and 
+{ref}`coalescing_segments_only <sec_additional_nodes_cso>` options serve 
+this exact purpose. These options allow us to record the nodes associated with 
+a custom subset of all events we might observe in the history of a sample. 
+Besides samples and coalescence events, nodes can now also represent 
+{ref}`common ancestor events <sec_additional_nodes_ca>`, 
+{ref}`recombination <sec_additional_nodes_re>`, 
+{ref}`gene conversion <sec_additional_nodes_re>`, 
+{ref}`migration <sec_ancestry_record_migrations>`, 
+and {ref}`pass through <sec_additional_nodes_re>` events. The example below 
+and the next few paragraphs provide a guide on how 
 to record additional nodes and interpret the resulting node tables.
 
 We first set up a simple pedigree simulation. Pedigrees are an
 interesting starting point as in contrast to the coalescent models a single 
-node might be associated with more than one type of event.
+node might be associated with more than one type of event. Conversely, 
+for the continuous-time coalescent model simulated by default by msprime,
+each event is registered as a new node.
 
 
 ```{code-cell}
@@ -1014,9 +1021,9 @@ ts = msprime.sim_ancestry(
 
 def count_flags(ts):
     counter = dict()
-    for name, nodetype in msprime.NodeType.__members__.items():
+    for nodetype in msprime.NodeType:
         flags = np.bitwise_and(ts.nodes_flags, nodetype.value)
-        counter[name] = np.sum(flags > 0)
+        counter[nodetype.name] = np.sum(flags > 0)
 
     return counter
 
@@ -1027,9 +1034,10 @@ bitwise operations to determine the type of a node. This function iterates
 across all node types and checks for all rows in the nodes table whether 
 the intersection of the basic node type and the node within the nodes table 
 is different from 0. It returns a `dict` containing the counts of all possible 
-node types. 
+node types.
 
-Note that recombination events are associated with two nodes, 
+Note that {ref}`recombination events <sec_additional_nodes_re>` are 
+associated with two nodes, 
 one for both ends that are created by recombination backwards in time. The 
 number of recombination events is thus half the number of recombination nodes. 
 `PASS_THROUGH` events occur when the ancestral material of only a single 
@@ -1061,7 +1069,9 @@ in the tree sequence according to their {class}`.NodeType`. Node 5 is both
 recombinant nodes (yellow). All other nodes are only associated with a 
 `PASS_THROUGH` event (blue). Note that we do not observe any `COMMON_ANCESTOR` 
 events. This means that all yellow nodes are also associated with a 
-coalesence event.
+coalesence event (see {ref}`common ancestor events <sec_additional_nodes_ca>`). 
+Note that in order to verify whether a node is `RECOMBINANT` **and** `PASS_THROUGH`, 
+we use the bitwise **OR** to define its associated `NodeType` constant.
 
 To summarize: `additional_nodes` are specified using bitwise flags. Multiple 
 basic node types can be combined by taking the bitwise `OR` (|) and then 
@@ -1070,23 +1080,41 @@ nodes across the genealogical history of the sample. By means of bitwise `AND`
 (&) we can then query the nodes table and check the type of each of the recorded 
 nodes.
 
-Note that the `coalescing_segments_only` option is set to `False` when 
-recording additional nodes. Setting `coalescing_segments_only` to `False` 
-allows us to switch off the default simulator behaviour of only recording the 
-relationships between overlapping ancestry segments. Instead, you can now 
-record edges along the full extent of the ancestral lineage that was involved 
-in any of the events as specified by the `additional_nodes` flag. This option 
-can also be set to `False` without specifying any additional nodes. We then 
-register edges along the full length of the tracked ancestral material. Not 
-just for the those marginal overlapping segments. This option will result 
-in nodes with only one child (unary nodes) along parts of the genome.
-
 If we wish to reduce these trees down to the minimal representation, we can use 
 {meth}`tskit.TreeSequence.simplify`. The resulting tree sequence will have 
 all of these unary nodes removed and will be equivalent to (but not identical, 
 due to stochastic effects) calling {func}`.sim_ancestry` without the 
 `additional_nodes` or `coalescing_segment_only` argument(s).
 
+
+(sec_additional_nodes_cso)=
+
+### Coalescing segments only
+
+Note that the `coalescing_segments_only` option should be set to `False` when 
+recording additional nodes. Setting `coalescing_segments_only` to `False` 
+allows us to switch off the default simulator behaviour of only recording the 
+relationships between overlapping ancestry segments. Instead, you can now 
+record edges along the full extent of any of the ancestral lineages 
+that was involved in any of the events as specified by the `additional_nodes` flag. 
+This option can also be set to `False` without specifying any additional nodes. 
+When `coalescing_segments_only` is set to `False`,
+edges that are a result of a coalescent event will record
+the full length of the tracked ancestral material,
+not just the overlapping segments of genome (as is the default behavior.
+As a result, this option will produce 
+in nodes with only one child (unary nodes) along parts (unary regions) of 
+the genome.
+
+For instance: suppose an ancestral segment ancestral to node `m` spans from `a` to `b` along the genome,
+and another overlapping segment ancestral to node `n` spans from `c` to `d`, with `a < c < b < d`.
+If the two coalesce to create node `p`, if `coalescing_segments_only=True` (the default)
+then edges from `m` and `n` to `p` over the genomic segment `[c,b)` would be created,
+and the ancestry of the remaining segments (i.e., `[a,c)` for `m` and `[b,d)` for `n`) would be left unspecified
+until further coalescent events.
+However, if `coalescing_segments_only=False`, then the edges recorded
+would be from `m` to `p` over the entire segment `[a, b)`, and from `n` to `p` over the entire segment `[c,d)`.
+The nodes `m` and `n` coalesce (in `p`) on only the overlapping segment `[c,b)`, and so the node `p` will be a unary node in the flanking regions: above `m` on the segment `[a,c)` and above `n` on the segment `[b,d)`.
 
 (sec_additional_nodes_ca)=
 
@@ -1096,15 +1124,19 @@ We distinguish two types of common ancestor events: coalescence and common
 ancestor (in the strict sense) events.
 
 Coalescence events are the default node type (associated with value 0) and are 
-therefore only implicitly part of the {class}`.NodeType` enumeration. Whenever we 
-do not observe any marginal overlap between lineages involved in a common ancestor 
-event, we register this in the node table as {class}`msprime.NodeType.COMMON_ANCESTOR`.
+therefore only implicitly part of the {class}`.NodeType` enumeration. 
+In contrast, whenever two nonoverlapping ancestral segments
+are found to have inherited from the same ancestral genome,
+there is no coalescence event, and so we register this in the node table as 
+{class}`msprime.NodeType.COMMON_ANCESTOR`.
 Finally, when keeping track of individuals 
 ({class}``msprime.DiscreteTimeWrightFisher``, 
-{class}``msprime.FixedPedigree``), we might observe genomes (ploid) through 
-which the ancestral material of only a single lineage passes. This is obviously not a
-common ancestor event. Such genomes can be registered in the table as 
+{class}``msprime.FixedPedigree``), we might observe genomes (ploids) through 
+which the ancestral material of only a single lineage passes. 
+Such genomes can be registered in the table as 
 {class}`msprime.NodeType.PASS_THROUGH` nodes.
+Although this is obviously not a common ancestor event, note that for both 
+of these models each node has to carry at least one of these three flags.
 
 
 (sec_additional_nodes_re)=
