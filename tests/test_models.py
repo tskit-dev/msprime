@@ -962,3 +962,30 @@ class TestSweepGenicSelection:
             random_seed=2,
         )
         assert all(tree.num_roots == 1 for tree in ts.trees())
+
+    def test_sweep_migration_event(self):
+        models = [
+            msprime.StandardCoalescent(duration=0.01),
+            msprime.SweepGenicSelection(
+                position=5,
+                start_frequency=0.69,
+                end_frequency=0.7,
+                s=0.1,
+                dt=1e-6,
+            ),
+        ]
+        with pytest.raises(
+            ValueError,
+            match="Recording MIGRANT nodes is not supported in "
+            "SweepGenicSelection simulation.",
+        ):
+            msprime.sim_ancestry(
+                3,
+                population_size=1000,
+                sequence_length=10,
+                recombination_rate=0.2,
+                model=models,
+                random_seed=2,
+                coalescing_segments_only=False,
+                additional_nodes=msprime.NodeType.MIGRANT,
+            )
