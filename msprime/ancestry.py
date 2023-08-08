@@ -866,17 +866,21 @@ def _parse_sim_ancestry(
                     " additional_nodes."
                 )
 
-        if is_dtwf:
-            if additional_nodes.value & NodeType.MIGRANT.value:
+        if additional_nodes.value & NodeType.MIGRANT.value:
+            if is_dtwf:
                 raise ValueError(
                     "Recording MIGRANT nodes is currently not supported in"
                     " DTWF simulation."
                 )
-        if is_pedigree:
-            if additional_nodes.value & NodeType.MIGRANT.value:
+            if is_pedigree:
                 raise ValueError(
                     "Recording MIGRANT nodes is not supported in "
                     "FixedPedigree simulation."
+                )
+            if any(isinstance(model, SweepGenicSelection) for model in models):
+                raise ValueError(
+                    "Recording MIGRANT nodes is not supported in "
+                    "SweepGenicSelection simulation."
                 )
 
     record_migrations = core._parse_flag(record_migrations, default=False)
