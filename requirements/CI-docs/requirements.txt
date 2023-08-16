@@ -1,7 +1,7 @@
 jupyter-book==0.15.1
 sphinx-issues==3.0.1
 sphinx-argparse==0.4.0
-tskit-book-theme # not pinned to enable easy updates
+sphinx-book-theme # not pinned to enable easy updates
 numpy==1.25.2
 tskit==0.5.5
 demes==0.2.3
