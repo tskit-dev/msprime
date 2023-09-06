@@ -24,8 +24,10 @@ html:
   use_edit_page_button: true
   # Do not edit this - the version placeholder is replaced by the
   # current version during a distribution build in the Makefile
-  extra_navbar: msprime __MSPRIME_VERSION__
-  extra_footer: msprime __MSPRIME_VERSION__
+  extra_footer: |
+    <div>
+    msprime __MSPRIME_VERSION__
+    </div>
 
 sphinx:
     extra_extensions:
@@ -40,9 +42,6 @@ sphinx:
 
     config:
       html_theme: sphinx_book_theme
-      html_theme_options:
-        pygment_light_style: monokai
-        pygment_dark_style: monokai
       pygments_style: monokai
       myst_enable_extensions:
       - colon_fence
