@@ -43,7 +43,8 @@ sphinx:
 
     config:
       html_theme: sphinx_book_theme
-      pygments_style: monokai
+      html_theme_options:
+        pygment_dark_style: monokai
       myst_enable_extensions:
       - colon_fence
       - deflist
