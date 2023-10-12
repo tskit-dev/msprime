@@ -689,6 +689,7 @@ class RecombinationMap:
             "RecombinationMap.read_hapmap() is deprecated. "
             "Use RateMap.read_hapmap() instead.",
             FutureWarning,
+            stacklevel=2,
         )
         rate_map = RateMap.read_hapmap(filename, position_col=1, rate_col=2)
         # Mark anything missing as 0 for backwards compatibility. This will
