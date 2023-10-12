@@ -907,7 +907,7 @@ def _parse_sim_ancestry(
                 "If you wish to suppress this warning, you can use, e.g., "
                 "warnings.simplefilter('ignore', msprime.TimeUnitsMismatchWarning)"
             )
-            warnings.warn(message, TimeUnitsMismatchWarning)
+            warnings.warn(message, TimeUnitsMismatchWarning, stacklevel=2)
 
     if sequence_length is None:
         # These are all the cases in which we derive the sequence_length

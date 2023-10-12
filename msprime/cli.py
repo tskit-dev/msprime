@@ -1027,13 +1027,15 @@ def run_simulate(args):
         "The simulate command is deprecated but will continue to work "
         "indefinitely. To simulate ancestries, please use the 'ancestry' "
         "command. To place mutations on a tree sequence, please use "
-        "the 'mutations' command."
+        "the 'mutations' command.",
+        stacklevel=2,
     )
 
     if args.compress:
         warnings.warn(
             "The --compress option is no longer supported and does nothing. "
-            "Please use the tszip utility to compress the output instead."
+            "Please use the tszip utility to compress the output instead.",
+            stacklevel=2,
         )
     tree_sequence = msprime.simulate(
         sample_size=int(args.sample_size),

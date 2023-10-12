@@ -70,7 +70,7 @@ def simulate_pedigree(
     for generation in range(1, num_generations):
         num_pairs = len(curr_gen) // 2
         if num_pairs == 0 and num_children_prob[0] != 1:
-            raise Exception(
+            raise ValueError(
                 f"Not enough people to make children in generation {generation}"
             )
         all_parents = rng.choice(curr_gen, size=(num_pairs, 2), replace=False)
@@ -341,9 +341,9 @@ class TestPedigreeSimulation:
         assert set(tb[6].parents) == {4, 5}
 
     def test_insufficient_founders(self):
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             self.simple_sim(num_founders=1, num_children_prob=[0, 1])
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             self.simple_sim(num_founders=3, num_children_prob=[0, 1], num_generations=3)
 
     @pytest.mark.parametrize("num_children", range(5))

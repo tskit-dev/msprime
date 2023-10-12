@@ -1146,6 +1146,7 @@ class Demography(collections.abc.Mapping):
                     "population names will not be recorded in the output "
                     "tree sequence",
                     IncompletePopulationMetadataWarning,
+                    stacklevel=2,
                 )
             if not description_in_metadata:
                 warnings.warn(
@@ -1153,6 +1154,7 @@ class Demography(collections.abc.Mapping):
                     "population descriptions will not be recorded in the output "
                     "tree sequence",
                     IncompletePopulationMetadataWarning,
+                    stacklevel=2,
                 )
             left_out = []
             for population in self.populations[len(tables.populations) :]:
@@ -1173,12 +1175,14 @@ class Demography(collections.abc.Mapping):
                     "in extra_metadata: these keys have not been recorded in the "
                     f"output tree sequence: {', '.join(left_out)}",
                     IncompletePopulationMetadataWarning,
+                    stacklevel=2,
                 )
         else:
             warnings.warn(
                 "No metadata schema present in population table, not recording "
                 "metadata",
                 IncompletePopulationMetadataWarning,
+                stacklevel=2,
             )
             # No metadata schema, just add bare populations.
             for _ in self.populations[len(tables.populations) :]:
@@ -1800,7 +1804,8 @@ class Demography(collections.abc.Mapping):
                             warnings.warn(
                                 "Migration out of inactive population "
                                 f"({source}) to ({dest}). This may be an "
-                                "error in your model."
+                                "error in your model.",
+                                stacklevel=2,
                             )
 
             last_epoch_id_map = epoch_id_map
@@ -2671,9 +2676,9 @@ class Demography(collections.abc.Mapping):
         for time, events_group in itertools.groupby(
             resolved.events, operator.attrgetter("time")
         ):
-            events_group = list(events_group)
+            events_group_list = list(events_group)
             lineage_movements = []
-            for event in events_group:
+            for event in events_group_list:
                 if isinstance(event, LineageMovementEvent):
                     # Collect these so that we can later group them by source.
                     lineage_movements.extend(event._as_lineage_movements())
@@ -3747,7 +3752,8 @@ class DemographyDebugger:
                     warnings.warn(
                         "Non-zero migration rates exist after merging "
                         f"population {k}. This almost certainly indicates "
-                        "demographic misspecification."
+                        "demographic misspecification.",
+                        stacklevel=2,
                     )
 
     def _populations_table(self, epoch, as_text=True):
@@ -4322,7 +4328,8 @@ class DemographyDebugger:
                 warnings.warn(
                     "Doubling the number of steps has resulted in different "
                     " predictions, please re-run with smaller step sizes to ensure "
-                    " numerical accuracy."
+                    " numerical accuracy.",
+                    stacklevel=2,
                 )
         return r, p_t
 
