@@ -202,8 +202,8 @@ class TestMatrixMutationModel:
 
     def verify_models_equivalent(self, model1, model2):
         assert len(model1.alleles) == len(model2.alleles)
-        assert np.alltrue(np.equal(model1.root_distribution, model2.root_distribution))
-        assert np.alltrue(np.equal(model1.transition_matrix, model2.transition_matrix))
+        assert np.all(np.equal(model1.root_distribution, model2.root_distribution))
+        assert np.all(np.equal(model1.transition_matrix, model2.transition_matrix))
 
     def test_bad_alleles(self):
         for alleles, err in [
@@ -1519,7 +1519,6 @@ class TestKeep:
 
 
 class StatisticalTestMixin:
-
     p_threshold = 0.001
 
     def chisquare(self, observed, expected, p_th=p_threshold):
@@ -1604,7 +1603,6 @@ class TestSLiMMutationModel:
         mutation_id=0,
         slim_generation=1,
     ):
-
         model = msprime.SLiMMutationModel(
             type=mutation_type, next_id=mutation_id, slim_generation=slim_generation
         )
@@ -1719,7 +1717,6 @@ class TestInfiniteAllelesMutationModel:
             assert len(alleles) == len(set(alleles))
 
     def run_mutate(self, ts, rate=1, random_seed=42, start_allele=0):
-
         model = msprime.InfiniteAlleles(start_allele=start_allele)
         mts1 = msprime.sim_mutations(
             ts, rate=rate, random_seed=random_seed, model=model, discrete_genome=True
@@ -2132,7 +2129,10 @@ class PythonMutationGenerator:
                     mutation.derived_state,
                     parent=parent_id,
                     metadata=mutation.metadata,
-                    time=mutation.time,
+                    # Not sure why, but sometimes the time is a single-element array
+                    time=mutation.time[0]
+                    if isinstance(mutation.time, np.ndarray)
+                    else mutation.time,
                 )
                 assert mutation_id > parent_id
                 mutation.id = mutation_id

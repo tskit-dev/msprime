@@ -2,12 +2,12 @@ jupyter-book==0.15.1
 sphinx-issues==3.0.1
 sphinx-argparse==0.4.0
 sphinx-book-theme # not pinned to enable easy updates
-numpy==1.25.2
-tskit==0.5.5
+numpy==1.26.0
+tskit==0.5.6
 demes==0.2.3
-matplotlib==3.7.2
+matplotlib==3.8.0
 networkx==3.1
-scipy==1.11.1
+scipy==1.11.3
 daiquiri==3.2.1
 demesdraw==0.4.0
 newick==1.9.0

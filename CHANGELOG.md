@@ -22,7 +22,12 @@
   {user}`GertjanBisschop`)
 
 **Maintenance**:
+
 - Automatically flush edges whenever an edge with a different parent is added to the edge buffer. ({issue}`2182`, {pr}`2183`, {user}`GertjanBisschop`)
+
+**Breaking changes**:
+
+- msprime no longer supports Python 3.7
 
 ## [1.2.0] - 2022-05-18
 

@@ -1662,7 +1662,6 @@ class DtwfVsPedigree(Test):
         df = pd.DataFrame()
 
         def replicates_data(replicates, model):
-
             data = collections.defaultdict(list)
             for ts in replicates:
                 t_mrca = np.zeros(ts.num_trees)
@@ -1704,7 +1703,6 @@ class DtwfVsPedigree(Test):
         return df
 
     def plot_coalescent_stats(self, df):
-
         df_ped = df[df.model == "dtwf|ped"]
         df_dtwf = df[df.model == "dtwf"]
         for stat in ["tmrca_mean", "num_trees", "num_roots"]:
@@ -1793,7 +1791,6 @@ class DtwfVsRecapitatedPedigree(Test):
         df = pd.DataFrame()
 
         def replicates_data(replicates, model):
-
             data = collections.defaultdict(list)
             for ts in replicates:
                 t_mrca = np.zeros(ts.num_trees)
@@ -1845,7 +1842,6 @@ class DtwfVsRecapitatedPedigree(Test):
         return df
 
     def plot_coalescent_stats(self, df):
-
         df_ped = df[df.model == "dtwf|ped"]
         df_dtwf = df[df.model == "dtwf"]
         for stat in ["tmrca_mean", "num_trees"]:
@@ -2224,7 +2220,6 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
         )
 
     def test_dtwf_vs_coalescent_2_pops_high_asymm_mig(self):
-
         migration_matrix = [[0, 0.5], [0.7, 0]]
         self._run(
             [1000, 1000],
@@ -2394,7 +2389,6 @@ class DtwfVsCoalescentRandom(DtwfVsCoalescent):
     """
 
     def _run(self, num_populations=1, num_replicates=200, num_demographic_events=0):
-
         # Make this deterministic
         np.random.seed(42)
         random.seed(42)
@@ -2823,7 +2817,6 @@ class DiracSFS(KnownSFS):
         self.compare_sfs(sample_size, ploidy, model, num_replicates, sfs, name)
 
     def test_xi_dirac_expected_sfs_psi_0_1_c_1(self):
-
         self._run(
             psi=0.1,
             c=1,
@@ -3135,7 +3128,6 @@ class BetaSFS(KnownSFS):
         self.compare_sfs(sample_size, ploidy, model, num_replicates, sfs, name)
 
     def test_xi_beta_expected_sfs_alpha1_1(self):
-
         self._run(
             num_replicates=100000,
             sample_size=10,
@@ -3468,7 +3460,6 @@ class ArgRecordTest(Test):
     """
 
     def _run(self, num_replicates=1000, **kwargs):
-
         ts_node_counts = np.array([])
         arg_node_counts = np.array([])
         ts_tree_counts = np.array([])
@@ -4269,7 +4260,6 @@ class SmcTest(Test):
         msp_mean = np.zeros_like(rho)
         msp_smc_mean = np.zeros_like(rho)
         for j in range(len(num_loci)):
-
             cmd = "{} {} -L -r {} {} -p 14".format(
                 n, num_replicates, rho[j], num_loci[j]
             )
@@ -5288,7 +5278,6 @@ class SeqGenTest(MutationTest):
     _seq_gen_executable = ["./data/seq-gen"]
 
     def _run_seq_gen(self, tree, args, model, alleles, num_sites, mutation_rate, Q):
-
         ts = tree.tree_sequence
         newick = tree.newick()
         cmd = self._seq_gen_executable + args
@@ -5556,7 +5545,6 @@ class PyvolveTest(MutationTest):
         return (py_counts, transitions_py, roots_d_py, expected)
 
     def _run_pyvolve_stats(self, model, length=20, num_samples=10):
-
         model_dict = {
             "JC69": {
                 "model_id": msprime.JC69(),
@@ -6180,7 +6168,6 @@ def setup_logging(args):
 
 
 def run_tests(suite, args):
-
     setup_logging(args)
     runner = TestRunner()
 

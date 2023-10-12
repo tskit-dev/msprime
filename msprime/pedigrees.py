@@ -215,7 +215,6 @@ def parse_pedigree(
 
 
 def write_pedigree(ts, out):
-
     print("# id\tparent0\tparent1\ttime\tis_sample\tpopulation", file=out)
     for ind in ts.individuals():
         if len(ind.nodes) != 2:

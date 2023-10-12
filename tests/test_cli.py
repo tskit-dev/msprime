@@ -1398,7 +1398,6 @@ class TestMspAncestryOutput:
         assert tree_sequence.get_num_mutations() == 0
 
     def test_run_yaml(self, tmp_path):
-
         yaml = """\
         time_units: generations
         demes:

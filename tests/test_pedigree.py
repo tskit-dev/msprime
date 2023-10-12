@@ -414,7 +414,6 @@ class TestJoinPedigrees:
         )
 
     def test_three_pedigrees(self):
-
         tables1 = simulate_pedigree(
             num_founders=2,
             num_generations=2,
@@ -778,7 +777,6 @@ class TestContinueSimulateThroughPedigree(TestSimulateThroughPedigree):
     """
 
     def verify(self, input_tables, recombination_rate=0):
-
         ts1 = msprime.sim_ancestry(
             model="fixed_pedigree",
             initial_state=input_tables,

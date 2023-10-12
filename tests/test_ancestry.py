@@ -1337,7 +1337,6 @@ class TestParseSimAncestry:
             msprime.sim_ancestry(initial_state=ts1, random_seed=2)
 
     def test_initial_state(self):
-
         ts = msprime.sim_ancestry(10, end_time=0.01, random_seed=2)
         # Same if we use either the tables or tree sequence object.
         sim = ancestry._parse_sim_ancestry(initial_state=ts, population_size=1)
