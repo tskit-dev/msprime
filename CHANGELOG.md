@@ -21,6 +21,8 @@
 - Enable `additional_nodes` and `coalescing_segments_only` flags for `DTWF` and `FIXED_PEDIDGREE`  models ({issue}`2129`, {issue}`2133`, {issue}`2167`, {pr}`2176`,
   {user}`GertjanBisschop`)
 
+- Support Python 3.11 ({issue}`2177`, {pr}`2180`, {user}`benjeffery`)
+
 **Maintenance**:
 
 - Automatically flush edges whenever an edge with a different parent is added to the edge buffer. ({issue}`2182`, {pr}`2183`, {user}`GertjanBisschop`)
