@@ -2984,7 +2984,6 @@ class PopulationParametersChange(ParameterChangeEvent):
     _type_str: ClassVar[str] = "Population parameter change"
 
     def __post_init__(self):
-
         if self.population_id is not None and self.population is not None:
             raise ValueError(
                 "population_id and population are aliases; cannot supply both."

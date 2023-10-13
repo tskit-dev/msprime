@@ -2597,7 +2597,6 @@ class TestFullArgMigration:
 
     def test_full_arg_migration_smc(self):
         for model in ["smc", "smc_prime"]:
-
             population_configurations = [
                 msprime.PopulationConfiguration(10),
                 msprime.PopulationConfiguration(10),
@@ -4262,7 +4261,6 @@ class TestDemographyObject:
         assert str(dbg1) == str(dbg2)
 
     def test_population_name(self):
-
         demography = msprime.Demography.isolated_model([1])
         assert demography.populations[0].name == "pop_0"
 

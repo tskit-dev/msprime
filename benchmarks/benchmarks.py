@@ -35,7 +35,6 @@ import msprime
 
 
 class LargeSimulationBenchmark:
-
     # ASV is designed to accurately time functions that execute in a fraction
     # of a second. But, we're interested in profiling large simulations that
     # run in 10s of seconds (at least). We want to run the target function

@@ -26,7 +26,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python: [ 3.7, 3.11 ]
+        python: [ 3.8, 3.11 ]
         os:  [ macos-latest, ubuntu-latest, windows-latest ]
     defaults:
       run:
@@ -62,7 +62,6 @@ jobs:
           channels: conda-forge
           channel-priority: strict
           auto-update-conda: true
-          use-only-tar-bz2: true
 
       - name: Fix windows symlinks
         # This is horrible, but the "git config core.symlinks true" didn't work.

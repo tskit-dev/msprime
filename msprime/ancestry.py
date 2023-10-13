@@ -403,6 +403,8 @@ def _parse_random_seed(seed):
     """
     if seed is None:
         seed = core.get_random_seed()
+    if isinstance(seed, np.ndarray):
+        seed = seed[0]
     seed = int(seed)
     return seed
 

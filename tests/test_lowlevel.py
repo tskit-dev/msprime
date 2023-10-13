@@ -1318,7 +1318,6 @@ class TestSimulator(LowLevelTestCase):
             assert sim.model == model
 
     def test_dirac_simulation_model(self):
-
         for bad_type in [None, str, "sdf"]:
             model = get_simulation_model("dirac", psi=bad_type, c=1.0)
             with pytest.raises(TypeError):
@@ -2453,7 +2452,6 @@ class TestRandomGenerator:
                 gen.seed = overflow
 
     def test_seed(self):
-
         for s in [1, 10, 2**32 - 1]:
             rng = _msprime.RandomGenerator()
             rng.seed = s
