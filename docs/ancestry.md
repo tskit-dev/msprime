@@ -348,7 +348,8 @@ sized population in the default demography.
 
 For example, here we run the same simulation twice, one with
 the default population size and one with a population size
-of 100:
+of 100 (this is the diploid population size because the
+default {ref}`sec_ancestry_ploidy` is 2):
 
 ```{code-cell}
 ts = msprime.sim_ancestry(2, random_seed=1234)
