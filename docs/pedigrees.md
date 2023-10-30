@@ -327,6 +327,8 @@ It is often useful to visualise a (small) pedigree. The following function
 is used in this documentation, which may be a useful recipe for others:
 
 ```{code-cell}
+from matplotlib import pyplot as plt
+import networkx as nx
 def draw_pedigree(ped_ts):
 
     G = nx.DiGraph()
