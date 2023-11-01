@@ -15,7 +15,7 @@ marking the 1.0 release:
 > Hugo van Kemenade, Anthony W Wohns, Yan Wong, Simon Gravel, Andrew D Kern,
 > Jere Koskela, Peter L Ralph and Jerome Kelleher (2022),
 > *Efficient ancestry and mutation simulation with msprime 1.0*,
-> Genetics, Volume 220, Issue 3. http://doi.org/10.1371/journal.pcbi.1004842
+> Genetics, Volume 220, Issue 3. http://doi.org/10.1093/genetics/iyab229
 
 You may also wish to cite the original
 [2016 PLOS Computational Biology paper](<http://dx.doi.org/10.1371/journal.pcbi.1004842>):
