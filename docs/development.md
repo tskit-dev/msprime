@@ -752,7 +752,7 @@ running the statistical tests, and can be built by running `make` in the
 like `ms` and `ms_summary_stats` present in the `data`
 directory.
 
-Please the comments at the top of the `verification.py` script for details
+Please read the comments at the top of the `verification.py` script for details
 on how to write and run these tests.
 
 ## Benchmarking
