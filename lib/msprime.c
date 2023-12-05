@@ -5348,7 +5348,8 @@ msp_finalise_tables(msp_t *self)
     }
     ret = tsk_table_collection_build_index(self->tables, 0);
     if (ret == TSK_ERR_EDGES_NOT_SORTED_PARENT_TIME
-        || ret == TSK_ERR_EDGES_NONCONTIGUOUS_PARENTS) {
+        || ret == TSK_ERR_EDGES_NONCONTIGUOUS_PARENTS
+        || ret == TSK_ERR_EDGES_NOT_SORTED_CHILD) {
         /* There are rare cases when we are simulating from awkward initial
          * states where the tables we produce in the simulation are not
          * correctly sorted. The simplest course of action here to just let it
