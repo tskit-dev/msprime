@@ -1297,6 +1297,38 @@ class TestSimulateAdditionalNodes:
             ):
                 self.verify_pedigree_unary(ts, initial_state)
 
+    def test_deep_pedigree_sorting_requirements(self):
+        """
+        Produces TSK_ERR_EDGES_NOT_SORTED_CHILD error if
+        this error is not addressed in msp_finalise_tables
+        """
+        N = 10
+        end_time = 1000
+        sequence_length = 100
+        recombination_rate = 0.0001
+        additional_nodes = (
+            msprime.NodeType.RECOMBINANT
+            | msprime.NodeType.PASS_THROUGH
+            | msprime.NodeType.COMMON_ANCESTOR
+        )
+        random_seed = 17351
+        pedigree = msprime.pedigrees.sim_pedigree(
+            population_size=N,
+            end_time=end_time,
+            direction="forward",
+            random_seed=random_seed,
+        )
+        pedigree.sequence_length = sequence_length
+        ts_ped = msprime.sim_ancestry(
+            initial_state=pedigree,
+            recombination_rate=recombination_rate,
+            model="fixed_pedigree",
+            additional_nodes=additional_nodes,
+            coalescing_segments_only=False,
+            random_seed=random_seed,
+        )
+        self.verify_pedigree_unary(ts_ped, pedigree)
+
 
 class TestPedigreeBuilder:
     def test_is_sample_default(self):
