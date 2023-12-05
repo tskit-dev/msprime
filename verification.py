@@ -1658,26 +1658,32 @@ class DtwfVsPedigree(Test):
         recombination_rate=0,
         num_replicates=100,
         pedigree_sim_direction="forward",
+        additional_nodes=None,
     ):
-        df = pd.DataFrame()
-
         def replicates_data(replicates, model):
             data = collections.defaultdict(list)
             for ts in replicates:
                 t_mrca = np.zeros(ts.num_trees)
                 num_roots = np.zeros(ts.num_trees)
                 t_intervals = []
+                total_branch_length = np.zeros(ts.num_trees)
                 for tree in ts.trees():
                     t_mrca[tree.index] = max(tree.time(root) for root in tree.roots)
                     t_intervals.append(tree.interval)
                     num_roots[tree.index] = tree.num_roots
+                    total_branch_length[tree.index] = tree.total_branch_length
                 data["num_roots"].append(np.mean(num_roots))
                 data["tmrca_mean"].append(np.mean(t_mrca))
                 data["num_trees"].append(ts.num_trees)
                 data["intervals"].append(t_intervals)
+                data["total_branch_length"].append(np.mean(total_branch_length))
                 data["model"].append(model)
             return pd.DataFrame(data)
 
+        df_list = []
+        coalescing_segments_only = True
+        if additional_nodes is not None:
+            coalescing_segments_only = False
         for _ in range(num_replicates):
             pedigree = pedigrees.sim_pedigree(
                 population_size=N, end_time=end_time, direction=pedigree_sim_direction
@@ -1687,8 +1693,11 @@ class DtwfVsPedigree(Test):
                 initial_state=pedigree,
                 recombination_rate=recombination_rate,
                 model="fixed_pedigree",
+                additional_nodes=additional_nodes,
+                coalescing_segments_only=coalescing_segments_only,
             )
-            df = df.append(replicates_data([ts_ped], "dtwf|ped"))
+
+            df_list.append(replicates_data([ts_ped], "dtwf|ped"))
 
         dtwf_replicates = msprime.sim_ancestry(
             samples=N,
@@ -1698,14 +1707,16 @@ class DtwfVsPedigree(Test):
             sequence_length=sequence_length,
             model="dtwf",
             num_replicates=num_replicates,
+            additional_nodes=additional_nodes,
+            coalescing_segments_only=coalescing_segments_only,
         )
-        df = df.append(replicates_data(dtwf_replicates, "dtwf"))
-        return df
+        df_list.append(replicates_data(dtwf_replicates, "dtwf"))
+        return pd.concat(df_list)
 
     def plot_coalescent_stats(self, df):
         df_ped = df[df.model == "dtwf|ped"]
         df_dtwf = df[df.model == "dtwf"]
-        for stat in ["tmrca_mean", "num_trees", "num_roots"]:
+        for stat in ["tmrca_mean", "num_trees", "num_roots", "total_branch_length"]:
             plot_qq(df_ped[stat], df_dtwf[stat])
             pyplot.xlabel("dtwf|ped")
             pyplot.ylabel("dtwf")
@@ -1723,6 +1734,14 @@ class DtwfVsPedigree(Test):
     def _run(self, **kwargs):
         df = self.run_dtwf_pedigree_comparison(**kwargs)
         self.plot_coalescent_stats(df)
+
+
+class DtwfVsPedigreeSimple(DtwfVsPedigree):
+    """
+    Running a simulation through a pedigree with population size N
+    should be identical to running a DTWF simulation of the same
+    size.
+    """
 
     def test_dtwf_vs_pedigree_single_locus_n50(self):
         self._run(N=50, end_time=500, num_replicates=100)
@@ -1769,6 +1788,44 @@ class DtwfVsPedigree(Test):
             sequence_length=recombination_map.sequence_length,
             recombination_rate=recombination_map,
             num_replicates=100,
+        )
+
+
+class DtwfVsPedigreeAdditionalNodes(DtwfVsPedigree):
+    """
+    Running a simulation through a pedigree with population size N
+    should be identical to running a DTWF simulation of the same
+    size. Tests impact of registering additional nodes.
+    """
+
+    def test_dtwf_vs_pedigree_many_roots_add_nodes(self):
+        additional_nodes = (
+            msprime.NodeType.RECOMBINANT
+            | msprime.NodeType.PASS_THROUGH
+            | msprime.NodeType.COMMON_ANCESTOR
+        )
+        self._run(
+            N=500,
+            end_time=100,
+            num_replicates=100,
+            sequence_length=100,
+            recombination_rate=0.0001,
+            additional_nodes=additional_nodes,
+        )
+
+    def test_dtwf_vs_pedigree_few_roots_add_nodes(self):
+        additional_nodes = (
+            msprime.NodeType.RECOMBINANT
+            | msprime.NodeType.PASS_THROUGH
+            | msprime.NodeType.COMMON_ANCESTOR
+        )
+        self._run(
+            N=10,
+            end_time=1000,
+            num_replicates=100,
+            sequence_length=100,
+            recombination_rate=0.0001,
+            additional_nodes=additional_nodes,
         )
 
 
@@ -1912,7 +1969,7 @@ class DtwfVsCoalescent(Test):
     """
 
     def run_dtwf_coalescent_stats(self, **kwargs):
-        df = pd.DataFrame()
+        df_list = []
 
         for model in ["hudson", "dtwf"]:
             kwargs["model"] = model
@@ -1930,8 +1987,8 @@ class DtwfVsCoalescent(Test):
                 data["num_trees"].append(ts.num_trees)
                 data["intervals"].append(t_intervals)
                 data["model"].append(model)
-            df = df.append(pd.DataFrame(data))
-        return df
+            df_list.append(pd.DataFrame(data))
+        return pd.concat(df_list)
 
     def plot_dtwf_coalescent_stats(self, df):
         df_hudson = df[df.model == "hudson"]
@@ -2229,6 +2286,76 @@ class DtwfVsCoalescentHighLevel(DtwfVsCoalescent):
             migration_matrix=migration_matrix,
             num_replicates=200,
             growth_rates=[0.005, 0.005],
+        )
+
+
+class DtwfVsCoalescentAdditionalNodes(DtwfVsCoalescent):
+    """
+    Comparison of DTWF with additional nodes against coalescent sims
+    without additional nodes.
+    """
+
+    def run_dtwf_coalescent_stats(self, **kwargs):
+        df_list = []
+
+        for model in ["dtwf", "hudson"]:
+            kwargs["model"] = model
+            if model == "hudson":
+                kwargs["additional_nodes"] = None
+                kwargs["coalescing_segments_only"] = True
+            logging.debug(f"Running: {kwargs}")
+            data = collections.defaultdict(list)
+            replicates = msprime.sim_ancestry(**kwargs)
+            for ts in replicates:
+                tss = ts.simplify()
+                t_mrca = np.zeros(tss.num_trees)
+                t_intervals = []
+                for tree in tss.trees():
+                    t_mrca[tree.index] = tree.time(tree.root)
+                    t_intervals.append(tree.interval)
+                data["tmrca_mean"].append(np.mean(t_mrca))
+                data["num_trees"].append(tss.num_trees)
+                data["intervals"].append(t_intervals)
+                data["model"].append(model)
+            df_list.append(pd.DataFrame(data))
+        return pd.concat(df_list)
+
+    def test_dtwf_vs_coalescent_pass_through_only(self):
+        """
+        Checks the DTWF against the standard coalescent while
+        registering all pass through nodes.
+        """
+        additional_nodes = msprime.NodeType.PASS_THROUGH
+        self._run(
+            samples=10,
+            population_size=1000,
+            recombination_rate=1e-5,
+            num_replicates=300,
+            sequence_length=1000,
+            discrete_genome=True,
+            coalescing_segments_only=False,
+            additional_nodes=additional_nodes,
+        )
+
+    def test_dtwf_vs_coalescent_all_additional_nodes(self):
+        """
+        Checks the DTWF against the standard coalescent while
+        registering all possible additional nodes.
+        """
+        additional_nodes = (
+            msprime.NodeType.RECOMBINANT
+            | msprime.NodeType.PASS_THROUGH
+            | msprime.NodeType.COMMON_ANCESTOR
+        )
+        self._run(
+            samples=10,
+            population_size=1000,
+            recombination_rate=1e-5,
+            num_replicates=300,
+            sequence_length=1000,
+            discrete_genome=True,
+            coalescing_segments_only=False,
+            additional_nodes=additional_nodes,
         )
 
 
