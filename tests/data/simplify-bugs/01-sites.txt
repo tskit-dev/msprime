@@ -1,1 +1,0 @@
-position	ancestral_state
