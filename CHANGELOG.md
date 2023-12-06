@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.2.1] - 2022-XX-XX
+## [1.3.0] - 2022-XX-XX
 
 **New features**
 
@@ -23,7 +23,13 @@
 
 - Support Python 3.11 ({issue}`2177`, {pr}`2180`, {user}`benjeffery`)
 
+**Bug fixes**:
+
+- Fix segfault in case of non-binary merger for `log_arg_likelihood` ({issue}`2107`, {pr}`2114`, {user}`JereKoskela`)
+
 **Maintenance**:
+
+- Update tskit to Python 0.5.2 ({pr}`2116`, {user}`benjeffery`).
 
 - Automatically flush edges whenever an edge with a different parent is added to the edge buffer. ({issue}`2182`, {pr}`2183`, {user}`GertjanBisschop`)
 
