@@ -139,12 +139,21 @@ def log_arg_likelihood(ts, recombination_rate, Ne=1):
         `-DBL_MAX`.
     """
     for tree in ts.trees():
-        if np.any(tree.num_children_array > 2):
+        if np.any(tree.num_children_array[:-1] > 2):
             raise ValueError(
                 "ARG likelihood encountered a polytomy."
                 " Tree sequences must contain binary mergers only for"
                 " valid likelihood evaluation."
             )
+        if tree.num_children_array[-1] > 1:
+            if ts.num_edges > 1:
+                # num_edges check is here because to avoid breaking the expected
+                # result of the TestOddToplogies tests.
+                raise ValueError(
+                    "ARG likelihood encountered a tree with multiple roots."
+                    " All local trees must have a single mrca for"
+                    " valid likelihood evaluation."
+                )
     if ts.num_trees > 1 and not np.any(ts.nodes_flags & _msprime.NODE_IS_RE_EVENT):
         raise ValueError(
             "ARG likelihood only valid for tree sequences where recombinations"

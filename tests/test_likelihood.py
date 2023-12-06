@@ -196,6 +196,19 @@ class TestKnownExamples:
         ):
             msprime.log_arg_likelihood(arg, 1)
 
+    def test_arg_likelihood_multi_root(self):
+        num_samples = 10
+        arg = msprime.sim_ancestry(num_samples, record_full_arg=True)
+        slice_time = arg.nodes_time[num_samples] + 0.01
+        decap_arg = arg.decapitate(slice_time)
+        with pytest.raises(
+            ValueError,
+            match="ARG likelihood encountered a tree with multiple roots."
+            " All local trees must have a single mrca for"
+            " valid likelihood evaluation.",
+        ):
+            msprime.log_arg_likelihood(decap_arg, 1)
+
     def test_arg_likelihood_no_re_node_handling(self):
         tables = tskit.TableCollection(sequence_length=1)
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0)
@@ -205,6 +218,7 @@ class TestKnownExamples:
         tables.edges.add_row(left=0, right=0.5, parent=2, child=0)
         tables.edges.add_row(left=0.5, right=1, parent=3, child=0)
         tables.edges.add_row(left=0, right=1, parent=3, child=1)
+        tables.edges.add_row(left=0, right=0.5, parent=3, child=2)
         bad_arg = tables.tree_sequence()
         with pytest.raises(ValueError, match="NODE_IS_RE_EVENT"):
             msprime.log_arg_likelihood(bad_arg, 1)
