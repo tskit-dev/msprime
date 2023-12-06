@@ -43,7 +43,7 @@ discoal:
 	cp discoal-0.1.5/discoal ./
 
 msms:
-	wget https://www.mabs.at/ewing/msms/msms3.2rc-b163.jar
+	wget https://www.mabs.at/fileadmin/user_upload/p_mabs/msms3.2rc-b163.jar
 	mv msms3.2rc-b163.jar msms.jar
 
 msprime-0.7.4:
