@@ -1345,10 +1345,8 @@ class MsmsSweeps(Test):
 
                 if s != 0:
                     print("positions: ", end="", file=output)
-                    positions = [
-                        mutation.position / msms_params["num_sites"]
-                        for mutation in tree_sequence.mutations()
-                    ]
+                    positions = tree_sequence.sites_position.copy()
+                    positions /= msms_params["num_sites"]
                     positions.sort()
                     for position in positions:
                         print("{0:.{1}f}".format(position, 8), end=" ", file=output)
@@ -1404,11 +1402,7 @@ class MsmsSweeps(Test):
         return self._run_sample_stats(_discoal_executable + discoal_cmd.split(" "))
 
     def _cmp_msms_vs_msp(self, cmd):
-        try:
-            df_msp = self._run_msp_sample_stats(cmd)
-        except pd.error.ParserError:
-            logging.warning("msm_vs_msp FAILED")
-            return
+        df_msp = self._run_msp_sample_stats(cmd)
         df_msms = self._run_msms_sample_stats(cmd)
         self._plot_stats("msp_msms", df_msp, df_msms, "msp", "msms")
 
