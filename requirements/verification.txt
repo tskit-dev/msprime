@@ -12,4 +12,4 @@ seaborn
 tqdm
 argparse
 daiquiri
-pyslim
+pyslim>=1.0

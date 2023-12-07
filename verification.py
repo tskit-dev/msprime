@@ -961,18 +961,17 @@ def sample_recap_simplify(slim_ts, sample_size, Ne, r, mu):
             # TODO is this needed now? Shouldn't be, right?
             start_time=slim_ts.metadata["SLiM"]["generation"],
         )
-    rts = pyslim.SlimTreeSequence(recap)
     logging.debug(f"pyslim: slim generation:{slim_ts.metadata['SLiM']['generation']}")
-    alive_inds = rts.individuals_alive_at(0)
+    alive_inds = pyslim.individuals_alive_at(recap, 0)
     keep_indivs = np.random.choice(alive_inds, sample_size, replace=False)
     keep_nodes = []
     for i in keep_indivs:
-        keep_nodes.extend(rts.individual(i).nodes)
-    logging.debug(f"before simplify {rts.num_nodes} nodes")
-    sts = rts.simplify(keep_nodes)
+        keep_nodes.extend(recap.individual(i).nodes)
+    logging.debug(f"before simplify {recap.num_nodes} nodes")
+    sts = recap.simplify(keep_nodes)
     logging.debug(f"after simplify {sts.num_nodes} nodes")
     logging.debug(f"after simplify {sts.num_trees} trees")
-    return pyslim.SlimTreeSequence(msprime.mutate(sts, rate=mu))
+    return msprime.mutate(sts, rate=mu)
 
 
 class SweepVsSlim(Test):
@@ -1033,7 +1032,7 @@ class SweepVsSlim(Test):
         cmd = _slim_executable + [slim_script]
         for _ in range(kwargs["num_replicates"]):
             subprocess.check_output(cmd)
-            ts = pyslim.load(outfile)
+            ts = tskit.load(outfile)
             rts = sample_recap_simplify(
                 ts, sample_size, pop_size, recombination_rate, 1e-8
             )
