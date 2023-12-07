@@ -980,7 +980,7 @@ class SweepVsSlim(Test):
     """
 
     def run_sweep_slim_comparison(self, slim_args, **kwargs):
-        df = pd.DataFrame()
+        df_list = []
 
         kwargs["model"] = "msp"
         logging.debug(f"Running: {kwargs}")
@@ -1032,7 +1032,7 @@ class SweepVsSlim(Test):
         cmd = _slim_executable + [slim_script]
         for _ in range(kwargs["num_replicates"]):
             subprocess.check_output(cmd)
-            ts = tskit.load(outfile)
+            ts = pyslim.update(tskit.load(outfile))
             rts = sample_recap_simplify(
                 ts, sample_size, pop_size, recombination_rate, 1e-8
             )
@@ -1047,8 +1047,8 @@ class SweepVsSlim(Test):
             slim_win_pis.append(rts.diversity(windows=wins))
             data["pi"].append(rts.diversity().reshape((1,))[0])
             data["model"].append("slim")
-        df = df.append(pd.DataFrame(data))
-
+        df_list.append(pd.DataFrame(data))
+        df = pd.concat(df_list)
         df_slim = df[df.model == "slim"]
         df_msp = df[df.model == "msp"]
         for stat in ["tmrca_mean", "num_trees", "pi"]:
@@ -1838,7 +1838,7 @@ class DtwfVsRecapitatedPedigree(Test):
         num_replicates=100,
         drop_fraction=0,
     ):
-        df = pd.DataFrame()
+        df_list = []
 
         def replicates_data(replicates, model):
             data = collections.defaultdict(list)
@@ -1864,7 +1864,7 @@ class DtwfVsRecapitatedPedigree(Test):
             model="dtwf",
             num_replicates=num_replicates,
         )
-        df = df.append(replicates_data(dtwf_replicates, "dtwf"))
+        df_list.append(replicates_data(dtwf_replicates, "dtwf"))
 
         for _ in range(num_replicates):
             pedigree = pedigrees.sim_pedigree(population_size=N, end_time=end_time)
@@ -1887,9 +1887,9 @@ class DtwfVsRecapitatedPedigree(Test):
                 initial_state=ts_ped,
                 recombination_rate=recombination_rate,
             )
-            df = df.append(replicates_data([ts_final], "dtwf|ped"))
+            df_list.append(replicates_data([ts_final], "dtwf|ped"))
 
-        return df
+        return pd.concat(df_list)
 
     def plot_coalescent_stats(self, df):
         df_ped = df[df.model == "dtwf|ped"]
@@ -2069,7 +2069,7 @@ class DtwfVsCoalescentSimple(DtwfVsCoalescent):
         self._run(
             samples=10,
             population_size=10,
-            num_replicates=1,
+            num_replicates=300,
             discrete_genome=True,
             recombination_rate=recombination_map,
         )
@@ -2358,7 +2358,7 @@ class DtwfVsSlim(Test):
     """
 
     def run_dtwf_slim_comparison(self, slim_args, **kwargs):
-        df = pd.DataFrame()
+        df_list = []
 
         kwargs["model"] = "dtwf"
         logging.debug(f"Running: {kwargs}")
@@ -2381,7 +2381,7 @@ class DtwfVsSlim(Test):
         cmd = _slim_executable + [slim_script]
         for _ in range(kwargs["num_replicates"]):
             subprocess.check_output(cmd)
-            ts = tskit.load(outfile)
+            ts = pyslim.update(tskit.load(outfile))
             ts = subsample_simplify_slim_treesequence(ts, slim_args["sample_sizes"])
             assert ts.num_samples == msp_num_samples
 
@@ -2392,7 +2392,8 @@ class DtwfVsSlim(Test):
             data["tmrca_mean"].append(np.mean(t_mrca))
             data["num_trees"].append(ts.num_trees)
             data["model"].append("slim")
-        df = df.append(pd.DataFrame(data))
+        df_list.append(pd.DataFrame(data))
+        df = pd.concat(df_list)
 
         df_slim = df[df.model == "slim"]
         df_dtwf = df[df.model == "dtwf"]
@@ -2791,7 +2792,7 @@ class XiVsHudsonTest(Test):
     """
 
     def _run(self, xi_model, num_replicates, num_samples, **kwargs):
-        df = pd.DataFrame()
+        df_list = []
         for model in ["hudson", xi_model]:
             simulate_args = dict(kwargs)
             simulate_args["model"] = model
@@ -2822,8 +2823,9 @@ class XiVsHudsonTest(Test):
                 data["num_nodes"].append(ts.num_nodes)
                 data["num_edges"].append(ts.num_edges)
                 data["model"].append(model_str)
-            df = df.append(pd.DataFrame(data))
+            df_list.append(pd.DataFrame(data))
 
+        df = pd.concat(df_list)
         df_hudson = df[df.model == "hudson"]
         df_xi = df[df.model == "Xi"]
         p = int(simulate_args["ploidy"])
