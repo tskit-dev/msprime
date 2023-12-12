@@ -5195,6 +5195,47 @@ class MutationStatsTest(Test):
             name="arbitrary",
         )
 
+    def test_SMM_stats(self):
+        lo = 10
+        hi = 30
+        half = (hi - lo) // 2
+        root_distribution = np.arange(hi - lo + 1, dtype=np.float64)
+        root_distribution[half + 1 :] = root_distribution[:half]
+        root_distribution /= np.sum(root_distribution)
+        model = msprime.SMM(lo=lo, hi=hi, root_distribution=root_distribution)
+        self.verify_model(model, name="SMM")
+
+    def test_SMM_2_stats(self):
+        lo = 1
+        hi = 20
+        root_distribution = np.zeros(hi - lo + 1)
+        root_distribution[0] = 1.0
+        model = msprime.SMM(lo=lo, hi=hi, root_distribution=root_distribution)
+        self.verify_model(model, name="SMM")
+
+    def test_TPM_stats(self):
+        lo = 100
+        hi = 500
+        p = 0.7
+        m = 0.25
+        root_distribution = np.zeros(hi - lo + 1)
+        root_distribution[(hi - lo) // 2] = 1.0
+        model = msprime.TPM(p=p, m=m, lo=lo, hi=hi)
+        self.verify_model(model, name="TPM")
+
+    def test_EL2_stats(self):
+        lo = 25
+        hi = 300
+        m = 0.2
+        u = 0.5
+        v = 1.0
+        root_distribution = np.zeros(hi - lo + 1)
+        root_distribution[(hi - lo) // 2] = 1.0
+        model = msprime.EL2(
+            m=m, u=u, v=v, lo=lo, hi=hi, root_distribution=root_distribution
+        )
+        self.verify_model(model, name="EL2")
+
 
 class MutationRateMapTest(Test):
     def verify_subdivided(self, ts, rate_map, discrete=False):
