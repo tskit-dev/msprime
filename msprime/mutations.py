@@ -296,10 +296,11 @@ def general_microsat_rate_matrix(s, u, v, p, m, lo, hi):
                 rate_matrix[ii, jj] = 0
     # scale by max row sum; then normalize to 1
     row_sums = rate_matrix.sum(axis=1, dtype="float64")
-    alpha = max(row_sums)
+    alpha = np.max(row_sums)
     rate_matrix /= alpha
     row_sums = rate_matrix.sum(axis=1, dtype="float64")
-    np.fill_diagonal(rate_matrix, 1.0 - row_sums)
+    # the max(0, *) is to avoid floating point error
+    np.fill_diagonal(rate_matrix, np.fmax(0.0, 1.0 - row_sums))
     return rate_matrix
 
 
