@@ -358,11 +358,14 @@ class TestMatrixMutationModel:
         self.validate_model(model)
         self.validate_stationary(model)
 
-    def test_TPM(self):
-        lo = 2
-        hi = 50
-        m = 0.9
-        p = 0.9
+    @pytest.mark.parametrize(
+        "p, m, lo, hi",
+        [
+            (0.9, 0.9, 2, 50),
+            (0.5, 0.25, 50, 500),
+        ],
+    )
+    def test_TPM(self, p, m, lo, hi):
         model = msprime.TPM(p=p, m=m, lo=lo, hi=hi)
         self.validate_model(model)
         self.validate_stationary(model)
