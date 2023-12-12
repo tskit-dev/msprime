@@ -18,7 +18,7 @@ pytest-cov
 pytest-xdist
 tskit>=0.5.2
 sphinx-book-theme
-stdpopsim>=0.1.2 # Make sure we have correct version of OOA model
+stdpopsim==0.1.2 # Make sure we have correct version of OOA model
 scipy
 setuptools_scm
 sphinx>=4.4
