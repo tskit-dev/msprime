@@ -549,6 +549,7 @@ class Simulator:
         gene_conversion_rate=0.0,
         gene_conversion_length=1,
         discrete_genome=True,
+        stop_condition=None,
     ):
         # Must be a square matrix.
         N = len(migration_matrix)
@@ -640,6 +641,7 @@ class Simulator:
         for time in census_times:
             self.modifier_events.append((time[0], self.census_event, time))
         self.modifier_events.sort()
+        self.stop_condition = stop_condition
 
     def initialise(self, ts):
         root_time = np.max(self.tables.nodes.time)
@@ -684,12 +686,32 @@ class Simulator:
                     self.set_segment_mass(seg)
                     seg = seg.next
 
+    def get_num_ancestors(self):
+        return sum(pop.get_num_ancestors() for pop in self.P)
+
     def ancestors_remain(self):
         """
         Returns True if the simulation is not finished, i.e., there is some ancestral
         material that has not fully coalesced.
         """
-        return sum(pop.get_num_ancestors() for pop in self.P) != 0
+        return self.get_num_ancestors() != 0
+
+    def assert_stop_condition(self):
+        """
+        Returns true if the simulation is not finished given the global
+        stopping condition that was specified.
+        """
+        if self.stop_condition is None:
+            return self.ancestors_remain()
+        elif self.stop_condition == "grand_mrca":
+            return self.get_num_ancestors() > 1
+        elif self.stop_condition == "all_local_mrcas":
+            return any(num_anc > 1 for num_anc in self.S.values())
+        elif self.stop_condition == "time":
+            return self.get_num_ancestors() > 1
+        else:
+            print("Error: unknown stop condition-", self.stop_condition)
+            raise ValueError
 
     def change_population_size(self, pop_id, size):
         self.P[pop_id].set_start_size(size)
@@ -835,16 +857,20 @@ class Simulator:
     def simulate(self, end_time):
         self.verify()
         if self.model == "hudson":
-            self.hudson_simulate(end_time)
+            ret = self.hudson_simulate(end_time)
         elif self.model == "dtwf":
-            self.dtwf_simulate()
+            ret = self.dtwf_simulate()
         elif self.model == "fixed_pedigree":
-            self.pedigree_simulate()
+            ret = self.pedigree_simulate()
         elif self.model == "single_sweep":
-            self.single_sweep_simulate()
+            ret = self.single_sweep_simulate()
         else:
             print("Error: bad model specification -", self.model)
             raise ValueError
+
+        if ret == 2:  # _msprime.EXIT_MAX_TIME:
+            self.t = end_time
+            print(end_time)
         return self.finalise()
 
     def get_potential_destinations(self):
@@ -897,15 +923,14 @@ class Simulator:
         """
         Simulates the algorithm until all loci have coalesced.
         """
+        ret = 0
         infinity = sys.float_info.max
         non_empty_pops = {pop.id for pop in self.P if pop.get_num_ancestors() > 0}
         potential_destinations = self.get_potential_destinations()
 
         # only worried about label 0 below
-        while len(non_empty_pops) > 0:
+        while self.assert_stop_condition():
             self.verify()
-            if self.t >= end_time:
-                break
             # self.print_state()
             re_rate = self.get_total_recombination_rate(label=0)
             t_re = infinity
@@ -948,6 +973,9 @@ class Simulator:
                         mig_dest = k
             min_time = min(t_re, t_ca, t_gcin, t_gc_left, t_mig)
             assert min_time != infinity
+            if self.t + min_time > end_time:
+                ret = 2  # _msprime.MAX_EVENT_TIME
+                break
             if self.t + min_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
                 self.t = t
@@ -991,6 +1019,8 @@ class Simulator:
 
             X = {pop.id for pop in self.P if pop.get_num_ancestors() > 0}
             assert non_empty_pops == X
+
+        return ret
 
     def single_sweep_simulate(self):
         """
@@ -1956,12 +1986,15 @@ class Simulator:
                         j = self.S.floor_key(r_max)
                         self.S[r_max] = self.S[j]
                     # Update the number of extant segments.
-                    if self.S[left] == 2:
+                    if self.S[left] == 2 and self.stop_condition is None:
                         self.S[left] = 0
                         right = self.S.succ_key(left)
                     else:
+                        stop_at = 2
+                        if self.stop_condition is not None:
+                            stop_at = 1
                         right = left
-                        while right < r_max and self.S[right] != 2:
+                        while right < r_max and self.S[right] != stop_at:
                             self.S[right] -= 1
                             right = self.S.succ_key(right)
                         alpha = self.alloc_segment(
@@ -2275,6 +2308,7 @@ def run_simulate(args):
         gene_conversion_rate=gc_rate,
         gene_conversion_length=mean_tract_length,
         discrete_genome=args.discrete,
+        stop_condition=args.stop_condition,
     )
     ts = s.simulate(args.end_time)
     ts.dump(args.output_file)
@@ -2372,6 +2406,9 @@ def add_simulator_arguments(parser):
     )
     parser.add_argument(
         "--end-time", type=float, default=np.inf, help="The end for simulations."
+    )
+    parser.add_argument(
+        "--stop-condition", type=str, default=None, help="Global stopping condition"
     )
 
 
