@@ -1840,13 +1840,19 @@ class Simulator:
                     j = self.S.floor_key(r_max)
                     self.S[r_max] = self.S[j]
                 # Update the number of extant segments.
-                if self.S[left] == len(X):
+                if self.S[left] == len(X) and self.stop_condition is None:
                     self.S[left] = 0
                     right = self.S.succ_key(left)
                 else:
                     right = left
-                    while right < r_max and self.S[right] != len(X):
-                        self.S[right] -= len(X) - 1
+                    while right < r_max:
+                        if self.S[right] <= len(X):
+                            if self.stop_condition is None:
+                                break
+                            else:
+                                self.S[right] = 1
+                        else:
+                            self.S[right] -= len(X) - 1
                         right = self.S.succ_key(right)
                     alpha = self.alloc_segment(left, right, new_node_id, pop_id)
                 # Update the heaps and make the record.
@@ -1990,12 +1996,15 @@ class Simulator:
                         self.S[left] = 0
                         right = self.S.succ_key(left)
                     else:
-                        stop_at = 2
-                        if self.stop_condition is not None:
-                            stop_at = 1
                         right = left
-                        while right < r_max and self.S[right] != stop_at:
-                            self.S[right] -= 1
+                        while right < r_max:
+                            if self.S[right] <= 2:
+                                if self.stop_condition is None:
+                                    break
+                                else:
+                                    self.S[right] = 1
+                            else:
+                                self.S[right] -= 1
                             right = self.S.succ_key(right)
                         alpha = self.alloc_segment(
                             left=left,
