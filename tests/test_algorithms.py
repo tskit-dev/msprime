@@ -457,3 +457,19 @@ class TestAlgorithms:
         assert ts.num_trees > 1
         roots = [tree.root for tree in ts.trees()]
         assert len(set(roots)) == 1
+
+    def test_stopping_condition_pedigree(self):
+        num_founders = 4
+        num_generations = 10
+        tables = simulate_pedigree(
+            num_founders=num_founders, num_generations=num_generations
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
+            tables.dump(ts_path)
+            ts = self.run_script(
+                f"0 --from-ts {ts_path} --model=fixed_pedigree -r 0.1 \
+                --stop-condition=full_pedigree"
+            )
+        assert ts.num_trees > 1
+        assert ts.max_root_time == num_generations - 1

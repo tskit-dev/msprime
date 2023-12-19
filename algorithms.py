@@ -709,6 +709,8 @@ class Simulator:
             return any(num_anc > 1 for num_anc in self.S.values())
         elif self.stop_condition == "time":
             return self.get_num_ancestors() > 1
+        elif self.stop_condition == "pedigree":
+            return True
         else:
             print("Error: unknown stop condition-", self.stop_condition)
             raise ValueError
@@ -859,9 +861,9 @@ class Simulator:
         if self.model == "hudson":
             ret = self.hudson_simulate(end_time)
         elif self.model == "dtwf":
-            ret = self.dtwf_simulate()
+            ret = self.dtwf_simulate(end_time)
         elif self.model == "fixed_pedigree":
-            ret = self.pedigree_simulate()
+            ret = self.pedigree_simulate(end_time)
         elif self.model == "single_sweep":
             ret = self.single_sweep_simulate()
         else:
@@ -870,7 +872,6 @@ class Simulator:
 
         if ret == 2:  # _msprime.EXIT_MAX_TIME:
             self.t = end_time
-            print(end_time)
         return self.finalise()
 
     def get_potential_destinations(self):
@@ -1129,21 +1130,27 @@ class Simulator:
             self.set_labels(u, 0)
             self.P[0].add(tmp)
 
-    def pedigree_simulate(self):
+    def pedigree_simulate(self, end_time):
         """
         Simulates through the provided pedigree, stopping at the top.
         """
         self.pedigree = Pedigree(self.tables)
-        self.dtwf_climb_pedigree()
+        ret = self.dtwf_climb_pedigree(end_time)
+        return ret
 
-    def dtwf_simulate(self):
+    def dtwf_simulate(self, end_time):
         """
         Simulates the algorithm until all loci have coalesced.
         """
+        ret = 0
         while self.ancestors_remain():
+            if self.t + 1 > end_time:
+                ret = 2  # _msprime.EXIT_MAX_TIME
+                break
             self.t += 1
             self.verify()
             self.dtwf_generation()
+        return ret
 
     def dtwf_generation(self):
         """
@@ -1281,13 +1288,14 @@ class Simulator:
         self.flush_edges()
         self.verify()
 
-    def dtwf_climb_pedigree(self):
+    def dtwf_climb_pedigree(self, end_time):
         """
         Simulates transmission of ancestral material through a pre-specified
         pedigree
         """
         assert self.num_populations == 1  # Single pop/pedigree for now
         pop = self.P[0]
+        ret = 0
 
         # Go through the extant lineages and gather the ancestral material
         # into the corresponding pedigree individuals.
@@ -1300,9 +1308,13 @@ class Simulator:
         # Visit pedigree individuals in time order.
         visit_order = sorted(self.pedigree.individuals, key=lambda x: (x.time, x.id))
         for ind in visit_order:
+            if ind.time > end_time:
+                ret = 2  # _msprime.EXIT_MAX_TIME
+                break
             self.t = ind.time
             for ploid in range(ind.ploidy):
                 self.process_pedigree_common_ancestors(ind, ploid)
+        return ret
 
     def store_arg_edges(self, segment, u=-1):
         if u == -1:
@@ -2295,6 +2307,10 @@ def run_simulate(args):
     else:
         from_ts = tskit.load(args.from_ts)
         tables = from_ts.dump_tables()
+    if args.stop_condition == "full_pedigree":
+        end_time = np.max(from_ts.nodes_time)
+    else:
+        end_time = args.end_time
 
     s = Simulator(
         tables=tables,
@@ -2319,7 +2335,7 @@ def run_simulate(args):
         discrete_genome=args.discrete,
         stop_condition=args.stop_condition,
     )
-    ts = s.simulate(args.end_time)
+    ts = s.simulate(end_time)
     ts.dump(args.output_file)
     if args.verbose:
         s.print_state()
