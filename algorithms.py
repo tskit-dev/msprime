@@ -708,7 +708,7 @@ class Simulator:
         elif self.stop_condition == "all_local_mrcas":
             return any(num_anc > 1 for num_anc in self.S.values())
         elif self.stop_condition == "time":
-            return self.get_num_ancestors() > 1
+            return True
         elif self.stop_condition == "pedigree":
             return True
         else:
@@ -1143,7 +1143,7 @@ class Simulator:
         Simulates the algorithm until all loci have coalesced.
         """
         ret = 0
-        while self.ancestors_remain():
+        while self.assert_stop_condition():
             if self.t + 1 > end_time:
                 ret = 2  # _msprime.EXIT_MAX_TIME
                 break
@@ -2307,7 +2307,7 @@ def run_simulate(args):
     else:
         from_ts = tskit.load(args.from_ts)
         tables = from_ts.dump_tables()
-    if args.stop_condition == "full_pedigree":
+    if args.stop_condition == "pedigree":
         end_time = np.max(from_ts.nodes_time)
     else:
         end_time = args.end_time

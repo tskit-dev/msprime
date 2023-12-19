@@ -469,7 +469,15 @@ class TestAlgorithms:
             tables.dump(ts_path)
             ts = self.run_script(
                 f"0 --from-ts {ts_path} --model=fixed_pedigree -r 0.1 \
-                --stop-condition=full_pedigree"
+                --stop-condition=pedigree"
             )
         assert ts.num_trees > 1
         assert ts.max_root_time == num_generations - 1
+
+    def test_stopping_condition_dtwf(self):
+        end_time = 20
+        ts = self.run_script(
+            f"10 --model=dtwf --stop-condition=time --end-time={end_time}"
+        )
+        assert ts.num_trees > 1
+        assert ts.max_root_time == end_time
