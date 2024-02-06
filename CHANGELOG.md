@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.1] - 2024-XX-XX
+
+**Bug fixes**:
+
+- Change tolerance of polynomial approximation in Beta-coalescent acceptance probabilities ({issue}`2256`, {pr}`2257`, {user}`JereKoskela`)
+
 ## [1.3.0] - 2022-12-13
 
 **New features**
