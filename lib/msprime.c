@@ -7056,7 +7056,7 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
     beta_x = ran_inc_beta(self->rng, 2.0 - alpha, alpha, truncation_point);
 
     /* We calculate the probability of accepting the event */
-    if (beta_x > 1e-9) {
+    if (beta_x > 1e-5) {
         u = (n - 1) * log(1 - beta_x) + log(1 + (n - 1) * beta_x);
         u = exp(log(1 - exp(u)) - 2 * log(beta_x) - gsl_sf_lnchoose(n, 2));
     } else {
@@ -7065,7 +7065,7 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
         u = 0;
         for (j = 2; j <= n; j += 2) {
             increment = (j - 1) * exp(gsl_sf_lnchoose(n, j) + (j - 2) * log(beta_x));
-            if (increment / u < 1e-12) {
+            if (increment / (u + increment) < 1e-12) {
                 /* We truncate the expansion adaptively once the increment
                  * becomes negligible. */
                 break;
