@@ -269,16 +269,16 @@ def plot_qq(v1, v2):
 def plot_stat_hist(v1, v2, v1_name, v2_name):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        sns.kdeplot(v1, color="b", shade=True, label=v1_name, legend=False)
-        sns.kdeplot(v2, color="r", shade=True, label=v2_name, legend=False)
+        sns.kdeplot(v1, color="b", fill=True, label=v1_name, legend=False)
+        sns.kdeplot(v2, color="r", fill=True, label=v2_name, legend=False)
         pyplot.legend(loc="upper right")
 
 
 def plot_breakpoints_hist(v1, v2, v1_name, v2_name):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        sns.kdeplot(v1, color="b", label=v1_name, shade=True, legend=False)
-        sns.kdeplot(v2, color="r", label=v2_name, shade=True, legend=False)
+        sns.kdeplot(v1, color="b", label=v1_name, fill=True, legend=False)
+        sns.kdeplot(v2, color="r", label=v2_name, fill=True, legend=False)
         pyplot.legend(loc="upper right")
 
 
