@@ -219,7 +219,7 @@ fast_search_idx_strict_upper(fast_search_t *self, double query)
     }
     assert(ret
            == idx_1st_strict_upper_bound(
-                  self->elements, lookups[self->num_lookups - 1], query));
+               self->elements, lookups[self->num_lookups - 1], query));
     /* function interface is in terms of index to target array of element values */
     return ret;
 }

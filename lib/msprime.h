@@ -156,10 +156,9 @@ typedef struct {
 struct _msp_t;
 
 typedef struct {
-    /* TODO document these parameters.*/
     double start_frequency;
     double end_frequency;
-    double s;
+    double s; //freq at the end of the sweep.
     double dt;
 } genic_selection_trajectory_t;
 
