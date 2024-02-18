@@ -2880,3 +2880,104 @@ class TestTimeUnits:
             msprime.sim_ancestry(
                 initial_state=tables, population_size=10, random_seed=1
             )
+
+
+class TestSMCK:
+    def test_single_locus(self):
+        tss = msprime.sim_ancestry(
+            samples=10,
+            model=msprime.SmcKApproxCoalescent(),
+            recombination_rate=0.005,
+            sequence_length=1000,
+            random_seed=4512,
+            num_replicates=10,
+        )
+        for ts in tss:
+            assert max(tree.num_roots for tree in ts.trees()) == 1
+
+        tss = msprime.simulate(
+            sample_size=10,
+            model=msprime.SmcKApproxCoalescent(),
+            recombination_rate=0.005,
+            length=1000,
+            random_seed=873561,
+            num_replicates=10,
+        )
+        for ts in tss:
+            assert max(tree.num_roots for tree in ts.trees()) == 1
+
+    def test_continuous(self):
+        tss = msprime.sim_ancestry(
+            samples=10,
+            model=msprime.SmcKApproxCoalescent(),
+            recombination_rate=0.005,
+            sequence_length=1000,
+            num_replicates=10,
+            discrete_genome=False,
+        )
+        for ts in tss:
+            assert max(tree.num_roots for tree in ts.trees()) == 1
+
+    def test_ancient_samples(self):
+        tables = tskit.TableCollection(100)
+        tables.time_units = "generations"
+        tables.populations.add_row()
+        tables.nodes.add_row(flags=1, time=0.0, population=0)
+        tables.nodes.add_row(flags=1, time=1.0, population=0)
+        tables.nodes.add_row(flags=1, time=10.0, population=0)
+        tables.nodes.add_row(flags=1, time=30.0, population=0)
+        ts = msprime.sim_ancestry(
+            initial_state=tables,
+            population_size=10_000,
+            model=msprime.SmcKApproxCoalescent(),
+            recombination_rate=1e-6,
+        )
+        for tree in ts.trees():
+            assert tree.num_roots == 1
+
+    def test_model_switch(self):
+        ts = msprime.sim_ancestry(
+            samples=10,
+            population_size=10_000,
+            model=[
+                msprime.StandardCoalescent(duration=10),
+                msprime.SmcKApproxCoalescent(duration=10),
+                msprime.StandardCoalescent(),
+            ],
+            random_seed=10,
+            recombination_rate=1e-5,
+            sequence_length=100,
+        )
+        for tree in ts.trees():
+            assert tree.num_roots == 1
+
+    def test_smc_k_plus(self):
+        tss = msprime.sim_ancestry(
+            samples=10,
+            population_size=10_000,
+            model=msprime.SmcKApproxCoalescent(hull_offset=2.0),
+            random_seed=10,
+            recombination_rate=1e-5,
+            sequence_length=100,
+            num_replicates=10,
+        )
+        for ts in tss:
+            assert ts.num_trees > 1
+            for tree in ts.trees():
+                assert tree.num_roots == 1
+
+    def test_two_pops(self):
+        demography = msprime.Demography()
+        demography.add_population(initial_size=10_000)
+        demography.add_population(initial_size=10_000)
+        demography.add_mass_migration(1e6, source=1, dest=0, proportion=1.0)
+        ts = msprime.sim_ancestry(
+            samples={0: 2, 1: 2},
+            demography=demography,
+            model=msprime.SmcKApproxCoalescent(),
+            random_seed=74024,
+            recombination_rate=1e-5,
+            sequence_length=100,
+        )
+        for tree in ts.trees():
+            assert tree.num_roots == 1

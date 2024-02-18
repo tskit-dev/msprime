@@ -83,7 +83,8 @@
 #define MSP_ERR_DTWF_ZERO_POPULATION_SIZE                           -36
 #define MSP_ERR_DTWF_UNSUPPORTED_BOTTLENECK                         -37
 #define MSP_ERR_BAD_PROPORTION                                      -38
-/* REUSE 39 and 40 */
+/* REUSE 39 */
+#define MSP_ERR_BAD_HULL_OFFSET                                     -40
 #define MSP_ERR_BAD_BETA_MODEL_ALPHA                                -41
 #define MSP_ERR_BAD_TRUNCATION_POINT                                -42
 #define MSP_ERR_BAD_RATE_VALUE                                      -43

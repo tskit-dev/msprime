@@ -1798,6 +1798,24 @@ class SmcPrimeApproxCoalescent(AncestryModel):
     name = "smc_prime"
 
 
+class ParametricAncestryModel(AncestryModel):
+    """
+    The superclass of ancestry models that require extra parameters.
+    """
+
+
+@dataclasses.dataclass
+class SmcKApproxCoalescent(ParametricAncestryModel):
+    name = "smc_k"
+
+    hull_offset: float
+
+    # We have to define an __init__ to enforce keyword-only behaviour
+    def __init__(self, *, duration=None, hull_offset=0.0):
+        self.duration = duration
+        self.hull_offset = hull_offset
+
+
 class DiscreteTimeWrightFisher(AncestryModel):
     """
     A discrete backwards-time Wright-Fisher model, with diploid back-and-forth
@@ -1852,12 +1870,6 @@ class FixedPedigree(AncestryModel):
     """
 
     name = "fixed_pedigree"
-
-
-class ParametricAncestryModel(AncestryModel):
-    """
-    The superclass of ancestry models that require extra parameters.
-    """
 
 
 @dataclasses.dataclass

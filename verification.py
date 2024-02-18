@@ -4516,6 +4516,150 @@ class SmcTest(Test):
         pyplot.close("all")
 
 
+class SmcKTest(Test):
+    """
+    Tests for the SMC(0) model against rejection sampling.
+    """
+
+    def test_smc_k_oldest_time(self):
+        """
+        Runs the check for number of trees using the CLI.
+        """
+        r = 1e-8  # Per generation recombination rate.
+        num_loci = np.linspace(100, 10**5, 10).astype(int)
+        Ne = 10**4
+        n = 100
+        rho = r * 4 * Ne * (num_loci - 1)
+        num_replicates = 1000
+        smc_k_mean = np.zeros_like(rho)
+        msp_mean = np.zeros_like(rho)
+        msp_smc_mean = np.zeros_like(rho)
+        for j in range(len(num_loci)):
+            for dest, model in [
+                (smc_k_mean, "smc_k"),
+                (msp_mean, "hudson"),
+                (msp_smc_mean, "smc"),
+            ]:
+                replicates = msprime.simulate(
+                    sample_size=n,
+                    length=num_loci[j],
+                    recombination_rate=r,
+                    Ne=Ne,
+                    num_replicates=num_replicates,
+                    model=model,
+                )
+                T = np.zeros(num_replicates)
+                for k, ts in enumerate(replicates):
+                    for record in ts.records():
+                        T[k] = max(T[k], record.time)
+                # Normalise back to coalescent time.
+                T /= 4 * Ne
+                dest[j] = np.mean(T)
+        pyplot.plot(rho, smc_k_mean, "-", color="red", label="smc_k")
+        pyplot.plot(rho, msp_smc_mean, "--", color="red", label="msprime_smc")
+        pyplot.plot(rho, msp_mean, "--", color="blue", label="msprime")
+        pyplot.xlabel("rho")
+        pyplot.ylabel("Mean oldest coalescence time")
+        pyplot.legend(loc="lower right")
+        pyplot.savefig(self.output_dir / "mean.png")
+        pyplot.close("all")
+
+    def test_smc_k_num_trees(self):
+        """
+        Runs the check for number of trees in the SMC and full coalescent
+        using the API. We compare this with scrm using the SMC as a check.
+        """
+        r = 1e-8  # Per generation recombination rate.
+        L = np.linspace(100, 10**5, 10).astype(int)
+        Ne = 10**4
+        n = 100
+        rho = r * 4 * Ne * (L - 1)
+        num_replicates = 10000
+        num_trees = np.zeros(num_replicates)
+        mean_exact = np.zeros_like(rho)
+        var_exact = np.zeros_like(rho)
+        mean_smc = np.zeros_like(rho)
+        var_smc = np.zeros_like(rho)
+        mean_smc_prime = np.zeros_like(rho)
+        var_smc_prime = np.zeros_like(rho)
+        mean_smc_k = np.zeros_like(rho)
+        var_smc_k = np.zeros_like(rho)
+
+        for j in range(len(L)):
+            smc_k_sim = msprime.ancestry._parse_simulate(
+                sample_size=n,
+                recombination_rate=r,
+                Ne=Ne,
+                length=L[j],
+                model="smc_k",
+            )
+            for k in range(num_replicates):
+                smc_k_sim.run()
+                num_trees[k] = smc_k_sim.num_breakpoints
+                smc_k_sim.reset()
+            mean_smc_k[j] = np.mean(num_trees)
+            var_smc_k[j] = np.var(num_trees)
+
+            exact_sim = msprime.ancestry._parse_simulate(
+                sample_size=n, recombination_rate=r, Ne=Ne, length=L[j]
+            )
+            for k in range(num_replicates):
+                exact_sim.run()
+                num_trees[k] = exact_sim.num_breakpoints
+                exact_sim.reset()
+            mean_exact[j] = np.mean(num_trees)
+            var_exact[j] = np.var(num_trees)
+
+            smc_sim = msprime.ancestry._parse_simulate(
+                sample_size=n, recombination_rate=r, Ne=Ne, length=L[j], model="smc"
+            )
+            for k in range(num_replicates):
+                smc_sim.run()
+                num_trees[k] = smc_sim.num_breakpoints
+                smc_sim.reset()
+            mean_smc[j] = np.mean(num_trees)
+            var_smc[j] = np.var(num_trees)
+
+            smc_prime_sim = msprime.ancestry._parse_simulate(
+                sample_size=n,
+                recombination_rate=r,
+                Ne=Ne,
+                length=L[j],
+                model="smc_prime",
+            )
+            for k in range(num_replicates):
+                smc_prime_sim.run()
+                num_trees[k] = smc_prime_sim.num_breakpoints
+                smc_prime_sim.reset()
+            mean_smc_prime[j] = np.mean(num_trees)
+            var_smc_prime[j] = np.var(num_trees)
+
+        pyplot.plot(rho, mean_exact, "o", label="msprime (hudson)")
+        pyplot.plot(rho, mean_smc, "^", label="msprime (smc)")
+        pyplot.plot(rho, mean_smc_prime, "*", label="msprime (smc_prime)")
+        pyplot.plot(rho, mean_smc_k, "x", label="smc_k")
+        pyplot.plot(rho, rho * harmonic_number(n - 1), "-")
+        pyplot.legend(loc="upper left")
+        pyplot.xlabel("scaled recombination rate rho")
+        pyplot.ylabel("Mean number of breakpoints")
+        pyplot.savefig(self.output_dir / "mean.png")
+        pyplot.close("all")
+
+        v = np.zeros(len(rho))
+        for j in range(len(rho)):
+            v[j] = get_predicted_variance(n, rho[j])
+        pyplot.plot(rho, var_exact, "o", label="msprime (hudson)")
+        pyplot.plot(rho, var_smc, "^", label="msprime (smc)")
+        pyplot.plot(rho, var_smc_prime, "*", label="msprime (smc_prime)")
+        pyplot.plot(rho, var_smc_k, "x", label="smc_k")
+        pyplot.plot(rho, v, "-")
+        pyplot.xlabel("scaled recombination rate rho")
+        pyplot.ylabel("variance in number of breakpoints")
+        pyplot.legend(loc="upper left")
+        pyplot.savefig(self.output_dir / "var.png")
+        pyplot.close("all")
+
+
 class SimulateFrom(Test):
     def test_simulate_from_single_locus(self):
         num_replicates = 1000

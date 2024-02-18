@@ -829,6 +829,7 @@ class TestSimulationState(LowLevelTestCase):
         )
         self.verify_simulation(3, 10, 1.0, model=get_simulation_model("smc"))
         self.verify_simulation(4, 10, 2.0, model=get_simulation_model("smc_prime"))
+        self.verify_simulation(4, 10, 2.0, model=get_simulation_model("smc_prime"))
 
     def test_event_by_event(self):
         n = 10
@@ -1314,6 +1315,21 @@ class TestSimulator(LowLevelTestCase):
                 make_sim(model=get_simulation_model(bad_model))
         for name in ["hudson", "smc", "smc_prime"]:
             model = get_simulation_model(name)
+            sim = make_sim(model=model)
+            assert sim.model == model
+
+    def test_smck_simulation_model(self):
+        for bad_type in [None, str, "sdf"]:
+            model = get_simulation_model("smc_k", hull_offset=bad_type)
+            with pytest.raises(TypeError):
+                make_sim(model=model)
+        for bad_hull_offset in [-1, -1e-6]:
+            with pytest.raises(ValueError):
+                make_sim(
+                    model=get_simulation_model("smc_k", hull_offset=bad_hull_offset),
+                )
+        for hull_offset in [0.0, 1.1e-4, 2.5]:
+            model = get_simulation_model("smc_k", hull_offset=hull_offset)
             sim = make_sim(model=model)
             assert sim.model == model
 
