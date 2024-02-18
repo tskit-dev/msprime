@@ -782,6 +782,9 @@ class TestSimulationState(LowLevelTestCase):
         """
         if model is None:
             model = get_simulation_model()
+        # using hudson as the init_model keeps the simulation
+        # logic consistent with `sim_ancestry()`
+        init_model = get_simulation_model()
         # These tests don't work for n == 2
         assert n > 2
         random_seed = random.randint(0, 2**31)
@@ -794,9 +797,10 @@ class TestSimulationState(LowLevelTestCase):
             segment_block_size=1000,
             avl_node_block_size=1000,
             node_mapping_block_size=1000,
-            model=model,
+            model=init_model,
         )
         for _ in range(3):
+            sim.model = model
             # Run the sim for a tiny amount of time and check.
             if sim.run(1e-9) != _msprime.EXIT_COALESCENCE:
                 self.verify_running_simulation(sim)
@@ -829,6 +833,10 @@ class TestSimulationState(LowLevelTestCase):
         )
         self.verify_simulation(3, 10, 1.0, model=get_simulation_model("smc"))
         self.verify_simulation(4, 10, 2.0, model=get_simulation_model("smc_prime"))
+        self.verify_simulation(4, 10, 2.0, model=get_simulation_model("smc_prime"))
+        self.verify_simulation(
+            3, 10, 1.0, model=get_simulation_model("smc_k", hull_offset=0.0)
+        )
 
     def test_event_by_event(self):
         n = 10
@@ -1315,6 +1323,24 @@ class TestSimulator(LowLevelTestCase):
         for name in ["hudson", "smc", "smc_prime"]:
             model = get_simulation_model(name)
             sim = make_sim(model=model)
+            assert sim.model == model
+
+    def test_smck_simulation_model(self):
+        # set model to hudson for initialisation
+        for bad_type in [None, str, "sdf"]:
+            model = get_simulation_model("smc_k", hull_offset=bad_type)
+            sim = make_sim(model=get_simulation_model())
+            with pytest.raises(TypeError):
+                sim.model = model
+        for bad_hull_offset in [-1, -1e-6]:
+            sim = make_sim(model=get_simulation_model())
+            model = get_simulation_model("smc_k", hull_offset=bad_hull_offset)
+            with pytest.raises(ValueError):
+                sim.model = model
+        for hull_offset in [0.0, 1.1e-4, 2.5]:
+            model = get_simulation_model("smc_k", hull_offset=hull_offset)
+            sim = make_sim(model=get_simulation_model())
+            sim.model = model
             assert sim.model == model
 
     def test_dirac_simulation_model(self):

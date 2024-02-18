@@ -3,6 +3,7 @@ Python version of the simulation algorithm.
 """
 import argparse
 import heapq
+import itertools
 import logging
 import math
 import random
@@ -125,6 +126,7 @@ class Segment:
         self.population = None
         self.label = 0
         self.index = index
+        self.hull = None
 
     def __repr__(self):
         return repr((self.left, self.right, self.node))
@@ -145,13 +147,29 @@ class Segment:
             self.node,
         )
 
+    def get_hull(self):
+        seg = self
+        assert seg is not None
+        while seg.prev is not None:
+            seg = seg.prev
+        hull = seg.hull
+        return hull
+
+    def get_left_index(self):
+        seg = self
+        while seg is not None:
+            index = seg.index
+            seg = seg.prev
+
+        return index
+
 
 class Population:
     """
     Class representing a population in the simulation.
     """
 
-    def __init__(self, id_, num_labels=1):
+    def __init__(self, id_, num_labels=1, max_segments=100, model="hudson"):
         self.id = id_
         self.start_time = 0
         self.start_size = 1.0
@@ -161,6 +179,23 @@ class Population:
         # do what we need. Lists are inefficient here and should not be
         # used in a real implementation.
         self._ancestors = [[] for _ in range(num_labels)]
+
+        # ADDITIONAL STATES FOR SMC(k)
+        # this has to be done for each label
+        # track hulls based on left
+        self.hulls_left = [OrderStatisticsTree() for _ in range(num_labels)]
+        self.coal_mass_index = [FenwickTree(max_segments) for j in range(num_labels)]
+        # track rank of hulls right
+        self.hulls_right = [OrderStatisticsTree() for _ in range(num_labels)]
+
+        if model == "smc_k":
+            self.get_common_ancestor_waiting_time = (
+                self.get_common_ancestor_waiting_time_smc_k()
+            )
+        else:
+            self.get_common_ancestor_waiting_time = (
+                self.get_common_ancestor_waiting_time_hudson()
+            )
 
     def print_state(self):
         print("Population ", self.id)
@@ -191,6 +226,13 @@ class Population:
         else:
             return len(self._ancestors[label])
 
+    def get_num_pairs(self, label=None):
+        # can be improved by updating values in self.num_pairs
+        if label is None:
+            return sum(mass_index.get_total() for mass_index in self.coal_mass_index)
+        else:
+            return self.coal_mass_index[label].get_total()
+
     def get_size(self, t):
         """
         Returns the size of this population at time t.
@@ -198,29 +240,48 @@ class Population:
         dt = t - self.start_time
         return self.start_size * math.exp(-self.growth_rate * dt)
 
-    def get_common_ancestor_waiting_time(self, t):
+    def _get_common_ancestor_waiting_time(self, np, t):
         """
         Returns the random waiting time until a common ancestor event
         occurs within this population.
         """
         ret = sys.float_info.max
-        k = self.get_num_ancestors()
-        if k > 1:
-            u = random.expovariate(k * (k - 1))
-            if self.growth_rate == 0:
-                ret = self.start_size * u
-            else:
-                dt = t - self.start_time
-                z = (
-                    1
-                    + self.growth_rate
-                    * self.start_size
-                    * math.exp(-self.growth_rate * dt)
-                    * u
-                )
-                if z > 0:
-                    ret = math.log(z) / self.growth_rate
+        u = random.expovariate(2 * np)
+        if self.growth_rate == 0:
+            ret = self.start_size * u
+        else:
+            dt = t - self.start_time
+            z = (
+                1
+                + self.growth_rate
+                * self.start_size
+                * math.exp(-self.growth_rate * dt)
+                * u
+            )
+            if z > 0:
+                ret = math.log(z) / self.growth_rate
         return ret
+
+    def get_common_ancestor_waiting_time_hudson(self):
+        def _get_common_ancestor_waiting_time_hudson(t):
+            k = self.get_num_ancestors()
+            ret = sys.float_info.max
+            if k > 1:
+                np = k * (k - 1) / 2
+                ret = self._get_common_ancestor_waiting_time(np, t)
+            return ret
+
+        return _get_common_ancestor_waiting_time_hudson
+
+    def get_common_ancestor_waiting_time_smc_k(self):
+        def _get_common_ancestor_waiting_time_smc_k(t):
+            np = self.get_num_pairs()
+            ret = sys.float_info.max
+            if np > 0:
+                ret = self._get_common_ancestor_waiting_time(np, t)
+            return ret
+
+        return _get_common_ancestor_waiting_time_smc_k
 
     def get_ind_range(self, t):
         """Returns ind labels at time t"""
@@ -228,6 +289,72 @@ class Population:
         last_ind = first_ind + self.get_size(t)
 
         return range(int(first_ind), int(last_ind) + 1)
+
+    def increment_avl(self, ost, coal_mass, hull, increment):
+        right = hull.right
+        curr_hull = hull
+        curr_hull, _ = ost.succ_key(curr_hull)
+        while curr_hull is not None:
+            if right > curr_hull.left:
+                ost.avl[curr_hull] += increment
+                coal_mass.increment(curr_hull.index, increment)
+            else:
+                break
+            curr_hull, _ = ost.succ_key(curr_hull)
+
+    def reset_hull_right(self, label, hull, old_right, new_right):
+        # when resetting the hull.right of a pre-existing hull we need to
+        # decrement count of all lineages starting off between hull.left and bp
+        # FIX: logic is almost identical to increment_avl()!!!
+        ost = self.hulls_left[label]
+        curr_hull = Hull(-1)
+        curr_hull.left = new_right
+        curr_hull.right = math.inf
+        curr_hull.insertion_order = 0
+        floor = ost.floor_key(curr_hull)
+        curr_hull = floor
+        while curr_hull is not None:
+            if curr_hull.left >= old_right:
+                break
+            if curr_hull.left >= new_right:
+                ost.avl[curr_hull] -= 1
+                self.coal_mass_index[label].increment(curr_hull.index, -1)
+            curr_hull, _ = ost.succ_key(curr_hull)
+        hull.right = new_right
+
+        # adjust rank of hull.right
+        ost = self.hulls_right[label]
+        floor = ost.floor_key(HullEnd(old_right))
+        assert floor.x == old_right
+        ost.pop(floor)
+        insertion_order = 0
+        hull_end = HullEnd(new_right)
+        floor = ost.floor_key(hull_end)
+        if floor is not None:
+            if floor.x == hull_end.x:
+                insertion_order = floor.insertion_order + 1
+        hull_end.insertion_order = insertion_order
+        ost[hull_end] = 0
+
+    def remove_hull(self, label, hull):
+        ost = self.hulls_left[label]
+        coal_mass_index = self.coal_mass_index[label]
+        self.increment_avl(ost, coal_mass_index, hull, -1)
+        # adjust insertion order
+        curr_hull, _ = ost.succ_key(hull)
+        count, left_rank = ost.pop(hull)
+        while curr_hull is not None:
+            if curr_hull.left == hull.left:
+                curr_hull.insertion_order -= 1
+            else:
+                break
+            curr_hull, _ = ost.succ_key(curr_hull)
+        ost = self.hulls_right[label]
+        floor = ost.floor_key(HullEnd(hull.right))
+        assert floor.x == hull.right
+        _, right_rank = ost.pop(floor)
+        hull.insertion_order = math.inf
+        self.coal_mass_index[label].set_value(hull.index, 0)
 
     def remove(self, index, label=0):
         """
@@ -240,6 +367,42 @@ class Population:
         Removes the given individual from its population.
         """
         return self._ancestors[label].remove(individual)
+
+    def add_hull(self, label, hull):
+        # logic left end
+        ost_left = self.hulls_left[label]
+        ost_right = self.hulls_right[label]
+        insertion_order = 0
+        num_starting_after_left = 0
+        num_ending_before_left = 0
+
+        floor = ost_left.floor_key(hull)
+        if floor is not None:
+            if floor.left == hull.left:
+                insertion_order = floor.insertion_order + 1
+            num_starting_after_left = ost_left.get_rank(floor) + 1
+        hull.insertion_order = insertion_order
+
+        floor = ost_right.floor_key(HullEnd(hull.left))
+        if floor is not None:
+            num_ending_before_left = ost_right.get_rank(floor) + 1
+        count = num_starting_after_left - num_ending_before_left
+        ost_left[hull] = count
+        self.coal_mass_index[label].set_value(hull.index, count)
+
+        # logic right end
+        insertion_order = 0
+        hull_end = HullEnd(hull.right)
+        floor = ost_right.floor_key(hull_end)
+        if floor is not None:
+            if floor.x == hull.right:
+                insertion_order = floor.insertion_order + 1
+        hull_end.insertion_order = insertion_order
+        ost_right[hull_end] = 0
+        # self.num_pairs[label] += count - correction
+        # Adjust counts for existing hulls in the avl tree
+        coal_mass_index = self.coal_mass_index[label]
+        self.increment_avl(ost_left, coal_mass_index, hull, 1)
 
     def add(self, individual, label=0):
         """
@@ -521,6 +684,134 @@ class OverlapCounter:
         return seg
 
 
+class Hull:
+    """
+    A hull keeps track of the outermost boundaries (left, right) of
+    a segment chain (lineage_head). Hulls allow us to efficiently
+    keep track of overlapping lineages when simulating under the SMC_K.
+    """
+
+    def __init__(self, index):
+        self.left = None
+        self.right = None
+        self.lineage_head = None
+        self.index = index
+        self.insertion_order = math.inf
+
+    def __lt__(self, other):
+        return (self.left, self.insertion_order) < (other.left, other.insertion_order)
+
+    def __repr__(self):
+        return f"l:{self.left}, r:{self.right}, io:{self.insertion_order}"
+
+    def intersects_with(self, other):
+        return self.left < other.right and other.left < self.right
+
+
+class HullEnd:
+    """
+    Each HullEnd is associated with a single Hull and keeps track of
+    Hull.right. This object is used to keep track of the order of Hulls
+    based on Hull.right in a separate AVLTree when simulating the SMC_K.
+    """
+
+    def __init__(self, x):
+        self.x = x
+        self.insertion_order = math.inf
+
+    def __lt__(self, other):
+        return (self.x, self.insertion_order) < (other.x, other.insertion_order)
+
+    def __repr__(self):
+        return f"x:{self.x}, io:{self.insertion_order}"
+
+
+class OrderStatisticsTree:
+    """
+    Bintrees AVL tree with added functionality to keep track of the rank
+    of all nodes in the AVL tree. This is needed for the SMC_K implementation.
+    The C AVL library has this functionality already baked in.
+    """
+
+    def __init__(self):
+        self.avl = bintrees.AVLTree()
+        self.rank = {}
+        self.size = 0
+        self.min = None
+
+    def __len__(self):
+        return self.size
+
+    def __setitem__(self, key, value):
+        first = True
+        rank = 0
+        if self.min is not None:
+            if self.min < key:
+                prev_key = self.avl.floor_key(key)
+                rank = self.rank[prev_key]
+                rank += 1
+                first = False
+        if first:
+            self.min = key
+        self.avl[key] = value
+        self.rank[key] = rank
+        self.size += 1
+        self.update_ranks(key, rank)
+
+    def __getitem__(self, key):
+        return self.avl[key], self.rank[key]
+
+    def get_rank(self, key):
+        return self.rank[key]
+
+    def update_ranks(self, key, rank, increment=1):
+        while rank < self.size - 1:
+            key = self.avl.succ_key(key)
+            self.rank[key] += increment
+            rank += 1
+
+    def pop(self, key):
+        if self.min == key:
+            if len(self) == 1:
+                self.min = None
+            else:
+                self.min = self.avl.succ_key(key)
+        rank = self.rank.pop(key)
+        self.update_ranks(key, rank, -1)
+        value = self.avl.pop(key)
+        self.size -= 1
+        return value, rank
+
+    def succ_key(self, key):
+        rank = self.rank[key]
+        if rank < self.size - 1:
+            key = self.avl.succ_key(key)
+            rank += 1
+            return key, rank
+        else:
+            return None, None
+
+    def prev_key(self, key):
+        if key == self.min:
+            return None, None
+        else:
+            key = self.avl.prev_key(key)
+            rank = self.rank[key]
+            return key, rank
+
+    def floor_key(self, key):
+        if len(self) == 0:
+            return None
+        if key < self.min:
+            return None
+        return self.avl.floor_key(key)
+
+    def ceil_key(self, key):
+        if len(self) == 0:
+            return None
+        return self.avl.ceiling_key(key)
+
+
 class Simulator:
     """
     A reference implementation of the multi locus simulation algorithm.
@@ -582,7 +873,13 @@ class Simulator:
             s = Segment(j + 1)
             self.segments[j + 1] = s
             self.segment_stack.append(s)
-        self.P = [Population(id_, num_labels) for id_ in range(N)]
+        self.hull_stack = []
+        self.hulls = [None for _ in range(self.max_segments + 1)]
+        for j in range(self.max_segments):
+            h = Hull(j + 1)
+            self.hulls[j + 1] = h
+            self.hull_stack.append(h)
+        self.P = [Population(id_, num_labels, max_segments, model) for id_ in range(N)]
         if self.recomb_map.total_mass == 0:
             self.recomb_mass_index = None
         else:
@@ -600,6 +897,12 @@ class Simulator:
             pop.set_start_size(population_sizes[pop.id])
             pop.set_growth_rate(population_growth_rates[pop.id], 0)
         self.edge_buffer = []
+
+        # set hull_offset for smc_k, deviates from actual pattern
+        # implemented using `ParametricAncestryModel()`
+        self.hull_offset = None
+        if self.model == "smc_k":
+            self.hull_offset = 0.0
 
         self.initialise(tables.tree_sequence())
 
@@ -679,10 +982,57 @@ class Simulator:
         for node in range(ts.num_nodes):
             seg = root_segments_head[node]
             if seg is not None:
+                left_end = seg.left
+                pop = seg.population
+                label = seg.label
                 self.P[seg.population].add(seg)
                 while seg is not None:
                     self.set_segment_mass(seg)
                     seg = seg.next
+
+        if self.model == "smc_k":
+            for node in range(ts.num_nodes):
+                seg = root_segments_head[node]
+                if seg is not None:
+                    left_end = seg.left
+                    pop = seg.population
+                    label = seg.label
+                    lineage_head = seg
+                    right_end = root_segments_tail[node].right
+                    new_hull = self.alloc_hull(left_end, right_end, lineage_head)
+                    # insert Hull
+                    floor = self.P[pop].hulls_left[label].floor_key(new_hull)
+                    insertion_order = 0
+                    if floor is not None:
+                        if floor.left == new_hull.left:
+                            insertion_order = floor.insertion_order + 1
+                    new_hull.insertion_order = insertion_order
+                    self.P[pop].hulls_left[label][new_hull] = -1
+
+            # initialise the correct coalesceable pairs count
+            for pop in self.P:
+                for label, ost_left in enumerate(pop.hulls_left):
+                    avl = ost_left.avl
+                    ost_right = pop.hulls_right[label]
+                    count = 0
+                    for hull in avl.keys():
+                        floor = ost_right.floor_key(HullEnd(hull.left))
+                        num_ending_before_hull = 0
+                        if floor is not None:
+                            num_ending_before_hull = ost_right.rank[floor] + 1
+                        num_pairs = count - num_ending_before_hull
+                        avl[hull] = num_pairs
+                        pop.coal_mass_index[label].set_value(hull.index, num_pairs)
+                        # insert HullEnd
+                        hull_end = HullEnd(hull.right)
+                        floor = ost_right.floor_key(hull_end)
+                        insertion_order = 0
+                        if floor is not None:
+                            if floor.x == hull.right:
+                                insertion_order = floor.insertion_order + 1
+                        hull_end.insertion_order = insertion_order
+                        ost_right[hull_end] = -1
+                        count += 1
 
     def ancestors_remain(self):
         """
@@ -700,6 +1050,18 @@ class Simulator:
     def change_migration_matrix_element(self, pop_i, pop_j, rate):
         self.migration_matrix[pop_i][pop_j] = rate
 
+    def alloc_hull(self, left, right, lineage_head):
+        alpha = lineage_head
+        hull = self.hull_stack.pop()
+        hull.left = left
+        hull.right = min(right + self.hull_offset, self.L)
+        while alpha.prev is not None:
+            alpha = alpha.prev
+        assert alpha is not None
+        hull.lineage_head = alpha
+        alpha.hull = hull
+        return hull
+
     def alloc_segment(
         self,
         left,
@@ -709,6 +1071,7 @@ class Simulator:
         prev=None,
         next=None,  # noqa: A002
         label=0,
+        hull=None,
     ):
         """
         Pops a new segment off the stack and sets its properties.
@@ -721,6 +1084,7 @@ class Simulator:
         s.next = next
         s.prev = prev
         s.label = label
+        s.hull = hull
         return s
 
     def copy_segment(self, segment):
@@ -744,6 +1108,16 @@ class Simulator:
         if self.gc_mass_index is not None:
             self.gc_mass_index[u.label].set_value(u.index, 0)
         self.segment_stack.append(u)
+
+    def free_hull(self, u):
+        """
+        Frees the specified hull making it ready for reuse.
+        """
+        u.left = None
+        u.right = None
+        u.lineage_head = None
+        u.insertion_order = math.inf
+        self.hull_stack.append(u)
 
     def store_node(self, population, flags=0):
         self.flush_edges()
@@ -842,6 +1216,8 @@ class Simulator:
             self.pedigree_simulate()
         elif self.model == "single_sweep":
             self.single_sweep_simulate()
+        elif self.model == "smc_k":
+            self.hudson_simulate(end_time)
         else:
             print("Error: bad model specification -", self.model)
             raise ValueError
@@ -1302,7 +1678,12 @@ class Simulator:
         dest = self.P[k]
         index = random.randint(0, source.get_num_ancestors(label) - 1)
         x = source.remove(index, label)
+        hull = x.get_hull()
+        assert (self.model == "smc_k") == (hull is not None)
         dest.add(x, label)
+        if self.model == "smc_k":
+            source.remove_hull(label, hull)
+            dest.add_hull(label, hull)
         if self.additional_nodes.value & msprime.NODE_IS_MIG_EVENT > 0:
             self.store_node(k, flags=msprime.NODE_IS_MIG_EVENT)
             self.store_arg_edges(x)
@@ -1408,6 +1789,21 @@ class Simulator:
             y.prev = None
             alpha = y
             lhs_tail = x
+
+        if self.model == "smc_k":
+            # modify original hull
+            pop = alpha.population
+            lhs_hull = lhs_tail.get_hull()
+            rhs_right = lhs_hull.right
+            lhs_hull.right = min(lhs_tail.right + self.hull_offset, self.L)
+            self.P[pop].reset_hull_right(label, lhs_hull, rhs_right, lhs_hull.right)
+
+            # create hull for alpha
+            alpha_hull = self.alloc_hull(
+                alpha.left, rhs_right - self.hull_offset, alpha
+            )
+            self.P[alpha.population].add_hull(label, alpha_hull)
+
         self.set_segment_mass(alpha)
         self.P[alpha.population].add(alpha, label)
         if self.additional_nodes.value & msprime.NODE_IS_RE_EVENT > 0:
@@ -1454,6 +1850,10 @@ class Simulator:
             #     lbp rbp
             return None
         self.num_gc_events += 1
+        hull = y.get_hull()
+        assert (self.model == "smc_k") == (hull is not None)
+        pop = y.population
+        reset_right = -1
 
         # Process left break
         insert_alpha = True
@@ -1472,6 +1872,7 @@ class Simulator:
                 insert_alpha = False
             else:
                 x.next = None
+                reset_right = x.right
             y.prev = None
             alpha = y
             tail = x
@@ -1493,11 +1894,15 @@ class Simulator:
             y.right = left_breakpoint
             self.set_segment_mass(y)
             tail = y
+            reset_right = left_breakpoint
         self.set_segment_mass(alpha)
 
         # Find the segment z that the right breakpoint falls in
         z = alpha
+        hull_left = z.left
+        hull_right = -1
         while z is not None and right_breakpoint >= z.right:
+            hull_right = z.right
             z = z.next
 
         head = None
@@ -1521,6 +1926,7 @@ class Simulator:
                 z.right = right_breakpoint
                 z.next = None
                 self.set_segment_mass(z)
+                hull_right = right_breakpoint
             else:
                 #   tail             z
                 # ======
@@ -1538,6 +1944,13 @@ class Simulator:
                 tail.next = head
             head.prev = tail
             self.set_segment_mass(head)
+        else:
+            # rbp lies beyond segment chain, regular recombination logic applies
+            if insert_alpha and self.model == "smc_k":
+                assert reset_right >= 0
+                self.P[pop].reset_hull_right(
+                    label, hull, hull_right + self.hull_offset, reset_right
+                )
 
         #        y            z
         #  |  ========== ... ===== |
@@ -1550,6 +1963,12 @@ class Simulator:
         elif head is not None:
             new_individual_head = head
         if new_individual_head is not None:
+            if self.model == "smc_k":
+                assert hull_left < hull_right
+                hull = self.alloc_hull(hull_left, hull_right, new_individual_head)
+                self.P[new_individual_head.population].add_hull(
+                    new_individual_head.label, hull
+                )
             self.P[new_individual_head.population].add(
                 new_individual_head, new_individual_head.label
             )
@@ -1580,6 +1999,9 @@ class Simulator:
 
         self.num_gc_events += 1
         x = y.prev
+        pop = y.population
+        lhs_hull = y.get_hull()
+        assert (self.model == "smc_k") == (lhs_hull is not None)
         if y.left < bp:
             #  x          y
             # =====   =====|====
@@ -1597,6 +2019,7 @@ class Simulator:
             y.next = None
             y.right = bp
             self.set_segment_mass(y)
+            right = y.right
         else:
             #  x          y
             # ===== |  =========
@@ -1610,6 +2033,18 @@ class Simulator:
             x.next = None
             y.prev = None
             alpha = y
+            right = x.right
+
+        if self.model == "smc_k":
+            # lhs logic is identical to the lhs recombination event
+            rhs_right = lhs_hull.right
+            lhs_hull.right = right + self.hull_offset
+            self.P[pop].reset_hull_right(label, lhs_hull, rhs_right, lhs_hull.right)
+
+            # rhs
+            hull = self.alloc_hull(alpha.left, rhs_right, alpha)
+            self.P[pop].add_hull(label, hull)
+
         self.set_segment_mass(alpha)
         assert alpha.prev is None
         self.P[alpha.population].add(alpha, label)
@@ -1897,22 +2332,63 @@ class Simulator:
             else:
                 j = k
 
+    def get_random_pair(self, pop, label):
+        num_pairs = self.P[pop].get_num_pairs(label)
+        random_mass = random.randint(1, num_pairs)
+        mass_index = self.P[pop].coal_mass_index[label]
+
+        # get first element of pair
+        hull1_index = mass_index.find(random_mass)
+        hull1_cumulative_mass = mass_index.get_cumulative_sum(hull1_index)
+        remaining_mass = hull1_cumulative_mass - random_mass
+
+        # get second element of pair
+        avl = self.P[pop].hulls_left[label].avl
+        hull1 = self.hulls[hull1_index]
+        left = hull1.left
+        hull2 = hull1
+        while remaining_mass >= 0:
+            hull2 = avl.prev_key(hull2)
+            if hull2.left == left or hull2.right > left:
+                remaining_mass -= 1
+
+        return (hull1_index, hull2.index)
+
     def common_ancestor_event(self, population_index, label):
         """
         Implements a coancestry event.
         """
         pop = self.P[population_index]
-        # Choose two ancestors uniformly.
-        j = random.randint(0, pop.get_num_ancestors(label) - 1)
-        x = pop.remove(j, label)
-        j = random.randint(0, pop.get_num_ancestors(label) - 1)
-        y = pop.remove(j, label)
+
+        if self.model == "smc_k":
+            # Choose two ancestors uniformly according to hulls_left weights
+            random_pair = self.get_random_pair(population_index, label)
+            hull_i_ptr, hull_j_ptr = random_pair
+            hull_i = self.hulls[hull_i_ptr]
+            hull_j = self.hulls[hull_j_ptr]
+            x = hull_i.lineage_head
+            y = hull_j.lineage_head
+            pop.remove_individual(x, label)
+            pop.remove_hull(label, hull_i)
+            pop.remove_individual(y, label)
+            pop.remove_hull(label, hull_j)
+            self.free_hull(hull_i)
+            self.free_hull(hull_j)
+
+        else:
+            # Choose two ancestors uniformly.
+            j = random.randint(0, pop.get_num_ancestors(label) - 1)
+            x = pop.remove(j, label)
+            j = random.randint(0, pop.get_num_ancestors(label) - 1)
+            y = pop.remove(j, label)
+
         self.merge_two_ancestors(population_index, label, x, y)
 
     def merge_two_ancestors(self, population_index, label, x, y, u=-1):
         pop = self.P[population_index]
         self.num_ca_events += 1
         z = None
+        merged_head = None
         coalescence = False
         defrag_required = False
         while x is not None or y is not None:
@@ -1991,6 +2467,7 @@ class Simulator:
             if alpha is not None:
                 if z is None:
                     pop.add(alpha, label)
+                    merged_head = alpha
                 else:
                     if (coalescence and not self.coalescing_segments_only) or (
                         self.additional_nodes.value & msprime.NODE_IS_CA_EVENT > 0
@@ -2016,6 +2493,15 @@ class Simulator:
             self.defrag_segment_chain(z)
         if coalescence:
             self.defrag_breakpoints()
+
+        if merged_head is not None and self.model == "smc_k":
+            assert merged_head.prev is None
+            hull = self.alloc_hull(merged_head.left, merged_head.right, merged_head)
+            while merged_head is not None:
+                right = merged_head.right
+                merged_head = merged_head.next
+            hull.right = min(right + self.hull_offset, self.L)
+            pop.add_hull(label, hull)
 
     def print_state(self, verify=False):
         print("State @ time ", self.t)
@@ -2166,6 +2652,41 @@ class Simulator:
         assert math.isclose(total_mass, mass_index.get_total(), abs_tol=1e-6)
         assert math.isclose(total_mass, alt_total_mass, abs_tol=1e-6)
 
+    def verify_hulls(self):
+        for pop in self.P:
+            for label in range(self.num_labels):
+                # num ancestors and num hulls should be identical
+                num_lineages = len(pop._ancestors[label])
+                assert num_lineages == len(pop.hulls_left[label])
+                if num_lineages > 0:
+                    assert max(pop.hulls_left[label].rank.values()) == num_lineages - 1
+                    assert max(pop.hulls_right[label].rank.values()) == num_lineages - 1
+                # verify counts in avl tree
+                count = 0
+                for a, b in itertools.combinations(pop._ancestors[label], 2):
+                    # make_hulls:
+                    a_hull = make_hull(a, self.L, self.hull_offset)
+                    b_hull = make_hull(b, self.L, self.hull_offset)
+                    count += a_hull.intersects_with(b_hull)
+                avl_pairs = avl_count_pairs(pop.hulls_left[label])
+                assert count == avl_pairs
+                fenwick_pairs = pop.coal_mass_index[label].get_total()
+                assert count == fenwick_pairs
+
+                avl = pop.hulls_left[label].avl
+                io = 0
+                left = None
+                for key in avl.keys():
+                    if left is None:
+                        left = key.left
+                    else:
+                        if left == key.left:
+                            io += 1
+                        else:
+                            io = 0
+                    assert io == key.insertion_order
+                    left = key.left
+
     def verify(self):
         """
         Checks that the state of the simulator is consistent.
@@ -2195,6 +2716,28 @@ class Simulator:
                         self.gc_map,
                         self.get_gc_left_bound,
                     )
+        if self.model == "smc_k":
+            self.verify_hulls()
+
+
+def make_hull(a, L, offset=0):
+    hull = Hull(-1)
+    assert a.prev is None
+    b = a
+    tracked_hull = a.get_hull()
+    while b is not None:
+        right = b.right
+        b = b.next
+    hull.left = a.left
+    hull.right = min(right + offset, L)
+    assert tracked_hull.left == hull.left
+    assert tracked_hull.right == hull.right
+    assert tracked_hull.lineage_head == a
+    return hull
+
+
+def avl_count_pairs(ost):
+    return sum(value for value in ost.avl.values())
 
 
 def run_simulate(args):
