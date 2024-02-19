@@ -194,7 +194,7 @@ msp_strerror_internal(int err)
             ret = "Proportion values must have 0 <= x <= 1";
             break;
         case MSP_ERR_BAD_BETA_MODEL_ALPHA:
-            ret = "Bad alpha. Must have 1 < alpha < 2";
+            ret = "Bad alpha. Must have 1 < alpha <= 1.991";
             break;
         case MSP_ERR_BAD_TRUNCATION_POINT:
             ret = "Bad truncation_point. Must have 0 < truncation_point.";
@@ -682,7 +682,7 @@ fast_search_alloc(fast_search_t *self, const double *elements, size_t n_elements
      * of the array. The rest of the lookup element indexes point to (max_element *
      * query_multiplier) non-zero element values.
      */
-    self->num_lookups = 2 + (size_t)(max_element * self->query_multiplier);
+    self->num_lookups = 2 + (size_t) (max_element * self->query_multiplier);
 
     self->query_cutoff = ((double) self->num_lookups - 1) / self->query_multiplier;
 

@@ -1590,7 +1590,7 @@ test_beta_coalescent_bad_parameters(void)
     int ret;
     msp_t msp;
     unsigned int n = 10;
-    double alphas[] = { -1e6, 0, 0.001, 1.0, 2.0, 1e6 };
+    double alphas[] = { -1e6, 0, 0.001, 1.0, 1.995, 1e6 };
     double truncation_points[] = { -1e6, 0 };
     gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
