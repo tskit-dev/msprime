@@ -7416,7 +7416,7 @@ msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point
 {
     int ret = 0;
 
-    if (alpha <= 1.0 || alpha >= 2.0) {
+    if (alpha <= 1.0 || alpha > 1.991) {
         ret = MSP_ERR_BAD_BETA_MODEL_ALPHA;
         goto out;
     }

@@ -2381,6 +2381,13 @@ tree = ts.first()
 print(tree.tmrca(0,1))
 
 ```
+:::{important}
+Both the haploid and polyploid timescales collapse to zero as {math}`\alpha`
+approaches 2. For reasons of numerical stability, values above
+{math}`\alpha = 1.991` have been prohibited. The
+{ref}`Hudson coalescent<sec_ancestry_models_hudson>` provides a very good
+approximation for {math}`1.991 <= \alpha <= 2`.
+:::
 
 The Dirac-coalescent is simulated similarly in both the diploid case:
 
