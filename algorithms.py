@@ -358,7 +358,7 @@ class TrajectorySimulator:
         self._times = []
 
     def _genic_selection_stochastic_forwards(self, dt, freq, alpha):
-        ux = (alpha * freq * (1 - freq)) / np.tanh(alpha * freq)
+        ux = (alpha / 2.0 * freq * (1 - freq)) / np.tanh(alpha / 2.0 * freq)
         sign = 1 if random.random() < 0.5 else -1
         freq += (ux * dt) + sign * np.sqrt(freq * (1.0 - freq) * dt)
         return freq
@@ -1022,6 +1022,7 @@ class Simulator:
 
         # main loop time
         t_inc_orig = self.time_slice
+        t_start = self.t
         e_time = 0.0
         while self.ancestors_remain() and sweep_traj_step < len(times) - 1:
             self.verify()
@@ -1029,29 +1030,39 @@ class Simulator:
             while event_prob > random.random() and sweep_traj_step < len(times) - 1:
                 sweep_traj_step += 1
                 x = allele_freqs[sweep_traj_step]
-                e_time += times[sweep_traj_step]
+                e_time = times[sweep_traj_step] * 2 * self.P[0].start_size
                 # self.t = self.t + times[sweep_traj_step]
                 sweep_pop_sizes = [
                     self.P[0].get_num_ancestors(label=0),
                     self.P[0].get_num_ancestors(label=1),
                 ]
-                p_rec_b = self.get_total_recombination_rate(0) * t_inc_orig
-                p_rec_B = self.get_total_recombination_rate(1) * t_inc_orig
+                p_rec_b = (
+                    self.get_total_recombination_rate(0)
+                    * t_inc_orig
+                    * 2
+                    * self.P[0].start_size
+                )
+                p_rec_B = (
+                    self.get_total_recombination_rate(1)
+                    * t_inc_orig
+                    * 2
+                    * self.P[0].start_size
+                )
 
                 # JK NOTE: We should probably factor these pop size calculations
                 # into a method in Population like get_common_ancestor_waiting_time().
                 # That way we can handle exponentially growing populations as well?
                 p_coal_b = (
                     (sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1))
+                    * 0.5
                     / (1.0 - x)
                     * t_inc_orig
-                    / self.P[0].start_size
                 )
                 p_coal_B = (
                     (sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1))
+                    * 0.5
                     / x
                     * t_inc_orig
-                    / self.P[0].start_size
                 )
                 sweep_pop_tot_rate = p_rec_b + p_rec_B + p_coal_b + p_coal_B
 
@@ -1062,12 +1073,12 @@ class Simulator:
 
             if total_rate == 0:
                 break
-            if self.t + e_time > self.modifier_events[0][0]:
+            if t_start + e_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
                 self.t = t
                 func(*args)
             else:
-                self.t += e_time
+                self.t = t_start + e_time
                 # choose which event happened
                 if random.random() < sweep_pop_tot_rate / total_rate:
                     # even in sweeping pop, choose which kind
