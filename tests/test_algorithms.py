@@ -431,3 +431,53 @@ class TestAlgorithms:
             tables.dump(ts_path)
             ts = self.run_script(f"0 --from-ts {ts_path} -r 1 --model=fixed_pedigree")
         assert len(ts.dump_tables().edges) == 0
+
+    def test_stopping_condition_time(self):
+        end_time = 2.5
+        ts = self.run_script(f"10 --stop-condition=time --end-time={end_time}")
+        assert ts.max_root_time == end_time
+        assert ts.num_samples == 10
+        assert ts.num_trees > 1
+        assert not has_discrete_genome(ts)
+        assert ts.sequence_length == 100
+
+    def test_stopping_condition_all_mrcas(self):
+        ts = self.run_script("10 --stop-condition=all_local_mrcas")
+        roots = [tree.root for tree in ts.trees()]
+        assert len(set(roots)) > 1
+        roots_time = [tree.time(tree.root) for tree in ts.trees()]
+        assert len(set(roots_time)) == 1
+        assert ts.num_samples == 10
+        assert ts.num_trees > 1
+        assert not has_discrete_genome(ts)
+        assert ts.sequence_length == 100
+
+    def test_stopping_condition_grand_mrca(self):
+        ts = self.run_script("10 --stop-condition=grand_mrca")
+        assert ts.num_trees > 1
+        roots = [tree.root for tree in ts.trees()]
+        assert len(set(roots)) == 1
+
+    def test_stopping_condition_pedigree(self):
+        num_founders = 4
+        num_generations = 10
+        tables = simulate_pedigree(
+            num_founders=num_founders, num_generations=num_generations
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
+            tables.dump(ts_path)
+            ts = self.run_script(
+                f"0 --from-ts {ts_path} --model=fixed_pedigree -r 0.1 \
+                --stop-condition=pedigree"
+            )
+        assert ts.num_trees > 1
+        assert ts.max_root_time == num_generations - 1
+
+    def test_stopping_condition_dtwf(self):
+        end_time = 20
+        ts = self.run_script(
+            f"10 --model=dtwf --stop-condition=time --end-time={end_time}"
+        )
+        assert ts.num_trees > 1
+        assert ts.max_root_time == end_time
