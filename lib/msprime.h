@@ -35,6 +35,7 @@
 #include "fenwick.h"
 #include "object_heap.h"
 #include "rate_map.h"
+#include "forward.h"
 
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1
@@ -156,11 +157,29 @@ typedef struct {
 struct _msp_t;
 
 typedef struct {
+    /* TODO document these parameters.*/
     double start_frequency;
     double end_frequency;
     double s; //freq at the end of the sweep.
+    double s;
     double dt;
 } genic_selection_trajectory_t;
+
+
+typedef struct {
+	tsk_id_t pop_id;
+	double* p_events;
+    //0: p_coal_b;
+    //1: p_coal_B;
+    //2: p_rec_b;
+    //3: p_rec_B;
+    //4: p_mig_b;
+    //5: p_mig_B;
+
+	tsk_id_t mig_dest_pop_id_b;
+	tsk_id_t mig_dest_pop_id_B;
+} sweep_pop_event_t;
+
 
 typedef struct _sweep_t {
     double position;
@@ -168,7 +187,7 @@ typedef struct _sweep_t {
         /* Future trajectory simulation models would go here */
         genic_selection_trajectory_t genic_selection_trajectory;
     } trajectory_params;
-    int (*generate_trajectory)(struct _sweep_t *self, struct _msp_t *simulator,
+    int (*generate_trajectory)(struct _sweep_t *self, struct _msp_t *simulator, tsk_id_t pop_id,
         size_t *num_steps, double **time, double **allele_frequency);
     void (*print_state)(struct _sweep_t *self, FILE *out);
 } sweep_t;
@@ -289,7 +308,7 @@ typedef struct {
 /* Arbitrary limit, saves us having to put in complex malloc/free
  * logic in the demographic_events. Can easily be changed if
  * needs be. */
-#define MSP_MAX_EVENT_POPULATIONS 100
+#define MSP_MAX_EVENT_POPULATIONS 10000
 
 typedef struct {
     population_id_t derived[MSP_MAX_EVENT_POPULATIONS];
@@ -489,6 +508,7 @@ int msp_is_completed(msp_t *self);
 simulation_model_t *msp_get_model(msp_t *self);
 const char *msp_get_model_name(msp_t *self);
 bool msp_get_store_migrations(msp_t *self);
+double msp_get_migration_prop(msp_t *self, tsk_id_t mig_source_pop, tsk_id_t mig_dest_pop);
 double msp_get_time(msp_t *self);
 size_t msp_get_num_samples(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
@@ -510,6 +530,12 @@ size_t msp_get_num_gene_conversion_events(msp_t *self);
 size_t msp_get_num_internal_gene_conversion_events(msp_t *self);
 size_t msp_get_num_noneffective_gene_conversion_events(msp_t *self);
 double msp_get_sum_internal_gc_tract_lengths(msp_t *self);
+
+double get_sweep_pop_events_total_rate(sweep_pop_event_t* e, size_t num_events);
+void print_sweep_pop_event_info(sweep_pop_event_t* e);
+double get_sweep_mig_rate(msp_t *self, size_t sweep_pop_size, double freq, double sweep_dt,
+ 		tsk_id_t mig_source_pop, tsk_id_t* mig_dest_pop);
+double get_sweep_coal_rate(size_t sweep_pop_size, double freq, double sweep_dt);
 
 int matrix_mutation_model_factory(mutation_model_t *self, int model);
 int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
@@ -535,4 +561,7 @@ void mutgen_print_state(mutgen_t *self, FILE *out);
 int msp_multi_merger_common_ancestor_event(
     msp_t *self, avl_tree_t *ancestors, avl_tree_t *Q, uint32_t k, uint32_t num_pots);
 
+int genic_selection_from_forwards(sweep_t *self, msp_t *simulator, 
+    size_t *ret_num_steps, double **ret_time, double **ret_allele_frequency,
+    unsigned int pastward_time, unsigned int N, unsigned int L, double m, int dim);
 #endif /*__MSPRIME_H__*/

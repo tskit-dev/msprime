@@ -7,6 +7,28 @@ SRC=msprime/_msprimemodule.c
 cmodule: ${SRC}
 	python3 setup.py build_ext --inplace
 
+test:
+	gcc \
+        -undefined dynamic_lookup \
+	-Wl,-rpath,${CONDA_ENV}/lib \
+        -Wno-unused-result \
+	-Wsign-compare -Wunreachable-code -Wall -Wstrict-prototypes \
+        -DNDEBUG -g -fwrapv -O3 -arch x86_64 \
+        -Ilib \
+        -Igit-submodules/tskit/c \
+        -Igit-submodules/tskit/c/tskit \
+        -Igit-submodules/tskit/c/subprojects/kastore \
+        -I${CONDA_ENV}/include \
+        -I${CONDA_ENV}/lib \
+        -L${CONDA_ENV}/include \
+        -L${CONDA_ENV}/lib \
+        -lgsl -lgslcblas \
+        lib/forward.c \
+        lib/tests/test_forward.c \
+        -o test_forward.out \
+        -std=c99
+		
+
 # allchecks turns on as many checks as make sense when building
 # Python-C extensions.
 allchecks: ${SRC}

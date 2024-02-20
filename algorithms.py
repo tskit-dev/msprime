@@ -151,11 +151,12 @@ class Population:
     Class representing a population in the simulation.
     """
 
-    def __init__(self, id_, num_labels=1):
+    def __init__(self, id_, num_labels=1, ploidy=2):
         self.id = id_
         self.start_time = 0
         self.start_size = 1.0
         self.growth_rate = 0
+        self.ploidy = ploidy
         # Keep a list of each label.
         # We'd like to use AVLTrees here for P but the API doesn't quite
         # do what we need. Lists are inefficient here and should not be
@@ -208,13 +209,13 @@ class Population:
         if k > 1:
             u = random.expovariate(k * (k - 1))
             if self.growth_rate == 0:
-                ret = self.start_size * u
+                ret = self.start_size * u * self.ploidy
             else:
                 dt = t - self.start_time
                 z = (
                     1
                     + self.growth_rate
-                    * self.start_size
+                    * self.start_size * self.ploidy
                     * math.exp(-self.growth_rate * dt)
                     * u
                 )
@@ -549,6 +550,8 @@ class Simulator:
         gene_conversion_rate=0.0,
         gene_conversion_length=1,
         discrete_genome=True,
+        ploidy=2,
+        trajectory_simulator=None,
     ):
         # Must be a square matrix.
         N = len(migration_matrix)
@@ -560,6 +563,8 @@ class Simulator:
             assert migration_matrix[j][j] == 0
         assert gene_conversion_length >= 1
 
+        self.trajectory_simulator = trajectory_simulator
+        self.ploidy = ploidy
         self.tables = tables
         self.model = model
         self.L = tables.sequence_length
@@ -596,6 +601,8 @@ class Simulator:
                 FenwickTree(self.max_segments) for j in range(num_labels)
             ]
         self.S = bintrees.AVLTree()
+
+        # self.P = [Population(id_, num_labels, self.ploidy) for id_ in range(N)]
         for pop in self.P:
             pop.set_start_size(population_sizes[pop.id])
             pop.set_growth_rate(population_growth_rates[pop.id], 0)
@@ -842,6 +849,8 @@ class Simulator:
             self.pedigree_simulate()
         elif self.model == "single_sweep":
             self.single_sweep_simulate()
+        elif self.model == "single_sweep_adjusted":
+            self.single_sweep_adjusted()
         else:
             print("Error: bad model specification -", self.model)
             raise ValueError
@@ -983,14 +992,109 @@ class Simulator:
                     assert self.P[mig_dest].get_num_ancestors() > 0
                     non_empty_pops.add(mig_dest)
             logger.info(
-                "%s time=%f n=%d",
+                "%s time=%f remain=%d nodes=%d edges=%d",
                 event,
                 self.t,
                 sum(pop.get_num_ancestors() for pop in self.P),
+                len(self.tables.nodes),
+                len(self.tables.edges)
             )
 
             X = {pop.id for pop in self.P if pop.get_num_ancestors() > 0}
             assert non_empty_pops == X
+
+    def single_sweep_adjusted(self):
+        ##We use msprime's default functionality to get set up
+        allele_freqs, times = self.sweep_trajectory
+        sweep_traj_step = 0
+        x = allele_freqs[sweep_traj_step]
+
+        assert self.num_populations == 1
+
+        indices = []
+        for idx, u in enumerate(self.P[0].iter_label(0)):
+            if random.random() < x:
+                self.set_labels(u, 1)
+                indices.append(idx)
+            else:
+                assert u.label == 0
+        popped = 0
+        for i in indices:
+            tmp = self.P[0].remove(i - popped, 0)
+            popped += 1
+            self.P[0].add(tmp, 1)
+
+        e_time = 0.0
+        while self.ancestors_remain() and sweep_traj_step < len(times) - 1:
+            self.verify()
+            event_prob = 1.0
+            while event_prob > random.random() and sweep_traj_step < len(times) - 1:
+                sweep_traj_step += 1
+                x = allele_freqs[sweep_traj_step]
+                e_time += times[sweep_traj_step]
+ 
+                sweep_pop_sizes = [
+                    self.P[0].get_num_ancestors(label=0),
+                    self.P[0].get_num_ancestors(label=1),
+                ]
+                p_rec_b = self.get_total_recombination_rate(0)
+                p_rec_B = self.get_total_recombination_rate(1)
+
+                p_coal_b = 0
+                p_coal_B = 0
+
+                if sweep_pop_sizes[0] >= 2:
+                    p_coal_b = (
+                        (sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1))
+                        / (1.0 - x)
+                        / self.P[0].start_size
+                    )
+                if sweep_pop_sizes[1] >= 2:
+                    p_coal_B = (
+                        (sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1))
+                        / x
+                        / self.P[0].start_size
+                    )
+                #It's 100% the time paramter
+                #I tried changing the time calculations by:
+                #Moving where e_time is added to self.t, and not adding it at al
+                #Scaling by time slice and using time slice as the increment instead of 1.
+                self.t += e_time
+                while True:
+                    rate_sum = p_coal_B + p_rec_B + p_coal_b + p_rec_b
+                    t_next_event = np.random.exponential(rate_sum)
+                    
+                    if t_next_event > 1:
+                        self.t = math.floor(1 + self.t)
+                        break
+                    else:
+                        self.t += t_next_event
+                        r = random.random()
+                        e_sum = p_coal_B
+                        if r < e_sum / rate_sum:
+                            # coalescent in B
+                            self.common_ancestor_event(0, 1)
+                        else:
+                            e_sum += p_coal_b
+                            if r < e_sum / rate_sum:
+                                # coalescent in b
+                                self.common_ancestor_event(0, 0)
+                            else:
+                                e_sum += p_rec_B
+                                if r < e_sum / rate_sum:
+                                    # recomb in B
+                                    self.hudson_recombination_event_sweep_phase(
+                                        1, self.sweep_site, x
+                                    )
+                                else:
+                                    # recomb in b
+                                    self.hudson_recombination_event_sweep_phase(
+                                        0, self.sweep_site, 1.0 - x
+                                    )
+        for idx, u in enumerate(self.P[0].iter_label(1)):
+            tmp = self.P[0].remove(idx, u.label)
+            self.set_labels(u, 0)
+            self.P[0].add(tmp)    
 
     def single_sweep_simulate(self):
         """
@@ -1002,12 +1106,18 @@ class Simulator:
         sweep_traj_step = 0
         x = allele_freqs[sweep_traj_step]
 
+        ###These next lines are exclusively for testing a three step sweep and should be deleted.
+        
+        #allele_freqs = [float(1/200000), 0.500025, 1]
+        #times = [1/20000, 2/20000, 3/20000]
+
         assert self.num_populations == 1
 
         # go through segments and assign labels
         # a bit ugly with the two loops because
         # of dealing with the pops
         indices = []
+        #self.P[0].print_state()
         for idx, u in enumerate(self.P[0].iter_label(0)):
             if random.random() < x:
                 self.set_labels(u, 1)
@@ -1030,38 +1140,57 @@ class Simulator:
                 sweep_traj_step += 1
                 x = allele_freqs[sweep_traj_step]
                 e_time += times[sweep_traj_step]
-                # self.t = self.t + times[sweep_traj_step]
+
+                # Print the current elapsed time
+                # print(f"Elapsed Step: {sweep_traj_step} Maximum steps: {len(times) - 1}")
+
                 sweep_pop_sizes = [
                     self.P[0].get_num_ancestors(label=0),
                     self.P[0].get_num_ancestors(label=1),
                 ]
-                p_rec_b = self.get_total_recombination_rate(0) * t_inc_orig
-                p_rec_B = self.get_total_recombination_rate(1) * t_inc_orig
+
+                # Print the current population sizes for each label
+                # print(f"Sweep Population Sizes: {sweep_pop_sizes}")
+
+                # p_rec_b = self.get_total_recombination_rate(0) * t_inc_orig * self.P[0].start_size * self.ploidy
+                # p_rec_B = self.get_total_recombination_rate(1) * t_inc_orig * self.P[0].start_size * self.ploidy
+                p_rec_b = self.get_total_recombination_rate(0) * t_inc_orig  * self.ploidy
+                p_rec_B = self.get_total_recombination_rate(1) * t_inc_orig  * self.ploidy
 
                 # JK NOTE: We should probably factor these pop size calculations
                 # into a method in Population like get_common_ancestor_waiting_time().
                 # That way we can handle exponentially growing populations as well?
-                p_coal_b = (
-                    (sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1))
-                    / (1.0 - x)
-                    * t_inc_orig
-                    / self.P[0].start_size
-                )
-                p_coal_B = (
-                    (sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1))
-                    / x
-                    * t_inc_orig
-                    / self.P[0].start_size
-                )
+
+                p_coal_b = 0
+                p_coal_B = 0
+                if sweep_pop_sizes[0] >= 2:
+                    p_coal_b = (
+                        (sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1))
+                        / (1.0 - x)
+                        * t_inc_orig
+                        / self.P[0].start_size * (1/self.ploidy)
+                    )
+                if sweep_pop_sizes[1] >= 2:
+                    p_coal_B = (
+                        (sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1))
+                        / x
+                        * t_inc_orig
+                        / self.P[0].start_size * (1/self.ploidy)
+                    )
                 sweep_pop_tot_rate = p_rec_b + p_rec_B + p_coal_b + p_coal_B
 
                 total_rate = sweep_pop_tot_rate
                 if total_rate == 0:
                     break
+                
                 event_prob *= 1.0 - total_rate
 
             if total_rate == 0:
                 break
+ 
+            # pop_size = self.P[0].get_size(self.t)
+            # e_time = times[sweep_traj_step-1] * pop_size * self.ploidy 
+            
             if self.t + e_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
                 self.t = t
@@ -1098,6 +1227,14 @@ class Simulator:
             tmp = self.P[0].remove(idx, u.label)
             self.set_labels(u, 0)
             self.P[0].add(tmp)
+        
+        # logger.info(
+        #     "Sweep time=%f remain=%d nodes=%d edges=%d",
+        #     self.t,
+        #     sum(pop.get_num_ancestors() for pop in self.P),
+        #     len(self.tables.nodes),
+        #     len(self.tables.edges)
+        # )
 
     def pedigree_simulate(self):
         """
@@ -2234,11 +2371,27 @@ def run_simulate(args):
             raise ValueError("Multiple populations not currently supported")
         # Compute the trajectory
         if args.trajectory is None:
-            raise ValueError("Must provide trajectory (init_freq, end_freq, alpha)")
-        init_freq, end_freq, alpha = args.trajectory
-        traj_sim = TrajectorySimulator(init_freq, end_freq, alpha, args.time_slice)
-        sweep_trajectory = traj_sim.run()
-        num_labels = 2
+            if args.forwards is None:
+                raise ValueError("Must provide trajectory (init_freq, end_freq, alpha)")
+            else:
+                L, N, s, mig, tfinal, seed = args.forwards
+                L = int(L)
+                N = int(N)
+                tfinal = int(tfinal)
+                seed = int(seed)
+                forwards = Forward(L, N, s, mig, tfinal, seed)
+                freqs = forwards.frequencies
+                trajec = DeterministicTrajectorySimulator(N, L, freqs)
+                time, allele_freqs = trajec.simulate()
+                num_labels = 2
+                args.model = "single_sweep_adjusted"
+
+                sweep_trajectory = [allele_freqs, time]
+        else:
+            init_freq, end_freq, alpha = args.trajectory
+            traj_sim = TrajectorySimulator(init_freq, end_freq, alpha, args.time_slice)
+            sweep_trajectory = traj_sim.run()
+            num_labels = 2
     random.seed(args.random_seed)
     np.random.seed(args.random_seed + 1)
 
@@ -2275,6 +2428,8 @@ def run_simulate(args):
         gene_conversion_rate=gc_rate,
         gene_conversion_length=mean_tract_length,
         discrete_genome=args.discrete,
+        ploidy=args.ploidy,
+        trajectory_simulator=traj_sim,
     )
     ts = s.simulate(args.end_time)
     ts.dump(args.output_file)
@@ -2343,6 +2498,13 @@ def add_simulator_arguments(parser):
         help="Parameters for the allele frequency trajectory simulation",
     )
     parser.add_argument(
+        "--forwards",
+        type=float,
+        nargs=6,
+        default=None,
+        help="Flag that determines whether a deterministic sweep trajectory should be used",
+    )
+    parser.add_argument(
         "--all-segments",
         action="store_true",
         default=False,
@@ -2373,7 +2535,9 @@ def add_simulator_arguments(parser):
     parser.add_argument(
         "--end-time", type=float, default=np.inf, help="The end for simulations."
     )
-
+    parser.add_argument(
+        "--ploidy", type=int, default=2
+    )
 
 def main(args=None):
     parser = argparse.ArgumentParser()
