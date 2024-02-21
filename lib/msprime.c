@@ -5024,7 +5024,6 @@ msp_run_sweep(msp_t *self)
     int ret = 0;
     simulation_model_t *model = &self->model;
     size_t curr_step = 1;
-    size_t num_steps;
     double **allele_frequency;
     double *time;
     double sweep_locus = model->params.sweep.position;
@@ -5040,7 +5039,8 @@ msp_run_sweep(msp_t *self)
     double p_rec_b, p_rec_B;
     double t_start, t_next_event;
     const char *filename = "/home/agushin/sweep_trajectories.txt";
-    int demes;
+    double demes_dbl, num_steps_dbl;
+    size_t demes, num_steps;
     double t_unscaled;
 
     if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
@@ -5059,30 +5059,28 @@ msp_run_sweep(msp_t *self)
 
     FILE *file = fopen(filename, "r");
 
-    fread(&demes, 4, 1, file);
-    fseek(file, 1, SEEK_CUR);
-    fread(&num_steps, 4, 1, file);
-    fseek(file, 1, SEEK_CUR);
+    fread(&demes_dbl, sizeof(double), 1, file);
+    fread(&num_steps_dbl, sizeof(double), 1, file);
 
-    allele_frequency = (double **) malloc(sizeof(double *) * (long unsigned int) demes);
-    time = (double *) malloc(sizeof(unsigned int) * num_steps);
-    for (int i = 0; i < demes; i++) {
+    demes = (size_t) demes_dbl;
+    num_steps = (size_t) num_steps_dbl;
+
+    allele_frequency = (double **) malloc(sizeof(double *) * (long unsigned int) num_steps);
+    time = (double *) malloc(sizeof(double) * num_steps);
+    for (size_t i = 0; i < num_steps; i++) {
         allele_frequency[i] = (double *) malloc(sizeof(double) * (long unsigned int) demes);
     }
 
-    int arrayPos = 0;
-    for (int row = 0; (size_t) row < num_steps; row++) {
-        if (arrayPos == 0) {
-            fread(time + row, sizeof(double), 1, file);
-            fseek(file, 1, SEEK_CUR);
+    // Read time and allele frequencies
+    for (size_t step = 0; step < num_steps; step++) {
+        fread(&time[step], sizeof(double), 1, file); // Read time
+        for (size_t i = 0; i < demes; i++) {
+            fread(&allele_frequency[step][i], sizeof(double), 1, file); // Read frequency for each deme
         }
-        else {
-            fread(allele_frequency[arrayPos - 1] + row, sizeof(double), 1, file);
-            fseek(file, 1, SEEK_CUR);
-        }
-        arrayPos++;
-        arrayPos %= demes + 1;
     }
+
+    // Close the file
+    fclose(file);
 
     t_start = self->time;
     sweep_dt = time[1] - time[0];
@@ -5226,7 +5224,7 @@ msp_run_sweep(msp_t *self)
     ret = MSP_EXIT_MODEL_COMPLETE;
 out:
     free(time);
-    for (int i = 0; i < demes; i++) {
+    for (size_t i = 0; i < demes; i++) {
         free(allele_frequency[i]);
     }
     free(allele_frequency);
