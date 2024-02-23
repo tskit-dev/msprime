@@ -40,6 +40,11 @@ int main() {
         }
     }
 
+    // New Part: Read the last time element
+    double last_time_element;
+    fread(&last_time_element, sizeof(double), 1, file);
+
+
     // Close the file
     fclose(file);
 
@@ -51,6 +56,8 @@ int main() {
             printf("Allele Frequency[%zu][%zu]: %f\n", step, i, allele_frequency[step][i]);
         }
     }
+    printf("Last Time Element: %f\n", last_time_element);
+    
 
     // Free allocated memory
     for (size_t step = 0; step < num_steps; step++) {
