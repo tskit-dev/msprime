@@ -5053,7 +5053,7 @@ out:
 /* Finalise the sweep by moving all lineages back to label 0.
  */
 static int
-msp_sweep_finalise_new(msp_t *self)
+msp_sweep_finalise(msp_t *self)
 {
     int ret = 0;
     uint32_t j;

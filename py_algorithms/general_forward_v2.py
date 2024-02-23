@@ -233,7 +233,7 @@ class DeterministicTrajectorySimulator:
         if len(frequencies) % L != 0:
             raise ValueError("Length of frequencies must be a multiple of the number of demes (L)")
         self.end_time = len(frequencies) // L
-        self.timestep = 1 * self.N  #in generations
+        self.timestep = 1  #in generations
         # Initialize the attributes to store simulation results
         self.simulated_time = []
         self.simulated_allele_freqs = []
