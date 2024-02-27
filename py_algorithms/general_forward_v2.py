@@ -277,7 +277,7 @@ class DeterministicTrajectorySimulator:
            
             # We use -1 to get the last item from the list
             last_time_element = self.simulated_time[-1]
-            file.write(struct.pack('d', float(last_time_element)))
+            file.write(struct.pack('d', float(last_time_element+1)))
 
 
 
