@@ -5037,13 +5037,11 @@ msp_run_sweep(msp_t *self)
     double tmp_rand, e_sum, pop_size;
     double p_coal_b, p_coal_B, sweep_pop_tot_rate;
     double p_rec_b, p_rec_B;
-    double t_start, t_next_event, t_last, next;
+    double t_start, t_next_event, t_last, next, t_current;
     const char *filename = "/home/agushin/sweep_trajectories.bin";
     double demes_dbl, num_steps_dbl;
     size_t demes, num_steps;
     double t_unscaled;
-
-    double internal_popsize = 20000; //remove later
 
     if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
         /* Could be, we just haven't implemented it */
@@ -5073,12 +5071,14 @@ msp_run_sweep(msp_t *self)
         allele_frequency[i] = (double *) malloc(sizeof(double) * (long unsigned int) demes);
     }
 
+    pop_size = get_population_size(&self->populations[0], self->time);
+
     // Read time and allele frequencies
     for (size_t step = 0; step < num_steps; step++) {
         fread(&time[step], sizeof(double), 1, file); // Read time
         for (size_t i = 0; i < demes; i++) {
             fread(&allele_frequency[step][i], sizeof(double), 1, file); // Read frequency for each deme
-            allele_frequency[step][i] /= internal_popsize;
+            allele_frequency[step][i] /= pop_size;
         }
     }
 
@@ -5088,8 +5088,6 @@ msp_run_sweep(msp_t *self)
     fclose(file);
 
     t_start = self->time;
-    sweep_dt = time[1] - time[0];
-    tsk_bug_assert(sweep_dt > 0);
 
     ret = msp_sweep_initialise(self, allele_frequency[0][0]);
     if (ret != 0) {
@@ -5117,10 +5115,9 @@ msp_run_sweep(msp_t *self)
         
         /* convert time scale */
         pop_size = get_population_size(&self->populations[0], self->time);
-        t_unscaled = time[curr_step] * self->ploidy * pop_size;
+        t_unscaled = time[curr_step];
         tsk_bug_assert(t_unscaled >= 0);
         self->time = t_start + t_unscaled;
-        t_next_event = time[curr_step];
         /* printf("event time: %g\n", self->time); */
         while (true) {
             if (msp_get_num_ancestors(self) <= 1) {
@@ -5131,7 +5128,7 @@ msp_run_sweep(msp_t *self)
 
             //Case: Allele freq is 1, coalease to one mutant lineage.
             //Hard coded to interact with deme 0 until we generalize.
-            if (allele_frequency[curr_step][0] == 1 / internal_popsize) {
+            if (allele_frequency[curr_step][0] == 1 / pop_size) {
                 while (sweep_pop_sizes[1] > 1) {
                     ret = self->common_ancestor_event(self, 1, 1);
                     sweep_pop_sizes[1] = avl_count(&self->populations[0].ancestors[1]);
@@ -5141,7 +5138,7 @@ msp_run_sweep(msp_t *self)
 
             //Case: Allele freq is N-1, coalease to one wild-type lineage.
             //Hard coded to interact with deme 0 until we generalize.
-            if (allele_frequency[curr_step][0] == (pop_size - 1) / internal_popsize) {
+            if (allele_frequency[curr_step][0] == (pop_size - 1) / pop_size) {
                 while (sweep_pop_sizes[0] > 1) {
                     ret = self->common_ancestor_event(self, 0, 0);
                     sweep_pop_sizes[0] = avl_count(&self->populations[0].ancestors[0]);
@@ -5165,19 +5162,20 @@ msp_run_sweep(msp_t *self)
 
             tmp_rand = gsl_rng_uniform(self->rng);
 
-            t_next_event += gsl_ran_exponential(self->rng, 1 / sweep_pop_tot_rate);
+            t_current = time[curr_step];
+            t_next_event = gsl_ran_exponential(self->rng, 1 / sweep_pop_tot_rate);
             e_sum = p_coal_b;
             if (curr_step < num_steps - 1) {
                 next = time[curr_step + 1];
+                sweep_dt = time[curr_step + 1] - time[curr_step];
             }
             else {
                 next = t_last;
+                sweep_dt = t_last - time[curr_step];
             }
-            if (t_next_event >= next) {
-                self->time += (int) 1 / (self->ploidy * pop_size);
+            if (t_current + t_next_event >= next) {
                 break;
             } else {
-                self->time += (1 / (self->ploidy * pop_size)) * t_next_event;
                 if (tmp_rand < e_sum / sweep_pop_tot_rate) {
                     /* coalescent in b background */
                     //SPECIAL CASE: We get here and there's no WT lineage
