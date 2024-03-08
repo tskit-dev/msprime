@@ -5027,7 +5027,6 @@ msp_run_sweep(msp_t *self)
     double **allele_frequency;
     double *time;
     double sweep_locus = model->params.sweep.position;
-    double sweep_dt;
     size_t j = 0;
     double recomb_mass;
     unsigned long events = 0;
@@ -5149,15 +5148,17 @@ msp_run_sweep(msp_t *self)
             p_coal_B = 0;
             if (avl_count(&self->populations[0].ancestors[1]) > 1) {
                 p_coal_B = ((sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1)) * 0.5)
-                           / allele_frequency[curr_step][0] * sweep_dt;
+                           / allele_frequency[curr_step][0];
+                p_coal_B /= (pop_size * self->ploidy);
             }
             p_coal_b = 0;
             if (avl_count(&self->populations[0].ancestors[0]) > 1) {
                 p_coal_b = ((sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1)) * 0.5)
-                           / (1.0 - allele_frequency[curr_step][0]) * sweep_dt;
+                           / (1.0 - allele_frequency[curr_step][0]);
+                p_coal_b /= (pop_size * self->ploidy);
             }
-            p_rec_b = rec_rates[0] * pop_size * self->ploidy * sweep_dt;
-            p_rec_B = rec_rates[1] * pop_size * self->ploidy * sweep_dt;
+            p_rec_b = rec_rates[0];
+            p_rec_B = rec_rates[1];
             sweep_pop_tot_rate = p_coal_b + p_coal_B + p_rec_b + p_rec_B;
 
             tmp_rand = gsl_rng_uniform(self->rng);
@@ -5167,11 +5168,9 @@ msp_run_sweep(msp_t *self)
             e_sum = p_coal_b;
             if (curr_step < num_steps - 1) {
                 next = time[curr_step + 1];
-                sweep_dt = time[curr_step + 1] - time[curr_step];
             }
             else {
                 next = t_last;
-                sweep_dt = t_last - time[curr_step];
             }
             if (t_current + t_next_event >= next) {
                 break;
