@@ -2974,3 +2974,16 @@ class TestSMCK:
         )
         for tree in ts.trees():
             assert tree.num_roots == 1
+
+    def test_gc(self):
+        with pytest.raises(
+            ValueError,
+            match="Gene conversion has not been implemented yet for smc_k models.",
+        ):
+            _ = msprime.sim_ancestry(
+                samples=10,
+                model=msprime.SmcKApproxCoalescent(),
+                sequence_length=100,
+                gene_conversion_rate=0.5,
+                gene_conversion_tract_length=5,
+            )
