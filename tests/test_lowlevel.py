@@ -1326,18 +1326,21 @@ class TestSimulator(LowLevelTestCase):
             assert sim.model == model
 
     def test_smck_simulation_model(self):
+        # set model to hudson for initialisation
         for bad_type in [None, str, "sdf"]:
             model = get_simulation_model("smc_k", hull_offset=bad_type)
+            sim = make_sim(model=get_simulation_model())
             with pytest.raises(TypeError):
-                make_sim(model=model)
+                sim.model = model
         for bad_hull_offset in [-1, -1e-6]:
+            sim = make_sim(model=get_simulation_model())
+            model = get_simulation_model("smc_k", hull_offset=bad_hull_offset)
             with pytest.raises(ValueError):
-                make_sim(
-                    model=get_simulation_model("smc_k", hull_offset=bad_hull_offset),
-                )
+                sim.model = model
         for hull_offset in [0.0, 1.1e-4, 2.5]:
             model = get_simulation_model("smc_k", hull_offset=hull_offset)
-            sim = make_sim(model=model)
+            sim = make_sim(model=get_simulation_model())
+            sim.model = model
             assert sim.model == model
 
     def test_dirac_simulation_model(self):
