@@ -2883,24 +2883,14 @@ class TestTimeUnits:
 
 
 class TestSMCK:
-    def test_single_locus(self):
+    @pytest.mark.parametrize("seed", [4512, 873561])
+    def test_discrete(self, seed):
         tss = msprime.sim_ancestry(
             samples=10,
             model=msprime.SmcKApproxCoalescent(),
             recombination_rate=0.005,
             sequence_length=1000,
-            random_seed=4512,
-            num_replicates=10,
-        )
-        for ts in tss:
-            assert max(tree.num_roots for tree in ts.trees()) == 1
-
-        tss = msprime.simulate(
-            sample_size=10,
-            model=msprime.SmcKApproxCoalescent(),
-            recombination_rate=0.005,
-            length=1000,
-            random_seed=873561,
+            random_seed=seed,
             num_replicates=10,
         )
         for ts in tss:
@@ -2913,6 +2903,7 @@ class TestSMCK:
             recombination_rate=0.005,
             sequence_length=1000,
             num_replicates=10,
+            random_seed=7598782,
             discrete_genome=False,
         )
         for ts in tss:
@@ -2926,6 +2917,7 @@ class TestSMCK:
         tables.nodes.add_row(flags=1, time=1.0, population=0)
         tables.nodes.add_row(flags=1, time=10.0, population=0)
         tables.nodes.add_row(flags=1, time=30.0, population=0)
+        tables.populations.metadata_schema = tskit.MetadataSchema.permissive_json()
         ts = msprime.sim_ancestry(
             initial_state=tables,
             population_size=10_000,
@@ -2951,11 +2943,12 @@ class TestSMCK:
         for tree in ts.trees():
             assert tree.num_roots == 1
 
-    def test_smc_k_plus(self):
+    @pytest.mark.parametrize("hull_offset", [2, 0.5, 1e-6, 2.133])
+    def test_smc_k_plus(self, hull_offset):
         tss = msprime.sim_ancestry(
             samples=10,
             population_size=10_000,
-            model=msprime.SmcKApproxCoalescent(hull_offset=2.0),
+            model=msprime.SmcKApproxCoalescent(hull_offset=hull_offset),
             random_seed=10,
             recombination_rate=1e-5,
             sequence_length=100,

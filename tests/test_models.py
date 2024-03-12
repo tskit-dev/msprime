@@ -474,7 +474,6 @@ class TestParametricModels:
             model = msprime.SmcKApproxCoalescent(hull_offset=hull_offset)
             assert model.hull_offset == hull_offset
             d = model._as_lowlevel()
-            print(d)
             assert d == {"name": "smc_k", "hull_offset": hull_offset, "duration": None}
 
 

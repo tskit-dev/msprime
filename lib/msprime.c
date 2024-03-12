@@ -4145,9 +4145,14 @@ msp_insert_root_segments(msp_t *self, const segment_t *head, segment_t **new_hea
             if (ret != 0) {
                 goto out;
             }
-            if (self->model.type == MSP_MODEL_SMC_K && self->state != MSP_STATE_NEW) {
-                /* correct hull->right is set at the end */
-                hull = msp_alloc_hull(self, head->left, copy->right, copy);
+            if (self->model.type == MSP_MODEL_SMC_K) {
+                if (self->state == MSP_STATE_NEW) {
+                    ret = MSP_ERR_BAD_STATE;
+                    goto out;
+                } else {
+                    /* correct hull->right is set at the end */
+                    hull = msp_alloc_hull(self, head->left, copy->right, copy);
+                }
             }
         } else {
             prev->next = copy;
@@ -4156,7 +4161,8 @@ msp_insert_root_segments(msp_t *self, const segment_t *head, segment_t **new_hea
         prev = copy;
     }
     /* insert hull into algorithm state */
-    if (self->model.type == MSP_MODEL_SMC_K && self->state != MSP_STATE_NEW) {
+    if (hull != NULL) {
+        tsk_bug_assert(self->model.type == MSP_MODEL_SMC_K);
         hull->right
             = GSL_MIN(prev->right + self->model.params.smc_k_coalescent.hull_offset,
                 self->sequence_length);

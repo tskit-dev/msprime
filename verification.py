@@ -4531,14 +4531,21 @@ class SmcKTest(Test):
         n = 100
         rho = r * 4 * Ne * (num_loci - 1)
         num_replicates = 1000
-        smc_k_mean = np.zeros_like(rho)
+        smck_zero_mean = np.zeros_like(rho)
+        smck_one_mean = np.zeros_like(rho)
+        smck_inf_mean = np.zeros_like(rho)
         msp_mean = np.zeros_like(rho)
         msp_smc_mean = np.zeros_like(rho)
+        msp_smc_prime_mean = np.zeros_like(rho)
+
         for j in range(len(num_loci)):
             for dest, model in [
-                (smc_k_mean, "smc_k"),
+                (smck_zero_mean, msprime.SmcKApproxCoalescent(hull_offset=0.0)),
+                (smck_one_mean, msprime.SmcKApproxCoalescent(hull_offset=1.0)),
+                (smck_inf_mean, msprime.SmcKApproxCoalescent(hull_offset=num_loci[j])),
                 (msp_mean, "hudson"),
                 (msp_smc_mean, "smc"),
+                (msp_smc_prime_mean, "smc_prime"),
             ]:
                 replicates = msprime.simulate(
                     sample_size=n,
@@ -4555,9 +4562,14 @@ class SmcKTest(Test):
                 # Normalise back to coalescent time.
                 T /= 4 * Ne
                 dest[j] = np.mean(T)
-        pyplot.plot(rho, smc_k_mean, "-", color="red", label="smc_k")
-        pyplot.plot(rho, msp_smc_mean, "--", color="red", label="msprime_smc")
-        pyplot.plot(rho, msp_mean, "--", color="blue", label="msprime")
+        pyplot.plot(rho, smck_zero_mean, "-", color="red", label="smc(0)")
+        pyplot.plot(rho, smck_one_mean, "-", color="blue", label="smc(1)")
+        pyplot.plot(rho, smck_inf_mean, "-", color="black", label="smc(inf)")
+        pyplot.plot(rho, msp_smc_mean, "--", color="red", label="smc_rejection")
+        pyplot.plot(
+            rho, msp_smc_prime_mean, "--", color="blue", label="smc_prime_rejection"
+        )
+        pyplot.plot(rho, msp_mean, "--", color="black", label="msprime")
         pyplot.xlabel("rho")
         pyplot.ylabel("Mean oldest coalescence time")
         pyplot.legend(loc="lower right")
@@ -4574,7 +4586,7 @@ class SmcKTest(Test):
         Ne = 10**4
         n = 100
         rho = r * 4 * Ne * (L - 1)
-        num_replicates = 10000
+        num_replicates = 10_000
         num_trees = np.zeros(num_replicates)
         mean_exact = np.zeros_like(rho)
         var_exact = np.zeros_like(rho)
@@ -4582,23 +4594,32 @@ class SmcKTest(Test):
         var_smc = np.zeros_like(rho)
         mean_smc_prime = np.zeros_like(rho)
         var_smc_prime = np.zeros_like(rho)
-        mean_smc_k = np.zeros_like(rho)
-        var_smc_k = np.zeros_like(rho)
+        mean_smc_k_zero = np.zeros_like(rho)
+        var_smc_k_zero = np.zeros_like(rho)
+        mean_smc_k_one = np.zeros_like(rho)
+        var_smc_k_one = np.zeros_like(rho)
+        mean_smc_k_inf = np.zeros_like(rho)
+        var_smc_k_inf = np.zeros_like(rho)
 
         for j in range(len(L)):
-            smc_k_sim = msprime.ancestry._parse_simulate(
-                sample_size=n,
-                recombination_rate=r,
-                Ne=Ne,
-                length=L[j],
-                model="smc_k",
-            )
-            for k in range(num_replicates):
-                smc_k_sim.run()
-                num_trees[k] = smc_k_sim.num_breakpoints
-                smc_k_sim.reset()
-            mean_smc_k[j] = np.mean(num_trees)
-            var_smc_k[j] = np.var(num_trees)
+            for mean_array, var_array, hull_offset in zip(
+                [mean_smc_k_zero, mean_smc_k_one, mean_smc_k_inf],
+                [var_smc_k_zero, var_smc_k_one, var_smc_k_inf],
+                [0.0, 1.0, L[j]],
+            ):
+                smc_k_sim = msprime.ancestry._parse_simulate(
+                    sample_size=n,
+                    recombination_rate=r,
+                    Ne=Ne,
+                    length=L[j],
+                    model=msprime.SmcKApproxCoalescent(hull_offset=hull_offset),
+                )
+                for k in range(num_replicates):
+                    smc_k_sim.run()
+                    num_trees[k] = smc_k_sim.num_breakpoints
+                    smc_k_sim.reset()
+                mean_array[j] = np.mean(num_trees)
+                var_array[j] = np.var(num_trees)
 
             exact_sim = msprime.ancestry._parse_simulate(
                 sample_size=n, recombination_rate=r, Ne=Ne, length=L[j]
@@ -4637,7 +4658,9 @@ class SmcKTest(Test):
         pyplot.plot(rho, mean_exact, "o", label="msprime (hudson)")
         pyplot.plot(rho, mean_smc, "^", label="msprime (smc)")
         pyplot.plot(rho, mean_smc_prime, "*", label="msprime (smc_prime)")
-        pyplot.plot(rho, mean_smc_k, "x", label="smc_k")
+        pyplot.plot(rho, mean_smc_k_zero, "^", label="smc_k(0)")
+        pyplot.plot(rho, mean_smc_k_one, "*", label="smc_k(1)")
+        pyplot.plot(rho, mean_smc_k_inf, "o", label="smc_k(inf)")
         pyplot.plot(rho, rho * harmonic_number(n - 1), "-")
         pyplot.legend(loc="upper left")
         pyplot.xlabel("scaled recombination rate rho")
@@ -4651,7 +4674,9 @@ class SmcKTest(Test):
         pyplot.plot(rho, var_exact, "o", label="msprime (hudson)")
         pyplot.plot(rho, var_smc, "^", label="msprime (smc)")
         pyplot.plot(rho, var_smc_prime, "*", label="msprime (smc_prime)")
-        pyplot.plot(rho, var_smc_k, "x", label="smc_k")
+        pyplot.plot(rho, var_smc_k_zero, "x", label="smc_k(0)")
+        pyplot.plot(rho, var_smc_k_one, "x", label="smc_k(1)")
+        pyplot.plot(rho, var_smc_k_inf, "o", label="smc_k(inf)")
         pyplot.plot(rho, v, "-")
         pyplot.xlabel("scaled recombination rate rho")
         pyplot.ylabel("variance in number of breakpoints")
