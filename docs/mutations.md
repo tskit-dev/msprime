@@ -508,7 +508,12 @@ Mutation matrix models are specified by three things: an alphabet,
 a root distribution, and a transition matrix.
 These leave one free parameter: an overall mutation rate,
 specified by the mutation `rate` in the call to {func}`.sim_mutations`.
-Concisely,
+This determines the probability that *any* mutation will occur: once
+{func}`.sim_mutations` has determined that a mutation has occurred, the
+type of mutation (i.e. the derived state) is decided as a function
+the previous state and the transition matrix. Thus the `rate` parameter
+can be thought of as the sum of the rates of all possible mutations
+at a site. Technically,
 the underlying model of mutation is a continuous-time Markov chain on the alphabet,
 started by a draw from `root_distribution`, and
 with instantaneous transition rate from `i` to `j` that is equal to
