@@ -1562,6 +1562,7 @@ def sim_mutations(
     end_time=None,
     discrete_genome=None,
     keep=None,
+    record_provenance=True,
 ):
     """
     Simulates mutations on the specified ancestry and returns the resulting
@@ -1631,6 +1632,8 @@ def sim_mutations(
     :param bool discrete_genome: Whether to generate mutations at only integer positions
         along the genome (Default=True).
     :param bool keep: Whether to keep existing mutations. (default: True)
+    :param bool record_provenance: If True, record all input parameters
+        in the tree sequence :ref:`tskit:sec_provenance`.
     :return: The :class:`tskit.TreeSequence` object resulting from overlaying
         mutations on the input tree sequence.
     :rtype: :class:`tskit.TreeSequence`
@@ -1645,20 +1648,20 @@ def sim_mutations(
     else:
         seed = int(seed)
 
-    parameters = dict(
-        command="sim_mutations",
-        tree_sequence=tree_sequence,
-        rate=rate,
-        model=model,
-        start_time=start_time,
-        end_time=end_time,
-        discrete_genome=discrete_genome,
-        keep=keep,
-        random_seed=seed,
-    )
-    encoded_provenance = provenance.json_encode_provenance(
-        provenance.get_provenance_dict(parameters)
-    )
+    provenance_dict = None
+    if record_provenance:
+        parameters = dict(
+            command="sim_mutations",
+            tree_sequence=tree_sequence,
+            rate=rate,
+            model=model,
+            start_time=start_time,
+            end_time=end_time,
+            discrete_genome=discrete_genome,
+            keep=keep,
+            random_seed=seed,
+        )
+        provenance_dict = provenance.get_provenance_dict(parameters)
 
     if rate is None:
         rate = 0
@@ -1698,5 +1701,6 @@ def sim_mutations(
     )
 
     tables = tskit.TableCollection.fromdict(lwt.asdict())
-    tables.provenances.add_row(encoded_provenance)
+    if provenance_dict is not None:
+        tables.provenances.add_row(provenance.json_encode_provenance(provenance_dict))
     return tables.tree_sequence()

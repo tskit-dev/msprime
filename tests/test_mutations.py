@@ -159,6 +159,14 @@ class TestMutateProvenance:
             assert record["parameters"]["command"] == "sim_mutations"
             assert record["parameters"]["keep"] == keep
 
+    def test_record_provenance(self):
+        ts = msprime.sim_ancestry(10, random_seed=1)
+        assert ts.num_provenances == 1
+        mutated = msprime.sim_mutations(ts, rate=1, record_provenance=True)
+        assert mutated.num_provenances == 2
+        mutated = msprime.sim_mutations(ts, rate=1, record_provenance=False)
+        assert mutated.num_provenances == 1
+
 
 class TestMatrixMutationModel:
     def validate_model(self, model):
