@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.2] - 2024-07-08
+
+- Add `record_provenance` argument to `sim_mutations` ({issue}`2272`, {pr}`2273`, {user}`peterlharp`)
+
+
 ## [1.3.1] - 2024-02-09
 
 **Bug fixes**:
