@@ -1,17 +1,23 @@
+codecov:
+  require_ci_to_pass: false
 coverage:
   status:
     project:
       python:
         target: 95%
-        flags: python
+        flags:
+          - python
       C:
         target: 80%
-        flags: C
+        flags:
+           - C
 
     patch:
       python:
         target: 90%
-        flags: python
+        flags:
+          - python
       C:
         target: 85%
-        flags: C
+        flags:
+          - C
