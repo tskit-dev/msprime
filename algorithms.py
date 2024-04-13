@@ -1,6 +1,7 @@
 """
 Python version of the simulation algorithm.
 """
+
 import argparse
 import heapq
 import itertools
@@ -127,9 +128,10 @@ class Segment:
         self.label = 0
         self.index = index
         self.hull = None
+        self.origin = set()
 
     def __repr__(self):
-        return repr((self.left, self.right, self.node))
+        return repr((self.left, self.right, self.node, self.origin))
 
     @staticmethod
     def show_chain(seg):
@@ -434,6 +436,14 @@ class Population:
         find the index of an ancestor in population
         """
         return self._ancestors[indv.label].index(indv)
+
+    def get_emerged_from_lineage(self, index, label):
+        """
+        Returns the indices of lineages that emerged from a given one.
+        """
+        return [
+            i for i, s in enumerate(self._ancestors[label]) if index.issubset(s.origin)
+        ]
 
 
 class Pedigree:
@@ -840,6 +850,7 @@ class Simulator:
         gene_conversion_rate=0.0,
         gene_conversion_length=1,
         discrete_genome=True,
+        coalescent_events=[],
     ):
         # Must be a square matrix.
         N = len(migration_matrix)
@@ -897,6 +908,15 @@ class Simulator:
             pop.set_start_size(population_sizes[pop.id])
             pop.set_growth_rate(population_growth_rates[pop.id], 0)
         self.edge_buffer = []
+
+        self.fixed_coalescent_events = False
+        self.coalescent_events = []
+
+        if coalescent_events:
+            self.fixed_coalescent_events = True
+            self.parse_nwk(coalescent_events)
+            self.coalescent_events.sort()
+            logger.debug(self.coalescent_events)
 
         # set hull_offset for smc_k, deviates from actual pattern
         # implemented using `ParametricAncestryModel()`
@@ -981,6 +1001,7 @@ class Simulator:
         # Insert the segment chains into the algorithm state.
         for node in range(ts.num_nodes):
             seg = root_segments_head[node]
+            seg.origin = {seg.node}
             if seg is not None:
                 left_end = seg.left
                 pop = seg.population
@@ -1072,6 +1093,7 @@ class Simulator:
         next=None,  # noqa: A002
         label=0,
         hull=None,
+        origin={},
     ):
         """
         Pops a new segment off the stack and sets its properties.
@@ -1085,6 +1107,7 @@ class Simulator:
         s.prev = prev
         s.label = label
         s.hull = hull
+        s.origin = origin
         return s
 
     def copy_segment(self, segment):
@@ -1096,6 +1119,7 @@ class Simulator:
             next=segment.next,
             prev=segment.prev,
             label=segment.label,
+            origin=segment.origin,
         )
 
     def free_segment(self, u):
@@ -1337,7 +1361,39 @@ class Simulator:
                 event = "MOD"
             else:
                 self.t += min_time
-                if min_time == t_re:
+
+                if (
+                    self.fixed_coalescent_events
+                    and self.coalescent_events
+                    and self.coalescent_events[0][0] < self.t
+                ):
+                    # Fixed Coalescent event.
+                    logger.debug("Fixed CA @", self.t, self.coalescent_events[0])
+                    event = "CA"
+                    ce = self.coalescent_events.pop(0)
+
+                    # Reset to fixed time
+                    prev_time = self.t - min_time
+                    # Check if the current event should have happen earlier
+                    # or at the same time as the last event.
+                    if ce[0] <= prev_time:
+                        # Add epsilon as two events can't happen simultaneously.
+                        self.t = prev_time + 0.00000001
+                    else:
+                        # Reset to time of ce event and add epsilon to avoid colission with leaf nodes.
+                        self.t = ce[0] + 0.00000001
+
+                    self.common_ancestor_event(
+                        ca_population,
+                        0,
+                        lineage_a=ce[1],
+                        lineage_b=ce[2],
+                    )
+
+                    if self.P[ca_population].get_num_ancestors() == 0:
+                        non_empty_pops.remove(ca_population)
+
+                elif min_time == t_re:
                     event = "RE"
                     self.hudson_recombination_event(0)
                 elif min_time == t_gcin:
@@ -2354,9 +2410,29 @@ class Simulator:
 
         return (hull1_index, hull2.index)
 
-    def common_ancestor_event(self, population_index, label):
+    def is_blocked_ancestor(self, i, pop, label):
+        """
+        Checks if the ancestor at index i is required for a future common ancestor event.
+        """
+        # If no fixed events happen in the future (the list is empty):
+        if not self.coalescent_events:
+            return False
+
+        # Check if ancestor i is required as ancestor in a future event.
+        _, ceA, ceB = zip(*self.coalescent_events)
+        return any(pop._ancestors[label][i].origin.issubset(j) for j in ceA + ceB)
+
+    def common_ancestor_event(
+        self,
+        population_index,
+        label,
+        lineage_a=None,
+        lineage_b=None,
+        blocked=False,
+    ):
         """
         Implements a coancestry event.
+        If lineage_a and lineage_b are set, only lines emerged from those will be selected.
         """
         pop = self.P[population_index]
 
@@ -2376,11 +2452,36 @@ class Simulator:
             self.free_hull(hull_j)
 
         else:
-            # Choose two ancestors uniformly.
-            j = random.randint(0, pop.get_num_ancestors(label) - 1)
-            x = pop.remove(j, label)
-            j = random.randint(0, pop.get_num_ancestors(label) - 1)
-            y = pop.remove(j, label)
+            if (lineage_a is None) ^ (lineage_b is None):  # a xor b
+                raise RuntimeError(
+                    "For a fixed Common Ancestor event, both lineages must be named."
+                )
+
+            if lineage_a is None and lineage_b is None:
+                # Choose uniformly from all lineages
+                all_lineage_ids = range(0, pop.get_num_ancestors(label) - 1)
+                i, j = random.choices(all_lineage_ids, k=2)
+                # random sampling without replacement
+
+                if (
+                    blocked
+                    and self.is_blocked_ancestor(i, pop, label)
+                    or self.is_blocked_ancestor(j, pop, label)
+                ):
+                    return
+
+                x = pop.remove(i, label)
+                y = pop.remove(j, label)
+
+            else:
+                # Get all lineages that emerged from lineage_a and lineage_b
+                lineage_ids = pop.get_emerged_from_lineage(lineage_a, label)
+                i = random.choice(lineage_ids)
+                x = pop.remove(i, label)
+
+                lineage_ids = pop.get_emerged_from_lineage(lineage_b, label)
+                j = random.choice(lineage_ids)
+                y = pop.remove(j, label)
 
         self.merge_two_ancestors(population_index, label, x, y)
 
@@ -2407,6 +2508,7 @@ class Simulator:
                     y = beta
                 if x.right <= y.left:
                     alpha = x
+                    alpha.origin = x.origin | y.origin
                     x = x.next
                     alpha.next = None
                 elif x.left != y.left:
@@ -2414,6 +2516,7 @@ class Simulator:
                     alpha.prev = None
                     alpha.next = None
                     alpha.right = y.left
+                    alpha.origin = x.origin | y.origin
                     x.left = y.left
                 else:
                     if not coalescence:
@@ -2446,6 +2549,7 @@ class Simulator:
                             node=u,
                             population=population_index,
                             label=label,
+                            origin=x.origin | y.origin,
                         )
                     if x.node != u:  # required for dtwf and fixed_pedigree
                         self.store_edge(left, right, u, x.node)
@@ -2502,6 +2606,132 @@ class Simulator:
                 merged_head = merged_head.next
             hull.right = min(right + self.hull_offset, self.L)
             pop.add_hull(label, hull)
+
+    def parse_nwk(self, nwk: str) -> None:
+        """
+        Parses newick string.
+        """
+        # Remove Tail and whitespace
+        nwk = nwk.strip().strip(";")
+        nwk = nwk.replace(" ", "")
+
+        # Remove Root Time
+        head, tail = nwk.rsplit(":", 1)
+        if ")" not in tail:
+            nwk = head
+
+        # Remove Root Label
+        if not nwk.endswith(")"):
+            nwk = nwk.rsplit(")", 1)[0] + ")"
+
+        # Remove redundant brackets
+        if nwk.startswith("(") and nwk.endswith(")"):
+            nwk = nwk[1:-1]
+
+        # Labels of leaf nodes
+        leaf_nwk = [
+            label[0]
+            for n in nwk.replace("(", ",").split(",")
+            if (label := n.split(":"))[0]
+        ]
+
+        # Create initial mapping for labels (str) to id (int).
+        self.leaf_mapping = {label: i for i, label in enumerate(leaf_nwk)}
+        self.label_mapping = {i: label for i, label in enumerate(leaf_nwk)}
+
+        if len(self.tables.nodes) < len(leaf_nwk):
+            raise ValueError(
+                "Population in newick string is larger than the provided sample_size. "
+                f"Please increase to {len(leaf_nwk)} or greater."
+            )
+
+        if len(leaf_nwk) < len(self.tables.nodes):
+            # TODO check if warning library can be imported
+            print(
+                "Population in newick string is smaller than the provided sample_size."
+            )
+
+        self.parse_nwk_str(nwk, 0)
+
+    def bracket_split(self, nkw: str):
+        """
+        Splits a string at "," if and only if it is not enclosed by brackets.
+        Input:
+            nwk: str, string to split.
+        Returns:
+            splits: List[str], list of substrings.
+        """
+        splits = []
+        level = 0
+        next_split = []
+        for c in nkw:
+            if c == "," and level == 0:
+                splits.append("".join(next_split))
+                next_split = []
+            else:
+                if c == "(":
+                    level += 1
+                elif c == ")":
+                    level -= 1
+                next_split.append(c)
+        splits.append("".join(next_split))
+        return splits
+
+    def parse_nwk_str(self, newick_str: str, time: float):
+        """
+        Parses a newick string recursivly.
+        """
+        # Split nwk intro left and right part.
+        left_node, right_node = self.bracket_split(newick_str)
+
+        left_time = float(left_node.split(":")[-1].split(")", 1)[0])
+        right_time = float(right_node.split(":")[-1].split(")", 1)[0])
+
+        # Clean left node and remove label
+        left_node = left_node.rsplit(":", 1)[0]
+        left_node = left_node[1:] if left_node.startswith("(") else left_node
+        left_node = left_node[:-1] if left_node.endswith(")") else left_node
+
+        # Clean right node and remove label
+        right_node = right_node.rsplit(":", 1)[0]
+        right_node = right_node[1:] if right_node.startswith("(") else right_node
+        right_node = right_node[:-1] if right_node.endswith(")") else right_node
+
+        # Check if left node is a leaf
+        if not "," in left_node:
+            if left_node in self.leaf_mapping:
+                # Replace leaf name with mapped id
+                node_id = self.leaf_mapping[left_node]
+            else:
+                raise RuntimeError(f"Invalid newick structure: {left_node}")
+            left_node = [node_id]
+        else:
+            left_node, sub_left_time = self.parse_nwk_str(left_node, time + left_time)
+            left_time = left_time + sub_left_time
+
+        # Check if left node is a leaf
+        if not "," in right_node:
+            if right_node in self.leaf_mapping:
+                # Replace leaf name with mapped id
+                node_id = self.leaf_mapping[right_node]
+            else:
+                raise RuntimeError(f"Invalid newick structure {right_node}")
+
+            right_node = [node_id]
+
+        else:
+            right_node, sub_right_time = self.parse_nwk_str(
+                right_node, time + right_time
+            )
+            right_time = right_time + sub_right_time
+
+        # Left and right time should be euqal.
+        # To handle potential inconsistentcies the maximum time is used.
+        ce_time = max(left_time, right_time)
+        self.coalescent_events.append((ce_time, set(left_node), set(right_node)))
+        node_name = left_node + right_node
+
+        return node_name, ce_time
 
     def print_state(self, verify=False):
         print("State @ time ", self.t)
@@ -2771,6 +3001,9 @@ def run_simulate(args):
         rates = args.recomb_rates
         recombination_map = RateMap(positions, rates)
     num_labels = 1
+
+    coalescent_events = args.ce_events
+
     sweep_trajectory = None
     if args.model == "single_sweep":
         if num_populations > 1:
@@ -2818,9 +3051,11 @@ def run_simulate(args):
         gene_conversion_rate=gc_rate,
         gene_conversion_length=mean_tract_length,
         discrete_genome=args.discrete,
+        coalescent_events=coalescent_events,
     )
     ts = s.simulate(args.end_time)
     ts.dump(args.output_file)
+
     if args.verbose:
         s.print_state()
 
@@ -2877,6 +3112,14 @@ def add_simulator_arguments(parser):
     )
     parser.add_argument(
         "--census-time", type=float, nargs=1, action="append", default=[]
+    )
+    parser.add_argument(
+        "--ce-events",
+        default="",
+        help="""Specify the coalescent events as newick string.
+        Example: Merge A and B at time 0.5. Merge (A,B) with C at time 0.8.
+        --> "((A:0.5, B:0.5):0.3, C:0.8);"
+        """,
     )
     parser.add_argument(
         "--trajectory",
