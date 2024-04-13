@@ -1001,8 +1001,8 @@ class Simulator:
         # Insert the segment chains into the algorithm state.
         for node in range(ts.num_nodes):
             seg = root_segments_head[node]
-            seg.origin = {seg.node}
             if seg is not None:
+                seg.origin = {seg.node}
                 left_end = seg.left
                 pop = seg.population
                 label = seg.label
@@ -1093,7 +1093,7 @@ class Simulator:
         next=None,  # noqa: A002
         label=0,
         hull=None,
-        origin={},
+        origin=set(),
     ):
         """
         Pops a new segment off the stack and sets its properties.
