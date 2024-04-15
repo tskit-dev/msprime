@@ -911,7 +911,7 @@ class Simulator:
         self.fixed_coalescent_events = False
         self.coalescent_events = []
 
-        if coalescent_events is not None:
+        if coalescent_events:
             self.fixed_coalescent_events = True
             self.parse_nwk(coalescent_events)
             self.coalescent_events.sort()
