@@ -2410,17 +2410,46 @@ class Simulator:
 
         return (hull1_index, hull2.index)
 
-    def is_blocked_ancestor(self, i, pop, label):
+    def is_blocked_ancestor(self, i: int, pop, label) -> int:
         """
         Checks if the ancestor at index i is required for a future common ancestor event.
+
+        Returns
+        -------
+            0: If the ancestor is not required or multiple similar ancestor exists.
+            1: If blocked.
+            2: If exactly two ancestor with the same origin exists.
         """
         # If no fixed events happen in the future (the list is empty):
         if not self.coalescent_events:
-            return False
+            return 0
 
         # Check if ancestor i is required as ancestor in a future event.
         _, ceA, ceB = zip(*self.coalescent_events)
-        return any(pop._ancestors[label][i].origin.issubset(j) for j in ceA + ceB)
+
+        ancestor = pop._ancestors[label][i]
+        # Stricter version
+        # return any(ancestor.origin.issubset(j) for j in ceA + ceB)
+
+        # Relevant Common Ancestor Events for that the selected ancestor could be required
+        ca_events = [j for j in ceA + ceB if ancestor.origin.issubset(j)]
+
+        if not ca_events:
+            return 0
+
+        # Check if multiple ancestors with this origin exists
+        matching_origins = 0
+        for j in pop._ancestors[label]:
+            # Has j same origin as selected ancestor.
+            if ancestor.origin.issubset(j.origin) and any(
+                j.origin.issubset(k) for k in ca_events
+            ):
+                matching_origins += 1
+                # If more than two is there -> ancestor can be chosen.
+                if matching_origins == 3:
+                    return 0
+
+        return matching_origins  # 1 or 2
 
     def common_ancestor_event(
         self,
@@ -2428,7 +2457,6 @@ class Simulator:
         label,
         lineage_a=None,
         lineage_b=None,
-        blocked=False,
     ):
         """
         Implements a coancestry event.
@@ -2463,12 +2491,19 @@ class Simulator:
                 i, j = random.choices(all_lineage_ids, k=2)
                 # random sampling without replacement
 
-                if (
-                    blocked
-                    and self.is_blocked_ancestor(i, pop, label)
-                    or self.is_blocked_ancestor(j, pop, label)
-                ):
-                    return
+                blocked_i = self.is_blocked_ancestor(i, pop, label)
+                blocked_j = self.is_blocked_ancestor(j, pop, label)
+                if blocked_i or blocked_j:
+                    # Check edge case where two identical lineages were chosen:
+                    if blocked_i == blocked_j == 2:
+                        if (
+                            pop._ancestors[label][i].origin
+                            == pop._ancestors[label][j].origin
+                        ):
+                            # Skip as they are required.
+                            return
+                    else:
+                        return
 
                 x = pop.remove(i, label)
                 y = pop.remove(j, label)
