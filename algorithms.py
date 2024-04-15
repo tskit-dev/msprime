@@ -1,7 +1,6 @@
 """
 Python version of the simulation algorithm.
 """
-
 import argparse
 import heapq
 import itertools
@@ -850,7 +849,7 @@ class Simulator:
         gene_conversion_rate=0.0,
         gene_conversion_length=1,
         discrete_genome=True,
-        coalescent_events=[],
+        coalescent_events=None,
     ):
         # Must be a square matrix.
         N = len(migration_matrix)
@@ -912,7 +911,7 @@ class Simulator:
         self.fixed_coalescent_events = False
         self.coalescent_events = []
 
-        if coalescent_events:
+        if coalescent_events is not None:
             self.fixed_coalescent_events = True
             self.parse_nwk(coalescent_events)
             self.coalescent_events.sort()
@@ -1093,7 +1092,7 @@ class Simulator:
         next=None,  # noqa: A002
         label=0,
         hull=None,
-        origin=set(),
+        origin=None,
     ):
         """
         Pops a new segment off the stack and sets its properties.
@@ -1107,7 +1106,7 @@ class Simulator:
         s.prev = prev
         s.label = label
         s.hull = hull
-        s.origin = origin
+        s.origin = origin if origin is not None else set()
         return s
 
     def copy_segment(self, segment):
@@ -1380,7 +1379,8 @@ class Simulator:
                         # Add epsilon as two events can't happen simultaneously.
                         self.t = prev_time + 0.00000001
                     else:
-                        # Reset to time of ce event and add epsilon to avoid colission with leaf nodes.
+                        # Reset to time of ce event and add epsilon to avoid
+                        # collision with leaf nodes.
                         self.t = ce[0] + 0.00000001
 
                     self.common_ancestor_event(
@@ -2431,7 +2431,7 @@ class Simulator:
         # Stricter version
         # return any(ancestor.origin.issubset(j) for j in ceA + ceB)
 
-        # Relevant Common Ancestor Events for that the selected ancestor could be required
+        # Relevant Common Ancestor events
         ca_events = [j for j in ceA + ceB if ancestor.origin.issubset(j)]
 
         if not ca_events:
@@ -2460,7 +2460,8 @@ class Simulator:
     ):
         """
         Implements a coancestry event.
-        If lineage_a and lineage_b are set, only lines emerged from those will be selected.
+        If lineage_a and lineage_b are set, only lineages emerged from those
+        will be selected. Raises an error if only one lineage is provided.
         """
         pop = self.P[population_index]
 
@@ -2733,7 +2734,7 @@ class Simulator:
         right_node = right_node[:-1] if right_node.endswith(")") else right_node
 
         # Check if left node is a leaf
-        if not "," in left_node:
+        if "," not in left_node:
             if left_node in self.leaf_mapping:
                 # Replace leaf name with mapped id
                 node_id = self.leaf_mapping[left_node]
@@ -2745,7 +2746,7 @@ class Simulator:
             left_time = left_time + sub_left_time
 
         # Check if left node is a leaf
-        if not "," in right_node:
+        if "," not in right_node:
             if right_node in self.leaf_mapping:
                 # Replace leaf name with mapped id
                 node_id = self.leaf_mapping[right_node]
