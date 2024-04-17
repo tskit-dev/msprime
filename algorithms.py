@@ -849,7 +849,8 @@ class Simulator:
         gene_conversion_rate=0.0,
         gene_conversion_length=1,
         discrete_genome=True,
-        coalescent_events=None,
+        coalescent_events_nwk=None,
+        coalescent_events_ts=None,
     ):
         # Must be a square matrix.
         N = len(migration_matrix)
@@ -911,9 +912,14 @@ class Simulator:
         self.fixed_coalescent_events = False
         self.coalescent_events = []
 
-        if coalescent_events:
+        if coalescent_events_nwk:
             self.fixed_coalescent_events = True
-            self.parse_nwk(coalescent_events)
+            self.parse_nwk(coalescent_events_nwk)
+            self.coalescent_events.sort()
+            logger.debug(self.coalescent_events)
+        elif coalescent_events_ts:
+            self.fixed_coalescent_events = True
+            self.parse_ts(coalescent_events_ts)
             self.coalescent_events.sort()
             logger.debug(self.coalescent_events)
 
@@ -2769,6 +2775,61 @@ class Simulator:
 
         return node_name, ce_time
 
+    def parse_ts(self, ts: tskit.TreeSequence) -> None:
+        """
+        Parses coalescent events from tree sequence file.
+        Does only work for one welldefined tree without gene conversion or recombination.
+        """
+        tables = ts.dump_tables()
+
+        edges = list(tables.edges)
+        events = []
+        while edges:
+            e1 = edges.pop(0)
+            # Sweep until sibling edge is found. Usually the next in list.
+            # Can be simplified if that assumption is made.
+            for i, e2 in enumerate(edges):
+                if e1.parent == e2.parent:
+                    e2 = edges.pop(i)
+                    break
+            # Get time of parent node (coalescent time)
+            t = [n.time for i, n in enumerate(tables.nodes) if i == e1.parent][0]
+            events.append((t, e1.child, e2.child, e1.parent))
+        events.sort()
+
+        # Add all leafs
+        node_mapping = {i: {i} for i, n in enumerate(tables.nodes) if n.time == 0}
+        if len(self.tables.nodes) < len(node_mapping):
+            raise ValueError(
+                "Population in tree sequence is larger than the provided sample_size. "
+                f"Please increase to {len(node_mapping)} or greater."
+            )
+        if len(node_mapping) < len(self.tables.nodes):
+            # TODO check if warning library can be imported
+            print(
+                "Population in tree sequence is smaller than the provided sample_size."
+            )
+
+        # While loop is only required if events happen at
+        # the same time and are not ordered correctly.
+        # Can be simplified if that assumption is made.
+        while events:
+            t, e1, e2, p = events.pop(0)
+            if e1 not in node_mapping or e2 not in node_mapping:
+                # Add event to end of the queue.
+                events.append(t, e1, e2, p)
+                continue
+
+            e1 = node_mapping[e1]
+            e2 = node_mapping[e2]
+            self.coalescent_events.append((t, e1, e2))
+
+            if p in node_mapping:
+                p = node_mapping[p]
+            else:
+                # Add parent node to mapping
+                node_mapping[p] = e1 | e2
+
     def print_state(self, verify=False):
         print("State @ time ", self.t)
         for label in range(self.num_labels):
@@ -3038,7 +3099,16 @@ def run_simulate(args):
         recombination_map = RateMap(positions, rates)
     num_labels = 1
 
-    coalescent_events = args.ce_events
+    if args.ce_from_nwk and args.ce_from_ts:
+        raise RuntimeError(
+            "Can't load coalescent events from newick and tree sequence simultaneously."
+        )
+
+    coalescent_events_nwk = args.ce_from_nwk
+    coalescent_events_ts = args.ce_from_ts
+
+    if coalescent_events_ts:
+        coalescent_events_ts = tskit.load(coalescent_events_ts)
 
     sweep_trajectory = None
     if args.model == "single_sweep":
@@ -3087,13 +3157,16 @@ def run_simulate(args):
         gene_conversion_rate=gc_rate,
         gene_conversion_length=mean_tract_length,
         discrete_genome=args.discrete,
-        coalescent_events=coalescent_events,
+        coalescent_events_nwk=coalescent_events_nwk,
+        coalescent_events_ts=coalescent_events_ts,
     )
     ts = s.simulate(args.end_time)
     ts.dump(args.output_file)
 
     if args.verbose:
         s.print_state()
+
+    return ts
 
 
 def add_simulator_arguments(parser):
@@ -3150,12 +3223,17 @@ def add_simulator_arguments(parser):
         "--census-time", type=float, nargs=1, action="append", default=[]
     )
     parser.add_argument(
-        "--ce-events",
+        "--ce-from-nwk",
         default="",
         help="""Specify the coalescent events as newick string.
         Example: Merge A and B at time 0.5. Merge (A,B) with C at time 0.8.
         --> "((A:0.5, B:0.5):0.3, C:0.8);"
         """,
+    )
+    parser.add_argument(
+        "--ce-from-ts",
+        default="",
+        help="""Load coalescent events from a tree sequence file.""",
     )
     parser.add_argument(
         "--trajectory",
