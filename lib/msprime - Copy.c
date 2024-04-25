@@ -37,6 +37,103 @@
 #define MSP_STATE_SIMULATING 2
 #define MSP_STATE_DEBUGGING 3
 
+double
+get_sweep_pop_events_total_rate(sweep_pop_event_t *e, size_t num_events)
+{
+    size_t i = 0;
+    double total = 0;
+    for (i = 0; i < num_events; i++) {
+        total += e->p_events[i];
+    }
+    return total;
+}
+
+void
+print_sweep_pop_event_info(sweep_pop_event_t *e)
+{
+    printf("p_coal_b: %g|", e->p_events[0]);
+    printf("p_coal_B: %g|", e->p_events[1]);
+    printf("p_rec_b: %g|", e->p_events[2]);
+    printf("p_rec_B: %g|", e->p_events[3]);
+    printf("p_mig_b: %g|", e->p_events[4]);
+    printf("p_mig_B: %g\n", e->p_events[5]);
+}
+
+double
+get_sweep_mig_rate(msp_t *self, size_t sweep_pop_size, double freq, double sweep_dt,
+    tsk_id_t mig_source_pop, tsk_id_t *mig_dest_pop)
+{
+
+    tsk_id_t i = 0;
+    double p_mig = 0;
+    double p_mig_tmp = 0;
+    tsk_id_t mig_dest_pop_tmp = 0;
+
+    population_t *pop = &self->populations[mig_source_pop];
+    for (i = 0; i < (tsk_id_t) pop->num_potential_destinations; i++) {
+        mig_dest_pop_tmp = pop->potential_destinations[i];
+        p_mig_tmp = sweep_pop_size * freq_target/freq_source
+                    * msp_get_migration_prop(self, mig_source_pop, mig_dest_pop_tmp) * sweep_dt
+
+        /* get the maximum p */
+        if (p_mig_tmp > p_mig) {
+            p_mig = p_mig_tmp;
+            *mig_dest_pop = mig_dest_pop_tmp;
+        }
+    }
+    return p_mig;
+}
+
+double
+get_sweep_coal_rate(size_t sweep_pop_size, double freq, double sweep_dt)
+{
+    return ((sweep_pop_size * (sweep_pop_size - 1)) * 0.5) / freq * sweep_dt;
+}
+
+static int
+get_mig_info(
+    msp_t *self, double *mig_t_wait, tsk_id_t *mig_source_pop, tsk_id_t *mig_dest_pop)
+{
+    int ret = 0;
+
+    double lambda, t_temp;
+    uint32_t n;
+    tsk_id_t i, pop_id_j, pop_id_k;
+    population_t *pop;
+    label_id_t label = 0;
+    const tsk_id_t N = (tsk_id_t) self->num_populations;
+
+    avl_node_t *avl_node;
+    for (avl_node = self->non_empty_populations.head; avl_node != NULL;
+         avl_node = avl_node->next) {
+        pop_id_j = (tsk_id_t) (intptr_t) avl_node->item;
+        if (*mig_source_pop != 0 && pop_id_j != *mig_source_pop) {
+            continue;
+        }
+
+        pop = &self->populations[pop_id_j];
+        n = avl_count(&pop->ancestors[label]);
+        tsk_bug_assert(n > 0);
+        for (i = 0; i < (tsk_id_t) pop->num_potential_destinations; i++) {
+            pop_id_k = pop->potential_destinations[i];
+            lambda = n * self->migration_matrix[pop_id_j * N + pop_id_k];
+            tsk_bug_assert(lambda > 0);
+            t_temp = gsl_ran_exponential(self->rng, 1.0 / lambda);
+            if (t_temp < *mig_t_wait) {
+                *mig_t_wait = t_temp;
+                /* m[j, k] is the rate at which migrants move from
+                 * population k to j forwards in time. Backwards
+                 * in time, we move the individual from from
+                 * population j into population k.
+                 */
+                *mig_source_pop = pop_id_j;
+                *mig_dest_pop = pop_id_k;
+            }
+        }
+    }
+    return ret;
+}
+
 /* Draw a random variable from a truncated Beta(a, b) distribution,
  * by rejecting draws above the truncation point x.
  */
@@ -1815,11 +1912,11 @@ msp_store_edge(msp_t *self, double left, double right, tsk_id_t parent, tsk_id_t
 {
     int ret = 0;
     tsk_edge_t *edge;
-    tsk_edge_t last_edge;
+tsk_edge_t last_edge;
     const double *node_time = self->tables->nodes.time;
 
     tsk_bug_assert(parent < (tsk_id_t) self->tables->nodes.num_rows);
-    if (self->num_buffered_edges > 0) {
+if (self->num_buffered_edges > 0) {
         last_edge = self->buffered_edges[self->num_buffered_edges - 1];
         if (last_edge.parent != parent) {
             ret = msp_flush_edges(self);
@@ -3041,9 +3138,9 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     } else {
         ret = msp_store_additional_nodes_edges(self, z, new_node_id,
             MSP_NODE_IS_CA_EVENT, population_id, TSK_NULL, &new_node_id);
-        if (ret < 0) {
-            goto out;
-        }
+            if (ret < 0) {
+                goto out;
+                    }
     }
 
     if (defrag_required) {
@@ -3176,8 +3273,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     if (new_node_id < 0) {
                         ret = (int) new_node_id;
                         goto out;
+}
                     }
-                }
             }
             /* Insert overlap counts for bounds, if necessary */
             search.position = l;
@@ -3279,9 +3376,9 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     } else {
         ret = msp_store_additional_nodes_edges(self, z, new_node_id,
             MSP_NODE_IS_CA_EVENT, population_id, individual, &new_node_id);
-        if (ret < 0) {
-            goto out;
-        }
+            if (ret < 0) {
+                goto out;
+                    }
     }
     if (defrag_required) {
         ret = msp_defrag_segment_chain(self, z);
@@ -3338,12 +3435,12 @@ msp_merge_n_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     if (num_common_ancestors == 1) {
         merged_head = msp_priority_queue_pop(self, Q);
         ret = msp_store_additional_nodes_edges(self, merged_head, new_node_id,
-            MSP_NODE_IS_PASS_THROUGH, population_id, TSK_NULL, &new_node_id);
-        if (ret < 0) {
-            goto out;
-        }
+                    MSP_NODE_IS_PASS_THROUGH, population_id, TSK_NULL, &new_node_id);
+                if (ret < 0) {
+                    goto out;
+                }
     } else if (num_common_ancestors >= 2) {
-        // counting ca_events can be added here instead
+// counting ca_events can be added here instead
         self->num_ca_events++;
         msp_remove_individuals_from_population(self, Q);
         if (num_common_ancestors == 2) {
@@ -3373,6 +3470,25 @@ msp_migration_event(msp_t *self, population_id_t source_pop, population_id_t des
     uint32_t j;
     avl_node_t *node;
     label_id_t label = 0; /* For now only support label 0 */
+    avl_tree_t *source = &self->populations[source_pop].ancestors[label];
+    size_t index = ((size_t) source_pop) * self->num_populations + (size_t) dest_pop;
+
+    self->num_migration_events[index]++;
+    j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(source));
+    node = avl_at(source, j);
+    tsk_bug_assert(node != NULL);
+    ret = msp_move_individual(self, node, source, dest_pop, label);
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
+msp_sweep_migration_event(
+    msp_t *self, population_id_t source_pop, population_id_t dest_pop, label_id_t label)
+{
+    int ret = 0;
+    uint32_t j;
+    avl_node_t *node;
+    // label_id_t label = 0; /* For now only support label 0 */
     avl_tree_t *source = &self->populations[source_pop].ancestors[label];
     size_t index = ((size_t) source_pop) * self->num_populations + (size_t) dest_pop;
 
@@ -4613,7 +4729,7 @@ msp_dtwf_generation(msp_t *self)
             p = (uint32_t) gsl_rng_uniform_int(self->rng, N);
             // note: this also counts pass_through events
             // if (parents[p] != NULL) {
-            //    self->num_ca_events++;
+                //    self->num_ca_events++;
             //}
             s->next = parents[p];
             s->node = a;
@@ -4622,16 +4738,13 @@ msp_dtwf_generation(msp_t *self)
 
         // Iterate through offspring of parent k, adding to avl_tree
         for (k = 0; k < N; k++) {
-            for (i = 0; i < 2; i++) {
-                parent_nodes[i] = TSK_NULL;
-            }
             for (s = parents[k]; s != NULL; s = s->next) {
                 node = s->node;
                 x = (segment_t *) node->item;
                 // Recombine ancestor
                 // TODO Should this be the recombination rate going foward from x.left?
                 if (rate_map_get_total_mass(&self->recomb_map) > 0) {
-                    ret = msp_dtwf_recombine(self, x, &u[0], &u[1], parent_nodes);
+                    ret = msp_dtwf_recombine(self, x, &u[0], &u[1]);
                     if (ret != 0) {
                         goto out;
                     }
@@ -4662,7 +4775,7 @@ msp_dtwf_generation(msp_t *self)
             // Merge segments in each parental chromosome
             for (i = 0; i < 2; i++) {
                 ret = msp_merge_n_ancestors(
-                    self, &Q[i], (population_id_t) j, label, parent_nodes[i], NULL);
+                    self, &Q[i], (population_id_t) j, label, TSK_NULL, NULL);
                 if (ret != 0) {
                     goto out;
                 }
@@ -4911,8 +5024,8 @@ msp_sweep_initialise(msp_t *self, double switch_proba)
     avl_node_t *node, *next;
     avl_tree_t *pop;
 
-    /* We only support one population and two labels for now */
-    if (self->num_populations != 1 || self->num_labels != 2) {
+    /* We only support two labels for now */
+    if (self->num_labels != 2) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
@@ -5018,89 +5131,55 @@ out:
     return ret;
 }
 
-static int msp_run_sweep_new(msp_t *self) {
+/* Set up the intial populations for a sweep by moving individuals from
+ * label 0 to label 1 with the specified probability.
+ */
+static int
+msp_sweep_initialise(msp_t *self, double switch_proba)
+{
     int ret = 0;
-    simulation_model_t *model = &self->model;
-    size_t curr_step = 1;
-    double **allele_frequency;
-    double *time;
-    double sweep_locus = model->params.sweep.position;
-    size_t j = 0;
-    double recomb_mass;
-    unsigned long events = 0;
-    label_id_t label;
-    double rec_rates[] = { 0.0, 0.0 };
-    double sweep_pop_sizes[] = { 0.0, 0.0 };
-    double tmp_rand, e_sum, pop_size;
-    double p_coal_b, p_coal_B, sweep_pop_tot_rate;
-    double p_rec_b, p_rec_B;
-    double t_start, t_next_event, t_last, next, t_current;
-    const char *filename = "/home/agushin/sweep_trajectories.bin";
-    double demes_dbl, num_steps_dbl;
-    size_t demes, num_steps;
-    double t_unscaled;
+    uint32_t j;
+    avl_node_t *node, *next;
+    avl_tree_t *pop;
 
-    if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
-        /* Could be, we just haven't implemented it */
-        ret = MSP_ERR_SWEEPS_GC_NOT_SUPPORTED;
+    /* We only support one population and two labels for now */
+    if (self->num_populations != 1 || self->num_labels != 2) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
         goto out;
     }
 
-    /* Keep the compiler happy */
-    sweep_pop_tot_rate = 0;
-    p_coal_b = 0;
-    p_coal_B = 0;
-    p_rec_b = 0;
-    p_rec_B = 0;
-
-
-    FILE *file = fopen(filename, "r");
-
-    fread(&demes_dbl, sizeof(double), 1, file);
-    fread(&num_steps_dbl, sizeof(double), 1, file);
-
-    demes = (size_t) demes_dbl;
-    num_steps = (size_t) num_steps_dbl;
-
-    allele_frequency = (double **) malloc(sizeof(double *) * (long unsigned int) num_steps);
-    time = (double *) malloc(sizeof(double) * num_steps);
-    for (size_t i = 0; i < num_steps; i++) {
-        allele_frequency[i] = (double *) malloc(sizeof(double) * (long unsigned int) demes);
-    }
-
-    pop_size = get_population_size(&self->populations[0], self->time);
-
-    // Read time and allele frequencies
-    for (size_t step = 0; step < num_steps; step++) {
-        fread(&time[step], sizeof(double), 1, file); // Read time
-        for (size_t i = 0; i < demes; i++) {
-            fread(&allele_frequency[step][i], sizeof(double), 1, file); // Read frequency for each deme
-            allele_frequency[step][i] /= pop_size;
+    /* Move ancestors to new labels. */
+    for (j = 0; j < self->num_populations; j++) {
+        tsk_bug_assert(avl_count(&self->populations[j].ancestors[1]) == 0);
+        pop = &self->populations[j].ancestors[0];
+        node = pop->head;
+        while (node != NULL) {
+            next = node->next;
+            if (gsl_rng_uniform(self->rng) < switch_proba) {
+                ret = msp_move_individual(self, node, pop, (population_id_t) j, 1);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+            node = next;
         }
     }
-
-    fread(&t_last, sizeof(double), 1, file);
-
-    // Close the file
-    fclose(file);
-
-    t_start = self->time;
-
-    ret = msp_sweep_initialise(self, allele_frequency[0][0]);
-    if (ret != 0) {
-        goto out;
-    }
+out:
+    return ret;
 }
 
 static int
 msp_run_sweep(msp_t *self)
 {
+    // printf("RUN msp_run_sweep\n");
     int ret = 0;
     simulation_model_t *model = &self->model;
     size_t curr_step = 1;
+    size_t num_steps;
     double **allele_frequency;
     double *time;
     double sweep_locus = model->params.sweep.position;
+    double sweep_dt;
     size_t j = 0;
     double recomb_mass;
     unsigned long events = 0;
@@ -5110,12 +5189,11 @@ msp_run_sweep(msp_t *self)
     double tmp_rand, e_sum, pop_size;
     double p_coal_b, p_coal_B, sweep_pop_tot_rate;
     double p_rec_b, p_rec_B;
-    double t_start, t_next_event, t_last, next, t_current;
-    const char *filename = "/home/agushin/sweep_trajectories.bin";
-    double demes_dbl, num_steps_dbl;
-    size_t demes, num_steps;
+    double t_start, t_next_event;
+    const char *filename = "/home/agushin/sweep_trajectories.txt";
+    int demes;
     double t_unscaled;
-
+    
     if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
         /* Could be, we just haven't implemented it */
         ret = MSP_ERR_SWEEPS_GC_NOT_SUPPORTED;
@@ -5128,40 +5206,49 @@ msp_run_sweep(msp_t *self)
     p_coal_B = 0;
     p_rec_b = 0;
     p_rec_B = 0;
+    /* JK: I've removed the time and event limits on this function to simplify
+     * things as function is currently 'non-rentrant'; we can't stop in the middle
+     * of the sweep and pick it up again from where we left off later. This is
+     * different to all the other model runners. Probably the simplest thing to
+     * do here is to make the trajectory times absolute wrt to the simulation, and
+     * to then increment curr_step accordingly. We can then probably reason about
+     * when the call msp_sweep_initialise and msp_sweep_finalise
+     * depending on the value of curr_step, and hopefully reintroduce the max_time
+     * and max_steps parameters. */
 
-
+    ret = model->params.sweep.generate_trajectory(
+        &model->params.sweep, self, 0, &num_steps, &time, &allele_frequency);
     FILE *file = fopen(filename, "r");
 
-    fread(&demes_dbl, sizeof(double), 1, file);
-    fread(&num_steps_dbl, sizeof(double), 1, file);
+    fread(&demes, 4, 1, file);
+    fseek(file, 1, SEEK_CUR);
+    fread(&num_steps, 4, 1, file);
+    fseek(file, 1, SEEK_CUR);
 
-    demes = (size_t) demes_dbl;
-    num_steps = (size_t) num_steps_dbl;
-
-    allele_frequency = (double **) malloc(sizeof(double *) * (long unsigned int) num_steps);
-    time = (double *) malloc(sizeof(double) * num_steps);
-    for (size_t i = 0; i < num_steps; i++) {
+    allele_frequency = (double **) malloc(sizeof(double *) * (long unsigned int) demes);
+    time = (double *) malloc(sizeof(unsigned int) * num_steps);
+    for (int i = 0; i < demes; i++) {
         allele_frequency[i] = (double *) malloc(sizeof(double) * (long unsigned int) demes);
     }
 
-    pop_size = get_population_size(&self->populations[0], self->time);
-
-    // Read time and allele frequencies
-    for (size_t step = 0; step < num_steps; step++) {
-        fread(&time[step], sizeof(double), 1, file); // Read time
-        for (size_t i = 0; i < demes; i++) {
-            fread(&allele_frequency[step][i], sizeof(double), 1, file); // Read frequency for each deme
-            allele_frequency[step][i] /= pop_size;
+    int arrayPos = 0;
+    for (int row = 0; (size_t) row < num_steps; row++) {
+        if (arrayPos == 0) {
+            fread(time + row, sizeof(double), 1, file);
+            fseek(file, 1, SEEK_CUR);
         }
+        else {
+            fread(allele_frequency[arrayPos - 1] + row, sizeof(double), 1, file);
+            fseek(file, 1, SEEK_CUR);
+        }
+        arrayPos++;
+        arrayPos %= demes + 1;
     }
 
-    fread(&t_last, sizeof(double), 1, file);
-
-    // Close the file
-    fclose(file);
-
     t_start = self->time;
-
+    sweep_dt = time[1] - time[0];
+    tsk_bug_assert(sweep_dt > 0);
+    
     ret = msp_sweep_initialise(self, allele_frequency[0][0]);
     if (ret != 0) {
         goto out;
@@ -5183,13 +5270,13 @@ msp_run_sweep(msp_t *self)
              */
             rec_rates[j] = TSK_MAX(0, recomb_mass);
         }
-        
 
         
+        e_sum = p_coal_b;
         /* convert time scale */
-        pop_size = get_population_size(&self->populations[0], self->time);
-        t_unscaled = time[curr_step];
-        tsk_bug_assert(t_unscaled >= 0);
+            pop_size = get_population_size(&self->populations[0], self->time);
+t_unscaled = time[curr_step] * self->ploidy * pop_size;
+        tsk_bug_assert(t_unscaled > 0);
         self->time = t_start + t_unscaled;
         /* printf("event time: %g\n", self->time); */
         while (true) {
@@ -5201,7 +5288,7 @@ msp_run_sweep(msp_t *self)
 
             //Case: Allele freq is 1, coalease to one mutant lineage.
             //Hard coded to interact with deme 0 until we generalize.
-            if (allele_frequency[curr_step][0] == 1 / pop_size) {
+            if (allele_frequency[0][curr_step] == 1) {
                 while (sweep_pop_sizes[1] > 1) {
                     ret = self->common_ancestor_event(self, 1, 1);
                     sweep_pop_sizes[1] = avl_count(&self->populations[0].ancestors[1]);
@@ -5211,7 +5298,7 @@ msp_run_sweep(msp_t *self)
 
             //Case: Allele freq is N-1, coalease to one wild-type lineage.
             //Hard coded to interact with deme 0 until we generalize.
-            if (allele_frequency[curr_step][0] == (pop_size - 1) / pop_size) {
+            if (allele_frequency[0][curr_step] == pop_size - 1) {
                 while (sweep_pop_sizes[0] > 1) {
                     ret = self->common_ancestor_event(self, 0, 0);
                     sweep_pop_sizes[0] = avl_count(&self->populations[0].ancestors[0]);
@@ -5222,59 +5309,55 @@ msp_run_sweep(msp_t *self)
             p_coal_B = 0;
             if (avl_count(&self->populations[0].ancestors[1]) > 1) {
                 p_coal_B = ((sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1)) * 0.5)
-                           / allele_frequency[curr_step][0];
-                p_coal_B /= (pop_size * self->ploidy);
+                           / allele_frequency[0][curr_step] * sweep_dt;
             }
             p_coal_b = 0;
             if (avl_count(&self->populations[0].ancestors[0]) > 1) {
                 p_coal_b = ((sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1)) * 0.5)
-                           / (1.0 - allele_frequency[curr_step][0]);
-                p_coal_b /= (pop_size * self->ploidy);
+                           / (1.0 - allele_frequency[0][curr_step]) * sweep_dt;
             }
-            p_rec_b = rec_rates[0];
-            p_rec_B = rec_rates[1];
+            p_rec_b = rec_rates[0] * pop_size * self->ploidy * sweep_dt;
+            p_rec_B = rec_rates[1] * pop_size * self->ploidy * sweep_dt;
             sweep_pop_tot_rate = p_coal_b + p_coal_B + p_rec_b + p_rec_B;
-
+            
             tmp_rand = gsl_rng_uniform(self->rng);
 
-            t_current = time[curr_step];
             t_next_event = gsl_ran_exponential(self->rng, 1 / sweep_pop_tot_rate);
-            e_sum = p_coal_b;
-            if (curr_step < num_steps - 1) {
-                next = time[curr_step + 1];
-            }
-            else {
-                next = t_last;
-            }
-            if (t_current + t_next_event >= next) {
-                break;
+
+            if (t_next_event >= 1) {
+                self->time += (int) 1 / (self->ploidy * pop_size);
+            break;
+        } else {
+                self->time += (1 / (self->ploidy * pop_size)) * t_next_event;
+        if (tmp_rand < e_sum / sweep_pop_tot_rate) {
+            /* coalescent in b background */
+            ret = self->common_ancestor_event(self, 0, 0);
+            printf("Success event: common_ancestor_event(self, j, 0)\n");
+        } else {
+            e_sum += p_coal_B;
+            if (tmp_rand < e_sum / sweep_pop_tot_rate) {
+                /* coalescent in B background */
+                ret = self->common_ancestor_event(self, 0, 1);
+                printf("Success event: common_ancestor_event(self, j, 1)\n");
             } else {
+                e_sum += p_rec_b;
                 if (tmp_rand < e_sum / sweep_pop_tot_rate) {
-                    /* coalescent in b background */
-                    //SPECIAL CASE: We get here and there's no WT lineage
-                    ret = self->common_ancestor_event(self, 0, 0);
+                    /* recomb in b background */
+                    ret = msp_sweep_recombination_event(
+                        self, 0, sweep_locus, (1.0 - allele_frequency[0][curr_step]));
+                    printf("Success event: msp_sweep_recombination_event 0\n");
                 } else {
-                    e_sum += p_coal_B;
-                    if (tmp_rand < e_sum / sweep_pop_tot_rate) {
-                        /* coalescent in B background */
-                        ret = self->common_ancestor_event(self, 0, 1);
-                    } else {
-                        e_sum += p_rec_b;
-                        if (tmp_rand < e_sum / sweep_pop_tot_rate) {
-                            /* recomb in b background */
-                            ret = msp_sweep_recombination_event(self, 0, sweep_locus,
-                                (1.0 - allele_frequency[0][curr_step]));
-                        } else {
-                            /* recomb in B background */
-                            ret = msp_sweep_recombination_event(
-                                self, 1, sweep_locus, allele_frequency[0][curr_step]);
-                        }
-                    }
+                    /* recomb in B background */
+                    ret = msp_sweep_recombination_event(
+                        self, 1, sweep_locus, allele_frequency[0][curr_step]);
+                    printf("Success event: msp_sweep_recombination_event 1\n");
                 }
             }
         }
+}
+        }
         curr_step++;
-        tsk_bug_assert(t_unscaled >= 0);
+        tsk_bug_assert(t_unscaled > 0);
         if (ret != 0) {
             goto out;
         }
@@ -5308,12 +5391,381 @@ msp_run_sweep(msp_t *self)
     ret = MSP_EXIT_MODEL_COMPLETE;
 out:
     free(time);
-    for (size_t i = 0; i < demes; i++) {
+    for (int i = 0; i < demes; i++) {
         free(allele_frequency[i]);
     }
     free(allele_frequency);
     return ret;
 }
+
+static int
+msp_run_sweep_new_yb(msp_t *self)
+{
+    printf("RUN msp_run_sweep_new\n");
+    int ret = 0;
+    if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
+        /* Could be, we just haven't implemented it */
+        ret = MSP_ERR_SWEEPS_GC_NOT_SUPPORTED;
+        goto out;
+    }
+
+    /* Initialization */
+    simulation_model_t *model = &self->model;
+    label_id_t label = 0;
+
+    bool all_sweep_over = true;
+    bool all_step_over = true;
+    bool is_excuted = false;
+
+    size_t num_pops = self->num_populations;
+    size_t j = 0, k = 0;
+    size_t num_events = 6;
+
+    double sweep_dt = 0.0;
+    double total_rate_sum = 0.0;
+    double sweep_locus = model->params.sweep.position;
+    double t_start, t_unscaled;
+    double event_prob, event_rand, tmp_rand, e_sum, pop_size;
+
+    /* Initialize 1-d arrays */
+    bool *sweep_over = calloc(num_pops, sizeof(bool));
+    double *recomb_mass = calloc(num_pops, sizeof(double));
+    double *total_rate = calloc(num_pops, sizeof(double));
+    size_t *curr_steps = calloc(num_pops, sizeof(size_t));
+    sweep_pop_event_t *sweep_pop_events = calloc(num_pops, sizeof(sweep_pop_event_t));
+
+    /* Compute trajactory */
+    int tfinal = 1000;
+    double mig = 0.15;
+    int dim = 1;
+
+    double **allele_frequency = calloc(num_pops, sizeof(double *));
+    double **time = calloc(num_pops, sizeof(double *));
+    size_t *num_steps = calloc(num_pops, sizeof(size_t));
+
+    for (int i = 0; i < num_pops; i++) {
+        allele_frequency[i] = calloc(tfinal, sizeof(double));
+        time[i] = calloc(tfinal, sizeof(double));
+    }
+
+    pop_size = get_population_size(
+        &self->populations[0], self->time); // the sizes of all populations are the same
+    ret = genic_selection_from_forwards(&model->params.sweep, self, num_steps, time,
+        allele_frequency, tfinal, pop_size, num_pops, mig, dim);
+    printf("genic_selection_from_forwards finish\n");
+
+    for (j = 0; j < num_pops; j++) {
+        for (k = 0; k < tfinal; k++) {
+            printf("[%zu][%zu] time: %f, allele_frequency: %f\n", j, k, time[j][k],
+                allele_frequency[j][k]);
+        }
+    }
+    if (ret != 0) {
+        goto out;
+    }
+
+    /* Initialize 2-d arrays */
+    double **sweep_pop_sizes = calloc(num_pops, sizeof(double *));
+    double **rec_rates = calloc(num_pops, sizeof(double *));
+
+    for (j = 0; j < num_pops; j++) {
+
+        sweep_pop_events[j].p_events = calloc(num_events, sizeof(double));
+        sweep_pop_sizes[j] = calloc(self->num_labels, sizeof(double));
+        rec_rates[j] = calloc(self->num_labels, sizeof(double));
+
+        curr_steps[j] = 1;
+
+        /* Set the num_steps, time, and allele_frequency */
+        // ret = model->params.sweep.generate_trajectory(
+        //			  &model->params.sweep, self, j, &num_steps[j], &time[j],
+        //&allele_frequency[j]);
+
+        /* Set the labels with end_frequency */
+        ret = msp_sweep_initialise_new(self, j, allele_frequency[j][0]);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+
+    /* Not affected by num_pops? */
+    t_start = self->time;
+    sweep_dt = model->params.sweep.trajectory_params.genic_selection_trajectory.dt;
+    tsk_bug_assert(sweep_dt > 0);
+
+    while (msp_get_num_ancestors(self) > 0) {
+        total_rate_sum = 0;
+
+        printf("reset p_events\n");
+        for (j = 0; j < num_pops; j++) {
+            total_rate[j] = 0;
+            for (k = 0; k < num_events; k++) {
+                sweep_pop_events[j].p_events[k] = 0.0;
+            }
+        }
+
+        for (j = 0; j < num_pops; j++) {
+            printf("j: %zu\n", j);
+
+            if (curr_steps[j] >= num_steps[j]) {
+                continue;
+            }
+
+            /* Set sweep_pop_sizes and rec_rates for label 1 and 0 */
+            for (k = 0; k < self->num_labels; k++) {
+                printf("k: %zu\n", k);
+                label = (label_id_t) k;
+                recomb_mass[j]
+                    = self->recomb_mass_index == NULL
+                          ? 0
+                          : fenwick_get_total(&self->recomb_mass_index[label]);
+                sweep_pop_sizes[j][k]
+                    = avl_count(&self->populations[j].ancestors[label]);
+                /* We can get small negative rates by numerical jitter which causes
+                 * problems in later calculations and leads to assertion trips.
+                 * See https://github.com/tskit-dev/msprime/issues/1966
+                 */
+                rec_rates[j][k] = TSK_MAX(0, recomb_mass[j]);
+            }
+            printf("Success: Set sweep_pop_sizes and rec_rates for label 1 and 0\n");
+
+            /* Compute the rate */
+            event_prob = 1.0;
+            event_rand = gsl_rng_uniform(self->rng);
+            sweep_over[j] = false;
+            while (event_prob > event_rand && curr_steps[j] < num_steps[j]
+                   && !sweep_over[j]) {
+                pop_size = get_population_size(&self->populations[j], self->time);
+
+                if (avl_count(&self->populations[j].ancestors[1]) > 1) {
+                    sweep_pop_events[j].p_events[1]
+                        = get_sweep_coal_rate(sweep_pop_sizes[j][1],
+                            allele_frequency[j][curr_steps[j]], sweep_dt);
+                    printf("Success: compute p_coal_B\n");
+
+                    sweep_pop_events[j].p_events[5] = get_sweep_mig_rate(self,
+                        sweep_pop_sizes[j][1], allele_frequency[j][curr_steps[j]],
+                        sweep_dt, j, &(sweep_pop_events[j].mig_dest_pop_id_B));
+                    printf("Success: compute p_mig_B\n");
+                }
+
+                if (avl_count(&self->populations[j].ancestors[0]) > 1) {
+                    sweep_pop_events[j].p_events[0]
+                        = get_sweep_coal_rate(sweep_pop_sizes[j][0],
+                            1 - allele_frequency[j][curr_steps[j]], sweep_dt);
+                    printf("Success: compute p_coal_b\n");
+
+                    sweep_pop_events[j].p_events[4] = get_sweep_mig_rate(self,
+                        sweep_pop_sizes[j][0], 1 - allele_frequency[j][curr_steps[j]],
+                        sweep_dt, j, &(sweep_pop_events[j].mig_dest_pop_id_b));
+                    printf("Success: compute p_mig_b\n");
+                }
+
+                sweep_pop_events[j].p_events[2]
+                    = rec_rates[j][0] * pop_size * self->ploidy * sweep_dt;
+                printf("Success: compute p_rec_b\n");
+
+                sweep_pop_events[j].p_events[3]
+                    = rec_rates[j][1] * pop_size * self->ploidy * sweep_dt;
+                printf("Success: compute p_rec_B\n");
+
+                print_sweep_pop_event_info(&sweep_pop_events[j]);
+                total_rate[j]
+                    = get_sweep_pop_events_total_rate(&sweep_pop_events[j], num_events);
+
+                event_prob *= 1.0 - total_rate[j];
+                curr_steps[j]++;
+                sweep_over[j] = total_rate == 0;
+
+                printf("pop_size: %g sweep_dt: %g sweep_pop_sizes[%zu][0]: %g "
+                       "sweep_pop_sizes[%zu][1]: %g\n",
+                    pop_size, sweep_dt, j, sweep_pop_sizes[j][0], j,
+                    sweep_pop_sizes[j][1]);
+
+                printf("step: %zu out of %zu, event_prob: %g rand: %g\n", curr_steps[j],
+                    num_steps[j], event_prob, event_rand);
+            }
+
+            total_rate_sum += total_rate[j];
+            printf("j: %zu, total_rate[j]:%g, total_rate_sum:%g\n", j, total_rate[j],
+                total_rate_sum);
+
+            printf("Success: compute rate\n");
+
+            if (sweep_over[j]) {
+                printf("sweep_over true\n");
+                break;
+            }
+
+        } /* end of FOR loop */
+
+        /* Excute the events */
+        tmp_rand = gsl_rng_uniform(self->rng);
+
+        e_sum = 0;
+        for (j = 0; j < num_pops; j++) {
+            for (k = 0; k < num_events; k++) {
+                printf("Checking excuting j=%zu k=%zu\n", j, k);
+                e_sum += sweep_pop_events[j].p_events[k];
+
+                printf("e_sum/total_rate_sum [%g] > tmp_rand: [%g] ?\n",
+                    e_sum / total_rate_sum, tmp_rand);
+                if ((e_sum / total_rate_sum) > tmp_rand) {
+                    printf("Yes\n");
+
+                    /* convert time scale */
+                    pop_size = get_population_size(&self->populations[j], self->time);
+                    t_unscaled = time[j][curr_steps[j] - 1] * self->ploidy * pop_size;
+                    printf("t_unscaled = %f", t_unscaled);
+                    tsk_bug_assert(t_unscaled > 0);
+                    self->time = t_start + t_unscaled;
+
+                    printf("Start excuting j=%zu k=%zu\n", j, k);
+                    if (k == 0) { /* coalescent in b background */
+                        ret = self->common_ancestor_event(self, j, 0);
+                        printf("Success event: common_ancestor_event(self, j, 0)\n");
+
+                    } else if (k == 1) { /* coalescent in B background */
+                        ret = self->common_ancestor_event(self, j, 1);
+                        printf("Success event: common_ancestor_event(self, j, 1)\n");
+
+                    } else if (k == 2) { /* recomb in b background */
+                        ret = msp_sweep_recombination_event(self, 0, sweep_locus,
+                            (1.0 - allele_frequency[j][curr_steps[j] - 1]));
+                        printf("Success event: msp_sweep_recombination_event 0\n");
+
+                    } else if (k == 3) { /* recomb in B background */
+                        ret = msp_sweep_recombination_event(self, 1, sweep_locus,
+                            allele_frequency[j][curr_steps[j] - 1]);
+                        printf("Success event: msp_sweep_recombination_event 1\n");
+
+                    } else if (k == 4) { /* migration in b background */
+                        ret = msp_sweep_migration_event(
+                            self, j, sweep_pop_events[j].mig_dest_pop_id_b, 0);
+                        printf("Success event: msp_sweep_migration_event 0\n");
+
+                    } else if (k == 5) { /* migration in B background */
+                        ret = msp_sweep_migration_event(
+                            self, j, sweep_pop_events[j].mig_dest_pop_id_b, 1);
+                        printf("Success event: msp_sweep_migration_event 1\n");
+                    }
+
+                    if (ret != 0) {
+                        goto out;
+                    }
+
+                    is_excuted = true;
+                    break;
+                }
+            }
+            if (is_excuted) {
+                break;
+            }
+        }
+
+        /* Check if the sweep is finished for all populations */
+        all_sweep_over = true;
+        for (j = 0; j < num_pops; j++) {
+            if (!sweep_over[j]) {
+                all_sweep_over = false;
+            }
+        }
+        if (all_sweep_over) {
+            printf("all_sweep_over true\n");
+            break;
+        }
+
+        /* Check if all steps are finished */
+        all_step_over = true;
+        for (j = 0; j < num_pops; j++) {
+            printf(
+                "curr_steps[j] %zu < num_steps[j] %zu ?\n", curr_steps[j], num_steps[j]);
+            if (curr_steps[j] < num_steps[j]) {
+                all_step_over = false;
+            }
+        }
+
+        if (all_step_over) {
+            printf("all_step_over true\n");
+            break;
+        }
+
+    } /* end of while loop */
+
+    /* TODO we should probably support fixed events here using
+     * msp_apply_fixed_events() like we do in the coalescent models.
+     * The point below about computing population sizes should be easily
+     * worked around using msp_compute_population_size(). */
+
+    /* Check if any demographic events should have happened during the
+     * event and raise an error if so. This is to keep computing population
+     * sizes simple */
+    //	if (self->next_demographic_event != NULL
+    //					&& self->next_demographic_event->time <= self->time) {
+    //			ret = MSP_ERR_EVENTS_DURING_SWEEP;
+    //			goto out;
+    //	}
+
+    /* Rule out sampling events for now, but there's no reason we can't
+     * support them. */
+    if (self->next_sampling_event < self->num_sampling_events
+        && self->sampling_events[self->next_sampling_event].time <= self->time) {
+        ret = MSP_ERR_EVENTS_DURING_SWEEP;
+        goto out;
+    }
+
+    ret = msp_sweep_finalise(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = MSP_EXIT_MODEL_COMPLETE;
+out:
+    msp_safe_free(time);
+    msp_safe_free(allele_frequency);
+    return ret;
+}
+
+/* Not used
+static int msp_run_sweep_forward_back(msp_t *self) {
+    int ret = 0;
+    simulation_model_t *model = &self->model;
+    size_t curr_step = 1;
+    size_t num_steps;
+    double *allele_frequency = NULL;
+    double *time = NULL;
+    double sweep_locus = model->params.sweep.position;
+    double sweep_dt;
+    size_t j = 0;
+    double recomb_mass;
+    unsigned long events = 0;
+    label_id_t label;
+    double rec_rates[] = { 0.0, 0.0 };
+    double sweep_pop_sizes[] = { 0.0, 0.0 };
+    double event_prob, event_rand, tmp_rand, e_sum, pop_size;
+    double p_coal_b, p_coal_B, total_rate, sweep_pop_tot_rate;
+    double p_rec_b, p_rec_B;
+    double t_start, t_unscaled;
+    bool sweep_over;
+
+    if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
+        ret = MSP_ERR_SWEEPS_GC_NOT_SUPPORTED;
+        goto out;
+    }
+
+    sweep_pop_tot_rate = 0;
+    p_coal_b = 0;
+    p_coal_B = 0;
+    p_rec_b = 0;
+    p_rec_B = 0;
+
+
+
+out:
+    msp_safe_free(time);
+    msp_safe_free(allele_frequency);
+    return ret;
+}
+*/
 
 /* Runs the simulation backwards in time until either the sample has coalesced,
  * or specified maximum simulation time has been reached or the specified maximum
@@ -5332,6 +5784,16 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = MSP_ERR_BAD_STATE;
         goto out;
     }
+    // if (self->additional_nodes > 0
+    //     && !(self->model.type == MSP_MODEL_HUDSON || self->model.type == MSP_MODEL_SMC
+    //          || self->model.type == MSP_MODEL_SMC_PRIME
+    //          || self->model.type == MSP_MODEL_BETA
+    //          || self->model.type == MSP_MODEL_DIRAC)) {
+    //     /* We currently only support the full ARG recording on the standard
+    //      * coalescent, SMC, or multiple merger coalescents. */
+    //     ret = MSP_ERR_UNSUPPORTED_OPERATION;
+    //     goto out;
+    // }
 
     if (msp_is_completed(self)) {
         /* If the simulation is completed, run() is a no-op for
@@ -5343,7 +5805,8 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = msp_run_pedigree(self, max_time, max_events);
     } else if (self->model.type == MSP_MODEL_SWEEP) {
         /* FIXME making sweep atomic for now as it's non-rentrant */
-        ret = msp_run_sweep(self);
+        // ret = msp_run_sweep(self);
+        ret = msp_run_sweep_new_yb(self);
     } else {
         ret = msp_run_coalescent(self, max_time, max_events);
     }
@@ -5703,6 +6166,12 @@ msp_get_breakpoints(msp_t *self, size_t *breakpoints)
     }
     ret = 0;
     return ret;
+}
+
+double MSP_WARN_UNUSED
+msp_get_migration_prop(msp_t *self, tsk_id_t mig_source_pop, tsk_id_t mig_dest_pop)
+{
+    return self->migration_matrix[mig_source_pop * self->num_populations + mig_dest_pop];
 }
 
 int MSP_WARN_UNUSED
@@ -6670,6 +7139,10 @@ msp_census_event(msp_t *self, demographic_event_t *event)
 
                 while (seg != NULL) {
                     // Add an edge to the edge table.
+                    ret = msp_flush_edges(self);
+                    if (ret != 0) {
+                        goto out;
+                    }
                     ret = tsk_node_table_add_row(&self->tables->nodes,
                         MSP_NODE_IS_CEN_EVENT, event->time, i, TSK_NULL, NULL, 0);
                     if (ret < 0) {
@@ -7239,8 +7712,58 @@ genic_selection_stochastic_forwards(double dt, double freq, double alpha, double
     return freq + (ux * dt) + sign * sqrt(freq * (1.0 - freq) * dt);
 }
 
+int
+genic_selection_from_forwards(sweep_t *self, msp_t *simulator, size_t *ret_num_steps,
+    double **ret_time, double **ret_allele_frequency, unsigned int pastward_time,
+    unsigned int N, unsigned int L, double m, int dim)
+{
+    int ret = 0;
+    genic_selection_trajectory_t trajectory
+        = self->trajectory_params.genic_selection_trajectory;
+    gsl_rng *rng = simulator->rng;
+
+    sweep_freqs *freqs;
+
+    if (dim < 1 || dim > 2) {
+        ret = MSP_ERR_BAD_PARAM_VALUE;
+        goto out;
+    } else if (dim == 1) {
+        printf("Start running forward_1d\n");
+        freqs = forward_1d(L, N, trajectory.s, m, pastward_time, gsl_rng_get(rng));
+    } else {
+        freqs = forward_2d(L, N, trajectory.s, m, pastward_time, 1, gsl_rng_get(rng));
+    }
+
+    /* Initialization */
+    for (unsigned int i = 0; i < L; i++) {
+        ret_num_steps[i] = 0;
+        for (int j = 0; j < freqs->length; j++) {
+            ret_allele_frequency[i][j] = 0;
+            ret_time[i][j] = 0;
+        }
+    }
+
+    double t = 0;
+    int current_gen = 0;
+    while (current_gen < freqs->length) {
+        size_t pop_id = freqs->pop_id_records[freqs->length - current_gen - 1];
+        double x = (double) freqs->sweep_frequencies[freqs->length - current_gen - 1];
+
+        ret_allele_frequency[pop_id][current_gen] = x / N;
+
+        t += trajectory.dt;
+        ret_time[pop_id][current_gen] = t;
+
+        ret_num_steps[pop_id]++;
+        current_gen++;
+    }
+
+out:
+    return ret;
+}
+
 static int
-genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
+genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator, tsk_id_t pop_id,
     size_t *ret_num_steps, double **ret_time, double **ret_allele_frequency)
 {
     int ret = 0;
@@ -7248,8 +7771,8 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         = self->trajectory_params.genic_selection_trajectory;
     gsl_rng *rng = simulator->rng;
     size_t max_steps = 64;
-    double *time = malloc(max_steps * sizeof(*time));
-    double *allele_frequency = malloc(max_steps * sizeof(*allele_frequency));
+    double *time = calloc(max_steps, sizeof(*time));
+    double *allele_frequency = calloc(max_steps, sizeof(*allele_frequency));
     double x, t, *tmp, pop_size, sim_time, alpha;
     size_t num_steps;
 
@@ -7286,7 +7809,7 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
             }
             allele_frequency = tmp;
         }
-        pop_size = get_population_size(&simulator->populations[0], sim_time);
+        pop_size = get_population_size(&simulator->populations[pop_id], sim_time);
         alpha = 2 * pop_size * trajectory.s;
         x = 1.0
             - genic_selection_stochastic_forwards(
