@@ -2517,12 +2517,21 @@ class Simulator:
 
             else:
                 # Get all lineages that emerged from lineage_a and lineage_b
-                lineage_ids = pop.get_emerged_from_lineage(lineage_a, label)
-                i = random.choice(lineage_ids)
-                x = pop.remove(i, label)
+                lineage_ids_a = pop.get_emerged_from_lineage(lineage_a, label)
+                lineage_ids_b = pop.get_emerged_from_lineage(lineage_b, label)
 
-                lineage_ids = pop.get_emerged_from_lineage(lineage_b, label)
-                j = random.choice(lineage_ids)
+                if len(lineage_ids_a) == 1 and lineage_ids_a == lineage_ids_b:
+                    return
+
+                i = None
+                j = None
+                while i == j:
+                    i = random.choice(lineage_ids_a)
+                    j = random.choice(lineage_ids_b)
+
+                x = pop.remove(i, label)
+                if i < j:
+                    j -= 1
                 y = pop.remove(j, label)
 
         self.merge_two_ancestors(population_index, label, x, y)
