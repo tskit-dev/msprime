@@ -5838,80 +5838,6 @@ out:
     return ret;
 }
 
-static int msp_run_sweep_new(msp_t *self) {
-    int ret = 0;
-    simulation_model_t *model = &self->model;
-    size_t curr_step = 1;
-    double **allele_frequency;
-    double *time;
-    double sweep_locus = model->params.sweep.position;
-    size_t j = 0;
-    double recomb_mass;
-    unsigned long events = 0;
-    label_id_t label;
-    double rec_rates[] = { 0.0, 0.0 };
-    double sweep_pop_sizes[] = { 0.0, 0.0 };
-    double tmp_rand, e_sum, pop_size;
-    double p_coal_b, p_coal_B, sweep_pop_tot_rate;
-    double p_rec_b, p_rec_B;
-    double t_start, t_next_event, t_last, next, t_current;
-    const char *filename = "/home/agushin/sweep_trajectories.bin";
-    double demes_dbl, num_steps_dbl;
-    size_t demes, num_steps;
-    double t_unscaled;
-
-    if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
-        /* Could be, we just haven't implemented it */
-        ret = MSP_ERR_SWEEPS_GC_NOT_SUPPORTED;
-        goto out;
-    }
-
-    /* Keep the compiler happy */
-    sweep_pop_tot_rate = 0;
-    p_coal_b = 0;
-    p_coal_B = 0;
-    p_rec_b = 0;
-    p_rec_B = 0;
-
-
-    FILE *file = fopen(filename, "r");
-
-    fread(&demes_dbl, sizeof(double), 1, file);
-    fread(&num_steps_dbl, sizeof(double), 1, file);
-
-    demes = (size_t) demes_dbl;
-    num_steps = (size_t) num_steps_dbl;
-
-    allele_frequency = (double **) malloc(sizeof(double *) * (long unsigned int) num_steps);
-    time = (double *) malloc(sizeof(double) * num_steps);
-    for (size_t i = 0; i < num_steps; i++) {
-        allele_frequency[i] = (double *) malloc(sizeof(double) * (long unsigned int) demes);
-    }
-
-    pop_size = get_population_size(&self->populations[0], self->time);
-
-    // Read time and allele frequencies
-    for (size_t step = 0; step < num_steps; step++) {
-        fread(&time[step], sizeof(double), 1, file); // Read time
-        for (size_t i = 0; i < demes; i++) {
-            fread(&allele_frequency[step][i], sizeof(double), 1, file); // Read frequency for each deme
-            allele_frequency[step][i] /= pop_size;
-        }
-    }
-
-    fread(&t_last, sizeof(double), 1, file);
-
-    // Close the file
-    fclose(file);
-
-    t_start = self->time;
-
-    ret = msp_sweep_initialise(self, allele_frequency[0][0]);
-    if (ret != 0) {
-        goto out;
-    }
-}
-
 static int
 msp_run_sweep(msp_t *self)
 {
@@ -5931,12 +5857,11 @@ msp_run_sweep(msp_t *self)
     double tmp_rand, e_sum, pop_size;
     double p_coal_b, p_coal_B, sweep_pop_tot_rate;
     double p_rec_b, p_rec_B;
-    double t_start, t_next_event, t_last, next, t_current;
+    double t_start, t_next_event, t_last, t_current;
     const char *filename = "/home/agushin/sweep_trajectories.bin";
-    double demes_dbl, num_steps_dbl;
+    double num_steps_dbl;
     size_t demes, num_steps;
-    double t_unscaled;
-    double init, final;
+    double init;
 
     if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
         /* Could be, we just haven't implemented it */
@@ -5950,6 +5875,7 @@ msp_run_sweep(msp_t *self)
     p_coal_B = 0;
     p_rec_b = 0;
     p_rec_B = 0;
+    demes = 1;
 
 
     FILE *file = fopen(filename, "r");
@@ -5988,7 +5914,7 @@ msp_run_sweep(msp_t *self)
     double currpop = allele_frequency[curr_step][0] * pop_size;
     curr_step--;
     
-    while (msp_get_num_ancestors(self) > 0 && curr_step >= 0) {
+    while (msp_get_num_ancestors(self) > 0 && curr_step > 0) {
         events++;
         /* Set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
@@ -6008,27 +5934,38 @@ msp_run_sweep(msp_t *self)
         
         /* convert time scale */
         pop_size = get_population_size(&self->populations[0], self->time);
-        tsk_bug_assert(t_unscaled >= 0);
         /* printf("event time: %g\n", self->time); */
         
         while (true) {
 
-            double timeslice;
             double next;
             char evtype;
             
-            fread(&evtype, sizeof(double), 1, file);
-            fread(&timeslice, sizeof(double), 1, file);
+            fread(&evtype, sizeof(double), 4, file);
+            fread(&next, sizeof(double), 1, file);
 
             pop_size = get_population_size(&self->populations[0], self->time);
 
+            size_t ancestors = msp_get_num_ancestors(self);
+            double coal = (double) ancestors * (double) (ancestors - 1);
             if (evtype == 'w') {
                 currpop--;
-                allele_frequency[curr_step][0] = currpop / pop_size; //Total #of mutant lineages?
+                allele_frequency[curr_step][0] = currpop / pop_size;
+                coal = coal / (currpop * (currpop - 1));
+                coal = 1 - coal;
+                tmp_rand = gsl_rng_uniform(self->rng);
+                if (tmp_rand <= coal) {
+                    ret = self->common_ancestor_event(self, 1, 1);
+                }
             }
             else {
                 currpop++;
                 allele_frequency[curr_step][0] = currpop / pop_size;
+                coal = coal / (currpop * (currpop - 1));
+                tmp_rand = gsl_rng_uniform(self->rng);
+                if (tmp_rand <= coal) {
+                    ret = self->common_ancestor_event(self, 1, 1);
+                }
             }
 
             //Case: Allele freq is 1, coalease to one mutant lineage.
@@ -6103,7 +6040,6 @@ msp_run_sweep(msp_t *self)
         }
         fclose(file);
         curr_step++;
-        tsk_bug_assert(t_unscaled >= 0);
         if (ret != 0) {
             goto out;
         }
@@ -8212,7 +8148,7 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         alpha = 2 * pop_size * trajectory.s;
         x = 1.0
             - genic_selection_stochastic_forwards(
-                trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
+                  trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
         /* need our recored traj to stay in bounds */
         t += trajectory.dt;
         sim_time += trajectory.dt * pop_size * simulator->ploidy;
@@ -8237,6 +8173,7 @@ out:
     msp_safe_free(allele_frequency);
     return ret;
 }
+
 
 static void
 genic_selection_print_state(sweep_t *self, FILE *out)
