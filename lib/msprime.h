@@ -45,6 +45,7 @@
 #define MSP_MODEL_DTWF 5
 #define MSP_MODEL_SWEEP 6
 #define MSP_MODEL_WF_PED 7
+#define MSP_MODEL_SMC_K 8
 
 /* Exit codes from msp_run to distinguish different reasons for exiting
  * before coalescence. */
@@ -84,12 +85,27 @@ typedef struct segment_t_t {
     size_t id;
     struct segment_t_t *prev;
     struct segment_t_t *next;
+    struct hull_t_t *hull;
 } segment_t;
 
 typedef struct {
     double position;
     uint32_t value;
 } node_mapping_t;
+
+typedef struct hull_t_t {
+    double left;
+    double right;
+    segment_t *lineage;
+    size_t id;
+    uint64_t count;
+    uint64_t insertion_order;
+} hull_t;
+
+typedef struct {
+    double position;
+    uint64_t insertion_order;
+} hullend_t;
 
 #define MSP_POP_STATE_INACTIVE 0
 #define MSP_POP_STATE_ACTIVE 1
@@ -106,6 +122,9 @@ typedef struct {
     avl_tree_t *ancestors;
     tsk_size_t num_potential_destinations;
     tsk_id_t *potential_destinations;
+    avl_tree_t *hulls_left;
+    avl_tree_t *hulls_right;
+    fenwick_t *coal_mass_index;
 } population_t;
 
 #define MSP_MAX_PED_PLOIDY 2
@@ -142,6 +161,10 @@ typedef struct {
 } sampling_event_t;
 
 /* Simulation models */
+
+typedef struct {
+    double hull_offset;
+} smc_k_coalescent_t;
 
 typedef struct {
     double alpha;
@@ -195,6 +218,7 @@ typedef struct _sweep_t {
 typedef struct _simulation_model_t {
     int type;
     union {
+        smc_k_coalescent_t smc_k_coalescent;
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
         sweep_t sweep;
@@ -236,6 +260,7 @@ typedef struct _msp_t {
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
     size_t segment_block_size;
+    size_t hull_block_size;
     /* Counters for statistics */
     size_t num_re_events;
     size_t num_ca_events;
@@ -272,6 +297,9 @@ typedef struct _msp_t {
     object_heap_t node_mapping_heap;
     /* We keep an independent segment heap for each label */
     object_heap_t *segment_heap;
+    /* We keep an independent hull heap for each label */
+    object_heap_t *hull_heap;
+    object_heap_t *hullend_heap;
     /* The tables used to store the simulation state */
     tsk_table_collection_t *tables;
     tsk_bookmark_t input_position;
@@ -440,6 +468,7 @@ int msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng);
 int msp_set_simulation_model_hudson(msp_t *self);
 int msp_set_simulation_model_smc(msp_t *self);
 int msp_set_simulation_model_smc_prime(msp_t *self);
+int msp_set_simulation_model_smc_k(msp_t *self, double hull_offset);
 int msp_set_simulation_model_dtwf(msp_t *self);
 int msp_set_simulation_model_fixed_pedigree(msp_t *self);
 int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
@@ -464,6 +493,7 @@ int msp_set_num_labels(msp_t *self, size_t num_labels);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
+int msp_set_hull_block_size(msp_t *self, size_t block_size);
 int msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix);
 int msp_set_population_configuration(msp_t *self, int population_id, double initial_size,
     double growth_rate, bool initially_active);
@@ -561,7 +591,4 @@ void mutgen_print_state(mutgen_t *self, FILE *out);
 int msp_multi_merger_common_ancestor_event(
     msp_t *self, avl_tree_t *ancestors, avl_tree_t *Q, uint32_t k, uint32_t num_pots);
 
-int genic_selection_from_forwards(sweep_t *self, msp_t *simulator, 
-    size_t *ret_num_steps, double **ret_time, double **ret_allele_frequency,
-    unsigned int pastward_time, unsigned int N, unsigned int L, double m, int dim);
 #endif /*__MSPRIME_H__*/
