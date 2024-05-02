@@ -5915,6 +5915,7 @@ static int msp_run_sweep_new(msp_t *self) {
 static int
 msp_run_sweep(msp_t *self)
 {
+
     int ret = 0;
     simulation_model_t *model = &self->model;
     size_t curr_step = 1;
@@ -5935,6 +5936,7 @@ msp_run_sweep(msp_t *self)
     double demes_dbl, num_steps_dbl;
     size_t demes, num_steps;
     double t_unscaled;
+    double init, final;
 
     if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
         /* Could be, we just haven't implemented it */
@@ -5952,10 +5954,9 @@ msp_run_sweep(msp_t *self)
 
     FILE *file = fopen(filename, "r");
 
-    fread(&demes_dbl, sizeof(double), 1, file);
     fread(&num_steps_dbl, sizeof(double), 1, file);
+    fread(&init, sizeof(double), 1, file);
 
-    demes = (size_t) demes_dbl;
     num_steps = (size_t) num_steps_dbl;
 
     allele_frequency = (double **) malloc(sizeof(double *) * (long unsigned int) num_steps);
@@ -5965,15 +5966,6 @@ msp_run_sweep(msp_t *self)
     }
 
     pop_size = get_population_size(&self->populations[0], self->time);
-
-    // Read time and allele frequencies
-    for (size_t step = 0; step < num_steps; step++) {
-        fread(&time[step], sizeof(double), 1, file); // Read time
-        for (size_t i = 0; i < demes; i++) {
-            fread(&allele_frequency[step][i], sizeof(double), 1, file); // Read frequency for each deme
-            allele_frequency[step][i] /= pop_size;
-        }
-    }
 
     fread(&t_last, sizeof(double), 1, file);
 
@@ -5987,8 +5979,16 @@ msp_run_sweep(msp_t *self)
         goto out;
     }
 
-    curr_step = 0;
-    while (msp_get_num_ancestors(self) > 0 && curr_step < num_steps) {
+    curr_step = num_steps;
+    allele_frequency[curr_step][0] = init;
+    
+
+    fread(&t_start, sizeof(double), 1, file);
+    self->time = t_start;
+    double currpop = allele_frequency[curr_step][0] * pop_size;
+    curr_step--;
+    
+    while (msp_get_num_ancestors(self) > 0 && curr_step >= 0) {
         events++;
         /* Set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
@@ -6008,16 +6008,28 @@ msp_run_sweep(msp_t *self)
         
         /* convert time scale */
         pop_size = get_population_size(&self->populations[0], self->time);
-        t_unscaled = time[curr_step];
         tsk_bug_assert(t_unscaled >= 0);
-        self->time = t_start + t_unscaled;
         /* printf("event time: %g\n", self->time); */
+        
         while (true) {
-            if (msp_get_num_ancestors(self) <= 1) {
-                goto out;
-            }
+
+            double timeslice;
+            double next;
+            char evtype;
+            
+            fread(&evtype, sizeof(double), 1, file);
+            fread(&timeslice, sizeof(double), 1, file);
 
             pop_size = get_population_size(&self->populations[0], self->time);
+
+            if (evtype == 'w') {
+                currpop--;
+                allele_frequency[curr_step][0] = currpop / pop_size; //Total #of mutant lineages?
+            }
+            else {
+                currpop++;
+                allele_frequency[curr_step][0] = currpop / pop_size;
+            }
 
             //Case: Allele freq is 1, coalease to one mutant lineage.
             //Hard coded to interact with deme 0 until we generalize.
@@ -6057,16 +6069,12 @@ msp_run_sweep(msp_t *self)
 
             tmp_rand = gsl_rng_uniform(self->rng);
 
-            t_current = time[curr_step];
+            t_current = self->time;
             t_next_event = gsl_ran_exponential(self->rng, 1 / sweep_pop_tot_rate);
             e_sum = p_coal_b;
-            if (curr_step < num_steps - 1) {
-                next = time[curr_step + 1];
-            }
-            else {
-                next = t_last;
-            }
+
             if (t_current + t_next_event >= next) {
+                self->time += next;
                 break;
             } else {
                 if (tmp_rand < e_sum / sweep_pop_tot_rate) {
@@ -6093,6 +6101,7 @@ msp_run_sweep(msp_t *self)
                 }
             }
         }
+        fclose(file);
         curr_step++;
         tsk_bug_assert(t_unscaled >= 0);
         if (ret != 0) {
