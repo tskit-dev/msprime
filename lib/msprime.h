@@ -35,6 +35,7 @@
 #include "fenwick.h"
 #include "object_heap.h"
 #include "rate_map.h"
+#include "forward.h"
 
 #define MSP_MODEL_HUDSON 0
 #define MSP_MODEL_SMC 1
@@ -44,6 +45,7 @@
 #define MSP_MODEL_DTWF 5
 #define MSP_MODEL_SWEEP 6
 #define MSP_MODEL_WF_PED 7
+#define MSP_MODEL_SMC_K 8
 
 /* Exit codes from msp_run to distinguish different reasons for exiting
  * before coalescence. */
@@ -83,12 +85,27 @@ typedef struct segment_t_t {
     size_t id;
     struct segment_t_t *prev;
     struct segment_t_t *next;
+    struct hull_t_t *hull;
 } segment_t;
 
 typedef struct {
     double position;
     uint32_t value;
 } node_mapping_t;
+
+typedef struct hull_t_t {
+    double left;
+    double right;
+    segment_t *lineage;
+    size_t id;
+    uint64_t count;
+    uint64_t insertion_order;
+} hull_t;
+
+typedef struct {
+    double position;
+    uint64_t insertion_order;
+} hullend_t;
 
 #define MSP_POP_STATE_INACTIVE 0
 #define MSP_POP_STATE_ACTIVE 1
@@ -105,6 +122,9 @@ typedef struct {
     avl_tree_t *ancestors;
     tsk_size_t num_potential_destinations;
     tsk_id_t *potential_destinations;
+    avl_tree_t *hulls_left;
+    avl_tree_t *hulls_right;
+    fenwick_t *coal_mass_index;
 } population_t;
 
 #define MSP_MAX_PED_PLOIDY 2
@@ -143,6 +163,10 @@ typedef struct {
 /* Simulation models */
 
 typedef struct {
+    double hull_offset;
+} smc_k_coalescent_t;
+
+typedef struct {
     double alpha;
     double truncation_point;
 } beta_coalescent_t;
@@ -156,11 +180,29 @@ typedef struct {
 struct _msp_t;
 
 typedef struct {
+    /* TODO document these parameters.*/
     double start_frequency;
     double end_frequency;
     double s; //freq at the end of the sweep.
+    double s;
     double dt;
 } genic_selection_trajectory_t;
+
+
+typedef struct {
+	tsk_id_t pop_id;
+	double* p_events;
+    //0: p_coal_b;
+    //1: p_coal_B;
+    //2: p_rec_b;
+    //3: p_rec_B;
+    //4: p_mig_b;
+    //5: p_mig_B;
+
+	tsk_id_t mig_dest_pop_id_b;
+	tsk_id_t mig_dest_pop_id_B;
+} sweep_pop_event_t;
+
 
 typedef struct _sweep_t {
     double position;
@@ -168,7 +210,7 @@ typedef struct _sweep_t {
         /* Future trajectory simulation models would go here */
         genic_selection_trajectory_t genic_selection_trajectory;
     } trajectory_params;
-    int (*generate_trajectory)(struct _sweep_t *self, struct _msp_t *simulator,
+    int (*generate_trajectory)(struct _sweep_t *self, struct _msp_t *simulator, tsk_id_t pop_id,
         size_t *num_steps, double **time, double **allele_frequency);
     void (*print_state)(struct _sweep_t *self, FILE *out);
 } sweep_t;
@@ -176,6 +218,7 @@ typedef struct _sweep_t {
 typedef struct _simulation_model_t {
     int type;
     union {
+        smc_k_coalescent_t smc_k_coalescent;
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
         sweep_t sweep;
@@ -217,6 +260,7 @@ typedef struct _msp_t {
     size_t avl_node_block_size;
     size_t node_mapping_block_size;
     size_t segment_block_size;
+    size_t hull_block_size;
     /* Counters for statistics */
     size_t num_re_events;
     size_t num_ca_events;
@@ -253,6 +297,9 @@ typedef struct _msp_t {
     object_heap_t node_mapping_heap;
     /* We keep an independent segment heap for each label */
     object_heap_t *segment_heap;
+    /* We keep an independent hull heap for each label */
+    object_heap_t *hull_heap;
+    object_heap_t *hullend_heap;
     /* The tables used to store the simulation state */
     tsk_table_collection_t *tables;
     tsk_bookmark_t input_position;
@@ -289,7 +336,7 @@ typedef struct {
 /* Arbitrary limit, saves us having to put in complex malloc/free
  * logic in the demographic_events. Can easily be changed if
  * needs be. */
-#define MSP_MAX_EVENT_POPULATIONS 100
+#define MSP_MAX_EVENT_POPULATIONS 10000
 
 typedef struct {
     population_id_t derived[MSP_MAX_EVENT_POPULATIONS];
@@ -421,6 +468,7 @@ int msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng);
 int msp_set_simulation_model_hudson(msp_t *self);
 int msp_set_simulation_model_smc(msp_t *self);
 int msp_set_simulation_model_smc_prime(msp_t *self);
+int msp_set_simulation_model_smc_k(msp_t *self, double hull_offset);
 int msp_set_simulation_model_dtwf(msp_t *self);
 int msp_set_simulation_model_fixed_pedigree(msp_t *self);
 int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
@@ -445,6 +493,7 @@ int msp_set_num_labels(msp_t *self, size_t num_labels);
 int msp_set_node_mapping_block_size(msp_t *self, size_t block_size);
 int msp_set_segment_block_size(msp_t *self, size_t block_size);
 int msp_set_avl_node_block_size(msp_t *self, size_t block_size);
+int msp_set_hull_block_size(msp_t *self, size_t block_size);
 int msp_set_migration_matrix(msp_t *self, size_t size, double *migration_matrix);
 int msp_set_population_configuration(msp_t *self, int population_id, double initial_size,
     double growth_rate, bool initially_active);
@@ -489,6 +538,7 @@ int msp_is_completed(msp_t *self);
 simulation_model_t *msp_get_model(msp_t *self);
 const char *msp_get_model_name(msp_t *self);
 bool msp_get_store_migrations(msp_t *self);
+double msp_get_migration_prop(msp_t *self, tsk_id_t mig_source_pop, tsk_id_t mig_dest_pop);
 double msp_get_time(msp_t *self);
 size_t msp_get_num_samples(msp_t *self);
 size_t msp_get_num_loci(msp_t *self);
@@ -510,6 +560,12 @@ size_t msp_get_num_gene_conversion_events(msp_t *self);
 size_t msp_get_num_internal_gene_conversion_events(msp_t *self);
 size_t msp_get_num_noneffective_gene_conversion_events(msp_t *self);
 double msp_get_sum_internal_gc_tract_lengths(msp_t *self);
+
+double get_sweep_pop_events_total_rate(sweep_pop_event_t* e, size_t num_events);
+void print_sweep_pop_event_info(sweep_pop_event_t* e);
+double get_sweep_mig_rate(msp_t *self, size_t sweep_pop_size, double freq, double sweep_dt,
+ 		tsk_id_t mig_source_pop, tsk_id_t* mig_dest_pop);
+double get_sweep_coal_rate(size_t sweep_pop_size, double freq, double sweep_dt);
 
 int matrix_mutation_model_factory(mutation_model_t *self, int model);
 int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,

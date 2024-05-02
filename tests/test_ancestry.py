@@ -2880,3 +2880,125 @@ class TestTimeUnits:
             msprime.sim_ancestry(
                 initial_state=tables, population_size=10, random_seed=1
             )
+
+
+class TestSMCK:
+    @pytest.mark.parametrize("seed", [4512, 873561])
+    def test_discrete(self, seed):
+        tss = msprime.sim_ancestry(
+            samples=10,
+            model=msprime.SmcKApproxCoalescent(),
+            recombination_rate=0.005,
+            sequence_length=1000,
+            random_seed=seed,
+            num_replicates=10,
+        )
+        for ts in tss:
+            assert max(tree.num_roots for tree in ts.trees()) == 1
+
+    def test_continuous(self):
+        tss = msprime.sim_ancestry(
+            samples=10,
+            model=msprime.SmcKApproxCoalescent(),
+            recombination_rate=0.005,
+            sequence_length=1000,
+            num_replicates=10,
+            random_seed=7598782,
+            discrete_genome=False,
+        )
+        for ts in tss:
+            assert max(tree.num_roots for tree in ts.trees()) == 1
+
+    def test_ancient_samples(self):
+        tables = tskit.TableCollection(100)
+        tables.time_units = "generations"
+        tables.populations.add_row()
+        tables.nodes.add_row(flags=1, time=0.0, population=0)
+        tables.nodes.add_row(flags=1, time=1.0, population=0)
+        tables.nodes.add_row(flags=1, time=10.0, population=0)
+        tables.nodes.add_row(flags=1, time=30.0, population=0)
+        tables.populations.metadata_schema = tskit.MetadataSchema.permissive_json()
+        ts = msprime.sim_ancestry(
+            initial_state=tables,
+            population_size=10_000,
+            model=msprime.SmcKApproxCoalescent(),
+            recombination_rate=1e-6,
+        )
+        for tree in ts.trees():
+            assert tree.num_roots == 1
+
+    def test_model_switch(self):
+        ts = msprime.sim_ancestry(
+            samples=10,
+            population_size=10_000,
+            model=[
+                msprime.StandardCoalescent(duration=10),
+                msprime.SmcKApproxCoalescent(duration=10),
+                msprime.StandardCoalescent(),
+            ],
+            random_seed=10,
+            recombination_rate=1e-5,
+            sequence_length=100,
+        )
+        for tree in ts.trees():
+            assert tree.num_roots == 1
+
+    def test_model_switch_high_rec(self):
+        ts = msprime.sim_ancestry(
+            samples=10,
+            population_size=10_000,
+            model=[
+                msprime.StandardCoalescent(duration=100),
+                msprime.SmcKApproxCoalescent(),
+            ],
+            random_seed=10,
+            recombination_rate=1e-4,
+            sequence_length=100,
+        )
+        for tree in ts.trees():
+            assert tree.num_roots == 1
+
+    @pytest.mark.parametrize("hull_offset", [2, 0.5, 1e-6, 2.133])
+    def test_smc_k_plus(self, hull_offset):
+        tss = msprime.sim_ancestry(
+            samples=10,
+            population_size=10_000,
+            model=msprime.SmcKApproxCoalescent(hull_offset=hull_offset),
+            random_seed=10,
+            recombination_rate=1e-5,
+            sequence_length=100,
+            num_replicates=10,
+        )
+        for ts in tss:
+            assert ts.num_trees > 1
+            for tree in ts.trees():
+                assert tree.num_roots == 1
+
+    def test_two_pops(self):
+        demography = msprime.Demography()
+        demography.add_population(initial_size=10_000)
+        demography.add_population(initial_size=10_000)
+        demography.add_mass_migration(1e6, source=1, dest=0, proportion=1.0)
+        ts = msprime.sim_ancestry(
+            samples={0: 2, 1: 2},
+            demography=demography,
+            model=msprime.SmcKApproxCoalescent(),
+            random_seed=74024,
+            recombination_rate=1e-5,
+            sequence_length=100,
+        )
+        for tree in ts.trees():
+            assert tree.num_roots == 1
+
+    def test_gc(self):
+        with pytest.raises(
+            ValueError,
+            match="Gene conversion has not been implemented yet for smc_k models.",
+        ):
+            _ = msprime.sim_ancestry(
+                samples=10,
+                model=msprime.SmcKApproxCoalescent(),
+                sequence_length=100,
+                gene_conversion_rate=0.5,
+                gene_conversion_tract_length=5,
+            )

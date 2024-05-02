@@ -57,6 +57,7 @@ includes = ["lwt_interface", libdir, tskroot, tskdir, kasdir]
 configurator = PathConfigurator()
 msp_source_files = [
     "msprime.c",
+    "forward.c",
     "fenwick.c",
     "avl.c",
     "util.c",
