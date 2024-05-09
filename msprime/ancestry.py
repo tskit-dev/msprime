@@ -833,7 +833,6 @@ def _parse_sim_ancestry(
     models = _parse_model_arg(model)
     is_dtwf = isinstance(models[0], DiscreteTimeWrightFisher)
     is_pedigree = any(isinstance(model, FixedPedigree) for model in models)
-    is_smck = any(isinstance(model, SmcKApproxCoalescent) for model in models)
 
     if record_full_arg:
         if coalescing_segments_only is not None:
@@ -937,12 +936,6 @@ def _parse_sim_ancestry(
 
     if discrete_genome and math.floor(sequence_length) != sequence_length:
         raise ValueError("Must have integer sequence length with discrete_genome=True")
-
-    if is_smck:
-        if gene_conversion_rate is not None or gene_conversion_tract_length is not None:
-            raise ValueError(
-                "Gene conversion has not been implemented yet for smc_k models."
-            )
 
     recombination_map = _parse_rate_map(
         recombination_rate, sequence_length, "recombination"

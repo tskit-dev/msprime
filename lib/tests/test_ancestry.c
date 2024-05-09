@@ -3941,6 +3941,7 @@ test_setup_smc_k_plus(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_smc_k(&msp, hull_offset);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL(msp.model.params.smc_k_coalescent.hull_offset, hull_offset);
 
     model = msp_get_model(&msp)->type;
     CU_ASSERT_EQUAL(model, MSP_MODEL_SMC_K);
@@ -4195,6 +4196,71 @@ test_fenwick_rebuild_smc_k(void)
     tsk_table_collection_free(&tables);
 }
 
+static void
+run_smc_k_gc_simulation(
+    double gc_rate, double tract_length, bool discrete_genome, double offset)
+{
+
+    int ret;
+    uint32_t n = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    tsk_treeseq_t ts;
+    long seed = 144;
+    double recombination_rate = 0.0;
+
+    gsl_rng_set(rng, seed);
+
+    CU_ASSERT_FATAL(&msp != NULL);
+    CU_ASSERT_FATAL(samples != NULL);
+    memset(samples, 0, n * sizeof(sample_t));
+    ret = build_sim(&msp, &tables, rng, 100, 1, samples, n);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_recombination_rate(&msp, 0.01);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_discrete_genome(&msp, discrete_genome), 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, recombination_rate), 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_gene_conversion_rate(&msp, gc_rate), 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_gene_conversion_tract_length(&msp, tract_length), 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_simulation_model_smc_k(&msp, offset);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp, 0);
+    CU_ASSERT_TRUE(msp_is_completed(&msp));
+    CU_ASSERT_TRUE(msp_get_num_gene_conversion_events(&msp) > 0);
+
+    /* Make sure we can build a tree sequence out of the result */
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_treeseq_free(&ts);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(samples);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_smc_k_gc(void)
+{
+    double tract_lengths[] = { 1.0, 1.3333, 5, 10 };
+    size_t j;
+
+    for (j = 0; j < sizeof(tract_lengths) / sizeof(double); j++) {
+        run_smc_k_gc_simulation(1.0, tract_lengths[j], true, 0.0);
+        run_smc_k_gc_simulation(1.0, tract_lengths[j], false, 0.75);
+        run_smc_k_gc_simulation(1.0, tract_lengths[j], true, 5.0);
+        run_smc_k_gc_simulation(1.0, tract_lengths[j], false, 3.1);
+    }
+}
+
 int
 main(int argc, char **argv)
 {
@@ -4294,6 +4360,7 @@ main(int argc, char **argv)
         { "test_mixed_model_smc_k", test_mixed_model_smc_k },
         { "test_mixed_model_smc_k_large", test_mixed_model_smc_k_large },
         { "test_fenwick_rebuild_smc_k", test_fenwick_rebuild_smc_k },
+        { "test_smc_k_gc", test_smc_k_gc },
         CU_TEST_INFO_NULL,
     };
 

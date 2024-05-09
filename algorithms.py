@@ -840,6 +840,7 @@ class Simulator:
         gene_conversion_rate=0.0,
         gene_conversion_length=1,
         discrete_genome=True,
+        hull_offset=None,
     ):
         # Must be a square matrix.
         N = len(migration_matrix)
@@ -900,9 +901,7 @@ class Simulator:
 
         # set hull_offset for smc_k, deviates from actual pattern
         # implemented using `ParametricAncestryModel()`
-        self.hull_offset = None
-        if self.model == "smc_k":
-            self.hull_offset = 0.0
+        self.hull_offset = hull_offset
 
         self.initialise(tables.tree_sequence())
 
@@ -1054,7 +1053,7 @@ class Simulator:
         alpha = lineage_head
         hull = self.hull_stack.pop()
         hull.left = left
-        hull.right = min(right + self.hull_offset, self.L)
+        hull.right = right
         while alpha.prev is not None:
             alpha = alpha.prev
         assert alpha is not None
@@ -1799,9 +1798,7 @@ class Simulator:
             self.P[pop].reset_hull_right(label, lhs_hull, rhs_right, lhs_hull.right)
 
             # create hull for alpha
-            alpha_hull = self.alloc_hull(
-                alpha.left, rhs_right - self.hull_offset, alpha
-            )
+            alpha_hull = self.alloc_hull(alpha.left, rhs_right, alpha)
             self.P[alpha.population].add_hull(label, alpha_hull)
 
         self.set_segment_mass(alpha)
@@ -1947,10 +1944,9 @@ class Simulator:
         else:
             # rbp lies beyond segment chain, regular recombination logic applies
             if insert_alpha and self.model == "smc_k":
-                assert reset_right >= 0
-                self.P[pop].reset_hull_right(
-                    label, hull, hull_right + self.hull_offset, reset_right
-                )
+                assert reset_right > 0
+                reset_right = min(reset_right + self.hull_offset, self.L)
+                self.P[pop].reset_hull_right(label, hull, hull.right, reset_right)
 
         #        y            z
         #  |  ========== ... ===== |
@@ -1965,6 +1961,7 @@ class Simulator:
         if new_individual_head is not None:
             if self.model == "smc_k":
                 assert hull_left < hull_right
+                hull_right = min(self.L, hull_right + self.hull_offset)
                 hull = self.alloc_hull(hull_left, hull_right, new_individual_head)
                 self.P[new_individual_head.population].add_hull(
                     new_individual_head.label, hull
@@ -2037,12 +2034,12 @@ class Simulator:
 
         if self.model == "smc_k":
             # lhs logic is identical to the lhs recombination event
-            rhs_right = lhs_hull.right
-            lhs_hull.right = right + self.hull_offset
-            self.P[pop].reset_hull_right(label, lhs_hull, rhs_right, lhs_hull.right)
+            lhs_old_right = lhs_hull.right
+            lhs_new_right = min(self.L, right + self.hull_offset)
+            self.P[pop].reset_hull_right(label, lhs_hull, lhs_old_right, lhs_new_right)
 
             # rhs
-            hull = self.alloc_hull(alpha.left, rhs_right, alpha)
+            hull = self.alloc_hull(alpha.left, lhs_old_right, alpha)
             self.P[pop].add_hull(label, hull)
 
         self.set_segment_mass(alpha)
@@ -2818,6 +2815,7 @@ def run_simulate(args):
         gene_conversion_rate=gc_rate,
         gene_conversion_length=mean_tract_length,
         discrete_genome=args.discrete,
+        hull_offset=args.offset,
     )
     ts = s.simulate(args.end_time)
     ts.dump(args.output_file)
@@ -2904,6 +2902,7 @@ def add_simulator_arguments(parser):
         help="The delta_t value for selective sweeps",
     )
     parser.add_argument("--model", default="hudson")
+    parser.add_argument("--offset", type=float, default=0.0)
     parser.add_argument(
         "--from-ts",
         "-F",
