@@ -443,12 +443,22 @@ class TestAlgorithms:
         for tree in ts.trees():
             assert tree.num_roots == 1
 
+        ts = self.run_script("10 -L 1000 -r 0.01 --model smc_k --offset 0.50")
+        assert ts.num_trees > 1
+        for tree in ts.trees():
+            assert tree.num_roots == 1
+
         ts = self.run_script("10 -L 1000 -d -r 0.01 --model smc_k -p 2 -g 0.1")
         assert ts.num_trees > 1
         for tree in ts.trees():
             assert tree.num_roots == 1
 
         ts = self.run_script("10 -L 1000 -d -c 0.04 2  --model smc_k")
+        assert ts.num_trees > 1
+        for tree in ts.trees():
+            assert tree.num_roots == 1
+
+        ts = self.run_script("10 -L 1000 -c 0.04 2  --model smc_k --offset 0.75")
         assert ts.num_trees > 1
         for tree in ts.trees():
             assert tree.num_roots == 1

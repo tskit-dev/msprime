@@ -2959,7 +2959,8 @@ class TestSMCK:
             assert tree.num_roots == 1
 
     @pytest.mark.parametrize("hull_offset", [2, 0.5, 1e-6, 2.133])
-    def test_smc_k_plus(self, hull_offset):
+    @pytest.mark.parametrize("discrete_genome", [True, False])
+    def test_smc_k_plus(self, hull_offset, discrete_genome):
         tss = msprime.sim_ancestry(
             samples=10,
             population_size=10_000,
@@ -2968,6 +2969,7 @@ class TestSMCK:
             recombination_rate=1e-5,
             sequence_length=100,
             num_replicates=10,
+            discrete_genome=discrete_genome,
         )
         for ts in tss:
             assert ts.num_trees > 1
@@ -2990,15 +2992,21 @@ class TestSMCK:
         for tree in ts.trees():
             assert tree.num_roots == 1
 
-    def test_gc(self):
-        with pytest.raises(
-            ValueError,
-            match="Gene conversion has not been implemented yet for smc_k models.",
-        ):
-            _ = msprime.sim_ancestry(
-                samples=10,
-                model=msprime.SmcKApproxCoalescent(),
-                sequence_length=100,
-                gene_conversion_rate=0.5,
-                gene_conversion_tract_length=5,
-            )
+    @pytest.mark.parametrize("hull_offset", [2, 0.5, 1e-6, 2.133])
+    @pytest.mark.parametrize("discrete_genome", [True, False])
+    @pytest.mark.parametrize("recombination_rate", [0.0, 0.1])
+    def test_gc(self, hull_offset, discrete_genome, recombination_rate):
+        tss = msprime.sim_ancestry(
+            samples=10,
+            model=msprime.SmcKApproxCoalescent(hull_offset=hull_offset),
+            sequence_length=100,
+            gene_conversion_rate=1.0,
+            gene_conversion_tract_length=5,
+            num_replicates=5,
+            discrete_genome=discrete_genome,
+            recombination_rate=recombination_rate,
+        )
+        for ts in tss:
+            assert ts.num_trees > 1
+            for tree in ts.trees():
+                assert tree.num_roots == 1

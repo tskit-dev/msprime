@@ -918,8 +918,8 @@ msp_alloc_hull(msp_t *self, double left, double right, segment_t *lineage)
     tsk_bug_assert(hull->id < UINT_MAX * self->num_populations);
 
     hull->left = left;
-    hull->right = GSL_MIN(
-        right + self->model.params.smc_k_coalescent.hull_offset, self->sequence_length);
+    tsk_bug_assert(right <= self->sequence_length);
+    hull->right = right;
     hull->lineage = lineage;
     hull->count = 0;
     hull->insertion_order = UINT64_MAX;
@@ -1876,7 +1876,7 @@ msp_verify_hulls(msp_t *self)
     hull_t *hull, hull_a, hull_b;
     hullend_t *hullend;
     fenwick_t *coal_mass_index;
-    double pos;
+    double pos, hull_right;
     uint32_t N;
     uint64_t io;
 
@@ -1887,11 +1887,12 @@ msp_verify_hulls(msp_t *self)
             count = 0;
             avl = &self->populations[population_id].ancestors[label_id];
             /* generate all possible lineage pairs */
-            if (msp_get_num_population_ancestors(self, population_id) == 0) {
+            if (avl_count(avl) == 0) {
                 continue;
             }
             for (a = avl->head; a->next != NULL; a = a->next) {
                 x = (segment_t *) a->item;
+                hull_right = x->hull->right;
                 hull_a.left = x->left;
                 while (x->next != NULL) {
                     x = x->next;
@@ -1899,6 +1900,7 @@ msp_verify_hulls(msp_t *self)
                 hull_a.right
                     = GSL_MIN(x->right + self->model.params.smc_k_coalescent.hull_offset,
                         self->sequence_length);
+                tsk_bug_assert(hull_a.right == hull_right);
                 for (b = a->next; b != NULL; b = b->next) {
                     y = (segment_t *) b->item;
                     hull_b.left = y->left;
@@ -3308,6 +3310,9 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
     segment_t *x, *y, *alpha, *head, *tail, *z, *new_individual_head;
     double left_breakpoint, right_breakpoint, tl;
     bool insert_alpha;
+    hull_t *hull = NULL;
+    double reset_right = 0.0;
+    double tract_hull_left, tract_hull_right;
 
     tsk_bug_assert(self->gc_mass_index != NULL);
     self->num_gc_events++;
@@ -3338,6 +3343,11 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         return 0;
     }
 
+    if (self->model.type == MSP_MODEL_SMC_K) {
+        hull = segment_get_hull(y);
+        tsk_bug_assert(hull != NULL);
+    }
+
     /* Process left break */
     insert_alpha = true;
     if (left_breakpoint <= y->left) {
@@ -3355,6 +3365,7 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
             insert_alpha = false;
         } else {
             x->next = NULL;
+            reset_right = x->right;
         }
         y->prev = NULL;
         alpha = y;
@@ -3383,6 +3394,7 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         y->right = left_breakpoint;
         msp_set_segment_mass(self, y);
         tail = y;
+        reset_right = left_breakpoint;
 
         if (!msp_has_breakpoint(self, left_breakpoint)) {
             ret = msp_insert_breakpoint(self, left_breakpoint);
@@ -3395,7 +3407,10 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
 
     // Find the segment z that the right breakpoint falls in
     z = alpha;
+    tract_hull_left = z->left;
+    tract_hull_right = 0.0;
     while (z != NULL && right_breakpoint >= z->right) {
+        tract_hull_right = z->right;
         z = z->next;
     }
 
@@ -3424,6 +3439,7 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
             }
             z->right = right_breakpoint;
             z->next = NULL;
+            tract_hull_right = right_breakpoint;
             msp_set_segment_mass(self, z);
 
             if (!msp_has_breakpoint(self, right_breakpoint)) {
@@ -3452,6 +3468,16 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         }
         head->prev = tail;
         msp_set_segment_mass(self, head);
+    } else {
+        // rbp lies beyond segment chain, regular recombination logic applies
+        if (insert_alpha && self->model.type == MSP_MODEL_SMC_K) {
+            tsk_bug_assert(reset_right > 0);
+            reset_right
+                = GSL_MIN(reset_right + self->model.params.smc_k_coalescent.hull_offset,
+                    self->sequence_length);
+            msp_reset_hull_right(
+                self, hull, hull->right, reset_right, y->population, y->label);
+        }
     }
 
     //        y            z
@@ -3466,6 +3492,18 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         new_individual_head = head;
     }
     if (new_individual_head != NULL) {
+        if (self->model.type == MSP_MODEL_SMC_K) {
+            tsk_bug_assert(tract_hull_left < tract_hull_right);
+            tract_hull_right = GSL_MIN(
+                tract_hull_right + self->model.params.smc_k_coalescent.hull_offset,
+                self->sequence_length);
+            hull = msp_alloc_hull(
+                self, tract_hull_left, tract_hull_right, new_individual_head);
+            ret = msp_insert_hull(self, hull);
+            if (ret != 0) {
+                goto out;
+            }
+        }
         ret = msp_insert_individual(self, new_individual_head);
     } else {
         self->num_noneffective_gc_events++;
@@ -4533,6 +4571,8 @@ msp_initialise_smc_k(msp_t *self)
                     seg = seg->next;
                 }
                 /* insert into hulls_left */
+                right += self->model.params.smc_k_coalescent.hull_offset;
+                right = GSL_MIN(right, self->sequence_length);
                 hull = msp_alloc_hull(self, left, right, head);
                 tsk_bug_assert(hull != NULL);
                 h_node = msp_alloc_avl_node(self);
@@ -4957,9 +4997,12 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     int ret = 0;
     const double gc_left_total = msp_get_total_gc_left(self);
     double h = gsl_rng_uniform(self->rng) * gc_left_total;
-    double tl, bp;
+    double tl, bp, lhs_old_right, lhs_new_right;
     segment_t *y, *x, *alpha;
+    hull_t *rhs_hull;
+    hull_t *lhs_hull = NULL;
 
+    lhs_hull = NULL;
     y = msp_find_gc_left_individual(self, label, h);
     assert(y != NULL);
 
@@ -4989,6 +5032,10 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     tsk_bug_assert(y != NULL);
     self->num_gc_events++;
     x = y->prev;
+    if (self->model.type == MSP_MODEL_SMC_K) {
+        lhs_hull = segment_get_hull(y);
+        tsk_bug_assert(lhs_hull != NULL);
+    }
 
     if (y->left < bp) {
         //  x          y
@@ -5033,6 +5080,26 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
         // Ensure y points to the last segment left of the break for full ARG recording
         y = x;
     }
+    lhs_new_right = y->right;
+
+    if (self->model.type == MSP_MODEL_SMC_K) {
+        // lhs logic is identical to the lhs recombination event
+        lhs_old_right = lhs_hull->right;
+        lhs_new_right
+            = GSL_MIN(lhs_new_right + self->model.params.smc_k_coalescent.hull_offset,
+                self->sequence_length);
+        msp_reset_hull_right(
+            self, lhs_hull, lhs_old_right, lhs_new_right, y->population, y->label);
+
+        // rhs
+        tsk_bug_assert(alpha->left < lhs_old_right);
+        rhs_hull = msp_alloc_hull(self, alpha->left, lhs_old_right, alpha);
+        ret = msp_insert_hull(self, rhs_hull);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+
     msp_set_segment_mass(self, alpha);
     tsk_bug_assert(alpha->prev == NULL);
     ret = msp_insert_individual(self, alpha);
