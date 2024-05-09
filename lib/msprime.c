@@ -1344,7 +1344,10 @@ msp_insert_hull(msp_t *self, hull_t *hull)
 
     /* insert hullend into state */
     hullend = msp_alloc_hullend(self, hull->right, u->label);
-    tsk_bug_assert(hullend != NULL);
+    if (hullend == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
     node = msp_alloc_avl_node(self);
     if (node == NULL) {
         ret = MSP_ERR_NO_MEMORY;
@@ -3256,6 +3259,10 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
 
         /* create new hull for alpha */
         rhs_hull = msp_alloc_hull(self, alpha->left, rhs_right, alpha);
+        if (rhs_hull == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
         ret = msp_insert_hull(self, rhs_hull);
         if (ret != 0) {
             goto out;
@@ -3499,6 +3506,10 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
                 self->sequence_length);
             hull = msp_alloc_hull(
                 self, tract_hull_left, tract_hull_right, new_individual_head);
+            if (hull == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
             ret = msp_insert_hull(self, hull);
             if (ret != 0) {
                 goto out;
@@ -3756,6 +3767,10 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
             r += self->model.params.smc_k_coalescent.hull_offset;
             hull = msp_alloc_hull(
                 self, merged_head->left, GSL_MIN(r, self->sequence_length), merged_head);
+            if (hull == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
             ret = msp_insert_hull(self, hull);
             if (ret != 0) {
                 goto out;
@@ -4189,6 +4204,10 @@ msp_insert_root_segments(msp_t *self, const segment_t *head, segment_t **new_hea
                 if (self->state != MSP_STATE_NEW) {
                     /* correct hull->right is set at the end */
                     hull = msp_alloc_hull(self, head->left, copy->right, copy);
+                    if (hull == NULL) {
+                        ret = MSP_ERR_NO_MEMORY;
+                        goto out;
+                    }
                 }
             }
         } else {
@@ -4528,7 +4547,10 @@ msp_hulls_init_counts(msp_t *self, population_id_t pop, label_id_t label)
 
         /* insert hullend into hulls_right */
         hullend = msp_alloc_hullend(self, hull->right, (label_id_t) label);
-        tsk_bug_assert(hullend != NULL);
+        if (hullend == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
         node_right = msp_alloc_avl_node(self);
         if (node_right == NULL) {
             ret = MSP_ERR_NO_MEMORY;
@@ -4574,7 +4596,10 @@ msp_initialise_smc_k(msp_t *self)
                 right += self->model.params.smc_k_coalescent.hull_offset;
                 right = GSL_MIN(right, self->sequence_length);
                 hull = msp_alloc_hull(self, left, right, head);
-                tsk_bug_assert(hull != NULL);
+                if (hull == NULL) {
+                    ret = MSP_ERR_NO_MEMORY;
+                    goto out;
+                }
                 h_node = msp_alloc_avl_node(self);
                 if (h_node == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
@@ -5094,6 +5119,10 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
         // rhs
         tsk_bug_assert(alpha->left < lhs_old_right);
         rhs_hull = msp_alloc_hull(self, alpha->left, lhs_old_right, alpha);
+        if (rhs_hull == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
         ret = msp_insert_hull(self, rhs_hull);
         if (ret != 0) {
             goto out;
