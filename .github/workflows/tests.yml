@@ -25,9 +25,10 @@ jobs:
     name: Python
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: False
       matrix:
         python: [ 3.8, 3.11 ]
-        os:  [ macos-latest, ubuntu-latest, windows-latest ]
+        os:  [ macos-13, ubuntu-latest, windows-latest ] #Fix to macos-13 as 14 uses M1 silicon
     defaults:
       run:
         shell: bash
@@ -42,24 +43,20 @@ jobs:
         with:
           submodules: true
 
-      - name: Cache conda and dependancies
+      - name: Cache conda and dependencies
         id: cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
-          path: |
-            c:\Miniconda\envs\anaconda-client-env
-            /usr/share/miniconda/envs/anaconda-client-env
-            ~/osx-conda
-            ~/.profile
-          key: ${{ runner.os }}-${{ matrix.python}}-conda-v1-${{ hashFiles('requirements/CI-tests-conda/requirements.txt') }}-${{ hashFiles('requirements/CI-tests-pip/requirements.txt') }}
+          path: ${{ env.CONDA }}/envs
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ matrix.python}}-conda-v1-${{ hashFiles('requirements/CI-tests-conda/requirements.txt') }}-${{ hashFiles('requirements/CI-tests-pip/requirements.txt') }}
 
       - name: Install Conda
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v3
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           activate-environment: anaconda-client-env
           python-version: ${{ matrix.python }}
-          channels: conda-forge
+          channels: conda-forge, anaconda
           channel-priority: strict
           auto-update-conda: true
 
@@ -84,17 +81,6 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         shell: bash -l {0}
         run: pip install -r requirements/CI-tests-pip/requirements.txt
-
-      - name: Fix OSX Cache Write #OSX Won't let the cache restore due to file perms
-        if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'macos-latest'
-        run: |
-          cp -r /usr/local/miniconda/envs/anaconda-client-env ~/osx-conda
-
-      - name: Fix OSX Cache Restore
-        if: steps.cache.outputs.cache-hit == 'true' && matrix.os == 'macos-latest'
-        run: |
-          mkdir -p /usr/local/miniconda/envs
-          sudo cp -r ~/osx-conda /usr/local/miniconda/envs/anaconda-client-env
 
       - name: Build module
         env:
