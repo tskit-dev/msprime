@@ -3,7 +3,7 @@
 
 title: Msprime manual
 author: Tskit Developers
-copyright: "2021"
+copyright: "2024"
 only_build_toc_files: true
 logo: msprime_logo.svg
 
@@ -49,6 +49,7 @@ sphinx:
       myst_enable_extensions:
       - colon_fence
       - deflist
+      - substitution
       issues_github_path: tskit-dev/msprime
       todo_include_todos: true
       intersphinx_mapping:
@@ -70,3 +71,6 @@ sphinx:
       # leads to broken links and nitpick failures. So, until we tackle
       # typehints fully, this is the simplest approach.
       autodoc_typehints: none
+
+      myst_substitutions:
+        min_python_version: "3.8"
