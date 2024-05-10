@@ -14,7 +14,7 @@ There are three options for installing `msprime`:
 ## Via Conda
 
 Convenient [conda](<https://conda.io/docs/>) packages are available for Python
-3.7+ on Linux, OSX and Windows.
+{{ min_python_version }} and greater on Linux, OSX and Windows.
 These pre-built binary packages are built using
 [conda-forge](<https://conda-forge.org/>).
 
@@ -119,6 +119,10 @@ more details on managing packages and environments.
 Installing using `pip` is more flexible than `conda` as it
 can support more versions of Python and dependencies can be customised.
 
+```{warning}
+Pip installations are not supported on Windows due to our dependency on GSL.
+```
+
 :::{warning}
 
 If you installed Python using anaconda/miniconda, please install
@@ -134,7 +138,7 @@ To install msprime via pip, first
 
 ### check system requirements
 
-Msprime requires Python 3.7+ and pip. Run
+Msprime requires Python {{ min_python_version }} or greater and pip. Run
 
 ```{code-block} bash
 
@@ -142,7 +146,7 @@ $ python3 -m pip --version
 
 ```
 
-to make sure you see Python 3.7 or greater.
+to make sure you see Python {{ min_python_version }} or greater.
 If you do not, do installation {ref}`via conda <sec_installation_conda>`.
 
 On most platforms, pip will install `msprime` pre-built binaries
