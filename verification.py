@@ -3830,46 +3830,51 @@ class HudsonAnalytical(Test):
         gc_length = np.array([100, 50, 20])
         gc_rate = 0.25 / (gc_length_rate_ratio * gc_length)
         seq_length = 500
+        # tests both Hudson as well as SMC K
+        # by setting hull_offset to seq_length are essentially simulating Hudson
+        models = ["hudson", msprime.SmcKApproxCoalescent(hull_offset=seq_length)]
         predicted_prob = np.zeros([gc_length_rate_ratio.size, seq_length], dtype=float)
         empirical_prob_first = np.zeros(
-            [gc_length_rate_ratio.size, seq_length], dtype=float
+            [2, gc_length_rate_ratio.size, seq_length], dtype=float
         )
         empirical_prob_mid = np.zeros(
-            [gc_length_rate_ratio.size, seq_length], dtype=float
+            [2, gc_length_rate_ratio.size, seq_length], dtype=float
         )
         empirical_prob_last = np.zeros(
-            [gc_length_rate_ratio.size, seq_length], dtype=float
+            [2, gc_length_rate_ratio.size, seq_length], dtype=float
         )
 
         for k, l in enumerate(gc_length):
-            same_root_count_first = np.zeros(seq_length)
-            same_root_count_mid = np.zeros(seq_length)
-            same_root_count_last = np.zeros(seq_length)
-            replicates = msprime.sim_ancestry(
-                samples=sample_size,
-                sequence_length=seq_length,
-                gene_conversion_rate=gc_rate[k],
-                gene_conversion_tract_length=gc_length[k],
-                num_replicates=R,
-            )
-            for ts in replicates:
-                firstroot = ts.first().root
-                lastroot = ts.last().root
-                for tree in ts.trees():
-                    left, right = tree.interval
-                    if left <= seq_length / 2 < right:
-                        midroot = tree.root
-                for tree in ts.trees():
-                    left, right = map(int, tree.interval)
-                    if firstroot == tree.root:
-                        same_root_count_first[left:right] += 1
-                    if lastroot == tree.root:
-                        same_root_count_last[left:right] += 1
-                    if midroot == tree.root:
-                        same_root_count_mid[left:right] += 1
-            empirical_prob_first[k, :] = same_root_count_first / R
-            empirical_prob_last[k, :] = same_root_count_last / R
-            empirical_prob_mid[k, :] = same_root_count_mid / R
+            for j, model in enumerate(models):
+                same_root_count_first = np.zeros(seq_length)
+                same_root_count_mid = np.zeros(seq_length)
+                same_root_count_last = np.zeros(seq_length)
+                replicates = msprime.sim_ancestry(
+                    samples=sample_size,
+                    sequence_length=seq_length,
+                    gene_conversion_rate=gc_rate[k],
+                    gene_conversion_tract_length=gc_length[k],
+                    num_replicates=R,
+                    model=model,
+                )
+                for ts in replicates:
+                    firstroot = ts.first().root
+                    lastroot = ts.last().root
+                    for tree in ts.trees():
+                        left, right = tree.interval
+                        if left <= seq_length / 2 < right:
+                            midroot = tree.root
+                    for tree in ts.trees():
+                        left, right = map(int, tree.interval)
+                        if firstroot == tree.root:
+                            same_root_count_first[left:right] += 1
+                        if lastroot == tree.root:
+                            same_root_count_last[left:right] += 1
+                        if midroot == tree.root:
+                            same_root_count_mid[left:right] += 1
+                empirical_prob_first[j, k, :] = same_root_count_first / R
+                empirical_prob_last[j, k, :] = same_root_count_last / R
+                empirical_prob_mid[j, k, :] = same_root_count_mid / R
             # Predicted prob
             # From Wiuf, Hein, 2000, eqn (15), pg. 457
             rG = (
@@ -3879,11 +3884,14 @@ class HudsonAnalytical(Test):
 
         x = np.arange(500) + 1
         pyplot.plot(x, predicted_prob[0], "--", label="prediction")
-        pyplot.plot(x, empirical_prob_first[0], "-", label="simulation")
+        pyplot.plot(x, empirical_prob_first[0, 0], "-", label="simulation hudson")
+        pyplot.plot(x, empirical_prob_first[1, 0], ":", label="simulation smc-k")
         pyplot.plot(x, predicted_prob[1], "--")
-        pyplot.plot(x, empirical_prob_first[1], "-")
+        pyplot.plot(x, empirical_prob_first[0, 1], "-")
+        pyplot.plot(x, empirical_prob_first[1, 1], ":")
         pyplot.plot(x, predicted_prob[2], "--")
-        pyplot.plot(x, empirical_prob_first[2], "-")
+        pyplot.plot(x, empirical_prob_first[0, 2], "-")
+        pyplot.plot(x, empirical_prob_first[1, 2], ":")
         pyplot.xlabel("chromosome positon")
         pyplot.ylabel("fraction of trees identical to first position tree")
         pyplot.legend(loc="upper right")
@@ -3891,11 +3899,14 @@ class HudsonAnalytical(Test):
         pyplot.close("all")
 
         pyplot.plot(x, predicted_prob[0, ::-1], "--", label="prediction")
-        pyplot.plot(x, empirical_prob_last[0], "-", label="simulation")
+        pyplot.plot(x, empirical_prob_last[0, 0], "-", label="simulation hudson")
+        pyplot.plot(x, empirical_prob_last[1, 0], ":", label="simulation smc-k")
         pyplot.plot(x, predicted_prob[1, ::-1], "--")
-        pyplot.plot(x, empirical_prob_last[1], "-")
+        pyplot.plot(x, empirical_prob_last[0, 1], "-")
+        pyplot.plot(x, empirical_prob_last[1, 1], ":")
         pyplot.plot(x, predicted_prob[2, ::-1], "--")
-        pyplot.plot(x, empirical_prob_last[2], "-")
+        pyplot.plot(x, empirical_prob_last[0, 2], "-")
+        pyplot.plot(x, empirical_prob_last[1, 2], ":")
         pyplot.xlabel("chromosome positon")
         pyplot.ylabel("fraction of trees identical to last position tree")
         pyplot.legend(loc="upper left")
@@ -3908,19 +3919,22 @@ class HudsonAnalytical(Test):
             "--",
             label="prediction",
         )
-        pyplot.plot(x, empirical_prob_mid[0], "-", label="simulation")
+        pyplot.plot(x, empirical_prob_mid[0, 0], "-", label="simulation hudson")
+        pyplot.plot(x, empirical_prob_mid[1, 0], ":", label="simulation smc-k")
         pyplot.plot(
             x,
             np.concatenate((predicted_prob[1, 249::-1], predicted_prob[1, :250])),
             "--",
         )
-        pyplot.plot(x, empirical_prob_mid[1], "-")
+        pyplot.plot(x, empirical_prob_mid[0, 1], "-")
+        pyplot.plot(x, empirical_prob_mid[1, 1], ":")
         pyplot.plot(
             x,
             np.concatenate((predicted_prob[2, 249::-1], predicted_prob[2, :250])),
             "--",
         )
-        pyplot.plot(x, empirical_prob_mid[2], "-")
+        pyplot.plot(x, empirical_prob_mid[0, 2], "-")
+        pyplot.plot(x, empirical_prob_mid[1, 2], ":")
         pyplot.xlabel("chromosome positon")
         pyplot.ylabel("fraction of trees identical to middle position tree")
         pyplot.legend(loc="upper right")
@@ -3929,11 +3943,18 @@ class HudsonAnalytical(Test):
 
         x = np.arange(10) + 1
         pyplot.plot(x, predicted_prob[0, range(10)], "--", label="prediction")
-        pyplot.plot(x, empirical_prob_first[0, range(10)], "-", label="simulation")
+        pyplot.plot(
+            x, empirical_prob_first[0, 0, range(10)], "-", label="simulation hudson"
+        )
+        pyplot.plot(
+            x, empirical_prob_first[1, 0, range(10)], ":", label="simulation smc-k"
+        )
         pyplot.plot(x, predicted_prob[1, range(10)], "--")
-        pyplot.plot(x, empirical_prob_first[1, range(10)], "-")
+        pyplot.plot(x, empirical_prob_first[0, 1, range(10)], "-")
+        pyplot.plot(x, empirical_prob_first[1, 1, range(10)], ":")
         pyplot.plot(x, predicted_prob[2, range(10)], "--")
-        pyplot.plot(x, empirical_prob_first[2, range(10)], "-")
+        pyplot.plot(x, empirical_prob_first[0, 2, range(10)], "-")
+        pyplot.plot(x, empirical_prob_first[1, 2, range(10)], ":")
         pyplot.xlabel("chromosome positon")
         pyplot.ylabel("fraction of trees identical to first position tree")
         pyplot.legend(loc="upper right")
