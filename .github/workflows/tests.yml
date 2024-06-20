@@ -95,3 +95,10 @@ jobs:
           source ~/.profile
           conda activate anaconda-client-env
           pytest -xvs -n0
+
+      - name: Run tests (numpy 2.0)
+        run: |
+          source ~/.profile
+          conda activate anaconda-client-env
+          conda install --yes numpy>=2.0
+          pytest -xvs -n0
