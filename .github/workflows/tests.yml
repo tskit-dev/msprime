@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: False
       matrix:
-        python: [ 3.8, 3.11 ]
+        python: [ 3.9, 3.12 ]
         os:  [ macos-13, ubuntu-latest, windows-latest ] #Fix to macos-13 as 14 uses M1 silicon
     defaults:
       run:
