@@ -1215,8 +1215,9 @@ axis.
 import tskit
 import numpy as np
 import matplotlib
+import matplotlib.pyplot as plt
 
-cmap = matplotlib.cm.get_cmap('viridis')
+cmap = plt.colormaps['viridis']
 tree = ts.first()
 mig_color_dict = {}
 for u, linestyle in zip(ts.samples()[::2], ["dotted", "dashdot"]):
@@ -1250,7 +1251,7 @@ event, colouring nodes and edges by the population with which they are associate
 
 ```{code-cell}
 mig_color_dict = {}
-cmap = matplotlib.cm.get_cmap("viridis")
+cmap = plt.colormaps['viridis']
 for i in range(N):
     rgba = cmap(i / N)
     mig_color_dict[i] = np.array(rgba) * 255

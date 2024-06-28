@@ -100,11 +100,10 @@ jobs:
       - run:
           name: Make sure we can build a distribution.
           command: |
-            python setup.py sdist
-            python setup.py check
+            python -m pip install build
+            python -m build --sdist
+            python -m build --wheel
             python -m twine check dist/*.tar.gz --strict
-            rm dist/*
-            python -m build
 
       - run:
           name: Install from the distribution tarball
