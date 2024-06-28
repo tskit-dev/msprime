@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.6.0
+        uses: styfle/cancel-workflow-action@0.12.1
         with:
           access_token: ${{ github.token }}
       - uses: actions/checkout@v3
@@ -19,27 +19,26 @@ jobs:
       - name: install clang-format
         run: |
           pip install clang-format==6.0.1
-      - uses: pre-commit/action@v3.0.0
+      - uses: pre-commit/action@v3.0.1
 
   test:
     name: Python
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: False
       matrix:
-        python: [ 3.8, 3.11 ]
-        os:  [ macos-13, ubuntu-latest, windows-latest ] #Fix to macos-13 as 14 uses M1 silicon
+        python: [ 3.9, 3.12 ]
+        os:  [ macos-latest, ubuntu-latest, windows-latest ]
     defaults:
       run:
         shell: bash
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.6.0
+        uses: styfle/cancel-workflow-action@0.12.1
         with:
           access_token: ${{ github.token }}
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: true
 
@@ -48,7 +47,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ${{ env.CONDA }}/envs
-          key: ${{ runner.os }}-${{ runner.arch }}-${{ matrix.python}}-conda-v1-${{ hashFiles('requirements/CI-tests-conda/requirements.txt') }}-${{ hashFiles('requirements/CI-tests-pip/requirements.txt') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-${{ matrix.python}}-conda-v2-${{ hashFiles('requirements/CI-tests-conda/requirements.txt') }}-${{ hashFiles('requirements/CI-tests-pip/requirements.txt') }}
 
       - name: Install Conda
         uses: conda-incubator/setup-miniconda@v3
@@ -80,7 +79,9 @@ jobs:
       - name: Install pip deps
         if: steps.cache.outputs.cache-hit != 'true'
         shell: bash -l {0}
-        run: pip install -r requirements/CI-tests-pip/requirements.txt
+        run: | 
+          pip install -r requirements/CI-tests-pip/requirements.txt
+          pip uninstall -y msprime
 
       - name: Build module
         env:
