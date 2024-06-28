@@ -1,11 +1,76 @@
+[project]
+name = "msprime"
+authors = [
+    {name = "Tskit Developers", email = "admin@tskit.dev"},
+]
+description = "Simulate genealogical trees and genomic sequence data using population genetic models"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "GNU GPLv3+"}
+classifiers = [
+    "Programming Language :: C",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Other Environment",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Bio-Informatics"
+]
+keywords = [
+    "coalescent simulation",
+    "population genetics",
+    "ms",
+    "tree sequence",
+    "tskit"
+]
+dependencies = [
+    "numpy>=1.23.5",
+    "newick>=1.3.0",
+    "tskit>=0.5.2",
+    "demes>=0.2"
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://tskit.dev/msprime"
+Documentation = "https://tskit.dev/msprime/docs/stable"
+Changelog = "https://tskit.dev/msprime/docs/stable/CHANGELOG.html"
+"Bug Tracker" = "https://github.com/tskit-dev/msprime/issues"
+"Source Code" = "https://github.com/tskit-dev/msprime/"
+
+[project.scripts]
+mspms = "msprime.cli:mspms_main"
+msp = "msprime.cli:msp_main"
+
 [build-system]
 requires = [
-    "setuptools>=42",
+    "setuptools>=45",
     "setuptools_scm",
     "wheel",
-    "oldest-supported-numpy"
+    "numpy>=2"
 ]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = ["msprime"]
+include-package-data = true
+
 [tool.setuptools_scm]
 write_to = "msprime/_version.py"
+
+[tool.pytest.ini_options]
+addopts = "-n 4"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore:.*usage of `cmp`.*:DeprecationWarning:demes"
+]
