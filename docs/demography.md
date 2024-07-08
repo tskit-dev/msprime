@@ -1536,7 +1536,7 @@ to facilitate interchange between simulators, as well as between
 demographic inference software and simulators.
 Demes models are typically written as a YAML file (see the
 {ref}`Demes tutorial <demes-spec:sec_tutorial>` for details), and loaded into Python
-using the [demes](demes:sec_introduction) library.
+using the {ref}`demes <demes:sec_introduction>` library.
 The {meth}`.Demography.from_demes` method converts a {class}`demes.Graph`
 object into a {class}`.Demography` object, and the {meth}`.Demography.to_demes`
 method does the opposite conversion.
