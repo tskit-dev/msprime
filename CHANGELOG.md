@@ -4,6 +4,7 @@
 
 - Add `record_provenance` argument to `sim_mutations` ({issue}`2272`, {pr}`2273`, {user}`peterlharp`)
 
+- Add support and wheels for Python3.12, drop Python3.8 
 
 ## [1.3.1] - 2024-02-09
 
