@@ -15,7 +15,7 @@ jobs:
           # we can invalidate the cache when we need to. Note that we need
           # to update the key in the ``save_cache`` block below also when
           # doing that.
-          key: msprime-{{ .Branch }}-v4
+          key: msprime-{{ .Branch }}-v5
       - run:
           name: Checkout submodules
           command: |
@@ -32,7 +32,7 @@ jobs:
             # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
             echo 'export PATH=/home/circleci/.local/bin:$PATH' >> $BASH_ENV
       - save_cache:
-          key: msprime-{{ .Branch }}-v4
+          key: msprime-{{ .Branch }}-v5
           paths:
             - "/home/circleci/.local"
 
