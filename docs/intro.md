@@ -22,8 +22,8 @@ available for learning about {program}`tskit` and {program}`msprime`:
 - The [tskit tutorials](https://tskit.dev/tutorials) site provides an
   introduction to the tree sequence format used by {program}`msprime`,
   as well as in-depth tutorials
-  on more [advanced {program}`msprime` topics](tutorials:sec_msprime) and
-  examples of how to [analyse](tutorials:sec_analysing_tree_sequences)
+  on more {ref}`advanced msprime topics<tutorials:sec_msprime>` and
+  examples of how to {ref}`analyse<tutorials:sec_analysing_tree_sequences>`
   simulated {program}`tskit` tree sequences.
 
 - Our [Discussions board](https://github.com/tskit-dev/msprime/discussions)
