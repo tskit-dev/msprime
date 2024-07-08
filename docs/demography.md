@@ -1535,7 +1535,7 @@ is intended to become a standard for writing demographic models,
 to facilitate interchange between simulators, as well as between
 demographic inference software and simulators.
 Demes models are typically written as a YAML file (see the
-[Demes tutorial](demes-spec:sec_tutorial) for details), and loaded into Python
+{ref}`Demes tutorial <demes-spec:sec_tutorial>` for details), and loaded into Python
 using the [demes](demes:sec_introduction) library.
 The {meth}`.Demography.from_demes` method converts a {class}`demes.Graph`
 object into a {class}`.Demography` object, and the {meth}`.Demography.to_demes`
