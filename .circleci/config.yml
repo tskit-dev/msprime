@@ -108,10 +108,12 @@ jobs:
       - run:
           name: Install from the distribution tarball
           command: |
+            mkdir installtest
+            cd installtest
             python -m venv venv
             source venv/bin/activate
             pip install --upgrade setuptools pip
-            pip install dist/*.tar.gz
+            pip install ../dist/*.whl
             python -c 'import msprime; print(msprime.__version__)'
 
             # We should still be able to import without the newick module
