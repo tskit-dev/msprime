@@ -1,7 +1,6 @@
 """
 Python version of the simulation algorithm.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -205,6 +204,13 @@ class Lineage:
             f"head={self.head.index}; tail={self.tail.index}: {Segment.show_chain(self.head)}"
         )
 
+    def reset_tail(self):
+        u = self.head
+        while u is not None:
+            u.lineage = self
+            self.tail = u
+            u = u.next
+
 
 class Population:
     """
@@ -243,7 +249,7 @@ class Population:
         print("Population ", self.id)
         print("\tstart_size = ", self.start_size)
         print("\tgrowth_rate = ", self.growth_rate)
-        print("\tAncestors: ", len(self._ancestors))
+        print("\tAncestors: ", self.get_num_ancestors())
         for label, ancestors in enumerate(self._ancestors):
             print("\tLabel = ", label)
             for lin in ancestors:
@@ -447,13 +453,13 @@ class Population:
         coal_mass_index = self.coal_mass_index[label]
         self.increment_avl(ost_left, coal_mass_index, hull, 1)
 
-    # TODO change all "individual" references here to "lineage"
-    def add(self, individual, label=0):
+    def add(self, lineage, label=0):
         """
-        Inserts the specified individual into this population.
+        Inserts the specified lineage into this population.
         """
-        assert individual.label == label
-        self._ancestors[label].append(individual)
+        assert isinstance(lineage, Lineage)
+        assert lineage.label == label
+        self._ancestors[label].append(lineage)
 
     def __iter__(self):
         # will default to label 0
@@ -1239,11 +1245,11 @@ class Simulator:
         # Insert unary edges for any remainining lineages.
         current_time = self.t
         for population in self.P:
-            for ancestor in population.iter_ancestors():
+            for lineage in population.iter_ancestors():
                 node = tskit.NULL
                 # See if there is already a node in this ancestor at the
                 # current time
-                seg = ancestor
+                seg = lineage.head
                 while seg is not None:
                     if self.tables.nodes[seg.node].time == current_time:
                         node = seg.node
@@ -1255,7 +1261,7 @@ class Simulator:
                         flags=0, time=current_time, population=population.id
                     )
                 # Add in edges pointing to this ancestor
-                seg = ancestor
+                seg = lineage.head
                 while seg is not None:
                     if seg.node != node:
                         self.tables.edges.add_row(seg.left, seg.right, node, seg.node)
@@ -1744,16 +1750,18 @@ class Simulator:
         source = self.P[j]
         dest = self.P[k]
         index = random.randint(0, source.get_num_ancestors(label) - 1)
-        x = source.remove(index, label)
+        lin_x = source.remove(index, label)
+        x = lin_x.head
         hull = x.get_hull()
         assert (self.model == "smc_k") == (hull is not None)
-        dest.add(x, label)
+        dest.add(lin_x, label)
         if self.model == "smc_k":
             source.remove_hull(label, hull)
             dest.add_hull(label, hull)
         if self.additional_nodes.value & msprime.NODE_IS_MIG_EVENT > 0:
             self.store_node(k, flags=msprime.NODE_IS_MIG_EVENT)
             self.store_arg_edges(x)
+        lin_x.population = k
         # Set the population id for each segment also.
         u = x
         while u is not None:
@@ -1860,9 +1868,8 @@ class Simulator:
             left_lineage = x.lineage
 
         left_lineage.tail = lhs_tail
-        right_lineage = self.alloc_lineage(
-            alpha, population=left_lineage.population, label=label
-        )
+        population = left_lineage.population
+        right_lineage = self.alloc_lineage(alpha, population=population, label=label)
         seg = right_lineage.head
         while seg is not None:
             right_lineage.tail = seg
@@ -1871,7 +1878,7 @@ class Simulator:
 
         if self.model == "smc_k":
             # modify original hull
-            pop = alpha.population
+            pop = population
             lhs_hull = lhs_tail.get_hull()
             rhs_right = lhs_hull.right
             lhs_hull.right = min(lhs_tail.right + self.hull_offset, self.L)
@@ -1879,10 +1886,10 @@ class Simulator:
 
             # create hull for alpha
             alpha_hull = self.alloc_hull(alpha.left, rhs_right, alpha)
-            self.P[alpha.population].add_hull(label, alpha_hull)
+            self.P[population].add_hull(label, alpha_hull)
 
         self.set_segment_mass(alpha)
-        self.P[alpha.population].add(right_lineage, label)
+        self.P[population].add(right_lineage, label)
         if self.additional_nodes.value & msprime.NODE_IS_RE_EVENT > 0:
             self.store_node(lhs_tail.population, flags=msprime.NODE_IS_RE_EVENT)
             self.store_arg_edges(lhs_tail)
@@ -1890,6 +1897,7 @@ class Simulator:
             self.store_arg_edges(alpha)
 
         assert not return_heads
+        # self.print_state()
         self.verify()
 
         ret = None
@@ -1933,10 +1941,12 @@ class Simulator:
             # ...  |   |   ========== ...
             #     lbp rbp
             return None
+
+        left_lineage = y.lineage
+        pop = left_lineage.population
         self.num_gc_events += 1
         hull = y.get_hull()
         assert (self.model == "smc_k") == (hull is not None)
-        pop = y.population
         reset_right = -1
 
         # Process left break
@@ -2053,9 +2063,15 @@ class Simulator:
                 self.P[new_individual_head.population].add_hull(
                     new_individual_head.label, hull
                 )
-            self.P[new_individual_head.population].add(
-                new_individual_head, new_individual_head.label
+            right_lineage = self.alloc_lineage(
+                new_individual_head,
+                population=left_lineage.population,
+                label=left_lineage.label,
             )
+            right_lineage.reset_tail()
+            # NOTE this could be done more efficiently
+            left_lineage.reset_tail()
+            self.P[pop].add(right_lineage, right_lineage.label)
 
     def wiuf_gene_conversion_left_event(self, label):
         """
@@ -2063,8 +2079,9 @@ class Simulator:
         """
         random_gc_left = random.uniform(0, self.get_total_gc_left(label))
         # Get segment where gene conversion starts from left
-        y = self.find_cleft_individual(label, random_gc_left)
-        assert y is not None
+        left_lineage = self.find_cleft_individual(label, random_gc_left)
+        assert left_lineage is not None
+        y = left_lineage.head
 
         # generate tract_length
         tl = self.generate_gc_tract_length()
@@ -2131,7 +2148,12 @@ class Simulator:
 
         self.set_segment_mass(alpha)
         assert alpha.prev is None
-        self.P[alpha.population].add(alpha, label)
+        right_lineage = self.alloc_lineage(
+            alpha, population=left_lineage.population, label=left_lineage.label
+        )
+        left_lineage.reset_tail()
+        right_lineage.reset_tail()
+        self.P[right_lineage.population].add(right_lineage, label)
 
     def hudson_recombination_event_sweep_phase(self, label, sweep_site, pop_freq):
         """
@@ -2390,6 +2412,7 @@ class Simulator:
             self.defrag_segment_chain(z)
         if coalescence:
             self.defrag_breakpoints()
+        self.verify()
         return merged_head
 
     def defrag_segment_chain(self, lineage):
@@ -2403,6 +2426,10 @@ class Simulator:
                     y.next.prev = x
                 self.set_segment_mass(x)
                 self.free_segment(y)
+                if lineage.head == y:
+                    lineage.head = x
+                if lineage.tail == y:
+                    lineage.tail = x
             y = x
 
     def defrag_breakpoints(self):
@@ -2470,7 +2497,6 @@ class Simulator:
         self.merge_two_ancestors(population_index, label, x, y)
 
     def merge_two_ancestors(self, population_index, label, lin_x, lin_y, u=-1):
-
         pop = self.P[population_index]
         self.num_ca_events += 1
         new_lineage = None
@@ -2568,6 +2594,7 @@ class Simulator:
                     ):
                         defrag_required |= z.right == alpha.left
                     else:
+                        # print("UPDATE DEFRAG")
                         defrag_required |= (
                             z.right == alpha.left and z.node == alpha.node
                         )
@@ -2601,8 +2628,11 @@ class Simulator:
 
         if defrag_required:
             self.defrag_segment_chain(new_lineage)
+        # self.verify()
         if coalescence:
+            # if True:
             self.defrag_breakpoints()
+        self.verify()
 
         # self.print_state()
         # self.verify()
@@ -2686,7 +2716,7 @@ class Simulator:
         # print("VERIFY")
         for pop_index, pop in enumerate(self.P):
             for label in range(self.num_labels):
-                assert len(set(id(lin) for lin in pop._ancestors[label])) == len(
+                assert len({id(lin) for lin in pop._ancestors[label]}) == len(
                     pop._ancestors[label]
                 )
                 for lin in pop.iter_label(label):
@@ -2722,14 +2752,17 @@ class Simulator:
                         overlap_counter.increment_interval(u.left, u.right)
                         u = u.next
 
+        last_count = -2
         for pos, count in self.S.items():
+            assert last_count != count
+            last_count = count
             if pos != self.L:
                 assert count == overlap_counter.overlaps_at(pos)
 
         assert self.S[self.L] == -1
         # Check the ancestry tracking.
         A = bintrees.AVLTree()
-        A[0] = 0
+        A[0] = 0.0
         A[self.L] = -1
         for pop in self.P:
             for label in range(self.num_labels):

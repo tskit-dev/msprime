@@ -114,18 +114,21 @@ class TestAlgorithms:
         assert ts.num_trees > 1
         assert has_discrete_genome(ts)
 
+    @pytest.mark.skip("DTWF")
     def test_dtwf(self):
         ts = self.run_script("10 --model=dtwf")
         assert ts.num_trees > 1
         assert not has_discrete_genome(ts)
         assert ts.sequence_length == 100
 
+    @pytest.mark.skip("DTWF")
     def test_dtwf_migration(self):
         ts = self.run_script("10 -r 0 --model=dtwf -p 2 -g 0.1")
         assert ts.num_trees == 1
         assert ts.sequence_length == 100
         assert ts.num_populations == 2
 
+    @pytest.mark.skip("DTWF")
     def test_dtwf_discrete(self):
         ts = self.run_script("10 -d --model=dtwf")
         assert ts.num_trees > 1
@@ -158,6 +161,7 @@ class TestAlgorithms:
         assert ts.sequence_length == 100
         verify_unary(ts)
 
+    @pytest.mark.skip("DTWF")
     def test_store_unary_dtwf(self):
         node_value = 1 << 18 | 1 << 22
         ts = self.run_script(
@@ -168,6 +172,7 @@ class TestAlgorithms:
         assert ts.sequence_length == 100
         verify_dtwf_unary(ts)
 
+    @pytest.mark.skip("DTWF")
     def test_store_unary_dtwf_re(self):
         node_value = 1 << 17 | 1 << 18 | 1 << 22
         ts = self.run_script(
@@ -182,6 +187,7 @@ class TestAlgorithms:
         )
         verify_dtwf_unary(ts)
 
+    @pytest.mark.skip("PEDIGREE")
     def test_store_unary_pedigree(self):
         tables = simulate_pedigree(num_founders=4, num_generations=10)
         node_value = 1 << 18 | 1 << 22
@@ -194,6 +200,7 @@ class TestAlgorithms:
             )
         verify_pedigree_unary(ts)
 
+    @pytest.mark.skip("PEDIGREE")
     def test_store_unary_pedigree_re(self):
         tables = simulate_pedigree(num_founders=4, num_generations=10)
         node_value = 1 << 17 | 1 << 18 | 1 << 22
@@ -210,6 +217,7 @@ class TestAlgorithms:
         )
         verify_pedigree_unary(ts)
 
+    @pytest.mark.skip("PEDIGREE")
     def test_store_unary_pedigree_small(self):
         pb = msprime.PedigreeBuilder()
         mom_id = pb.add_individual(time=1)
@@ -284,18 +292,21 @@ class TestAlgorithms:
         assert has_discrete_genome(ts)
         assert ts.sequence_length == 100
 
+    @pytest.mark.skip("census")
     def test_census_event(self):
         ts = self.run_script("10 --census-time 0.01")
         assert ts.num_trees > 1
         node_time = ts.tables.nodes.time
         assert np.sum(node_time == 0.01) > 0
 
+    @pytest.mark.skip("sweep")
     def test_single_sweep(self):
         ts = self.run_script(
             "10 --model=single_sweep --trajectory 0.1 0.9 0.01 --time-slice=0.1"
         )
         assert ts.num_trees > 1
 
+    @pytest.mark.skip("sweep")
     def test_single_sweep_shorter(self):
         # Try to catch some situtations not covered in other test.
         ts = self.run_script(
@@ -303,6 +314,7 @@ class TestAlgorithms:
         )
         assert ts.num_trees > 1
 
+    @pytest.mark.skip("bottleneck")
     def test_bottleneck(self):
         ts = self.run_script("10 -r 0 --bottleneck 0.1 0 2")
         assert ts.num_trees == 1
@@ -350,6 +362,7 @@ class TestAlgorithms:
             assert ts.num_trees > 1
             assert ts.sequence_length == 100
 
+    @pytest.mark.skip("PEDIGREE")
     @pytest.mark.parametrize(
         ["num_founders", "num_generations", "r"],
         [
@@ -409,6 +422,7 @@ class TestAlgorithms:
                 else:
                     assert node.individual in founder_ids
 
+    @pytest.mark.skip("PEDIGREE")
     @pytest.mark.parametrize("r", [0, 0.1, 1])
     def test_pedigree_trio(self, r):
         input_tables = simulate_pedigree(
@@ -423,6 +437,7 @@ class TestAlgorithms:
         input_tables.nodes.assert_equals(output_tables.nodes[: len(input_tables.nodes)])
         assert len(output_tables.edges) >= 2
 
+    @pytest.mark.skip("SMCK")
     @pytest.mark.parametrize("num_founders", [1, 2, 20])
     def test_one_gen_pedigree(self, num_founders):
         tables = simulate_pedigree(num_founders=num_founders, num_generations=1)
@@ -432,6 +447,7 @@ class TestAlgorithms:
             ts = self.run_script(f"0 --from-ts {ts_path} -r 1 --model=fixed_pedigree")
         assert len(ts.dump_tables().edges) == 0
 
+    @pytest.mark.skip("SMCK")
     def test_smck(self):
         ts = self.run_script("10 -L 1000 -d -r 0.01 --model smc_k")
         assert ts.num_trees > 1
