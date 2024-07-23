@@ -2,6 +2,7 @@
 Python version of the simulation algorithm.
 """
 import argparse
+import dataclasses
 import heapq
 import itertools
 import logging
@@ -127,6 +128,7 @@ class Segment:
         self.label = 0
         self.index = index
         self.hull = None
+        self.lineage = None
 
     def __repr__(self):
         return repr((self.left, self.right, self.node))
@@ -162,6 +164,11 @@ class Segment:
             seg = seg.prev
 
         return index
+
+
+@dataclasses.dataclass
+class Lineage:
+    head: Segment
 
 
 class Population:
@@ -204,8 +211,8 @@ class Population:
         print("\tAncestors: ", len(self._ancestors))
         for label, ancestors in enumerate(self._ancestors):
             print("\tLabel = ", label)
-            for u in ancestors:
-                print("\t\t" + Segment.show_chain(u))
+            for lineage in ancestors:
+                print("\t\t" + Segment.show_chain(lineage.head))
 
     def set_growth_rate(self, growth_rate, time):
         # TODO This doesn't work because we need to know what the time
@@ -366,6 +373,7 @@ class Population:
         """
         Removes the given individual from its population.
         """
+        assert isinstance(individual, Lineage)
         return self._ancestors[label].remove(individual)
 
     def add_hull(self, label, hull):
@@ -408,7 +416,8 @@ class Population:
         """
         Inserts the specified individual into this population.
         """
-        assert individual.label == label
+        assert isinstance(individual, Lineage)
+        assert individual.head.label == label
         self._ancestors[label].append(individual)
 
     def __iter__(self):
@@ -428,12 +437,6 @@ class Population:
         """
         for ancestors in self._ancestors:
             yield from ancestors
-
-    def find_indv(self, indv):
-        """
-        find the index of an ancestor in population
-        """
-        return self._ancestors[indv.label].index(indv)
 
 
 class Pedigree:
@@ -694,7 +697,7 @@ class Hull:
     def __init__(self, index):
         self.left = None
         self.right = None
-        self.lineage_head = None
+        self.lineage = None
         self.index = index
         self.insertion_order = math.inf
 
@@ -984,7 +987,8 @@ class Simulator:
                 left_end = seg.left
                 pop = seg.population
                 label = seg.label
-                self.P[seg.population].add(seg)
+                lineage = self.alloc_lineage(seg)
+                self.P[seg.population].add(lineage)
                 while seg is not None:
                     self.set_segment_mass(seg)
                     seg = seg.next
@@ -996,9 +1000,9 @@ class Simulator:
                     left_end = seg.left
                     pop = seg.population
                     label = seg.label
-                    lineage_head = seg
+                    lineage = seg.lineage
                     right_end = root_segments_tail[node].right
-                    new_hull = self.alloc_hull(left_end, right_end, lineage_head)
+                    new_hull = self.alloc_hull(left_end, right_end, lineage)
                     # insert Hull
                     floor = self.P[pop].hulls_left[label].floor_key(new_hull)
                     insertion_order = 0
@@ -1049,15 +1053,15 @@ class Simulator:
     def change_migration_matrix_element(self, pop_i, pop_j, rate):
         self.migration_matrix[pop_i][pop_j] = rate
 
-    def alloc_hull(self, left, right, lineage_head):
-        alpha = lineage_head
+    def alloc_hull(self, left, right, lineage):
+        alpha = lineage.head
         hull = self.hull_stack.pop()
         hull.left = left
         hull.right = right
         while alpha.prev is not None:
             alpha = alpha.prev
         assert alpha is not None
-        hull.lineage_head = alpha
+        hull.lineage = lineage
         alpha.hull = hull
         return hull
 
@@ -1085,6 +1089,11 @@ class Simulator:
         s.label = label
         s.hull = hull
         return s
+
+    def alloc_lineage(self, head):
+        lineage = Lineage(head)
+        head.lineage = lineage
+        return lineage
 
     def copy_segment(self, segment):
         return self.alloc_segment(
@@ -1171,11 +1180,11 @@ class Simulator:
         # Insert unary edges for any remainining lineages.
         current_time = self.t
         for population in self.P:
-            for ancestor in population.iter_ancestors():
+            for lineage in population.iter_ancestors():
                 node = tskit.NULL
                 # See if there is already a node in this ancestor at the
                 # current time
-                seg = ancestor
+                seg = lineage.head
                 while seg is not None:
                     if self.tables.nodes[seg.node].time == current_time:
                         node = seg.node
@@ -1187,7 +1196,7 @@ class Simulator:
                         flags=0, time=current_time, population=population.id
                     )
                 # Add in edges pointing to this ancestor
-                seg = ancestor
+                seg = lineage.head
                 while seg is not None:
                     if seg.node != node:
                         self.tables.edges.add_row(seg.left, seg.right, node, seg.node)
@@ -1383,12 +1392,12 @@ class Simulator:
         # a bit ugly with the two loops because
         # of dealing with the pops
         indices = []
-        for idx, u in enumerate(self.P[0].iter_label(0)):
+        for idx, lineage in enumerate(self.P[0].iter_label(0)):
             if random.random() < x:
-                self.set_labels(u, 1)
+                self.set_labels(lineage, 1)
                 indices.append(idx)
             else:
-                assert u.label == 0
+                assert lineage.head.label == 0
         popped = 0
         for i in indices:
             tmp = self.P[0].remove(i - popped, 0)
@@ -1469,9 +1478,9 @@ class Simulator:
                                     0, self.sweep_site, 1.0 - x
                                 )
         # clean up the labels at end
-        for idx, u in enumerate(self.P[0].iter_label(1)):
-            tmp = self.P[0].remove(idx, u.label)
-            self.set_labels(u, 0)
+        for idx, lineage in enumerate(self.P[0].iter_label(1)):
+            tmp = self.P[0].remove(idx, label=1)
+            self.set_labels(lineage, 0)
             self.P[0].add(tmp)
 
     def pedigree_simulate(self):
@@ -1524,18 +1533,17 @@ class Simulator:
                 parent_nodes = [-1, -1]
                 H = [[], []]
                 for child in children:
-                    segs_pair = self.dtwf_recombine(child, parent_nodes)
-                    for seg in segs_pair:
-                        if seg is not None and seg.index != child.index:
-                            pop.add(seg)
+                    lin_pair = self.dtwf_recombine(child, parent_nodes)
+                    for lin in lin_pair:
+                        if lin is not None and lin != child:
+                            pop.add(lin)
 
                     self.verify()
                     # Collect segments inherited from the same individual
-                    for i, seg in enumerate(segs_pair):
-                        if seg is None:
-                            continue
-                        assert seg.prev is None
-                        heapq.heappush(H[i], (seg.left, seg))
+                    for i, lin in enumerate(lin_pair):
+                        if lin is not None:
+                            assert lin.head.prev is None
+                            heapq.heappush(H[i], (lin.head.left, lin.head))
 
                 # Merge segments
                 for ploid, h in enumerate(H):
@@ -1552,8 +1560,8 @@ class Simulator:
                             )
                         h = []
                     elif segments_to_merge >= 2:
-                        for _, individual in h:
-                            pop.remove_individual(individual)
+                        for _, seg in h:
+                            pop.remove_individual(seg.lineage)
                         # parent_nodes[ploid] does not need to be updated here
                         if segments_to_merge == 2:
                             self.merge_two_ancestors(
@@ -1580,9 +1588,9 @@ class Simulator:
         # All the segment chains in common_ancestors reach a common
         # ancestor in this ploid of this individual. First we remove
         # them from the populations they are stored in:
-        for _, anc in common_ancestors:
-            pop = self.P[anc.population]
-            pop.remove_individual(anc)
+        for _, seg in common_ancestors:
+            pop = self.P[seg.population]
+            pop.remove_individual(seg.lineage)
 
         # Merge together these lists of ancestral segments to create the
         # monoploid genome for this ploid of this individual.
@@ -1600,7 +1608,7 @@ class Simulator:
             # simulation because we are *not* simulating the entire
             # population process, only the subset that we have information
             # about within the pedigree.
-            seg = genome
+            seg = genome.head
             while seg is not None:
                 if seg.node != node:
                     self.store_edge(seg.left, seg.right, parent=node, child=seg.node)
@@ -1613,15 +1621,16 @@ class Simulator:
             # to create two independent lines of ancestry.
             parent = self.pedigree.individuals[ind.parents[ploid]]
             parent_ancestry = self.dtwf_recombine(genome, parent.nodes)
+            assert len(parent_ancestry) == ind.ploidy
             for parent_ploid in range(ind.ploidy):
-                seg = parent_ancestry[parent_ploid]
-                if seg is not None:
+                parent_lin = parent_ancestry[parent_ploid]
+                if parent_lin is not None:
                     # Add this segment chain of ancestry to the accumulating
                     # set in the parent on the corresponding ploid.
-                    parent.add_common_ancestor(seg, ploid=parent_ploid)
-                    if seg != genome:
+                    parent.add_common_ancestor(parent_lin.head, ploid=parent_ploid)
+                    if parent_lin != genome:
                         # Add the recombined ancestor to the population
-                        pop.add(seg)
+                        pop.add(parent_lin)
 
         self.flush_edges()
         self.verify()
@@ -1636,11 +1645,12 @@ class Simulator:
 
         # Go through the extant lineages and gather the ancestral material
         # into the corresponding pedigree individuals.
-        for anc in pop.iter_ancestors():
-            node = self.tables.nodes[anc.node]
+        for lineage in pop.iter_ancestors():
+            u = lineage.head.node
+            node = self.tables.nodes[u]
             assert node.individual != tskit.NULL
             ind = self.pedigree.individuals[node.individual]
-            ind.add_common_ancestor(anc, ploid=ind.nodes.index(anc.node))
+            ind.add_common_ancestor(lineage.head, ploid=ind.nodes.index(u))
 
         # Visit pedigree individuals in time order.
         visit_order = sorted(self.pedigree.individuals, key=lambda x: (x.time, x.id))
@@ -1676,10 +1686,11 @@ class Simulator:
         source = self.P[j]
         dest = self.P[k]
         index = random.randint(0, source.get_num_ancestors(label) - 1)
-        x = source.remove(index, label)
+        lineage = source.remove(index, label)
+        x = lineage.head
         hull = x.get_hull()
         assert (self.model == "smc_k") == (hull is not None)
-        dest.add(x, label)
+        dest.add(lineage, label)
         if self.model == "smc_k":
             source.remove_hull(label, hull)
             dest.add_hull(label, hull)
@@ -1723,11 +1734,12 @@ class Simulator:
             gc_mass = self.gc_map.mass_between(gc_left_bound, seg.right)
             mass_index.set_value(seg.index, gc_mass)
 
-    def set_labels(self, segment, new_label):
+    def set_labels(self, lineage, new_label):
         """
-        Move the specified segment to the specified label.
+        Move the specified lineage to the specified label.
         """
         mass_indexes = [self.recomb_mass_index, self.gc_mass_index]
+        segment = lineage.head
         while segment is not None:
             masses = []
             for mass_index in mass_indexes:
@@ -1789,6 +1801,7 @@ class Simulator:
             alpha = y
             lhs_tail = x
 
+        right_lineage = self.alloc_lineage(alpha)
         if self.model == "smc_k":
             # modify original hull
             pop = alpha.population
@@ -1798,11 +1811,11 @@ class Simulator:
             self.P[pop].reset_hull_right(label, lhs_hull, rhs_right, lhs_hull.right)
 
             # create hull for alpha
-            alpha_hull = self.alloc_hull(alpha.left, rhs_right, alpha)
+            alpha_hull = self.alloc_hull(alpha.left, rhs_right, right_lineage)
             self.P[alpha.population].add_hull(label, alpha_hull)
 
         self.set_segment_mass(alpha)
-        self.P[alpha.population].add(alpha, label)
+        self.P[alpha.population].add(right_lineage, label)
         if self.additional_nodes.value & msprime.NODE_IS_RE_EVENT > 0:
             self.store_node(lhs_tail.population, flags=msprime.NODE_IS_RE_EVENT)
             self.store_arg_edges(lhs_tail)
@@ -1814,7 +1827,8 @@ class Simulator:
             # Seek back to the head of the x chain
             while x.prev is not None:
                 x = x.prev
-            ret = x, alpha
+            left_lineage = x.lineage
+            ret = left_lineage, right_lineage
         return ret
 
     def generate_gc_tract_length(self):
@@ -1959,15 +1973,16 @@ class Simulator:
         elif head is not None:
             new_individual_head = head
         if new_individual_head is not None:
+            lineage = self.alloc_lineage(new_individual_head)
             if self.model == "smc_k":
                 assert hull_left < hull_right
                 hull_right = min(self.L, hull_right + self.hull_offset)
-                hull = self.alloc_hull(hull_left, hull_right, new_individual_head)
+                hull = self.alloc_hull(hull_left, hull_right, lineage)
                 self.P[new_individual_head.population].add_hull(
                     new_individual_head.label, hull
                 )
             self.P[new_individual_head.population].add(
-                new_individual_head, new_individual_head.label
+                lineage, new_individual_head.label
             )
 
     def wiuf_gene_conversion_left_event(self, label):
@@ -1976,7 +1991,8 @@ class Simulator:
         """
         random_gc_left = random.uniform(0, self.get_total_gc_left(label))
         # Get segment where gene conversion starts from left
-        y = self.find_cleft_individual(label, random_gc_left)
+        lineage = self.find_cleft_individual(label, random_gc_left)
+        y = lineage.head
         assert y is not None
 
         # generate tract_length
@@ -2044,29 +2060,30 @@ class Simulator:
 
         self.set_segment_mass(alpha)
         assert alpha.prev is None
-        self.P[alpha.population].add(alpha, label)
+        lineage = self.alloc_lineage(alpha)
+        self.P[alpha.population].add(lineage, label)
 
     def hudson_recombination_event_sweep_phase(self, label, sweep_site, pop_freq):
         """
         Implements a recombination event in during a selective sweep.
         """
-        lhs, rhs = self.hudson_recombination_event(label, return_heads=True)
+        left_lin, right_lin = self.hudson_recombination_event(label, return_heads=True)
+        lhs = left_lin.head
+        rhs = right_lin.head
 
         r = random.random()
         if sweep_site < rhs.left:
             if r < 1.0 - pop_freq:
                 # move rhs to other population
-                t_idx = self.P[rhs.population].find_indv(rhs)
-                self.P[rhs.population].remove(t_idx, rhs.label)
-                self.set_labels(rhs, 1 - label)
-                self.P[rhs.population].add(rhs, rhs.label)
+                self.P[rhs.population].remove_individual(right_lin, rhs.label)
+                self.set_labels(right_lin, 1 - label)
+                self.P[rhs.population].add(right_lin, rhs.label)
         else:
             if r < 1.0 - pop_freq:
                 # move lhs to other population
-                t_idx = self.P[lhs.population].find_indv(lhs)
-                self.P[lhs.population].remove(t_idx, lhs.label)
-                self.set_labels(lhs, 1 - label)
-                self.P[lhs.population].add(lhs, lhs.label)
+                self.P[rhs.population].remove_individual(left_lin, lhs.label)
+                self.set_labels(left_lin, 1 - label)
+                self.P[lhs.population].add(left_lin, lhs.label)
 
     def dtwf_generate_breakpoint(self, start):
         left_bound = start + 1 if self.discrete_genome else start
@@ -2076,7 +2093,7 @@ class Simulator:
             bp = math.floor(bp)
         return bp
 
-    def dtwf_recombine(self, x, ind_nodes):
+    def dtwf_recombine(self, lineage, ind_nodes):
         """
         Chooses breakpoints and returns segments sorted by inheritance
         direction, by iterating through segment chain starting with x
@@ -2084,6 +2101,7 @@ class Simulator:
         u = self.alloc_segment(-1, -1, -1, -1, None, None)
         v = self.alloc_segment(-1, -1, -1, -1, None, None)
         seg_tails = [u, v]
+        x = lineage.head
 
         # TODO Should this be the recombination rate going foward from x.left?
         if self.recomb_map.total_mass > 0:
@@ -2162,12 +2180,22 @@ class Simulator:
                         segment,
                     )
 
-        return u, v
+        ret = []
+        for seg in [u, v]:
+            if seg is None:
+                ret.append(None)
+            else:
+                if seg.lineage is lineage:
+                    ret.append(lineage)
+                else:
+                    ret.append(self.alloc_lineage(seg))
+
+        return ret
 
     def census_event(self, time):
         for pop in self.P:
-            for ancestor in pop.iter_ancestors():
-                seg = ancestor
+            for lineage in pop.iter_ancestors():
+                seg = lineage.head
                 u = self.tables.nodes.add_row(
                     time=time, flags=msprime.NODE_IS_CEN_EVENT, population=pop.id
                 )
@@ -2184,7 +2212,8 @@ class Simulator:
         H = []
         for _ in range(pop.get_num_ancestors()):
             if random.random() < intensity:
-                x = pop.remove(0)
+                lineage = pop.remove(0)
+                x = lineage.head
                 heapq.heappush(H, (x.left, x))
         self.merge_ancestors(H, pop_id, label)
 
@@ -2204,7 +2233,7 @@ class Simulator:
         pass_through = len(H) == 1
         alpha = None
         z = None
-        merged_head = None
+        new_lineage = None
         while len(H) > 0:
             alpha = None
             left = H[0][0]
@@ -2267,8 +2296,8 @@ class Simulator:
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
                 if z is None:
-                    pop.add(alpha, label)
-                    merged_head = alpha
+                    new_lineage = self.alloc_lineage(alpha)
+                    pop.add(new_lineage, label)
                 else:
                     if (coalescence and not self.coalescing_segments_only) or (
                         self.additional_nodes.value & msprime.NODE_IS_CA_EVENT > 0
@@ -2303,7 +2332,7 @@ class Simulator:
             self.defrag_segment_chain(z)
         if coalescence:
             self.defrag_breakpoints()
-        return merged_head
+        return new_lineage
 
     def defrag_segment_chain(self, z):
         y = z
@@ -2363,11 +2392,11 @@ class Simulator:
             hull_i_ptr, hull_j_ptr = random_pair
             hull_i = self.hulls[hull_i_ptr]
             hull_j = self.hulls[hull_j_ptr]
-            x = hull_i.lineage_head
-            y = hull_j.lineage_head
-            pop.remove_individual(x, label)
+            x_lin = hull_i.lineage
+            y_lin = hull_j.lineage
+            pop.remove_individual(x_lin, label)
             pop.remove_hull(label, hull_i)
-            pop.remove_individual(y, label)
+            pop.remove_individual(y_lin, label)
             pop.remove_hull(label, hull_j)
             self.free_hull(hull_i)
             self.free_hull(hull_j)
@@ -2375,17 +2404,18 @@ class Simulator:
         else:
             # Choose two ancestors uniformly.
             j = random.randint(0, pop.get_num_ancestors(label) - 1)
-            x = pop.remove(j, label)
+            x_lin = pop.remove(j, label)
             j = random.randint(0, pop.get_num_ancestors(label) - 1)
-            y = pop.remove(j, label)
-
+            y_lin = pop.remove(j, label)
+        x = x_lin.head
+        y = y_lin.head
         self.merge_two_ancestors(population_index, label, x, y)
 
     def merge_two_ancestors(self, population_index, label, x, y, u=-1):
         pop = self.P[population_index]
         self.num_ca_events += 1
         z = None
-        merged_head = None
+        new_lineage = None
         coalescence = False
         defrag_required = False
         while x is not None or y is not None:
@@ -2463,8 +2493,8 @@ class Simulator:
             # loop tail; update alpha and integrate it into the state.
             if alpha is not None:
                 if z is None:
-                    pop.add(alpha, label)
-                    merged_head = alpha
+                    new_lineage = self.alloc_lineage(alpha)
+                    pop.add(new_lineage, label)
                 else:
                     if (coalescence and not self.coalescing_segments_only) or (
                         self.additional_nodes.value & msprime.NODE_IS_CA_EVENT > 0
@@ -2491,9 +2521,10 @@ class Simulator:
         if coalescence:
             self.defrag_breakpoints()
 
-        if merged_head is not None and self.model == "smc_k":
+        if new_lineage is not None and self.model == "smc_k":
+            merged_head = new_lineage.head
             assert merged_head.prev is None
-            hull = self.alloc_hull(merged_head.left, merged_head.right, merged_head)
+            hull = self.alloc_hull(merged_head.left, merged_head.right, new_lineage)
             while merged_head is not None:
                 right = merged_head.right
                 merged_head = merged_head.next
@@ -2505,15 +2536,19 @@ class Simulator:
         for label in range(self.num_labels):
             print(
                 "Recomb mass = ",
-                0
-                if self.recomb_mass_index is None
-                else self.recomb_mass_index[label].get_total(),
+                (
+                    0
+                    if self.recomb_mass_index is None
+                    else self.recomb_mass_index[label].get_total()
+                ),
             )
             print(
                 "GC mass = ",
-                0
-                if self.gc_mass_index is None
-                else self.gc_mass_index[label].get_total(),
+                (
+                    0
+                    if self.gc_mass_index is None
+                    else self.gc_mass_index[label].get_total()
+                ),
             )
         print("Modifier events = ")
         for t, f, args in self.modifier_events:
@@ -2564,7 +2599,10 @@ class Simulator:
     def verify_segments(self):
         for pop in self.P:
             for label in range(self.num_labels):
-                for head in pop.iter_label(label):
+                for lineage in pop.iter_label(label):
+                    assert isinstance(lineage, Lineage)
+                    head = lineage.head
+                    assert head.lineage is lineage
                     assert head.prev is None
                     prev = head
                     u = head.next
@@ -2581,7 +2619,8 @@ class Simulator:
         overlap_counter = OverlapCounter(self.L)
         for pop in self.P:
             for label in range(self.num_labels):
-                for u in pop.iter_label(label):
+                for lineage in pop.iter_label(label):
+                    u = lineage.head
                     while u is not None:
                         overlap_counter.increment_interval(u.left, u.right)
                         u = u.next
@@ -2597,7 +2636,8 @@ class Simulator:
         A[self.L] = -1
         for pop in self.P:
             for label in range(self.num_labels):
-                for u in pop.iter_label(label):
+                for lineage in pop.iter_label(label):
+                    u = lineage.head
                     while u is not None:
                         if u.left not in A:
                             k = A.floor_key(u.left)
@@ -2626,7 +2666,8 @@ class Simulator:
         total_mass = 0
         alt_total_mass = 0
         for pop_index, pop in enumerate(self.P):
-            for u in pop.iter_label(label):
+            for lineage in pop.iter_label(label):
+                u = lineage.head
                 assert u.prev is None
                 left = compute_left_bound(u)
                 while u is not None:
@@ -2717,8 +2758,9 @@ class Simulator:
             self.verify_hulls()
 
 
-def make_hull(a, L, offset=0):
+def make_hull(lineage, L, offset=0):
     hull = Hull(-1)
+    a = lineage.head
     assert a.prev is None
     b = a
     tracked_hull = a.get_hull()
@@ -2729,7 +2771,7 @@ def make_hull(a, L, offset=0):
     hull.right = min(right + offset, L)
     assert tracked_hull.left == hull.left
     assert tracked_hull.right == hull.right
-    assert tracked_hull.lineage_head == a
+    assert tracked_hull.lineage.head == a
     return hull
 
 
