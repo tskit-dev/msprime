@@ -374,8 +374,9 @@ static void
 test_sweep_genic_selection_mimic_msms(void)
 {
     /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
-    for (int i = 0; i < 300; i++)
+    for (int i = 0; i < 300; i++) {
         sweep_genic_selection_mimic_msms_single_run(i + 1);
+    }
 }
 
 int

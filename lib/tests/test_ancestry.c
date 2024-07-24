@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2016-2021 University of Oxford
+** Copyright (C) 2016-2024 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -1645,6 +1645,7 @@ test_multiple_mergers_unary_nodes(void)
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(&msp, 0);
 
+        /* msp_print_state(&msp, stdout); */
         CU_ASSERT_TRUE(msp_get_num_breakpoints(&msp) > 0);
         // verify whether there is at least one unary node
         num_edges = tables.edges.num_rows;
@@ -4307,7 +4308,7 @@ main(int argc, char **argv)
         { "test_multiple_mergers_growth_rate", test_multiple_mergers_growth_rate },
         { "test_dirac_coalescent_bad_parameters", test_dirac_coalescent_bad_parameters },
         { "test_beta_coalescent_bad_parameters", test_beta_coalescent_bad_parameters },
-        { "test_multipe_mergers_unary_nodes", test_multiple_mergers_unary_nodes },
+        { "test_multiple_mergers_unary_nodes", test_multiple_mergers_unary_nodes },
 
         { "test_simulator_getters_setters", test_simulator_getters_setters },
         { "test_demographic_events", test_demographic_events },

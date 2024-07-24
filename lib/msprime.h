@@ -85,7 +85,12 @@ typedef struct segment_t_t {
     struct segment_t_t *prev;
     struct segment_t_t *next;
     struct hull_t_t *hull;
+    struct lineage_t_t *lineage;
 } segment_t;
+
+typedef struct lineage_t_t {
+    segment_t *head;
+} lineage_t;
 
 typedef struct {
     double position;
@@ -95,7 +100,7 @@ typedef struct {
 typedef struct hull_t_t {
     double left;
     double right;
-    segment_t *lineage;
+    lineage_t *lineage;
     size_t id;
     uint64_t count;
     uint64_t insertion_order;
@@ -277,6 +282,7 @@ typedef struct _msp_t {
     /* memory management */
     object_heap_t avl_node_heap;
     object_heap_t node_mapping_heap;
+    object_heap_t lineage_heap;
     /* We keep an independent segment heap for each label */
     object_heap_t *segment_heap;
     /* We keep an independent hull heap for each label */
