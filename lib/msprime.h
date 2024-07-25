@@ -84,12 +84,12 @@ typedef struct segment_t_t {
     size_t id;
     struct segment_t_t *prev;
     struct segment_t_t *next;
-    struct hull_t_t *hull;
     struct lineage_t_t *lineage;
 } segment_t;
 
 typedef struct lineage_t_t {
     segment_t *head;
+    struct hull_t_t *hull;
 } lineage_t;
 
 typedef struct {

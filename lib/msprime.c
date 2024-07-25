@@ -200,7 +200,7 @@ segment_get_hull(segment_t *seg)
         seg = seg->prev;
     }
     tsk_bug_assert(seg->lineage != NULL);
-    hull = seg->hull;
+    hull = seg->lineage->hull;
     tsk_bug_assert(hull->lineage == seg->lineage);
 
     return hull;
@@ -838,8 +838,7 @@ out:
 
 static segment_t *MSP_WARN_UNUSED
 msp_alloc_segment(msp_t *self, double left, double right, tsk_id_t value,
-    population_id_t population, label_id_t label, segment_t *prev, segment_t *next,
-    hull_t *hull)
+    population_id_t population, label_id_t label, segment_t *prev, segment_t *next)
 {
     segment_t *seg = NULL;
 
@@ -878,7 +877,6 @@ msp_alloc_segment(msp_t *self, double left, double right, tsk_id_t value,
     seg->value = value;
     seg->population = population;
     seg->label = label;
-    seg->hull = hull;
 out:
     return seg;
 }
@@ -907,7 +905,7 @@ static segment_t *MSP_WARN_UNUSED
 msp_copy_segment(msp_t *self, const segment_t *seg)
 {
     return msp_alloc_segment(self, seg->left, seg->right, seg->value, seg->population,
-        seg->label, seg->prev, seg->next, seg->hull);
+        seg->label, seg->prev, seg->next);
 }
 
 static hull_t *MSP_WARN_UNUSED
@@ -950,7 +948,7 @@ msp_alloc_hull(msp_t *self, double left, double right, lineage_t *lineage)
     hull->count = 0;
     hull->insertion_order = UINT64_MAX;
     tsk_bug_assert(lineage->head->prev == NULL);
-    lineage->head->hull = hull;
+    lineage->hull = hull;
 out:
     return hull;
 }
@@ -1949,7 +1947,7 @@ msp_verify_hulls(msp_t *self)
             for (a = avl->head; a->next != NULL; a = a->next) {
                 lin = (lineage_t *) a->item;
                 x = lin->head;
-                hull_right = x->hull->right;
+                hull_right = lin->hull->right;
                 hull_a.left = x->left;
                 while (x->next != NULL) {
                     x = x->next;
@@ -2571,7 +2569,7 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
     lineage_t *ind;
     segment_t *x, *y;
     double recomb_mass, gc_mass;
-    hull_t *hull, *new_hull, *h;
+    hull_t *hull, *new_hull;
 
     if (self->populations[dest_pop].state != MSP_POP_STATE_ACTIVE) {
         ret = MSP_ERR_POPULATION_INACTIVE_MOVE;
@@ -2623,10 +2621,9 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         //    new_hull = msp_alloc_hull(self, hull->left, hull->right, new_ind);
         //    msp_free_hull(self, hull, ind->population, ind->label);
         //}
-        h = new_hull;
         for (x = ind->head; x != NULL; x = x->next) {
-            y = msp_alloc_segment(self, x->left, x->right, x->value, x->population,
-                dest_label, y, NULL, h);
+            y = msp_alloc_segment(
+                self, x->left, x->right, x->value, x->population, dest_label, y, NULL);
             if (x->prev == NULL) {
                 ind->head = y;
                 y->lineage = ind;
@@ -2644,7 +2641,6 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
                 fenwick_set_value(&self->gc_mass_index[y->label], y->id, gc_mass);
             }
             msp_free_segment(self, x);
-            h = NULL;
         }
     }
     if (new_hull != NULL) {
@@ -3004,8 +3000,8 @@ msp_dtwf_recombine(
             } else {
                 tail = seg_tails[ix];
             }
-            z = msp_alloc_segment(self, k, x->right, x->value, x->population, x->label,
-                tail, x->next, NULL);
+            z = msp_alloc_segment(
+                self, k, x->right, x->value, x->population, x->label, tail, x->next);
             if (z == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -3284,7 +3280,7 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
     if (y->left < breakpoint) {
         tsk_bug_assert(breakpoint < y->right);
         alpha = msp_alloc_segment(self, breakpoint, y->right, y->value, y->population,
-            y->label, NULL, y->next, NULL);
+            y->label, NULL, y->next);
         if (alpha == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
@@ -3694,7 +3690,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 alpha->next = NULL;
             } else if (x->left != y->left) {
                 alpha = msp_alloc_segment(self, x->left, y->left, x->value,
-                    x->population, x->label, NULL, NULL, NULL);
+                    x->population, x->label, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -3754,7 +3750,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                         r = nm->position;
                     }
                     alpha = msp_alloc_segment(
-                        self, l, r, v, population_id, label, NULL, NULL, NULL);
+                        self, l, r, v, population_id, label, NULL, NULL);
                     if (alpha == NULL) {
                         ret = MSP_ERR_NO_MEMORY;
                         goto out;
@@ -3954,7 +3950,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             x = H[0];
             if (node != NULL && next_l < x->right) {
                 alpha = msp_alloc_segment(self, x->left, next_l, x->value, x->population,
-                    x->label, NULL, NULL, NULL);
+                    x->label, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -4023,7 +4019,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     r = nm->position;
                 }
                 alpha = msp_alloc_segment(
-                    self, l, r, new_node_id, population_id, label, NULL, NULL, NULL);
+                    self, l, r, new_node_id, population_id, label, NULL, NULL);
                 if (alpha == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -4379,7 +4375,7 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree, double left, double ri
         }
         if (root_segments_head[root] == NULL) {
             seg = msp_alloc_segment(
-                self, left, right, root, population, label, NULL, NULL, NULL);
+                self, left, right, root, population, label, NULL, NULL);
             if (seg == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -4392,7 +4388,7 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree, double left, double ri
                 tail->right = right;
             } else {
                 seg = msp_alloc_segment(
-                    self, left, right, root, population, label, tail, NULL, NULL);
+                    self, left, right, root, population, label, tail, NULL);
                 if (seg == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;

@@ -1,6 +1,8 @@
 """
 Python version of the simulation algorithm.
 """
+from __future__ import annotations
+
 import argparse
 import dataclasses
 import heapq
@@ -111,6 +113,9 @@ class FenwickTree:
         return j + 1
 
 
+# Once we drop support for 3.9 we can use slots=True to prevent
+# writing extra attrs.
+@dataclasses.dataclass  # (slots=True)
 class Segment:
     """
     A class representing a single segment. Each segment has a left
@@ -118,17 +123,15 @@ class Segment:
     next, giving the next in the chain.
     """
 
-    def __init__(self, index):
-        self.left = None
-        self.right = None
-        self.node = None
-        self.prev = None
-        self.next = None
-        self.population = None
-        self.label = 0
-        self.index = index
-        self.hull = None
-        self.lineage = None
+    index: int
+    left: float = 0
+    right: float = 0
+    node: int = -1
+    prev: Segment = None
+    next: Segment = None  # noqa: A003
+    lineage: Lineage = None
+    population: int = -1
+    label: int = 0
 
     def __repr__(self):
         return repr((self.left, self.right, self.node))
@@ -154,7 +157,7 @@ class Segment:
         assert seg is not None
         while seg.prev is not None:
             seg = seg.prev
-        hull = seg.hull
+        hull = seg.lineage.hull
         return hull
 
     def get_left_index(self):
@@ -164,11 +167,6 @@ class Segment:
             seg = seg.prev
 
         return index
-
-
-@dataclasses.dataclass
-class Lineage:
-    head: Segment
 
 
 class Population:
@@ -729,6 +727,12 @@ class HullEnd:
         return f"x:{self.x}, io:{self.insertion_order}"
 
 
+@dataclasses.dataclass
+class Lineage:
+    head: Segment
+    hull: Hull = None
+
+
 class OrderStatisticsTree:
     """
     Bintrees AVL tree with added functionality to keep track of the rank
@@ -1054,15 +1058,11 @@ class Simulator:
         self.migration_matrix[pop_i][pop_j] = rate
 
     def alloc_hull(self, left, right, lineage):
-        alpha = lineage.head
         hull = self.hull_stack.pop()
         hull.left = left
         hull.right = right
-        while alpha.prev is not None:
-            alpha = alpha.prev
-        assert alpha is not None
         hull.lineage = lineage
-        alpha.hull = hull
+        lineage.hull = hull
         return hull
 
     def alloc_segment(
@@ -1074,7 +1074,6 @@ class Simulator:
         prev=None,
         next=None,  # noqa: A002
         label=0,
-        hull=None,
     ):
         """
         Pops a new segment off the stack and sets its properties.
@@ -1087,7 +1086,6 @@ class Simulator:
         s.next = next
         s.prev = prev
         s.label = label
-        s.hull = hull
         return s
 
     def alloc_lineage(self, head):
@@ -1688,7 +1686,7 @@ class Simulator:
         index = random.randint(0, source.get_num_ancestors(label) - 1)
         lineage = source.remove(index, label)
         x = lineage.head
-        hull = x.get_hull()
+        hull = lineage.hull
         assert (self.model == "smc_k") == (hull is not None)
         dest.add(lineage, label)
         if self.model == "smc_k":
