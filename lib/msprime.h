@@ -77,7 +77,6 @@ typedef tsk_id_t label_id_t;
 
 typedef struct segment_t_t {
     population_id_t population;
-    label_id_t label;
     double left;
     double right;
     tsk_id_t value;
@@ -89,6 +88,7 @@ typedef struct segment_t_t {
 
 typedef struct lineage_t_t {
     segment_t *head;
+    label_id_t label;
     struct hull_t_t *hull;
 } lineage_t;
 
