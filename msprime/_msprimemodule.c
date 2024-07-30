@@ -2470,7 +2470,9 @@ Simulator_individual_to_python(Simulator *self, segment_t *ind)
     PyObject *t = NULL;
     size_t num_segments, j;
     segment_t *u;
+    lineage_t *lin = ind->lineage;
 
+    assert(lin != NULL);
     num_segments = 0;
     u = ind;
     while (u != NULL) {
@@ -2485,7 +2487,7 @@ Simulator_individual_to_python(Simulator *self, segment_t *ind)
     j = 0;
     while (u != NULL) {
         t = Py_BuildValue("(d,d,I,I)", u->left, u->right, u->value,
-                u->population);
+                lin->population);
         if (t == NULL) {
             Py_DECREF(l);
             goto out;
