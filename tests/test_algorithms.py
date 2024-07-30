@@ -432,33 +432,19 @@ class TestAlgorithms:
             ts = self.run_script(f"0 --from-ts {ts_path} -r 1 --model=fixed_pedigree")
         assert len(ts.dump_tables().edges) == 0
 
-    def test_smck(self):
-        ts = self.run_script("10 -L 1000 -d -r 0.01 --model smc_k")
-        assert ts.num_trees > 1
-        for tree in ts.trees():
-            assert tree.num_roots == 1
-
-        ts = self.run_script("10 -L 1000 -r 0.01 --model smc_k")
-        assert ts.num_trees > 1
-        for tree in ts.trees():
-            assert tree.num_roots == 1
-
-        ts = self.run_script("10 -L 1000 -r 0.01 --model smc_k --offset 0.50")
-        assert ts.num_trees > 1
-        for tree in ts.trees():
-            assert tree.num_roots == 1
-
-        ts = self.run_script("10 -L 1000 -d -r 0.01 --model smc_k -p 2 -g 0.1")
-        assert ts.num_trees > 1
-        for tree in ts.trees():
-            assert tree.num_roots == 1
-
-        ts = self.run_script("10 -L 1000 -d -c 0.04 2  --model smc_k")
-        assert ts.num_trees > 1
-        for tree in ts.trees():
-            assert tree.num_roots == 1
-
-        ts = self.run_script("10 -L 1000 -c 0.04 2  --model smc_k --offset 0.75")
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "10 -L 1000 -d -r 0.01 --model smc_k",
+            "10 -L 1000 -r 0.01 --model smc_k",
+            "10 -L 1000 -r 0.01 --model smc_k --offset 0.50",
+            "10 -L 1000 -d -r 0.01 --model smc_k -p 2 -g 0.1",
+            "10 -L 1000 -d -c 0.04 2  --model smc_k",
+            "10 -L 1000 -c 0.04 2  --model smc_k --offset 0.75",
+        ],
+    )
+    def test_smck(self, cmd):
+        ts = self.run_script(cmd)
         assert ts.num_trees > 1
         for tree in ts.trees():
             assert tree.num_roots == 1

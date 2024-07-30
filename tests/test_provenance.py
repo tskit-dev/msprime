@@ -80,7 +80,7 @@ class TestBuildObjects:
     def decode(self, prov):
         # Supress warnings about schemas here - it's no big deal and
         # not easy to fix
-        with pytest.warns(UserWarning):
+        with pytest.warns((UserWarning, DeprecationWarning)):
             builder = pjs.ObjectBuilder(tskit.provenance.get_schema())
         ns = builder.build_classes()
         return ns.TskitProvenance.from_json(prov)
