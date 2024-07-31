@@ -89,6 +89,7 @@ typedef struct segment_t_t {
 typedef struct lineage_t_t {
     population_id_t population;
     segment_t *head;
+    segment_t *tail;
     label_id_t label;
     struct hull_t_t *hull;
 } lineage_t;
