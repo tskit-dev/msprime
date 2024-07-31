@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2020 University of Oxford
+** Copyright (C) 2015-2024 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -76,20 +76,21 @@ typedef tsk_id_t population_id_t;
 typedef tsk_id_t label_id_t;
 
 typedef struct segment_t_t {
-    population_id_t population;
-    label_id_t label;
+    tsk_id_t value;
+    // TODO change to tsk_id_t  or uint32?  Same for hull_t
+    size_t id; 
     double left;
     double right;
-    tsk_id_t value;
-    size_t id;
     struct segment_t_t *prev;
     struct segment_t_t *next;
-    struct hull_t_t *hull;
     struct lineage_t_t *lineage;
 } segment_t;
 
 typedef struct lineage_t_t {
+    population_id_t population;
     segment_t *head;
+    label_id_t label;
+    struct hull_t_t *hull;
 } lineage_t;
 
 typedef struct {
