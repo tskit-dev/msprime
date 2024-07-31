@@ -729,7 +729,8 @@ class HullEnd:
 @dataclasses.dataclass
 class Lineage:
     head: Segment
-    population: int
+    tail: Segment
+    population: int = -1
     hull: Hull = None
     label: int = 0
 
@@ -737,15 +738,18 @@ class Lineage:
         s = (
             f"Lineage(id={hex(id(self))},"
             f"population={self.population},label={self.label},hull={self.hull},"
-            f"head={self.head.index},"
+            f"head={self.head.index},tail={self.tail.index},"
             f"chain={Segment.show_chain(self.head)})"
         )
         return s
 
+    # NOTE we're currently calling this in a lot of places, but should try an be
+    # much more selective.
     def reset_segments(self):
         x = self.head
         while x is not None:
             x.lineage = self
+            self.tail = x
             x = x.next
 
 
@@ -1015,6 +1019,7 @@ class Simulator:
                 left_end = seg.left
                 while seg is not None:
                     self.set_segment_mass(seg)
+                    lineage.tail = seg
                     seg = seg.next
                 self.add_lineage(lineage)
 
@@ -1108,13 +1113,9 @@ class Simulator:
         s.lineage = lineage
         return s
 
-    def alloc_lineage(self, head, population, *, label=0):
-        lineage = Lineage(head, population=population, label=label)
+    def alloc_lineage(self, head, population, *, label=0, tail=None):
+        lineage = Lineage(head, population=population, label=label, tail=tail)
         lineage.reset_segments()
-        x = head
-        while x is not None:
-            x.lineage = lineage
-            x = x.next
         return lineage
 
     def copy_segment(self, segment):
@@ -1788,7 +1789,7 @@ class Simulator:
             bp = math.floor(bp)
         return y, bp
 
-    def hudson_recombination_event(self, label, return_heads=False):
+    def hudson_recombination_event(self, label):
         """
         Implements a recombination event.
         """
@@ -1813,6 +1814,7 @@ class Simulator:
             y.next = None
             y.right = bp
             self.set_segment_mass(y)
+            left_lineage.tail = y
             lhs_tail = y
         else:
             #   x            y
@@ -1825,9 +1827,13 @@ class Simulator:
             x.next = None
             y.prev = None
             alpha = y
+            left_lineage.tail = x
             lhs_tail = x
 
         right_lineage = self.alloc_lineage(alpha, left_lineage.population, label=label)
+        self.set_segment_mass(alpha)
+        self.add_lineage(right_lineage)
+
         if self.model == "smc_k":
             # modify original hull
             pop = left_lineage.population
@@ -1840,23 +1846,13 @@ class Simulator:
             alpha_hull = self.alloc_hull(alpha.left, rhs_right, right_lineage)
             self.P[pop].add_hull(label, alpha_hull)
 
-        self.set_segment_mass(alpha)
-        self.add_lineage(right_lineage)
         if self.additional_nodes.value & msprime.NODE_IS_RE_EVENT > 0:
             self.store_node(left_lineage.population, flags=msprime.NODE_IS_RE_EVENT)
             self.store_arg_edges(lhs_tail)
             self.store_node(right_lineage.population, flags=msprime.NODE_IS_RE_EVENT)
             self.store_arg_edges(alpha)
-        ret = None
-        if return_heads:
-            # if True:
-            x = lhs_tail
-            # Seek back to the head of the x chain
-            while x.prev is not None:
-                x = x.prev
-            left_lineage = x.lineage
-            ret = left_lineage, right_lineage
-        return ret
+
+        return left_lineage, right_lineage
 
     def generate_gc_tract_length(self):
         # generate tract length
@@ -2001,13 +1997,14 @@ class Simulator:
         elif head is not None:
             new_individual_head = head
         if new_individual_head is not None:
-            lineage = self.alloc_lineage(new_individual_head, pop)
+            lineage.reset_segments()
+            new_lineage = self.alloc_lineage(new_individual_head, pop)
             if self.model == "smc_k":
                 assert hull_left < hull_right
                 hull_right = min(self.L, hull_right + self.hull_offset)
-                hull = self.alloc_hull(hull_left, hull_right, lineage)
-                self.P[lineage.population].add_hull(lineage.label, hull)
-            self.add_lineage(lineage)
+                hull = self.alloc_hull(hull_left, hull_right, new_lineage)
+                self.P[new_lineage.population].add_hull(new_lineage.label, hull)
+            self.add_lineage(new_lineage)
 
     def wiuf_gene_conversion_left_event(self, label):
         """
@@ -2083,16 +2080,18 @@ class Simulator:
             hull = self.alloc_hull(alpha.left, lhs_old_right, alpha)
             self.P[pop].add_hull(label, hull)
 
+        lineage.reset_segments()
+
         self.set_segment_mass(alpha)
         assert alpha.prev is None
-        lineage = self.alloc_lineage(alpha, pop)
-        self.add_lineage(lineage)
+        new_lineage = self.alloc_lineage(alpha, pop)
+        self.add_lineage(new_lineage)
 
     def hudson_recombination_event_sweep_phase(self, label, sweep_site, pop_freq):
         """
         Implements a recombination event in during a selective sweep.
         """
-        left_lin, right_lin = self.hudson_recombination_event(label, return_heads=True)
+        left_lin, right_lin = self.hudson_recombination_event(label)
 
         r = random.random()
         if sweep_site < right_lin.head.left:
@@ -2360,6 +2359,9 @@ class Simulator:
             self.defrag_segment_chain(z)
         if coalescence:
             self.defrag_breakpoints()
+        if new_lineage is not None:
+            # FIXME do this more efficiently!
+            new_lineage.reset_segments()
         return new_lineage
 
     def defrag_segment_chain(self, z):
@@ -2555,6 +2557,7 @@ class Simulator:
             # TODO do this more efficiently
             while x is not None:
                 x.lineage = new_lineage
+                new_lineage.tail = x
                 x = x.next
             self.add_lineage(new_lineage)
 
@@ -2652,6 +2655,7 @@ class Simulator:
                         assert u.left >= prev.right
                         prev = u
                         u = u.next
+                    assert lineage.tail == prev
 
     def verify_overlaps(self):
         overlap_counter = OverlapCounter(self.L)
