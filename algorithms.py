@@ -1116,11 +1116,11 @@ class Simulator:
     def alloc_lineage(self, head, population, *, label=0, tail=None):
         lineage = Lineage(head, population=population, label=label, tail=tail)
         assert tail is None
-        if head is not None:
-            # If we're allocating a new lineage for a given head segment, then we
-            # have no choice but to iterate over the rest of the chain to update
-            # the lineage reference, and determine the tail.
-            lineage.reset_segments()
+        # If we're allocating a new lineage for a given head segment, then we
+        # have no choice but to iterate over the rest of the chain to update
+        # the lineage reference, and determine the tail. If head is None,
+        # this doesn't do anything.
+        lineage.reset_segments()
         return lineage
 
     def copy_segment(self, segment):
@@ -2564,9 +2564,14 @@ class Simulator:
 
         if new_lineage.head is not None:
             # Use up any uncoalesced segments at the end of the chain
-            while (x := new_lineage.tail.next) is not None:
+            x = new_lineage.tail.next
+            while x is not None:
                 x.lineage = new_lineage
                 new_lineage.tail = x
+                x = x.next
+            # tail = new_lineage.tail
+            # new_lineage.reset_segments()
+            # assert tail == new_lineage.tail
             self.add_lineage(new_lineage)
 
             if self.model == "smc_k":
