@@ -887,12 +887,13 @@ lineage_reset_segments(lineage_t *self)
 
     for (x = self->head; x != NULL; x = x->next) {
         x->lineage = self;
+        self->tail = x;
     }
 }
 
 static lineage_t *MSP_WARN_UNUSED
-msp_alloc_lineage(
-    msp_t *self, segment_t *head, population_id_t population, label_id_t label)
+msp_alloc_lineage(msp_t *self, segment_t *head, segment_t *tail,
+    population_id_t population, label_id_t label)
 {
     lineage_t *lin = NULL;
 
@@ -906,8 +907,10 @@ msp_alloc_lineage(
         goto out;
     }
     lin->head = head;
+    lin->tail = tail;
     lin->population = population;
     lin->label = label;
+    // FIXME we should be calling this more selectively, remove from here.
     lineage_reset_segments(lin);
 out:
     return lin;
@@ -1389,7 +1392,7 @@ msp_insert_hull(msp_t *self, hull_t *hull)
     } else {
         c = avl_search_closest(hulls_right, &query, &query_node);
         /* query < node->item ==> c = -1 */
-        num_ending_before_left = (uint64_t) avl_index(query_node) + (uint64_t) (c != -1);
+        num_ending_before_left = (uint64_t) avl_index(query_node) + (uint64_t)(c != -1);
     }
     /* set number of pairs coalescing with hull */
     count = num_starting_before_left - num_ending_before_left;
@@ -1637,7 +1640,7 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
     size_t num_root_segments = 0;
     size_t pedigree_avl_nodes = 0;
     avl_node_t *node;
-    segment_t *u;
+    segment_t *u, *tail;
     individual_t *ind;
     lineage_t *lin;
 
@@ -1675,8 +1678,10 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
                     if (self->discrete_genome) {
                         tsk_bug_assert(floor(u->left) == u->left);
                     }
+                    tail = u;
                     u = u->next;
                 }
+                tsk_bug_assert(lin->tail == tail);
                 node = node->next;
             }
         }
@@ -1890,7 +1895,7 @@ msp_verify_non_empty_populations(msp_t *self)
 
     for (avl_node = self->non_empty_populations.head; avl_node != NULL;
          avl_node = avl_node->next) {
-        j = (tsk_id_t) (intptr_t) avl_node->item;
+        j = (tsk_id_t)(intptr_t) avl_node->item;
         tsk_bug_assert(msp_get_num_population_ancestors(self, j) > 0);
     }
 
@@ -2275,7 +2280,7 @@ msp_print_state(msp_t *self, FILE *out)
     }
     fprintf(out, "non_empty_populations = [");
     for (a = self->non_empty_populations.head; a != NULL; a = a->next) {
-        j = (uint32_t) (intptr_t) a->item;
+        j = (uint32_t)(intptr_t) a->item;
         fprintf(out, "%d,", j);
     }
     fprintf(out, "]\n");
@@ -3078,7 +3083,7 @@ msp_dtwf_recombine(
             lineage_reset_segments(y->lineage);
         }
         if (y != x_head && y != NULL) {
-            lin = msp_alloc_lineage(self, y, population, label);
+            lin = msp_alloc_lineage(self, y, NULL, population, label);
             if (lin == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -3285,7 +3290,7 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_t **rhs)
+msp_recombination_event(msp_t *self, label_id_t label, lineage_t **lhs, lineage_t **rhs)
 {
     int ret = 0;
     double breakpoint;
@@ -3329,6 +3334,7 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
             }
         }
         lhs_tail = y;
+        left_lineage->tail = y;
         tsk_bug_assert(y->left < y->right);
     } else {
         tsk_bug_assert(x != NULL);
@@ -3337,10 +3343,12 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
         alpha = y;
         self->num_trapped_re_events++;
         lhs_tail = x;
+        left_lineage->tail = x;
     }
     tsk_bug_assert(alpha->left < alpha->right);
     msp_set_segment_mass(self, alpha);
-    right_lineage = msp_alloc_lineage(self, alpha, left_lineage->population, label);
+    right_lineage
+        = msp_alloc_lineage(self, alpha, NULL, left_lineage->population, label);
     if (right_lineage == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
@@ -3377,13 +3385,8 @@ msp_recombination_event(msp_t *self, label_id_t label, segment_t **lhs, segment_
         }
     }
     if (lhs != NULL) {
-        x = lhs_tail;
-        /* Seek back to the head of the x chain */
-        while (x->prev != NULL) {
-            x = x->prev;
-        }
-        *lhs = x;
-        *rhs = alpha;
+        *lhs = left_lineage;
+        *rhs = right_lineage;
     }
 out:
     return ret;
@@ -3417,7 +3420,7 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
 {
     int ret = 0;
     segment_t *x, *y, *alpha, *head, *tail, *z, *new_individual_head;
-    lineage_t *new_lineage;
+    lineage_t *lineage, *new_lineage;
     double left_breakpoint, right_breakpoint, tl;
     bool insert_alpha;
     hull_t *hull = NULL;
@@ -3434,7 +3437,8 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         goto out;
     }
 
-    population = y->lineage->population;
+    lineage = y->lineage;
+    population = lineage->population;
     x = y->prev;
 
     /* generate tract length */
@@ -3604,12 +3608,17 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         new_individual_head = head;
     }
     if (new_individual_head != NULL) {
-        new_lineage = msp_alloc_lineage(self, new_individual_head, population, label);
+        new_lineage
+            = msp_alloc_lineage(self, new_individual_head, NULL, population, label);
         if (new_lineage == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
+        lineage_reset_segments(new_lineage);
         ret = msp_insert_individual(self, new_lineage);
+        if (ret != 0) {
+            goto out;
+        }
         if (self->model.type == MSP_MODEL_SMC_K) {
             tsk_bug_assert(tract_hull_left < tract_hull_right);
             tract_hull_right = GSL_MIN(
@@ -3628,6 +3637,9 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
     } else {
         self->num_noneffective_gc_events++;
     }
+
+    lineage_reset_segments(lineage);
+
     if (self->additional_nodes & MSP_NODE_IS_GC_EVENT) {
         ret = msp_store_arg_gene_conversion(self, tail, alpha, head);
         if (ret != 0) {
@@ -3814,7 +3826,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
         }
         if (alpha != NULL) {
             if (z == NULL) {
-                new_lineage = msp_alloc_lineage(self, alpha, population_id, label);
+                new_lineage = msp_alloc_lineage(self, alpha, NULL, population_id, label);
                 if (new_lineage == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -4088,7 +4100,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         if (alpha != NULL) {
             if (z == NULL) {
                 merged_head = alpha;
-                new_lineage = msp_alloc_lineage(self, alpha, population_id, label);
+                new_lineage = msp_alloc_lineage(self, alpha, NULL, population_id, label);
                 if (new_lineage == NULL) {
                     ret = MSP_ERR_NO_MEMORY;
                     goto out;
@@ -4110,16 +4122,6 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             z = alpha;
         }
     }
-    if (new_lineage != NULL) {
-        ret = msp_insert_individual(self, new_lineage);
-        if (ret != 0) {
-            goto out;
-        }
-        /* FIXME see note above about avoiding this by exausting
-         * the original chains */
-        lineage_reset_segments(new_lineage);
-    }
-
     if (coalescence) {
         if (!self->coalescing_segments_only) {
             ret = msp_store_arg_edges(self, z, new_node_id);
@@ -4145,6 +4147,16 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         if (ret != 0) {
             goto out;
         }
+    }
+
+    if (new_lineage != NULL) {
+        ret = msp_insert_individual(self, new_lineage);
+        if (ret != 0) {
+            goto out;
+        }
+        /* FIXME see note above about avoiding this by exausting
+         * the original chains */
+        lineage_reset_segments(new_lineage);
     }
 
     if (ret_merged_head != NULL) {
@@ -4305,7 +4317,7 @@ static int
 msp_insert_root_segments(msp_t *self, const segment_t *head, segment_t **new_head)
 {
     int ret = 0;
-    lineage_t *lineage;
+    lineage_t *lineage = NULL;
     segment_t *copy, *prev;
     const segment_t *seg;
     const tsk_id_t *restrict node_population = self->tables->nodes.population;
@@ -4339,7 +4351,8 @@ msp_insert_root_segments(msp_t *self, const segment_t *head, segment_t **new_hea
         }
         copy->prev = prev;
         if (prev == NULL) {
-            lineage = msp_alloc_lineage(self, copy, node_population[head->value], label);
+            lineage = msp_alloc_lineage(
+                self, copy, NULL, node_population[head->value], label);
             if (lineage == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
                 goto out;
@@ -4359,6 +4372,7 @@ msp_insert_root_segments(msp_t *self, const segment_t *head, segment_t **new_hea
                 }
             }
         } else {
+            lineage->tail = copy;
             prev->next = copy;
         }
         msp_set_segment_mass(self, copy);
@@ -5173,7 +5187,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     double h = gsl_rng_uniform(self->rng) * gc_left_total;
     double tl, bp, lhs_old_right, lhs_new_right;
     population_id_t population;
-    lineage_t *lineage;
+    lineage_t *lineage, *new_lineage;
     segment_t *y, *x, *alpha;
     hull_t *rhs_hull;
     hull_t *lhs_hull = NULL;
@@ -5261,15 +5275,21 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     }
     lhs_new_right = y->right;
 
-    lineage = msp_alloc_lineage(self, alpha, population, label);
-    if (lineage == NULL) {
+    new_lineage = msp_alloc_lineage(self, alpha, NULL, population, label);
+    if (new_lineage == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     msp_set_segment_mass(self, alpha);
     tsk_bug_assert(alpha->prev == NULL);
 
-    ret = msp_insert_individual(self, lineage);
+    lineage_reset_segments(new_lineage);
+    lineage_reset_segments(lineage);
+
+    ret = msp_insert_individual(self, new_lineage);
+    if (ret != 0) {
+        goto out;
+    }
     if (self->additional_nodes & MSP_NODE_IS_GC_EVENT) {
         ret = msp_store_arg_gene_conversion(self, NULL, y, alpha);
         if (ret != 0) {
@@ -5368,7 +5388,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         ca_pop_id = 0;
         for (avl_node = self->non_empty_populations.head; avl_node != NULL;
              avl_node = avl_node->next) {
-            pop_id = (tsk_id_t) (intptr_t) avl_node->item;
+            pop_id = (tsk_id_t)(intptr_t) avl_node->item;
             t_temp = self->get_common_ancestor_waiting_time(self, pop_id, label);
             if (t_temp < ca_t_wait) {
                 ca_t_wait = t_temp;
@@ -5382,7 +5402,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         mig_dest_pop = 0;
         for (avl_node = self->non_empty_populations.head; avl_node != NULL;
              avl_node = avl_node->next) {
-            pop_id_j = (tsk_id_t) (intptr_t) avl_node->item;
+            pop_id_j = (tsk_id_t)(intptr_t) avl_node->item;
             pop = &self->populations[pop_id_j];
             n = avl_count(&pop->ancestors[label]);
             tsk_bug_assert(n > 0);
@@ -6045,21 +6065,18 @@ out:
     return ret;
 }
 
-/* Migrate the specified individual to the specified new label.
+/* Migrate the specified lineage to the specified new label.
  */
 static int
-msp_change_label(msp_t *self, segment_t *ind, label_id_t label)
+msp_change_label(msp_t *self, lineage_t *lin, label_id_t label)
 {
-    int ret = 0;
-    avl_tree_t *pop
-        = &self->populations[ind->lineage->population].ancestors[ind->lineage->label];
+    avl_tree_t *pop = &self->populations[lin->population].ancestors[lin->label];
     avl_node_t *node;
 
     /* Find the this individual in the AVL tree. */
-    node = avl_search(pop, ind->lineage);
+    node = avl_search(pop, lin);
     tsk_bug_assert(node != NULL);
-    ret = msp_move_individual(self, node, pop, ind->lineage->population, label);
-    return ret;
+    return msp_move_individual(self, node, pop, lin->population, label);
 }
 
 static int
@@ -6067,25 +6084,25 @@ msp_sweep_recombination_event(
     msp_t *self, label_id_t label, double sweep_locus, double population_frequency)
 {
     int ret = 0;
-    segment_t *lhs, *rhs;
+    lineage_t *left_lin, *right_lin;
     label_id_t new_label;
     double r;
 
-    ret = msp_recombination_event(self, label, &lhs, &rhs);
+    ret = msp_recombination_event(self, label, &left_lin, &right_lin);
     if (ret != 0) {
         goto out;
     }
 
-    tsk_bug_assert(lhs->lineage != NULL);
-    tsk_bug_assert(rhs->lineage != NULL);
+    tsk_bug_assert(left_lin != NULL);
+    tsk_bug_assert(right_lin != NULL);
 
     /* NOTE: we can look at rhs->left when we compare to the sweep site. */
     r = gsl_rng_uniform(self->rng);
-    if (sweep_locus < rhs->left) {
+    if (sweep_locus < right_lin->head->left) {
         if (r < 1.0 - population_frequency) {
             /* move rhs to other population */
             new_label = (label + 1) % 2;
-            ret = msp_change_label(self, rhs, new_label);
+            ret = msp_change_label(self, right_lin, new_label);
             if (ret != 0) {
                 goto out;
             }
@@ -6094,7 +6111,7 @@ msp_sweep_recombination_event(
         if (r < 1.0 - population_frequency) {
             /* move lhs to other population */
             new_label = (label + 1) % 2;
-            ret = msp_change_label(self, lhs, new_label);
+            ret = msp_change_label(self, left_lin, new_label);
             if (ret != 0) {
                 goto out;
             }
@@ -7497,7 +7514,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     for (u = 0; u < (tsk_id_t) n; u++) {
         lineages[u] = u;
     }
-    for (u = 0; u < (tsk_id_t) (2 * n); u++) {
+    for (u = 0; u < (tsk_id_t)(2 * n); u++) {
         pi[u] = TSK_NULL;
     }
     j = 0;
@@ -8372,7 +8389,7 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         alpha = 2 * pop_size * trajectory.s;
         x = 1.0
             - genic_selection_stochastic_forwards(
-                trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
+                  trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
         /* need our recored traj to stay in bounds */
         t += trajectory.dt;
         sim_time += trajectory.dt * pop_size * simulator->ploidy;
