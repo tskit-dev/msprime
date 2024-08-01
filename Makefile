@@ -25,7 +25,7 @@ clang-format:
 	clang-format -i lib/tests/* lib/*.[c,h]
 
 tags:
-	ctags -f TAGS msprime/*.c lib/*.[c,h] msprime/*.py tests/*.py
+	ctags -f TAGS msprime/*.c lib/*.[c,h] msprime/*.py tests/*.py algorithms.py
 
 
 clean:
