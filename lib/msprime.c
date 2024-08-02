@@ -884,7 +884,6 @@ static void
 lineage_reset_segments(lineage_t *self)
 {
     segment_t *x;
-
     for (x = self->head; x != NULL; x = x->next) {
         x->lineage = self;
         self->tail = x;
@@ -910,7 +909,9 @@ msp_alloc_lineage(msp_t *self, segment_t *head, segment_t *tail,
     lin->tail = tail;
     lin->population = population;
     lin->label = label;
-    // FIXME we should be calling this more selectively, remove from here.
+    /* If we are creating a new lineage with a given head segment, we have
+     * no choice but to iterate. If the lineage is empty, or has a single
+     * segment this does no harm. */
     lineage_reset_segments(lin);
 out:
     return lin;
@@ -2821,14 +2822,14 @@ out:
     return ret;
 }
 
-/* Defragment the segment chain ending in z by squashing any redundant
+/* Defragment the segment chain by squashing any redundant
  * segments together */
 static int MSP_WARN_UNUSED
-msp_defrag_segment_chain(msp_t *self, segment_t *z)
+msp_defrag_segment_chain(msp_t *self, lineage_t *lin)
 {
     segment_t *y, *x;
 
-    y = z;
+    y = lin->tail;
     while (y->prev != NULL) {
         x = y->prev;
         if (x->right == y->left && x->value == y->value) {
@@ -2837,8 +2838,10 @@ msp_defrag_segment_chain(msp_t *self, segment_t *z)
             if (y->next != NULL) {
                 y->next->prev = x;
             }
-            /* msp_add_segment_mass(self, x, y); */
             msp_set_segment_mass(self, x);
+            if (y == lin->tail) {
+                lin->tail = x;
+            }
             msp_free_segment(self, y);
         }
         y = x;
@@ -3687,6 +3690,88 @@ msp_reject_ca_event(msp_t *self, segment_t *a, segment_t *b)
 }
 
 static int MSP_WARN_UNUSED
+msp_insert_merged_ancestor(msp_t *self, lineage_t *new_lineage, tsk_id_t new_node_id,
+    bool coalescence, bool defrag_required, double l_min, double r_max,
+    segment_t **ret_merged_head)
+{
+    int ret = 0;
+    segment_t *z = new_lineage->tail;
+    segment_t *merged_head = new_lineage->head;
+    segment_t *y;
+    hull_t *hull = NULL;
+    double r;
+
+    if (coalescence) {
+        ret = msp_conditional_compress_overlap_counts(self, l_min, r_max);
+        if (ret != 0) {
+            goto out;
+        }
+
+        if (!self->coalescing_segments_only) {
+            ret = msp_store_arg_edges(self, z, new_node_id);
+            if (ret < 0) {
+                goto out;
+            }
+        }
+    } else {
+        ret = msp_store_additional_nodes_edges(self, z, new_node_id,
+            MSP_NODE_IS_CA_EVENT, new_lineage->population, TSK_NULL, &new_node_id);
+        if (ret < 0) {
+            goto out;
+        }
+    }
+
+    if (new_lineage->head != NULL) {
+        tsk_bug_assert(new_lineage->tail != NULL);
+        for (y = new_lineage->tail->next; y != NULL; y = y->next) {
+            y->lineage = new_lineage;
+            new_lineage->tail = y;
+        }
+
+        if (defrag_required) {
+            ret = msp_defrag_segment_chain(self, new_lineage);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+
+        ret = msp_insert_individual(self, new_lineage);
+        if (ret != 0) {
+            goto out;
+        }
+    } else {
+        msp_free_lineage(self, new_lineage);
+    }
+
+    if (ret_merged_head != NULL) {
+        *ret_merged_head = new_lineage->head;
+    }
+    if (self->model.type == MSP_MODEL_SMC_K) {
+        if (merged_head != NULL) {
+            y = merged_head;
+            r = 0;
+            while (y != NULL) {
+                r = y->right;
+                y = y->next;
+            }
+            r += self->model.params.smc_k_coalescent.hull_offset;
+            hull = msp_alloc_hull(self, merged_head->left,
+                GSL_MIN(r, self->sequence_length), merged_head->lineage);
+            if (hull == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            ret = msp_insert_hull(self, hull);
+            if (ret != 0) {
+                goto out;
+            }
+        }
+    }
+out:
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
 msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t label,
     segment_t *a, segment_t *b, tsk_id_t new_node_id, segment_t **ret_merged_head)
 {
@@ -3697,13 +3782,16 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     double l, r, l_min, r_max;
     avl_node_t *node;
     node_mapping_t *nm, search;
-    segment_t *x, *y, *z, *alpha, *beta, *merged_head;
-    lineage_t *new_lineage = NULL;
-    hull_t *hull = NULL;
+    segment_t *x, *y, *z, *alpha, *beta;
+    lineage_t *new_lineage = msp_alloc_lineage(self, NULL, NULL, population_id, label);
+
+    if (new_lineage == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
 
     x = a;
     y = b;
-    merged_head = NULL;
     /* Keep GCC happy */
     l_min = 0;
     r_max = 0;
@@ -3824,15 +3912,16 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 }
             }
         }
+
         if (alpha != NULL) {
-            if (z == NULL) {
-                new_lineage = msp_alloc_lineage(self, alpha, NULL, population_id, label);
-                if (new_lineage == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
-                    goto out;
-                }
-                merged_head = alpha;
+            alpha->lineage = new_lineage;
+            alpha->prev = new_lineage->tail;
+            msp_set_segment_mass(self, alpha);
+            if (new_lineage->head == NULL) {
+                new_lineage->head = alpha;
             } else {
+                new_lineage->tail->next = alpha;
+                z = new_lineage->tail;
                 if ((self->additional_nodes & MSP_NODE_IS_CA_EVENT)
                     || (!self->coalescing_segments_only && coalescence)) {
                     // we pre-empt the fact that values will be set equal later
@@ -3842,75 +3931,12 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                         |= z->right == alpha->left && z->value == alpha->value;
                 }
                 tsk_bug_assert(z->right <= alpha->left);
-                z->next = alpha;
             }
-            alpha->prev = z;
-            alpha->lineage = new_lineage;
-            msp_set_segment_mass(self, alpha);
-            z = alpha;
+            new_lineage->tail = alpha;
         }
     }
-    if (coalescence) {
-        if (!self->coalescing_segments_only) {
-            ret = msp_store_arg_edges(self, z, new_node_id);
-            if (ret < 0) {
-                goto out;
-            }
-        }
-    } else {
-        ret = msp_store_additional_nodes_edges(self, z, new_node_id,
-            MSP_NODE_IS_CA_EVENT, population_id, TSK_NULL, &new_node_id);
-        if (ret < 0) {
-            goto out;
-        }
-    }
-
-    if (defrag_required) {
-        ret = msp_defrag_segment_chain(self, z);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    if (coalescence) {
-        ret = msp_conditional_compress_overlap_counts(self, l_min, r_max);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-
-    if (new_lineage != NULL) {
-        // TODO this could be done more efficiently by exhausing the
-        // x and y chains above
-        lineage_reset_segments(new_lineage);
-        ret = msp_insert_individual(self, new_lineage);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    if (ret_merged_head != NULL) {
-        *ret_merged_head = merged_head;
-    }
-    if (self->model.type == MSP_MODEL_SMC_K) {
-        if (merged_head != NULL) {
-            y = merged_head;
-            r = 0;
-            while (y != NULL) {
-                r = y->right;
-                y = y->next;
-            }
-            r += self->model.params.smc_k_coalescent.hull_offset;
-            hull = msp_alloc_hull(self, merged_head->left,
-                GSL_MIN(r, self->sequence_length), merged_head->lineage);
-            if (hull == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            ret = msp_insert_hull(self, hull);
-            if (ret != 0) {
-                goto out;
-            }
-        }
-    }
+    ret = msp_insert_merged_ancestor(self, new_lineage, new_node_id, coalescence,
+        defrag_required, l_min, r_max, ret_merged_head);
 out:
     return ret;
 }
@@ -3963,20 +3989,17 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *z, *alpha;
-    segment_t **H = NULL;
-    segment_t *merged_head = NULL;
-    lineage_t *new_lineage = NULL;
-    tsk_id_t individual = TSK_NULL;
+    lineage_t *new_lineage = msp_alloc_lineage(self, NULL, NULL, population_id, label);
+    segment_t **H = malloc(avl_count(Q) * sizeof(segment_t *));
 
-    H = malloc(avl_count(Q) * sizeof(segment_t *));
-    if (H == NULL) {
+    if (H == NULL || new_lineage == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
     r_max = 0; /* keep compiler happy */
     l_min = 0;
     z = NULL;
-    merged_head = NULL;
+
     while (avl_count(Q) > 0) {
         h = 0;
         node = Q->head;
@@ -4022,8 +4045,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                 coalescence = true;
                 if (new_node_id == TSK_NULL) {
                     l_min = l;
-                    new_node_id
-                        = msp_store_node(self, 0, self->time, population_id, individual);
+                    new_node_id = msp_store_node(self, 0, self->time, population_id, -1);
                     if (new_node_id < 0) {
                         ret = (int) new_node_id;
                         goto out;
@@ -4098,14 +4120,14 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         }
         /* Loop tail; integrate alpha into the global state */
         if (alpha != NULL) {
-            if (z == NULL) {
-                merged_head = alpha;
-                new_lineage = msp_alloc_lineage(self, alpha, NULL, population_id, label);
-                if (new_lineage == NULL) {
-                    ret = MSP_ERR_NO_MEMORY;
-                    goto out;
-                }
+            alpha->lineage = new_lineage;
+            alpha->prev = new_lineage->tail;
+            msp_set_segment_mass(self, alpha);
+            if (new_lineage->head == NULL) {
+                new_lineage->head = alpha;
             } else {
+                new_lineage->tail->next = alpha;
+                z = new_lineage->tail;
                 if ((self->additional_nodes & MSP_NODE_IS_CA_EVENT)
                     || (!self->coalescing_segments_only && coalescence)) {
                     // we pre-empt the fact that values will be set equal later
@@ -4114,55 +4136,13 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                     defrag_required
                         |= z->right == alpha->left && z->value == alpha->value;
                 }
-                z->next = alpha;
+                tsk_bug_assert(z->right <= alpha->left);
             }
-            alpha->prev = z;
-            alpha->lineage = new_lineage;
-            msp_set_segment_mass(self, alpha);
-            z = alpha;
+            new_lineage->tail = alpha;
         }
     }
-    if (coalescence) {
-        if (!self->coalescing_segments_only) {
-            ret = msp_store_arg_edges(self, z, new_node_id);
-            if (ret < 0) {
-                goto out;
-            }
-        }
-    } else {
-        ret = msp_store_additional_nodes_edges(self, z, new_node_id,
-            MSP_NODE_IS_CA_EVENT, population_id, individual, &new_node_id);
-        if (ret < 0) {
-            goto out;
-        }
-    }
-    if (defrag_required) {
-        ret = msp_defrag_segment_chain(self, z);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    if (coalescence) {
-        ret = msp_conditional_compress_overlap_counts(self, l_min, r_max);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-
-    if (new_lineage != NULL) {
-        ret = msp_insert_individual(self, new_lineage);
-        if (ret != 0) {
-            goto out;
-        }
-        /* FIXME see note above about avoiding this by exausting
-         * the original chains */
-        lineage_reset_segments(new_lineage);
-    }
-
-    if (ret_merged_head != NULL) {
-        *ret_merged_head = merged_head;
-    }
-    ret = 0;
+    ret = msp_insert_merged_ancestor(self, new_lineage, new_node_id, coalescence,
+        defrag_required, l_min, r_max, ret_merged_head);
 out:
     if (H != NULL) {
         free(H);
