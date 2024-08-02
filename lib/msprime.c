@@ -462,10 +462,13 @@ msp_set_segment_mass(msp_t *self, segment_t *seg)
     }
 }
 
+static int msp_insert_individual_hull(msp_t *self, lineage_t *lin);
+
 /* Add all extant segments into the indexes. */
-static void
+static int
 msp_reindex_segments(msp_t *self)
 {
+    int ret = 0;
     avl_node_t *node;
     avl_tree_t *population_ancestors;
     segment_t *seg;
@@ -481,9 +484,76 @@ msp_reindex_segments(msp_t *self)
                 for (seg = lin->head; seg != NULL; seg = seg->next) {
                     msp_set_segment_mass(self, seg);
                 }
+                if (self->model.type == MSP_MODEL_SMC_K) {
+                    ret = msp_insert_individual_hull(self, lin);
+                    if (ret != 0) {
+                        goto out;
+                    }
+                }
             }
         }
     }
+out:
+    return ret;
+}
+
+/* Setup the various SMC K indexes either after a simulation model change
+ * or during msp_initialise */
+static int
+msp_setup_smc_k_indexes(msp_t *self)
+{
+    int ret = 0;
+    label_id_t label;
+    size_t num_hulls, j;
+
+    /* For simplicity, we always drop the indexes even though
+     * sometimes we'll be dropping it just to rebuild */
+    for (j = 0; j < self->num_populations; j++) {
+        if (self->populations[j].hulls_left != NULL) {
+            msp_safe_free(self->populations[j].hulls_left);
+            self->populations[j].hulls_left = NULL;
+        }
+        if (self->populations[j].hulls_right != NULL) {
+            msp_safe_free(self->populations[j].hulls_right);
+            self->populations[j].hulls_right = NULL;
+        }
+        if (self->populations[j].coal_mass_index != NULL) {
+            for (label = 0; label < (label_id_t) self->num_labels; label++) {
+                fenwick_free(&self->populations[j].coal_mass_index[label]);
+            }
+            msp_safe_free(self->populations[j].coal_mass_index);
+            self->populations[j].coal_mass_index = NULL;
+        }
+    }
+    if (self->model.type == MSP_MODEL_SMC_K) {
+        num_hulls = self->hull_heap->size;
+        for (j = 0; j < self->num_populations; j++) {
+            self->populations[j].hulls_left
+                = malloc(self->num_labels * sizeof(*self->populations[j].hulls_left));
+            self->populations[j].hulls_right
+                = malloc(self->num_labels * sizeof(*self->populations[j].hulls_right));
+            self->populations[j].coal_mass_index = calloc(
+                self->num_labels, sizeof(*self->populations[j].coal_mass_index));
+            if (self->populations[j].hulls_left == NULL
+                || self->populations[j].hulls_right == NULL
+                || self->populations[j].coal_mass_index == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            for (label = 0; label < (label_id_t) self->num_labels; label++) {
+                avl_init_tree(&self->populations[j].hulls_left[label], cmp_hull, NULL);
+                avl_init_tree(
+                    &self->populations[j].hulls_right[label], cmp_hullend, NULL);
+                ret = fenwick_alloc(
+                    &self->populations[j].coal_mass_index[label], num_hulls);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        }
+    }
+out:
+    return ret;
 }
 
 /* Setup the mass indexes either after a simulation model change
@@ -553,7 +623,14 @@ msp_setup_mass_indexes(msp_t *self)
         }
     }
 
-    msp_reindex_segments(self);
+    if (self->model.type == MSP_MODEL_SMC_K) {
+        ret = msp_setup_smc_k_indexes(self);
+        if (ret != 0) {
+            goto out;
+        }
+    }
+
+    ret = msp_reindex_segments(self);
 out:
     return ret;
 }
@@ -577,66 +654,6 @@ msp_alloc_memory_blocks_hulls(msp_t *self)
             &self->hullend_heap[j], sizeof(hullend_t), self->hull_block_size, NULL);
         if (ret != 0) {
             goto out;
-        }
-    }
-out:
-    return ret;
-}
-
-/* Setup the mass indexes either after a simulation model change
- * or during msp_initialise */
-static int
-msp_setup_smc_k(msp_t *self)
-{
-    int ret = 0;
-    label_id_t label;
-    size_t num_hulls, j;
-
-    /* Copied logic from msp_setup_mass_indexes */
-    /* For simplicity, we always drop the mass indexes even though
-     * sometimes we'll be dropping it just to rebuild */
-    for (j = 0; j < self->num_populations; j++) {
-        if (self->populations[j].hulls_left != NULL) {
-            msp_safe_free(self->populations[j].hulls_left);
-            self->populations[j].hulls_left = NULL;
-        }
-        if (self->populations[j].hulls_right != NULL) {
-            msp_safe_free(self->populations[j].hulls_right);
-            self->populations[j].hulls_right = NULL;
-        }
-        if (self->populations[j].coal_mass_index != NULL) {
-            for (label = 0; label < (label_id_t) self->num_labels; label++) {
-                fenwick_free(&self->populations[j].coal_mass_index[label]);
-            }
-            msp_safe_free(self->populations[j].coal_mass_index);
-            self->populations[j].coal_mass_index = NULL;
-        }
-    }
-    if (self->model.type == MSP_MODEL_SMC_K) {
-        num_hulls = self->hull_heap->size;
-        for (j = 0; j < self->num_populations; j++) {
-            self->populations[j].hulls_left
-                = malloc(self->num_labels * sizeof(*self->populations[j].hulls_left));
-            self->populations[j].hulls_right
-                = malloc(self->num_labels * sizeof(*self->populations[j].hulls_right));
-            self->populations[j].coal_mass_index = calloc(
-                self->num_labels, sizeof(*self->populations[j].coal_mass_index));
-            if (self->populations[j].hulls_left == NULL
-                || self->populations[j].hulls_right == NULL
-                || self->populations[j].coal_mass_index == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            for (label = 0; label < (label_id_t) self->num_labels; label++) {
-                avl_init_tree(&self->populations[j].hulls_left[label], cmp_hull, NULL);
-                avl_init_tree(
-                    &self->populations[j].hulls_right[label], cmp_hullend, NULL);
-                ret = fenwick_alloc(
-                    &self->populations[j].coal_mass_index[label], num_hulls);
-                if (ret != 0) {
-                    goto out;
-                }
-            }
         }
     }
 out:
@@ -935,6 +952,7 @@ msp_alloc_hull(msp_t *self, double left, double right, lineage_t *lineage)
     uint32_t j;
 
     tsk_bug_assert(lineage != NULL);
+    tsk_bug_assert(0 <= left && left <= right);
     label = lineage->label;
 
     if (object_heap_empty(&self->hull_heap[label])) {
@@ -1331,9 +1349,9 @@ hullend_adjust_insertion_order(hullend_t *h, avl_node_t *node)
 }
 
 static inline avl_tree_t *
-msp_get_segment_population(msp_t *self, segment_t *u)
+msp_get_lineage_population(msp_t *self, lineage_t *lineage)
 {
-    return &self->populations[u->lineage->population].ancestors[u->lineage->label];
+    return &self->populations[lineage->population].ancestors[lineage->label];
 }
 
 static int MSP_WARN_UNUSED
@@ -1482,6 +1500,29 @@ msp_remove_hull(msp_t *self, hull_t *hull)
 }
 
 static inline int MSP_WARN_UNUSED
+msp_insert_individual_hull(msp_t *self, lineage_t *lin)
+{
+    int ret = 0;
+    hull_t *hull;
+    double hull_right;
+    const double hull_offset = self->model.params.smc_k_coalescent.hull_offset;
+
+    hull_right = GSL_MIN(lin->tail->right + hull_offset, self->sequence_length);
+    hull = msp_alloc_hull(self, lin->head->left, hull_right, lin);
+    if (hull == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    lin->hull = hull;
+    ret = msp_insert_hull(self, hull);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
+
+static inline int MSP_WARN_UNUSED
 msp_insert_individual(msp_t *self, lineage_t *lin)
 {
     int ret = 0;
@@ -1495,8 +1536,12 @@ msp_insert_individual(msp_t *self, lineage_t *lin)
         goto out;
     }
     avl_init_node(node, lin);
-    node = avl_insert_node(msp_get_segment_population(self, lin->head), node);
+    node = avl_insert_node(msp_get_lineage_population(self, lin), node);
     tsk_bug_assert(node != NULL);
+
+    if (self->model.type == MSP_MODEL_SMC_K) {
+        ret = msp_insert_individual_hull(self, lin);
+    }
 out:
     return ret;
 }
@@ -1507,7 +1552,7 @@ msp_remove_individual(msp_t *self, lineage_t *lin)
     avl_node_t *node;
     avl_tree_t *pop;
     tsk_bug_assert(lin != NULL);
-    pop = msp_get_segment_population(self, lin->head);
+    pop = msp_get_lineage_population(self, lin);
     node = avl_search(pop, lin);
     tsk_bug_assert(node != NULL);
     avl_unlink_node(pop, node);
@@ -3318,7 +3363,7 @@ msp_recombination_event(msp_t *self, label_id_t label, lineage_t **lhs, lineage_
     double breakpoint;
     lineage_t *left_lineage, *right_lineage;
     segment_t *x, *y, *alpha, *lhs_tail;
-    hull_t *lhs_hull, *rhs_hull;
+    hull_t *lhs_hull;
     double lhs_right, rhs_right;
 
     self->num_re_events++;
@@ -3389,16 +3434,16 @@ msp_recombination_event(msp_t *self, label_id_t label, lineage_t **lhs, lineage_
         msp_reset_hull_right(
             self, lhs_hull, rhs_right, lhs_right, left_lineage->population, label);
 
-        /* create new hull for alpha */
-        rhs_hull = msp_alloc_hull(self, alpha->left, rhs_right, alpha->lineage);
-        if (rhs_hull == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        ret = msp_insert_hull(self, rhs_hull);
-        if (ret != 0) {
-            goto out;
-        }
+        /* /1* create new hull for alpha *1/ */
+        /* rhs_hull = msp_alloc_hull(self, alpha->left, rhs_right, alpha->lineage); */
+        /* if (rhs_hull == NULL) { */
+        /*     ret = MSP_ERR_NO_MEMORY; */
+        /*     goto out; */
+        /* } */
+        /* ret = msp_insert_hull(self, rhs_hull); */
+        /* if (ret != 0) { */
+        /*     goto out; */
+        /* } */
     }
     if (self->additional_nodes & MSP_NODE_IS_RE_EVENT) {
         ret = msp_store_arg_recombination(self, lhs_tail, alpha);
@@ -3447,7 +3492,6 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
     bool insert_alpha;
     hull_t *hull = NULL;
     double reset_right = 0.0;
-    double tract_hull_left, tract_hull_right;
     population_id_t population;
 
     tsk_bug_assert(self->gc_mass_index != NULL);
@@ -3545,10 +3589,7 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
 
     // Find the segment z that the right breakpoint falls in
     z = alpha;
-    tract_hull_left = z->left;
-    tract_hull_right = 0.0;
     while (z != NULL && right_breakpoint >= z->right) {
-        tract_hull_right = z->right;
         z = z->next;
     }
 
@@ -3577,7 +3618,6 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
             }
             z->right = right_breakpoint;
             z->next = NULL;
-            tract_hull_right = right_breakpoint;
             msp_set_segment_mass(self, z);
 
             if (!msp_has_breakpoint(self, right_breakpoint)) {
@@ -3641,21 +3681,22 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         if (ret != 0) {
             goto out;
         }
-        if (self->model.type == MSP_MODEL_SMC_K) {
-            tsk_bug_assert(tract_hull_left < tract_hull_right);
-            tract_hull_right = GSL_MIN(
-                tract_hull_right + self->model.params.smc_k_coalescent.hull_offset,
-                self->sequence_length);
-            hull = msp_alloc_hull(self, tract_hull_left, tract_hull_right, new_lineage);
-            if (hull == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            ret = msp_insert_hull(self, hull);
-            if (ret != 0) {
-                goto out;
-            }
-        }
+        /* if (self->model.type == MSP_MODEL_SMC_K) { */
+        /*     tsk_bug_assert(tract_hull_left < tract_hull_right); */
+        /*     tract_hull_right = GSL_MIN( */
+        /*         tract_hull_right + self->model.params.smc_k_coalescent.hull_offset, */
+        /*         self->sequence_length); */
+        /*     hull = msp_alloc_hull(self, tract_hull_left, tract_hull_right,
+         * new_lineage); */
+        /*     if (hull == NULL) { */
+        /*         ret = MSP_ERR_NO_MEMORY; */
+        /*         goto out; */
+        /*     } */
+        /*     ret = msp_insert_hull(self, hull); */
+        /*     if (ret != 0) { */
+        /*         goto out; */
+        /*     } */
+        /* } */
     } else {
         self->num_noneffective_gc_events++;
     }
@@ -3715,10 +3756,7 @@ msp_insert_merged_ancestor(msp_t *self, lineage_t *new_lineage, tsk_id_t new_nod
 {
     int ret = 0;
     segment_t *z = new_lineage->tail;
-    segment_t *merged_head = new_lineage->head;
     segment_t *y;
-    hull_t *hull = NULL;
-    double r;
 
     if (coalescence) {
         ret = msp_conditional_compress_overlap_counts(self, l_min, r_max);
@@ -3765,27 +3803,27 @@ msp_insert_merged_ancestor(msp_t *self, lineage_t *new_lineage, tsk_id_t new_nod
     if (ret_merged_head != NULL) {
         *ret_merged_head = new_lineage->head;
     }
-    if (self->model.type == MSP_MODEL_SMC_K) {
-        if (merged_head != NULL) {
-            y = merged_head;
-            r = 0;
-            while (y != NULL) {
-                r = y->right;
-                y = y->next;
-            }
-            r += self->model.params.smc_k_coalescent.hull_offset;
-            hull = msp_alloc_hull(self, merged_head->left,
-                GSL_MIN(r, self->sequence_length), merged_head->lineage);
-            if (hull == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            ret = msp_insert_hull(self, hull);
-            if (ret != 0) {
-                goto out;
-            }
-        }
-    }
+    /* if (self->model.type == MSP_MODEL_SMC_K) { */
+    /*     if (merged_head != NULL) { */
+    /*         y = merged_head; */
+    /*         r = 0; */
+    /*         while (y != NULL) { */
+    /*             r = y->right; */
+    /*             y = y->next; */
+    /*         } */
+    /*         r += self->model.params.smc_k_coalescent.hull_offset; */
+    /*         hull = msp_alloc_hull(self, merged_head->left, */
+    /*             GSL_MIN(r, self->sequence_length), merged_head->lineage); */
+    /*         if (hull == NULL) { */
+    /*             ret = MSP_ERR_NO_MEMORY; */
+    /*             goto out; */
+    /*         } */
+    /*         ret = msp_insert_hull(self, hull); */
+    /*         if (ret != 0) { */
+    /*             goto out; */
+    /*         } */
+    /*     } */
+    /* } */
 out:
     return ret;
 }
@@ -4316,14 +4354,19 @@ static int
 msp_insert_root_segments(msp_t *self, const segment_t *head, segment_t **new_head)
 {
     int ret = 0;
-    lineage_t *lineage = NULL;
     segment_t *copy, *prev;
     const segment_t *seg;
     const tsk_id_t *restrict node_population = self->tables->nodes.population;
     double breakpoints[2];
     int j;
     const label_id_t label = 0;
-    hull_t *hull = NULL;
+    lineage_t *lineage
+        = msp_alloc_lineage(self, NULL, NULL, node_population[head->value], label);
+
+    if (lineage == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
 
     prev = NULL;
     for (seg = head; seg != NULL; seg = seg->next) {
@@ -4345,48 +4388,21 @@ msp_insert_root_segments(msp_t *self, const segment_t *head, segment_t **new_hea
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
-        if (seg == head && new_head != NULL) {
-            *new_head = copy;
-        }
         copy->prev = prev;
         if (prev == NULL) {
-            lineage = msp_alloc_lineage(
-                self, copy, NULL, node_population[head->value], label);
-            if (lineage == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
-                goto out;
-            }
-            ret = msp_insert_individual(self, lineage);
-            if (ret != 0) {
-                goto out;
-            }
-            if (self->model.type == MSP_MODEL_SMC_K) {
-                if (self->state != MSP_STATE_NEW) {
-                    /* correct hull->right is set at the end */
-                    hull = msp_alloc_hull(self, head->left, copy->right, lineage);
-                    if (hull == NULL) {
-                        ret = MSP_ERR_NO_MEMORY;
-                        goto out;
-                    }
-                }
-            }
+            lineage->head = copy;
         } else {
-            lineage->tail = copy;
             prev->next = copy;
         }
+        lineage->tail = copy;
+        copy->lineage = lineage;
         msp_set_segment_mass(self, copy);
         prev = copy;
     }
-    /* insert hull into algorithm state */
-    if (hull != NULL) {
-        tsk_bug_assert(self->model.type == MSP_MODEL_SMC_K);
-        hull->right
-            = GSL_MIN(prev->right + self->model.params.smc_k_coalescent.hull_offset,
-                self->sequence_length);
-        ret = msp_insert_hull(self, hull);
-        if (ret != 0) {
-            goto out;
-        }
+    ret = msp_insert_individual(self, lineage);
+
+    if (new_head != NULL) {
+        *new_head = lineage->head;
     }
 out:
     return ret;
@@ -4640,6 +4656,7 @@ out:
     return ret;
 }
 
+#if 0
 static int MSP_WARN_UNUSED
 msp_hulls_init_counts(msp_t *self, population_id_t pop, label_id_t label)
 {
@@ -4678,6 +4695,7 @@ msp_hulls_init_counts(msp_t *self, population_id_t pop, label_id_t label)
         }
         value = visited - num_ending_before_hull;
         hull->count = value;
+
         fenwick_set_value(coal_mass, hull->id, (double) value);
         visited++;
 
@@ -4700,9 +4718,11 @@ msp_hulls_init_counts(msp_t *self, population_id_t pop, label_id_t label)
 out:
     return ret;
 }
+#endif
 
+#if 0
 static int
-msp_initialise_smc_k(msp_t *self)
+msp_initialise_smc_k(msp_t *MSP_UNUSED(self))
 {
     int ret = 0;
     population_id_t population_id;
@@ -4756,6 +4776,7 @@ msp_initialise_smc_k(msp_t *self)
 out:
     return ret;
 }
+#endif
 
 int
 msp_reset(msp_t *self)
@@ -4940,17 +4961,17 @@ msp_initialise(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    /* SMC_K logic */
-    if (self->model.type == MSP_MODEL_SMC_K) {
-        ret = msp_setup_smc_k(self);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = msp_initialise_smc_k(self);
-        if (ret != 0) {
-            goto out;
-        }
-    }
+    /* /1* SMC_K logic *1/ */
+    /* if (self->model.type == MSP_MODEL_SMC_K) { */
+    /*     ret = msp_setup_smc_k(self); */
+    /*     if (ret != 0) { */
+    /*         goto out; */
+    /*     } */
+    /*     ret = msp_initialise_smc_k(self); */
+    /*     if (ret != 0) { */
+    /*         goto out; */
+    /*     } */
+    /* } */
 out:
     return ret;
 }
@@ -8422,17 +8443,6 @@ msp_set_simulation_model(msp_t *self, int model)
         /* We only need to setup the mass indexes if we are already simulating
          * another model */
         ret = msp_setup_mass_indexes(self);
-        if (ret != 0) {
-            goto out;
-        }
-    }
-    /* SMC_K logic */
-    if (self->model.type == MSP_MODEL_SMC_K) {
-        ret = msp_setup_smc_k(self);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = msp_initialise_smc_k(self);
         if (ret != 0) {
             goto out;
         }
