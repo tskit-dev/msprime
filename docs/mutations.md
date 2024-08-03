@@ -873,7 +873,7 @@ of the mutation, a nonnegative integer. If, for instance, you specify
 `type=1`, then the mutations in SLiM will be of type `m1`. For more
 information, and for how to modify the metadata (e.g., changing the selection
 coefficients), see
-[the pyslim documentation](<https://pyslim.readthedocs.io/en/latest/>).
+[the pyslim documentation](<https://tskit.dev/pyslim/docs/stable/tutorial.html#adding-neutral-mutations-to-a-slim-simulation>).
 For instance,
 
 ```{code-cell} python
