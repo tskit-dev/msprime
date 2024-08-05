@@ -533,8 +533,9 @@ test_multi_locus_simulation(void)
     int model;
     double migration_matrix[] = { 0, 1, 1, 0 };
     size_t migration_events[4];
-    int models[] = { MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME };
-    const char *model_names[] = { "hudson", "smc", "smc_prime" };
+    int models[]
+        = { MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME, MSP_MODEL_SMC_K };
+    const char *model_names[] = { "hudson", "smc", "smc_prime", "smc_k" };
     const char *model_name;
     bool store_full_arg[] = { true, false };
     size_t j, k;
@@ -571,6 +572,9 @@ test_multi_locus_simulation(void)
                     break;
                 case 2:
                     ret = msp_set_simulation_model_smc_prime(&msp);
+                    break;
+                case 3:
+                    ret = msp_set_simulation_model_smc_k(&msp, 0);
                     break;
             }
             ret = msp_set_store_full_arg(&msp, store_full_arg[k]);
@@ -1299,12 +1303,12 @@ test_mixed_hudson_smc(void)
         CU_ASSERT_FALSE(msp_is_completed(&msp));
         model = msp_get_model(&msp)->type;
         if (j % 2 == 1) {
-            CU_ASSERT_EQUAL(model, MSP_MODEL_SMC);
+            CU_ASSERT_EQUAL(model, MSP_MODEL_SMC_K);
             ret = msp_set_simulation_model_hudson(&msp);
             CU_ASSERT_EQUAL(ret, 0);
         } else {
             CU_ASSERT_EQUAL(model, MSP_MODEL_HUDSON);
-            ret = msp_set_simulation_model_smc(&msp);
+            ret = msp_set_simulation_model_smc_k(&msp, 0);
             CU_ASSERT_EQUAL(ret, 0);
         }
         if (j == 10) {
@@ -4003,7 +4007,6 @@ test_setup_smc_k_plus(void)
     tsk_table_collection_free(&tables);
 }
 
-#if 0
 static void
 test_reset_smc_k(void)
 {
@@ -4028,14 +4031,27 @@ test_reset_smc_k(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    while ((ret = msp_run(&msp, DBL_MAX, 1)) == MSP_EXIT_MAX_EVENTS) {
+        msp_verify(&msp, 0);
+        CU_ASSERT_FALSE(msp_is_completed(&msp));
+    }
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    msp_verify(&msp, 0);
+
     ret = msp_run(&msp, t, ULONG_MAX);
-    CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_TIME);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_reset(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    msp_verify(&msp, 0);
+    ret = msp_set_simulation_model_smc_k(&msp, 0.0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
     msp_verify(&msp, 0);
 
     ret = msp_reset(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_set_simulation_model_smc_k(&msp, 0.0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    msp_verify(&msp, 0);
+
     gsl_rng_set(rng, seed);
     while ((ret = msp_run(&msp, DBL_MAX, 1)) == MSP_EXIT_MAX_EVENTS) {
         msp_verify(&msp, 0);
@@ -4049,7 +4065,6 @@ test_reset_smc_k(void)
     free(samples);
     tsk_table_collection_free(&tables);
 }
-#endif
 
 static void
 test_init_smc_k(void)
@@ -4086,7 +4101,6 @@ test_init_smc_k(void)
     tsk_table_collection_free(&tables);
 }
 
-#if 0
 static void
 test_smc_k_multipop(void)
 {
@@ -4113,9 +4127,11 @@ test_smc_k_multipop(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_smc_k(&msp, 0.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    msp_verify(&msp, 0);
 
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, 0);
+    msp_print_state(&msp, stdout);
     msp_verify(&msp, 0);
 
     ret = msp_free(&msp);
@@ -4123,7 +4139,6 @@ test_smc_k_multipop(void)
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
 }
-#endif
 
 static void
 test_mixed_model_smc_k(void)
@@ -4403,9 +4418,9 @@ main(int argc, char **argv)
         { "test_bad_setup_smc_k", test_bad_setup_smc_k },
         { "test_setup_smc_k", test_setup_smc_k },
         { "test_setup_smc_k_plus", test_setup_smc_k_plus },
-        /* { "test_reset_smc_k", test_reset_smc_k }, */
+        { "test_reset_smc_k", test_reset_smc_k },
         { "test_init_smc_k", test_init_smc_k },
-        /* { "test_smc_k_multipop", test_smc_k_multipop }, */
+        { "test_smc_k_multipop", test_smc_k_multipop },
         { "test_mixed_model_smc_k", test_mixed_model_smc_k },
         { "test_mixed_model_smc_k_large", test_mixed_model_smc_k_large },
         { "test_fenwick_rebuild_smc_k", test_fenwick_rebuild_smc_k },

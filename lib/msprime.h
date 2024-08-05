@@ -78,7 +78,7 @@ typedef tsk_id_t label_id_t;
 typedef struct segment_t_t {
     tsk_id_t value;
     // TODO change to tsk_id_t  or uint32?  Same for hull_t
-    size_t id; 
+    size_t id;
     double left;
     double right;
     struct segment_t_t *prev;
@@ -102,7 +102,7 @@ typedef struct {
 typedef struct hull_t_t {
     double left;
     double right;
-    lineage_t *lineage;
+    lineage_t *lineage; // TODO remove as part of refactoring */
     size_t id;
     uint64_t count;
     uint64_t insertion_order;
