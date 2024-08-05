@@ -6824,7 +6824,8 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t 
 {
     int ret = 0;
     uint32_t j, n, num_participants, num_parental_copies;
-    avl_tree_t *ancestors, Q[4]; /* MSVC won't let us use num_pots here */
+    avl_tree_t *ancestors;
+    avl_tree_t *Q = NULL;
     avl_node_t *x_node, *y_node;
     segment_t *x, *y;
     double nC2, p;
@@ -6836,6 +6837,11 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t 
         num_parental_copies = 1;
     } else {
         num_parental_copies = 2 * self->ploidy;
+    }
+    Q = tsk_malloc(num_parental_copies * sizeof(*Q));
+    if (Q == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
     }
 
     ancestors = &self->populations[pop_id].ancestors[label];
@@ -6889,6 +6895,7 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t 
         }
     }
 out:
+    tsk_safe_free(Q);
     return ret;
 }
 
@@ -7035,7 +7042,8 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
 {
     int ret = 0;
     uint32_t j, n, num_participants, num_parental_copies;
-    avl_tree_t *ancestors, Q[4]; /* MSVC won't let us use num_pots here */
+    avl_tree_t *ancestors;
+    avl_tree_t *Q = NULL;
     double alpha = self->model.params.beta_coalescent.alpha;
     double truncation_point = beta_compute_truncation(self);
     double beta_x, u, increment;
@@ -7046,6 +7054,11 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
         num_parental_copies = 1;
     } else {
         num_parental_copies = 2 * self->ploidy;
+    }
+    Q = tsk_malloc(num_parental_copies * sizeof(*Q));
+    if (Q == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
     }
 
     for (j = 0; j < num_parental_copies; j++) {
@@ -7106,6 +7119,7 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
     }
 
 out:
+    tsk_safe_free(Q);
     return ret;
 }
 
