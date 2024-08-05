@@ -4045,7 +4045,6 @@ test_init_smc_k(void)
     tsk_table_collection_free(&tables);
 }
 
-#if 0
 static void
 test_smc_k_multipop(void)
 {
@@ -4082,7 +4081,6 @@ test_smc_k_multipop(void)
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
 }
-#endif
 
 static void
 test_mixed_model_smc_k(void)
@@ -4363,7 +4361,7 @@ main(int argc, char **argv)
         { "test_setup_smc_k_plus", test_setup_smc_k_plus },
         /* { "test_reset_smc_k", test_reset_smc_k }, */
         { "test_init_smc_k", test_init_smc_k },
-        /* { "test_smc_k_multipop", test_smc_k_multipop }, */
+        { "test_smc_k_multipop", test_smc_k_multipop },
         { "test_mixed_model_smc_k", test_mixed_model_smc_k },
         { "test_mixed_model_smc_k_large", test_mixed_model_smc_k_large },
         { "test_fenwick_rebuild_smc_k", test_fenwick_rebuild_smc_k },

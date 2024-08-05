@@ -2716,12 +2716,9 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
         }
         ind->label = dest_label;
     }
+    ind->hull = new_hull;
     if (new_hull != NULL) {
         new_hull->lineage = ind;
-        ret = msp_insert_hull(self, new_hull);
-        if (ret != 0) {
-            goto out;
-        }
     }
     lineage_reset_segments(ind);
     ret = msp_insert_individual(self, ind);
