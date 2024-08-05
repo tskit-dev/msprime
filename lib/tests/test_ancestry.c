@@ -1516,6 +1516,47 @@ test_multiple_mergers_simulation(void)
 }
 
 static void
+test_multiple_mergers_ploidy(void)
+{
+    int ret;
+    size_t j, ploidy;
+    uint32_t n = 10;
+    long seed = 10;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+
+    for (j = 0; j < 2; j++) {
+        gsl_rng_set(rng, seed);
+        for (ploidy = 1; ploidy < 12; ploidy++) {
+            ret = build_sim(&msp, &tables, rng, 10, 1, NULL, n);
+            CU_ASSERT_EQUAL(ret, 0);
+            CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 0.1), 0);
+            if (j == 0) {
+                ret = msp_set_simulation_model_dirac(&msp, 0.9, 10);
+            } else {
+                ret = msp_set_simulation_model_beta(&msp, 1.8, 1);
+            }
+            CU_ASSERT_EQUAL(ret, 0);
+
+            msp_set_ploidy(&msp, ploidy);
+            ret = msp_initialise(&msp);
+
+            ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+            CU_ASSERT_EQUAL_FATAL(ret, 0);
+            CU_ASSERT_TRUE(msp_is_completed(&msp));
+            CU_ASSERT_TRUE(msp.time > 0);
+            msp_verify(&msp, 0);
+
+            ret = msp_free(&msp);
+            CU_ASSERT_EQUAL(ret, 0);
+            tsk_table_collection_free(&tables);
+        }
+    }
+    gsl_rng_free(rng);
+}
+
+static void
 test_multiple_mergers_growth_rate(void)
 {
     int ret;
@@ -4305,6 +4346,7 @@ main(int argc, char **argv)
         { "test_gc_rates", test_gc_rates },
 
         { "test_multiple_mergers_simulation", test_multiple_mergers_simulation },
+        { "test_multiple_mergers_ploidy", test_multiple_mergers_ploidy },
         { "test_multiple_mergers_growth_rate", test_multiple_mergers_growth_rate },
         { "test_dirac_coalescent_bad_parameters", test_dirac_coalescent_bad_parameters },
         { "test_beta_coalescent_bad_parameters", test_beta_coalescent_bad_parameters },
