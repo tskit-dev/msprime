@@ -5184,7 +5184,6 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     population_id_t population;
     lineage_t *lineage, *new_lineage;
     segment_t *y, *x, *alpha;
-    hull_t *rhs_hull;
     hull_t *lhs_hull = NULL;
 
     lhs_hull = NULL;
@@ -5300,18 +5299,6 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
                 self->sequence_length);
         msp_reset_hull_right(
             self, lhs_hull, lhs_old_right, lhs_new_right, y->lineage->population, label);
-
-        // rhs
-        tsk_bug_assert(alpha->left < lhs_old_right);
-        rhs_hull = msp_alloc_hull(self, alpha->left, lhs_old_right, alpha->lineage);
-        if (rhs_hull == NULL) {
-            ret = MSP_ERR_NO_MEMORY;
-            goto out;
-        }
-        ret = msp_insert_hull(self, rhs_hull);
-        if (ret != 0) {
-            goto out;
-        }
     }
 
 out:

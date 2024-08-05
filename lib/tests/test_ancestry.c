@@ -4242,7 +4242,6 @@ test_fenwick_rebuild_smc_k(void)
     tsk_table_collection_free(&tables);
 }
 
-#if 0
 static void
 run_smc_k_gc_simulation(
     double gc_rate, double tract_length, bool discrete_genome, double offset)
@@ -4271,10 +4270,12 @@ run_smc_k_gc_simulation(
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, recombination_rate), 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_gene_conversion_rate(&msp, gc_rate), 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_gene_conversion_tract_length(&msp, tract_length), 0);
-    ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_smc_k(&msp, offset);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    msp_verify(&msp, 0);
 
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, 0);
@@ -4307,7 +4308,6 @@ test_smc_k_gc(void)
         run_smc_k_gc_simulation(1.0, tract_lengths[j], false, 3.1);
     }
 }
-#endif
 
 int
 main(int argc, char **argv)
@@ -4409,7 +4409,7 @@ main(int argc, char **argv)
         { "test_mixed_model_smc_k", test_mixed_model_smc_k },
         { "test_mixed_model_smc_k_large", test_mixed_model_smc_k_large },
         { "test_fenwick_rebuild_smc_k", test_fenwick_rebuild_smc_k },
-        /* { "test_smc_k_gc", test_smc_k_gc }, */
+        { "test_smc_k_gc", test_smc_k_gc },
         CU_TEST_INFO_NULL,
     };
 
