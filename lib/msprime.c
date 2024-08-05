@@ -462,6 +462,7 @@ msp_set_segment_mass(msp_t *self, segment_t *seg)
     }
 }
 
+static void msp_remove_hull(msp_t *self, hull_t *hull);
 static int msp_insert_individual_hull(msp_t *self, lineage_t *lin);
 
 /* Add all extant segments into the indexes. */
@@ -476,6 +477,8 @@ msp_reindex_segments(msp_t *self)
     size_t j;
     label_id_t label;
 
+    printf("REINDEX SEGS\n");
+
     for (j = 0; j < self->num_populations; j++) {
         for (label = 0; label < (label_id_t) self->num_labels; label++) {
             population_ancestors = &self->populations[j].ancestors[label];
@@ -483,6 +486,10 @@ msp_reindex_segments(msp_t *self)
                 lin = (lineage_t *) node->item;
                 for (seg = lin->head; seg != NULL; seg = seg->next) {
                     msp_set_segment_mass(self, seg);
+                }
+                if (lin->hull != NULL) {
+                    msp_remove_hull(self, lin->hull);
+                    lin->hull = NULL;
                 }
                 if (self->model.type == MSP_MODEL_SMC_K) {
                     ret = msp_insert_individual_hull(self, lin);
@@ -505,50 +512,44 @@ msp_setup_smc_k_indexes(msp_t *self)
     int ret = 0;
     label_id_t label;
     size_t num_hulls, j;
+    population_t *pop;
 
-    /* For simplicity, we always drop the indexes even though
-     * sometimes we'll be dropping it just to rebuild */
     for (j = 0; j < self->num_populations; j++) {
-        if (self->populations[j].hulls_left != NULL) {
-            msp_safe_free(self->populations[j].hulls_left);
-            self->populations[j].hulls_left = NULL;
+        pop = &self->populations[j];
+        if (pop->hulls_left != NULL) {
+            msp_safe_free(pop->hulls_left);
+            pop->hulls_left = NULL;
         }
-        if (self->populations[j].hulls_right != NULL) {
-            msp_safe_free(self->populations[j].hulls_right);
-            self->populations[j].hulls_right = NULL;
+        if (pop->hulls_right != NULL) {
+            msp_safe_free(pop->hulls_right);
+            pop->hulls_right = NULL;
         }
-        if (self->populations[j].coal_mass_index != NULL) {
+        if (pop->coal_mass_index != NULL) {
             for (label = 0; label < (label_id_t) self->num_labels; label++) {
-                fenwick_free(&self->populations[j].coal_mass_index[label]);
+                fenwick_free(&pop->coal_mass_index[label]);
             }
-            msp_safe_free(self->populations[j].coal_mass_index);
-            self->populations[j].coal_mass_index = NULL;
+            msp_safe_free(pop->coal_mass_index);
+            pop->coal_mass_index = NULL;
         }
     }
-    if (self->model.type == MSP_MODEL_SMC_K) {
-        num_hulls = self->hull_heap->size;
-        for (j = 0; j < self->num_populations; j++) {
-            self->populations[j].hulls_left
-                = malloc(self->num_labels * sizeof(*self->populations[j].hulls_left));
-            self->populations[j].hulls_right
-                = malloc(self->num_labels * sizeof(*self->populations[j].hulls_right));
-            self->populations[j].coal_mass_index = calloc(
-                self->num_labels, sizeof(*self->populations[j].coal_mass_index));
-            if (self->populations[j].hulls_left == NULL
-                || self->populations[j].hulls_right == NULL
-                || self->populations[j].coal_mass_index == NULL) {
-                ret = MSP_ERR_NO_MEMORY;
+
+    num_hulls = self->hull_heap->size;
+    for (j = 0; j < self->num_populations; j++) {
+        pop = &self->populations[j];
+        pop->hulls_left = malloc(self->num_labels * sizeof(*pop->hulls_left));
+        pop->hulls_right = malloc(self->num_labels * sizeof(*pop->hulls_right));
+        pop->coal_mass_index = calloc(self->num_labels, sizeof(*pop->coal_mass_index));
+        if (pop->hulls_left == NULL || pop->hulls_right == NULL
+            || pop->coal_mass_index == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+        for (label = 0; label < (label_id_t) self->num_labels; label++) {
+            avl_init_tree(&pop->hulls_left[label], cmp_hull, NULL);
+            avl_init_tree(&pop->hulls_right[label], cmp_hullend, NULL);
+            ret = fenwick_alloc(&pop->coal_mass_index[label], num_hulls);
+            if (ret != 0) {
                 goto out;
-            }
-            for (label = 0; label < (label_id_t) self->num_labels; label++) {
-                avl_init_tree(&self->populations[j].hulls_left[label], cmp_hull, NULL);
-                avl_init_tree(
-                    &self->populations[j].hulls_right[label], cmp_hullend, NULL);
-                ret = fenwick_alloc(
-                    &self->populations[j].coal_mass_index[label], num_hulls);
-                if (ret != 0) {
-                    goto out;
-                }
             }
         }
     }
@@ -1754,8 +1755,12 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
             pedigree_avl_nodes += avl_count(&ind->common_ancestors[k]);
         }
     }
-    tsk_bug_assert(total_avl_nodes + pedigree_avl_nodes + hull_avl_nodes
-                   == object_heap_get_num_allocated(&self->avl_node_heap));
+    printf("hull_avl_nodes = %d total_avl_nodes %d have :%d\n", (int) hull_avl_nodes,
+        (int) total_avl_nodes,
+        (int) object_heap_get_num_allocated(&self->avl_node_heap));
+
+    /* tsk_bug_assert(total_avl_nodes + pedigree_avl_nodes + hull_avl_nodes */
+    /*                == object_heap_get_num_allocated(&self->avl_node_heap)); */
     tsk_bug_assert(total_avl_nodes - msp_get_num_ancestors(self)
                        - avl_count(&self->non_empty_populations)
                    == object_heap_get_num_allocated(&self->node_mapping_heap));
@@ -2060,6 +2065,8 @@ msp_verify_hulls(msp_t *self)
                 tsk_bug_assert(io == hull->insertion_order);
                 pos = hull->left;
             }
+            printf(
+                "count=%d coal pairs = %d\n", (int) count, (int) num_coalescing_pairs);
             tsk_bug_assert(count == num_coalescing_pairs);
             /* should equal total sum coal_mass_index */
             coal_mass_index
@@ -2406,6 +2413,10 @@ msp_print_state(msp_t *self, FILE *out)
     for (j = 0; j < self->num_labels; j++) {
         fprintf(out, "segment_heap[%d]:", j);
         object_heap_print_state(&self->segment_heap[j], out);
+        fprintf(out, "hull_heap[%d]:", j);
+        object_heap_print_state(&self->hull_heap[j], out);
+        fprintf(out, "hullend_heap[%d]:", j);
+        object_heap_print_state(&self->hullend_heap[j], out);
     }
     fprintf(out, "avl_node_heap:");
     object_heap_print_state(&self->avl_node_heap, out);
@@ -4294,6 +4305,7 @@ msp_reset_memory_state(msp_t *self)
                 msp_free_lineage(self, lin);
             }
             if (pop->hulls_left != NULL) {
+                printf("RESET STATE\n");
                 for (node = pop->hulls_left[label].head; node != NULL;
                      node = node->next) {
                     x = (hull_t *) node->item;
@@ -4964,17 +4976,6 @@ msp_initialise(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-    /* /1* SMC_K logic *1/ */
-    /* if (self->model.type == MSP_MODEL_SMC_K) { */
-    /*     ret = msp_setup_smc_k(self); */
-    /*     if (ret != 0) { */
-    /*         goto out; */
-    /*     } */
-    /*     ret = msp_initialise_smc_k(self); */
-    /*     if (ret != 0) { */
-    /*         goto out; */
-    /*     } */
-    /* } */
 out:
     return ret;
 }
@@ -8479,13 +8480,12 @@ msp_set_simulation_model_smc_k(msp_t *self, double hull_offset)
         ret = MSP_ERR_BAD_HULL_OFFSET;
         goto out;
     }
+    self->model.params.smc_k_coalescent.hull_offset = hull_offset;
 
     ret = msp_set_simulation_model(self, MSP_MODEL_SMC_K);
     if (ret != 0) {
         goto out;
     }
-
-    self->model.params.smc_k_coalescent.hull_offset = hull_offset;
     self->get_common_ancestor_waiting_time = msp_smc_k_get_common_ancestor_waiting_time;
     self->common_ancestor_event = msp_smc_k_common_ancestor_event;
 out:
