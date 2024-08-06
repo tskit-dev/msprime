@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.3] - 2024-XX-XX
+
+**Bug fixes**:
+
+- Correct the Dirac coalescent time scaling with polyploidy and population growth.
+
 ## [1.3.2] - 2024-07-08
 
 - Add `record_provenance` argument to `sim_mutations` ({issue}`2272`, {pr}`2273`, {user}`peterlharp`)

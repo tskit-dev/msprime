@@ -3431,12 +3431,14 @@ class BetaGrowth(XiGrowth):
         logging.debug(f"running Beta growth for {pop_size} {alpha} {growth_rate}")
         b = growth_rate * (alpha - 1)
         model = (msprime.BetaCoalescent(alpha=alpha),)
-        ploidy = 2
-        a = 1 / (2 * ploidy * self.compute_beta_timescale(pop_size, alpha, ploidy))
-        name = f"N={pop_size}_alpha={alpha}_growth_rate={growth_rate}_ploidy={ploidy}"
-        self.compare_tmrca(
-            pop_size, growth_rate, model, num_replicates, a, b, ploidy, name
-        )
+        for ploidy in range(2, 7):
+            a = 1 / (2 * ploidy * self.compute_beta_timescale(pop_size, alpha, ploidy))
+            name = (
+                f"N={pop_size}_alpha={alpha}_growth_rate={growth_rate}_ploidy={ploidy}"
+            )
+            self.compare_tmrca(
+                pop_size, growth_rate, model, num_replicates, a, b, ploidy, name
+            )
         ploidy = 1
         a = 1 / self.compute_beta_timescale(pop_size, alpha, ploidy)
         name = f"N={pop_size}_alpha={alpha}_growth_rate={growth_rate}_ploidy={ploidy}"
@@ -3474,12 +3476,14 @@ class BetaGrowth(XiGrowth):
 class DiracGrowth(XiGrowth):
     def _run(self, pop_size, c, psi, growth_rate, num_replicates=10000):
         logging.debug(f"running Dirac growth for {pop_size} {c} {psi} {growth_rate}")
-        b = growth_rate
+        b = 2 * growth_rate
         model = (msprime.DiracCoalescent(psi=psi, c=c),)
-        p = 2
-        a = (1 + c * psi * psi / (2 * p)) / (pop_size * pop_size)
-        name = f"N={pop_size}_c={c}_psi={psi}_growth_rate={growth_rate}_ploidy={p}"
-        self.compare_tmrca(pop_size, growth_rate, model, num_replicates, a, b, p, name)
+        for p in range(2, 7):
+            a = (1 + c * psi * psi / (2 * p)) / (pop_size * pop_size)
+            name = f"N={pop_size}_c={c}_psi={psi}_growth_rate={growth_rate}_ploidy={p}"
+            self.compare_tmrca(
+                pop_size, growth_rate, model, num_replicates, a, b, p, name
+            )
         p = 1
         a = (1 + c * psi * psi) / (pop_size * pop_size)
         name = f"N={pop_size}_c={c}_psi={psi}_growth_rate={growth_rate}_ploidy={p}"
