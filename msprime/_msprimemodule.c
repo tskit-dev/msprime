@@ -1199,8 +1199,8 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
             goto out;
         }
         c = PyFloat_AsDouble(value);
-        if (psi <= 0 || psi >= 1.0) {
-            PyErr_SetString(PyExc_ValueError, "Must have 0 < psi < 1");
+        if (psi <= 0 || psi > 1.0) {
+            PyErr_SetString(PyExc_ValueError, "Must have 0 < psi <= 1");
             goto out;
         }
         if (c < 0) {

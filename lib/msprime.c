@@ -7949,33 +7949,18 @@ msp_dirac_get_common_ancestor_waiting_time_from_rate(
     msp_t *self, population_t *pop, double lambda)
 {
     double ret = DBL_MAX;
-    double alpha = pop->growth_rate;
+    double alpha = 2.0 * pop->growth_rate;
     double t = self->time;
     double u, dt, z;
+    double pop_size = pop->initial_size;
 
     if (lambda > 0.0) {
         u = gsl_ran_exponential(self->rng, 1.0 / lambda);
         if (alpha == 0.0) {
-            if (self->ploidy == 1) {
-                ret = pop->initial_size * pop->initial_size * u;
-            } else {
-                /* For ploidy > 1 we assume N/2 two-parent families, so that the rate
-                 * with which 2 lineages belong to a common family is (2/N)^2 */
-                ret = pop->initial_size * pop->initial_size * u / 4.0;
-            }
+            ret = pop_size * pop_size * u;
         } else {
             dt = t - pop->start_time;
-            if (self->ploidy == 1) {
-                z = 1
-                    + alpha * pop->initial_size * pop->initial_size * exp(-alpha * dt)
-                          * u;
-            } else {
-                /* For ploidy > 1 we assume N/2 two-parent families, so that the rate
-                 * with which 2 lineages belong to a common family is (2/N)^2 */
-                z = 1
-                    + alpha * pop->initial_size * pop->initial_size * exp(-alpha * dt)
-                          * u / 4.0;
-            }
+            z = 1 + alpha * pop_size * pop_size * exp(-alpha * dt) * u;
             /* if z is <= 0 no coancestry can occur */
             if (z > 0) {
                 ret = log(z) / alpha;
@@ -7994,13 +7979,7 @@ msp_dirac_get_common_ancestor_waiting_time(
 {
     population_t *pop = &self->populations[pop_id];
     unsigned int n = (unsigned int) avl_count(&pop->ancestors[label]);
-    double c = self->model.params.dirac_coalescent.c;
-    double lambda = n * (n - 1.0) / 2.0;
-    if (self->ploidy == 1) {
-        lambda += c;
-    } else {
-        lambda += c / (2.0 * self->ploidy);
-    }
+    double lambda = gsl_sf_choose(n, 2) + self->model.params.dirac_coalescent.c;
 
     return msp_dirac_get_common_ancestor_waiting_time_from_rate(self, pop, lambda);
 }
@@ -8018,70 +7997,63 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t 
     double nC2, p;
     double psi = self->model.params.dirac_coalescent.psi;
 
-    /* We assume haploid reproduction is single-parent, while all other ploidies
-     * are two-parent */
-    if (self->ploidy == 1) {
-        num_parental_copies = 1;
-    } else {
-        num_parental_copies = 2 * self->ploidy;
-    }
-    Q = tsk_malloc(num_parental_copies * sizeof(*Q));
-    if (Q == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-
     ancestors = &self->populations[pop_id].ancestors[label];
     n = avl_count(ancestors);
     nC2 = gsl_sf_choose(n, 2);
-    if (self->ploidy == 1) {
-        p = (nC2 / (nC2 + self->model.params.dirac_coalescent.c));
-    } else {
-        p = (nC2 / (nC2 + self->model.params.dirac_coalescent.c / (2.0 * self->ploidy)));
-    }
+    p = nC2 / (nC2 + self->model.params.dirac_coalescent.c);
+
     if (gsl_rng_uniform(self->rng) < p) {
-        /* When 2 * ploidy parental chromosomes are available, Mendelian segregation
-         * results in a merger only 1 / (2 * ploidy) of the time. */
-        if (self->ploidy == 1
-            || gsl_rng_uniform(self->rng) < 1.0 / (2.0 * self->ploidy)) {
-            /* Choose x and y */
-            n = avl_count(ancestors);
-            j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
-            x_node = avl_at(ancestors, j);
-            tsk_bug_assert(x_node != NULL);
-            x_lin = (lineage_t *) x_node->item;
-            x = x_lin->head;
-            avl_unlink_node(ancestors, x_node);
-            j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
-            y_node = avl_at(ancestors, j);
-            tsk_bug_assert(y_node != NULL);
-            y_lin = (lineage_t *) y_node->item;
-            y = y_lin->head;
-            avl_unlink_node(ancestors, y_node);
-            self->num_ca_events++;
-            msp_free_avl_node(self, x_node);
-            msp_free_lineage(self, x_lin);
-            msp_free_avl_node(self, y_node);
-            msp_free_lineage(self, y_lin);
-            ret = msp_merge_two_ancestors(self, pop_id, label, x, y, TSK_NULL, NULL);
-        }
+        /* Choose x and y */
+        n = avl_count(ancestors);
+        j = (uint32_t) gsl_rng_uniform_int(self->rng, n);
+        x_node = avl_at(ancestors, j);
+        tsk_bug_assert(x_node != NULL);
+        x_lin = (lineage_t *) x_node->item;
+        x = x_lin->head;
+        avl_unlink_node(ancestors, x_node);
+        j = (uint32_t) gsl_rng_uniform_int(self->rng, n - 1);
+        y_node = avl_at(ancestors, j);
+        tsk_bug_assert(y_node != NULL);
+        y_lin = (lineage_t *) y_node->item;
+        y = y_lin->head;
+        avl_unlink_node(ancestors, y_node);
+        self->num_ca_events++;
+        msp_free_avl_node(self, x_node);
+        msp_free_lineage(self, x_lin);
+        msp_free_avl_node(self, y_node);
+        msp_free_lineage(self, y_lin);
+        ret = msp_merge_two_ancestors(self, pop_id, label, x, y, TSK_NULL, NULL);
     } else {
-        for (j = 0; j < num_parental_copies; j++) {
-            avl_init_tree(&Q[j], cmp_segment_queue, NULL);
-        }
         num_participants = gsl_ran_binomial(self->rng, psi, n);
-        ret = msp_multi_merger_common_ancestor_event(
-            self, ancestors, Q, num_participants, num_parental_copies);
-        if (ret < 0) {
-            goto out;
-        }
-        /* All the lineages that have been assigned to the particular pots can now be
-         * merged.
-         */
-        for (j = 0; j < num_parental_copies; j++) {
-            ret = msp_merge_ancestors(self, &Q[j], pop_id, label, TSK_NULL, NULL);
+        if (num_participants > 1) {
+            /* We assume haploid reproduction is single-parent, while all other ploidies
+             * are two-parent */
+            if (self->ploidy == 1) {
+                num_parental_copies = 1;
+            } else {
+                num_parental_copies = 2 * self->ploidy;
+            }
+            Q = tsk_malloc(num_parental_copies * sizeof(*Q));
+            if (Q == NULL) {
+                ret = MSP_ERR_NO_MEMORY;
+                goto out;
+            }
+            for (j = 0; j < num_parental_copies; j++) {
+                avl_init_tree(&Q[j], cmp_segment_queue, NULL);
+            }
+            ret = msp_multi_merger_common_ancestor_event(
+                self, ancestors, Q, num_participants, num_parental_copies);
             if (ret < 0) {
                 goto out;
+            }
+            /* All the lineages that have been assigned to the particular pots can now be
+             * merged.
+             */
+            for (j = 0; j < num_parental_copies; j++) {
+                ret = msp_merge_ancestors(self, &Q[j], pop_id, label, TSK_NULL, NULL);
+                if (ret < 0) {
+                    goto out;
+                }
             }
         }
     }
@@ -8242,22 +8214,6 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
     double truncation_point = beta_compute_truncation(self);
     double beta_x, u, increment;
 
-    /* We assume haploid reproduction is single-parent, while all other ploidies
-     * are two-parent */
-    if (self->ploidy == 1) {
-        num_parental_copies = 1;
-    } else {
-        num_parental_copies = 2 * self->ploidy;
-    }
-    Q = tsk_malloc(num_parental_copies * sizeof(*Q));
-    if (Q == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
-
-    for (j = 0; j < num_parental_copies; j++) {
-        avl_init_tree(&Q[j], cmp_segment_queue, NULL);
-    }
     ancestors = &self->populations[pop_id].ancestors[label];
     n = avl_count(ancestors);
     beta_x = ran_inc_beta(self->rng, 2.0 - alpha, alpha, truncation_point);
@@ -8295,6 +8251,22 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
             num_participants = 2 + gsl_ran_binomial(self->rng, beta_x, n - 2);
         } while (gsl_rng_uniform(self->rng) > 1 / gsl_sf_choose(num_participants, 2));
 
+        /* We assume haploid reproduction is single-parent, while all other ploidies
+         * are two-parent */
+        if (self->ploidy == 1) {
+            num_parental_copies = 1;
+        } else {
+            num_parental_copies = 2 * self->ploidy;
+        }
+        Q = tsk_malloc(num_parental_copies * sizeof(*Q));
+        if (Q == NULL) {
+            ret = MSP_ERR_NO_MEMORY;
+            goto out;
+        }
+
+        for (j = 0; j < num_parental_copies; j++) {
+            avl_init_tree(&Q[j], cmp_segment_queue, NULL);
+        }
         ret = msp_multi_merger_common_ancestor_event(
             self, ancestors, Q, num_participants, num_parental_copies);
         if (ret < 0) {

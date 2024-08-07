@@ -206,7 +206,7 @@ class TestFullArg:
             recombination_rate=0.1,
             record_full_arg=True,
             sequence_length=10,
-            model=msprime.DiracCoalescent(psi=0.5, c=5),
+            model=msprime.DiracCoalescent(psi=0.5, c=100),
         )
         self.verify(sim, multiple_mergers=True)
 

@@ -1353,7 +1353,7 @@ class TestSimulator(LowLevelTestCase):
                 make_sim(model=model)
         with pytest.raises(ValueError):
             make_sim(model=get_simulation_model("dirac"))
-        for bad_psi in [-1, 0, -1e-6, 1, 1e6]:
+        for bad_psi in [-1, 0, -1e-6, 1 + 1e-6, 1e6]:
             with pytest.raises(ValueError):
                 make_sim(
                     model=get_simulation_model("dirac", c=1, psi=bad_psi),
@@ -1363,7 +1363,7 @@ class TestSimulator(LowLevelTestCase):
                 make_sim(
                     model=get_simulation_model("dirac", psi=0.5, c=bad_c),
                 )
-        for psi in [0.99, 0.2, 1e-4]:
+        for psi in [1, 0.2, 1e-4]:
             for c in [5.0, 1e2, 1e-4]:
                 model = get_simulation_model("dirac", psi=psi, c=c)
                 sim = make_sim(model=model)
