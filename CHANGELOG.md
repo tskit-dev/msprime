@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.3] - 2024-08-07
+
+Bugfix release for issues with Dirac and Beta coalescent models.
+
+**Bug fixes**:
+
+- Fix segfault for in Dirac and Beta coalescent models for ploidy > 2 ({issue}`2307`, {pr}`{2308}`)
+
+- Correct the Dirac coalescent time scaling with polyploidy and population growth. ({pr}`{2310},
+  {user}`JereKoskela`)
+
+- Allow psi = 1 in the Dirac coalescent ({pr}`{2310}, {user}`JereKoskela`).
+
 ## [1.3.2] - 2024-07-08
 
 - Add `record_provenance` argument to `sim_mutations` ({issue}`2272`, {pr}`2273`, {user}`peterlharp`)
