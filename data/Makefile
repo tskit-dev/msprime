@@ -9,12 +9,12 @@ seq-gen:
 
 slim:
 	rm -fR SLiM*
-	wget http://benhaller.com/slim/SLiM.zip
-	unzip SLiM.zip
-	mkdir SLiM/build
+	wget https://github.com/MesserLab/SLiM/archive/refs/tags/v3.7.1.tar.gz
+	tar -zxvf v3.7.1.tar.gz 
+	mkdir SLiM-3.7.1/build
 	# Arbitrarily using 4 threads to build here..
-	cd SLiM/build && cmake .. && make -j 4
-	cp SLiM/build/slim ./
+	cd SLiM-3.7.1/build && cmake .. && make -j 4
+	cp SLiM-3.7.1/build/slim ./
 
 scrm:
 	wget https://github.com/scrm/scrm/releases/download/v1.7.2/scrm-src.tar.gz
