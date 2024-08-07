@@ -1,10 +1,17 @@
 # Changelog
 
-## [1.3.3] - 2024-XX-XX
+## [1.3.3] - 2024-08-07
+
+Bugfix release for issues with Dirac and Beta coalescent models.
 
 **Bug fixes**:
 
-- Correct the Dirac coalescent time scaling with polyploidy and population growth.
+- Fix segfault for in Dirac and Beta coalescent models for ploidy > 2 ({issue}`2307`, {pr}`{2308}`)
+
+- Correct the Dirac coalescent time scaling with polyploidy and population growth. ({pr}`{2310},
+  {user}`JereKoskela`)
+
+- Allow psi = 1 in the Dirac coalescent ({pr}`{2310}, {user}`JereKoskela`).
 
 ## [1.3.2] - 2024-07-08
 
