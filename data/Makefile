@@ -1,4 +1,4 @@
-all: scrm ms msHOT slim seq-gen msms
+all: scrm ms msHOT slim seq-gen msms msprime-0.7.4
 
 seq-gen:
 	rm -fR seq-gen Seq-Gen* 1.3.4.tar.gz
@@ -48,7 +48,7 @@ msms:
 
 msprime-0.7.4:
 	python3 -m venv msprime-0.7.4
-	bash -c "source msprime-0.7.4/bin/activate; pip install msprime==0.7.4"
+	bash -c "source msprime-0.7.4/bin/activate; pip install 'numpy<2' msprime==0.7.4"
 
 clean:
 	rm -fR scrm* ms ms_summary_stats msHOT msHOT_summary_stats sample_stats \
