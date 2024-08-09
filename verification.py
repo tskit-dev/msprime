@@ -126,6 +126,10 @@ def hk_f(n, z):
     return ret
 
 
+def chisquare_stat(observed, expected):
+    return np.sum((observed - expected) ** 2 / expected)
+
+
 def get_predicted_variance(n, R):
     # We import this here as it's _very_ slow to import and we
     # only use it in this case.
@@ -5536,8 +5540,8 @@ class MutationTest(Test):
         for row, p in zip(transitions, transition_matrix):
             not_zeros = p > 0
             if sum(not_zeros) > 1:
-                chisq = scipy.stats.chisquare(row[not_zeros], p[not_zeros])
-                tm_chisq.append(chisq.statistic)
+                chisq = chisquare_stat(row[not_zeros], p[not_zeros])
+                tm_chisq.append(chisq)
             else:
                 tm_chisq.append(None)
 
@@ -5805,16 +5809,16 @@ class SeqGenTest(MutationTest):
             )
             # in Seq-Gen the ancestral sequence is determined first
             expected_num_ancestral_states_sg = root_distribution * num_sites
-            root_chisq_sg = scipy.stats.chisquare(
+            root_chisq_sg = chisquare_stat(
                 observed_ancestral_sg, expected_num_ancestral_states_sg
-            ).statistic
+            )
 
             tm_chisq_ts = self._transition_matrix_chi_sq(
                 observed_transitions_ts, expected_ts
             )
-            root_chisq_ts = scipy.stats.chisquare(
+            root_chisq_ts = chisquare_stat(
                 obs_ancestral_states_ts, expected_ancestral_states_ts
-            ).statistic
+            )
             ts_results["root_distribution"].append(root_chisq_ts)
             sg_results["root_distribution"].append(root_chisq_sg)
 
@@ -5992,17 +5996,17 @@ class PyvolveTest(MutationTest):
             )
 
             expected_num_ancestral_states_py = root_distribution * num_sites
-            root_chisq_py = scipy.stats.chisquare(
+            root_chisq_py = chisquare_stat(
                 observed_ancestral_py, expected_num_ancestral_states_py
-            ).statistic
+            )
 
             tm_chisq_ts = self._transition_matrix_chi_sq(
                 observed_transitions_ts, expected
             )
 
-            root_chisq_ts = scipy.stats.chisquare(
+            root_chisq_ts = chisquare_stat(
                 obs_ancestral_states_ts, expected_ancestral_states_ts
-            ).statistic
+            )
 
             c_ts = self.get_allele_counts(ts_mutated)
             pi_ts = allel.sequence_diversity(pos, c_ts)
