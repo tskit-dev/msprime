@@ -302,6 +302,14 @@ rate_map = msprime.RateMap.read_hapmap(data)
 print(rate_map)
 ```
 
+The map positions in cM can be calculated using {meth}`.RateMap.get_cumulative_mass`
+and multiplying the result by 100:
+
+```{code-cell}
+original_positions = rate_map.position[1:]  # Omit position 0 for clarity
+genetic_pos_in_cM = rate_map.get_cumulative_mass(original_positions) * 100
+print(genetic_pos_in_cM)  # matches the map positions in the input file
+```
 
 (sec_rate_maps_missing)=
 
