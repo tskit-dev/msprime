@@ -931,7 +931,12 @@ class Simulator:
         # implemented using `ParametricAncestryModel()`
         self.hull_offset = hull_offset
 
-        self.initialise(tables.tree_sequence())
+        if model == "fixed_pedigree":
+            self.t = 0
+            self.S[0] = 0
+            self.S[self.L] = -1
+        else:
+            self.initialise(tables.tree_sequence())
 
         self.num_ca_events = 0
         self.num_re_events = 0
@@ -981,6 +986,7 @@ class Simulator:
         root_segments_tail = [None for _ in range(ts.num_nodes)]
         root_lineages = [None for _ in range(ts.num_nodes)]
         last_S = -1
+        start_time = np.inf
         for tree in ts.trees():
             left, right = tree.interval
             S = 0 if tree.num_roots == 1 else tree.num_roots
@@ -991,6 +997,7 @@ class Simulator:
             # any ancestral segments to the state.
             if tree.num_roots > 1:
                 for root in tree.roots:
+                    start_time = min(start_time, tree.time(root))
                     population = ts.node(root).population
                     if root_segments_head[root] is None:
                         seg = self.alloc_segment(left, right, root)
@@ -1014,7 +1021,7 @@ class Simulator:
         # Insert the segment chains into the algorithm state.
         for node in range(ts.num_nodes):
             lineage = root_lineages[node]
-            if lineage is not None:
+            if lineage is not None and ts.nodes_time[node] == start_time:
                 seg = lineage.head
                 left_end = seg.left
                 while seg is not None:
@@ -1616,6 +1623,16 @@ class Simulator:
         individual, then recombine and distribute the remaining ancestral
         material among its parent ploids.
         """
+        node = ind.nodes[ploid]
+        is_sample = (self.tables.nodes.flags[node] & tskit.NODE_IS_SAMPLE) > 0
+        if is_sample:
+            segment = self.alloc_segment(0, self.L, node)
+            lineage = self.alloc_lineage(segment, population=0)
+            self.add_lineage(lineage)
+            ind.add_common_ancestor(lineage.head, ploid=ploid)
+            for k in list(self.S.keys())[:-1]:
+                self.S[k] += 1
+
         common_ancestors = ind.common_ancestors[ploid]
         if len(common_ancestors) == 0:
             # No ancestral material inherited on this ploid of this individual
@@ -1632,7 +1649,6 @@ class Simulator:
         # monoploid genome for this ploid of this individual.
         # If any coalescences occur, they use the corresponding node ID.
         # FIXME update the population/label here
-        node = ind.nodes[ploid]
         genome = self.merge_ancestors(common_ancestors, 0, 0, node)
         if ind.parents[ploid] == tskit.NULL:
             # If this individual is a founder we need to make sure that all
@@ -1676,18 +1692,6 @@ class Simulator:
         Simulates transmission of ancestral material through a pre-specified
         pedigree
         """
-        assert self.num_populations == 1  # Single pop/pedigree for now
-        pop = self.P[0]
-
-        # Go through the extant lineages and gather the ancestral material
-        # into the corresponding pedigree individuals.
-        for lineage in pop.iter_ancestors():
-            u = lineage.head.node
-            node = self.tables.nodes[u]
-            assert node.individual != tskit.NULL
-            ind = self.pedigree.individuals[node.individual]
-            ind.add_common_ancestor(lineage.head, ploid=ind.nodes.index(u))
-
         # Visit pedigree individuals in time order.
         visit_order = sorted(self.pedigree.individuals, key=lambda x: (x.time, x.id))
         for ind in visit_order:
