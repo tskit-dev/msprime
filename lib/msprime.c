@@ -1859,11 +1859,13 @@ msp_verify_overlaps(msp_t *self)
     int ok = overlap_counter_alloc(&counter, self->sequence_length, 0);
     tsk_bug_assert(ok == 0);
 
-    /* add in the overlaps for ancient samples */
-    for (j = self->next_sampling_event; j < self->num_sampling_events; j++) {
-        se = self->sampling_events[j];
-        for (u = self->root_segments[se.sample]; u != NULL; u = u->next) {
-            overlap_counter_increment_interval(&counter, u->left, u->right);
+    if (self->model.type != MSP_MODEL_WF_PED) {
+        /* add in the overlaps for ancient samples */
+        for (j = self->next_sampling_event; j < self->num_sampling_events; j++) {
+            se = self->sampling_events[j];
+            for (u = self->root_segments[se.sample]; u != NULL; u = u->next) {
+                overlap_counter_increment_interval(&counter, u->left, u->right);
+            }
         }
     }
 
@@ -2495,12 +2497,10 @@ msp_store_coalescence_edge(
     int ret = 0;
 
     if (self->model.type == MSP_MODEL_DTWF || self->model.type == MSP_MODEL_WF_PED) {
-        if (self->additional_nodes & MSP_NODE_IS_RE_EVENT) {
-            // parent and child can be equal
-            // don't store edges
-            if (parent == child) {
-                return ret;
-            }
+        // parent and child can be equal if we're storing RE events, or if we've
+        // got internal samples. Don't store edges
+        if (parent == child) {
+            return ret;
         }
     }
 
@@ -2914,13 +2914,30 @@ out:
 }
 
 static int MSP_WARN_UNUSED
-msp_pedigree_add_sample_ancestry(msp_t *self, segment_t *segment)
+msp_pedigree_add_sample_ancestry(msp_t *self, tsk_id_t node_id)
 {
     int ret = 0;
     tsk_size_t ploid;
-    tsk_id_t node_id = segment->value;
     tsk_id_t individual_id;
     individual_t *ind;
+    avl_node_t *a;
+    node_mapping_t *counter;
+    segment_t *seg
+        = msp_alloc_segment(self, 0, self->sequence_length, node_id, 0, 0, NULL, NULL);
+    lineage_t *lin = msp_alloc_lineage(self, seg, seg, 0, 0);
+
+    if (seg == NULL || lin == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    ret = msp_insert_individual(self, lin);
+    if (ret != 0) {
+        goto out;
+    }
+    for (a = self->overlap_counts.head; a != self->overlap_counts.tail; a = a->next) {
+        counter = (node_mapping_t *) a->item;
+        counter->value += 1;
+    }
 
     tsk_bug_assert(node_id < (tsk_id_t) self->tables->nodes.num_rows);
     individual_id = self->tables->nodes.individual[node_id];
@@ -2934,14 +2951,7 @@ msp_pedigree_add_sample_ancestry(msp_t *self, segment_t *segment)
         }
     }
     tsk_bug_assert(ploid < ind->ploidy);
-    if (avl_count(&ind->common_ancestors[ploid]) > 0) {
-        /* This is where we'd deal with the internal samples. What we'll probably
-         * need to do is to go through the ancestry after we've processed the
-         * individual and then pad out any gaps in the ancestry segments. */
-        ret = MSP_ERR_PEDIGREE_INTERNAL_SAMPLE;
-        goto out;
-    }
-    ret = msp_pedigree_add_individual_common_ancestor(self, ind->id, segment, ploid);
+    ret = msp_pedigree_add_individual_common_ancestor(self, ind->id, seg, ploid);
     if (ret != 0) {
         goto out;
     }
@@ -2955,9 +2965,11 @@ msp_pedigree_initialise(msp_t *self)
     int ret = 0;
     population_t *pop;
     lineage_t *lin;
+    segment_t *seg;
     avl_node_t *a;
     label_id_t label = 0;
     tsk_size_t j;
+    node_mapping_t *counter;
 
     if (self->next_demographic_event != NULL) {
         ret = MSP_ERR_UNSUPPORTED_OPERATION;
@@ -2981,14 +2993,21 @@ msp_pedigree_initialise(msp_t *self)
 
     for (j = 0; j < self->num_populations; j++) {
         pop = &self->populations[j];
+        /* Rather than messing about with how we initialise from trees, it's
+         * easier to just remove the lineages here, before we add them
+         * back later when dealing with samples in the pedigree. */
         for (a = pop->ancestors[label].head; a != NULL; a = a->next) {
             lin = (lineage_t *) a->item;
-            ret = msp_pedigree_add_sample_ancestry(self, lin->head);
-            if (ret != 0) {
-                goto out;
+            for (seg = lin->head; seg != NULL; seg = seg->next) {
+                msp_free_segment(self, seg);
             }
+            msp_remove_individual(self, lin);
         }
     }
+    tsk_bug_assert(avl_count(&self->overlap_counts) == 2);
+    counter = (node_mapping_t *) self->overlap_counts.head->item;
+    counter->value = 0;
+
     self->pedigree.next_individual = 0;
 out:
     return ret;
@@ -4589,31 +4608,6 @@ out:
     return ret;
 }
 
-static int MSP_WARN_UNUSED
-msp_pedigree_insert_ancient_samples(msp_t *self)
-{
-    int ret = 0;
-    sampling_event_t *se;
-    segment_t *root_seg, *new_head;
-
-    while (self->next_sampling_event < self->num_sampling_events
-           && self->sampling_events[self->next_sampling_event].time <= self->time) {
-        se = self->sampling_events + self->next_sampling_event;
-        root_seg = self->root_segments[se->sample];
-        ret = msp_insert_root_segments(self, root_seg, &new_head);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = msp_pedigree_add_sample_ancestry(self, new_head);
-        if (ret != 0) {
-            goto out;
-        }
-        self->next_sampling_event++;
-    }
-out:
-    return ret;
-}
-
 static double
 msp_get_next_fixed_event_time(msp_t *self)
 {
@@ -5483,12 +5477,20 @@ msp_pedigree_process_common_ancestors(msp_t *self, individual_t *ind, tsk_size_t
 {
     int ret = 0;
     tsk_id_t node = ind->nodes[ploid];
+    bool is_sample = (self->tables->nodes.flags[node] & TSK_NODE_IS_SAMPLE) != 0;
     tsk_id_t parent = ind->parents[ploid];
     avl_tree_t *common_ancestors = &ind->common_ancestors[ploid];
     segment_t *genome, *parent_ancestry[MSP_MAX_PED_PLOIDY], *seg;
     const tsk_size_t ploidy = self->ploidy;
     tsk_size_t j;
     tsk_id_t *parent_nodes;
+
+    if (is_sample) {
+        ret = msp_pedigree_add_sample_ancestry(self, node);
+        if (ret != 0) {
+            goto out;
+        }
+    }
 
     /* FIXME - assuming 1 label here */
     ret = msp_merge_n_ancestors(
@@ -5607,10 +5609,6 @@ msp_run_pedigree(msp_t *self, double max_time, unsigned long max_events)
         }
         tsk_bug_assert(ind->time >= self->time);
         self->time = ind->time;
-        ret = msp_pedigree_insert_ancient_samples(self);
-        if (ret != 0) {
-            goto out;
-        }
         for (ploid = 0; ploid < ind->ploidy; ploid++) {
             ret = msp_pedigree_process_common_ancestors(self, ind, ploid);
             if (ret != 0) {

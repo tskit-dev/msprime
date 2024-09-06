@@ -750,6 +750,19 @@ class TestSimulateThroughPedigree:
         parent_nodes = {0, 1, 2, 3}
         assert set(ts.first().roots) == parent_nodes
 
+    @pytest.mark.parametrize("num_founders", [2, 3, 10, 20])
+    def test_all_samples(self, num_founders):
+        tables = simulate_pedigree(
+            num_founders=num_founders,
+            num_children_prob=[0, 0, 1],
+            num_generations=6,
+            sequence_length=100,
+        )
+        flags = tables.nodes.flags
+        flags[:] = tskit.NODE_IS_SAMPLE
+        tables.nodes.flags = flags
+        self.verify(tables)
+
 
 class TestSimulateThroughPedigreeEventByEvent(TestSimulateThroughPedigree):
     def verify(self, input_tables, recombination_rate=0):
@@ -792,11 +805,14 @@ class TestContinueSimulateThroughPedigree(TestSimulateThroughPedigree):
             for node_id in tree.nodes():
                 if tree.num_children(node_id) == 1:
                     # Any unary nodes should be associated with a pedigree
-                    # founder.
+                    # founder or a sapmle
                     node = ts2.node(node_id)
                     assert node.individual != tskit.NULL
                     individual = ts2.individual(node.individual)
-                    assert list(individual.parents) == [tskit.NULL, tskit.NULL]
+                    assert node.is_sample() or list(individual.parents) == [
+                        tskit.NULL,
+                        tskit.NULL,
+                    ]
         tables1 = ts1.tables
         tables2 = ts2.tables
         tables1.individuals.assert_equals(
@@ -912,19 +928,6 @@ class TestSimulateThroughPartialPedigree:
 
 
 class TestSimulateThroughPedigreeErrors:
-    def test_parents_are_samples(self):
-        tables = get_base_tables(100)
-        parents = [
-            add_pedigree_individual(tables, time=1, is_sample=True) for _ in range(2)
-        ]
-        add_pedigree_individual(tables, parents=parents, time=0)
-
-        with pytest.raises(_msprime.LibraryError, match="1855"):
-            msprime.sim_ancestry(
-                initial_state=tables,
-                model="fixed_pedigree",
-            )
-
     @pytest.mark.parametrize("num_parents", [0, 1, 3])
     def test_not_two_parents(self, num_parents):
         tables = get_base_tables(100)
@@ -982,20 +985,6 @@ class TestSimulateThroughPedigreeErrors:
         parents = [add_pedigree_individual(tables, time=0) for _ in range(2)]
         add_pedigree_individual(tables, time=1, parents=parents, is_sample=True)
         with pytest.raises(_msprime.InputError, match="time for a parent must be"):
-            msprime.sim_ancestry(initial_state=tables, model="fixed_pedigree")
-
-    @pytest.mark.parametrize("num_founders", [2, 3, 10, 20])
-    def test_all_samples(self, num_founders):
-        tables = simulate_pedigree(
-            num_founders=num_founders,
-            num_children_prob=[0, 0, 1],
-            num_generations=6,
-            sequence_length=100,
-        )
-        flags = tables.nodes.flags
-        flags[:] = tskit.NODE_IS_SAMPLE
-        tables.nodes.flags = flags
-        with pytest.raises(_msprime.LibraryError, match="1855"):
             msprime.sim_ancestry(initial_state=tables, model="fixed_pedigree")
 
 
