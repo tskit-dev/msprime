@@ -134,7 +134,6 @@
 #define MSP_ERR_PEDIGREE_TIME_TRAVEL                                -88
 #define MSP_ERR_PEDIGREE_IND_NOT_DIPLOID                            -89
 #define MSP_ERR_PEDIGREE_IND_NOT_TWO_PARENTS                        -90
-#define MSP_ERR_PEDIGREE_INTERNAL_SAMPLE                            -91
 
 /* clang-format on */
 /* This bit is 0 for any errors originating from tskit */

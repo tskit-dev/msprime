@@ -553,8 +553,8 @@ test_replicates_ancient_samples(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     for (j = 0; j < 20; j++) {
-        msp_verify(&msp, 0);
         ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+
         CU_ASSERT_EQUAL_FATAL(ret, MSP_EXIT_MODEL_COMPLETE);
         msp_verify(&msp, 0);
         ret = msp_finalise_tables(&msp);
@@ -844,24 +844,12 @@ test_errors(void)
 static void
 test_internal_samples(void)
 {
-    int ret;
     tsk_id_t parents[] = { -1, -1, -1, -1, 0, 1 };
     double time[] = { 1.0, 1.0, 0.0 };
     tsk_flags_t is_sample[] = { true, true, true };
-    msp_t msp;
-    tsk_table_collection_t tables;
-    gsl_rng *rng = safe_rng_alloc();
 
-    ret = build_pedigree_sim(
-        &msp, &tables, rng, 100, 2, 3, parents, time, is_sample, NULL);
-    ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
-    CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_PEDIGREE_INTERNAL_SAMPLE);
-    tsk_table_collection_free(&tables);
-    msp_free(&msp);
-
-    gsl_rng_free(rng);
+    verify_pedigree(0, 1, 3, parents, time, is_sample, NULL, 0);
+    verify_pedigree(0.1, 1, 3, parents, time, is_sample, NULL, 0);
 }
 
 static void

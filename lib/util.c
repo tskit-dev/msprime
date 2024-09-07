@@ -183,12 +183,6 @@ msp_strerror_internal(int err)
             ret = "All individuals in the input pedigree must be associated with "
                   "exactly two parents (can be TSK_NULL, if not known)";
             break;
-        case MSP_ERR_PEDIGREE_INTERNAL_SAMPLE:
-            ret = "Samples that are internal nodes in the pedigree are not "
-                  "currently supported. Please comment on this GitHub issue if you "
-                  "would like to see this feature implemented: "
-                  "https://github.com/tskit-dev/msprime/issues/1855 ";
-            break;
 
         case MSP_ERR_BAD_PROPORTION:
             ret = "Proportion values must have 0 <= x <= 1";
