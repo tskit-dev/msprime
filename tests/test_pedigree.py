@@ -373,6 +373,42 @@ class TestPedigreeSimulation:
             tc.individuals.append(row)
         tc.tree_sequence()  # creating tree sequence should succeed
 
+    @pytest.mark.parametrize("direction", ["backward", "forward"])
+    def test_equal_N_Nfunc(self, direction):
+        seed = np.random.randint(1e6)
+        p1 = pedigrees.sim_pedigree(
+            num_samples=10,
+            population_size=10,
+            end_time=20,
+            random_seed=seed,
+            direction=direction,
+        )
+        p2 = pedigrees.sim_pedigree(
+            num_samples=10,
+            population_size=lambda _: 10,
+            end_time=20,
+            random_seed=seed,
+            direction=direction,
+        )
+        assert p1 == p2
+
+    @pytest.mark.parametrize("direction", ["backward", "forward"])
+    def test_pop_collapse(self, direction):
+        seed = np.random.randint(1e6)
+        collapse_time = 10
+        ped = pedigrees.sim_pedigree(
+            num_samples=100,
+            population_size=lambda t: 100 if t < collapse_time else 1,
+            end_time=20,
+            random_seed=seed,
+            direction=direction,
+        )
+        times_old_nodes = ped.nodes.time[ped.nodes.time > collapse_time - 1]
+        _, node_counts = np.unique(times_old_nodes, return_counts=True)
+        # if we have a collapse down to one (diploid) individual, there should be only
+        # two nodes at each time point after the collapse
+        assert all(node_counts == 2)
+
 
 def join_pedigrees(tables_list):
     """
