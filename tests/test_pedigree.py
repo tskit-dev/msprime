@@ -48,6 +48,7 @@ def simulate_pedigree(
     num_generations=3,
     sequence_length=1,
     random_seed=42,
+    internal_sample_gen=(False,False,False),
 ) -> tskit.TableCollection:
     """
     Simulates pedigree.
@@ -80,7 +81,7 @@ def simulate_pedigree(
             num_children = rng.choice(len(num_children_prob), p=num_children_prob)
             for _ in range(num_children):
                 parents = np.sort(parents).astype(np.int32)
-                ind_id = builder.add_individual(time=time, parents=parents)
+                ind_id = builder.add_individual(time=time, parents=parents, is_sample=internal_sample_gen[generation-1])
                 curr_gen.append(ind_id)
     return builder.finalise(sequence_length)
 
@@ -542,6 +543,18 @@ class TestSimulateThroughPedigree:
             num_children_prob=[0, 0, 1],
             num_generations=2,
             sequence_length=100,
+        )
+        self.verify(tables, recombination_rate)
+        
+    @pytest.mark.parametrize("num_founders", [2, 3, 5, 100])
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_shallow_internal(self, num_founders, recombination_rate):
+        tables = simulate_pedigree(
+            num_founders=num_founders,
+            num_children_prob=[0, 0, 1],
+            num_generations=2,
+            sequence_length=100, 
+            internal_sample_gen=[True, False],
         )
         self.verify(tables, recombination_rate)
 
