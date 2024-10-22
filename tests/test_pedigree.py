@@ -48,6 +48,7 @@ def simulate_pedigree(
     num_generations=3,
     sequence_length=1,
     random_seed=42,
+    internal_sample_gen=(None,None,None),
 ) -> tskit.TableCollection:
     """
     Simulates pedigree.
@@ -62,11 +63,16 @@ def simulate_pedigree(
     sequence_length: The sequence_length of the output tables.
     random_seed: Random seed.
     """
+    # Fill-in internal_sample_gen with None if shorter than number of generations
+    if len(internal_sample_gen) < num_generations:
+        tmp = internal_sample_gen 
+        internal_sample_gen = np.repeat(None,num_generations)
+        internal_sample_gen[0:len(tmp)] = tmp
     rng = np.random.RandomState(random_seed)
     builder = msprime.PedigreeBuilder()
 
     time = num_generations - 1
-    curr_gen = [builder.add_individual(time=time) for _ in range(num_founders)]
+    curr_gen = [builder.add_individual(time=time,is_sample=internal_sample_gen[0]) for _ in range(num_founders)]
     for generation in range(1, num_generations):
         num_pairs = len(curr_gen) // 2
         if num_pairs == 0 and num_children_prob[0] != 1:
@@ -80,7 +86,7 @@ def simulate_pedigree(
             num_children = rng.choice(len(num_children_prob), p=num_children_prob)
             for _ in range(num_children):
                 parents = np.sort(parents).astype(np.int32)
-                ind_id = builder.add_individual(time=time, parents=parents)
+                ind_id = builder.add_individual(time=time, parents=parents, is_sample=internal_sample_gen[generation])
                 curr_gen.append(ind_id)
     return builder.finalise(sequence_length)
 
@@ -542,6 +548,18 @@ class TestSimulateThroughPedigree:
             num_children_prob=[0, 0, 1],
             num_generations=2,
             sequence_length=100,
+        )
+        self.verify(tables, recombination_rate)
+        
+    @pytest.mark.parametrize("num_founders", [2, 3, 5, 100])
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_shallow_internal(self, num_founders, recombination_rate):
+        tables = simulate_pedigree(
+            num_founders=num_founders,
+            num_children_prob=[0, 0, 1],
+            num_generations=2,
+            sequence_length=100, 
+            internal_sample_gen=[True, False],
         )
         self.verify(tables, recombination_rate)
 
