@@ -14,12 +14,12 @@ jobs:
         uses: styfle/cancel-workflow-action@0.12.1
         with:
           access_token: ${{ github.token }}
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
       - name: install clang-format
         run: |
           pip install clang-format==6.0.1
-      - uses: pre-commit/action@v3.0.1
+      - uses: pre-commit/action@v3
 
   test:
     name: Python
@@ -44,7 +44,7 @@ jobs:
 
       - name: Cache conda and dependencies
         id: cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.CONDA }}/envs
           key: ${{ runner.os }}-${{ runner.arch }}-${{ matrix.python}}-conda-v2-${{ hashFiles('requirements/CI-tests-conda/requirements.txt') }}-${{ hashFiles('requirements/CI-tests-pip/requirements.txt') }}
