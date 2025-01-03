@@ -1220,10 +1220,7 @@ def sim_ancestry(
         (Default: None).
     :param float start_time: If specified, set the initial time that the
         simulation starts to this value. If not specified, the start
-        time is zero if performing a simulation of a set of samples,
-        or is the time of the oldest node if simulating from an
-        existing tree sequence (see the ``initial_state`` parameter).
-        See the :ref:`sec_ancestry_start_time` section for examples.
+        time is zero. See the :ref:`sec_ancestry_start_time` section for examples.
     :param float end_time: If specified, terminate the simulation at the
         specified time. In the returned tree sequence, all rootward paths from
         samples with time < ``end_time`` will end in a node with one child with
