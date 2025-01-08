@@ -9,8 +9,8 @@ queue_rules:
       - status-success=Lint
       - status-success=Python (3.9, macos-latest)
       - status-success=Python (3.12, macos-latest)
-      - status-success=Python (3.9, ubuntu-latest)
-      - status-success=Python (3.12, ubuntu-latest)
+      - status-success=Python (3.9, ubuntu-24.04)
+      - status-success=Python (3.12, ubuntu-24.04)
       - status-success=Python (3.9, windows-latest)
       - status-success=Python (3.12, windows-latest)
       - "status-success=ci/circleci: build"
@@ -20,8 +20,8 @@ queue_rules:
       - status-success=Lint
       - status-success=Python (3.9, macos-latest)
       - status-success=Python (3.12, macos-latest)
-      - status-success=Python (3.9, ubuntu-latest)
-      - status-success=Python (3.12, ubuntu-latest)
+      - status-success=Python (3.9, ubuntu-24.04)
+      - status-success=Python (3.12, ubuntu-24.04)
       - status-success=Python (3.9, windows-latest)
       - status-success=Python (3.12, windows-latest)
       - "status-success=ci/circleci: build"
