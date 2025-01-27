@@ -54,6 +54,7 @@ def get_provenance_dict(parameters=None):
     """
     document = {
         "schema_version": "1.0.0",
+        "foo": "bar",
         "software": {"name": "msprime", "version": __version__},
         "parameters": parameters,
         "environment": get_environment(),
