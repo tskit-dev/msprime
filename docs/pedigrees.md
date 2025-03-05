@@ -18,10 +18,11 @@ kernelspec:
 import io
 import msprime
 import tskit
-from IPython.display import SVG, set_matplotlib_formats
+from IPython.display import SVG
 from matplotlib import pyplot as plt
 import numpy as np
 import networkx as nx
+from matplotlib_inline.backend_inline import set_matplotlib_formats
 
 set_matplotlib_formats("svg")
 ```
