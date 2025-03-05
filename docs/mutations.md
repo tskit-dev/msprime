@@ -481,7 +481,7 @@ Here are the available models; they are documented in more detail below.
 - {class}`.BLOSUM62`: The BLOSUM62 model of time-reversible amino acid mutation
 - {class}`.PAM`: The PAM model of time-reversible amino acid mutation
 - {class}`.MatrixMutationModel`: Superclass of the specific mutation models with a finite set of states
-- {class}`.SMM`: Stepwise mutation model for microsatellite repeat copy number. Ohta and Kimura ('73)
+- {class}`.SMM`: Stepwise mutation model for microsatellite repeat copy number. Ohta and Kimura ('78)
 - {class}`.TPM`: Two-phase mutation model for microsatellite repeat copy number. DiRienzo et al. ('94)
 - {class}`.EL2`: Two-phase mutation model, equal rate, linear bias model for microsatellite repeat copy number. Garza et al. ('95)
 - {class}`.InfiniteAlleles`: A generic infinite-alleles mutation model
