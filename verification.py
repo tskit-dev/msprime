@@ -1,57 +1,40 @@
-"""
-Script to automate verification of msprime against known statistical
-results and benchmark programs such as ms and Seq-Gen.
-
-Tests are structured in a similar way to Python unittests. Tests
-are organised into classes of similar tests. Ideally, each test
-in the class is a simple call to a general method with
-different parameters (this is called ``_run``, by convention).
-Tests must be *independent* and not depend on any shared
-state within the test class, other than the ``self.output_dir``
-variable which is guaranteed to be set when the method is called.
-
-The output directory is <output-dir>/<class name>/<test name>.
-Each test should output one or more diagnostic plots, which have
-a clear interpretation as "correct" or "incorrect". QQ-plots
-are preferred, where possible. Numerical results can also be
-output by using ``logging.debug()``, where appropriate; to
-view these, append ``--debug`` to the comand line running
-your tests.
-
-Test classes must be a subclass of the ``Test`` class defined
-in this module.
-
-To run the tests, first get some help from the CLI:
-
-    python3 verification.py --help
-
-This will output some basic help on the tests. Use
-
-    python3 verification.py --list
-
-to show all the available tests.
-
-If you run without any arguments, this will run all the tests
-sequentially. The progress bar and output behaviour can be
-controlled using command line parameters, and running over
-multiple processes is possible.
-
-If you wish to run a specific tests, you can provide the
-test names as positional arguments, i.e.,
-
-    python3 verification.py test_msdoc_outgroup_sequence test_msdoc_recomb_ex
-
-will just run these two specific tests.
-
-Using the ``-c`` option allows you to run all tests in a
-given class.
-
-Gotchas:
-- Any test superclasses must be abstract. That is, you cannot
-  inherit from a test class that contains any tests.
-- Test method names must be unique across *all* classes.
-
-"""
+# Script to automate verification of msprime against known statistical
+# results and benchmark programs such as ms and Seq-Gen.
+# Tests are structured in a similar way to Python unittests. Tests
+# are organised into classes of similar tests. Ideally, each test
+# in the class is a simple call to a general method with
+# different parameters (this is called ``_run``, by convention).
+# Tests must be *independent* and not depend on any shared
+# state within the test class, other than the ``self.output_dir``
+# variable which is guaranteed to be set when the method is called.
+# The output directory is <output-dir>/<class name>/<test name>.
+# Each test should output one or more diagnostic plots, which have
+# a clear interpretation as "correct" or "incorrect". QQ-plots
+# are preferred, where possible. Numerical results can also be
+# output by using ``logging.debug()``, where appropriate; to
+# view these, append ``--debug`` to the comand line running
+# your tests.
+# Test classes must be a subclass of the ``Test`` class defined
+# in this module.
+# To run the tests, first get some help from the CLI:
+#     python3 verification.py --help
+# This will output some basic help on the tests. Use
+#     python3 verification.py --list
+# to show all the available tests.
+# If you run without any arguments, this will run all the tests
+# sequentially. The progress bar and output behaviour can be
+# controlled using command line parameters, and running over
+# multiple processes is possible.
+# If you wish to run a specific tests, you can provide the
+# test names as positional arguments, i.e.,
+#     python3 verification.py test_msdoc_outgroup_sequence test_msdoc_recomb_ex
+# will just run these two specific tests.
+# Using the ``-c`` option allows you to run all tests in a
+# given class.
+# Gotchas:
+# - Any test superclasses must be abstract. That is, you cannot
+#   inherit from a test class that contains any tests.
+# - Test method names must be unique across *all* classes.
 import argparse
 import ast
 import collections
@@ -5643,9 +5626,10 @@ class SeqGenTest(MutationTest):
         newick = tree.newick()
         cmd = self._seq_gen_executable + args
         num_sequences = 2 * ts.num_samples - 1
-        with tempfile.TemporaryFile("w+") as in_file, tempfile.TemporaryFile(
-            "w+"
-        ) as out_file:
+        with (
+            tempfile.TemporaryFile("w+") as in_file,
+            tempfile.TemporaryFile("w+") as out_file,
+        ):
             in_file.write(newick)
             in_file.seek(0)
             subprocess.call(cmd, stdin=in_file, stdout=out_file)

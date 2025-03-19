@@ -2141,9 +2141,11 @@ class PythonMutationGenerator:
                     parent=parent_id,
                     metadata=mutation.metadata,
                     # Not sure why, but sometimes the time is a single-element array
-                    time=mutation.time[0]
-                    if isinstance(mutation.time, np.ndarray)
-                    else mutation.time,
+                    time=(
+                        mutation.time[0]
+                        if isinstance(mutation.time, np.ndarray)
+                        else mutation.time
+                    ),
                 )
                 assert mutation_id > parent_id
                 mutation.id = mutation_id

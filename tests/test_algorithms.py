@@ -1,6 +1,4 @@
-"""
-Tests for the algorithms.py script.
-"""
+# Tests for the algorithms.py script.
 import pathlib
 import platform
 import tempfile
