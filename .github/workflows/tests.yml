@@ -15,7 +15,7 @@ jobs:
         with:
           access_token: ${{ github.token }}
       - uses: actions/checkout@v4.2.2
-      - uses: actions/setup-python@v5.3.0
+      - uses: actions/setup-python@v5.4.0
       - name: install clang-format
         run: |
           pip install clang-format==6.0.1
@@ -44,13 +44,13 @@ jobs:
 
       - name: Cache conda and dependencies
         id: cache
-        uses: actions/cache@v4.2.0
+        uses: actions/cache@v4.2.2
         with:
           path: ${{ env.CONDA }}/envs
           key: ${{ runner.os }}-${{ runner.arch }}-${{ matrix.python}}-conda-v2-${{ hashFiles('requirements/CI-tests-conda/requirements.txt') }}-${{ hashFiles('requirements/CI-tests-pip/requirements.txt') }}
 
       - name: Install Conda
-        uses: conda-incubator/setup-miniconda@v3.1.0
+        uses: conda-incubator/setup-miniconda@v3.1.1
         if: steps.cache.outputs.cache-hit != 'true'
         with:
           activate-environment: anaconda-client-env
