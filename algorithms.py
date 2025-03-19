@@ -1,6 +1,4 @@
-"""
-Python version of the simulation algorithm.
-"""
+# Python version of the simulation algorithm.
 from __future__ import annotations
 
 import argparse

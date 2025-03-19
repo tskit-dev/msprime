@@ -1,7 +1,5 @@
-"""
-Test cases for the low-level dictionary encoding used to move
-data around in C.
-"""
+# Test cases for the low-level dictionary encoding used to move
+# data around in C.
 import lwt_interface.dict_encoding_testlib
 
 from msprime import _msprime

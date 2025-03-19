@@ -1,8 +1,6 @@
-"""
-Runs the parameters for a given simulation in an input
-pickle file and writes the output tree sequence to
-an output file.
-"""
+# Runs the parameters for a given simulation in an input
+# pickle file and writes the output tree sequence to
+# an output file.
 import pickle
 import sys
 
