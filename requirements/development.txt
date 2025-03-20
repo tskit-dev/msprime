@@ -1,4 +1,4 @@
-docutils==0.15  # issue with 0.17, https://github.com/tskit-dev/msprime/issues/1625
+docutils==0.21.2  # issue with 0.17, https://github.com/tskit-dev/msprime/issues/1625
 asv
 bintrees
 coverage
@@ -19,7 +19,7 @@ pytest-xdist
 tskit>=0.5.2
 kastore
 sphinx-book-theme
-stdpopsim==0.1.2 # Make sure we have correct version of OOA model
+stdpopsim==0.1.2 # Pinned for OOA model
 scipy
 setuptools_scm
 sphinx>=4.4
