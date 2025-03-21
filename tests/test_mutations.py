@@ -26,6 +26,7 @@ import functools
 import itertools
 import json
 import struct
+import sys
 from typing import Any
 
 import numpy as np
@@ -366,6 +367,9 @@ class TestMatrixMutationModel:
         self.validate_model(model)
         self.validate_stationary(model)
 
+    @pytest.mark.skipif(
+        sys.platform.startswith("win"), reason="Windows BLAS issue #2349"
+    )
     @pytest.mark.parametrize(
         "p, m, lo, hi",
         [
