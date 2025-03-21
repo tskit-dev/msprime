@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.3.4] - 2024-08-07
+
+- Add support and wheels for Python3.13
+
 ## [1.3.3] - 2024-08-07
 
 Bugfix release for issues with Dirac and Beta coalescent models.
