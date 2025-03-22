@@ -1,3 +1,4 @@
 gsl
 stdpopsim==0.1.2 # Pinned for OOA model
 demes==0.2.3
+nomkl
