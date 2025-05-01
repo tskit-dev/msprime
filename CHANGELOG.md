@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.4] - 2025-05-01
+
+**Bug fixes**:
+
+- Fix wheels on OSX-13 ({pr}`2355`, {user}`benjeffery`)
+
 ## [1.3.3] - 2024-08-07
 
 Bugfix release for issues with Dirac and Beta coalescent models.
