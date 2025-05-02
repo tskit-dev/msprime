@@ -2113,7 +2113,10 @@ msp_verify(msp_t *self, int options)
     if (self->model.type == MSP_MODEL_WF_PED) {
         msp_verify_pedigree(self);
     }
-    if (self->model.type == MSP_MODEL_SMC_K) {
+    if ((self->model.type == MSP_MODEL_SMC_K) && false) {
+        /* skip verifying hulls by adding "and false" instead of commmenting the call
+           this is to build without warnings of unused functions
+        */
         msp_verify_hulls(self);
     }
 }
