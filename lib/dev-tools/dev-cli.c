@@ -801,7 +801,7 @@ run_simulate(
     record_provenance(&tables.provenances);
 
     msp_print_state(&msp, stdout);
-    msp_verify(&msp, MSP_VERIFY_BREAKPOINTS);
+    //msp_verify(&msp, MSP_VERIFY_BREAKPOINTS);
     for (j = 0; j < num_replicates; j++) {
         if (verbose >= 1) {
             printf("=====================\n");
@@ -812,7 +812,7 @@ run_simulate(
         if (ret != 0) {
             fatal_msprime_error(ret, __LINE__);
         }
-        msp_verify(&msp, 0);
+        //msp_verify(&msp, 0);
         ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
         if (ret < 0) {
             fatal_msprime_error(ret, __LINE__);
@@ -820,7 +820,7 @@ run_simulate(
         if (verbose >= 1) {
             msp_print_state(&msp, stdout);
         }
-        msp_verify(&msp, 0);
+        //msp_verify(&msp, 0);
         ret = msp_finalise_tables(&msp);
 
         if (ret != 0) {

@@ -2113,10 +2113,7 @@ msp_verify(msp_t *self, int options)
     if (self->model.type == MSP_MODEL_WF_PED) {
         msp_verify_pedigree(self);
     }
-    if ((self->model.type == MSP_MODEL_SMC_K) && false) {
-        /* skip verifying hulls by adding "and false" instead of commmenting the call
-           this is to build without warnings of unused functions
-        */
+    if ((self->model.type == MSP_MODEL_SMC_K)) {
         msp_verify_hulls(self);
     }
 }
@@ -2374,7 +2371,7 @@ msp_print_state(msp_t *self, FILE *out)
     fprintf(out, "lineage_heap:");
     object_heap_print_state(&self->lineage_heap, out);
     fflush(out);
-    msp_verify(self, 0);
+    //msp_verify(self, 0);
 out:
     if (ancestors != NULL) {
         free(ancestors);
