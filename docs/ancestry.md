@@ -1146,7 +1146,7 @@ of these models each node has to carry at least one of these three flags.
 ### Recombination events
 
 Additional nodes can also be used to mark recombination events (cross over) as well 
-as gene conversion. A seperate {class}`msprime.NodeType` exists for each:
+as gene conversion. A separate {class}`msprime.NodeType` exists for each:
 {class}`msprime.NodeType.RECOMBINANT` and {class}`msprime.NodeType.GENE_CONVERSION`.
 
 A recombination event results in two extra nodes being recorded, one identifying
