@@ -5841,208 +5841,169 @@ out:
 static int
 msp_run_sweep(msp_t *self)
 {
-
     int ret = 0;
     simulation_model_t *model = &self->model;
-    size_t curr_step = 1;
-    double **allele_frequency;
-    double *time;
+    size_t curr_step;
+    size_t num_steps;
+    double allele_frequency_mut;
+    double *t_of_forward_ev = NULL;
     double sweep_locus = model->params.sweep.position;
     size_t j = 0;
     double recomb_mass;
-    unsigned long events = 0;
     label_id_t label;
+    const char *filename = "/home/aalhadbhatt/Documents/PyNBmsprime/events.bin";
     double rec_rates[] = { 0.0, 0.0 };
-    double sweep_pop_sizes[] = { 0.0, 0.0 };
-    double tmp_rand, e_sum, pop_size;
-    double p_coal_b, p_coal_B, sweep_pop_tot_rate;
-    double p_rec_b, p_rec_B;
-    double t_start, t_next_event, t_last, t_current;
-    const char *filename = "/home/agushin/sweep_trajectories.bin";
-    double num_steps_dbl;
-    size_t demes, num_steps;
-    double init;
+    double ancestral_bg_pop_size[] = { 0.0, 0.0 };
+    double tmp_rand;
+    double p_coal_wild, p_coal_mut, p_rec_wild, p_rec_mut, p_any_ev;
+    double t_start, t_end, t_of_next_ev, t_current;
+    //size_t demes;
+    double p_forward_ev, t_of_next_forward_ev;
+    int tot_pop, mut_pop;
+    int curr_ev_type;
+    int *ev_type;
+    int *start_deme;
+    int *end_deme;
+    FILE *file;
 
-    if (rate_map_get_total_mass(&self->gc_map) != 0.0) {
+    if (rate_map_get_total_mass(&self->gc_map) != 0.0) { //arrow?+
         /* Could be, we just haven't implemented it */
         ret = MSP_ERR_SWEEPS_GC_NOT_SUPPORTED;
         goto out;
     }
 
     /* Keep the compiler happy */
-    sweep_pop_tot_rate = 0;
-    p_coal_b = 0;
-    p_coal_B = 0;
-    p_rec_b = 0;
-    p_rec_B = 0;
-    demes = 1;
+    p_any_ev = 0.0;
+    p_coal_wild = 0.0;
+    p_coal_mut = 0.0;
+    p_rec_wild = 0.0;
+    p_rec_mut = 0.0;
+    //demes = 1;
+
+    // Open the binary file for reading
+    file = fopen(filename, "r");
+    fread(&num_steps, sizeof(size_t), 1, file);
+    fread(&tot_pop, sizeof(int), 1, file);
+
+    t_of_forward_ev = (double *) malloc(sizeof(double) * num_steps);
+    ev_type = (int *) malloc(sizeof(int) * num_steps);
+    start_deme = (int *) malloc(sizeof(int) * num_steps);
+    end_deme = (int *) malloc(sizeof(int) * num_steps);
 
 
-    FILE *file = fopen(filename, "r");
-
-    fread(&num_steps_dbl, sizeof(double), 1, file);
-    fread(&init, sizeof(double), 1, file);
-
-    num_steps = (size_t) num_steps_dbl;
-
-    allele_frequency = (double **) malloc(sizeof(double *) * (long unsigned int) num_steps);
-    time = (double *) malloc(sizeof(double) * num_steps);
-    for (size_t i = 0; i < num_steps; i++) {
-        allele_frequency[i] = (double *) malloc(sizeof(double) * (long unsigned int) demes);
+    // Read the data from the forward simulation into the arrays
+    for (size_t i = 1; i <= num_steps; i++) {
+        fread(&t_of_forward_ev[num_steps - i], sizeof(double), 1, file);
+        fread(&ev_type[num_steps - i], sizeof(int), 1, file);
+        fread(&start_deme[num_steps - i], sizeof(int), 1, file);
+        fread(&end_deme[num_steps - i], sizeof(int), 1, file);
     }
 
-    pop_size = get_population_size(&self->populations[0], self->time);
-
-    fread(&t_last, sizeof(double), 1, file);
+    //allele_frequency = (double **) malloc(sizeof(double *) * (long unsigned int) num_steps);
+    //time = (double *) malloc(sizeof(double) * num_steps);
+    //for (size_t i = 0; i < num_steps; i++) {
+    //    allele_frequency[i] = (double *) malloc(sizeof(double) * (long unsigned int) demes);
+    //}
+    //allele_frequency = (double *) malloc(sizeof(double) * demes);
 
     // Close the file
     fclose(file);
 
-    t_start = self->time;
+    curr_step = 0;
+    mut_pop = tot_pop;
+    allele_frequency_mut = 1.0 * mut_pop / tot_pop;
 
-    ret = msp_sweep_initialise(self, allele_frequency[0][0]);
+    ret = msp_sweep_initialise(self, allele_frequency_mut);
     if (ret != 0) {
         goto out;
     }
 
-    curr_step = num_steps;
-    allele_frequency[curr_step][0] = init;
-    
+    //allele_frequency[curr_step][0] = init;//What do dis do?
 
-    fread(&t_start, sizeof(double), 1, file);
-    self->time = t_start;
-    double currpop = allele_frequency[curr_step][0] * pop_size;
-    curr_step--;
+    t_start = self->time;
+    t_current = t_start;
+    t_of_next_ev = 0.0;
+    t_end = t_of_forward_ev[0];
+    for (size_t i = 0; i < num_steps; i++) {//move this step to file IO
+        t_of_forward_ev[i] = t_start + t_end - t_of_forward_ev[i] ;
+    }
     
-    while (msp_get_num_ancestors(self) > 0 && curr_step > 0) {
-        events++;
+    while (msp_get_num_ancestors(self) > 0 && curr_step < num_steps && self->time < (t_start + t_end)) {
         /* Set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
             label = (label_id_t) j;
             recomb_mass = self->recomb_mass_index == NULL
                               ? 0
                               : fenwick_get_total(&self->recomb_mass_index[label]);
-            sweep_pop_sizes[j] = avl_count(&self->populations[0].ancestors[label]);
+            ancestral_bg_pop_size[j] = avl_count(&self->populations[0].ancestors[label]);
             /* We can get small negative rates by numerical jitter which causes
              * problems in later calculations and leads to assertion trips.
              * See https://github.com/tskit-dev/msprime/issues/1966
              */
             rec_rates[j] = TSK_MAX(0, recomb_mass);
         }
+
+        p_coal_mut = 0.0;
+        if (ancestral_bg_pop_size[1] > 1 && allele_frequency_mut != 0) {
+            p_coal_mut = ((ancestral_bg_pop_size[1] * (ancestral_bg_pop_size[1] - 1.0)) * 0.5) / allele_frequency_mut;
+        }
+        p_coal_wild = 0.0;
+        if (ancestral_bg_pop_size[0] > 1 && allele_frequency_mut != 1.0) {
+            p_coal_wild = ((ancestral_bg_pop_size[0] * (ancestral_bg_pop_size[0] - 1.0)) * 0.5) / (1.0 - allele_frequency_mut);
+        }
+        p_rec_wild = rec_rates[0];
+        p_rec_mut = rec_rates[1];
+        p_any_ev = p_coal_wild + p_coal_mut + p_rec_wild + p_rec_mut;
+
+        t_current = self->time;
+        t_of_next_ev = gsl_ran_exponential(self->rng, 1 / p_any_ev);
         
+        t_of_next_forward_ev = t_of_forward_ev[curr_step];
+        //tot_pop = (int) get_population_size(&self->populations[0], self->time);
+        //add check
 
-        
-        /* convert time scale */
-        pop_size = get_population_size(&self->populations[0], self->time);
-        /* printf("event time: %g\n", self->time); */
-        
-        while (true) {
+        if (t_current + t_of_next_ev >= t_of_next_forward_ev) {
 
-            double next;
-            char evtype;
-            
-            fread(&evtype, sizeof(double), 4, file);
-            fread(&next, sizeof(double), 1, file);
+            self->time = t_of_next_forward_ev;
+            curr_ev_type = ev_type[curr_step];
 
-            pop_size = get_population_size(&self->populations[0], self->time);
-
-            size_t ancestors = msp_get_num_ancestors(self);
-            double coal = (double) ancestors * (double) (ancestors - 1);
-            if (evtype == 'w') {
-                currpop--;
-                allele_frequency[curr_step][0] = currpop / pop_size;
-                coal = coal / (currpop * (currpop - 1));
-                coal = 1 - coal;
+            if (curr_ev_type == 0) { //mutant replaced with wildtype, mutant coalascence
+                p_forward_ev = (float) ancestral_bg_pop_size[1] * (ancestral_bg_pop_size[1] - 1.0) / ((mut_pop) * (mut_pop - 1.0));
                 tmp_rand = gsl_rng_uniform(self->rng);
-                if (tmp_rand <= coal) {
-                    ret = self->common_ancestor_event(self, 1, 1);
+                if (tmp_rand <= p_forward_ev) {
+                    ret = self->common_ancestor_event(self, 0, 1);
                 }
-            }
-            else {
-                currpop++;
-                allele_frequency[curr_step][0] = currpop / pop_size;
-                coal = coal / (currpop * (currpop - 1));
+                mut_pop--;
+                allele_frequency_mut = 1.0 * mut_pop / tot_pop;
+                curr_step++;
+            } else if (curr_ev_type == 1) { //wildtype replaced with mutant, wt coalescence
+                p_forward_ev = (float) ancestral_bg_pop_size[0] * (ancestral_bg_pop_size[0] - 1.0) / ((tot_pop - mut_pop) * ((tot_pop - mut_pop) - 1.0));
                 tmp_rand = gsl_rng_uniform(self->rng);
-                if (tmp_rand <= coal) {
-                    ret = self->common_ancestor_event(self, 1, 1);
-                }
-            }
-
-            //Case: Allele freq is 1, coalease to one mutant lineage.
-            //Hard coded to interact with deme 0 until we generalize.
-            if (allele_frequency[curr_step][0] == 1 / pop_size) {
-                while (sweep_pop_sizes[1] > 1) {
-                    ret = self->common_ancestor_event(self, 1, 1);
-                    sweep_pop_sizes[1] = avl_count(&self->populations[0].ancestors[1]);
-                }
-                break;
-            }
-
-            //Case: Allele freq is N-1, coalease to one wild-type lineage.
-            //Hard coded to interact with deme 0 until we generalize.
-            if (allele_frequency[curr_step][0] == (pop_size - 1) / pop_size) {
-                while (sweep_pop_sizes[0] > 1) {
+                if (tmp_rand <= p_forward_ev) {
                     ret = self->common_ancestor_event(self, 0, 0);
-                    sweep_pop_sizes[0] = avl_count(&self->populations[0].ancestors[0]);
                 }
-                break;
+                mut_pop++;
+                allele_frequency_mut = 1.0 * mut_pop / tot_pop;
+                curr_step++;
             }
-
-            p_coal_B = 0;
-            if (avl_count(&self->populations[0].ancestors[1]) > 1) {
-                p_coal_B = ((sweep_pop_sizes[1] * (sweep_pop_sizes[1] - 1)) * 0.5)
-                           / allele_frequency[curr_step][0];
-                p_coal_B /= (pop_size * self->ploidy);
-            }
-            p_coal_b = 0;
-            if (avl_count(&self->populations[0].ancestors[0]) > 1) {
-                p_coal_b = ((sweep_pop_sizes[0] * (sweep_pop_sizes[0] - 1)) * 0.5)
-                           / (1.0 - allele_frequency[curr_step][0]);
-                p_coal_b /= (pop_size * self->ploidy);
-            }
-            p_rec_b = rec_rates[0];
-            p_rec_B = rec_rates[1];
-            sweep_pop_tot_rate = p_coal_b + p_coal_B + p_rec_b + p_rec_B;
-
+        }
+        else {
+            self->time += t_of_next_ev;
             tmp_rand = gsl_rng_uniform(self->rng);
-
-            t_current = self->time;
-            t_next_event = gsl_ran_exponential(self->rng, 1 / sweep_pop_tot_rate);
-            e_sum = p_coal_b;
-
-            if (t_current + t_next_event >= next) {
-                self->time += next;
-                break;
+            if (tmp_rand < p_coal_wild / p_any_ev) {
+                ret = self->common_ancestor_event(self, 0, 0);
+            } else if (tmp_rand < (p_coal_wild + p_coal_mut) / p_any_ev) {
+                ret = self->common_ancestor_event(self, 0, 1);
+            } else if (tmp_rand < (p_coal_wild + p_coal_mut + p_rec_wild) / p_any_ev) {
+                ret = msp_sweep_recombination_event(self, 0, sweep_locus, (1.0 - allele_frequency_mut));
             } else {
-                if (tmp_rand < e_sum / sweep_pop_tot_rate) {
-                    /* coalescent in b background */
-                    //SPECIAL CASE: We get here and there's no WT lineage
-                    ret = self->common_ancestor_event(self, 0, 0);
-                } else {
-                    e_sum += p_coal_B;
-                    if (tmp_rand < e_sum / sweep_pop_tot_rate) {
-                        /* coalescent in B background */
-                        ret = self->common_ancestor_event(self, 0, 1);
-                    } else {
-                        e_sum += p_rec_b;
-                        if (tmp_rand < e_sum / sweep_pop_tot_rate) {
-                            /* recomb in b background */
-                            ret = msp_sweep_recombination_event(self, 0, sweep_locus,
-                                (1.0 - allele_frequency[0][curr_step]));
-                        } else {
-                            /* recomb in B background */
-                            ret = msp_sweep_recombination_event(
-                                self, 1, sweep_locus, allele_frequency[0][curr_step]);
-                        }
-                    }
-                }
+                ret = msp_sweep_recombination_event(self, 1, sweep_locus, allele_frequency_mut);
             }
         }
-        fclose(file);
-        curr_step++;
-        if (ret != 0) {
-            goto out;
-        }
+
+    if (ret != 0) {
+        goto out;
+    }
         /* msp_print_state(self, stdout); */
     }
 
@@ -6072,11 +6033,11 @@ msp_run_sweep(msp_t *self)
     }
     ret = MSP_EXIT_MODEL_COMPLETE;
 out:
-    free(time);
-    for (size_t i = 0; i < demes; i++) {
-        free(allele_frequency[i]);
-    }
-    free(allele_frequency);
+    free(t_of_forward_ev);
+    free(ev_type);
+    free(start_deme);
+    free(end_deme);
+
     return ret;
 }
 
