@@ -15,6 +15,7 @@
 **
 ** You should have received a copy of the GNU General Public License
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
+** test
 */
 
 #include "testlib.h"
