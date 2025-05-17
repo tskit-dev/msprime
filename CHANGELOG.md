@@ -14,6 +14,10 @@
 
 - Add wheels on Windows ({pr}`2414`, {issue}`2200`,{user}`benjeffery`)
 
+**New features**
+
+- Demography objects can now be created from provenance entries ({pr}`{2369}, {user}`hyanwong`)
+
 **Breaking changes**:
 
 - The `.asdict()` methods for Demography, Population, and Event classes in the
