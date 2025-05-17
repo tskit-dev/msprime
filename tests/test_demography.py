@@ -19,6 +19,7 @@
 """
 Test cases for demographic events in msprime.
 """
+import importlib
 import io
 import itertools
 import json
@@ -4292,6 +4293,41 @@ class TestDemographyObject:
                 [msprime.Population(10, name="A"), msprime.Population(11, name="A")]
             )
 
+    def test_init_with_pops(self):
+        pop1 = msprime.Population(10)
+        pop2 = msprime.Population(10)
+        demography = msprime.Demography([pop1, pop2])
+        assert len(demography.populations) == 2
+        assert demography.populations[0].id == 0
+        assert demography.populations[1].id == 1
+
+    def test_init_with_matrix(self):
+        pop1 = msprime.Population(10)
+        pop2 = msprime.Population(10)
+        # Test passing in as a list of lists, not a numpy array
+        demography = msprime.Demography([pop1, pop2], migration_matrix=[[1, 1], [1, 1]])
+        assert demography.migration_matrix.shape == (2, 2)
+        assert np.all(demography.migration_matrix == 1)
+
+    def test_init_with_bad_matrix(self):
+        pop1 = msprime.Population(10)
+        pop2 = msprime.Population(10)
+        with pytest.raises(ValueError, match="must be square"):
+            msprime.Demography([pop1, pop2], migration_matrix=[[1, 1]])
+
+    def test_init_with_events(self):
+        pop = msprime.Population(10)
+        event = msprime.PopulationParametersChange(1, initial_size=1)
+        demography = msprime.Demography([pop], events=[event])
+        assert len(demography.events) == 1
+        assert np.all(demography.migration_matrix == 0)
+        assert demography.events[0].demography == demography
+
+    def test_bad_init_with_events(self):
+        pop = msprime.Population(10)
+        with pytest.raises(TypeError, match="instances of DemographicEvent"):
+            msprime.Demography([pop], events=[None])
+
     def test_duplicate_populations(self):
         pop = msprime.Population(10)
         with pytest.raises(ValueError, match="must be distinct"):
@@ -4561,6 +4597,45 @@ class TestDemographyObject:
         assert validated["A"].initially_active
         assert validated["B"].initially_active
         assert not validated["C"].initially_active
+
+    def test_population_asdict(self):
+        # Test that we can instantiate the components of a demography object
+        demography = msprime.Demography()
+        demography.add_population(
+            name="A",
+            initial_size=1234,
+            growth_rate=0.234,
+            description="ASDF",
+            extra_metadata={"a": "B", "c": 1234},
+            default_sampling_time=0.2,
+            initially_active=True,
+        )
+        popdict = demography.populations[0].asdict()
+        module, classname = popdict.pop("__class__").rsplit(".", 1)
+        popdict.pop("id", None)  # can't create a population with ID set
+        cls = getattr(importlib.import_module(module), classname)
+        obj = cls(**popdict)
+        assert isinstance(obj, msprime.demography.Population)
+        assert obj.name == "A"
+        assert obj.initial_size == 1234
+
+    def test_event_asdict(self):
+        demography = msprime.Demography(
+            [msprime.Population(1234), msprime.Population(4321)],
+            events=[
+                msprime.PopulationParametersChange(2, initial_size=5, population_id=1)
+            ],
+        )
+        assert len(demography.events) == 1
+        eventdict = demography.events[0].asdict()
+        assert "population_id" not in eventdict  # deprecated param
+        assert eventdict["population"] == 1
+        module, classname = eventdict.pop("__class__").rsplit(".", 1)
+        cls = getattr(importlib.import_module(module), classname)
+        obj = cls(**eventdict)
+        assert isinstance(obj, msprime.demography.PopulationParametersChange)
+        assert obj.time == 2
+        assert obj.initial_size == 5
 
 
 class TestDemographyCopy:
