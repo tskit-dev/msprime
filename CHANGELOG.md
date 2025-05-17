@@ -1,5 +1,15 @@
 # Changelog
 
+
+## [1.3.5] - 2025-XX-XX
+
+**Breaking changes**:
+
+- The `.asdict()` methods for Demography, Population, and Event classes in the
+  demography submodule now return a `__class__` key. This is also stored in their
+  provenance entries, to help recreate demography objects from provenance.
+  ({pr}`{2368}, {user}`hyanwong`)
+
 ## [1.3.4] - 2025-05-01
 
 **Bug fixes**:

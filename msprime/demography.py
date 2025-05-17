@@ -223,7 +223,9 @@ class Population:
     """
 
     def asdict(self):
-        return dataclasses.asdict(self)
+        d = dataclasses.asdict(self)
+        d["__class__"] = f"{self.__module__}.{self.__class__.__name__}"
+        return d
 
     def validate(self):
         if self.initial_size < 0:
@@ -269,6 +271,19 @@ class Demography(collections.abc.Mapping):
         if self.migration_matrix is None:
             N = self.num_populations
             self.migration_matrix = np.zeros((N, N))
+        else:
+            # convert to a numpy array if it's not already
+            if not isinstance(self.migration_matrix, np.ndarray):
+                self.migration_matrix = np.array(self.migration_matrix)
+        if self.migration_matrix.shape != (self.num_populations, self.num_populations):
+            raise ValueError(
+                "Migration matrix must be square and match the number of populations"
+            )
+        if self.events is not None:
+            for event in self.events:
+                if not isinstance(event, DemographicEvent):
+                    raise TypeError("Events must be instances of DemographicEvent")
+                event.demography = self
 
         # People might get cryptic errors from passing in copies of the same
         # population, so check for it.
@@ -1196,6 +1211,7 @@ class Demography(collections.abc.Mapping):
             "populations": [pop.asdict() for pop in self.populations],
             "events": [event.asdict() for event in self.events],
             "migration_matrix": self.migration_matrix.tolist(),
+            "__class__": f"{self.__module__}.{self.__class__.__name__}",
         }
 
     def debug(self):
@@ -2882,6 +2898,7 @@ class PopulationConfiguration:
             initial_size=self.initial_size,
             growth_rate=self.growth_rate,
             metadata=self.metadata,
+            __class__=f"{self.__module__}.{self.__class__.__name__}",
         )
 
 
@@ -2914,11 +2931,14 @@ class DemographicEvent:
         raise NotImplementedError()
 
     def asdict(self):
-        return {
+        deprecated = {"population_id", "matrix_index", "destination"}
+        d = {
             key: getattr(self, key)
             for key in inspect.signature(self.__init__).parameters.keys()
-            if hasattr(self, key)
+            if hasattr(self, key) and key not in deprecated
         }
+        d["__class__"] = f"{self.__module__}.{self.__class__.__name__}"
+        return d
 
     def _convert_id(self, population_ref):
         """
