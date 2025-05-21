@@ -5857,7 +5857,8 @@ msp_run_sweep(msp_t *self)
     double tmp_rand;
     double p_coal_wild, p_coal_mut, p_rec_wild, p_rec_mut, p_any_ev;
     double t_start, t_end, t_of_next_ev, t_current;
-    //size_t demes;
+    size_t demes;
+    double migration_rate;
     double p_forward_ev, t_of_next_forward_ev;
     int tot_pop, mut_pop;
     int curr_ev_type;
@@ -5884,6 +5885,8 @@ msp_run_sweep(msp_t *self)
     file = fopen(filename, "r");
     fread(&num_steps, sizeof(size_t), 1, file);
     fread(&tot_pop, sizeof(int), 1, file);
+    fread(&demes, sizeof(size_t), 1, file);
+    fread(&migration_rate, sizeof(double), 1, file);
 
     t_of_forward_ev = (double *) malloc(sizeof(double) * num_steps);
     ev_type = (int *) malloc(sizeof(int) * num_steps);
