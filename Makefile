@@ -5,7 +5,7 @@ SRC=msprime/_msprimemodule.c
 
 # The default target builds the C module in the simplest way.
 cmodule: ${SRC}
-	python3 setup.py build_ext --inplace
+	python setup.py build_ext --inplace
 
 # allchecks turns on as many checks as make sense when building
 # Python-C extensions.
