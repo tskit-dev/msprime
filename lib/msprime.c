@@ -4049,6 +4049,23 @@ msp_migration_event(msp_t *self, population_id_t source_pop, population_id_t des
 }
 
 static int MSP_WARN_UNUSED
+msp_migration_event_background(msp_t *self, population_id_t source_pop, population_id_t dest_pop, label_id_t label)
+{
+    int ret = 0;
+    uint32_t j;
+    avl_node_t *node;
+    avl_tree_t *source = &self->populations[source_pop].ancestors[label];
+    size_t index = ((size_t) source_pop) * self->num_populations + (size_t) dest_pop;
+
+    self->num_migration_events[index]++;
+    j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(source));
+    node = avl_at(source, j);
+    tsk_bug_assert(node != NULL);
+    ret = msp_move_individual(self, node, source, dest_pop, label);
+    return ret;
+}
+
+static int MSP_WARN_UNUSED
 msp_reset_memory_state(msp_t *self)
 {
     int ret = 0;
@@ -5724,7 +5741,7 @@ out:
  * label 0 to label 1 with the specified probability.
  */
 static int
-msp_sweep_initialise(msp_t *self, double switch_proba)
+msp_sweep_initialise(msp_t *self, double* switch_proba)
 {
     int ret = 0;
     uint32_t j;
@@ -5732,10 +5749,10 @@ msp_sweep_initialise(msp_t *self, double switch_proba)
     avl_tree_t *pop;
 
     /* We only support one population and two labels for now */
-    if (self->num_populations != 1 || self->num_labels != 2) {
-        ret = MSP_ERR_UNSUPPORTED_OPERATION;
-        goto out;
-    }
+    //if (self->num_populations != 1 || self->num_labels != 2) {
+    //    ret = MSP_ERR_UNSUPPORTED_OPERATION;
+    //    goto out;
+    //}
 
     /* Move ancestors to new labels. */
     for (j = 0; j < self->num_populations; j++) {
@@ -5744,7 +5761,7 @@ msp_sweep_initialise(msp_t *self, double switch_proba)
         node = pop->head;
         while (node != NULL) {
             next = node->next;
-            if (gsl_rng_uniform(self->rng) < switch_proba) {
+            if (gsl_rng_uniform(self->rng) < switch_proba[j]) {
                 ret = msp_move_individual(self, node, pop, (population_id_t) j, 1);
                 if (ret != 0) {
                     goto out;
@@ -5845,7 +5862,7 @@ msp_run_sweep(msp_t *self)
     simulation_model_t *model = &self->model;
     size_t curr_step;
     size_t num_steps;
-    double allele_frequency_mut;
+    double *allele_frequency_mut;
     double *t_of_forward_ev = NULL;
     double sweep_locus = model->params.sweep.position;
     size_t j = 0;
@@ -5857,11 +5874,13 @@ msp_run_sweep(msp_t *self)
     double tmp_rand;
     double p_coal_wild, p_coal_mut, p_rec_wild, p_rec_mut, p_any_ev;
     double t_start, t_end, t_of_next_ev, t_current;
-    size_t demes;
+    size_t num_demes;
     double migration_rate;
     double p_forward_ev, t_of_next_forward_ev;
-    int tot_pop, mut_pop;
-    int curr_ev_type;
+    int tot_pop;
+    int *mut_pop;
+    int *final_mut_pop;
+    int curr_ev_type, deme_index;
     int *ev_type;
     int *start_deme;
     int *end_deme;
@@ -5879,21 +5898,31 @@ msp_run_sweep(msp_t *self)
     p_coal_mut = 0.0;
     p_rec_wild = 0.0;
     p_rec_mut = 0.0;
-    //demes = 1;
 
     // Open the binary file for reading
     file = fopen(filename, "r");
     fread(&num_steps, sizeof(size_t), 1, file);
     fread(&tot_pop, sizeof(int), 1, file);
-    fread(&demes, sizeof(size_t), 1, file);
+    fread(&num_demes, sizeof(size_t), 1, file);
     fread(&migration_rate, sizeof(double), 1, file);
+
+    mut_pop = (int *) malloc(sizeof(int) * num_demes);
+    allele_frequency_mut = (double *) malloc(sizeof(double) * num_demes);
+    final_mut_pop = (int *) malloc(sizeof(int) * num_demes);
+
+    for (size_t i = 0; i < num_demes; i++) {
+        fread(&final_mut_pop[i], sizeof(int), 1, file);
+    }
+
+    for (size_t i = 0; i < num_demes; i++) {
+        fread(&mut_pop[i], sizeof(int), 1, file);
+        allele_frequency_mut[i] = 1.0 * final_mut_pop[i] / tot_pop;
+    }
 
     t_of_forward_ev = (double *) malloc(sizeof(double) * num_steps);
     ev_type = (int *) malloc(sizeof(int) * num_steps);
     start_deme = (int *) malloc(sizeof(int) * num_steps);
     end_deme = (int *) malloc(sizeof(int) * num_steps);
-
-
     // Read the data from the forward simulation into the arrays
     for (size_t i = 1; i <= num_steps; i++) {
         fread(&t_of_forward_ev[num_steps - i], sizeof(double), 1, file);
@@ -5913,8 +5942,6 @@ msp_run_sweep(msp_t *self)
     fclose(file);
 
     curr_step = 0;
-    mut_pop = tot_pop;
-    allele_frequency_mut = 1.0 * mut_pop / tot_pop;
 
     ret = msp_sweep_initialise(self, allele_frequency_mut);
     if (ret != 0) {
@@ -5970,26 +5997,50 @@ msp_run_sweep(msp_t *self)
             self->time = t_of_next_forward_ev;
             curr_ev_type = ev_type[curr_step];
 
-            if (curr_ev_type == 0) { //mutant replaced with wildtype, mutant coalascence
-                p_forward_ev = (float) ancestral_bg_pop_size[1] * (ancestral_bg_pop_size[1] - 1.0) / ((mut_pop) * (mut_pop - 1.0));
-                tmp_rand = gsl_rng_uniform(self->rng);
-                if (tmp_rand <= p_forward_ev) {
-                    ret = self->common_ancestor_event(self, 0, 1);
+            if (start_deme[curr_step] == end_deme[curr_step]) {
+
+                deme_index = start_deme[curr_step];
+
+                if (curr_ev_type == 0) { //mutant replaced with wildtype, mutant coalascence
+                    p_forward_ev = (float) ancestral_bg_pop_size[1] * (ancestral_bg_pop_size[1] - 1.0) / ((mut_pop[deme_index]) * (mut_pop[deme_index] - 1.0));
+                    tmp_rand = gsl_rng_uniform(self->rng);
+                    if (tmp_rand <= p_forward_ev) {
+                        ret = self->common_ancestor_event(self, deme_index, 1);
+                    }
+                    mut_pop[deme_index]--;
+                    allele_frequency_mut[deme_index] = 1.0 * mut_pop[deme_index] / tot_pop;
+                    curr_step++;
+
+                } else if (curr_ev_type == 1) { //wildtype replaced with mutant, wt coalescence
+                    p_forward_ev = (float) ancestral_bg_pop_size[0] * (ancestral_bg_pop_size[0] - 1.0) / ((tot_pop - mut_pop[deme_index]) * ((tot_pop - mut_pop[deme_index]) - 1.0));
+                    tmp_rand = gsl_rng_uniform(self->rng);
+                    if (tmp_rand <= p_forward_ev) {
+                        ret = self->common_ancestor_event(self, deme_index, 0);
+                    }
+                    mut_pop[deme_index]++;
+                    allele_frequency_mut[deme_index] = 1.0 * mut_pop[deme_index] / tot_pop;
+                    curr_step++;
                 }
-                mut_pop--;
-                allele_frequency_mut = 1.0 * mut_pop / tot_pop;
-                curr_step++;
-            } else if (curr_ev_type == 1) { //wildtype replaced with mutant, wt coalescence
-                p_forward_ev = (float) ancestral_bg_pop_size[0] * (ancestral_bg_pop_size[0] - 1.0) / ((tot_pop - mut_pop) * ((tot_pop - mut_pop) - 1.0));
-                tmp_rand = gsl_rng_uniform(self->rng);
-                if (tmp_rand <= p_forward_ev) {
-                    ret = self->common_ancestor_event(self, 0, 0);
+
+            } else {
+
+                if (curr_ev_type == 2) { //wildtype replaced by mutant, mutant migration + coalascence
+                    p_forward_ev = (float) ancestral_bg_pop_size[1] / mut_pop[start_deme[curr_step]];
+                    tmp_rand = gsl_rng_uniform(self->rng);
+                    if (tmp_rand <= p_forward_ev) {
+                        msp_migration_event_background(self, start_deme[curr_step], end_deme[curr_step], 1);
+                        p_coal = 
+                            ret = self->common_ancestor_event(self, end_deme[curr_step], 0);
+                    }
+                    mut_pop[start_deme[curr_step]]--;
+                    allele_frequency_mut[start_deme[curr_step]] = 1.0 * mut_pop[start_deme[curr_step]] / tot_pop;
+                    curr_step++;
                 }
-                mut_pop++;
-                allele_frequency_mut = 1.0 * mut_pop / tot_pop;
-                curr_step++;
+                
             }
+
         }
+
         else {
             self->time += t_of_next_ev;
             tmp_rand = gsl_rng_uniform(self->rng);
@@ -6040,6 +6091,9 @@ out:
     free(ev_type);
     free(start_deme);
     free(end_deme);
+    free(mut_pop);
+    free(final_mut_pop);
+    free(allele_frequency_mut);
 
     return ret;
 }
