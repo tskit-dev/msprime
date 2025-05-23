@@ -3,6 +3,10 @@
 
 ## [1.3.5] - 2025-XX-XX
 
+**New features**
+
+- Demography objects can now be created from provenance entries ({pr}`{2369}, {user}`hyanwong`)
+
 **Breaking changes**:
 
 - The `.asdict()` methods for Demography, Population, and Event classes in the
