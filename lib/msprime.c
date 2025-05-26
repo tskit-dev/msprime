@@ -5872,7 +5872,7 @@ msp_run_sweep(msp_t *self)
     double **rec_rates;
     double **ancestral_bg_pop_size;
     double tmp_rand;
-    double *p_coal_wild, *p_coal_mut, *p_rec_wild, *p_rec_mut;
+    double *p_coal_wild, *p_coal_mut, *p_mig_wild_right, *p_mig_mut_right, *p_mig_wild_left, *p_mig_mut_left, *p_rec_wild, *p_rec_mut;
     double p_any_ev, p_cum_ev;
     double t_start, t_end, t_of_next_ev, t_current;
     size_t num_demes;
@@ -5882,13 +5882,12 @@ msp_run_sweep(msp_t *self)
     int *mut_pop, *final_mut_pop;
     int curr_ev_type, deme_index;
     int *ev_type, *start_deme, *end_deme;
-    bool no_event;
+    bool no_event_yet;
     FILE *file;
 
     //TODO:
-    //1. Add no event migration
-    //2. See if msprime knows num_populations
-    //3. Verify if recomb mass can calculate rec rates for multiple population
+    //1. See if msprime knows num_populations
+    //2. Verify if recomb mass can calculate rec rates for multiple populations
 
     if (rate_map_get_total_mass(&self->gc_map) != 0.0) { //arrow?+
         /* Could be, we just haven't implemented it */
@@ -5901,6 +5900,10 @@ msp_run_sweep(msp_t *self)
     p_cum_ev = 0.0;
     p_coal_wild = (double *) malloc(sizeof(double) * num_demes);
     p_coal_mut = (double *) malloc(sizeof(double) * num_demes);
+    p_mig_wild_right = (double *) malloc(sizeof(double) * (num_demes - 1));
+    p_mig_mut_right = (double *) malloc(sizeof(double) * (num_demes - 1));
+    p_mig_wild_left = (double *) malloc(sizeof(double) * (num_demes - 1));
+    p_mig_mut_left = (double *) malloc(sizeof(double) * (num_demes - 1));
     p_rec_wild = (double *) malloc(sizeof(double) * num_demes);
     p_rec_mut = (double *) malloc(sizeof(double) * num_demes);
 
@@ -5921,7 +5924,7 @@ msp_run_sweep(msp_t *self)
 
     for (size_t i = 0; i < num_demes; i++) {
         fread(&mut_pop[i], sizeof(int), 1, file);
-        allele_frequency_mut[i] = 1.0 * final_mut_pop[i] / tot_pop;
+        allele_frequency_mut[i] = 1.0 * mut_pop[i] / tot_pop;
     }
 
     t_of_forward_ev = (double *) malloc(sizeof(double) * num_steps);
@@ -5952,8 +5955,6 @@ msp_run_sweep(msp_t *self)
     if (ret != 0) {
         goto out;
     }
-
-    //allele_frequency[curr_step][0] = init;//What do dis do?
 
     t_start = self->time;
     t_current = t_start;
@@ -5991,15 +5992,23 @@ msp_run_sweep(msp_t *self)
         }
 
         for (size_t i = 0; i < num_demes; i++) {
-            if (ancestral_bg_pop_size[0] > 1 && allele_frequency_mut[i] != 1) {
+            if (ancestral_bg_pop_size[0] > 0 && allele_frequency_mut[i] != 1) {
                 p_coal_wild[i] = ((ancestral_bg_pop_size[i][0] * (ancestral_bg_pop_size[i][0] - 1.0)) * 0.5) / (1.0 - allele_frequency_mut[i]);
             } else {
                 p_coal_wild[i] = 0;
             }
-            if (ancestral_bg_pop_size[1] > 1 && allele_frequency_mut[i] != 0) {
+            if (ancestral_bg_pop_size[1] > 0 && allele_frequency_mut[i] != 0) {
                 p_coal_mut[i] = ((ancestral_bg_pop_size[i][1] * (ancestral_bg_pop_size[i][1] - 1.0)) * 0.5) / allele_frequency_mut[i];
             } else {
                 p_coal_mut[i] = 0;
+            }
+            if (i > 0) {
+                p_mig_wild_left[i-1] = migration_rate * ancestral_bg_pop_size[i][0] * (1.0 - allele_frequency_mut[i-1]);
+                p_mig_mut_left[i-1] = migration_rate * ancestral_bg_pop_size[i][1] * allele_frequency_mut[i-1];
+            }
+            if (i < num_demes) {
+                p_mig_wild_right[i] = migration_rate * ancestral_bg_pop_size[i][0] * (1.0 - allele_frequency_mut[i+1]);
+                p_mig_mut_right[i] = migration_rate * ancestral_bg_pop_size[i][1] * allele_frequency_mut[i+1];
             }
             p_rec_wild[i] = rec_rates[i][0];
             p_rec_mut[i] = rec_rates[i][1];
@@ -6012,6 +6021,22 @@ msp_run_sweep(msp_t *self)
 
         for (size_t i = 0; i < num_demes; i++) {
             p_any_ev += p_coal_mut[i];
+        }
+
+        for (size_t i = 0; i < (num_demes-1); i++) {
+            p_any_ev += p_mig_wild_left[i];
+        }
+
+        for (size_t i = 0; i < (num_demes-1); i++) {
+            p_any_ev += p_mig_mut_left[i];
+        }
+
+        for (size_t i = 0; i < (num_demes-1); i++) {
+            p_any_ev += p_mig_wild_right[i];
+        }
+
+        for (size_t i = 0; i < (num_demes-1); i++) {
+            p_any_ev += p_mig_mut_right[i];
         }
 
         for (size_t i = 0; i < num_demes; i++) {
@@ -6097,42 +6122,82 @@ msp_run_sweep(msp_t *self)
         } else {
             self->time += t_of_next_ev;
             p_cum_ev = 0.0;
-            no_event = true;
+            no_event_yet = true;
             tmp_rand = gsl_rng_uniform(self->rng);
             for (size_t i = 0; i < num_demes; i++) {
                 p_cum_ev += p_coal_wild[i];
                 if (tmp_rand < p_cum_ev / p_any_ev) {
                     ret = self->common_ancestor_event(self, i, 0);
-                    no_event = false;
+                    no_event_yet = false;
                     break;
                 }
             }
-            if (no_event){
+            if (no_event_yet) {
                 for (size_t i = 0; i < num_demes; i++) {
                     p_cum_ev += p_coal_mut[i];
                     if (tmp_rand < p_cum_ev / p_any_ev) {
                         ret = self->common_ancestor_event(self, i, 1);
-                        no_event = false;
+                        no_event_yet = false;
                         break;
                     }
                 }
             }
-            if (no_event){
+            if (no_event_yet) {
+                for (size_t i = 0; i < (num_demes-1); i++) {
+                    p_cum_ev += p_mig_wild_left[i];
+                    if (tmp_rand < p_cum_ev / p_any_ev) {
+                        ret = msp_migration_event_in_background(self, i+1, i, 0);
+                        no_event_yet = false;
+                        break;
+                    }
+                }
+            }
+            if (no_event_yet) {
+                for (size_t i = 0; i < (num_demes-1); i++) {
+                    p_cum_ev += p_mig_mut_left[i];
+                    if (tmp_rand < p_cum_ev / p_any_ev) {
+                        ret = msp_migration_event_in_background(self, i+1, i, 1);
+                        no_event_yet = false;
+                        break;
+                    }
+                }
+            }
+            if (no_event_yet) {
+                for (size_t i = 0; i < (num_demes-1); i++) {
+                    p_cum_ev += p_mig_wild_right[i];
+                    if (tmp_rand < p_cum_ev / p_any_ev) {
+                        ret = msp_migration_event_in_background(self, i, i+1, 0);
+                        no_event_yet = false;
+                        break;
+                    }
+                }
+            }
+            if (no_event_yet) {
+                for (size_t i = 0; i < (num_demes-1); i++) {
+                    p_cum_ev += p_mig_mut_right[i];
+                    if (tmp_rand < p_cum_ev / p_any_ev) {
+                        ret = msp_migration_event_in_background(self, i, i+1, 0);
+                        no_event_yet = false;
+                        break;
+                    }
+                }
+            }
+            if (no_event_yet) {
                 for (size_t i = 0; i < num_demes; i++) {
                     p_cum_ev += p_rec_wild[i];
                     if (tmp_rand < p_cum_ev / p_any_ev){
-                        ret = msp_sweep_recombination_event(self, i, sweep_locus, (1.0 - allele_frequency_mut[0]));
-                        no_event = false;
+                        ret = msp_sweep_recombination_event(self, i, sweep_locus, (1.0 - allele_frequency_mut[i]));
+                        no_event_yet = false;
                         break;
                     }
                 }
             }
-            if (no_event){
+            if (no_event_yet) {
                 for (size_t i = 0; i < num_demes; i++) {
                     p_cum_ev += p_rec_mut[i];
                     if (tmp_rand < p_cum_ev / p_any_ev){
-                        ret = msp_sweep_recombination_event(self, i, sweep_locus, allele_frequency_mut[0]);
-                        no_event = false;
+                        ret = msp_sweep_recombination_event(self, i, sweep_locus, allele_frequency_mut[i]);
+                        no_event_yet = false;
                         break;
                     }
                 }
