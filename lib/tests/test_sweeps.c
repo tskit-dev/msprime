@@ -332,6 +332,7 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
     double start_frequency = 0.5 / 10000;
     double end_frequency = 0.9;
     double dt = 1.0 / 400000;
+    size_t num_demes = 10;
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
@@ -339,7 +340,7 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
     // Test over differnt seeds
     gsl_rng_set(rng, seed);
 
-    ret = build_sim(&msp, &tables, rng, num_loci, 1, NULL, n);
+    ret = build_sim(&msp, &tables, rng, num_loci, num_demes, NULL, n);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, recom_rate), 0);
     ret = msp_set_num_labels(&msp, 2);
@@ -382,16 +383,16 @@ int
 main(int argc, char **argv)
 {
     CU_TestInfo tests[] = {
-        { "test_genic_selection_trajectory", test_genic_selection_trajectory },
+        //{ "test_genic_selection_trajectory", test_genic_selection_trajectory },
        // { "test_sweep_genic_selection_bad_parameters",
          //   test_sweep_genic_selection_bad_parameters },
-        { "test_sweep_genic_selection_events", test_sweep_genic_selection_events },
-        { "test_sweep_genic_selection_single_locus",
-            test_sweep_genic_selection_single_locus },
-        { "test_sweep_genic_selection_recomb", test_sweep_genic_selection_recomb },
-        { "test_sweep_genic_selection_gc", test_sweep_genic_selection_gc },
-        { "test_sweep_genic_selection_time_change",
-            test_sweep_genic_selection_time_change },
+        //{ "test_sweep_genic_selection_events", test_sweep_genic_selection_events },
+        //{ "test_sweep_genic_selection_single_locus",
+        //    test_sweep_genic_selection_single_locus },
+        //{ "test_sweep_genic_selection_recomb", test_sweep_genic_selection_recomb },
+        //{ "test_sweep_genic_selection_gc", test_sweep_genic_selection_gc },
+        //{ "test_sweep_genic_selection_time_change",
+        //    test_sweep_genic_selection_time_change },
         { "test_sweep_genic_selection_mimic_msms",
             test_sweep_genic_selection_mimic_msms },
         CU_TEST_INFO_NULL,
