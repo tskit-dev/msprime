@@ -5886,8 +5886,8 @@ msp_run_sweep(msp_t *self)
     FILE *file;
 
     //TODO:
-    //1. See if msprime knows num_populations
-    //2. Verify if recomb mass can calculate rec rates for multiple populations
+    //1. Find a way to calclate correct recomb rates
+    //2. Find and fix memory leak (?)
 
     if (rate_map_get_total_mass(&self->gc_map) != 0.0) { //arrow?+
         /* Could be, we just haven't implemented it */
@@ -6175,7 +6175,7 @@ msp_run_sweep(msp_t *self)
                 for (int i = 0; i < (num_demes-1); i++) {
                     p_cum_ev += p_mig_mut_right[i];
                     if (tmp_rand < p_cum_ev / p_any_ev) {
-                        ret = msp_migration_event_in_background(self, i, i+1, 0);
+                        ret = msp_migration_event_in_background(self, i, i+1, 1);
                         no_event_yet = false;
                         break;
                     }
