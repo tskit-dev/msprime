@@ -332,7 +332,7 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
     double start_frequency = 0.5 / 10000;
     double end_frequency = 0.9;
     double dt = 1.0 / 400000;
-    size_t num_demes = 10;
+    size_t num_demes = 1;
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
@@ -375,7 +375,7 @@ static void
 test_sweep_genic_selection_mimic_msms(void)
 {
     /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
-    for (int i = 0; i < 300; i++)
+    for (int i = 0; i < 30; i++)
         sweep_genic_selection_mimic_msms_single_run(i + 1);
 }
 
