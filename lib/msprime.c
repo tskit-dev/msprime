@@ -2389,7 +2389,7 @@ msp_store_edge(msp_t *self, double left, double right, tsk_id_t parent, tsk_id_t
         }
         self->buffered_edges = edge;
     }
-    if (node_time[child] >= node_time[parent]) {
+    if (node_time[child] > node_time[parent]) {
         ret = MSP_ERR_TIME_TRAVEL;
         goto out;
     }
