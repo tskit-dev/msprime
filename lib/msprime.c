@@ -5904,7 +5904,7 @@ msp_run_sweep(msp_t *self)
     double p_forward_ev, t_of_next_forward_ev;
     int tot_pop;
     int *mut_pop, *final_mut_pop;
-    int curr_ev_type, deme_index;
+    int curr_ev_type, start_deme_index;
     int *ev_type, *start_deme, *end_deme;
     bool no_event_yet;
     FILE *file;
@@ -6066,39 +6066,38 @@ msp_run_sweep(msp_t *self)
 
             self->time = t_of_next_forward_ev;
             curr_ev_type = ev_type[curr_step];
+            start_deme_index = start_deme[curr_step];
 
-            if (start_deme[curr_step] == end_deme[curr_step]) {
-
-                deme_index = start_deme[curr_step];
+            if (start_deme_index == end_deme[curr_step]) {
 
                 if (curr_ev_type == 0) { //mutant replaced with wildtype, mutant coalascence
-                    p_forward_ev = (float) ancestral_bg_pop_size[deme_index][1] * (ancestral_bg_pop_size[deme_index][1] - 1.0) / ((mut_pop[deme_index]) * (mut_pop[deme_index] - 1.0));
+                    p_forward_ev = (float) ancestral_bg_pop_size[start_deme_index][1] * (ancestral_bg_pop_size[start_deme_index][1] - 1.0) / ((mut_pop[start_deme_index]) * (mut_pop[start_deme_index] - 1.0));
                     tmp_rand = gsl_rng_uniform(self->rng);
                     if (tmp_rand <= p_forward_ev) {
-                        ret = self->common_ancestor_event(self, deme_index, 1);
+                        ret = self->common_ancestor_event(self, start_deme_index, 1);
                     }
-                    mut_pop[deme_index]--;
-                    allele_frequency_mut[deme_index] = 1.0 * mut_pop[deme_index] / tot_pop;
+                    mut_pop[start_deme_index]--;
+                    allele_frequency_mut[start_deme_index] = 1.0 * mut_pop[start_deme_index] / tot_pop;
                     curr_step++;
 
                 } else if (curr_ev_type == 1) { //wildtype replaced with mutant, wt coalescence
-                    p_forward_ev = (float) ancestral_bg_pop_size[deme_index][0] * (ancestral_bg_pop_size[deme_index][0] - 1.0) / ((tot_pop - mut_pop[deme_index]) * ((tot_pop - mut_pop[deme_index]) - 1.0));
+                    p_forward_ev = (float) ancestral_bg_pop_size[start_deme_index][0] * (ancestral_bg_pop_size[start_deme_index][0] - 1.0) / ((tot_pop - mut_pop[start_deme_index]) * ((tot_pop - mut_pop[start_deme_index]) - 1.0));
                     tmp_rand = gsl_rng_uniform(self->rng);
                     if (tmp_rand <= p_forward_ev) {
-                        ret = self->common_ancestor_event(self, deme_index, 0);
+                        ret = self->common_ancestor_event(self, start_deme_index, 0);
                     }
-                    mut_pop[deme_index]++;
-                    allele_frequency_mut[deme_index] = 1.0 * mut_pop[deme_index] / tot_pop;
+                    mut_pop[start_deme_index]++;
+                    allele_frequency_mut[start_deme_index] = 1.0 * mut_pop[start_deme_index] / tot_pop;
                     curr_step++;
                 }
 
             } else {
 
                 if (curr_ev_type == 2) { //wildtype replaced by mutant, mutant migration + coalascence
-                    p_forward_ev = 1.0 * ancestral_bg_pop_size[start_deme[curr_step]][1] / mut_pop[start_deme[curr_step]];
+                    p_forward_ev = 1.0 * ancestral_bg_pop_size[start_deme_index][1] / mut_pop[start_deme_index];
                     tmp_rand = gsl_rng_uniform(self->rng);
                     if (tmp_rand <= p_forward_ev) {
-                        ret = msp_migration_event_in_background(self, start_deme[curr_step], end_deme[curr_step], 1);
+                        ret = msp_migration_event_in_background(self, start_deme_index, end_deme[curr_step], 1);
                         p_forward_ev = 1.0 * ancestral_bg_pop_size[end_deme[curr_step]][1] / mut_pop[end_deme[curr_step]];
                         tmp_rand = gsl_rng_uniform(self->rng);
                         if (tmp_rand <= p_forward_ev) {
@@ -6110,17 +6109,17 @@ msp_run_sweep(msp_t *self)
                     curr_step++;
 
                 } else if (curr_ev_type == 3) { //mutant replaced by wildtype, wildtype migration + coalascence
-                    p_forward_ev = 1.0 * ancestral_bg_pop_size[start_deme[curr_step]][0] / (tot_pop - mut_pop[start_deme[curr_step]]);
+                    p_forward_ev = 1.0 * ancestral_bg_pop_size[start_deme_index][0] / (tot_pop - mut_pop[start_deme_index]);
                     tmp_rand = gsl_rng_uniform(self->rng);
                     if (tmp_rand <= p_forward_ev) {
-                        ret = msp_migration_event_in_background(self, start_deme[curr_step], end_deme[curr_step], 0);
+                        ret = msp_migration_event_in_background(self, start_deme_index, end_deme[curr_step], 0);
                         p_forward_ev = 1.0 * ancestral_bg_pop_size[end_deme[curr_step]][0] / (tot_pop - mut_pop[end_deme[curr_step]]);
                         tmp_rand = gsl_rng_uniform(self->rng);
                         if (tmp_rand <= p_forward_ev) {
                             ret = self->common_ancestor_event(self, end_deme[curr_step], 0);
                         }
                     }
-                    mut_pop[start_deme[curr_step]]--;
+                    mut_pop[start_deme[curr_step]]++;
                     allele_frequency_mut[start_deme[curr_step]] = 1.0 * mut_pop[start_deme[curr_step]] / tot_pop;
                     curr_step++;
                 }
