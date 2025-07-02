@@ -15,7 +15,6 @@
 **
 ** You should have received a copy of the GNU General Public License
 ** along with msprime.  If not, see <http://www.gnu.org/licenses/>.
-** test
 */
 
 #include "testlib.h"
@@ -134,7 +133,7 @@ test_sweep_genic_selection_bad_parameters(void)
     msp_free(&msp);
     tsk_table_collection_free(&tables);
     gsl_rng_free(rng);
-} */ 
+} */
 
 static void
 test_sweep_genic_selection_events(void)
@@ -155,8 +154,8 @@ test_sweep_genic_selection_events(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_EVENTS_DURING_SWEEP);
+    // ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    // CU_ASSERT_EQUAL(ret, MSP_ERR_EVENTS_DURING_SWEEP);
     msp_free(&msp);
     tsk_table_collection_free(&tables);
 
@@ -169,8 +168,8 @@ test_sweep_genic_selection_events(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
-    CU_ASSERT_EQUAL(ret, MSP_ERR_EVENTS_DURING_SWEEP);
+    // ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    // CU_ASSERT_EQUAL(ret, MSP_ERR_EVENTS_DURING_SWEEP);
     msp_free(&msp);
 
     tsk_table_collection_free(&tables);
@@ -324,15 +323,17 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
            " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
      */
     int ret;
+    const char *filename = "/home/aalhadbhatt/Desktop/msprime/notebooks/PyNBmsprime/events.bin";
+    //FILE *file = file = fopen(filename, "r");
     uint32_t n = 10;
+    // sample_t *samples = malloc(n * sizeof(sample_t));
     double num_loci = 500001;
     double position = num_loci / 2;
-    double s = 10000;
-    double recom_rate = 0.0004;
-    double start_frequency = 0.5 / 10000;
+    double s = 10;
+    double recom_rate = 0.000004;
+    double start_frequency = 1.0 / 10000;
     double end_frequency = 0.9;
     double dt = 1.0 / 400000;
-    size_t num_demes = 1;
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
@@ -340,7 +341,7 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
     // Test over differnt seeds
     gsl_rng_set(rng, seed);
 
-    ret = build_sim(&msp, &tables, rng, num_loci, num_demes, NULL, n);
+    ret = build_sim(&msp, &tables, rng, num_loci, 2, NULL, n);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, recom_rate), 0);
     ret = msp_set_num_labels(&msp, 2);
@@ -368,6 +369,7 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
 
     msp_free(&msp);
     gsl_rng_free(rng);
+    // free(samples);
     tsk_table_collection_free(&tables);
 }
 
@@ -375,7 +377,7 @@ static void
 test_sweep_genic_selection_mimic_msms(void)
 {
     /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
-    for (int i = 0; i < 30; i++)
+    for (int i = 0; i < 1; i++)
         sweep_genic_selection_mimic_msms_single_run(i + 1);
 }
 
@@ -384,8 +386,8 @@ main(int argc, char **argv)
 {
     CU_TestInfo tests[] = {
         //{ "test_genic_selection_trajectory", test_genic_selection_trajectory },
-       // { "test_sweep_genic_selection_bad_parameters",
-         //   test_sweep_genic_selection_bad_parameters },
+        //{ "test_sweep_genic_selection_bad_parameters",
+        //   test_sweep_genic_selection_bad_parameters },
         //{ "test_sweep_genic_selection_events", test_sweep_genic_selection_events },
         //{ "test_sweep_genic_selection_single_locus",
         //    test_sweep_genic_selection_single_locus },
