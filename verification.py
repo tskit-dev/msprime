@@ -3823,16 +3823,20 @@ class HudsonAnalytical(Test):
         seq_length = 500
         # tests both Hudson as well as SMC K
         # by setting hull_offset to seq_length are essentially simulating Hudson
-        models = ["hudson", msprime.SmcKApproxCoalescent(hull_offset=seq_length)]
+        models = [
+            "hudson",
+            msprime.SmcKApproxCoalescent(hull_offset=seq_length),
+            msprime.SmcKApproxCoalescent(hull_offset=0)
+            ]
         predicted_prob = np.zeros([gc_length_rate_ratio.size, seq_length], dtype=float)
         empirical_prob_first = np.zeros(
-            [2, gc_length_rate_ratio.size, seq_length], dtype=float
+            [len(models), gc_length_rate_ratio.size, seq_length], dtype=float
         )
         empirical_prob_mid = np.zeros(
-            [2, gc_length_rate_ratio.size, seq_length], dtype=float
+            [len(models), gc_length_rate_ratio.size, seq_length], dtype=float
         )
         empirical_prob_last = np.zeros(
-            [2, gc_length_rate_ratio.size, seq_length], dtype=float
+            [len(models), gc_length_rate_ratio.size, seq_length], dtype=float
         )
 
         for k, l in enumerate(gc_length):
@@ -3876,7 +3880,8 @@ class HudsonAnalytical(Test):
         x = np.arange(500) + 1
         pyplot.plot(x, predicted_prob[0], "--", label="prediction")
         pyplot.plot(x, empirical_prob_first[0, 0], "-", label="simulation hudson")
-        pyplot.plot(x, empirical_prob_first[1, 0], ":", label="simulation smc-k")
+        pyplot.plot(x, empirical_prob_first[1, 0], ":", label="simulation smc-k (k=seq_len)")
+        pyplot.plot(x, empirical_prob_first[2, 0], ".", label="simulation smc-k (k=0)")
         pyplot.plot(x, predicted_prob[1], "--")
         pyplot.plot(x, empirical_prob_first[0, 1], "-")
         pyplot.plot(x, empirical_prob_first[1, 1], ":")
@@ -3892,6 +3897,7 @@ class HudsonAnalytical(Test):
         pyplot.plot(x, predicted_prob[0, ::-1], "--", label="prediction")
         pyplot.plot(x, empirical_prob_last[0, 0], "-", label="simulation hudson")
         pyplot.plot(x, empirical_prob_last[1, 0], ":", label="simulation smc-k")
+        pyplot.plot(x, empirical_prob_last[2, 0], ".", label="simulation smc-k (k=0)")
         pyplot.plot(x, predicted_prob[1, ::-1], "--")
         pyplot.plot(x, empirical_prob_last[0, 1], "-")
         pyplot.plot(x, empirical_prob_last[1, 1], ":")
@@ -3912,6 +3918,8 @@ class HudsonAnalytical(Test):
         )
         pyplot.plot(x, empirical_prob_mid[0, 0], "-", label="simulation hudson")
         pyplot.plot(x, empirical_prob_mid[1, 0], ":", label="simulation smc-k")
+        pyplot.plot(x, empirical_prob_mid[2, 0], ".", label="simulation smc-k (k=0)")
+
         pyplot.plot(
             x,
             np.concatenate((predicted_prob[1, 249::-1], predicted_prob[1, :250])),
@@ -3919,6 +3927,7 @@ class HudsonAnalytical(Test):
         )
         pyplot.plot(x, empirical_prob_mid[0, 1], "-")
         pyplot.plot(x, empirical_prob_mid[1, 1], ":")
+        pyplot.plot(x, empirical_prob_mid[2, 1], ".")
         pyplot.plot(
             x,
             np.concatenate((predicted_prob[2, 249::-1], predicted_prob[2, :250])),
@@ -3926,6 +3935,7 @@ class HudsonAnalytical(Test):
         )
         pyplot.plot(x, empirical_prob_mid[0, 2], "-")
         pyplot.plot(x, empirical_prob_mid[1, 2], ":")
+        pyplot.plot(x, empirical_prob_mid[2, 2], ".")
         pyplot.xlabel("chromosome positon")
         pyplot.ylabel("fraction of trees identical to middle position tree")
         pyplot.legend(loc="upper right")
@@ -3940,12 +3950,18 @@ class HudsonAnalytical(Test):
         pyplot.plot(
             x, empirical_prob_first[1, 0, range(10)], ":", label="simulation smc-k"
         )
+        pyplot.plot(
+            x, empirical_prob_first[2, 0, range(10)], ".", label="simulation smc-k (k=0)"
+        )
         pyplot.plot(x, predicted_prob[1, range(10)], "--")
         pyplot.plot(x, empirical_prob_first[0, 1, range(10)], "-")
         pyplot.plot(x, empirical_prob_first[1, 1, range(10)], ":")
+        pyplot.plot(x, empirical_prob_first[2, 1, range(10)], ".")
         pyplot.plot(x, predicted_prob[2, range(10)], "--")
         pyplot.plot(x, empirical_prob_first[0, 2, range(10)], "-")
         pyplot.plot(x, empirical_prob_first[1, 2, range(10)], ":")
+        pyplot.plot(x, empirical_prob_first[2, 2, range(10)], ".")
+
         pyplot.xlabel("chromosome positon")
         pyplot.ylabel("fraction of trees identical to first position tree")
         pyplot.legend(loc="upper right")
