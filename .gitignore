@@ -96,3 +96,5 @@ tmp__NOBACKUP__
 
 # vscode stuff
 .vscode
+git-submodules
+lib/subprojects
