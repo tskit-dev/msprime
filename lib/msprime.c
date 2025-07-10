@@ -5818,13 +5818,14 @@ msp_change_label(msp_t *self, segment_t *ind, label_id_t label)
     return ret;
 }
 
+/* Recombination event during a sweep within a specified background
+ */
 static int
-msp_sweep_recombination_event(
-    msp_t *self, label_id_t label, double sweep_locus, double *mutant_population_frequency)
+msp_sweep_recombination_event(msp_t *self, label_id_t label, double sweep_locus,
+    double *mutant_population_frequency)
 {
     int ret = 0;
     segment_t *lhs, *rhs;
-    //label_id_t new_label;
     double r;
 
     ret = msp_recombination_event(self, label, &lhs, &rhs);
@@ -5836,8 +5837,6 @@ msp_sweep_recombination_event(
     if (label == 0) {
         if (sweep_locus < rhs->left) {
             if (r < mutant_population_frequency[rhs->population]) {
-                /* move rhs to other population */
-                //new_label = (label + 1) % 2;
                 ret = msp_change_label(self, rhs, 1);
                 if (ret != 0) {
                     goto out;
@@ -5845,8 +5844,6 @@ msp_sweep_recombination_event(
             }
         } else {
             if (r < mutant_population_frequency[lhs->population]) {
-                /* move lhs to other population */
-                //new_label = (label + 1) % 2;
                 ret = msp_change_label(self, lhs, 1);
                 if (ret != 0) {
                     goto out;
@@ -5857,8 +5854,6 @@ msp_sweep_recombination_event(
     if (label == 1) {
         if (sweep_locus < rhs->left) {
             if (r < 1.0 - mutant_population_frequency[rhs->population]) {
-                /* move rhs to other population */
-                //new_label = (label + 1) % 2;
                 ret = msp_change_label(self, rhs, 0);
                 if (ret != 0) {
                     goto out;
@@ -5866,8 +5861,6 @@ msp_sweep_recombination_event(
             }
         } else {
             if (r < 1.0 - mutant_population_frequency[lhs->population]) {
-                /* move lhs to other population */
-                //new_label = (label + 1) % 2;
                 ret = msp_change_label(self, lhs, 0);
                 if (ret != 0) {
                     goto out;
@@ -5880,7 +5873,67 @@ out:
 }
 
 static int
-msp_run_sweep(msp_t *self)
+genic_selection_read_trajectory(FILE *file, size_t *num_steps_ret, int *num_demes_ret, int *tot_pop_ret, double *migration_rate_ret, 
+    int **final_mut_pop_ret, int **mut_pop_ret, double **allele_frequency_mut_ret, double **t_of_forward_ev_ret, int **ev_type_ret, int **start_deme_ret,
+        int **end_deme_ret)
+{
+    int ret = 0;
+    size_t num_steps;
+    int num_demes;
+    double *allele_frequency_mut = NULL;
+    double *t_of_forward_ev = NULL;
+    size_t j = 0;
+    int i = 0;
+    double migration_rate = 0.0;
+    int tot_pop = 0;
+    int *mut_pop = NULL, *final_mut_pop = NULL;
+    int *ev_type = NULL, *start_deme = NULL, *end_deme = NULL;
+
+    fread(&num_steps, sizeof(size_t), 1, file);
+    fread(&num_demes, sizeof(int), 1, file);
+    fread(&tot_pop, sizeof(int), 1, file);
+    fread(&migration_rate, sizeof(double), 1, file);
+
+    mut_pop = (int *) malloc(sizeof(*mut_pop) * (size_t) num_demes);
+    allele_frequency_mut = (double *) malloc(sizeof(*allele_frequency_mut) * (size_t) num_demes);
+    final_mut_pop = (int *) malloc(sizeof(*final_mut_pop) * (size_t) num_demes);
+
+    for (i = 0; i < num_demes; i++) {
+        fread(&final_mut_pop[i], sizeof(int), 1, file);
+    }
+
+    for (i = 0; i < num_demes; i++) {
+        fread(&mut_pop[i], sizeof(int), 1, file);
+        allele_frequency_mut[i] = 1.0 * mut_pop[i] / tot_pop;
+    }
+
+    t_of_forward_ev = (double *) malloc(sizeof(*t_of_forward_ev) * num_steps);
+    ev_type = (int *) malloc(sizeof(*ev_type) * num_steps);
+    start_deme = (int *) malloc(sizeof(*start_deme) * num_steps);
+    end_deme = (int *) malloc(sizeof(*end_deme) * num_steps);
+    for (j = 1; j <= num_steps; j++) {
+        fread(&t_of_forward_ev[num_steps - j], sizeof(double), 1, file);
+        fread(&ev_type[num_steps - j], sizeof(int), 1, file);
+        fread(&start_deme[num_steps - j], sizeof(int), 1, file);
+        fread(&end_deme[num_steps - j], sizeof(int), 1, file);
+    }
+
+    *num_demes_ret = num_demes;
+    *num_steps_ret = num_steps;
+    *tot_pop_ret = tot_pop;
+    *migration_rate_ret = migration_rate;
+    *final_mut_pop_ret = final_mut_pop;
+    *mut_pop_ret = mut_pop;
+    *allele_frequency_mut_ret = allele_frequency_mut;
+    *t_of_forward_ev_ret = t_of_forward_ev;
+    *ev_type_ret = ev_type;
+    *start_deme_ret = start_deme;
+    *end_deme_ret = end_deme;
+    return ret;
+}
+
+static int
+msp_run_sweep(msp_t *self, FILE *file)
 {
     int ret = 0;
     simulation_model_t *model = &self->model;
@@ -5893,12 +5946,12 @@ msp_run_sweep(msp_t *self)
     int i = 0;
     double recomb_mass = 0.0;
     label_id_t label;
-    const char *filename = "/home/aalhadbhatt/Desktop/msprime/notebooks/PyNBmsprime/events.bin";
     double rec_rates[] = { 0.0, 0.0 };
     double **ancestral_bg_pop_size = NULL;
     double tmp_rand = 0.0;
-    double *p_coal_wild = NULL, *p_coal_mut = NULL, *p_mig_wild_right = NULL, *p_mig_mut_right = NULL,
-        *p_mig_wild_left = NULL, *p_mig_mut_left = NULL, p_rec_wild = 0.0, p_rec_mut = 0.0;
+    double *p_coal_wild = NULL, *p_coal_mut = NULL, *p_mig_wild_right = NULL,
+           *p_mig_mut_right = NULL, *p_mig_wild_left = NULL, *p_mig_mut_left = NULL,
+           p_rec_wild = 0.0, p_rec_mut = 0.0;
     double p_any_ev = 0.0, p_cum_ev = 0.0;
     double t_start = 0.0, t_end = 0.0, t_of_next_ev = 0.0, t_current = 0.0;
     int num_demes = 0;
@@ -5909,9 +5962,7 @@ msp_run_sweep(msp_t *self)
     int curr_ev_type = 0, start_deme_index = 0;
     int *ev_type = NULL, *start_deme = NULL, *end_deme = NULL;
     bool no_event_yet = true;
-    FILE *file;
-
-    /* Keep the compiler happy by initialising all values*/
+    
 
     if (rate_map_get_total_mass(&self->gc_map) != 0.0) { // arrow?+
         /* Could be, we just haven't implemented it */
@@ -5919,12 +5970,7 @@ msp_run_sweep(msp_t *self)
         goto out;
     }
 
-    // Open the binary file for reading
-    file = fopen(filename, "r");
-    fread(&num_steps, sizeof(size_t), 1, file);
-    fread(&tot_pop, sizeof(int), 1, file);
-    fread(&num_demes, sizeof(int), 1, file);
-    fread(&migration_rate, sizeof(double), 1, file);
+    ret = genic_selection_read_trajectory(file, &num_steps, &num_demes, &tot_pop, &migration_rate, &final_mut_pop, &mut_pop, &allele_frequency_mut, &t_of_forward_ev, &ev_type, &start_deme, &end_deme);
 
     p_coal_wild = (double *) malloc(sizeof(double) * (size_t) num_demes);
     p_coal_mut = (double *) malloc(sizeof(double) * (size_t) num_demes);
@@ -5934,42 +5980,11 @@ msp_run_sweep(msp_t *self)
         p_mig_wild_left = (double *) malloc(sizeof(double) * (size_t)(num_demes - 1));
         p_mig_mut_left = (double *) malloc(sizeof(double) * (size_t)(num_demes - 1));
     }
-    
-    mut_pop = (int *) malloc(sizeof(int) * (size_t) num_demes);
-    allele_frequency_mut = (double *) malloc(sizeof(double) * (size_t) num_demes);
-    final_mut_pop = (int *) malloc(sizeof(int) * (size_t) num_demes);
 
+    ancestral_bg_pop_size = (double **) malloc(sizeof(double *) * (size_t) num_demes);
     for (i = 0; i < num_demes; i++) {
-        fread(&final_mut_pop[i], sizeof(int), 1, file);
+        ancestral_bg_pop_size[i] = (double *) malloc(sizeof(double) * 2);
     }
-
-    for (i = 0; i < num_demes; i++) {
-        fread(&mut_pop[i], sizeof(int), 1, file);
-        allele_frequency_mut[i] = 1.0 * mut_pop[i] / tot_pop;
-    }
-
-    t_of_forward_ev = (double *) malloc(sizeof(double) * num_steps);
-    ev_type = (int *) malloc(sizeof(int) * num_steps);
-    start_deme = (int *) malloc(sizeof(int) * num_steps);
-    end_deme = (int *) malloc(sizeof(int) * num_steps);
-    // Read the data from the forward simulation into the arrays
-    for (j = 1; j <= num_steps; j++) {
-        fread(&t_of_forward_ev[num_steps - j], sizeof(double), 1, file);
-        fread(&ev_type[num_steps - j], sizeof(int), 1, file);
-        fread(&start_deme[num_steps - j], sizeof(int), 1, file);
-        fread(&end_deme[num_steps - j], sizeof(int), 1, file);
-    }
-
-    // allele_frequency = (double **) malloc(sizeof(double *) * (long unsigned int)
-    // num_steps); time = (double *) malloc(sizeof(double) * num_steps); for (size_t i =
-    // 0; i < num_steps; i++) {
-    //    allele_frequency[i] = (double *) malloc(sizeof(double) * (long unsigned int)
-    //    demes);
-    //}
-    // allele_frequency = (double *) malloc(sizeof(double) * demes);
-
-    // Close the file
-    fclose(file);
 
     curr_step = 0;
 
@@ -5986,19 +6001,14 @@ msp_run_sweep(msp_t *self)
         t_of_forward_ev[j] = t_start + t_end - t_of_forward_ev[j];
     }
 
-    ancestral_bg_pop_size = (double **) malloc(sizeof(double *) * (size_t) num_demes);
-    for (i = 0; i < num_demes; i++) {
-        ancestral_bg_pop_size[i] = (double *) malloc(sizeof(double) * 2);
-    }
-
     while (msp_get_num_ancestors(self) > 1 && curr_step < num_steps
            && self->time < (t_start + t_end)) {
         /* Set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
             label = (label_id_t) j;
             recomb_mass = self->recomb_mass_index == NULL
-                                ? 0
-                                : fenwick_get_total(&self->recomb_mass_index[label]);
+                              ? 0
+                              : fenwick_get_total(&self->recomb_mass_index[label]);
             for (i = 0; i < num_demes; i++) {
                 ancestral_bg_pop_size[i][j]
                     = avl_count(&self->populations[i].ancestors[label]);
@@ -6031,21 +6041,21 @@ msp_run_sweep(msp_t *self)
             if (num_demes > 1) {
                 if (i > 0) {
                     p_mig_wild_left[i - 1] = migration_rate * ancestral_bg_pop_size[i][0]
-                                            * (1.0 - allele_frequency_mut[i - 1]);
+                                             * (1.0 - allele_frequency_mut[i - 1]);
                     p_mig_mut_left[i - 1] = migration_rate * ancestral_bg_pop_size[i][1]
                                             * allele_frequency_mut[i - 1];
                 }
                 if (i < num_demes - 1) {
                     p_mig_wild_right[i] = migration_rate * ancestral_bg_pop_size[i][0]
-                                        * (1.0 - allele_frequency_mut[i + 1]);
+                                          * (1.0 - allele_frequency_mut[i + 1]);
                     p_mig_mut_right[i] = migration_rate * ancestral_bg_pop_size[i][1]
-                                        * allele_frequency_mut[i + 1];
+                                         * allele_frequency_mut[i + 1];
                 }
             }
-            
-            p_rec_wild = rec_rates[0];
-            p_rec_mut = rec_rates[1];
         }
+
+        p_rec_wild = rec_rates[0];
+        p_rec_mut = rec_rates[1];
         p_any_ev = 0;
 
         for (i = 0; i < num_demes; i++) {
@@ -6197,7 +6207,7 @@ msp_run_sweep(msp_t *self)
                 }
             }
 
-            if (num_demes > 1){
+            if (num_demes > 1) {
                 if (no_event_yet) {
                     for (i = 0; i < (num_demes - 1); i++) {
                         p_cum_ev += p_mig_wild_left[i];
@@ -6289,32 +6299,27 @@ msp_run_sweep(msp_t *self)
         goto out;
     }
     ret = MSP_EXIT_MODEL_COMPLETE;
+
 out:
-    free(t_of_forward_ev);
-    free(ev_type);
-    free(start_deme);
-    free(end_deme);
-    free(mut_pop);
-    free(final_mut_pop);
-    free(allele_frequency_mut);
-    free(p_coal_mut);
-    free(p_coal_wild);
-    if (num_demes > 1){
-        free(p_mig_wild_left);
-        free(p_mig_mut_left);
-        free(p_mig_wild_right);
-        free(p_mig_mut_right);
+    msp_safe_free(p_coal_mut);
+    msp_safe_free(p_coal_wild);
+    if (num_demes > 1) {
+        msp_safe_free(p_mig_wild_left);
+        msp_safe_free(p_mig_mut_left);
+        msp_safe_free(p_mig_wild_right);
+        msp_safe_free(p_mig_mut_right);
     }
-    // free(p_rec_wild);
-    // free(p_rec_mut);
     for (i = 0; i < num_demes; i++) {
-        free(ancestral_bg_pop_size[i]);
+        msp_safe_free(ancestral_bg_pop_size[i]);
     }
-    free(ancestral_bg_pop_size);
-    // for (int i = 0; i < num_demes; i++){
-    //    free(rec_rates[i]);
-    //}
-    // free(rec_rates);
+    msp_safe_free(ancestral_bg_pop_size);
+    msp_safe_free(mut_pop);
+    msp_safe_free(allele_frequency_mut);
+    msp_safe_free(final_mut_pop);
+    msp_safe_free(t_of_forward_ev);
+    msp_safe_free(ev_type);
+    msp_safe_free(start_deme);
+    msp_safe_free(end_deme);
 
     return ret;
 }
@@ -6347,9 +6352,51 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = msp_run_pedigree(self, max_time, max_events);
     } else if (self->model.type == MSP_MODEL_SWEEP) {
         /* FIXME making sweep atomic for now as it's non-rentrant */
-        ret = msp_run_sweep(self);
+        //ret = msp_run_sweep(self);
     } else {
         ret = msp_run_coalescent(self, max_time, max_events);
+    }
+
+    if (ret < 0) {
+        goto out;
+    }
+    if (ret == MSP_EXIT_MAX_TIME) {
+        /* Set the time to the max_time specified. If the tables are finalised
+         * after this we will get unary edges on the end of each extant node
+         * to this point so that the simulation can be resumed accurately.
+         */
+        self->time = max_time;
+    }
+    err = msp_flush_edges(self);
+    if (err != 0) {
+        ret = err;
+        goto out;
+    }
+out:
+    return ret;
+}
+
+int MSP_WARN_UNUSED
+msp_run_reverse_only(msp_t *self, double max_time, FILE *file)
+{
+    int ret = 0;
+    int err;
+
+    if (self->state == MSP_STATE_INITIALISED) {
+        self->state = MSP_STATE_SIMULATING;
+    }
+    if (self->state != MSP_STATE_SIMULATING) {
+        ret = MSP_ERR_BAD_STATE;
+        goto out;
+    }
+
+    if (msp_is_completed(self)) {
+        /* If the simulation is completed, run() is a no-op for
+         * all models. */
+        ret = 0;
+    } else if (self->model.type == MSP_MODEL_SWEEP) {
+        /* FIXME making sweep atomic for now as it's non-rentrant */
+        ret = msp_run_sweep(self, file);
     }
 
     if (ret < 0) {
@@ -8729,6 +8776,30 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     trajectory->end_frequency = end_frequency;
     trajectory->s = s;
     trajectory->dt = dt;
+out:
+    return ret;
+}
+
+int
+msp_set_simulation_model_sweep_genic_selection_reverse_only(msp_t *self, double position)
+{
+    int ret = 0;
+    simulation_model_t *model = &self->model;
+    double L = self->sequence_length;
+
+    /* Check the inputs to make sure they make sense */
+    if (position < 0 || position >= L) {
+        ret = MSP_ERR_BAD_SWEEP_POSITION;
+        goto out;
+    }
+
+    ret = msp_set_simulation_model(self, MSP_MODEL_SWEEP);
+    if (ret != 0) {
+        goto out;
+    }
+
+    model->params.sweep.position = position;
+
 out:
     return ret;
 }

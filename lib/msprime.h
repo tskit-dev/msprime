@@ -457,7 +457,7 @@ int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
 int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
 int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     double start_frequency, double end_frequency, double s, double dt);
-
+int msp_set_simulation_model_sweep_genic_selection_reverse_only(msp_t *self, double position);
 int msp_set_start_time(msp_t *self, double start_time);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
@@ -500,6 +500,7 @@ int msp_add_census_event(msp_t *self, double time);
 
 int msp_initialise(msp_t *self);
 int msp_run(msp_t *self, double max_time, unsigned long max_events);
+int msp_run_reverse_only(msp_t *self, double max_time, FILE *file);
 int msp_debug_demography(msp_t *self, double *end_time);
 int msp_finalise_tables(msp_t *self);
 int msp_reset(msp_t *self);
