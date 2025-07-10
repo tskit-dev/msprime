@@ -5872,10 +5872,20 @@ out:
     return ret;
 }
 
+/* Reads the trajectory of a sweep when fed a file.
+The file contains (in order)
+1. Number of steps
+2. Number of demes
+3. Pop size
+4. Migration rate
+5. Time, type, and start and end locations for each event
+No. 5 is currently read backward in time as well
+ */
 static int
-genic_selection_read_trajectory(FILE *file, size_t *num_steps_ret, int *num_demes_ret, int *tot_pop_ret, double *migration_rate_ret, 
-    int **final_mut_pop_ret, int **mut_pop_ret, double **allele_frequency_mut_ret, double **t_of_forward_ev_ret, int **ev_type_ret, int **start_deme_ret,
-        int **end_deme_ret)
+genic_selection_read_trajectory(FILE *file, size_t *num_steps_ret, int *num_demes_ret,
+    int *tot_pop_ret, double *migration_rate_ret, int **final_mut_pop_ret,
+    int **mut_pop_ret, double **allele_frequency_mut_ret, double **t_of_forward_ev_ret,
+    int **ev_type_ret, int **start_deme_ret, int **end_deme_ret)
 {
     int ret = 0;
     size_t num_steps;
@@ -5895,7 +5905,8 @@ genic_selection_read_trajectory(FILE *file, size_t *num_steps_ret, int *num_deme
     fread(&migration_rate, sizeof(double), 1, file);
 
     mut_pop = (int *) malloc(sizeof(*mut_pop) * (size_t) num_demes);
-    allele_frequency_mut = (double *) malloc(sizeof(*allele_frequency_mut) * (size_t) num_demes);
+    allele_frequency_mut
+        = (double *) malloc(sizeof(*allele_frequency_mut) * (size_t) num_demes);
     final_mut_pop = (int *) malloc(sizeof(*final_mut_pop) * (size_t) num_demes);
 
     for (i = 0; i < num_demes; i++) {
@@ -5932,6 +5943,8 @@ genic_selection_read_trajectory(FILE *file, size_t *num_steps_ret, int *num_deme
     return ret;
 }
 
+/* Runs a backward in time sweep after reading the forward trajectory from a file
+ */
 static int
 msp_run_sweep(msp_t *self, FILE *file)
 {
@@ -5939,8 +5952,8 @@ msp_run_sweep(msp_t *self, FILE *file)
     simulation_model_t *model = &self->model;
     size_t curr_step = 0;
     size_t num_steps = 0;
-    double *allele_frequency_mut = NULL;
-    double *t_of_forward_ev = NULL;
+    double *allele_frequency_mut = NULL, *t_of_forward_ev = NULL;
+    int *ev_type = NULL, *start_deme = NULL, *end_deme = NULL;
     double sweep_locus = model->params.sweep.position;
     size_t j = 0;
     int i = 0;
@@ -5948,21 +5961,18 @@ msp_run_sweep(msp_t *self, FILE *file)
     label_id_t label;
     double rec_rates[] = { 0.0, 0.0 };
     double **ancestral_bg_pop_size = NULL;
-    double tmp_rand = 0.0;
     double *p_coal_wild = NULL, *p_coal_mut = NULL, *p_mig_wild_right = NULL,
-           *p_mig_mut_right = NULL, *p_mig_wild_left = NULL, *p_mig_mut_left = NULL,
-           p_rec_wild = 0.0, p_rec_mut = 0.0;
-    double p_any_ev = 0.0, p_cum_ev = 0.0;
+           *p_mig_mut_right = NULL, *p_mig_wild_left = NULL, *p_mig_mut_left = NULL;
+    double p_rec_wild = 0.0, p_rec_mut = 0.0;
+    double tmp_rand = 0.0, p_any_ev = 0.0, p_cum_ev = 0.0, p_forward_ev = 0.0,
+           t_of_next_forward_ev = 0.0;
     double t_start = 0.0, t_end = 0.0, t_of_next_ev = 0.0, t_current = 0.0;
     int num_demes = 0;
     double migration_rate = 0.0;
-    double p_forward_ev = 0.0, t_of_next_forward_ev = 0.0;
     int tot_pop = 0;
     int *mut_pop = NULL, *final_mut_pop = NULL;
     int curr_ev_type = 0, start_deme_index = 0;
-    int *ev_type = NULL, *start_deme = NULL, *end_deme = NULL;
     bool no_event_yet = true;
-    
 
     if (rate_map_get_total_mass(&self->gc_map) != 0.0) { // arrow?+
         /* Could be, we just haven't implemented it */
@@ -5970,7 +5980,12 @@ msp_run_sweep(msp_t *self, FILE *file)
         goto out;
     }
 
-    ret = genic_selection_read_trajectory(file, &num_steps, &num_demes, &tot_pop, &migration_rate, &final_mut_pop, &mut_pop, &allele_frequency_mut, &t_of_forward_ev, &ev_type, &start_deme, &end_deme);
+    ret = genic_selection_read_trajectory(file, &num_steps, &num_demes, &tot_pop,
+        &migration_rate, &final_mut_pop, &mut_pop, &allele_frequency_mut,
+        &t_of_forward_ev, &ev_type, &start_deme, &end_deme);
+
+    tsk_bug_assert(num_demes > 0);
+    tsk_bug_assert(tot_pop > 0);
 
     p_coal_wild = (double *) malloc(sizeof(double) * (size_t) num_demes);
     p_coal_mut = (double *) malloc(sizeof(double) * (size_t) num_demes);
@@ -5993,15 +6008,18 @@ msp_run_sweep(msp_t *self, FILE *file)
         goto out;
     }
 
+    /* Sets the initial time of the sweep. Adds a small increment after the final event
+     * (TODO). Also makes the times of the forward step consistent with msprime
+     */
     t_start = self->time;
     t_current = t_start;
     t_of_next_ev = 0.0;
     t_end = t_of_forward_ev[0];
-    for (j = 0; j < num_steps; j++) { // move this step to file IO
+    for (j = 0; j < num_steps; j++) { /*move this step to file io*/
         t_of_forward_ev[j] = t_start + t_end - t_of_forward_ev[j];
     }
 
-    while (msp_get_num_ancestors(self) > 1 && curr_step < num_steps
+    while (msp_get_num_ancestors(self) > 0 && curr_step < num_steps
            && self->time < (t_start + t_end)) {
         /* Set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
@@ -6019,6 +6037,8 @@ msp_run_sweep(msp_t *self, FILE *file)
             }
             rec_rates[j] = TSK_MAX(0, (recomb_mass));
         }
+
+        /* Set coal and mig rates*/
 
         for (i = 0; i < num_demes; i++) {
             if (ancestral_bg_pop_size[i][0] > 1 && allele_frequency_mut[i] != 1) {
@@ -6058,42 +6078,29 @@ msp_run_sweep(msp_t *self, FILE *file)
         p_rec_mut = rec_rates[1];
         p_any_ev = 0;
 
+        /* Find rate of any event */
         for (i = 0; i < num_demes; i++) {
             p_any_ev += p_coal_wild[i];
-        }
-
-        for (i = 0; i < num_demes; i++) {
             p_any_ev += p_coal_mut[i];
         }
 
         if (num_demes > 1) {
             for (i = 0; i < (num_demes - 1); i++) {
                 p_any_ev += p_mig_wild_left[i];
-            }
-
-            for (i = 0; i < (num_demes - 1); i++) {
                 p_any_ev += p_mig_mut_left[i];
-            }
-
-            for (i = 0; i < (num_demes - 1); i++) {
                 p_any_ev += p_mig_wild_right[i];
-            }
-
-            for (i = 0; i < (num_demes - 1); i++) {
                 p_any_ev += p_mig_mut_right[i];
             }
         }
 
         p_any_ev += p_rec_wild;
-
         p_any_ev += p_rec_mut;
 
         t_current = self->time;
         t_of_next_ev = gsl_ran_exponential(self->rng, 1 / p_any_ev);
+        tsk_bug_assert(t_of_next_ev > 0);
 
         t_of_next_forward_ev = t_of_forward_ev[curr_step];
-        // tot_pop = (int) get_population_size(&self->populations[0], self->time);
-        // add check
 
         if (t_current + t_of_next_ev >= t_of_next_forward_ev) {
 
@@ -6102,7 +6109,6 @@ msp_run_sweep(msp_t *self, FILE *file)
             start_deme_index = start_deme[curr_step];
 
             if (start_deme_index == end_deme[curr_step]) {
-
                 if (curr_ev_type
                     == 0) { // mutant replaced with wildtype, mutant coalascence
                     p_forward_ev = (float) ancestral_bg_pop_size[start_deme_index][1]
@@ -6194,10 +6200,7 @@ msp_run_sweep(msp_t *self, FILE *file)
                     ret = self->common_ancestor_event(self, i, 0);
                     no_event_yet = false;
                     break;
-                }
-            }
-            if (no_event_yet) {
-                for (i = 0; i < num_demes; i++) {
+                } else {
                     p_cum_ev += p_coal_mut[i];
                     if (tmp_rand < p_cum_ev / p_any_ev) {
                         ret = self->common_ancestor_event(self, i, 1);
@@ -6215,36 +6218,30 @@ msp_run_sweep(msp_t *self, FILE *file)
                             ret = msp_migration_event_in_background(self, i + 1, i, 0);
                             no_event_yet = false;
                             break;
-                        }
-                    }
-                }
-                if (no_event_yet) {
-                    for (i = 0; i < (num_demes - 1); i++) {
-                        p_cum_ev += p_mig_mut_left[i];
-                        if (tmp_rand < p_cum_ev / p_any_ev) {
-                            ret = msp_migration_event_in_background(self, i + 1, i, 1);
-                            no_event_yet = false;
-                            break;
-                        }
-                    }
-                }
-                if (no_event_yet) {
-                    for (i = 0; i < (num_demes - 1); i++) {
-                        p_cum_ev += p_mig_wild_right[i];
-                        if (tmp_rand < p_cum_ev / p_any_ev) {
-                            ret = msp_migration_event_in_background(self, i, i + 1, 0);
-                            no_event_yet = false;
-                            break;
-                        }
-                    }
-                }
-                if (no_event_yet) {
-                    for (i = 0; i < (num_demes - 1); i++) {
-                        p_cum_ev += p_mig_mut_right[i];
-                        if (tmp_rand < p_cum_ev / p_any_ev) {
-                            ret = msp_migration_event_in_background(self, i, i + 1, 1);
-                            no_event_yet = false;
-                            break;
+                        } else {
+                            p_cum_ev += p_mig_mut_left[i];
+                            if (tmp_rand < p_cum_ev / p_any_ev) {
+                                ret = msp_migration_event_in_background(
+                                    self, i + 1, i, 1);
+                                no_event_yet = false;
+                                break;
+                            } else {
+                                p_cum_ev += p_mig_wild_right[i];
+                                if (tmp_rand < p_cum_ev / p_any_ev) {
+                                    ret = msp_migration_event_in_background(
+                                        self, i, i + 1, 0);
+                                    no_event_yet = false;
+                                    break;
+                                } else {
+                                    p_cum_ev += p_mig_mut_right[i];
+                                    if (tmp_rand < p_cum_ev / p_any_ev) {
+                                        ret = msp_migration_event_in_background(
+                                            self, i, i + 1, 1);
+                                        no_event_yet = false;
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -6271,7 +6268,6 @@ msp_run_sweep(msp_t *self, FILE *file)
         if (ret != 0) {
             goto out;
         }
-        /* msp_print_state(self, stdout); */
     }
 
     /* TODO we should probably support fixed events here using
@@ -6320,7 +6316,6 @@ out:
     msp_safe_free(ev_type);
     msp_safe_free(start_deme);
     msp_safe_free(end_deme);
-
     return ret;
 }
 
@@ -6352,7 +6347,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = msp_run_pedigree(self, max_time, max_events);
     } else if (self->model.type == MSP_MODEL_SWEEP) {
         /* FIXME making sweep atomic for now as it's non-rentrant */
-        //ret = msp_run_sweep(self);
+        // ret = msp_run_sweep(self);
     } else {
         ret = msp_run_coalescent(self, max_time, max_events);
     }
