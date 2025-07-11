@@ -5882,7 +5882,7 @@ The file contains (in order)
 No. 5 is currently read backward in time as well
  */
 static int
-genic_selection_read_trajectory(FILE *file, size_t *num_steps_ret, int *num_demes_ret,
+genic_selection_read_trajectory(const char *filename, size_t *num_steps_ret, int *num_demes_ret,
     int *tot_pop_ret, double *migration_rate_ret, int **final_mut_pop_ret,
     int **mut_pop_ret, double **allele_frequency_mut_ret, double **t_of_forward_ev_ret,
     int **ev_type_ret, int **start_deme_ret, int **end_deme_ret)
@@ -5898,6 +5898,7 @@ genic_selection_read_trajectory(FILE *file, size_t *num_steps_ret, int *num_deme
     int tot_pop = 0;
     int *mut_pop = NULL, *final_mut_pop = NULL;
     int *ev_type = NULL, *start_deme = NULL, *end_deme = NULL;
+    FILE *file = fopen(filename, "r");
 
     fread(&num_steps, sizeof(size_t), 1, file);
     fread(&num_demes, sizeof(int), 1, file);
@@ -5929,6 +5930,7 @@ genic_selection_read_trajectory(FILE *file, size_t *num_steps_ret, int *num_deme
         fread(&end_deme[num_steps - j], sizeof(int), 1, file);
     }
 
+    fclose(file);
     *num_demes_ret = num_demes;
     *num_steps_ret = num_steps;
     *tot_pop_ret = tot_pop;
@@ -5946,7 +5948,7 @@ genic_selection_read_trajectory(FILE *file, size_t *num_steps_ret, int *num_deme
 /* Runs a backward in time sweep after reading the forward trajectory from a file
  */
 static int
-msp_run_sweep(msp_t *self, FILE *file)
+msp_run_sweep(msp_t *self)
 {
     int ret = 0;
     simulation_model_t *model = &self->model;
@@ -5954,7 +5956,8 @@ msp_run_sweep(msp_t *self, FILE *file)
     size_t num_steps = 0;
     double *allele_frequency_mut = NULL, *t_of_forward_ev = NULL;
     int *ev_type = NULL, *start_deme = NULL, *end_deme = NULL;
-    double sweep_locus = model->params.sweep.position;
+    double sweep_locus = model->params.sweep_reverse.position;
+    const char *filename = model->params.sweep_reverse.filename;
     size_t j = 0;
     int i = 0;
     double recomb_mass = 0.0;
@@ -5980,7 +5983,7 @@ msp_run_sweep(msp_t *self, FILE *file)
         goto out;
     }
 
-    ret = genic_selection_read_trajectory(file, &num_steps, &num_demes, &tot_pop,
+    ret = genic_selection_read_trajectory(filename, &num_steps, &num_demes, &tot_pop,
         &migration_rate, &final_mut_pop, &mut_pop, &allele_frequency_mut,
         &t_of_forward_ev, &ev_type, &start_deme, &end_deme);
 
@@ -6347,51 +6350,9 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         ret = msp_run_pedigree(self, max_time, max_events);
     } else if (self->model.type == MSP_MODEL_SWEEP) {
         /* FIXME making sweep atomic for now as it's non-rentrant */
-        // ret = msp_run_sweep(self);
+        ret = msp_run_sweep(self);
     } else {
         ret = msp_run_coalescent(self, max_time, max_events);
-    }
-
-    if (ret < 0) {
-        goto out;
-    }
-    if (ret == MSP_EXIT_MAX_TIME) {
-        /* Set the time to the max_time specified. If the tables are finalised
-         * after this we will get unary edges on the end of each extant node
-         * to this point so that the simulation can be resumed accurately.
-         */
-        self->time = max_time;
-    }
-    err = msp_flush_edges(self);
-    if (err != 0) {
-        ret = err;
-        goto out;
-    }
-out:
-    return ret;
-}
-
-int MSP_WARN_UNUSED
-msp_run_reverse_only(msp_t *self, double max_time, FILE *file)
-{
-    int ret = 0;
-    int err;
-
-    if (self->state == MSP_STATE_INITIALISED) {
-        self->state = MSP_STATE_SIMULATING;
-    }
-    if (self->state != MSP_STATE_SIMULATING) {
-        ret = MSP_ERR_BAD_STATE;
-        goto out;
-    }
-
-    if (msp_is_completed(self)) {
-        /* If the simulation is completed, run() is a no-op for
-         * all models. */
-        ret = 0;
-    } else if (self->model.type == MSP_MODEL_SWEEP) {
-        /* FIXME making sweep atomic for now as it's non-rentrant */
-        ret = msp_run_sweep(self, file);
     }
 
     if (ret < 0) {
@@ -8776,7 +8737,7 @@ out:
 }
 
 int
-msp_set_simulation_model_sweep_genic_selection_reverse_only(msp_t *self, double position)
+msp_set_simulation_model_sweep_genic_selection_reverse_only(msp_t *self, double position, const char *filename)
 {
     int ret = 0;
     simulation_model_t *model = &self->model;
@@ -8793,7 +8754,9 @@ msp_set_simulation_model_sweep_genic_selection_reverse_only(msp_t *self, double 
         goto out;
     }
 
-    model->params.sweep.position = position;
+    model->params.sweep_reverse.position = position;
+    model->params.sweep_reverse.filename = filename;
+
 
 out:
     return ret;

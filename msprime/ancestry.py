@@ -815,7 +815,7 @@ def _parse_sim_ancestry(
     coalescing_segments_only=None,
     num_labels=None,
     random_seed=None,
-    init_for_debugger=False,
+    init_for_debugger=False
 ):
     """
     Argument parser for the sim_ancestry frontend. Interprets all the parameters
@@ -884,6 +884,11 @@ def _parse_sim_ancestry(
                 raise ValueError(
                     "Recording MIGRANT nodes is not supported in "
                     "SweepGenicSelection simulation."
+                )
+            if any(isinstance(model, SweepGenicSelectionReverse) for model in models):
+                raise ValueError(
+                    "Recording MIGRANT nodes is not supported in "
+                    "SweepGenicSelectionReverse simulation."
                 )
 
     record_migrations = core._parse_flag(record_migrations, default=False)
@@ -1127,7 +1132,7 @@ def sim_ancestry(
     random_seed=None,
     num_replicates=None,
     replicate_index=None,
-    record_provenance=None,
+    record_provenance=None
 ):
     """
     Simulates an ancestral process described by the specified model, demography and
@@ -1313,7 +1318,7 @@ def sim_ancestry(
         additional_nodes=additional_nodes,
         coalescing_segments_only=coalescing_segments_only,
         num_labels=num_labels,
-        random_seed=random_seed,
+        random_seed=random_seed
     )
     return _wrap_replicates(
         sim,
@@ -1398,7 +1403,7 @@ class Simulator(_msprime.Simulator):
         coalescing_segments_only=True,
         start_time=None,
         end_time=None,
-        num_labels=None,
+        num_labels=None
     ):
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
@@ -1489,7 +1494,7 @@ class Simulator(_msprime.Simulator):
         """
         num_labels = 1
         for model in models:
-            if isinstance(model, SweepGenicSelection):
+            if isinstance(model, SweepGenicSelection) or isinstance(model, SweepGenicSelectionReverse):
                 num_labels = 2
         return num_labels
 
@@ -2119,3 +2124,55 @@ class SweepGenicSelection(ParametricAncestryModel):
         self.end_frequency = end_frequency
         self.s = s
         self.dt = dt
+
+@dataclasses.dataclass
+class SweepGenicSelectionReverse(ParametricAncestryModel):
+    """
+    This is a modification of SweepGenicSelection such that the user feeds the
+    filename for a binary file containing the forward in time trajectory of the sweep
+    for a single allele and the simulator computes the trajectory for the entire
+    genome.
+
+    For more details see the definition of class SweepGenicSelection
+
+
+    .. warning::
+        Currently models with more than one population and a selective sweep
+        are not implemented. Population size changes during the sweep
+        are not yet possible in msprime.
+
+    :param float position: the location of the beneficial allele along the
+        chromosome.
+    :param filename: The path of the file that contains the forward trajectory
+        computed from a Guillespie simulation of a logistic birth and death
+        process stored in a binary file
+        Currently the file has the following format:
+        1. Number of events (uintp)
+        2. Number of demes (int) - currently 0
+        3. Population size (int)
+        4. Migration rate (float) - currently 0
+        5. The initial state of the forward sim  (1 int per deme)
+        6. the final state of the forward sim (1 int per deme)
+        7. For each event there is also:
+        a. time of event (float)
+        b. type of event (0 for wt birth, 1 for mutant birth - int)
+        c. deme of birth (int)
+        d. deme of parent (int)
+    """
+
+    name = "sweep_genic_selection_reverse"
+
+    position: float | None
+    filename: str | None
+
+    # We have to define an __init__ to enforce keyword-only behaviour
+    def __init__(
+        self,
+        *,
+        duration=None,
+        position=None,
+        filename = None
+    ):
+        self.duration = duration
+        self.position = position
+        self.filename = filename
