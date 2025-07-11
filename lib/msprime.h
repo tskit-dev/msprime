@@ -197,6 +197,11 @@ typedef struct _sweep_t {
     void (*print_state)(struct _sweep_t *self, FILE *out);
 } sweep_t;
 
+typedef struct _sweep_reverse_t {
+    double position;
+    const char *filename;
+} sweep_reverse_t;
+
 typedef struct _simulation_model_t {
     int type;
     union {
@@ -204,6 +209,7 @@ typedef struct _simulation_model_t {
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
         sweep_t sweep;
+        sweep_reverse_t sweep_reverse;
     } params;
     /* If the model allocates memory this function should be non-null. */
     void (*free)(struct _simulation_model_t *model);
@@ -457,7 +463,8 @@ int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
 int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
 int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     double start_frequency, double end_frequency, double s, double dt);
-int msp_set_simulation_model_sweep_genic_selection_reverse_only(msp_t *self, double position);
+int msp_set_simulation_model_sweep_genic_selection_reverse_only(
+    msp_t *self, double position, const char *filename);
 int msp_set_start_time(msp_t *self, double start_time);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
