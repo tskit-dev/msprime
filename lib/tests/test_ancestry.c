@@ -20,6 +20,40 @@
 #include "testlib.h"
 
 static void
+set_simulation_model(msp_t *sim, int model)
+{
+    int ret;
+
+    printf("set model %d\n", model);
+    switch (model) {
+        case MSP_MODEL_SMC_K:
+            ret = msp_set_simulation_model_smc_k(sim, 0);
+            break;
+        case MSP_MODEL_HUDSON:
+            ret = msp_set_simulation_model_hudson(sim);
+            break;
+        case MSP_MODEL_SMC:
+            ret = msp_set_simulation_model_smc(sim);
+            break;
+        case MSP_MODEL_SMC_PRIME:
+            ret = msp_set_simulation_model_smc_prime(sim);
+            break;
+        case MSP_MODEL_DTWF:
+            ret = msp_set_simulation_model_dtwf(sim);
+            break;
+        case MSP_MODEL_BETA:
+            ret = msp_set_simulation_model_beta(sim, 1.1, 0.5);
+            break;
+        case MSP_MODEL_DIRAC:
+            ret = msp_set_simulation_model_dirac(sim, 0.1, 10);
+            break;
+        default:
+            CU_ASSERT_TRUE_FATAL(false);
+    }
+    CU_ASSERT_EQUAL(ret, 0);
+}
+
+static void
 test_single_locus_simulation(void)
 {
     int ret;
@@ -1321,6 +1355,56 @@ test_mixed_hudson_smc(void)
     CU_ASSERT_TRUE(j > 10);
     CU_ASSERT_TRUE(msp_get_num_recombination_events(&msp) > 1);
     CU_ASSERT_TRUE(msp_get_num_gene_conversion_events(&msp) > 1);
+
+    ret = msp_finalise_tables(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    tsk_treeseq_print_state(&ts, _devnull);
+    tsk_treeseq_free(&ts);
+    tsk_table_collection_free(&tables);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    tsk_table_collection_free(&tables);
+}
+
+static void
+test_mixed_models(void)
+{
+    int ret;
+    uint32_t j;
+    uint32_t n = 20;
+    tsk_table_collection_t tables;
+    tsk_treeseq_t ts;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    int models[] = { MSP_MODEL_HUDSON, MSP_MODEL_SMC_K, MSP_MODEL_SMC,
+        MSP_MODEL_SMC_PRIME, MSP_MODEL_DTWF, MSP_MODEL_BETA, MSP_MODEL_DIRAC };
+    const int num_models = (int) sizeof(models) / sizeof(*models);
+
+    ret = build_sim(&msp, &tables, rng, 10, 1, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(&msp, 1);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    /* Run for 1 event each for the models, interleaving */
+    j = 0;
+    while ((ret = msp_run(&msp, DBL_MAX, 1)) == MSP_EXIT_MAX_EVENTS) {
+        msp_verify(&msp, 0);
+        CU_ASSERT_FALSE(msp_is_completed(&msp));
+        set_simulation_model(&msp, models[j % num_models]);
+        j++;
+    }
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_TRUE(msp_is_completed(&msp));
+    CU_ASSERT_TRUE(j > 10);
+    CU_ASSERT_TRUE(msp_get_num_recombination_events(&msp) > 1);
+    CU_ASSERT_TRUE(msp_get_num_gene_conversion_events(&msp) == 0);
 
     ret = msp_finalise_tables(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -2927,7 +3011,7 @@ test_floating_point_extremes(void)
 }
 
 static void
-test_simulation_replicates(void)
+verify_simulation_replicates(int model)
 {
     int ret;
     uint32_t n = 100;
@@ -2974,9 +3058,7 @@ test_simulation_replicates(void)
     mutgen_print_state(&mutgen, _devnull);
 
     for (j = 0; j < num_replicates; j++) {
-        ret = msp_set_simulation_model_smc_k(&msp, 0);
-        /* ret = msp_set_simulation_model_hudson(&msp); */
-        CU_ASSERT_EQUAL(ret, 0);
+        set_simulation_model(&msp, model);
         ret = msp_run(&msp, DBL_MAX, SIZE_MAX);
         CU_ASSERT_EQUAL(ret, 0);
         msp_verify(&msp, 0);
@@ -3001,6 +3083,53 @@ test_simulation_replicates(void)
     mutation_model_free(&mut_model);
     gsl_rng_free(rng);
     tsk_table_collection_free(&tables);
+}
+
+static void
+test_simulation_replicates_hudson(void)
+{
+    verify_simulation_replicates(MSP_MODEL_HUDSON);
+}
+
+static void
+test_simulation_replicates_smc_k(void)
+{
+    verify_simulation_replicates(MSP_MODEL_SMC_K);
+}
+
+static void
+test_simulation_replicates_smc(void)
+{
+    verify_simulation_replicates(MSP_MODEL_SMC);
+}
+
+static void
+test_simulation_replicates_smc_prime(void)
+{
+    verify_simulation_replicates(MSP_MODEL_SMC_PRIME);
+}
+
+static void
+test_simulation_replicates_dtwf(void)
+{
+    verify_simulation_replicates(MSP_MODEL_DTWF);
+}
+
+static void
+test_simulation_replicates_dirac(void)
+{
+    /* FIXME commenting this out for now as it provokes a bug. See
+     * https://github.com/tskit-dev/msprime/issues/2380 for details.
+     */
+    /* verify_simulation_replicates(MSP_MODEL_DIRAC); */
+}
+
+static void
+test_simulation_replicates_beta(void)
+{
+    /* Also commenting this one out as it's terribly slow. Also fix this
+     * while fixing the DIRAC bug above. */
+    /* verify_simulation_replicates(MSP_MODEL_BETA); */
 }
 
 static void
@@ -4042,7 +4171,6 @@ test_reset_smc_k(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     msp_verify(&msp, 0);
 
-
     ret = msp_run(&msp, t, ULONG_MAX);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_reset(&msp);
@@ -4365,6 +4493,7 @@ main(int argc, char **argv)
 
         { "test_mixed_hudson_dtwf", test_mixed_hudson_dtwf },
         { "test_mixed_hudson_smc", test_mixed_hudson_smc },
+        { "test_mixed_models", test_mixed_models },
 
         { "test_gc_single_locus", test_gc_single_locus },
         { "test_gc_tract_lengths", test_gc_tract_lengths },
@@ -4397,7 +4526,15 @@ main(int argc, char **argv)
             test_deactivate_population_event_errors },
         { "test_time_travel_error", test_time_travel_error },
         { "test_floating_point_extremes", test_floating_point_extremes },
-        { "test_simulation_replicates", test_simulation_replicates },
+
+        { "test_simulation_replicates_smc_k", test_simulation_replicates_smc_k },
+        { "test_simulation_replicates_hudson", test_simulation_replicates_hudson },
+        { "test_simulation_replicates_smc", test_simulation_replicates_smc },
+        { "test_simulation_replicates_smc_prime", test_simulation_replicates_smc_prime },
+        { "test_simulation_replicates_dtwf", test_simulation_replicates_dtwf },
+        { "test_simulation_replicates_dirac", test_simulation_replicates_dirac },
+        { "test_simulation_replicates_beta", test_simulation_replicates_beta },
+
         { "test_bottleneck_simulation", test_bottleneck_simulation },
         { "test_large_bottleneck_simulation", test_large_bottleneck_simulation },
 
