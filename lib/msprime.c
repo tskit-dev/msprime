@@ -3254,8 +3254,7 @@ out:
 }
 
 static void
-msp_reset_hull_right(msp_t *self, hull_t *hull, double old_right, double new_right,
-    population_id_t population_id, label_id_t label_id)
+msp_reset_hull_right(msp_t *self, lineage_t *lineage, double new_right)
 {
     int c;
     avl_tree_t *hulls_left, *hulls_right;
@@ -3264,6 +3263,22 @@ msp_reset_hull_right(msp_t *self, hull_t *hull, double old_right, double new_rig
     hull_t query_hull;
     avl_node_t *node;
     hull_t *curr_hull;
+    hull_t *hull = lineage->hull;
+    double old_right = hull->right;
+    label_id_t label_id = lineage->label;
+    population_id_t population_id = lineage->population;
+
+    /* This is not yet true for GC events */
+    /* tsk_bug_assert(lineage->tail->right == new_right); */
+
+    new_right = GSL_MIN(new_right + self->model.params.smc_k_coalescent.hull_offset,
+        self->sequence_length);
+
+    tsk_bug_assert(lineage->hull == hull);
+    tsk_bug_assert(lineage->population == population_id);
+    tsk_bug_assert(lineage->label == label_id);
+    tsk_bug_assert(hull->right == old_right);
+    /* printf("lineage->right = %f new_right=%f\n", hull->right, new_right); */
 
     hulls_left = &self->populations[population_id].hulls_left[label_id];
     coal_mass_index = &self->populations[population_id].coal_mass_index[label_id];
@@ -3376,8 +3391,6 @@ msp_recombination_event(msp_t *self, label_id_t label, lineage_t **lhs, lineage_
     double breakpoint;
     lineage_t *left_lineage, *right_lineage;
     segment_t *x, *y, *alpha, *lhs_tail;
-    hull_t *lhs_hull;
-    double lhs_right, rhs_right;
 
     self->num_re_events++;
     tsk_bug_assert(self->recomb_mass_index != NULL);
@@ -3439,13 +3452,7 @@ msp_recombination_event(msp_t *self, label_id_t label, lineage_t **lhs, lineage_
     }
     if (self->model.type == MSP_MODEL_SMC_K) {
         /* modify original hull */
-        lhs_hull = left_lineage->hull;
-        rhs_right = lhs_hull->right;
-        lhs_right
-            = GSL_MIN(lhs_tail->right + self->model.params.smc_k_coalescent.hull_offset,
-                self->sequence_length);
-        msp_reset_hull_right(
-            self, lhs_hull, rhs_right, lhs_right, left_lineage->population, label);
+        msp_reset_hull_right(self, left_lineage, lhs_tail->right);
     }
     if (self->additional_nodes & MSP_NODE_IS_RE_EVENT) {
         ret = msp_store_arg_recombination(self, lhs_tail, alpha);
@@ -3492,7 +3499,6 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
     lineage_t *lineage, *new_lineage;
     double left_breakpoint, right_breakpoint, tl;
     bool insert_alpha;
-    hull_t *hull = NULL;
     double reset_right = 0.0;
     population_id_t population;
 
@@ -3646,13 +3652,8 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
     } else {
         // rbp lies beyond segment chain, regular recombination logic applies
         if (insert_alpha && self->model.type == MSP_MODEL_SMC_K) {
-            hull = lineage->hull;
             tsk_bug_assert(reset_right > 0);
-            reset_right
-                = GSL_MIN(reset_right + self->model.params.smc_k_coalescent.hull_offset,
-                    self->sequence_length);
-            msp_reset_hull_right(
-                self, hull, hull->right, reset_right, population, label);
+            msp_reset_hull_right(self, lineage, reset_right);
         }
     }
 
@@ -4993,13 +4994,11 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     int ret = 0;
     const double gc_left_total = msp_get_total_gc_left(self);
     double h = gsl_rng_uniform(self->rng) * gc_left_total;
-    double tl, bp, lhs_old_right, lhs_new_right;
+    double tl, bp, lhs_new_right;
     population_id_t population;
     lineage_t *lineage, *new_lineage;
     segment_t *y, *x, *alpha;
-    hull_t *lhs_hull = NULL;
 
-    lhs_hull = NULL;
     lineage = msp_find_gc_left_individual(self, label, h);
     assert(lineage != NULL);
     population = lineage->population;
@@ -5102,13 +5101,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
 
     if (self->model.type == MSP_MODEL_SMC_K) {
         // lhs logic is identical to the lhs recombination event
-        lhs_hull = lineage->hull;
-        lhs_old_right = lhs_hull->right;
-        lhs_new_right
-            = GSL_MIN(lhs_new_right + self->model.params.smc_k_coalescent.hull_offset,
-                self->sequence_length);
-        msp_reset_hull_right(
-            self, lhs_hull, lhs_old_right, lhs_new_right, y->lineage->population, label);
+        msp_reset_hull_right(self, lineage, lhs_new_right);
     }
 
 out:
