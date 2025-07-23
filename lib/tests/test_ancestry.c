@@ -4042,6 +4042,7 @@ test_reset_smc_k(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     msp_verify(&msp, 0);
 
+
     ret = msp_run(&msp, t, ULONG_MAX);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_reset(&msp);
