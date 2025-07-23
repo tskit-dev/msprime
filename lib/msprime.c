@@ -190,22 +190,6 @@ cmp_hullend(const void *a, const void *b)
     return ret;
 }
 
-static inline hull_t *
-segment_get_hull(segment_t *seg)
-{
-    hull_t *hull;
-
-    tsk_bug_assert(seg != NULL);
-    while (seg->prev != NULL) {
-        seg = seg->prev;
-    }
-    tsk_bug_assert(seg->lineage != NULL);
-    hull = seg->lineage->hull;
-    tsk_bug_assert(hull->lineage == seg->lineage);
-
-    return hull;
-}
-
 static void
 segment_init(void **obj, size_t id)
 {
@@ -1297,7 +1281,6 @@ msp_free_hullend(msp_t *self, hullend_t *hullend, label_id_t label)
 static void
 msp_free_lineage(msp_t *self, lineage_t *lineage)
 {
-    /* printf("free lineage %p\n", (void *) lineage); */
     object_heap_free_object(&self->lineage_heap, lineage);
     lineage->head = NULL;
     lineage->tail = NULL;
@@ -3456,7 +3439,7 @@ msp_recombination_event(msp_t *self, label_id_t label, lineage_t **lhs, lineage_
     }
     if (self->model.type == MSP_MODEL_SMC_K) {
         /* modify original hull */
-        lhs_hull = segment_get_hull(lhs_tail);
+        lhs_hull = left_lineage->hull;
         rhs_right = lhs_hull->right;
         lhs_right
             = GSL_MIN(lhs_tail->right + self->model.params.smc_k_coalescent.hull_offset,
@@ -3542,11 +3525,6 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         //     lbp rbp
         self->num_noneffective_gc_events++;
         return 0;
-    }
-
-    if (self->model.type == MSP_MODEL_SMC_K) {
-        hull = segment_get_hull(y);
-        tsk_bug_assert(hull != NULL);
     }
 
     /* Process left break */
@@ -3668,6 +3646,7 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
     } else {
         // rbp lies beyond segment chain, regular recombination logic applies
         if (insert_alpha && self->model.type == MSP_MODEL_SMC_K) {
+            hull = lineage->hull;
             tsk_bug_assert(reset_right > 0);
             reset_right
                 = GSL_MIN(reset_right + self->model.params.smc_k_coalescent.hull_offset,
@@ -5053,10 +5032,6 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     tsk_bug_assert(y != NULL);
     self->num_gc_events++;
     x = y->prev;
-    if (self->model.type == MSP_MODEL_SMC_K) {
-        lhs_hull = segment_get_hull(y);
-        tsk_bug_assert(lhs_hull != NULL);
-    }
 
     if (y->left < bp) {
         //  x          y
@@ -5127,6 +5102,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
 
     if (self->model.type == MSP_MODEL_SMC_K) {
         // lhs logic is identical to the lhs recombination event
+        lhs_hull = lineage->hull;
         lhs_old_right = lhs_hull->right;
         lhs_new_right
             = GSL_MIN(lhs_new_right + self->model.params.smc_k_coalescent.hull_offset,

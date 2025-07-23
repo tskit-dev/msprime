@@ -24,7 +24,6 @@ set_simulation_model(msp_t *sim, int model)
 {
     int ret;
 
-    printf("set model %d\n", model);
     switch (model) {
         case MSP_MODEL_SMC_K:
             ret = msp_set_simulation_model_smc_k(sim, 0);
