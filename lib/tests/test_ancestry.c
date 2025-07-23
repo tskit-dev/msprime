@@ -4131,7 +4131,6 @@ test_smc_k_multipop(void)
 
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
     CU_ASSERT_EQUAL(ret, 0);
-    msp_print_state(&msp, stdout);
     msp_verify(&msp, 0);
 
     ret = msp_free(&msp);
