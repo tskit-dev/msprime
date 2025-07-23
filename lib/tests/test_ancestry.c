@@ -2963,16 +2963,19 @@ test_simulation_replicates(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_segment_block_size(&msp, 3);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_hull_block_size(&msp, 3);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 3);
     CU_ASSERT_EQUAL(ret, 0);
     ret = mutgen_set_rate(&mutgen, mutation_rate);
     CU_ASSERT_EQUAL(ret, 0);
-
     mutgen_print_state(&mutgen, _devnull);
 
     for (j = 0; j < num_replicates; j++) {
+        ret = msp_set_simulation_model_smc_k(&msp, 0);
+        /* ret = msp_set_simulation_model_hudson(&msp); */
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_run(&msp, DBL_MAX, SIZE_MAX);
         CU_ASSERT_EQUAL(ret, 0);
@@ -4042,10 +4045,12 @@ test_reset_smc_k(void)
     ret = msp_run(&msp, t, ULONG_MAX);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_reset(&msp);
+    /* msp_print_state(&msp, stdout); */
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     msp_verify(&msp, 0);
     ret = msp_set_simulation_model_smc_k(&msp, 0.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+    /* msp_print_state(&msp, stdout); */
     msp_verify(&msp, 0);
 
     ret = msp_reset(&msp);
@@ -4085,9 +4090,9 @@ test_init_smc_k(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_recombination_rate(&msp, 0.01);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = msp_set_simulation_model_smc_k(&msp, 0.0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
@@ -4122,10 +4127,10 @@ test_smc_k_multipop(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_add_mass_migration(&msp, t2, 0, 1, 1.0);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_smc_k(&msp, 0.0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-    ret = msp_set_simulation_model_smc_k(&msp, 0.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     msp_verify(&msp, 0);
 
