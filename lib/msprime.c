@@ -446,8 +446,7 @@ msp_set_segment_mass(msp_t *self, segment_t *seg)
     }
 }
 
-static void msp_remove_hull(msp_t *self, hull_t *hull);
-static void msp_free_hull(msp_t *self, hull_t *hull, label_id_t label);
+static void msp_remove_hull(msp_t *self, lineage_t *lin);
 static int msp_insert_individual_hull(msp_t *self, lineage_t *lin);
 
 static int
@@ -466,8 +465,7 @@ msp_unindex_segments(msp_t *self)
             for (node = population_ancestors->head; node != NULL; node = node->next) {
                 lin = (lineage_t *) node->item;
                 if (lin->hull != NULL) {
-                    msp_remove_hull(self, lin->hull);
-                    lin->hull = NULL;
+                    msp_remove_hull(self, lin);
                 }
             }
         }
@@ -975,12 +973,12 @@ msp_alloc_hull(msp_t *self, double left, double right, lineage_t *lineage)
     hull->left = left;
     tsk_bug_assert(right <= self->sequence_length);
     hull->right = right;
-    hull->lineage = lineage;
     hull->count = 0;
     hull->insertion_order = UINT64_MAX;
     tsk_bug_assert(lineage->head->prev == NULL);
     tsk_bug_assert(lineage->hull == NULL);
     lineage->hull = hull;
+    hull->lineage = lineage;
 out:
     return hull;
 }
@@ -1353,12 +1351,13 @@ msp_get_lineage_population(msp_t *self, lineage_t *lineage)
 }
 
 static int MSP_WARN_UNUSED
-msp_insert_hull(msp_t *self, hull_t *hull)
+msp_insert_hull(msp_t *self, lineage_t *lineage)
 {
     int c, ret = 0;
     avl_node_t *node, *query_node;
     avl_tree_t *hulls_left, *hulls_right;
     population_id_t pop;
+    hull_t *hull = lineage->hull;
     hull_t *curr_hull;
     hullend_t query;
     hullend_t *hullend;
@@ -1369,8 +1368,8 @@ msp_insert_hull(msp_t *self, hull_t *hull)
     /* setting hull->count requires two steps
     step 1: num_starting before hull->left */
     tsk_bug_assert(hull != NULL);
-    pop = hull->lineage->population;
-    label = hull->lineage->label;
+    pop = lineage->population;
+    label = lineage->label;
     hulls_left = &self->populations[pop].hulls_left[label];
     coal_mass_index = &self->populations[pop].coal_mass_index[label];
     /* insert hull into state */
@@ -1435,21 +1434,24 @@ out:
 }
 
 static void
-msp_remove_hull(msp_t *self, hull_t *hull)
+msp_remove_hull(msp_t *self, lineage_t *lin)
 {
     int c;
     avl_node_t *node, *curr_node, *query_node;
     hullend_t query, *query_ptr;
-    hull_t *curr_hull;
+    hull_t *curr_hull, *hull;
     avl_tree_t *hulls_left, *hulls_right;
     fenwick_t *coal_mass_index;
     segment_t *u;
     label_id_t label;
     population_id_t pop;
 
-    u = hull->lineage->head;
-    label = hull->lineage->label;
-    pop = hull->lineage->population;
+    tsk_bug_assert(lin != NULL);
+
+    hull = lin->hull;
+    u = lin->head;
+    label = lin->label;
+    pop = lin->population;
     tsk_bug_assert(u != NULL);
     hulls_left = &self->populations[pop].hulls_left[label];
     coal_mass_index = &self->populations[pop].coal_mass_index[label];
@@ -1496,6 +1498,7 @@ msp_remove_hull(msp_t *self, hull_t *hull)
     msp_free_avl_node(self, node);
     msp_free_hullend(self, query_ptr, label);
     msp_free_hull(self, hull, label);
+    lin->hull = NULL;
 }
 
 static inline int MSP_WARN_UNUSED
@@ -1513,7 +1516,7 @@ msp_insert_individual_hull(msp_t *self, lineage_t *lin)
         goto out;
     }
     lin->hull = hull;
-    ret = msp_insert_hull(self, hull);
+    ret = msp_insert_hull(self, lin);
     if (ret != 0) {
         goto out;
     }
@@ -2679,8 +2682,7 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
     avl_unlink_node(source, node);
     msp_free_avl_node(self, node);
     if (self->model.type == MSP_MODEL_SMC_K) {
-        msp_remove_hull(self, ind->hull);
-        ind->hull = NULL;
+        msp_remove_hull(self, ind);
     }
 
     if (self->additional_nodes & MSP_NODE_IS_MIG_EVENT) {
@@ -4274,8 +4276,7 @@ msp_reset_memory_state(msp_t *self)
                 avl_unlink_node(&pop->ancestors[label], node);
                 msp_free_avl_node(self, node);
                 if (lin->hull != NULL) {
-                    msp_remove_hull(self, lin->hull);
-                    lin->hull = NULL;
+                    msp_remove_hull(self, lin);
                 }
                 msp_free_lineage(self, lin);
             }
@@ -7720,19 +7721,17 @@ msp_smc_k_common_ancestor_event(
             remaining_mass--;
         }
     }
-    msp_remove_hull(self, x_hull);
-    msp_remove_hull(self, y_hull);
+    x_lin = x_hull->lineage;
+    y_lin = y_hull->lineage;
+    msp_remove_hull(self, x_lin);
+    msp_remove_hull(self, y_lin);
 
     /* retrieve ancestors linked to both hulls */
     avl = &self->populations[population_id].ancestors[label];
-    x_lin = x_hull->lineage;
-    x_lin->hull = NULL;
     x = x_lin->head;
     x_node = avl_search(avl, x_lin);
     tsk_bug_assert(x_node != NULL);
     avl_unlink_node(avl, x_node);
-    y_lin = y_hull->lineage;
-    y_lin->hull = NULL;
     y = y_lin->head;
     y_node = avl_search(avl, y_lin);
     tsk_bug_assert(y_node != NULL);
@@ -8226,7 +8225,6 @@ msp_set_simulation_model(msp_t *self, int model)
     if (self->model.free != NULL) {
         self->model.free(&self->model);
     }
-    /* printf("set_simulation_model %d -> %d\n", self->model.type, model); */
 
     self->model.type = model;
     self->get_common_ancestor_waiting_time = msp_std_get_common_ancestor_waiting_time;

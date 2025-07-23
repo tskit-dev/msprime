@@ -102,7 +102,9 @@ typedef struct {
 typedef struct hull_t_t {
     double left;
     double right;
-    lineage_t *lineage; // TODO remove as part of refactoring */
+    /* We need a reference back to the lineage because we index the hulls in
+     * the smc_k. */
+    lineage_t *lineage;
     size_t id;
     uint64_t count;
     uint64_t insertion_order;
