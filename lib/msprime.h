@@ -78,7 +78,7 @@ typedef tsk_id_t label_id_t;
 typedef struct segment_t_t {
     tsk_id_t value;
     // TODO change to tsk_id_t  or uint32?  Same for hull_t
-    size_t id; 
+    size_t id;
     double left;
     double right;
     struct segment_t_t *prev;
@@ -102,6 +102,8 @@ typedef struct {
 typedef struct hull_t_t {
     double left;
     double right;
+    /* We need a reference back to the lineage because we index the hulls in
+     * the smc_k. */
     lineage_t *lineage;
     size_t id;
     uint64_t count;
