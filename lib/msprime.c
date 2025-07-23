@@ -163,7 +163,7 @@ cmp_pedigree_individual_p(const void *a, const void *b)
 }
 
 static int
-cmp_hull(const void *a, const void *b)
+cmp_hull_left(const void *a, const void *b)
 {
     const hull_t *ia = (const hull_t *) a;
     const hull_t *ib = (const hull_t *) b;
@@ -177,15 +177,15 @@ cmp_hull(const void *a, const void *b)
 }
 
 static int
-cmp_hullend(const void *a, const void *b)
+cmp_hull_right(const void *a, const void *b)
 {
-    const hullend_t *ia = (const hullend_t *) a;
-    const hullend_t *ib = (const hullend_t *) b;
-    int ret = (ia->position > ib->position) - (ia->position < ib->position);
+    const hull_t *ia = (const hull_t *) a;
+    const hull_t *ib = (const hull_t *) b;
+    int ret = (ia->right > ib->right) - (ia->right < ib->right);
 
     if (ret == 0) {
-        ret = (ia->insertion_order > ib->insertion_order)
-              - (ia->insertion_order < ib->insertion_order);
+        ret = (ia->right_insertion_order > ib->right_insertion_order)
+              - (ia->right_insertion_order < ib->right_insertion_order);
     }
     return ret;
 }
@@ -616,8 +616,8 @@ msp_setup_segment_indexes(msp_t *self)
                 goto out;
             }
             for (label = 0; label < (label_id_t) self->num_labels; label++) {
-                avl_init_tree(&pop->hulls_left[label], cmp_hull, NULL);
-                avl_init_tree(&pop->hulls_right[label], cmp_hullend, NULL);
+                avl_init_tree(&pop->hulls_left[label], cmp_hull_left, NULL);
+                avl_init_tree(&pop->hulls_right[label], cmp_hull_right, NULL);
                 ret = fenwick_alloc(&pop->coal_mass_index[label], num_hulls);
                 if (ret != 0) {
                     goto out;
@@ -640,11 +640,6 @@ msp_alloc_memory_blocks_hulls(msp_t *self)
     for (j = 0; j < self->num_labels; j++) {
         ret = object_heap_init(
             &self->hull_heap[j], sizeof(hull_t), self->hull_block_size, hull_init);
-        if (ret != 0) {
-            goto out;
-        }
-        ret = object_heap_init(
-            &self->hullend_heap[j], sizeof(hullend_t), self->hull_block_size, NULL);
         if (ret != 0) {
             goto out;
         }
@@ -975,33 +970,13 @@ msp_alloc_hull(msp_t *self, double left, double right, lineage_t *lineage)
     hull->right = right;
     hull->count = 0;
     hull->left_insertion_order = UINT64_MAX;
+    hull->right_insertion_order = UINT64_MAX;
     tsk_bug_assert(lineage->head->prev == NULL);
     tsk_bug_assert(lineage->hull == NULL);
     lineage->hull = hull;
     hull->lineage = lineage;
 out:
     return hull;
-}
-
-static hullend_t *MSP_WARN_UNUSED
-msp_alloc_hullend(msp_t *self, double position, label_id_t label)
-{
-    hullend_t *hullend = NULL;
-
-    if (object_heap_empty(&self->hullend_heap[label])) {
-        if (object_heap_expand(&self->hullend_heap[label]) != 0) {
-            goto out;
-        }
-    }
-    hullend = (hullend_t *) object_heap_alloc_object(&self->hullend_heap[label]);
-    if (hullend == NULL) {
-        goto out;
-    }
-
-    hullend->position = position;
-    hullend->insertion_order = UINT64_MAX;
-out:
-    return hullend;
 }
 
 /* Top level allocators and initialisation */
@@ -1271,12 +1246,6 @@ msp_free_hull(msp_t *self, hull_t *hull, label_id_t label)
 }
 
 static void
-msp_free_hullend(msp_t *self, hullend_t *hullend, label_id_t label)
-{
-    object_heap_free_object(&self->hullend_heap[label], hullend);
-}
-
-static void
 msp_free_lineage(msp_t *self, lineage_t *lineage)
 {
     object_heap_free_object(&self->lineage_heap, lineage);
@@ -1330,18 +1299,18 @@ hull_adjust_insertion_order(hull_t *h, avl_node_t *node)
 }
 
 static inline void
-hullend_adjust_insertion_order(hullend_t *h, avl_node_t *node)
+hullend_adjust_insertion_order(hull_t *h, avl_node_t *node)
 {
-    hullend_t *prev_hullend;
+    hull_t *prev_hull;
     uint64_t insertion_order = 0;
 
     if (node->prev != NULL) {
-        prev_hullend = (hullend_t *) node->prev->item;
-        if (h->position == prev_hullend->position) {
-            insertion_order = prev_hullend->insertion_order + 1;
+        prev_hull = (hull_t *) node->prev->item;
+        if (h->right == prev_hull->right) {
+            insertion_order = prev_hull->right_insertion_order + 1;
         }
     }
-    h->insertion_order = insertion_order;
+    h->right_insertion_order = insertion_order;
 }
 
 static inline avl_tree_t *
@@ -1359,8 +1328,7 @@ msp_insert_hull(msp_t *self, lineage_t *lineage)
     population_id_t pop;
     hull_t *hull = lineage->hull;
     hull_t *curr_hull;
-    hullend_t query;
-    hullend_t *hullend;
+    hull_t query;
     fenwick_t *coal_mass_index;
     label_id_t label;
     uint64_t num_starting_before_left, num_ending_before_left, count;
@@ -1372,6 +1340,7 @@ msp_insert_hull(msp_t *self, lineage_t *lineage)
     label = lineage->label;
     hulls_left = &self->populations[pop].hulls_left[label];
     coal_mass_index = &self->populations[pop].coal_mass_index[label];
+
     /* insert hull into state */
     node = msp_alloc_avl_node(self);
     if (node == NULL) {
@@ -1401,8 +1370,8 @@ msp_insert_hull(msp_t *self, lineage_t *lineage)
 
     /* step 2: num ending before hull->left */
     hulls_right = &self->populations[pop].hulls_right[label];
-    query.position = hull->left;
-    query.insertion_order = UINT64_MAX;
+    query.right = hull->left;
+    query.right_insertion_order = UINT64_MAX;
     if (hulls_right->head == NULL) {
         num_ending_before_left = 0;
     } else {
@@ -1415,20 +1384,16 @@ msp_insert_hull(msp_t *self, lineage_t *lineage)
     hull->count = count;
     fenwick_set_value(coal_mass_index, hull->id, (double) count);
 
-    /* insert hullend into state */
-    hullend = msp_alloc_hullend(self, hull->right, label);
-    if (hullend == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
+    /* insert hull right AVL tree */
     node = msp_alloc_avl_node(self);
     if (node == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
-    avl_init_node(node, hullend);
+    avl_init_node(node, hull);
     node = avl_insert_node(hulls_right, node);
-    hullend_adjust_insertion_order(hullend, node);
+    tsk_bug_assert(node != NULL);
+    hullend_adjust_insertion_order(hull, node);
 out:
     return ret;
 }
@@ -1438,7 +1403,7 @@ msp_remove_hull(msp_t *self, lineage_t *lin)
 {
     int c;
     avl_node_t *node, *curr_node, *query_node;
-    hullend_t query, *query_ptr;
+    hull_t query, *query_ptr;
     hull_t *curr_hull, *hull;
     avl_tree_t *hulls_left, *hulls_right;
     fenwick_t *coal_mass_index;
@@ -1484,19 +1449,18 @@ msp_remove_hull(msp_t *self, lineage_t *lin)
 
     /* remove node from hulls_right */
     hulls_right = &self->populations[pop].hulls_right[label];
-    query.position = hull->right;
-    query.insertion_order = UINT64_MAX;
+    query.right = hull->right;
+    query.right_insertion_order = UINT64_MAX;
     c = avl_search_closest(hulls_right, &query, &query_node);
     /* query < query_node->item ==> c = -1 */
     if (c == -1) {
         query_node = query_node->prev;
     }
-    query_ptr = (hullend_t *) query_node->item;
-    tsk_bug_assert(query_ptr->position == hull->right);
+    query_ptr = (hull_t *) query_node->item;
+    tsk_bug_assert(query_ptr != NULL);
     node = query_node;
     avl_unlink_node(hulls_right, node);
     msp_free_avl_node(self, node);
-    msp_free_hullend(self, query_ptr, label);
     msp_free_hull(self, hull, label);
     lin->hull = NULL;
 }
@@ -2019,7 +1983,6 @@ msp_verify_hulls(msp_t *self)
     lineage_t *lin;
     segment_t *x, *y;
     hull_t *hull, hull_a, hull_b;
-    hullend_t *hullend;
     fenwick_t *coal_mass_index;
     const double hull_offset = self->model.params.smc_k_coalescent.hull_offset;
     double pos, hull_right;
@@ -2104,19 +2067,19 @@ msp_verify_hulls(msp_t *self)
             pos = -1;
             io = 0;
             for (a = avl->head; a != NULL; a = a->next) {
-                hullend = (hullend_t *) a->item;
+                hull = (hull_t *) a->item;
                 /* verify insertion order count */
                 if (pos == -1) {
-                    pos = hullend->position;
+                    pos = hull->right;
                 } else {
-                    if (pos == hullend->position) {
+                    if (pos == hull->right) {
                         io++;
                     } else {
                         io = 0;
                     }
                 }
-                tsk_bug_assert(io == hullend->insertion_order);
-                pos = hullend->position;
+                tsk_bug_assert(io == hull->right_insertion_order);
+                pos = hull->right;
             }
         }
     }
@@ -3261,7 +3224,7 @@ msp_reset_hull_right(msp_t *self, lineage_t *lineage, double new_right)
     int c;
     avl_tree_t *hulls_left, *hulls_right;
     fenwick_t *coal_mass_index;
-    hullend_t query_hullend, *floor_hullend;
+    hull_t query_hullend, *floor_hullend;
     hull_t query_hull;
     avl_node_t *node;
     hull_t *curr_hull;
@@ -3305,19 +3268,19 @@ msp_reset_hull_right(msp_t *self, lineage_t *lineage, double new_right)
 
     /* unlink last inserted node with node->item->position == old_right */
     hulls_right = &self->populations[population_id].hulls_right[label_id];
-    query_hullend.position = old_right;
-    query_hullend.insertion_order = UINT64_MAX;
+    query_hullend.right = old_right;
+    query_hullend.right_insertion_order = UINT64_MAX;
     c = avl_search_closest(hulls_right, &query_hullend, &node);
     /* query_hullend < node->item ==> c = -1 */
     if (c == -1) {
         node = node->prev;
     }
-    floor_hullend = (hullend_t *) node->item;
-    tsk_bug_assert(floor_hullend->position == old_right);
+    floor_hullend = (hull_t *) node->item;
+    tsk_bug_assert(floor_hullend->right == old_right);
     avl_unlink_node(hulls_right, node);
     /* modify right and reinsert hullend */
-    floor_hullend->position = new_right;
-    floor_hullend->insertion_order = UINT64_MAX;
+    floor_hullend->right = new_right;
+    floor_hullend->right_insertion_order = UINT64_MAX;
     node = avl_insert_node(hulls_right, node);
     tsk_bug_assert(node != NULL);
     hullend_adjust_insertion_order(floor_hullend, node);

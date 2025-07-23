@@ -108,12 +108,9 @@ typedef struct hull_t_t {
     size_t id;
     uint64_t count;
     uint64_t left_insertion_order;
+    uint64_t right_insertion_order;
 } hull_t;
 
-typedef struct {
-    double position;
-    uint64_t insertion_order;
-} hullend_t;
 
 #define MSP_POP_STATE_INACTIVE 0
 #define MSP_POP_STATE_ACTIVE 1
