@@ -170,8 +170,8 @@ cmp_hull(const void *a, const void *b)
     int ret = (ia->left > ib->left) - (ia->left < ib->left);
 
     if (ret == 0) {
-        ret = (ia->insertion_order > ib->insertion_order)
-              - (ia->insertion_order < ib->insertion_order);
+        ret = (ia->left_insertion_order > ib->left_insertion_order)
+              - (ia->left_insertion_order < ib->left_insertion_order);
     }
     return ret;
 }
@@ -974,7 +974,7 @@ msp_alloc_hull(msp_t *self, double left, double right, lineage_t *lineage)
     tsk_bug_assert(right <= self->sequence_length);
     hull->right = right;
     hull->count = 0;
-    hull->insertion_order = UINT64_MAX;
+    hull->left_insertion_order = UINT64_MAX;
     tsk_bug_assert(lineage->head->prev == NULL);
     tsk_bug_assert(lineage->hull == NULL);
     lineage->hull = hull;
@@ -1323,10 +1323,10 @@ hull_adjust_insertion_order(hull_t *h, avl_node_t *node)
     if (node->prev != NULL) {
         prev_hull = (hull_t *) node->prev->item;
         if (h->left == prev_hull->left) {
-            insertion_order = prev_hull->insertion_order + 1;
+            insertion_order = prev_hull->left_insertion_order + 1;
         }
     }
-    h->insertion_order = insertion_order;
+    h->left_insertion_order = insertion_order;
 }
 
 static inline void
@@ -1379,7 +1379,7 @@ msp_insert_hull(msp_t *self, lineage_t *lineage)
         goto out;
     }
     /* required for migration */
-    hull->insertion_order = UINT64_MAX;
+    hull->left_insertion_order = UINT64_MAX;
     avl_init_node(node, hull);
     node = avl_insert_node(hulls_left, node);
     tsk_bug_assert(node != NULL);
@@ -1465,7 +1465,7 @@ msp_remove_hull(msp_t *self, lineage_t *lin)
         curr_hull = (hull_t *) curr_node->item;
         /* adjust insertion order */
         if (hull->left == curr_hull->left) {
-            curr_hull->insertion_order--;
+            curr_hull->left_insertion_order--;
         }
         if (hull->right > curr_hull->left) {
             curr_hull->count--;
@@ -2089,7 +2089,7 @@ msp_verify_hulls(msp_t *self)
                         io = 0;
                     }
                 }
-                tsk_bug_assert(io == hull->insertion_order);
+                tsk_bug_assert(io == hull->left_insertion_order);
                 pos = hull->left;
             }
             tsk_bug_assert(count == num_coalescing_pairs);
@@ -3287,7 +3287,7 @@ msp_reset_hull_right(msp_t *self, lineage_t *lineage, double new_right)
 
     /* adapt count for lineages between old_right and new_right */
     query_hull.left = new_right;
-    query_hull.insertion_order = 0;
+    query_hull.left_insertion_order = 0;
     avl_search_closest(hulls_left, &query_hull, &node);
     tsk_bug_assert(node != NULL);
     for (; node != NULL; node = node->next) {

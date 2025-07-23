@@ -107,7 +107,7 @@ typedef struct hull_t_t {
     lineage_t *lineage;
     size_t id;
     uint64_t count;
-    uint64_t insertion_order;
+    uint64_t left_insertion_order;
 } hull_t;
 
 typedef struct {
