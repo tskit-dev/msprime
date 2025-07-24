@@ -4135,8 +4135,7 @@ msp_merge_n_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         tsk_bug_assert(u->lineage != NULL);
         if (u->lineage->population != population_id) {
             current_pop = &self->populations[u->lineage->population];
-            avl_node = avl_search(&current_pop->ancestors[label], u->lineage);
-            tsk_bug_assert(avl_node != NULL);
+            avl_node = &u->lineage->avl_node;
             ret = msp_move_individual(
                 self, avl_node, &current_pop->ancestors[label], population_id, label);
             if (ret != 0) {
@@ -5804,11 +5803,7 @@ static int
 msp_change_label(msp_t *self, lineage_t *lin, label_id_t label)
 {
     avl_tree_t *pop = &self->populations[lin->population].ancestors[lin->label];
-    avl_node_t *node;
-
-    /* Find the this individual in the AVL tree. */
-    node = avl_search(pop, lin);
-    tsk_bug_assert(node != NULL);
+    avl_node_t *node = &lin->avl_node;
     return msp_move_individual(self, node, pop, lin->population, label);
 }
 
