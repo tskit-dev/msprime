@@ -436,6 +436,21 @@ class TestAlgorithms:
         input_tables.nodes.assert_equals(output_tables.nodes[: len(input_tables.nodes)])
         assert len(output_tables.edges) >= 2
 
+    @pytest.mark.parametrize("r", [0, 0.1, 1])
+    def test_pedigree_only_internal_samples(self, r):
+        input_tables = simulate_pedigree(
+            num_founders=4, num_generations=4, sample_gen=[1]
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ts_path = pathlib.Path(tmpdir) / "pedigree.trees"
+            input_tables.dump(ts_path)
+            ts = self.run_script(f"0 --from-ts {ts_path} -r {r} --model=fixed_pedigree")
+        output_tables = ts.dump_tables()
+        input_tables.individuals.assert_equals(output_tables.individuals)
+        input_tables.nodes.assert_equals(output_tables.nodes[: len(input_tables.nodes)])
+        assert np.all(ts.nodes_time[ts.samples()] == 1)
+        assert len(output_tables.edges) >= 2
+
     @pytest.mark.parametrize("num_founders", [1, 2, 20])
     def test_one_gen_pedigree(self, num_founders):
         tables = simulate_pedigree(num_founders=num_founders, num_generations=1)
