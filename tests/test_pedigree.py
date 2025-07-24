@@ -567,6 +567,30 @@ class TestSimulateThroughPedigree:
         )
         self.verify(tables, recombination_rate)
 
+    @pytest.mark.parametrize("num_founders", [2, 3, 5])
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_internal_and_leaf_samples(self, num_founders, recombination_rate):
+        tables = simulate_pedigree(
+            num_founders=num_founders,
+            num_children_prob=[0, 0, 1],
+            num_generations=5,
+            sequence_length=100,
+            sample_gen=[0, 2],
+        )
+        self.verify(tables, recombination_rate)
+
+    @pytest.mark.parametrize("num_founders", [2, 3, 5])
+    @pytest.mark.parametrize("recombination_rate", [0, 0.01])
+    def test_no_leaf_samples(self, num_founders, recombination_rate):
+        tables = simulate_pedigree(
+            num_founders=num_founders,
+            num_children_prob=[0, 0, 1],
+            num_generations=5,
+            sequence_length=100,
+            sample_gen=[1],
+        )
+        self.verify(tables, recombination_rate)
+
     @pytest.mark.parametrize("num_founders", [2, 3, 10, 20])
     @pytest.mark.parametrize("recombination_rate", [0, 0.01])
     def test_deep(self, num_founders, recombination_rate):
@@ -836,8 +860,11 @@ class TestSimulateThroughPedigreeEventByEvent(TestSimulateThroughPedigree):
             recombination_rate=recombination_rate,
             random_seed=1,
         )
+        # print(ts1.tables)
+        # print(ts1.draw_text())
         sim.run(event_chunk=1)
         output_tables = tskit.TableCollection.fromdict(sim.tables.asdict())
+        # print(output_tables)
         output_tables.assert_equals(ts1.tables, ignore_provenance=True)
         return ts1
 

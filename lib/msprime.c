@@ -3007,6 +3007,25 @@ out:
     return ret;
 }
 
+static void
+msp_skip_pedigree_non_samples(msp_t *self)
+{
+    individual_t *ind = NULL;
+    pedigree_t *pedigree = &self->pedigree;
+    const tsk_id_t num_individuals = (tsk_id_t) pedigree->num_individuals;
+    const tsk_flags_t *nodes_flags = self->tables->nodes.flags;
+    tsk_id_t j, node;
+
+    for (j = 0; j < num_individuals; j++) {
+        ind = pedigree->visit_order[j];
+        node = ind->nodes[0];
+        if ((nodes_flags[node] & TSK_NODE_IS_SAMPLE) != 0) {
+            break;
+        }
+    }
+    pedigree->next_individual = j;
+}
+
 static int MSP_WARN_UNUSED
 msp_pedigree_initialise(msp_t *self)
 {
@@ -3057,6 +3076,7 @@ msp_pedigree_initialise(msp_t *self)
     counter->value = 0;
 
     self->pedigree.next_individual = 0;
+    msp_skip_pedigree_non_samples(self);
 out:
     return ret;
 }

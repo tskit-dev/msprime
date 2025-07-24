@@ -205,6 +205,54 @@ verify_pedigree(double recombination_rate, unsigned long seed,
 }
 
 static void
+verify_pedigree_event_by_event(double recombination_rate, unsigned long seed,
+    tsk_size_t num_individuals, tsk_id_t *parents, double *time, tsk_flags_t *is_sample,
+    tsk_id_t *population, uint32_t additional_nodes)
+{
+    int ret, status1, status2;
+    int ploidy = 2;
+    msp_t msp1, msp2;
+    tsk_table_collection_t tables1, tables2;
+    gsl_rng *rng1 = safe_rng_alloc();
+    gsl_rng *rng2 = safe_rng_alloc();
+
+    ret = build_pedigree_sim(&msp1, &tables1, rng1, 100, ploidy, num_individuals,
+        parents, time, is_sample, population);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = build_pedigree_sim(&msp2, &tables2, rng2, 100, ploidy, num_individuals,
+        parents, time, is_sample, population);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_initialise(&msp1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_initialise(&msp2);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_run(&msp1, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_FATAL(ret == MSP_EXIT_MODEL_COMPLETE || ret == MSP_EXIT_COALESCENCE);
+    status1 = ret;
+
+    ret = MSP_EXIT_MAX_EVENTS;
+    while (ret == MSP_EXIT_MAX_EVENTS) {
+        ret = msp_run(&msp2, DBL_MAX, 1);
+        CU_ASSERT_FATAL(ret >= 0);
+        msp_verify(&msp2, 0);
+    }
+    CU_ASSERT_FATAL(ret == MSP_EXIT_MODEL_COMPLETE || ret == MSP_EXIT_COALESCENCE);
+    status2 = ret;
+    CU_ASSERT_EQUAL(status1, status2);
+
+    CU_ASSERT_TRUE(tsk_table_collection_equals(&tables1, &tables2, 0));
+
+    tsk_table_collection_free(&tables1);
+    msp_free(&msp1);
+    tsk_table_collection_free(&tables2);
+    msp_free(&msp2);
+    gsl_rng_free(rng1);
+    gsl_rng_free(rng2);
+}
+
+static void
 test_trio(void)
 {
 
@@ -850,6 +898,29 @@ test_internal_samples(void)
 
     verify_pedigree(0, 1, 3, parents, time, is_sample, NULL, 0);
     verify_pedigree(0.1, 1, 3, parents, time, is_sample, NULL, 0);
+
+    verify_pedigree_event_by_event(0, 1, 3, parents, time, is_sample, NULL, 0);
+    verify_pedigree_event_by_event(0.1, 1, 3, parents, time, is_sample, NULL, 0);
+}
+
+static void
+test_no_leaf_samples(void)
+{
+    tsk_id_t *parents = deep_n10_parents;
+    double *time = deep_n10_time;
+    size_t num_inds = sizeof(deep_n10_time) / sizeof(*deep_n10_time);
+    tsk_flags_t is_sample[num_inds];
+    size_t j;
+
+    for (j = 0; j < num_inds; j++) {
+        is_sample[j] = time[j] == 1;
+    }
+
+    verify_pedigree(0, 1, num_inds, parents, time, is_sample, NULL, 0);
+    verify_pedigree(0.1, 1, num_inds, parents, time, is_sample, NULL, 0);
+
+    verify_pedigree_event_by_event(0, 1, num_inds, parents, time, is_sample, NULL, 0);
+    verify_pedigree_event_by_event(0.1, 1, num_inds, parents, time, is_sample, NULL, 0);
 }
 
 static void
@@ -895,6 +966,7 @@ test_trio_same_pop(void)
     tsk_id_t population[] = { 2, 2, 2 };
 
     verify_pedigree(0, 1, 3, parents, time, NULL, population, 0);
+    verify_pedigree_event_by_event(0, 1, 3, parents, time, NULL, population, 0);
 }
 
 static void
@@ -906,6 +978,7 @@ test_trio_child_different_pop(void)
     tsk_id_t population[] = { 2, 2, 1 };
 
     verify_pedigree(0, 1, 3, parents, time, NULL, population, 0);
+    verify_pedigree_event_by_event(0, 1, 3, parents, time, NULL, population, 0);
 }
 
 int
@@ -918,6 +991,7 @@ main(int argc, char **argv)
         { "test_sibs", test_sibs },
         { "test_ancient_sample", test_ancient_sample },
         { "test_internal_samples", test_internal_samples },
+        { "test_no_leaf_samples", test_no_leaf_samples },
         { "test_large_family", test_large_family },
         { "test_unrelated_n3", test_unrelated_n3 },
         { "test_very_deep_n2", test_very_deep_n2 },
@@ -933,7 +1007,6 @@ main(int argc, char **argv)
         { "test_replicates_exit_coalescence", test_replicates_exit_coalescence },
         { "test_errors", test_errors },
         { "test_combined_with_other_models", test_combined_with_other_models },
-
         { "test_trio_same_pop", test_trio_same_pop },
         { "test_trio_child_different_pop", test_trio_child_different_pop },
         CU_TEST_INFO_NULL,
