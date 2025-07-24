@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2015-2024 University of Oxford
+** Copyright (C) 2015-2025 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -1470,19 +1470,14 @@ msp_insert_individual(msp_t *self, lineage_t *lin)
 
     tsk_bug_assert(lin != NULL);
     tsk_bug_assert(lin->head != NULL);
-    node = msp_alloc_avl_node(self);
-    if (node == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
-        goto out;
-    }
+    node = &lin->avl_node;
     avl_init_node(node, lin);
     node = avl_insert_node(msp_get_lineage_population(self, lin), node);
-    tsk_bug_assert(node != NULL);
+    tsk_bug_assert(node == &lin->avl_node);
 
     if (self->model.type == MSP_MODEL_SMC_K) {
         ret = msp_insert_individual_hull(self, lin);
     }
-out:
     return ret;
 }
 
@@ -1491,12 +1486,11 @@ msp_remove_individual(msp_t *self, lineage_t *lin)
 {
     avl_node_t *node;
     avl_tree_t *pop;
+
     tsk_bug_assert(lin != NULL);
     pop = msp_get_lineage_population(self, lin);
-    node = avl_search(pop, lin);
-    tsk_bug_assert(node != NULL);
+    node = &lin->avl_node;
     avl_unlink_node(pop, node);
-    msp_free_avl_node(self, node);
     msp_free_lineage(self, lin);
 }
 
@@ -1688,11 +1682,8 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
             label_segments == object_heap_get_num_allocated(&self->segment_heap[k]));
         tsk_bug_assert(
             label_hulls == object_heap_get_num_allocated(&self->hull_heap[k]));
-        /* tsk_bug_assert( */
-        /*     label_hulls == object_heap_get_num_allocated(&self->hullend_heap[k])); */
     }
-    total_avl_nodes = msp_get_num_ancestors(self) + avl_count(&self->breakpoints)
-                      + avl_count(&self->overlap_counts)
+    total_avl_nodes = avl_count(&self->breakpoints) + avl_count(&self->overlap_counts)
                       + avl_count(&self->non_empty_populations);
     tsk_bug_assert(msp_get_num_ancestors(self)
                    == object_heap_get_num_allocated(&self->lineage_heap));
@@ -1705,8 +1696,7 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
     }
     tsk_bug_assert(total_avl_nodes + pedigree_avl_nodes
                    == object_heap_get_num_allocated(&self->avl_node_heap));
-    tsk_bug_assert(total_avl_nodes - msp_get_num_ancestors(self)
-                       - avl_count(&self->non_empty_populations)
+    tsk_bug_assert(total_avl_nodes - avl_count(&self->non_empty_populations)
                    == object_heap_get_num_allocated(&self->node_mapping_heap));
     if (self->recomb_mass_index != NULL) {
         msp_verify_segment_index(
@@ -2682,7 +2672,6 @@ msp_move_individual(msp_t *self, avl_node_t *node, avl_tree_t *source,
 
     ind = (lineage_t *) node->item;
     avl_unlink_node(source, node);
-    msp_free_avl_node(self, node);
     if (self->model.type == MSP_MODEL_SMC_K) {
         msp_remove_hull(self, ind);
     }
@@ -4146,8 +4135,7 @@ msp_merge_n_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
         tsk_bug_assert(u->lineage != NULL);
         if (u->lineage->population != population_id) {
             current_pop = &self->populations[u->lineage->population];
-            avl_node = avl_search(&current_pop->ancestors[label], u->lineage);
-            tsk_bug_assert(avl_node != NULL);
+            avl_node = &u->lineage->avl_node;
             ret = msp_move_individual(
                 self, avl_node, &current_pop->ancestors[label], population_id, label);
             if (ret != 0) {
@@ -4229,7 +4217,6 @@ msp_reset_memory_state(msp_t *self)
                     u = v;
                 }
                 avl_unlink_node(&pop->ancestors[label], node);
-                msp_free_avl_node(self, node);
                 if (lin->hull != NULL) {
                     msp_remove_hull(self, lin);
                 }
@@ -5816,11 +5803,7 @@ static int
 msp_change_label(msp_t *self, lineage_t *lin, label_id_t label)
 {
     avl_tree_t *pop = &self->populations[lin->population].ancestors[lin->label];
-    avl_node_t *node;
-
-    /* Find the this individual in the AVL tree. */
-    node = avl_search(pop, lin);
-    tsk_bug_assert(node != NULL);
+    avl_node_t *node = &lin->avl_node;
     return msp_move_individual(self, node, pop, lin->population, label);
 }
 
@@ -7162,7 +7145,6 @@ msp_simple_bottleneck(msp_t *self, demographic_event_t *event)
             lin = (lineage_t *) node->item;
             u = lin->head;
             avl_unlink_node(pop, node);
-            msp_free_avl_node(self, node);
             msp_free_lineage(self, lin);
             q_node = msp_alloc_avl_node(self);
             if (q_node == NULL) {
@@ -7314,7 +7296,6 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
              * set for the root at u */
             lin = (lineage_t *) avl_nodes[j]->item;
             avl_unlink_node(pop, avl_nodes[j]);
-            msp_free_avl_node(self, avl_nodes[j]);
             set_node = msp_alloc_avl_node(self);
             if (set_node == NULL) {
                 ret = MSP_ERR_NO_MEMORY;
@@ -7601,9 +7582,7 @@ msp_std_common_ancestor_event(
         tsk_bug_assert(node != NULL);
     } else {
         self->num_ca_events++;
-        msp_free_avl_node(self, x_node);
         msp_free_lineage(self, x_lin);
-        msp_free_avl_node(self, y_node);
         msp_free_lineage(self, y_lin);
         ret = msp_merge_two_ancestors(self, population_id, label, x, y, TSK_NULL, NULL);
     }
@@ -7647,14 +7626,13 @@ msp_smc_k_common_ancestor_event(
     double random_mass, num_pairs, remaining_mass;
     size_t hull_id;
     fenwick_t *coal_mass_index;
-    avl_tree_t *avl;
+    avl_tree_t *ancestors;
     avl_node_t *x_node, *y_node, *search;
     hull_t *x_hull, *y_hull = NULL;
     lineage_t *x_lin, *y_lin;
     segment_t *x, *y;
 
     /* find first hull */
-    /* FIX ME: clean up the various type castings */
     coal_mass_index = &self->populations[population_id].coal_mass_index[label];
     num_pairs = fenwick_get_total(coal_mass_index);
     random_mass = gsl_ran_flat(self->rng, 0, num_pairs);
@@ -7666,9 +7644,7 @@ msp_smc_k_common_ancestor_event(
     remaining_mass = fenwick_get_cumulative_sum(coal_mass_index, hull_id) - random_mass;
 
     /* find second hull */
-    avl = &self->populations[population_id].hulls_left[label];
-    search = avl_search(avl, x_hull);
-    tsk_bug_assert(search != NULL);
+    search = &x_hull->left_avl_node;
     for (search = search->prev; remaining_mass >= 0; search = search->prev) {
         tsk_bug_assert(search != NULL);
         y_hull = (hull_t *) search->item;
@@ -7682,19 +7658,15 @@ msp_smc_k_common_ancestor_event(
     msp_remove_hull(self, y_lin);
 
     /* retrieve ancestors linked to both hulls */
-    avl = &self->populations[population_id].ancestors[label];
+    ancestors = &self->populations[population_id].ancestors[label];
     x = x_lin->head;
-    x_node = avl_search(avl, x_lin);
-    tsk_bug_assert(x_node != NULL);
-    avl_unlink_node(avl, x_node);
+    x_node = &x_lin->avl_node;
+    avl_unlink_node(ancestors, x_node);
     y = y_lin->head;
-    y_node = avl_search(avl, y_lin);
-    tsk_bug_assert(y_node != NULL);
-    avl_unlink_node(avl, y_node);
+    y_node = &y_lin->avl_node;
+    avl_unlink_node(ancestors, y_node);
 
     self->num_ca_events++;
-    msp_free_avl_node(self, x_node);
-    msp_free_avl_node(self, y_node);
     msp_free_lineage(self, x_lin);
     msp_free_lineage(self, y_lin);
     ret = msp_merge_two_ancestors(self, population_id, label, x, y, TSK_NULL, NULL);
@@ -7781,9 +7753,7 @@ msp_dirac_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t 
         y = y_lin->head;
         avl_unlink_node(ancestors, y_node);
         self->num_ca_events++;
-        msp_free_avl_node(self, x_node);
         msp_free_lineage(self, x_lin);
-        msp_free_avl_node(self, y_node);
         msp_free_lineage(self, y_lin);
         ret = msp_merge_two_ancestors(self, pop_id, label, x, y, TSK_NULL, NULL);
     } else {
@@ -7947,7 +7917,6 @@ msp_multi_merger_common_ancestor_event(
                 lin = (lineage_t *) node->item;
                 u = lin->head;
                 avl_unlink_node(ancestors, node);
-                msp_free_avl_node(self, node);
                 msp_free_lineage(self, lin);
 
                 q_node = msp_alloc_avl_node(self);
