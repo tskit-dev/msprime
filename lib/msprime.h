@@ -109,6 +109,8 @@ typedef struct hull_t_t {
     uint64_t count;
     uint64_t left_insertion_order;
     uint64_t right_insertion_order;
+    avl_node_t left_avl_node;
+    avl_node_t right_avl_node;
 } hull_t;
 
 #define MSP_POP_STATE_INACTIVE 0
