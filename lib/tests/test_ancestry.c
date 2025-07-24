@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2016-2024 University of Oxford
+** Copyright (C) 2016-2025 University of Oxford
 **
 ** This file is part of msprime.
 **
