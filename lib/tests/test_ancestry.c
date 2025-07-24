@@ -795,7 +795,7 @@ test_dtwf_multi_locus_simulation(void)
     long seed = 10;
     double migration_matrix[] = { 0, 0.1, 0.1, 0 };
     const char *model_name;
-    size_t num_ca_events, num_re_events;
+    size_t num_ca_events, num_re_events, num_mig_events;
     double t;
     tsk_table_collection_t tables;
     msp_t msp;
@@ -809,6 +809,8 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, 0.1), 0);
     ret = msp_set_population_configuration(&msp, 0, n, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 1, n, 0, true);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_store_migrations(&msp, true);
@@ -819,12 +821,14 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_STRING_EQUAL(model_name, "dtwf");
 
     ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
     msp_verify(&msp, 0);
     num_ca_events = msp_get_num_common_ancestor_events(&msp);
     num_re_events = msp_get_num_recombination_events(&msp);
+    num_mig_events = tables.migrations.num_rows;
     CU_ASSERT_TRUE(num_ca_events > 0);
     CU_ASSERT_TRUE(num_re_events > 0);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_TRUE(num_mig_events > 0);
     msp_free(&msp);
     tsk_table_collection_free(&tables);
 
@@ -838,7 +842,12 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_population_configuration(&msp, 0, n, 0, true);
     CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_population_configuration(&msp, 1, n, 0, true);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_migration_matrix(&msp, 4, migration_matrix);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_store_migrations(&msp, true);
+    CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
     t = 1;
@@ -854,6 +863,7 @@ test_dtwf_multi_locus_simulation(void)
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_TRUE(num_ca_events == msp_get_num_common_ancestor_events(&msp));
     CU_ASSERT_TRUE(num_re_events == msp_get_num_recombination_events(&msp));
+    CU_ASSERT_TRUE(num_mig_events == tables.migrations.num_rows);
 
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
