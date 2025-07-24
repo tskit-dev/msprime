@@ -7631,14 +7631,13 @@ msp_smc_k_common_ancestor_event(
     double random_mass, num_pairs, remaining_mass;
     size_t hull_id;
     fenwick_t *coal_mass_index;
-    avl_tree_t *avl;
+    avl_tree_t *ancestors;
     avl_node_t *x_node, *y_node, *search;
     hull_t *x_hull, *y_hull = NULL;
     lineage_t *x_lin, *y_lin;
     segment_t *x, *y;
 
     /* find first hull */
-    /* FIX ME: clean up the various type castings */
     coal_mass_index = &self->populations[population_id].coal_mass_index[label];
     num_pairs = fenwick_get_total(coal_mass_index);
     random_mass = gsl_ran_flat(self->rng, 0, num_pairs);
@@ -7650,9 +7649,7 @@ msp_smc_k_common_ancestor_event(
     remaining_mass = fenwick_get_cumulative_sum(coal_mass_index, hull_id) - random_mass;
 
     /* find second hull */
-    avl = &self->populations[population_id].hulls_left[label];
-    search = avl_search(avl, x_hull);
-    tsk_bug_assert(search != NULL);
+    search = &x_hull->left_avl_node;
     for (search = search->prev; remaining_mass >= 0; search = search->prev) {
         tsk_bug_assert(search != NULL);
         y_hull = (hull_t *) search->item;
@@ -7666,15 +7663,13 @@ msp_smc_k_common_ancestor_event(
     msp_remove_hull(self, y_lin);
 
     /* retrieve ancestors linked to both hulls */
-    avl = &self->populations[population_id].ancestors[label];
+    ancestors = &self->populations[population_id].ancestors[label];
     x = x_lin->head;
-    x_node = avl_search(avl, x_lin);
-    tsk_bug_assert(x_node != NULL);
-    avl_unlink_node(avl, x_node);
+    x_node = &x_lin->avl_node;
+    avl_unlink_node(ancestors, x_node);
     y = y_lin->head;
-    y_node = avl_search(avl, y_lin);
-    tsk_bug_assert(y_node != NULL);
-    avl_unlink_node(avl, y_node);
+    y_node = &y_lin->avl_node;
+    avl_unlink_node(ancestors, y_node);
 
     self->num_ca_events++;
     msp_free_lineage(self, x_lin);
