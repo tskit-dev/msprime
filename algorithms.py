@@ -682,6 +682,14 @@ class OverlapCounter:
         return seg
 
 
+# The SMC(k) implementation here differs in a few details to the
+# version in the C code. Most of this is incidental detail related
+# to memory management and differences in AVL tree implementations.
+# The main difference is that we have an implementation of
+# reset_hull_right here which could be worth porting into the C
+# code at some point.
+
+
 class Hull:
     """
     A hull keeps track of the outermost boundaries (left, right) of
@@ -1952,7 +1960,9 @@ class Simulator:
         elif head is not None:
             new_individual_head = head
         if new_individual_head is not None:
-            # FIXME when doing the smc_k update
+            # NOTE: this is not done very nicely and there's likely
+            # ways that would improve performance a little. See
+            # https://github.com/tskit-dev/msprime/issues/2386
             lineage.reset_segments()
             self.update_lineage_right(lineage)
             new_lineage = self.alloc_lineage(new_individual_head, pop)
@@ -2018,7 +2028,7 @@ class Simulator:
             y.prev = None
             alpha = y
 
-        # FIXME
+        # See https://github.com/tskit-dev/msprime/issues/2386
         lineage.reset_segments()
         self.update_lineage_right(lineage)
 
