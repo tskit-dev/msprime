@@ -1336,6 +1336,9 @@ msp_insert_hull(msp_t *self, lineage_t *lineage)
     /* setting hull->count requires two steps
     step 1: num_starting before hull->left */
     tsk_bug_assert(hull != NULL);
+
+    /* printf("insert_hull %d\n", (int) hull->id); */
+
     pop = lineage->population;
     label = lineage->label;
     hulls_left = &self->populations[pop].hulls_left[label];
@@ -1392,6 +1395,9 @@ msp_insert_hull(msp_t *self, lineage_t *lineage)
     }
     avl_init_node(node, hull);
     node = avl_insert_node(hulls_right, node);
+    /* if (node == NULL) { */
+    /*     msp_print_state(self, stdout); */
+    /* } */
     tsk_bug_assert(node != NULL);
     hullend_adjust_insertion_order(hull, node);
 out:
@@ -1401,9 +1407,9 @@ out:
 static void
 msp_remove_hull(msp_t *self, lineage_t *lin)
 {
-    int c;
-    avl_node_t *node, *curr_node, *query_node;
-    hull_t query, *query_ptr;
+    /* int c; */
+    avl_node_t *node, *curr_node;
+    /* hull_t query, *query_ptr; */
     hull_t *curr_hull, *hull;
     avl_tree_t *hulls_left, *hulls_right;
     fenwick_t *coal_mass_index;
@@ -1420,6 +1426,9 @@ msp_remove_hull(msp_t *self, lineage_t *lin)
     tsk_bug_assert(u != NULL);
     hulls_left = &self->populations[pop].hulls_left[label];
     coal_mass_index = &self->populations[pop].coal_mass_index[label];
+
+    /* printf("remove_hull %d\n", (int) hull->id); */
+
     node = avl_search(hulls_left, hull);
     tsk_bug_assert(node != NULL);
 
@@ -1447,18 +1456,20 @@ msp_remove_hull(msp_t *self, lineage_t *lin)
     avl_unlink_node(hulls_left, node);
     msp_free_avl_node(self, node);
 
-    /* remove node from hulls_right */
+    /* remove node from hulls_right and adjust insertion order. */
     hulls_right = &self->populations[pop].hulls_right[label];
-    query.right = hull->right;
-    query.right_insertion_order = UINT64_MAX;
-    c = avl_search_closest(hulls_right, &query, &query_node);
-    /* query < query_node->item ==> c = -1 */
-    if (c == -1) {
-        query_node = query_node->prev;
+    node = avl_search(hulls_right, hull);
+    tsk_bug_assert(node != NULL);
+
+    for (curr_node = node->next; curr_node != NULL; curr_node = curr_node->next) {
+        curr_hull = (hull_t *) curr_node->item;
+        /* adjust insertion order */
+        if (hull->right == curr_hull->right) {
+            curr_hull->right_insertion_order--;
+        } else {
+            break;
+        }
     }
-    query_ptr = (hull_t *) query_node->item;
-    tsk_bug_assert(query_ptr != NULL);
-    node = query_node;
     avl_unlink_node(hulls_right, node);
     msp_free_avl_node(self, node);
     msp_free_hull(self, hull, label);
@@ -1715,8 +1726,8 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
             label_segments == object_heap_get_num_allocated(&self->segment_heap[k]));
         tsk_bug_assert(
             label_hulls == object_heap_get_num_allocated(&self->hull_heap[k]));
-        tsk_bug_assert(
-            label_hulls == object_heap_get_num_allocated(&self->hullend_heap[k]));
+        /* tsk_bug_assert( */
+        /*     label_hulls == object_heap_get_num_allocated(&self->hullend_heap[k])); */
     }
     total_avl_nodes = msp_get_num_ancestors(self) + avl_count(&self->breakpoints)
                       + avl_count(&self->overlap_counts)
@@ -1977,6 +1988,7 @@ msp_verify_hulls(msp_t *self)
 {
     label_id_t label_id;
     population_id_t population_id;
+    population_t *pop;
     int count, num_coalescing_pairs;
     avl_tree_t *avl;
     avl_node_t *a, *b;
@@ -1994,7 +2006,11 @@ msp_verify_hulls(msp_t *self)
         for (label_id = 0; label_id < (label_id_t) self->num_labels; label_id++) {
             num_coalescing_pairs = 0;
             count = 0;
-            avl = &self->populations[population_id].ancestors[label_id];
+            pop = &self->populations[population_id];
+            avl = &pop->ancestors[label_id];
+
+            tsk_bug_assert(avl_count(avl) == avl_count(&pop->hulls_left[label_id]));
+            tsk_bug_assert(avl_count(avl) == avl_count(&pop->hulls_right[label_id]));
 
             /* Do some basic testing on the hull/lineage integrity */
             for (a = avl->head; a != NULL; a = a->next) {
@@ -2078,6 +2094,9 @@ msp_verify_hulls(msp_t *self)
                         io = 0;
                     }
                 }
+                /* printf("hull %d io=%d insertion_order=%d\n", */
+                /*         (int) hull->id, (int) io, (int) hull->right_insertion_order);
+                 */
                 tsk_bug_assert(io == hull->right_insertion_order);
                 pos = hull->right;
             }
@@ -2229,6 +2248,63 @@ msp_print_initial_overlaps(msp_t *self, FILE *out)
     fprintf(out, "\t%f -> %d\n", overlap->left, (int) overlap->count);
 }
 
+static void
+msp_print_smck_state(msp_t *self, FILE *out)
+{
+    uint32_t j, k;
+    population_t *pop;
+    avl_node_t *a;
+    lineage_t *lineage;
+    hull_t *hull;
+    double v;
+
+    fprintf(out, "=====\nSMCK state\n=====\n");
+    for (j = 0; j < self->num_labels; j++) {
+        for (k = 0; k < self->num_populations; k++) {
+            pop = &self->populations[k];
+            fprintf(out, "Label[%d] Population[%d] size=%d\n", j, k,
+                avl_count(&pop->ancestors[j]));
+            for (a = pop->ancestors->head; a != NULL; a = a->next) {
+                lineage = (lineage_t *) a->item;
+                hull = lineage->hull;
+                tsk_bug_assert(hull != NULL);
+                fprintf(out, "\tlin: head=(%g,%g) tail=(%g,%g) ", lineage->head->left,
+                    lineage->head->right, lineage->tail->left, lineage->tail->right);
+                fprintf(out,
+                    "hull: id=%d left=%g right=%g count=%d "
+                    "left_order=%d right_order=%d\n",
+                    (int) hull->id, hull->left, hull->right, (int) hull->count,
+                    (int) hull->left_insertion_order, (int) hull->right_insertion_order);
+            }
+            fprintf(out, "hulls_left (%d)\n", avl_count(pop->hulls_left));
+            for (a = pop->hulls_left->head; a != NULL; a = a->next) {
+                hull = (hull_t *) a->item;
+                fprintf(out, "\thull: id=%d left=%g left_order=%d\n", (int) hull->id,
+                    hull->left, (int) hull->left_insertion_order);
+            }
+            fprintf(out, "hulls_right (%d)\n", avl_count(pop->hulls_right));
+            for (a = pop->hulls_right->head; a != NULL; a = a->next) {
+                hull = (hull_t *) a->item;
+                fprintf(out, "\thull: id=%d right=%g right_order=%d\n", (int) hull->id,
+                    hull->right, (int) hull->right_insertion_order);
+            }
+
+            fprintf(out, "coal_mass_index size=%d numerical drift = %.17g\n",
+                (int) fenwick_get_size(&pop->coal_mass_index[k]),
+                fenwick_get_numerical_drift(&pop->coal_mass_index[k]));
+            for (j = 1; j <= (uint32_t) fenwick_get_size(&pop->coal_mass_index[k]);
+                 j++) {
+                hull = msp_get_hull(self, j, (label_id_t) k);
+                v = fenwick_get_value(&pop->coal_mass_index[k], j);
+                if (v != 0) {
+                    fprintf(out, "\t%g\tid=%d l=%g r=%g\n", v, (int) hull->id,
+                        hull->left, hull->right);
+                }
+            }
+        }
+    }
+}
+
 int
 msp_print_state(msp_t *self, FILE *out)
 {
@@ -2317,6 +2393,14 @@ msp_print_state(msp_t *self, FILE *out)
         for (k = 0; k < self->num_populations; k++) {
             fprintf(out, "\tpop_size[%d] = %d\n", k,
                 avl_count(&self->populations[k].ancestors[j]));
+            if (self->model.type == MSP_MODEL_SMC_K) {
+                fprintf(out, "\thulls_left[%d] = %d\n", k,
+                    avl_count(&self->populations[k].hulls_left[j]));
+                fprintf(out, "\thulls_right[%d] = %d\n", k,
+                    avl_count(&self->populations[k].hulls_right[j]));
+                fprintf(out, "\tcoal_mass[%d] = %.14g\n", k,
+                    fenwick_get_total(&self->populations[k].coal_mass_index[j]));
+            }
         }
     }
     fprintf(out, "non_empty_populations = [");
@@ -2343,6 +2427,9 @@ msp_print_state(msp_t *self, FILE *out)
     for (j = 0; j < msp_get_num_ancestors(self); j++) {
         fprintf(out, "\t");
         msp_print_segment_chain(self, ancestors[j], out);
+    }
+    if (self->model.type == MSP_MODEL_SMC_K) {
+        msp_print_smck_state(self, out);
     }
     fprintf(out, "Fenwick trees\n");
     for (k = 0; k < self->num_labels; k++) {
@@ -3218,72 +3305,17 @@ out:
     return ret;
 }
 
-static void
-msp_reset_hull_right(msp_t *self, lineage_t *lineage, double new_right)
+/* This function is called in places where we can keep the left of the hull
+ * intact and just reason about the right hand edge, and in earlier versions
+ * there was specific logic for this. In an attempt to simplify the logic
+ * here we just do the straightforward thing, but this is definitely somewhere
+ * we could get some benefit if looking for optimisations.
+ */
+static int
+msp_reset_hull_right(msp_t *self, lineage_t *lineage)
 {
-    int c;
-    avl_tree_t *hulls_left, *hulls_right;
-    fenwick_t *coal_mass_index;
-    hull_t query_hullend, *floor_hullend;
-    hull_t query_hull;
-    avl_node_t *node;
-    hull_t *curr_hull;
-    hull_t *hull = lineage->hull;
-    double old_right = hull->right;
-    label_id_t label_id = lineage->label;
-    population_id_t population_id = lineage->population;
-
-    /* This is not yet true for GC events */
-    /* tsk_bug_assert(lineage->tail->right == new_right); */
-
-    new_right = GSL_MIN(new_right + self->model.params.smc_k_coalescent.hull_offset,
-        self->sequence_length);
-
-    tsk_bug_assert(lineage->hull == hull);
-    tsk_bug_assert(lineage->population == population_id);
-    tsk_bug_assert(lineage->label == label_id);
-    tsk_bug_assert(hull->right == old_right);
-    /* printf("lineage->right = %f new_right=%f\n", hull->right, new_right); */
-
-    hulls_left = &self->populations[population_id].hulls_left[label_id];
-    coal_mass_index = &self->populations[population_id].coal_mass_index[label_id];
-
-    /* adapt count for lineages between old_right and new_right */
-    query_hull.left = new_right;
-    query_hull.left_insertion_order = 0;
-    avl_search_closest(hulls_left, &query_hull, &node);
-    tsk_bug_assert(node != NULL);
-    for (; node != NULL; node = node->next) {
-        curr_hull = (hull_t *) node->item;
-        if (curr_hull->left >= old_right) {
-            break;
-        }
-        if (curr_hull->left >= new_right) {
-            curr_hull->count--;
-            fenwick_increment(coal_mass_index, curr_hull->id, -1);
-        }
-    }
-    /* adjust right */
-    hull->right = new_right;
-
-    /* unlink last inserted node with node->item->position == old_right */
-    hulls_right = &self->populations[population_id].hulls_right[label_id];
-    query_hullend.right = old_right;
-    query_hullend.right_insertion_order = UINT64_MAX;
-    c = avl_search_closest(hulls_right, &query_hullend, &node);
-    /* query_hullend < node->item ==> c = -1 */
-    if (c == -1) {
-        node = node->prev;
-    }
-    floor_hullend = (hull_t *) node->item;
-    tsk_bug_assert(floor_hullend->right == old_right);
-    avl_unlink_node(hulls_right, node);
-    /* modify right and reinsert hullend */
-    floor_hullend->right = new_right;
-    floor_hullend->right_insertion_order = UINT64_MAX;
-    node = avl_insert_node(hulls_right, node);
-    tsk_bug_assert(node != NULL);
-    hullend_adjust_insertion_order(floor_hullend, node);
+    msp_remove_hull(self, lineage);
+    return msp_insert_individual_hull(self, lineage);
 }
 
 static int MSP_WARN_UNUSED
@@ -3416,8 +3448,10 @@ msp_recombination_event(msp_t *self, label_id_t label, lineage_t **lhs, lineage_
         goto out;
     }
     if (self->model.type == MSP_MODEL_SMC_K) {
-        /* modify original hull */
-        msp_reset_hull_right(self, left_lineage, lhs_tail->right);
+        ret = msp_reset_hull_right(self, left_lineage);
+        if (ret != 0) {
+            goto out;
+        }
     }
     if (self->additional_nodes & MSP_NODE_IS_RE_EVENT) {
         ret = msp_store_arg_recombination(self, lhs_tail, alpha);
@@ -3464,8 +3498,8 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
     lineage_t *lineage, *new_lineage;
     double left_breakpoint, right_breakpoint, tl;
     bool insert_alpha;
-    double reset_right = 0.0;
     population_id_t population;
+    const bool is_smc_k = self->model.type == MSP_MODEL_SMC_K;
 
     tsk_bug_assert(self->gc_mass_index != NULL);
     self->num_gc_events++;
@@ -3498,6 +3532,10 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         return 0;
     }
 
+    if (is_smc_k) {
+        msp_remove_hull(self, lineage);
+    }
+
     /* Process left break */
     insert_alpha = true;
     if (left_breakpoint <= y->left) {
@@ -3515,7 +3553,6 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
             insert_alpha = false;
         } else {
             x->next = NULL;
-            reset_right = x->right;
         }
         y->prev = NULL;
         alpha = y;
@@ -3544,7 +3581,6 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         y->right = left_breakpoint;
         msp_set_segment_mass(self, y);
         tail = y;
-        reset_right = left_breakpoint;
 
         if (!msp_has_breakpoint(self, left_breakpoint)) {
             ret = msp_insert_breakpoint(self, left_breakpoint);
@@ -3614,12 +3650,6 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         }
         head->prev = tail;
         msp_set_segment_mass(self, head);
-    } else {
-        // rbp lies beyond segment chain, regular recombination logic applies
-        if (insert_alpha && self->model.type == MSP_MODEL_SMC_K) {
-            tsk_bug_assert(reset_right > 0);
-            msp_reset_hull_right(self, lineage, reset_right);
-        }
     }
 
     //        y            z
@@ -3649,8 +3679,18 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
         self->num_noneffective_gc_events++;
     }
 
+    /* NOTE: we're taking the easy way out here in managing the state of the
+     * lineage and the SMC(k) state as the code paths are quite convoluted.
+     * It seems unlikely the segment iteration will be a bottleneck in
+     * practise, but unconditionaly removing and reinserting hulls could
+     * become significant. */
     lineage_reset_segments(lineage);
-
+    if (is_smc_k) {
+        ret = msp_insert_individual_hull(self, lineage);
+        if (ret != 0) {
+            goto out;
+        }
+    }
     if (self->additional_nodes & MSP_NODE_IS_GC_EVENT) {
         ret = msp_store_arg_gene_conversion(self, tail, alpha, head);
         if (ret != 0) {
@@ -4958,7 +4998,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     int ret = 0;
     const double gc_left_total = msp_get_total_gc_left(self);
     double h = gsl_rng_uniform(self->rng) * gc_left_total;
-    double tl, bp, lhs_new_right;
+    double tl, bp;
     population_id_t population;
     lineage_t *lineage, *new_lineage;
     segment_t *y, *x, *alpha;
@@ -5039,7 +5079,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
         // Ensure y points to the last segment left of the break for full ARG recording
         y = x;
     }
-    lhs_new_right = y->right;
+    /* lhs_new_right = y->right; */
 
     new_lineage = msp_alloc_lineage(self, alpha, NULL, population, label);
     if (new_lineage == NULL) {
@@ -5065,7 +5105,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
 
     if (self->model.type == MSP_MODEL_SMC_K) {
         // lhs logic is identical to the lhs recombination event
-        msp_reset_hull_right(self, lineage, lhs_new_right);
+        msp_reset_hull_right(self, lineage);
     }
 
 out:

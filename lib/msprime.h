@@ -88,9 +88,9 @@ typedef struct segment_t_t {
 
 typedef struct lineage_t_t {
     population_id_t population;
+    label_id_t label;
     segment_t *head;
     segment_t *tail;
-    label_id_t label;
     struct hull_t_t *hull;
 } lineage_t;
 
@@ -111,7 +111,6 @@ typedef struct hull_t_t {
     uint64_t right_insertion_order;
 } hull_t;
 
-
 #define MSP_POP_STATE_INACTIVE 0
 #define MSP_POP_STATE_ACTIVE 1
 #define MSP_POP_STATE_PREVIOUSLY_ACTIVE 2
@@ -127,6 +126,7 @@ typedef struct {
     avl_tree_t *ancestors;
     tsk_size_t num_potential_destinations;
     tsk_id_t *potential_destinations;
+    /* These three indexes are only used in the SMCK model */
     avl_tree_t *hulls_left;
     avl_tree_t *hulls_right;
     fenwick_t *coal_mass_index;
