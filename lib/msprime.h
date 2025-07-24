@@ -88,9 +88,9 @@ typedef struct segment_t_t {
 
 typedef struct lineage_t_t {
     population_id_t population;
+    label_id_t label;
     segment_t *head;
     segment_t *tail;
-    label_id_t label;
     struct hull_t_t *hull;
 } lineage_t;
 
@@ -107,13 +107,11 @@ typedef struct hull_t_t {
     lineage_t *lineage;
     size_t id;
     uint64_t count;
-    uint64_t insertion_order;
+    uint64_t left_insertion_order;
+    uint64_t right_insertion_order;
+    avl_node_t left_avl_node;
+    avl_node_t right_avl_node;
 } hull_t;
-
-typedef struct {
-    double position;
-    uint64_t insertion_order;
-} hullend_t;
 
 #define MSP_POP_STATE_INACTIVE 0
 #define MSP_POP_STATE_ACTIVE 1
@@ -130,6 +128,7 @@ typedef struct {
     avl_tree_t *ancestors;
     tsk_size_t num_potential_destinations;
     tsk_id_t *potential_destinations;
+    /* These three indexes are only used in the SMCK model */
     avl_tree_t *hulls_left;
     avl_tree_t *hulls_right;
     fenwick_t *coal_mass_index;
@@ -291,7 +290,6 @@ typedef struct _msp_t {
     object_heap_t *segment_heap;
     /* We keep an independent hull heap for each label */
     object_heap_t *hull_heap;
-    object_heap_t *hullend_heap;
     /* The tables used to store the simulation state */
     tsk_table_collection_t *tables;
     tsk_bookmark_t input_position;
