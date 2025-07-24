@@ -2038,9 +2038,6 @@ msp_verify_hulls(msp_t *self)
                         io = 0;
                     }
                 }
-                /* printf("hull %d io=%d insertion_order=%d\n", */
-                /*         (int) hull->id, (int) io, (int) hull->right_insertion_order);
-                 */
                 tsk_bug_assert(io == hull->right_insertion_order);
                 pos = hull->right;
             }
@@ -3251,6 +3248,19 @@ out:
  * there was specific logic for this. In an attempt to simplify the logic
  * here we just do the straightforward thing, but this is definitely somewhere
  * we could get some benefit if looking for optimisations.
+ *
+ * In some profiling on a simulation that takes about a minute, we see
+ * the following breakdown:
+ * --49.65%--msp_smc_k_common_ancestor_event
+ * --40.93%--msp_recombination_event
+ *  |--17.03%--msp_insert_individual
+ *  |--16.79%--msp_reset_hull_right
+ *
+ * So, in this case msp_reset_hull_right represents about 17% of the overall
+ * processing time, and I think we could at best expect to halve that if
+ * we did things better. A ~5% improvement in performance doesn't seem
+ * worth the effort or complexity currently. See the Python implementation
+ * of the git history though, for how this used to be done.
  */
 static int
 msp_reset_hull_right(msp_t *self, lineage_t *lineage)
@@ -3624,7 +3634,9 @@ msp_gene_conversion_event(msp_t *self, label_id_t label)
      * lineage and the SMC(k) state as the code paths are quite convoluted.
      * It seems unlikely the segment iteration will be a bottleneck in
      * practise, but unconditionaly removing and reinserting hulls could
-     * become significant. */
+     * become significant.
+     * See https://github.com/tskit-dev/msprime/issues/2386
+     */
     lineage_reset_segments(lineage);
     if (is_smc_k) {
         ret = msp_insert_individual_hull(self, lineage);
@@ -5028,6 +5040,7 @@ msp_gene_conversion_left_event(msp_t *self, label_id_t label)
     msp_set_segment_mass(self, alpha);
     tsk_bug_assert(alpha->prev == NULL);
 
+    // This isn't optimal - see https://github.com/tskit-dev/msprime/issues/2386
     lineage_reset_segments(new_lineage);
     lineage_reset_segments(lineage);
 

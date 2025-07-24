@@ -92,6 +92,7 @@ typedef struct lineage_t_t {
     segment_t *head;
     segment_t *tail;
     avl_node_t avl_node;
+    /* The hull is only used for the SMCK, and is NULL otherwise */
     struct hull_t_t *hull;
 } lineage_t;
 
@@ -129,7 +130,10 @@ typedef struct {
     avl_tree_t *ancestors;
     tsk_size_t num_potential_destinations;
     tsk_id_t *potential_destinations;
-    /* These three indexes are only used in the SMCK model */
+    /* These three indexes are only used in the SMCK model. We maintain
+     * two AVL trees in which the hulls are indexed by the left and right
+     * coordinates, respectively, along with a Fenwick tree which maintains
+     * the cumulative count of coalescable lineages */
     avl_tree_t *hulls_left;
     avl_tree_t *hulls_right;
     fenwick_t *coal_mass_index;
