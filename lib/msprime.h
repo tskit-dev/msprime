@@ -91,6 +91,7 @@ typedef struct lineage_t_t {
     label_id_t label;
     segment_t *head;
     segment_t *tail;
+    avl_node_t avl_node;
     struct hull_t_t *hull;
 } lineage_t;
 
