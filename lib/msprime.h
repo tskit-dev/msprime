@@ -288,7 +288,6 @@ typedef struct _msp_t {
     object_heap_t *segment_heap;
     /* We keep an independent hull heap for each label */
     object_heap_t *hull_heap;
-    object_heap_t *hullend_heap;
     /* The tables used to store the simulation state */
     tsk_table_collection_t *tables;
     tsk_bookmark_t input_position;

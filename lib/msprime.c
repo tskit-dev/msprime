@@ -703,14 +703,11 @@ msp_set_num_labels(msp_t *self, size_t num_labels)
     }
     msp_safe_free(self->segment_heap);
     msp_safe_free(self->hull_heap);
-    msp_safe_free(self->hullend_heap);
 
     self->num_labels = (uint32_t) num_labels;
     self->segment_heap = calloc(self->num_labels, sizeof(*self->segment_heap));
     self->hull_heap = calloc(self->num_labels, sizeof(*self->hull_heap));
-    self->hullend_heap = calloc(self->num_labels, sizeof(*self->hullend_heap));
-    if (self->segment_heap == NULL || self->hull_heap == NULL
-        || self->hullend_heap == NULL) {
+    if (self->segment_heap == NULL || self->hull_heap == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
     }
@@ -1139,9 +1136,6 @@ msp_free(msp_t *self)
         if (self->hull_heap != NULL) {
             object_heap_free(&self->hull_heap[j]);
         }
-        if (self->hullend_heap != NULL) {
-            object_heap_free(&self->hullend_heap[j]);
-        }
     }
     for (j = 0; j < self->num_populations; j++) {
         msp_safe_free(self->populations[j].ancestors);
@@ -1159,7 +1153,6 @@ msp_free(msp_t *self)
     msp_safe_free(self->gc_mass_index);
     msp_safe_free(self->segment_heap);
     msp_safe_free(self->hull_heap);
-    msp_safe_free(self->hullend_heap);
     msp_safe_free(self->initial_migration_matrix);
     msp_safe_free(self->migration_matrix);
     msp_safe_free(self->num_migration_events);
@@ -2490,8 +2483,6 @@ msp_print_state(msp_t *self, FILE *out)
         object_heap_print_state(&self->segment_heap[j], out);
         fprintf(out, "hull_heap[%d]:", j);
         object_heap_print_state(&self->hull_heap[j], out);
-        fprintf(out, "hullend_heap[%d]:", j);
-        object_heap_print_state(&self->hullend_heap[j], out);
     }
     fprintf(out, "avl_node_heap:");
     object_heap_print_state(&self->avl_node_heap, out);
