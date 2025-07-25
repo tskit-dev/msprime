@@ -8,6 +8,10 @@
 - The `FixedPedigree` simulation model now supports internal samples ({issue}`1855`,
   {pr}`2321`, {pr}`2326`, {pr}`2388`, {user}`abureau`, {user}`jeromekelleher`).
 
+**New features**
+
+- Demography objects can now be created from provenance entries ({pr}`{2369}, {user}`hyanwong`)
+
 **Breaking changes**:
 
 - The `.asdict()` methods for Demography, Population, and Event classes in the
