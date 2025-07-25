@@ -8,6 +8,5 @@ pytest-cov==6.0.0
 pytest-xdist==3.6.1
 python_jsonschema_objects==0.5.7
 scipy==1.14.0
-stdpopsim==0.1.2 #Pinned for OOA model
 tskit==0.6.0
 kastore==0.3.3
