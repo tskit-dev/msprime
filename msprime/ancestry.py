@@ -1162,7 +1162,8 @@ def sim_ancestry(
         case multiple events at precisely the same genome location are very
         unlikely (but technically possible).
         See the :ref:`sec_ancestry_discrete_genome` section for usage examples.
-    :param recombination_rate: The rate of recombination along the sequence;
+    :param recombination_rate: The rate of recombination along the sequence,
+        in units of recombinations per unit time and unit length;
         can be either a single value (specifying a single rate over the entire
         sequence) or an instance of :class:`RateMap`.
         See the :ref:`sec_ancestry_recombination` section for usage examples
