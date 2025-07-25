@@ -19,7 +19,6 @@ pytest-xdist
 tskit>=0.5.2
 kastore
 sphinx-book-theme
-stdpopsim==0.1.2 # Pinned for OOA model
 scipy
 setuptools_scm
 sphinx>=4.4
