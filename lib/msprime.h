@@ -83,9 +83,30 @@ typedef struct segment_t_t {
     double right;
     struct segment_t_t *prev;
     struct segment_t_t *next;
+    /* NOTE: In the DTWF model we don't really use the lineage and it would be
+     * better if we explicitly reserved the concept as something only used in
+     * the coalescent models. One thing we could do is to make this member a
+     * union, which was either a lineage (for the coalescent models) or an
+     * "individual" for the DTWF/pedigree code. Thus, we could then separate
+     * the DTWF and coalescent main loops and population storage (it's
+     * pointless using AVL trees for the DTWF code) while keeping the low-level
+     * segment merging code the same. This would require a significant
+     * refactoring (rewriting, really) of the DTWF code, though.
+     */
     struct lineage_t_t *lineage;
 } segment_t;
 
+/* A lineage represents a single ancestral (or sample) genome in the coalescent
+ * models, and keeps track of the head and tail of the segment chains. These
+ * lineages are what are stored in the populations. For the SMC(k) model,
+ * we also store a hull_t object, which keeps track of the information required
+ * to implement the indexes for that model.
+ *
+ * Note that the situation is quite confusing for the DTWF and pedigree models,
+ * which sort-of use the same structures as the coalescent models, but don't
+ * really use them in a meaningful way. So, while we need to define lineages
+ * as well as segments here, they don't actually do anything.
+ */
 typedef struct lineage_t_t {
     population_id_t population;
     label_id_t label;

@@ -734,6 +734,17 @@ class HullEnd:
 
 @dataclasses.dataclass
 class Lineage:
+    """
+    A lineage represents a single genome in a coalescent model simulation,
+    and keeps track of the head and tail of the ancestry segment lists.
+    For the SMC(k) model, we also keep a Hull object which represents the
+    information required to implement the search indexes for that model.
+
+    Note that the situation with the DTWF and pedigree models is confusing
+    because we use segment chains to represent ancestry, which have lineages
+    associated with them, but they're not used in any meaninful way.
+    """
+
     head: Segment
     tail: Segment
     population: int = -1
