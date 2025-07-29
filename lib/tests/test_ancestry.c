@@ -667,6 +667,192 @@ test_multi_locus_simulation(void)
 }
 
 static void
+test_single_locus_continue_after_local_mrca_with_end_time(void)
+{
+    int ret;
+    uint32_t n = 10;
+    uint32_t m = 10;
+    long t = 100000.0; // end time
+    long seed = 10;
+    int model;
+    int models[] = { MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME,
+        MSP_MODEL_SMC_K, MSP_MODEL_DTWF };
+    const char *model_names[] = { "hudson", "smc", "smc_prime", "smc_k", "dtwf" };
+    const char *model_name;
+    size_t j;
+    tsk_table_collection_t tables;
+    msp_t msp;
+    tsk_treeseq_t ts;
+    tsk_tree_t tree;
+    tsk_id_t root;
+
+    gsl_rng *rng = safe_rng_alloc();
+
+    gsl_rng_set(rng, seed);
+
+    for (j = 0; j < sizeof(models) / sizeof(int); j++) {
+
+        ret = build_sim(&msp, &tables, rng, m, 1, NULL, n);
+        ret = msp_set_recombination_rate(&msp, 0.01);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        ret = msp_set_stop_at_local_mrca(&msp, false);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        switch (j) {
+            case 0:
+                ret = msp_set_simulation_model_hudson(&msp);
+                break;
+            case 1:
+                ret = msp_set_simulation_model_smc(&msp);
+                break;
+            case 2:
+                ret = msp_set_simulation_model_smc_prime(&msp);
+                break;
+            case 3:
+                ret = msp_set_simulation_model_smc_k(&msp, 0);
+                break;
+            case 4:
+                ret = msp_set_simulation_model_dtwf(&msp);
+                break;
+        }
+        ret = msp_initialise(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        ret = msp_run(&msp, t, ULONG_MAX);
+        CU_ASSERT(ret == 0 || ret == 2); // exit on max time or simulations done
+
+        ret = msp_finalise_tables(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        ret = msp_get_time(&msp);
+        CU_ASSERT_EQUAL(ret, t);
+
+        ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        ret = tsk_tree_init(&tree, &ts, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        for (ret = tsk_tree_first(&tree); ret == 1; ret = tsk_tree_next(&tree)) {
+
+            // verrify each tree has a single root
+            CU_ASSERT_EQUAL_FATAL(tsk_tree_get_num_roots(&tree), 1);
+
+            // verify that all roots end at end_time
+            root = tsk_tree_get_left_root(&tree);
+            CU_ASSERT_EQUAL(msp.tables->nodes.time[root], t);
+        }
+
+        model = msp_get_model(&msp)->type;
+        CU_ASSERT_EQUAL(model, models[j]);
+        model_name = msp_get_model_name(&msp);
+        CU_ASSERT_STRING_EQUAL(model_name, model_names[j]);
+
+        ret = msp_free(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        tsk_table_collection_free(&tables);
+        tsk_treeseq_free(&ts);
+        tsk_tree_free(&tree);
+    }
+    gsl_rng_free(rng);
+}
+
+static void
+test_single_locus_continue_after_local_mrca(void)
+{
+    int ret;
+    uint32_t n = 10;
+    uint32_t m = 10;
+    long check_time;
+    long seed = 10;
+    int model;
+    int models[] = { MSP_MODEL_HUDSON, MSP_MODEL_SMC, MSP_MODEL_SMC_PRIME,
+        MSP_MODEL_SMC_K, MSP_MODEL_DTWF };
+    const char *model_names[] = { "hudson", "smc", "smc_prime", "smc_k", "dtwf" };
+    const char *model_name;
+    size_t j;
+    int k;
+    tsk_table_collection_t tables;
+    msp_t msp;
+    tsk_treeseq_t ts;
+    tsk_tree_t tree;
+    tsk_id_t root;
+
+    gsl_rng *rng = safe_rng_alloc();
+
+    gsl_rng_set(rng, seed);
+
+    for (j = 0; j < sizeof(models) / sizeof(int); j++) {
+
+        ret = build_sim(&msp, &tables, rng, m, 1, NULL, n);
+        ret = msp_set_recombination_rate(&msp, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        ret = msp_set_stop_at_local_mrca(&msp, false);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        switch (j) {
+            case 0:
+                ret = msp_set_simulation_model_hudson(&msp);
+                break;
+            case 1:
+                ret = msp_set_simulation_model_smc(&msp);
+                break;
+            case 2:
+                ret = msp_set_simulation_model_smc_prime(&msp);
+                break;
+            case 3:
+                ret = msp_set_simulation_model_smc_k(&msp, 0);
+                break;
+            case 4:
+                ret = msp_set_simulation_model_dtwf(&msp);
+                break;
+        }
+        ret = msp_initialise(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        ret = msp_finalise_tables(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+
+        ret = tsk_treeseq_init(&ts, &tables, TSK_TS_INIT_BUILD_INDEXES);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        ret = tsk_tree_init(&tree, &ts, 0);
+        CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+        k = 0;
+        for (ret = tsk_tree_first(&tree); ret == 1; ret = tsk_tree_next(&tree)) {
+            k++;
+            // verrify each tree has a single root
+            CU_ASSERT_EQUAL_FATAL(tsk_tree_get_num_roots(&tree), 1);
+
+            root = tsk_tree_get_left_root(&tree);
+            if (k == 1) {
+                check_time = msp.tables->nodes.time[root];
+            } else {
+                CU_ASSERT_EQUAL(msp.tables->nodes.time[root], check_time);
+            }
+        }
+
+        model = msp_get_model(&msp)->type;
+        CU_ASSERT_EQUAL(model, models[j]);
+        model_name = msp_get_model_name(&msp);
+        CU_ASSERT_STRING_EQUAL(model_name, model_names[j]);
+
+        ret = msp_free(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
+        tsk_table_collection_free(&tables);
+        tsk_treeseq_free(&ts);
+        tsk_tree_free(&tree);
+    }
+    gsl_rng_free(rng);
+}
+
+static void
 test_multi_locus_bottleneck_arg(void)
 {
     int ret;
@@ -4484,6 +4670,10 @@ main(int argc, char **argv)
             test_single_locus_historical_sample_end_time },
 
         { "test_multi_locus_simulation", test_multi_locus_simulation },
+        { "test_single_locus_continue_after_local_mrca",
+            test_single_locus_continue_after_local_mrca },
+        { "test_single_locus_continue_after_local_mrca_with_end_time",
+            test_single_locus_continue_after_local_mrca_with_end_time },
         { "test_multi_locus_bottleneck_arg", test_multi_locus_bottleneck_arg },
         { "test_multi_locus_store_unary_simple", test_multi_locus_store_unary_simple },
 
