@@ -568,8 +568,8 @@ have fallen in the high recombination region.
 :::{note}
 The units of recombination and other rates in msprime are
 **per unit sequence length, per unit time**. If you have set
-effective population sizes in units of individuals and 
-aremeasuring sequence lengths in base pairs, then the units
+effective population sizes in units of individuals and
+are measuring sequence lengths in base pairs, then the units
 for recombination rate will be per base pair, per generation.
 Other choices are possible (e.g., time in "coalescent units" and
 recombination breakpoints on a
