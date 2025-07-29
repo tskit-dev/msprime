@@ -1790,8 +1790,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         "demographic_events", "model", "avl_node_block_size", "segment_block_size",
         "node_mapping_block_size", "store_migrations", "start_time",
         "additional_nodes", "coalescing_segments_only",
-        "num_labels", "gene_conversion_rate", "gene_conversion_tract_length", 
-        "discrete_genome", "ploidy", NULL};
+        "num_labels", "gene_conversion_rate", "gene_conversion_tract_length",
+        "discrete_genome", "ploidy", "stop_at_local_mrca", NULL};
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
@@ -1813,11 +1813,13 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     double gene_conversion_rate = 0;
     double gene_conversion_tract_length = 1.0;
     int ploidy = 2;
+    int stop_at_local_mrca = true;
+
 
     self->sim = NULL;
     self->random_generator = NULL;
     if (!PyArg_ParseTupleAndKeywords(args, kwds,
-            "O!O!|O!O!OO!O!nnnidkinddii", kwlist,
+            "O!O!|O!O!OO!O!nnnidkinddiii", kwlist,
             &LightweightTableCollectionType, &tables,
             &RandomGeneratorType, &random_generator,
             /* optional */
@@ -1830,7 +1832,7 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             &node_mapping_block_size, &store_migrations, &start_time,
             &additional_nodes, &coalescing_segments_only, &num_labels,
             &gene_conversion_rate, &gene_conversion_tract_length,
-            &discrete_genome, &ploidy)) {
+            &discrete_genome, &ploidy, &stop_at_local_mrca)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -1951,7 +1953,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     }
     msp_set_additional_nodes(self->sim, (uint32_t) additional_nodes);
     msp_set_coalescing_segments_only(self->sim, coalescing_segments_only);
-    
+    msp_set_stop_at_local_mrca(self->sim, stop_at_local_mrca);
+
     sim_ret = msp_initialise(self->sim);
     if (sim_ret != 0) {
         handle_input_error("initialise", sim_ret);

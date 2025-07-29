@@ -13,6 +13,8 @@
 **Maintenance**
 
 - Add support and wheels for Python3.13
+- Support for simulations after local mrca,
+  ({pr}`2396`, {user}`jeromekelleher`, {user}`hossam26644`).
 
 - Drop Python 3.9 support, require Python >= 3.10 ({pr}`2418`, {user}`benjeffery`)
 
