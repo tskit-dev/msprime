@@ -567,13 +567,13 @@ have fallen in the high recombination region.
 
 :::{note}
 The units of recombination and other rates in msprime are
-**per unit sequence length, per unit time**. If you have
-specified a {ref}`demographic model<sec_demography>` for a species
-and are measuring sequence lengths in base pairs, then the units
+**per unit sequence length, per unit time**. If you have set
+effective population sizes in units of individuals and 
+aremeasuring sequence lengths in base pairs, then the units
 for recombination rate will be per base pair, per generation.
-It is also possible  to specify time in "coalescent units" and to
-model recombination breakpoints as occurring on the
-{ref}`continuous unit interval<sec_ancestry_discrete_genome>`.
+Other choices are possible (e.g., time in "coalescent units" and
+recombination breakpoints on a
+{ref}`continuous unit interval<sec_ancestry_discrete_genome>`.)
 :::
 
 :::{seealso}
