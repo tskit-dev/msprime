@@ -30,7 +30,7 @@ jobs:
 
       - uses: actions/setup-python@v5.4.0
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
 
       - name: Create venv and install deps (one by one to avoid conflict errors)
