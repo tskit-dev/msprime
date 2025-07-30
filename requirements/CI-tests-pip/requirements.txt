@@ -1,9 +1,12 @@
 bintrees==2.2.0
-daiquiri==3.2.5.1
+daiquiri==3.2.5.1; python_version<="3.9"
+daiquiri==3.3.0; python_version>"3.9"
 kastore==0.3.3
 newick==1.10.0
-pytest==8.3.5
-pytest-xdist==3.6.1
+pytest==8.4.1
+pytest-xdist==3.8.0
 python_jsonschema_objects==0.5.7
-scipy==1.13.1
-tskit==0.6.0
+setuptools==80.9.0
+scipy==1.13.1; python_version<="3.9"
+scipy==1.16.1; python_version>"3.9"
+tskit==0.6.4
