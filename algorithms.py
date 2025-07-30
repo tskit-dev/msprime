@@ -2396,7 +2396,7 @@ class Simulator:
         new_lineage = self.alloc_lineage(None, population_index, label=label)
         coalescence = False
         defrag_required = False
-        min_overlap = 0
+        min_overlap = 2 if self.stop_at_local_mrca else 0
 
         while x is not None or y is not None:
             alpha = None
@@ -2863,7 +2863,7 @@ def run_simulate(args):
         gene_conversion_length=mean_tract_length,
         discrete_genome=args.discrete,
         hull_offset=args.offset,
-        stop_at_local_mrca=args.stop_at_local_mrca,
+        stop_at_local_mrca=not args.continue_after_local_mrca,
     )
     ts = s.simulate(args.end_time)
     ts.dump(args.output_file)
@@ -2950,7 +2950,12 @@ def add_simulator_arguments(parser):
         help="The delta_t value for selective sweeps",
     )
     parser.add_argument("--model", default="hudson")
-    parser.add_argument("--stop-at-local-mrca", default=True, type=bool)
+    parser.add_argument(
+        "--continue-after-local-mrca",
+        action='store_true',
+        default=False,
+        help="If set, continue after local MRCA (i.e., do not stop). Default: False (stop at local MRCA)."
+    )
     parser.add_argument("--offset", type=float, default=0.0)
     parser.add_argument(
         "--from-ts",
