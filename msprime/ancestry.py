@@ -1080,7 +1080,7 @@ def _parse_sim_ancestry(
     random_generator = _msprime.RandomGenerator(random_seed)
 
     if stop_at_local_mrca is None:
-        stop_at_local_mrca = False
+        stop_at_local_mrca = True
     elif not isinstance(stop_at_local_mrca, bool):
         raise TypeError(
             "stop_at_local_mrca must be a boolean value, or None which defaults to True."
