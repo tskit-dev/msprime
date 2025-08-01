@@ -1411,7 +1411,7 @@ class Simulator(_msprime.Simulator):
         start_time=None,
         end_time=None,
         num_labels=None,
-        stop_at_local_mrca=None,
+        stop_at_local_mrca=True,
     ):
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
@@ -1462,6 +1462,7 @@ class Simulator(_msprime.Simulator):
             gene_conversion_tract_length=gene_conversion_tract_length,
             discrete_genome=discrete_genome,
             ploidy=ploidy,
+            stop_at_local_mrca=stop_at_local_mrca,
         )
         # Highlevel attributes used externally that have no lowlevel equivalent
         self.end_time = np.inf if end_time is None else end_time
