@@ -205,7 +205,7 @@ fast_search_idx_strict_upper(fast_search_t *self, double query)
     unsigned *lookups = self->lookups;
     assert(query >= 0.0);
     if (query < self->query_cutoff) {
-        int64_t idx = (int64_t)(query * self->query_multiplier);
+        int64_t idx = (int64_t) (query * self->query_multiplier);
         /* The query range of [A, B) maps to `idx` where
          * A = idx/query_multiplier and B = (idx + 1)/query_multiplier).
          * The lookup table has been initialized such that
@@ -219,7 +219,7 @@ fast_search_idx_strict_upper(fast_search_t *self, double query)
     }
     assert(ret
            == idx_1st_strict_upper_bound(
-                  self->elements, lookups[self->num_lookups - 1], query));
+               self->elements, lookups[self->num_lookups - 1], query));
     /* function interface is in terms of index to target array of element values */
     return ret;
 }
