@@ -890,6 +890,32 @@ class TestSimulator:
         s = str(sim)
         assert len(s) > 0
 
+    def test_simulate_after_local_mrca(self):
+        """
+        Tests that simulations run after the local MRCA when the flag is set
+        """
+        end_time = 100
+        ts = msprime.sim_ancestry(
+            10,
+            stop_at_local_mrca=False,
+            end_time=end_time,
+            random_seed=1,
+            sequence_length=10,
+            recombination_rate=0.1,
+        )
+
+        old_time = None
+        for tree in ts.trees():
+            assert len(tree.roots) == 1  # otherwise the test is not valid
+            u = tree.roots[0]
+            assert (
+                tree.time(u) >= end_time
+            )  # makes sure that local simulations only stop at end time
+            if old_time is None:
+                old_time = tree.time(u)
+            # check that end time is the same for all roots
+            assert tree.time(u) == old_time
+
 
 class TestParseRandomSeed:
     """
