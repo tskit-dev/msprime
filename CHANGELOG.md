@@ -8,6 +8,9 @@
 - The `FixedPedigree` simulation model now supports internal samples ({issue}`1855`,
   {pr}`2321`, {pr}`2326`, {pr}`2388`, {user}`abureau`, {user}`jeromekelleher`).
 
+- Support for simulations after local mrca,
+  ({pr}`2396`, {user}`jeromekelleher`, {user}`hossam26644`).
+
 **Breaking changes**:
 
 - The `.asdict()` methods for Demography, Population, and Event classes in the
