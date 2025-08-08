@@ -885,6 +885,7 @@ class Simulator:
         gene_conversion_length=1,
         discrete_genome=True,
         hull_offset=None,
+        stop_at_local_mrca=True,
     ):
         # Must be a square matrix.
         N = len(migration_matrix)
@@ -906,6 +907,7 @@ class Simulator:
         self.migration_matrix = migration_matrix
         self.num_labels = num_labels
         self.num_populations = N
+        self.stop_at_local_mrca = stop_at_local_mrca
         self.max_segments = max_segments
         self.coalescing_segments_only = coalescing_segments_only
         self.additional_nodes = msprime.NodeType(additional_nodes)
@@ -1253,7 +1255,7 @@ class Simulator:
         if self.model == "hudson":
             self.hudson_simulate(end_time)
         elif self.model == "dtwf":
-            self.dtwf_simulate()
+            self.dtwf_simulate(end_time)
         elif self.model == "fixed_pedigree":
             self.pedigree_simulate()
         elif self.model == "single_sweep":
@@ -1524,11 +1526,11 @@ class Simulator:
         self.pedigree = Pedigree(self.tables)
         self.dtwf_climb_pedigree()
 
-    def dtwf_simulate(self):
+    def dtwf_simulate(self, end_time):
         """
         Simulates the algorithm until all loci have coalesced.
         """
-        while self.ancestors_remain():
+        while self.ancestors_remain() and self.t < end_time:
             self.t += 1
             self.verify()
             self.dtwf_generation()
@@ -2394,6 +2396,7 @@ class Simulator:
         new_lineage = self.alloc_lineage(None, population_index, label=label)
         coalescence = False
         defrag_required = False
+        min_overlap = 2 if self.stop_at_local_mrca else 0
 
         while x is not None or y is not None:
             alpha = None
@@ -2435,12 +2438,12 @@ class Simulator:
                         j = self.S.floor_key(r_max)
                         self.S[r_max] = self.S[j]
                     # Update the number of extant segments.
-                    if self.S[left] == 2:
+                    if self.S[left] == min_overlap:
                         self.S[left] = 0
                         right = self.S.succ_key(left)
                     else:
                         right = left
-                        while right < r_max and self.S[right] != 2:
+                        while right < r_max and self.S[right] != min_overlap:
                             self.S[right] -= 1
                             right = self.S.succ_key(right)
                         alpha = self.alloc_segment(
@@ -2838,6 +2841,11 @@ def run_simulate(args):
         from_ts = tskit.load(args.from_ts)
         tables = from_ts.dump_tables()
 
+    if args.continue_after_local_mrca and args.end_time == np.inf:
+        raise ValueError(
+            "The flag --continue-after-local-mrca option requires setting an end time"
+        )
+
     s = Simulator(
         tables=tables,
         recombination_map=recombination_map,
@@ -2860,6 +2868,7 @@ def run_simulate(args):
         gene_conversion_length=mean_tract_length,
         discrete_genome=args.discrete,
         hull_offset=args.offset,
+        stop_at_local_mrca=not args.continue_after_local_mrca,
     )
     ts = s.simulate(args.end_time)
     ts.dump(args.output_file)
@@ -2946,6 +2955,15 @@ def add_simulator_arguments(parser):
         help="The delta_t value for selective sweeps",
     )
     parser.add_argument("--model", default="hudson")
+    parser.add_argument(
+        "--continue-after-local-mrca",
+        action="store_true",
+        default=False,
+        help=(
+            "If set, continue after local MRCA (i.e., do not stop). "
+            "Default: False (stop at local MRCA)."
+        ),
+    )
     parser.add_argument("--offset", type=float, default=0.0)
     parser.add_argument(
         "--from-ts",

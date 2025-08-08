@@ -890,6 +890,32 @@ class TestSimulator:
         s = str(sim)
         assert len(s) > 0
 
+    def test_simulate_after_local_mrca(self):
+        """
+        Tests that simulations run after the local MRCA when the flag is set
+        """
+        end_time = 100
+        ts = msprime.sim_ancestry(
+            10,
+            stop_at_local_mrca=False,
+            end_time=end_time,
+            random_seed=1,
+            sequence_length=10,
+            recombination_rate=0.1,
+        )
+
+        old_time = None
+        for tree in ts.trees():
+            assert len(tree.roots) == 1  # otherwise the test is not valid
+            u = tree.roots[0]
+            assert (
+                tree.time(u) >= end_time
+            )  # makes sure that local simulations only stop at end time
+            if old_time is None:
+                old_time = tree.time(u)
+            # check that end time is the same for all roots
+            assert tree.time(u) == old_time
+
 
 class TestParseRandomSeed:
     """
@@ -2529,6 +2555,47 @@ class TestSimAncestryInterface:
                 10,
                 additional_nodes=msprime.NodeType.COMMON_ANCESTOR,
             )
+
+    def test_stop_at_local_mrca(self):
+        with pytest.raises(
+            TypeError,
+            match="stop_at_local_mrca must be a boolean value, "
+            "or None which defaults to True.",
+        ):
+            msprime.sim_ancestry(3, stop_at_local_mrca=1)
+            msprime.sim_ancestry(3, stop_at_local_mrca="X")
+
+        with pytest.raises(
+            ValueError,
+            match="You have to specify an end_time when using stop_at_local_mrca, "
+            "otherwise the simulation will run indefinitely.",
+        ):
+            msprime.sim_ancestry(
+                2, stop_at_local_mrca=False, recombination_rate=0.1, sequence_length=10
+            )
+
+        with pytest.raises(
+            ValueError,
+            match="stop_at_local_mrca is only supported for simulations with "
+            "recombination or gene conversion.",
+        ):
+            msprime.sim_ancestry(2, stop_at_local_mrca=False, end_time=3)
+
+        msprime.sim_ancestry(
+            2,
+            stop_at_local_mrca=False,
+            recombination_rate=0.1,
+            sequence_length=10,
+            end_time=3,
+        )
+        msprime.sim_ancestry(
+            2,
+            stop_at_local_mrca=False,
+            gene_conversion_rate=0.01,
+            gene_conversion_tract_length=10,
+            sequence_length=10,
+            end_time=3,
+        )
 
 
 class TestSimulateInterface:
