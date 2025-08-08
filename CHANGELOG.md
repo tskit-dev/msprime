@@ -9,6 +9,8 @@
   {pr}`2321`, {pr}`2326`, {pr}`2388`, {user}`abureau`, {user}`jeromekelleher`).
 
 - Add support and wheels for Python3.13
+- Support for simulations after local mrca,
+  ({pr}`2396`, {user}`jeromekelleher`, {user}`hossam26644`).
 
 **Breaking changes**:
 
