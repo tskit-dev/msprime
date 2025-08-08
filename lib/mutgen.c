@@ -399,7 +399,7 @@ slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
 
     mutation->metadata = buff;
     mutation->metadata_length
-        = (tsk_size_t)(parent_metadata_length + SLIM_MUTATION_METADATA_SIZE);
+        = (tsk_size_t) (parent_metadata_length + SLIM_MUTATION_METADATA_SIZE);
 out:
     return ret;
 }
