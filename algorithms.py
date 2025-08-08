@@ -2841,6 +2841,11 @@ def run_simulate(args):
         from_ts = tskit.load(args.from_ts)
         tables = from_ts.dump_tables()
 
+    if args.continue_after_local_mrca and args.end_time == np.inf:
+        raise ValueError(
+            "The flag --continue-after-local-mrca option requires setting an end time"
+        )
+
     s = Simulator(
         tables=tables,
         recombination_map=recombination_map,
@@ -2952,9 +2957,12 @@ def add_simulator_arguments(parser):
     parser.add_argument("--model", default="hudson")
     parser.add_argument(
         "--continue-after-local-mrca",
-        action='store_true',
+        action="store_true",
         default=False,
-        help="If set, continue after local MRCA (i.e., do not stop). Default: False (stop at local MRCA)."
+        help=(
+            "If set, continue after local MRCA (i.e., do not stop). "
+            "Default: False (stop at local MRCA)."
+        ),
     )
     parser.add_argument("--offset", type=float, default=0.0)
     parser.add_argument(
