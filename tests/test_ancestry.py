@@ -2114,47 +2114,6 @@ class TestParseSimulate:
                 coalescing_segments_only=None,
             )
 
-    def test_bad_stop_at_local_mrca(self):
-        with pytest.raises(
-            TypeError,
-            match="stop_at_local_mrca must be a boolean value, "
-            "or None which defaults to True.",
-        ):
-            msprime.sim_ancestry(3, stop_at_local_mrca=1)
-            msprime.sim_ancestry(3, stop_at_local_mrca="X")
-
-        with pytest.raises(
-            ValueError,
-            match="You have to specify an end_time when using stop_at_local_mrca, "
-            "otherwise the simulation will run indefinitely.",
-        ):
-            msprime.sim_ancestry(
-                2, stop_at_local_mrca=False, recombination_rate=0.1, sequence_length=10
-            )
-
-        with pytest.raises(
-            ValueError,
-            match="stop_at_local_mrca is only supported for simulations with "
-            "recombination or gene conversion.",
-        ):
-            msprime.sim_ancestry(2, stop_at_local_mrca=False, end_time=3)
-
-        msprime.sim_ancestry(
-            2,
-            stop_at_local_mrca=False,
-            recombination_rate=0.1,
-            sequence_length=10,
-            end_time=3,
-        )
-        msprime.sim_ancestry(
-            2,
-            stop_at_local_mrca=False,
-            gene_conversion_rate=0.01,
-            gene_conversion_tract_length=10,
-            sequence_length=10,
-            end_time=3,
-        )
-
 
 class TestSimAncestryInterface:
     """
@@ -2570,6 +2529,47 @@ class TestSimAncestryInterface:
                 10,
                 additional_nodes=msprime.NodeType.COMMON_ANCESTOR,
             )
+
+    def test_stop_at_local_mrca(self):
+        with pytest.raises(
+            TypeError,
+            match="stop_at_local_mrca must be a boolean value, "
+            "or None which defaults to True.",
+        ):
+            msprime.sim_ancestry(3, stop_at_local_mrca=1)
+            msprime.sim_ancestry(3, stop_at_local_mrca="X")
+
+        with pytest.raises(
+            ValueError,
+            match="You have to specify an end_time when using stop_at_local_mrca, "
+            "otherwise the simulation will run indefinitely.",
+        ):
+            msprime.sim_ancestry(
+                2, stop_at_local_mrca=False, recombination_rate=0.1, sequence_length=10
+            )
+
+        with pytest.raises(
+            ValueError,
+            match="stop_at_local_mrca is only supported for simulations with "
+            "recombination or gene conversion.",
+        ):
+            msprime.sim_ancestry(2, stop_at_local_mrca=False, end_time=3)
+
+        msprime.sim_ancestry(
+            2,
+            stop_at_local_mrca=False,
+            recombination_rate=0.1,
+            sequence_length=10,
+            end_time=3,
+        )
+        msprime.sim_ancestry(
+            2,
+            stop_at_local_mrca=False,
+            gene_conversion_rate=0.01,
+            gene_conversion_tract_length=10,
+            sequence_length=10,
+            end_time=3,
+        )
 
 
 class TestSimulateInterface:
