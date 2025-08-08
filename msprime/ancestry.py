@@ -1092,13 +1092,19 @@ def _parse_sim_ancestry(
         raise TypeError(
             "stop_at_local_mrca must be a boolean value, or None which defaults to True."
         )
-    elif not stop_at_local_mrca: #when set to False
+    elif not stop_at_local_mrca:  # when set to False
         if end_time == math.inf or end_time is None:
             raise ValueError(
-                "You have to specify an end_time when using stop_at_local_mrca, otherwise "
-                "the simulation will run indefinitely."
+                "You have to specify an end_time when using stop_at_local_mrca, "
+                "otherwise the simulation will run indefinitely."
             )
 
+        if (recombination_rate in (None, 0)) and (gene_conversion_rate in (None, 0)):
+
+            raise ValueError(
+                "stop_at_local_mrca is only supported for simulations with "
+                "recombination or gene conversion."
+            )
 
     return Simulator(
         tables=initial_state,
@@ -1266,8 +1272,8 @@ def sim_ancestry(
         the :ref:`sec_ancestry_models_specifying` section for more details,
         and the :ref:`sec_ancestry_models` section for the available models
         and examples.
-    :param stop_at_local_mrca: If True (the default), the simulation will stop for a tree when
-        local mrca is reached. If False, simulations will continue on the path
+    :param stop_at_local_mrca: If True (the default), the simulation will stop for a
+        tree when local mrca is reached. If False, simulations will continue on the path
         to the grand mrca.
     :type model: str or msprime.AncestryModel or list
     :return: The :class:`tskit.TreeSequence` object representing the results
@@ -1307,7 +1313,7 @@ def sim_ancestry(
             coalescing_segments_only=coalescing_segments_only,
             num_labels=num_labels,
             random_seed=random_seed,
-            stop_at_local_mrca=stop_at_local_mrca
+            stop_at_local_mrca=stop_at_local_mrca,
             # num_replicates is excluded as provenance is per replicate
             # replicate index is excluded as it is inserted for each replicate
         )
