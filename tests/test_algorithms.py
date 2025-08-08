@@ -285,12 +285,13 @@ class TestAlgorithms:
         # test that simulations continue for all trees to the end_time
         old_time = None
         for tree in ts.trees():
-            for u in tree.roots:
-                assert tree.time(u) >= end_time
-                if old_time is None:
-                    old_time = tree.time(u)
-                # check that end time is the same for all roots
-                assert tree.time(u) == old_time
+            assert len(tree.roots) == 1  # otherwise the test is not valid
+            u = tree.roots[0]
+            assert tree.time(u) >= end_time
+            if old_time is None:
+                old_time = tree.time(u)
+            # check that end time is the same for all roots
+            assert tree.time(u) == old_time
 
     def test_gc(self):
         ts = self.run_script("10 -c 0.4 2 -d")
