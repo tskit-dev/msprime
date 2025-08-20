@@ -23,12 +23,6 @@ html:
   use_issues_button: true
   use_repository_button: true
   use_edit_page_button: true
-  # Do not edit this - the version placeholder is replaced by the
-  # current version during a distribution build in the Makefile
-  extra_footer: |
-    <div>
-    msprime __MSPRIME_VERSION__
-    </div>
 
 sphinx:
     extra_extensions:
@@ -46,6 +40,8 @@ sphinx:
       html_theme_options:
         navigation_with_keys: False
         pygments_dark_style: monokai
+        logo:
+          text: "Version __MSPRIME_VERSION__"
       myst_enable_extensions:
       - colon_fence
       - deflist
