@@ -2557,13 +2557,6 @@ class TestSimAncestryInterface:
             )
 
     def test_stop_at_local_mrca(self):
-        with pytest.raises(
-            TypeError,
-            match="stop_at_local_mrca must be a boolean value, "
-            "or None which defaults to True.",
-        ):
-            msprime.sim_ancestry(3, stop_at_local_mrca=1)
-            msprime.sim_ancestry(3, stop_at_local_mrca="X")
 
         with pytest.raises(
             ValueError,

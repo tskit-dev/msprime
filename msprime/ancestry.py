@@ -1081,11 +1081,7 @@ def _parse_sim_ancestry(
 
     if stop_at_local_mrca is None:
         stop_at_local_mrca = True
-    elif not isinstance(stop_at_local_mrca, bool):
-        raise TypeError(
-            "stop_at_local_mrca must be a boolean value, or None which defaults to True."
-        )
-    elif not stop_at_local_mrca:  # when set to False
+    if not stop_at_local_mrca:  # when set to False
         if end_time == math.inf or end_time is None:
             raise ValueError(
                 "You have to specify an end_time when using stop_at_local_mrca, "
