@@ -1370,7 +1370,7 @@ msp_insert_hull(msp_t *self, lineage_t *lineage)
     } else {
         c = avl_search_closest(hulls_right, &query, &query_node);
         /* query < node->item ==> c = -1 */
-        num_ending_before_left = (uint64_t) avl_index(query_node) + (uint64_t) (c != -1);
+        num_ending_before_left = (uint64_t) avl_index(query_node) + (uint64_t)(c != -1);
     }
 
     /* set number of pairs coalescing with hull */
@@ -1890,7 +1890,7 @@ msp_verify_non_empty_populations(msp_t *self)
 
     for (avl_node = self->non_empty_populations.head; avl_node != NULL;
          avl_node = avl_node->next) {
-        j = (tsk_id_t) (intptr_t) avl_node->item;
+        j = (tsk_id_t)(intptr_t) avl_node->item;
         tsk_bug_assert(msp_get_num_population_ancestors(self, j) > 0);
     }
 
@@ -2354,7 +2354,7 @@ msp_print_state(msp_t *self, FILE *out)
     }
     fprintf(out, "non_empty_populations = [");
     for (a = self->non_empty_populations.head; a != NULL; a = a->next) {
-        j = (uint32_t) (intptr_t) a->item;
+        j = (uint32_t)(intptr_t) a->item;
         fprintf(out, "%d,", j);
     }
     fprintf(out, "]\n");
@@ -3998,6 +3998,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     bool defrag_required = false;
     uint32_t j, h;
     double l, r, r_max, next_l, l_min;
+    uint32_t min_overlap;
+
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *z, *alpha;
@@ -4087,7 +4089,12 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             node = avl_search(&self->overlap_counts, &search);
             tsk_bug_assert(node != NULL);
             nm = (node_mapping_t *) node->item;
-            if (nm->value == h) {
+            if (self->stop_at_local_mrca) {
+                min_overlap = h;
+            } else {
+                min_overlap = 0;
+            }
+            if (nm->value == min_overlap) {
                 nm->value = 0;
                 node = node->next;
                 tsk_bug_assert(node != NULL);
@@ -4095,8 +4102,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                 r = nm->position;
             } else {
                 r = l;
-                while (nm->value != h && r < r_max) {
-                    nm->value -= h - 1;
+                while (nm->value != min_overlap && r < r_max) {
+                    nm->value -= min_overlap - 1;
                     node = node->next;
                     tsk_bug_assert(node != NULL);
                     nm = (node_mapping_t *) node->item;
@@ -5164,7 +5171,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         ca_pop_id = 0;
         for (avl_node = self->non_empty_populations.head; avl_node != NULL;
              avl_node = avl_node->next) {
-            pop_id = (tsk_id_t) (intptr_t) avl_node->item;
+            pop_id = (tsk_id_t)(intptr_t) avl_node->item;
             t_temp = self->get_common_ancestor_waiting_time(self, pop_id, label);
             if (t_temp < ca_t_wait) {
                 ca_t_wait = t_temp;
@@ -5178,7 +5185,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         mig_dest_pop = 0;
         for (avl_node = self->non_empty_populations.head; avl_node != NULL;
              avl_node = avl_node->next) {
-            pop_id_j = (tsk_id_t) (intptr_t) avl_node->item;
+            pop_id_j = (tsk_id_t)(intptr_t) avl_node->item;
             pop = &self->populations[pop_id_j];
             n = avl_count(&pop->ancestors[label]);
             tsk_bug_assert(n > 0);
@@ -7289,7 +7296,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     for (u = 0; u < (tsk_id_t) n; u++) {
         lineages[u] = u;
     }
-    for (u = 0; u < (tsk_id_t) (2 * n); u++) {
+    for (u = 0; u < (tsk_id_t)(2 * n); u++) {
         pi[u] = TSK_NULL;
     }
     j = 0;
@@ -8135,7 +8142,7 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         alpha = 2 * pop_size * trajectory.s;
         x = 1.0
             - genic_selection_stochastic_forwards(
-                trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
+                  trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
         /* need our recored traj to stay in bounds */
         t += trajectory.dt;
         sim_time += trajectory.dt * pop_size * simulator->ploidy;
