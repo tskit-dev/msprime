@@ -2992,21 +2992,19 @@ class TestSMCK:
         for tree in ts.trees():
             assert tree.num_roots == 1
 
-    @pytest.mark.parametrize("hull_offset", [2, 0.5, 1e-6, 2.133])
-    @pytest.mark.parametrize("discrete_genome", [True, False])
-    @pytest.mark.parametrize("recombination_rate", [0.0, 0.1])
-    def test_gc(self, hull_offset, discrete_genome, recombination_rate):
-        tss = msprime.sim_ancestry(
-            samples=10,
-            model=msprime.SmcKApproxCoalescent(hull_offset=hull_offset),
-            sequence_length=100,
-            gene_conversion_rate=1.0,
-            gene_conversion_tract_length=5,
-            num_replicates=5,
-            discrete_genome=discrete_genome,
-            recombination_rate=recombination_rate,
-        )
-        for ts in tss:
-            assert ts.num_trees > 1
-            for tree in ts.trees():
-                assert tree.num_roots == 1
+    def test_gc(self):
+
+        with pytest.raises(
+            ValueError,
+            match="Gene conversion is not supported for the SmcKApproxCoalescent model. "
+            "Please refer to issue #2399 on GitHub for details.",
+        ):
+            msprime.sim_ancestry(
+                samples=10,
+                model=msprime.SmcKApproxCoalescent(),
+                sequence_length=100,
+                gene_conversion_rate=1.0,
+                gene_conversion_tract_length=5,
+                num_replicates=5,
+                recombination_rate=0.01,
+            )
