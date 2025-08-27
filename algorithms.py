@@ -2258,14 +2258,16 @@ class Simulator:
                 if r_max not in self.S:
                     j = self.S.floor_key(r_max)
                     self.S[r_max] = self.S[j]
+
+                min_overlap = len(X) if self.stop_at_local_mrca else 0
                 # Update the number of extant segments.
-                if self.S[left] == len(X):
+                if self.S[left] == min_overlap:
                     self.S[left] = 0
                     right = self.S.succ_key(left)
                 else:
                     right = left
-                    while right < r_max and self.S[right] != len(X):
-                        self.S[right] -= len(X) - 1
+                    while right < r_max and self.S[right] != min_overlap:
+                        self.S[right] -= min_overlap - 1
                         right = self.S.succ_key(right)
                     alpha = self.alloc_segment(left, right, new_node_id, pop_id)
                 # Update the heaps and make the record.
