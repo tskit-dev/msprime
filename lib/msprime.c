@@ -3785,6 +3785,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     bool defrag_required = false;
     tsk_id_t v;
     double l, r, l_min, r_max;
+    uint32_t min_overlap;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
@@ -3795,7 +3796,6 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
         goto out;
     }
 
-    uint32_t min_overlap;
     if (self->stop_at_local_mrca) {
         min_overlap = 2;
     } else {
