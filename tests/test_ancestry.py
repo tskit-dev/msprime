@@ -890,18 +890,21 @@ class TestSimulator:
         s = str(sim)
         assert len(s) > 0
 
-    def test_simulate_after_local_mrca(self):
+    @pytest.mark.parametrize("model", ["dtwf", "hudson"])
+    def test_simulate_after_local_mrca(self, model):
         """
         Tests that simulations run after the local MRCA when the flag is set
         """
-        end_time = 100
+        end_time = 1000
         ts = msprime.sim_ancestry(
             10,
+            population_size=100,
             stop_at_local_mrca=False,
             end_time=end_time,
             random_seed=1,
             sequence_length=10,
             recombination_rate=0.1,
+            model=model,
         )
 
         old_time = None
@@ -2556,7 +2559,8 @@ class TestSimAncestryInterface:
                 additional_nodes=msprime.NodeType.COMMON_ANCESTOR,
             )
 
-    def test_stop_at_local_mrca(self):
+    @pytest.mark.parametrize("model", ["dtwf", "hudson"])
+    def test_stop_at_local_mrca(self, model):
 
         with pytest.raises(
             ValueError,
@@ -2576,13 +2580,16 @@ class TestSimAncestryInterface:
 
         msprime.sim_ancestry(
             2,
+            population_size=100,
             stop_at_local_mrca=False,
             recombination_rate=0.1,
             sequence_length=10,
             end_time=3,
+            model=model,
         )
-        msprime.sim_ancestry(
+        msprime.sim_ancestry(  # gene conversion is not allowed for dtwf model
             2,
+            population_size=100,
             stop_at_local_mrca=False,
             gene_conversion_rate=0.01,
             gene_conversion_tract_length=10,
