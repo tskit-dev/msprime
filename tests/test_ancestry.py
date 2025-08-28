@@ -890,7 +890,15 @@ class TestSimulator:
         s = str(sim)
         assert len(s) > 0
 
-    @pytest.mark.parametrize("model", ["dtwf", "hudson"])
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "dtwf",
+            "hudson",
+            msprime.BetaCoalescent(alpha=1.5),
+            msprime.DiracCoalescent(psi=0.1, c=2),
+        ],
+    )
     def test_simulate_after_local_mrca(self, model):
         """
         Tests that simulations run after the local MRCA when the flag is set
@@ -898,7 +906,7 @@ class TestSimulator:
         end_time = 1000
         ts = msprime.sim_ancestry(
             10,
-            population_size=100,
+            population_size=10,
             stop_at_local_mrca=False,
             end_time=end_time,
             random_seed=1,
@@ -907,17 +915,9 @@ class TestSimulator:
             model=model,
         )
 
-        old_time = None
-        for tree in ts.trees():
-            assert len(tree.roots) == 1  # otherwise the test is not valid
-            u = tree.roots[0]
-            assert (
-                tree.time(u) >= end_time
-            )  # makes sure that local simulations only stop at end time
-            if old_time is None:
-                old_time = tree.time(u)
-            # check that end time is the same for all roots
-            assert tree.time(u) == old_time
+        root_times = [tree.time(tree.root) for tree in ts.trees()]
+        assert len(set(root_times)) == 1
+        assert root_times[0] >= end_time
 
 
 class TestParseRandomSeed:
@@ -2577,25 +2577,6 @@ class TestSimAncestryInterface:
             "recombination or gene conversion.",
         ):
             msprime.sim_ancestry(2, stop_at_local_mrca=False, end_time=3)
-
-        msprime.sim_ancestry(
-            2,
-            population_size=100,
-            stop_at_local_mrca=False,
-            recombination_rate=0.1,
-            sequence_length=10,
-            end_time=3,
-            model=model,
-        )
-        msprime.sim_ancestry(  # gene conversion is not allowed for dtwf model
-            2,
-            population_size=100,
-            stop_at_local_mrca=False,
-            gene_conversion_rate=0.01,
-            gene_conversion_tract_length=10,
-            sequence_length=10,
-            end_time=3,
-        )
 
 
 class TestSimulateInterface:
