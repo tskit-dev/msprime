@@ -1147,7 +1147,7 @@ node 8 in the leftmost tree.
 
 
 However, for some specialised applications, simulations after the local MRCA might be needed. In this case, we set the
-attribute `stop_at_local_mrca` of {func}`.sim_ancestry` to `False`, and we set the `end_time` parameter to stop simulations
+parameter `stop_at_local_mrca` of {func}`.sim_ancestry` to `False`, and we set the `end_time` parameter to stop simulations
 when they reach this end time.
 
 
