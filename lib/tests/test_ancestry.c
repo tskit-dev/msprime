@@ -720,7 +720,10 @@ test_single_locus_continue_after_local_mrca(void)
         CU_ASSERT_EQUAL(ret, 0);
 
         ret = msp_run(&msp, t, ULONG_MAX);
-        // CU_ASSERT_EQUAL(ret, 0); //TODO check why it gives 2
+        CU_ASSERT_EQUAL(ret, 2); // exit on max time
+
+        ret = msp_finalise_tables(&msp);
+        CU_ASSERT_EQUAL(ret, 0);
 
         ret = msp_get_time(&msp);
         CU_ASSERT_EQUAL(ret, t);
@@ -736,9 +739,9 @@ test_single_locus_continue_after_local_mrca(void)
             // verrify each tree has a single root
             CU_ASSERT_EQUAL_FATAL(tsk_tree_get_num_roots(&tree), 1);
 
-            // verify that all roots are older than the end time
+            // verify that all roots end at end_time
             root = tsk_tree_get_left_root(&tree);
-            CU_ASSERT_EQUAL(msp.tables->nodes.time[root], t); // todo why fails?
+            CU_ASSERT_EQUAL(msp.tables->nodes.time[root], t);
         }
 
         model = msp_get_model(&msp)->type;
