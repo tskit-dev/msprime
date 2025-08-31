@@ -759,13 +759,12 @@ on how to write and run these tests.
 
 Benchmarks to measure performance are in the `benchmarks` folder and are run using
 [airspeed velocity](https://asv.readthedocs.io/en/stable/index.html).
-An automated system runs the benchmarks on each push to the main branch and uploads
-the results to [this github pages site](https://tskit-dev.github.io/msprime-asv).
+A system that runs the benchmarks on each push to the main branch.
 These benchmarks can also be run locally to compare your branch with the main branch.
 Your changes must be in a commit to be measured. To run the benchmarks:
 
 ```
-asv run asv run HEAD...main~1
+asv run HEAD...main~1
 ```
 
 This will run the benchmarks for the latest main branch commit and all commits on
@@ -787,6 +786,9 @@ Note the following tips:
   development version. This can lead to confusing results! When tuning
   benchmarks it's better to commit often and use (e.g.)
   `asv run HEAD^! --show-stderr -b Hudson.time_large_sample_size`.
+- You may want to benchmark a specific list of commits exclusively. To do so, put the commits' hashes in a file and use the command: `asv run --show-stderr --skip-existing HASHFILE:hashestobenchmark.txt`
+
+- There is a script: `benchmarks/check_asv.sh` that can be used to benchmark recent commits.
 
 ## Containerization
 
