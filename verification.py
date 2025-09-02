@@ -4528,7 +4528,133 @@ class SmcTest(Test):
         pyplot.close("all")
 
 
-class SmcKTest(Test):
+class SmckvsSmcKApproxCoalescent(Test):
+    """
+    Tests for the SMC(k) approximation coalescent against the SMC(k) model.
+    """
+
+    models = {
+        "SmcKApprox": msprime.SmcKApproxCoalescent(),
+        "smc": msprime.SmcApproxCoalescent(),
+    }
+
+    def run_Smck_SmcKApproxCoalescent_stats(self, initial_condition=False, **kwargs):
+        df_list = []
+
+        for model, model_cls in self.models.items():
+
+            if initial_condition:
+                kwargs["model"] = [msprime.StandardCoalescent(duration=50), model_cls]
+            else:
+                kwargs["model"] = model_cls
+
+            logging.debug(f"Running: {kwargs}")
+            data = collections.defaultdict(list)
+            replicates = msprime.sim_ancestry(**kwargs)
+            for ts in replicates:
+                t_mrca = np.zeros(ts.num_trees)
+                t_intervals = []
+                for tree in ts.trees():
+                    t_mrca[tree.index] = tree.time(tree.root)
+                    t_intervals.append(tree.interval)
+                data["tmrca_mean"].append(np.mean(t_mrca))
+                data["num_trees"].append(ts.num_trees)
+                data["intervals"].append(t_intervals)
+                data["model"].append(model)
+            df_list.append(pd.DataFrame(data))
+        return pd.concat(df_list)
+
+    def plot_SmcKApprox_smcK_stats(self, df):
+        df_SmcKApprox = df[df.model == "SmcKApprox"]
+        df_smcK = df[df.model == "smc"]
+        for stat in ["tmrca_mean", "num_trees"]:
+            plot_qq(df_SmcKApprox[stat], df_smcK[stat])
+            f = self.output_dir / f"{stat}.png"
+            pyplot.savefig(f, dpi=72)
+            pyplot.close("all")
+
+        SmcKApprox_breakpoints = all_breakpoints_in_replicates(
+            df_SmcKApprox["intervals"]
+        )
+        smcK_breakpoints = all_breakpoints_in_replicates(df_smcK["intervals"])
+        if len(SmcKApprox_breakpoints) > 0 or len(smcK_breakpoints) > 0:
+            plot_breakpoints_hist(
+                SmcKApprox_breakpoints, smcK_breakpoints, "SmcKApprox", "smc"
+            )
+            pyplot.savefig(self.output_dir / "breakpoints.png", dpi=72)
+            pyplot.close("all")
+
+    def plot_tree_intervals(self, df):
+        fig, ax_arr = pyplot.subplots(2, 1)
+        for subplot_idx, model in enumerate(self.models):
+            intervals = df[df.model == model]["intervals"][0]
+            for i, interval in enumerate(intervals):
+                left, right = interval
+                ax_arr[subplot_idx].set_title(model)
+                ax_arr[subplot_idx].set_ylabel("tree index")
+                ax_arr[subplot_idx].plot([left, right], [i, i], c="grey")
+
+        ax_arr[1].set_xlabel("tree interval")
+        pyplot.tight_layout()
+        pyplot.savefig(self.output_dir / "intervals.png", dpi=72)
+        pyplot.close("all")
+
+    def plot_gc_metric(self, df, metric, ylabel, discrete_genome):
+
+        grouped = (
+            df.groupby(["tract_length", "model"])[metric]
+            .agg(["mean", "std"])
+            .reset_index()
+        )
+        smc_means = grouped[grouped["model"] == "SMC"]["mean"]
+        smc_stds = grouped[grouped["model"] == "SMC"]["std"]
+        smck_means = grouped[grouped["model"] == "SMCK"]["mean"]
+        smck_stds = grouped[grouped["model"] == "SMCK"]["std"]
+        hudson_means = grouped[grouped["model"] == "Hudson"]["mean"]
+        hudson_stds = grouped[grouped["model"] == "Hudson"]["std"]
+
+        tract_lengths = grouped["tract_length"].unique()
+        x = np.arange(len(tract_lengths))
+        width = 0.25
+
+        filename = f"{metric}_discrete={int(discrete_genome)}.png"
+
+        fig, ax = pyplot.subplots(figsize=(10, 6))
+        ax.bar(x - width, smc_means, width, yerr=smc_stds, capsize=5, label="SMC")
+        ax.bar(x, smck_means, width, yerr=smck_stds, capsize=5, label="SMCK")
+        ax.bar(
+            x + width, hudson_means, width, yerr=hudson_stds, capsize=5, label="Hudson"
+        )
+        ax.set_xticks(x)
+        ax.set_xticklabels([str(tl) for tl in tract_lengths], rotation=45)
+        ax.set_xlabel("Tract length (l)")
+        ax.set_ylabel(ylabel)
+        ax.set_title(
+            f"{ylabel} comparison (discrete={int(discrete_genome)}). "
+            "Error bars equals 1 standard deviation."
+        )
+        ax.legend()
+        pyplot.tight_layout()
+        pyplot.savefig(self.output_dir / filename)
+        pyplot.close()
+
+    def _run(self, **kwargs):
+        df = self.run_Smck_SmcKApproxCoalescent_stats(**kwargs)
+        self.plot_SmcKApprox_smcK_stats(df)
+        self.plot_tree_intervals(df)
+
+        # test with initial conditions
+        df = self.run_Smck_SmcKApproxCoalescent_stats(initial_condition=True, **kwargs)
+        self.output_dir = self.output_dir.parent / (
+            self.output_dir.name + "_with_initial_conditions"
+        )
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        self.plot_SmcKApprox_smcK_stats(df)
+        self.plot_tree_intervals(df)
+
+
+class SmcKTest(SmckvsSmcKApproxCoalescent):
     """
     Tests for the SMC(0) model against rejection sampling.
     """
@@ -4696,8 +4822,368 @@ class SmcKTest(Test):
         pyplot.savefig(self.output_dir / "var.png")
         pyplot.close("all")
 
+    def test_smck_vs_smckapprox_single_locus(self):
+        self._run(samples=10, population_size=1000, num_replicates=300)
 
-class SimulateFrom(Test):
+    def test_smck_vs_smckapprox_recomb_discrete_hotspots(self):
+        """
+        Checks the DTWF against the standard coalescent with a
+        discrete recombination map with variable rates.
+        """
+        recombination_map = msprime.RateMap(
+            position=[0, 100, 500, 900, 1200, 1500, 2000],
+            rate=[0.00001, 0, 0.0002, 0.00005, 0, 0.001],
+        )
+        self._run(
+            samples=10,
+            population_size=1000,
+            recombination_rate=recombination_map,
+            num_replicates=300,
+            discrete_genome=True,
+        )
+
+    def test_smck_vs_smckapprox_recomb_continuous_hotspots(self):
+        """
+        Checks the DTWF against the standard coalescent with a
+        continuous recombination map with variable rates.
+        """
+        recombination_map = msprime.RateMap(
+            position=[0, 0.1, 0.5, 0.9, 1.2, 1.5, 2.0],
+            rate=[0.00001, 0, 0.0002, 0.00005, 0, 0.001],
+        )
+        self._run(
+            samples=10,
+            population_size=1000,
+            recombination_rate=recombination_map,
+            num_replicates=300,
+            discrete_genome=False,
+        )
+
+    def test_smck_vs_smckapprox_single_forced_recombination(self):
+        recombination_map = msprime.RateMap(position=[0, 100, 101, 201], rate=[0, 1, 0])
+        self._run(
+            samples=10,
+            population_size=10,
+            num_replicates=300,
+            discrete_genome=True,
+            recombination_rate=recombination_map,
+        )
+
+    def test_smck_vs_smckapprox_low_recombination(self):
+        self._run(
+            samples=10,
+            population_size=1000,
+            num_replicates=400,
+            recombination_rate=0.01,
+            sequence_length=5,
+        )
+
+    def test_smck_vs_smckapprox_2_pops_massmigration(self):
+        demography = msprime.Demography.isolated_model([1000, 1000])
+        demography.add_mass_migration(time=10, source=1, dest=0, proportion=1.0)
+        self._run(
+            samples={0: 10, 1: 10},
+            demography=demography,
+            sequence_length=10**6,
+            num_replicates=300,
+            recombination_rate=1e-8,
+        )
+
+    def test_smck_vs_smckapprox_1_pop_growth(self):
+        self._run(
+            samples=10,
+            demography=msprime.Demography.isolated_model([1000], growth_rate=[0.01]),
+            recombination_rate=1e-8,
+            sequence_length=5e7,
+            num_replicates=300,
+            discrete_genome=True,
+        )
+
+    def test_smck_vs_smckapprox_1_pop_shrink(self):
+        initial_size = 1000
+        demography = msprime.Demography.isolated_model(
+            [initial_size], growth_rate=[-0.01]
+        )
+        demography.events.append(
+            msprime.PopulationParametersChange(
+                time=200, initial_size=initial_size, growth_rate=0.01, population=0
+            )
+        )
+        self._run(
+            samples=10,
+            demography=demography,
+            recombination_rate=1e-8,
+            sequence_length=5e7,
+            num_replicates=300,
+            discrete_genome=True,
+        )
+
+    def test_smck_vs_smckapprox_multiple_bottleneck(self):
+        demography = msprime.Demography.isolated_model([1000, 1000])
+        demography.events = [
+            msprime.PopulationParametersChange(
+                time=100, initial_size=100, growth_rate=-0.01, population=0
+            ),
+            msprime.PopulationParametersChange(
+                time=200, initial_size=100, growth_rate=-0.01, population=1
+            ),
+            msprime.PopulationParametersChange(
+                time=300, initial_size=1000, growth_rate=0.01, population=0
+            ),
+            msprime.PopulationParametersChange(
+                time=400, initial_size=1000, growth_rate=0.01, population=1
+            ),
+            msprime.PopulationParametersChange(
+                time=500, initial_size=100, growth_rate=0, population=0
+            ),
+            msprime.PopulationParametersChange(
+                time=600, initial_size=100, growth_rate=0, population=1
+            ),
+            msprime.MigrationRateChange(time=700, rate=0.1, matrix_index=(0, 1)),
+        ]
+        self._run(
+            samples={0: 5, 1: 5},
+            demography=demography,
+            num_replicates=400,
+            recombination_rate=1e-8,
+            sequence_length=5e7,
+        )
+
+    def test_gc_tract_length_smc(self):
+        """
+        Runs the check for the mean length of gene conversion tracts.
+        """
+        models = {
+            "Hudson": msprime.SmcApproxCoalescent(),
+            "SMC": msprime.SmcKApproxCoalescent(),
+            "SMCK": msprime.StandardCoalescent(),
+        }
+        num_replicates = 10
+        n = 10
+        gene_conversion_rate = 5
+        gc_tract_lengths = np.append(np.arange(1, 5.25, 0.25), [10, 50])
+
+        for discrete_genome in [True, False]:
+            records = []
+
+            for k, l in enumerate(gc_tract_lengths):
+                num_gc_events = np.zeros(num_replicates)
+                num_internal_gc_events = np.zeros(num_replicates)
+                sum_internal_gc_tract_lengths = np.zeros(num_replicates)
+
+                for model_name, model in models.items():
+
+                    sim = msprime.ancestry._parse_sim_ancestry(
+                        samples=n,
+                        sequence_length=100,
+                        gene_conversion_rate=gene_conversion_rate,
+                        gene_conversion_tract_length=gc_tract_lengths[k],
+                        discrete_genome=discrete_genome,
+                        ploidy=1,
+                        model=model,
+                        additional_nodes=(
+                            msprime.NodeType.RECOMBINANT
+                            | msprime.NodeType.CENSUS
+                            | msprime.NodeType.GENE_CONVERSION
+                            | msprime.NodeType.PASS_THROUGH
+                            | msprime.NodeType.COMMON_ANCESTOR
+                        ),
+                        coalescing_segments_only=False,
+                    )
+
+                    for j, _ts in enumerate(sim.run_replicates(num_replicates)):
+                        num_gc_events[j] = sim.num_gene_conversion_events
+                        num_internal_gc_events[j] = (
+                            sim.num_internal_gene_conversion_events
+                        )
+                        sum_internal_gc_tract_lengths[j] = (
+                            sim.sum_internal_gc_tract_lengths
+                        )
+                        sim.reset()
+
+                    for j in range(num_replicates):
+                        records.append(
+                            {
+                                "tract_length": l,
+                                "model": model_name,
+                                "num_gc_events": num_gc_events[j],
+                                "num_internal_gc_events": num_internal_gc_events[j],
+                                "normalized_tract_length": (
+                                    sum_internal_gc_tract_lengths[j]
+                                    / num_internal_gc_events[j]
+                                    / l
+                                    if num_internal_gc_events[j] > 0
+                                    else np.nan
+                                ),
+                            }
+                        )
+
+            df = pd.DataFrame(records)
+
+            self.plot_gc_metric(
+                df, "num_gc_events", "Number of GC events", discrete_genome
+            )
+            self.plot_gc_metric(
+                df,
+                "num_internal_gc_events",
+                "Number of internal GC events",
+                discrete_genome,
+            )
+            self.plot_gc_metric(
+                df,
+                "normalized_tract_length",
+                "Normalized tract length (mean / l)",
+                discrete_genome,
+            )
+
+    def test_smc_k_num_trees_gc(self):
+        """
+        Runs the check for number of trees in the SMC and full coalescent
+        using the API, but with gene conversion instead of recombination.
+        """
+        L = 100
+        Ne = 1000
+        n = 10
+        gene_conversion_rate = 0.00001
+        gc_tract_lengths = np.arange(1, 5.25, 0.25)
+
+        num_replicates = 10_000
+        results = []
+
+        models_to_run = [
+            (msprime.SmcApproxCoalescent(), "msprime (hudson)"),
+            (msprime.SmcKApproxCoalescent(), "smc"),
+            (msprime.SmcPrimeApproxCoalescent(), "smc_prime"),
+            (msprime.SmcKApproxCoalescent(hull_offset=0.0), "smc_k(0)"),
+            (msprime.SmcKApproxCoalescent(hull_offset=1.0), "smc_k(1)"),
+            (msprime.SmcKApproxCoalescent(hull_offset=L), "smc_k(inf)"),
+        ]
+
+        for gc_tract_length in gc_tract_lengths:
+            for model_obj, model_name in models_to_run:
+                sim = msprime.ancestry._parse_sim_ancestry(
+                    samples=n,
+                    population_size=Ne,
+                    sequence_length=L,
+                    gene_conversion_rate=gene_conversion_rate,
+                    gene_conversion_tract_length=gc_tract_length,
+                    model=model_obj,
+                )
+
+                for rep in range(num_replicates):
+                    sim.run()
+                    results.append(
+                        {
+                            "tract_length": gc_tract_length,
+                            "model": model_name,
+                            "replicate": rep,
+                            "num_breakpoints": sim.num_breakpoints,
+                        }
+                    )
+                    sim.reset()
+
+        smc_df = pd.DataFrame(results)
+
+        models = smc_df["model"].unique()
+        tract_lengths = sorted(smc_df["tract_length"].unique())
+        model_colors = pyplot.cm.tab10(np.linspace(0, 1, len(models)))
+
+        fig, ax = pyplot.subplots(figsize=(10, 6))
+
+        box_width = 0.15
+        legend_handles = {}
+
+        for i, tl in enumerate(tract_lengths):
+            for j, model in enumerate(models):
+                subset = smc_df[
+                    (smc_df["tract_length"] == tl) & (smc_df["model"] == model)
+                ]
+                pos = i + (j - len(models) / 2) * box_width
+                bp = ax.boxplot(
+                    subset["num_breakpoints"].values,
+                    positions=[pos],
+                    widths=box_width * 0.8,
+                    patch_artist=True,
+                    boxprops=dict(facecolor=model_colors[j], alpha=0.6),
+                    medianprops=dict(color="black"),
+                    whiskerprops=dict(color=model_colors[j]),
+                    capprops=dict(color=model_colors[j]),
+                    flierprops=dict(
+                        markerfacecolor=model_colors[j],
+                        marker="o",
+                        markersize=4,
+                        alpha=0.5,
+                    ),
+                )
+                if model not in legend_handles:
+                    legend_handles[model] = bp["boxes"][0]
+
+        ax.set_xticks(range(len(tract_lengths)))
+        ax.set_xticklabels(tract_lengths)
+        ax.set_xlabel("GC tract length")
+        ax.set_ylabel("Number of breakpoints")
+        ax.set_title(
+            f"Distribution of breakpoints by model and GC tract length. \n"
+            f"GC rate: {gene_conversion_rate}, L: {L}, Ne: {Ne}, samples: {n}"
+            f", num_replicates: {num_replicates}"
+        )
+        ax.legend(legend_handles.values(), legend_handles.keys(), title="Model")
+
+        pyplot.tight_layout()
+        pyplot.savefig(self.output_dir / "breakpoints_boxplot.png")
+        pyplot.close()
+
+    def test_out_of_africa_migration_model(self):
+        s_no = 10
+        samples = {
+            "YRI": s_no,
+            "CEU": s_no,
+            "CHB": s_no,
+            "OOA": s_no,
+            "AMH": s_no,
+            "ANC": s_no,
+        }
+        recombination_map = msprime.RateMap(
+            position=[0, 100, 500, 900, 1200, 1500, 2000],
+            rate=[0.00001, 0, 0.0002, 0.00005, 0, 0.001],
+        )
+
+        big_df = pd.DataFrame()
+        for model, model_cls in self.models.items():
+            tss = msprime.sim_ancestry(
+                samples=samples,
+                recombination_rate=recombination_map,
+                discrete_genome=True,
+                demography=msprime.Demography._ooa_model(),
+                record_migrations=True,
+                num_replicates=50,
+                model=model_cls,
+            )
+
+            for i, ts in enumerate(tss):
+                migrations_dic = ts.tables.migrations.asdict()
+
+                # to make the migration dict have the same number of
+                # rows, for df initialization
+                del migrations_dic["metadata_schema"]
+                del migrations_dic["metadata"]
+                del migrations_dic["metadata_offset"]
+                df = pd.DataFrame(migrations_dic)
+
+                df = df.groupby(["source", "dest"]).size().reset_index(name="count")
+
+                df["model"] = model
+                df["replicate"] = i
+                big_df = pd.concat([big_df, df], ignore_index=True)
+
+        smc_df = big_df[big_df["model"] == "smc"]
+        smck_df = big_df[big_df["model"] == "SmcKApprox"]
+
+        plot_qq(smc_df["count"], smck_df["count"])
+        f = self.output_dir / "qq.png"
+        pyplot.savefig(f, dpi=72)
+        pyplot.close("all")
+
     def test_simulate_from_single_locus(self):
         num_replicates = 1000
 
