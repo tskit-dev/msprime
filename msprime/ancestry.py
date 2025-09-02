@@ -833,6 +833,13 @@ def _parse_sim_ancestry(
     models = _parse_model_arg(model)
     is_dtwf = isinstance(models[0], DiscreteTimeWrightFisher)
     is_pedigree = any(isinstance(model, FixedPedigree) for model in models)
+    is_smck = any(isinstance(model, SmcKApproxCoalescent) for model in models)
+
+    if is_smck and gene_conversion_rate is not None:
+        raise ValueError(
+            "Gene conversion is not supported for the SmcKApproxCoalescent model. "
+            "Please refer to issue #2399 on GitHub for details."
+        )
 
     if record_full_arg:
         if coalescing_segments_only is not None:
