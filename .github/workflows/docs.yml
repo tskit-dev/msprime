@@ -6,6 +6,7 @@ on:
     branches: [main]
     tags:
       - '*'
+  merge_group:
 
 env:
   BUILD_GSL: true
