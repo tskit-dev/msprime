@@ -330,7 +330,7 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
     double s = 10000;
     double recom_rate = 0.0004;
     double start_frequency = 0.5 / 10000;
-    double end_frequency = 0.9;
+    double end_frequency = 1 - 0.5 / 10000;
     double dt = 1.0 / 400000;
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
@@ -371,12 +371,75 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
 }
 
 static void
+sweep_genic_selection_reverse_single_run(unsigned long int seed)
+{
+
+    /* Try to mimic the msms parameters used in verification.py
+           "100 300 -t 200 -r 200 500000"
+           " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
+     */
+    int ret;
+    const char *filename
+        = "/home/aalhadbhatt/Desktop/msprime/notebooks/PyNBmsprime/events.bin";
+    uint32_t n = 10;
+    double num_loci = 500001;
+    double position = num_loci / 2;
+    size_t num_demes = 1;
+    double recom_rate = 0.0004;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+
+    // Test over differnt seeds
+    gsl_rng_set(rng, seed);
+
+    ret = build_sim(&msp, &tables, rng, num_loci, num_demes, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, recom_rate), 0);
+    ret = msp_set_num_labels(&msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    // To mimic the verfication.py call
+    msp_set_discrete_genome(&msp, 0);
+    msp_set_gene_conversion_rate(&msp, 0);
+    msp_set_gene_conversion_tract_length(&msp, 1);
+    msp_set_avl_node_block_size(&msp, 65536);
+    msp_set_node_mapping_block_size(&msp, 65536);
+    msp_set_segment_block_size(&msp, 65536);
+
+    ret = msp_set_simulation_model_sweep_genic_selection_reverse(
+        &msp, position, filename);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
+
+    msp_verify(&msp, 0);
+
+    msp_free(&msp);
+    gsl_rng_free(rng);
+    // free(samples);
+    tsk_table_collection_free(&tables);
+}
+
+static void
 test_sweep_genic_selection_mimic_msms(void)
 {
     /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
     for (int i = 0; i < 300; i++) {
         sweep_genic_selection_mimic_msms_single_run(i + 1);
     }
+}
+
+static void
+test_sweep_genic_selection_reverse(void)
+{
+    /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
+    for (int i = 0; i < 300; i++)
+        sweep_genic_selection_reverse_single_run(i + 1);
 }
 
 int
@@ -395,6 +458,7 @@ main(int argc, char **argv)
             test_sweep_genic_selection_time_change },
         { "test_sweep_genic_selection_mimic_msms",
             test_sweep_genic_selection_mimic_msms },
+        { "test_sweep_genic_selection_reverse", test_sweep_genic_selection_reverse },
         CU_TEST_INFO_NULL,
     };
 

@@ -47,6 +47,7 @@ from msprime.ancestry import (
     StandardCoalescent,
     SweepGenicSelection,
     FixedPedigree,
+    SweepGenicSelectionReverse,
     TimeUnitsMismatchWarning,
     NodeType,
 )
