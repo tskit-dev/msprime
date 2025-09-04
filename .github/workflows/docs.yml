@@ -8,8 +8,7 @@ on:
   merge_group:
 jobs:
   Docs:
-    uses: tskit-dev/.github/.github/workflows/docs-build-template.yml@main
+    uses: tskit-dev/.github/.github/workflows/docs-build-template.yml@v1
     with:
-      requirements-path: requirements/CI-docs/requirements.txt
       additional-setup: sudo apt-get install -y libgsl0-dev
       make-command: make cmodule

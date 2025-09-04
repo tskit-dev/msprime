@@ -27,8 +27,9 @@ jobs:
           command: |
             sudo apt-get update
             sudo apt-get install libgsl0-dev libcunit1-dev libconfig-dev ninja-build valgrind clang
-            pip install --user -r requirements/CI-complete/requirements.txt
-            pip install --user build twine meson
+            pip install uv
+            uv venv
+            uv pip install -r pyproject.toml --extra test
             # way to set path persistently https://circleci.com/docs/2.0/env-vars/#setting-path
             echo 'export PATH=/home/circleci/.local/bin:$PATH' >> $BASH_ENV
       - save_cache:
@@ -39,12 +40,14 @@ jobs:
       - run:
           name: Compile Python
           command: |
+            source .venv/bin/activate
             make allchecks
 
       - run:
           name: Run highlevel tests
           # Run tests without background threads
           command: |
+            source .venv/bin/activate
             pytest --cov=msprime --cov-report=xml --cov-branch -n 0 tests
 
       - codecov/upload:
@@ -59,11 +62,13 @@ jobs:
       - run:
           name: Compile C with gcc
           command: |
+            source .venv/bin/activate
             CFLAGS=--coverage meson lib/ build-gcc && ninja -C build-gcc
 
       - run:
           name: Run the low-level tests.
           command: |
+            source .venv/bin/activate
             ninja -C build-gcc test
 
       - run:
@@ -100,7 +105,7 @@ jobs:
       - run:
           name: Make sure we can build a distribution.
           command: |
-            python -m pip install build
+            source .venv/bin/activate
             python -m build --sdist
             python -m build --wheel
             python -m twine check dist/*.tar.gz --strict
