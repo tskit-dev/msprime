@@ -43,16 +43,8 @@ jobs:
         with:
           submodules: true
 
-      - name: Cache conda and dependencies
-        id: cache
-        uses: actions/cache@v4.2.2
-        with:
-          path: ${{ env.CONDA }}/envs
-          key: ${{ runner.os }}-${{ runner.arch }}-${{ matrix.python}}-conda-v2-${{ hashFiles('requirements/CI-tests-conda/requirements.txt') }}-${{ hashFiles('requirements/CI-tests-pip/requirements.txt') }}
-
-      - name: Install Conda
+      - name: Install Conda (needed for GSL)
         uses: conda-incubator/setup-miniconda@v3.1.1
-        if: steps.cache.outputs.cache-hit != 'true'
         with:
           activate-environment: anaconda-client-env
           python-version: ${{ matrix.python }}
@@ -72,17 +64,20 @@ jobs:
         run: |
           cp ~/.bash_profile ~/.profile
 
-      - name: Install conda deps
+      - name: Install GSL
         if: steps.cache.outputs.cache-hit != 'true'
         shell: bash -l {0} #We need a login shell to get conda
-        run: conda install --yes --file=requirements/CI-tests-conda/requirements.txt
+        run: conda install gsl
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.15"
+      
       - name: Install pip deps
-        if: steps.cache.outputs.cache-hit != 'true'
         shell: bash -l {0}
         run: | 
-          pip install -r requirements/CI-tests-pip/requirements.txt
-          pip uninstall -y msprime
+          uv pip install -r pyproject.toml --extra test
 
       - name: Build module
         env:

@@ -64,17 +64,18 @@ on the documentation because it requires a locally built version of the
 
 ### Python requirements
 
-The list of packages needed for development are listed in
-``requirements/development.txt``. Install these using either:
+The packages needed for development are specified as optional dependencies
+in the ``pyproject.toml`` file. Install these using:
 
 ```
-conda install --file requirements/development.txt
+$ python -m pip install -e ".[dev]"
 ```
-or
+
+For conda users, you may need to install GSL first:
 ```
-$ python -m pip install -r requirements/development.txt
+conda install gsl
+pip install -e ".[dev]"
 ```
-depending on whether you are a conda or pip user.
 
 ## Overview
 
@@ -734,9 +735,13 @@ new simulation functionality, as subtle statistical bugs can easily slip in
 unnoticed.
 
 The statistical tests are all run via the `verification.py` script in the project root.
-The script has some extra dependencies listed in the `requirements/verification.txt`,
-which can be installed using `pip install -r` or `conda install --file`. Run
-this script using:
+The script has some extra dependencies, which can be installed using:
+
+```
+pip install -e ".[verification]"
+```
+
+Run this script using:
 
 ```{code-block} bash
 
