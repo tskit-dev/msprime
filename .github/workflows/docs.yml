@@ -1,5 +1,4 @@
 name: Docs
-
 on:
   pull_request:
   push:
@@ -7,56 +6,10 @@ on:
     tags:
       - '*'
   merge_group:
-
-env:
-  BUILD_GSL: true
-  COMMIT_EMAIL: ben.jeffery.well+adminbot@gmail.com
-  MAKE_TARGET: cmodule
-  OWNER: tskit-dev
-  REPO: msprime
-
 jobs:
-  build-deploy-docs:
-    name: Docs
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.12.1
-        with:
-          access_token: ${{ github.token }}
-
-      - uses: actions/checkout@v4.2.2
-        with:
-          submodules: true
-
-      - uses: actions/setup-python@v5.4.0
-        with:
-          python-version: "3.12"
-          cache: "pip"
-
-      - name: Create venv and install deps (one by one to avoid conflict errors)
-        run: |
-          pip install --upgrade pip wheel
-          pip install -r requirements/CI-docs/requirements.txt
-
-      - name: Install GSL
-        if: env.BUILD_GSL == 'true'
-        run: sudo apt-get install -y libgsl0-dev
-
-      - name: Build C module
-        if: env.MAKE_TARGET
-        run: |
-          make $MAKE_TARGET
-
-      - name: Build Docs
-        run: |
-          cd docs
-          make
-
-      - name: Trigger docs site rebuild
-        if: github.ref == 'refs/heads/main'
-        run: |
-          curl -X POST https://api.github.com/repos/tskit-dev/tskit-site/dispatches \
-                    -H 'Accept: application/vnd.github.everest-preview+json' \
-                    -u AdminBot-tskit:${{ secrets.ADMINBOT_TOKEN }} \
-                    --data '{"event_type":"build-docs"}'
+  Docs:
+    uses: tskit-dev/.github/.github/workflows/docs-build-template.yml@main
+    with:
+      requirements-path: requirements/CI-docs/requirements.txt
+      additional-setup: sudo apt-get install -y libgsl0-dev
+      make-command: make cmodule
