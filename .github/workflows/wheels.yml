@@ -65,6 +65,52 @@ jobs:
           name: osx-wheel-${{ matrix.os }}-${{ matrix.python }}
           path: dist
 
+  Windows:
+    name: Build Windows - ${{ matrix.python }}
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python: [3.9, "3.10", 3.11, 3.12, 3.13]
+        arch: [x64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          submodules: true
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5.4.0
+        with:
+          python-version: ${{ matrix.python }}
+          architecture: ${{ matrix.arch }}
+      - name: Install GSL via vcpkg
+        run: |
+          vcpkg install gsl:${{ matrix.arch }}-windows
+        shell: cmd
+      - name: Install deps
+        run: |
+          pip install --upgrade pip build delvewheel
+      - name: Fix windows symlinks
+        run: |
+          if (Test-Path "lwt_interface") { Remove-Item -Recurse -Force "lwt_interface" }
+          Copy-Item -Recurse "git-submodules/tskit/python/lwt_interface" "./lwt_interface"
+        shell: powershell
+      - name: Build Wheel
+        run: |
+          python -m build --wheel
+      - name: Bundle dynamic libs
+        run: |
+          $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkgRoot) { $vcpkgRoot = "C:\vcpkg" }
+          $gslBinPath = Join-Path $vcpkgRoot "installed\x64-windows\bin"
+          $env:PATH = "$gslBinPath;$env:PATH"
+          delvewheel repair dist/*.whl -w dist/ --add-path "$gslBinPath"
+        shell: powershell
+      - name: Upload Wheels
+        uses: actions/upload-artifact@v4.6.1
+        with:
+          name: win-wheel-${{ matrix.python }}
+          path: dist
+
   manylinux:
     runs-on: ubuntu-24.04
     steps:
@@ -153,10 +199,35 @@ jobs:
           tskit provenances tmp.trees
 
 
+  Windows-test:
+    runs-on: windows-latest
+    needs: ['Windows']
+    strategy:
+      matrix:
+        python: [3.9, "3.10", 3.11, 3.12, 3.13]
+    steps:
+      - name: Download wheels
+        uses: actions/download-artifact@v4.2.0
+        with:
+          name: win-wheel-${{ matrix.python }}
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5.4.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install wheel and test
+        run: |
+          python -VV
+          pip install numpy newick>=1.3.0 tskit>=0.5.2 demes>=0.2
+          pip install msprime --no-index --only-binary msprime -f .
+          python -c "import msprime"
+          msp simulate 10 tmp.trees
+          tskit info tmp.trees
+          tskit provenances tmp.trees
+
   PyPI_Upload:
     runs-on: ubuntu-24.04
     environment: release
-    needs: ['OSX-test', 'manylinux-test']
+    needs: ['OSX-test', 'manylinux-test', 'Windows-test']
     permissions:
       id-token: write
     steps:
@@ -166,6 +237,8 @@ jobs:
         run: |
           mkdir dist
           cp */*.{whl,gz} dist/.
+          # Windows wheels have different naming pattern
+          if [ -d "win-wheel"* ]; then cp win-wheel*/*.whl dist/. || true; fi
       - name: Publish distribution to Test PyPI
         if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
         uses: pypa/gh-action-pypi-publish@v1.12.4
