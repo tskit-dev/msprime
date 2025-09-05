@@ -119,10 +119,6 @@ more details on managing packages and environments.
 Installing using `pip` is more flexible than `conda` as it
 can support more versions of Python and dependencies can be customised.
 
-```{warning}
-Pip installations are not supported on Windows due to our dependency on GSL.
-```
-
 :::{warning}
 
 If you installed Python using anaconda/miniconda, please install
