@@ -890,6 +890,35 @@ class TestSimulator:
         s = str(sim)
         assert len(s) > 0
 
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "dtwf",
+            "hudson",
+            msprime.BetaCoalescent(alpha=1.5),
+            msprime.DiracCoalescent(psi=0.1, c=2),
+        ],
+    )
+    def test_simulate_after_local_mrca(self, model):
+        """
+        Tests that simulations run after the local MRCA when the flag is set
+        """
+        end_time = 1000
+        ts = msprime.sim_ancestry(
+            10,
+            population_size=10,
+            stop_at_local_mrca=False,
+            end_time=end_time,
+            random_seed=1,
+            sequence_length=10,
+            recombination_rate=0.1,
+            model=model,
+        )
+
+        root_times = [tree.time(tree.root) for tree in ts.trees()]
+        assert len(set(root_times)) == 1
+        assert root_times[0] >= end_time
+
 
 class TestParseRandomSeed:
     """
@@ -2528,6 +2557,18 @@ class TestSimAncestryInterface:
             msprime.sim_ancestry(
                 10,
                 additional_nodes=msprime.NodeType.COMMON_ANCESTOR,
+            )
+
+    @pytest.mark.parametrize("model", ["dtwf", "hudson"])
+    def test_stop_at_local_mrca(self, model):
+
+        with pytest.raises(
+            ValueError,
+            match="You have to specify an end_time when using stop_at_local_mrca, "
+            "otherwise the simulation will run indefinitely.",
+        ):
+            msprime.sim_ancestry(
+                2, stop_at_local_mrca=False, recombination_rate=0.1, sequence_length=10
             )
 
 

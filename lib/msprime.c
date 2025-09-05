@@ -329,6 +329,13 @@ out:
 }
 
 int
+msp_set_stop_at_local_mrca(msp_t *self, bool stop_at_local_mrca)
+{
+    self->stop_at_local_mrca = stop_at_local_mrca;
+    return 0;
+}
+
+int
 msp_set_discrete_genome(msp_t *self, bool is_discrete)
 {
     self->discrete_genome = is_discrete;
@@ -1030,6 +1037,7 @@ msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng)
     self->store_migrations = false;
     self->additional_nodes = 0;
     self->coalescing_segments_only = true;
+    self->stop_at_local_mrca = true;
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
@@ -3777,6 +3785,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     bool defrag_required = false;
     tsk_id_t v;
     double l, r, l_min, r_max;
+    uint32_t min_overlap;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
@@ -3785,6 +3794,12 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     if (new_lineage == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
+    }
+
+    if (self->stop_at_local_mrca) {
+        min_overlap = 2;
+    } else {
+        min_overlap = 0;
     }
 
     x = a;
@@ -3862,7 +3877,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 node = avl_search(&self->overlap_counts, &search);
                 tsk_bug_assert(node != NULL);
                 nm = (node_mapping_t *) node->item;
-                if (nm->value == 2) {
+                if (nm->value == min_overlap) {
                     nm->value = 0;
                     node = node->next;
                     tsk_bug_assert(node != NULL);
@@ -3870,7 +3885,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                     r = nm->position;
                 } else {
                     r = l;
-                    while (nm->value != 2 && r < r_max) {
+                    while (nm->value != min_overlap && r < r_max) {
                         nm->value--;
                         node = node->next;
                         tsk_bug_assert(node != NULL);
@@ -3983,6 +3998,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     bool defrag_required = false;
     uint32_t j, h;
     double l, r, r_max, next_l, l_min;
+    uint32_t min_overlap;
+
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *z, *alpha;
@@ -4072,7 +4089,12 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             node = avl_search(&self->overlap_counts, &search);
             tsk_bug_assert(node != NULL);
             nm = (node_mapping_t *) node->item;
-            if (nm->value == h) {
+            if (self->stop_at_local_mrca) {
+                min_overlap = h;
+            } else {
+                min_overlap = 0;
+            }
+            if (nm->value == min_overlap) {
                 nm->value = 0;
                 node = node->next;
                 tsk_bug_assert(node != NULL);
@@ -4080,8 +4102,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                 r = nm->position;
             } else {
                 r = l;
-                while (nm->value != h && r < r_max) {
-                    nm->value -= h - 1;
+                while (nm->value != min_overlap && r < r_max) {
+                    nm->value -= min_overlap - 1;
                     node = node->next;
                     tsk_bug_assert(node != NULL);
                     nm = (node_mapping_t *) node->item;
@@ -5189,9 +5211,14 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         t_wait = GSL_MIN(mig_t_wait,
             GSL_MIN(gc_t_wait, GSL_MIN(gc_left_t_wait, GSL_MIN(re_t_wait, ca_t_wait))));
 
-        if (fixed_event_time == DBL_MAX && t_wait == DBL_MAX) {
+        if (fixed_event_time == DBL_MAX && t_wait == DBL_MAX
+            && self->stop_at_local_mrca) { // TODO add condition
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
+        } else if ((fixed_event_time == DBL_MAX && t_wait == DBL_MAX)
+                   && !self->stop_at_local_mrca) {
+            ret = MSP_EXIT_MAX_TIME;
+            break;
         }
         random_event_time = self->time + t_wait;
 
