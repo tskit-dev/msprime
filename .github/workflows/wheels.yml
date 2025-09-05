@@ -96,6 +96,11 @@ jobs:
         shell: powershell
       - name: Build Wheel
         run: |
+          # The symlink fix above confuses setuptools_scm
+          $tag = git describe --tags --exact-match HEAD 2>$null
+          if ($tag) {
+            $env:SETUPTOOLS_SCM_PRETEND_VERSION_FOR_MSPRIME = $tag
+          }
           python -m build --wheel
       - name: Bundle dynamic libs
         run: |
