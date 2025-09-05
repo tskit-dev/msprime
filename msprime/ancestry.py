@@ -1088,13 +1088,6 @@ def _parse_sim_ancestry(
                 "otherwise the simulation will run indefinitely."
             )
 
-        if (recombination_rate in (None, 0)) and (gene_conversion_rate in (None, 0)):
-
-            raise ValueError(
-                "stop_at_local_mrca is only supported for simulations with "
-                "recombination or gene conversion."
-            )
-
     return Simulator(
         tables=initial_state,
         recombination_map=recombination_map,

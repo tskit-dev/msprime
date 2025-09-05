@@ -2571,13 +2571,6 @@ class TestSimAncestryInterface:
                 2, stop_at_local_mrca=False, recombination_rate=0.1, sequence_length=10
             )
 
-        with pytest.raises(
-            ValueError,
-            match="stop_at_local_mrca is only supported for simulations with "
-            "recombination or gene conversion.",
-        ):
-            msprime.sim_ancestry(2, stop_at_local_mrca=False, end_time=3)
-
 
 class TestSimulateInterface:
     """

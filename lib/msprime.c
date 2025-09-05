@@ -5211,9 +5211,14 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         t_wait = GSL_MIN(mig_t_wait,
             GSL_MIN(gc_t_wait, GSL_MIN(gc_left_t_wait, GSL_MIN(re_t_wait, ca_t_wait))));
 
-        if (fixed_event_time == DBL_MAX && t_wait == DBL_MAX) {
+        if (fixed_event_time == DBL_MAX && t_wait == DBL_MAX
+            && self->stop_at_local_mrca) { // TODO add condition
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
+        } else if ((fixed_event_time == DBL_MAX && t_wait == DBL_MAX)
+                   && !self->stop_at_local_mrca) {
+            ret = MSP_EXIT_MAX_TIME;
+            break;
         }
         random_event_time = self->time + t_wait;
 

@@ -1367,7 +1367,9 @@ class Simulator:
                         mig_source = j
                         mig_dest = k
             min_time = min(t_re, t_ca, t_gcin, t_gc_left, t_mig)
-            assert min_time != infinity
+            assert (min_time != infinity) or (
+                (min_time == infinity) and self.stop_at_local_mrca is False
+            )
             if self.t + min_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
                 self.t = t
@@ -1381,7 +1383,11 @@ class Simulator:
                 event = "MOD"
             else:
                 self.t += min_time
-                if min_time == t_re:
+                if (min_time == infinity) and self.stop_at_local_mrca is False:
+                    # No more events can occur
+                    event = "END"
+                    end_time = self.t
+                elif min_time == t_re:
                     event = "RE"
                     self.hudson_recombination_event(0)
                 elif min_time == t_gcin:
@@ -1395,6 +1401,7 @@ class Simulator:
                     self.common_ancestor_event(ca_population, 0)
                     if self.P[ca_population].get_num_ancestors() == 0:
                         non_empty_pops.remove(ca_population)
+
                 else:
                     event = "MIG"
                     self.migration_event(mig_source, mig_dest)
@@ -1402,6 +1409,7 @@ class Simulator:
                         non_empty_pops.remove(mig_source)
                     assert self.P[mig_dest].get_num_ancestors() > 0
                     non_empty_pops.add(mig_dest)
+
             logger.info(
                 "%s time=%f n=%d",
                 event,
