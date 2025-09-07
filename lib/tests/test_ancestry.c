@@ -710,7 +710,7 @@ test_single_locus_continue_after_local_mrca(void)
                 ret = msp_set_simulation_model_smc_prime(&msp);
                 break;
             case 3:
-                ret = msp_set_simulation_model_smc_k(&msp, 0.1); // TODO why 0 fails
+                ret = msp_set_simulation_model_smc_k(&msp, 0);
                 break;
             case 4:
                 ret = msp_set_simulation_model_dtwf(&msp);
