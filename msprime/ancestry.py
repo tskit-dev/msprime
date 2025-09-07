@@ -892,6 +892,14 @@ def _parse_sim_ancestry(
                     "Recording MIGRANT nodes is not supported in "
                     "SweepGenicSelection simulation."
                 )
+    if stop_at_local_mrca is None:
+        stop_at_local_mrca = True
+    if not stop_at_local_mrca:
+        if end_time == math.inf or end_time is None:
+            raise ValueError(
+                "You have to specify an end_time when using stop_at_local_mrca, "
+                "otherwise the simulation will run indefinitely."
+            )
 
     record_migrations = core._parse_flag(record_migrations, default=False)
 
@@ -1003,6 +1011,10 @@ def _parse_sim_ancestry(
             raise ValueError(
                 "Cannot use FixedPedigree simulation in conjunction with other models"
             )
+        if not stop_at_local_mrca:
+            raise ValueError(
+                "Cannot set stop_at_local_mrca to False with FixedPedigree simulations"
+            )
         demography = demog.Demography.from_tree_sequence(
             initial_state.tree_sequence(), initial_size=1
         )
@@ -1085,15 +1097,6 @@ def _parse_sim_ancestry(
     # entry point - so we want to get good seeds in this case too.
     random_seed = _parse_random_seed(random_seed)
     random_generator = _msprime.RandomGenerator(random_seed)
-
-    if stop_at_local_mrca is None:
-        stop_at_local_mrca = True
-    if not stop_at_local_mrca:
-        if end_time == math.inf or end_time is None:
-            raise ValueError(
-                "You have to specify an end_time when using stop_at_local_mrca, "
-                "otherwise the simulation will run indefinitely."
-            )
 
     return Simulator(
         tables=initial_state,
