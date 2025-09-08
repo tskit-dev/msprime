@@ -2568,7 +2568,11 @@ class TestSimAncestryInterface:
             "otherwise the simulation will run indefinitely.",
         ):
             msprime.sim_ancestry(
-                2, stop_at_local_mrca=False, recombination_rate=0.1, sequence_length=10
+                2,
+                stop_at_local_mrca=False,
+                recombination_rate=0.1,
+                sequence_length=10,
+                model=model,
             )
 
     def test_stop_at_local_mrca_fixedpedigree(self):
