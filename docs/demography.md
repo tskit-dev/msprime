@@ -1294,7 +1294,7 @@ from [Browning et al. 2011](https://doi.org/10.1371/journal.pgen.1007385).
 :::{important}
 If you want to use this precise model in your analyses
 we strongly recommend using the {ref}`stdpopsim <stdpopsim:sec_introduction>`
-{ref}`HomSap/AmericanAdmixture_4B11 <stdpopsim:sec_catalog_homsap_models_americanadmixture_4b11>`
+{ref}`HomSap/AmericanAdmixture_4B18 <stdpopsim:sec_catalog_homsap_models_americanadmixture_4b18>`
 model.
 :::
 
