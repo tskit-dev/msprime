@@ -9,7 +9,7 @@ on:
 jobs:
   pre-commit:
     name: Lint
-    uses: tskit-dev/.github/.github/workflows/lint.yml@v1
+    uses: tskit-dev/.github/.github/workflows/lint.yml@v2
 
   test:
     name: Python
