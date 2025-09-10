@@ -2560,7 +2560,7 @@ class TestSimAncestryInterface:
             )
 
     @pytest.mark.parametrize("model", ["dtwf", "hudson"])
-    def test_stop_at_local_mrca_no_end_time(self, model):
+    def test_stop_at_local_mrca(self, model):
 
         with pytest.raises(
             ValueError,
@@ -2573,24 +2573,6 @@ class TestSimAncestryInterface:
                 recombination_rate=0.1,
                 sequence_length=10,
                 model=model,
-            )
-
-    def test_stop_at_local_mrca_fixedpedigree(self):
-
-        with open("tests/data/example_pedigree.tsv") as f:
-            pedigree = msprime.parse_pedigree(f, sequence_length=100)
-
-        with pytest.raises(
-            ValueError,
-            match="Cannot set stop_at_local_mrca to False with FixedPedigree "
-            "simulations",
-        ):
-            msprime.sim_ancestry(
-                initial_state=pedigree,
-                stop_at_local_mrca=False,
-                recombination_rate=0.1,
-                end_time=10,
-                model="fixed_pedigree",
             )
 
 
