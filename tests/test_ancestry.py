@@ -890,6 +890,9 @@ class TestSimulator:
         s = str(sim)
         assert len(s) > 0
 
+
+class TestSimulateAfterLocalMRCA:
+
     @pytest.mark.parametrize(
         "model",
         [
@@ -899,7 +902,7 @@ class TestSimulator:
             msprime.DiracCoalescent(psi=0.1, c=2),
         ],
     )
-    def test_simulate_after_local_mrca(self, model):
+    def test_different_models(self, model):
         """
         Tests that simulations run after the local MRCA when the flag is set
         """
@@ -918,6 +921,57 @@ class TestSimulator:
         root_times = [tree.time(tree.root) for tree in ts.trees()]
         assert len(set(root_times)) == 1
         assert root_times[0] >= end_time
+
+    def test_fixed_pedigree(self):
+        """
+        To test pedigree model, we make diamond shaped pedigree and make
+        sure that simulations run until the eldest individual.
+        There is a chance that no coalescence happens until the eldest individual,
+        so, we use longer sequence with a high recombination rate and confirm that
+        all trees does not end before the eldest individual.
+
+        The pedigree used has this shape:
+                  O
+                  |
+                  O
+                 / \
+                O   O
+                \\ //
+                  O
+                 / \
+                O   O
+                \\ //
+                  O
+        """
+        eldest_time = 10
+        pb = msprime.PedigreeBuilder()
+
+        gggpa = pb.add_individual(time=eldest_time)
+        ggpa = pb.add_individual(time=4, parents=[gggpa, gggpa])
+
+        # first diamound
+        gmom = pb.add_individual(time=3, parents=[ggpa, ggpa])
+        gdad = pb.add_individual(time=3, parents=[ggpa, ggpa])
+        grandpa_id = pb.add_individual(time=2, parents=[gmom, gdad])
+
+        # second diamond
+        mom_id = pb.add_individual(time=1, parents=[grandpa_id, grandpa_id])
+        dad_id = pb.add_individual(time=1, parents=[grandpa_id, grandpa_id])
+        pb.add_individual(time=0, parents=[mom_id, dad_id], is_sample=True)
+
+        pedigree = pb.finalise(100)
+
+        ts = msprime.sim_ancestry(
+            initial_state=pedigree,
+            stop_at_local_mrca=False,
+            recombination_rate=0.1,
+            end_time=eldest_time,
+            model="fixed_pedigree",
+        )
+
+        root_times = [tree.time(tree.roots[0]) for tree in ts.trees()]
+        assert len(set(root_times)) == 1
+        assert root_times[0] >= eldest_time
 
 
 class TestParseRandomSeed:
