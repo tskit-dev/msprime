@@ -902,7 +902,7 @@ class TestSimulateAfterLocalMRCA:
             msprime.DiracCoalescent(psi=0.1, c=2),
         ],
     )
-    def test_different_models(self, model):
+    def test_single_models(self, model):
         """
         Tests that simulations run after the local MRCA when the flag is set
         """
@@ -972,6 +972,50 @@ class TestSimulateAfterLocalMRCA:
         root_times = [tree.time(tree.roots[0]) for tree in ts.trees()]
         assert len(set(root_times)) == 1
         assert root_times[0] >= eldest_time
+
+    def test_multiple_models(self):
+        """
+        To test multiple models, we run simulations with end time < first models
+        duration and test (that would be using the first model). Then we run again
+        until end_time too large to cover the second model.
+        """
+        end_time = 499
+        ts = msprime.sim_ancestry(
+            2,
+            population_size=10,
+            model=[
+                msprime.DiscreteTimeWrightFisher(duration=500),
+                msprime.StandardCoalescent(),
+            ],
+            random_seed=2,
+            recombination_rate=0.1,
+            sequence_length=10,
+            stop_at_local_mrca=False,
+            end_time=end_time,
+        )
+
+        root_times = [tree.time(tree.roots[0]) for tree in ts.trees()]
+        assert len(set(root_times)) == 1
+        assert root_times[0] >= end_time
+
+        end_time = 100000
+        ts = msprime.sim_ancestry(
+            2,
+            population_size=10,
+            model=[
+                msprime.DiscreteTimeWrightFisher(duration=500),
+                msprime.StandardCoalescent(),
+            ],
+            random_seed=2,
+            recombination_rate=0.1,
+            sequence_length=10,
+            stop_at_local_mrca=False,
+            end_time=end_time,
+        )
+
+        root_times = [tree.time(tree.roots[0]) for tree in ts.trees()]
+        assert len(set(root_times)) == 1
+        assert root_times[0] >= end_time
 
 
 class TestParseRandomSeed:
