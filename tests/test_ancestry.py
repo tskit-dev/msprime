@@ -2623,6 +2623,7 @@ class TestSimAncestryInterface:
         ):
             msprime.sim_ancestry(
                 2,
+                population_size=100,
                 stop_at_local_mrca=False,
                 recombination_rate=0.1,
                 sequence_length=10,
