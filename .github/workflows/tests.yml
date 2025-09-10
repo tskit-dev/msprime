@@ -12,72 +12,21 @@ jobs:
     uses: tskit-dev/.github/.github/workflows/lint.yml@v2
 
   test:
-    name: Python
-    runs-on: ${{ matrix.os }}
+    uses: tskit-dev/.github/.github/workflows/python-tests.yml@v3
     strategy:
       matrix:
         python: [ "3.10", 3.13 ]
         os:  [ macos-latest, ubuntu-24.04, windows-latest ]
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.12.1
-        with:
-          access_token: ${{ github.token }}
-
-      - name: Checkout
-        uses: actions/checkout@v4.2.2
-        with:
-          submodules: true
-
-      - name: Install Conda (needed for GSL)
-        uses: conda-incubator/setup-miniconda@v3.1.1
-        with:
-          activate-environment: anaconda-client-env
-          python-version: ${{ matrix.python }}
-          channels: conda-forge, anaconda
-          channel-priority: strict
-          auto-update-conda: true
-
-      - name: Fix windows symlinks
-        # This is horrible, but the "git config core.symlinks true" didn't work.
-        if: matrix.os == 'windows-latest'
-        run: |
+    with:
+      additional_commands: |
+        # Install GSL and fix Windows symlinks
+        if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+          brew install gsl
+        elif [[ "${{ matrix.os }}" == "ubuntu-24.04" ]]; then
+          sudo apt-get update && sudo apt-get install -y libgsl-dev
+        elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
           rm lwt_interface
           cp -r --dereference git-submodules/tskit/python/lwt_interface ./lwt_interface
-
-      - name: Fix windows .profile
-        if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'windows-latest'
-        run: |
-          cp ~/.bash_profile ~/.profile
-
-      - name: Install GSL
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: bash -l {0} #We need a login shell to get conda
-        run: conda install gsl
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          version: "0.8.15"
-      
-      - name: Install pip deps
-        shell: bash -l {0}
-        run: | 
-          uv pip install -r pyproject.toml --extra test
-
-      - name: Build module
-        env:
-          MSP_CONDA_PREFIX: c:\Miniconda\envs\anaconda-client-env
-        run: |
-          source ~/.profile
-          conda activate anaconda-client-env
-          python setup.py build_ext --inplace
-
-      - name: Run tests
-        run: |
-          source ~/.profile
-          conda activate anaconda-client-env
-          pytest -xvs -n0
+          vcpkg install gsl:x64-windows
+        fi
+      make_command: uv run --no-sync python setup.py build_ext --inplace
