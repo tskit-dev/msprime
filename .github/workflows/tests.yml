@@ -32,14 +32,6 @@ jobs:
         with:
           submodules: true
 
-      - name: Install Conda (needed for GSL)
-        uses: conda-incubator/setup-miniconda@v3.1.1
-        with:
-          activate-environment: anaconda-client-env
-          python-version: ${{ matrix.python }}
-          channels: conda-forge, anaconda
-          channel-priority: strict
-          auto-update-conda: true
 
       - name: Fix windows symlinks
         # This is horrible, but the "git config core.symlinks true" didn't work.
@@ -48,36 +40,58 @@ jobs:
           rm lwt_interface
           cp -r --dereference git-submodules/tskit/python/lwt_interface ./lwt_interface
 
-      - name: Fix windows .profile
-        if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'windows-latest'
+      - name: Install GSL (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install gsl
+        
+      - name: Install GSL (Windows)
+        if: matrix.os == 'windows-latest'
         run: |
-          cp ~/.bash_profile ~/.profile
+          vcpkg install gsl:x64-windows
+        shell: powershell
+        
+      - name: Install GSL (Ubuntu)
+        if: matrix.os == 'ubuntu-24.04'
+        run: sudo apt-get update && sudo apt-get install -y libgsl-dev
 
-      - name: Install GSL
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: bash -l {0} #We need a login shell to get conda
-        run: conda install gsl
-
-      - name: Install uv
+      - name: Install uv and set the python version
         uses: astral-sh/setup-uv@v6
         with:
+          python-version: ${{ matrix.python }}
           version: "0.8.15"
       
       - name: Install pip deps
-        shell: bash -l {0}
         run: | 
+          uv venv
           uv pip install -r pyproject.toml --extra test
 
-      - name: Build module
-        env:
-          MSP_CONDA_PREFIX: c:\Miniconda\envs\anaconda-client-env
+      - name: Install Windows build tools
+        if: matrix.os == 'windows-latest'
         run: |
-          source ~/.profile
-          conda activate anaconda-client-env
-          python setup.py build_ext --inplace
+          uv pip install build delvewheel
+
+      - name: Build module
+        if: matrix.os != 'windows-latest'
+        run: |
+          uv run --no-sync python setup.py build_ext --inplace
+
+      - name: Build and install repaired wheel (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          # Build wheel
+          uv run --no-sync python -m build --wheel
+          
+          # Repair wheel with delvewheel (bundle DLLs)
+          $vcpkgRoot = $env:VCPKG_ROOT
+          if (-not $vcpkgRoot) { $vcpkgRoot = "C:\vcpkg" }
+          $gslBinPath = Join-Path $vcpkgRoot "installed\x64-windows\bin"
+          uv run --no-sync delvewheel repair dist/*.whl -w repaired_wheel/ --add-path "$gslBinPath"
+          
+          # Install the repaired wheel 
+          uv pip install (Get-ChildItem repaired_wheel\*.whl | Select-Object -First 1).FullName --force-reinstall
+
 
       - name: Run tests
         run: |
-          source ~/.profile
-          conda activate anaconda-client-env
-          pytest -xvs -n0
+          uv run --no-sync pytest -xvs -n0
