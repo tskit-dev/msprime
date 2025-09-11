@@ -72,6 +72,9 @@
 #define MSP_PED_STATE_CLIMBING 1
 #define MSP_PED_STATE_CLIMB_COMPLETE 2
 
+/*flags for dtwf model*/
+#define MSP_DTWF_DID_NOTHING 99
+
 typedef tsk_id_t population_id_t;
 typedef tsk_id_t label_id_t;
 

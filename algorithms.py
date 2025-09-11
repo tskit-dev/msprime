@@ -1386,7 +1386,9 @@ class Simulator:
                 if (min_time == infinity) and self.stop_at_local_mrca is False:
                     # No more events can occur
                     event = "END"
-                    end_time = self.t
+                    if end_time >= infinity:
+                        end_time = self.t
+                    self.t = end_time
                 elif min_time == t_re:
                     event = "RE"
                     self.hudson_recombination_event(0)
@@ -1541,13 +1543,29 @@ class Simulator:
         while self.ancestors_remain() and self.t < end_time:
             self.t += 1
             self.verify()
-            self.dtwf_generation()
+            events_happened = self.dtwf_generation()
+
+            if (
+                not events_happened
+                and self.stop_at_local_mrca is False
+                and sum(pop.get_num_ancestors() for pop in self.P) == 1
+            ):
+                infinity = sys.float_info.max
+                if end_time >= infinity:
+                    end_time = self.t
+                self.t = end_time
+                break
 
     def dtwf_generation(self):
         """
         Evolves one generation of a Wright Fisher population
+        Returns True if any events occurred, False otherwise.
         """
         # Migration events happen at the rates in the matrix.
+        no_migration = True
+        no_coalescence = True
+        no_recombination = True
+
         for j in range(len(self.P)):
             source_size = self.P[j].get_num_ancestors()
             for k in range(len(self.P)):
@@ -1559,7 +1577,9 @@ class Simulator:
                     mig_source = j
                     mig_dest = k
                     self.migration_event(mig_source, mig_dest)
-
+                    no_migration = False
+        n_coal = 0
+        n_recomb = 0
         for pop_idx, pop in enumerate(self.P):
             # Cluster haploid inds by parent
             parent_inds = pop.get_ind_range(self.t)
@@ -1570,6 +1590,9 @@ class Simulator:
                 if parent not in offspring:
                     offspring[parent] = []
                 offspring[parent].append(anc)
+                n_coal += 1
+                if n_coal > 1:  # one event has to happen anyway
+                    no_coalescence = False
 
             # Draw recombinations in children and sort segments by
             # inheritance direction
@@ -1587,6 +1610,9 @@ class Simulator:
                         if lin is not None:
                             assert lin.head.prev is None
                             heapq.heappush(H[i], (lin.head.left, lin.head))
+                            n_recomb += 1
+                            if n_recomb > 1:
+                                no_recombination = False
 
                 # Merge segments
                 for ploid, h in enumerate(H):
@@ -1615,6 +1641,9 @@ class Simulator:
                                 h, pop_idx, 0, parent_nodes[ploid]
                             )  # label 0 only
             self.verify()
+        if no_migration and no_coalescence and no_recombination:
+            return False
+        return True
 
     def process_pedigree_common_ancestors(self, ind, ploid):
         """
@@ -2850,11 +2879,6 @@ def run_simulate(args):
     else:
         from_ts = tskit.load(args.from_ts)
         tables = from_ts.dump_tables()
-
-    if args.continue_after_local_mrca and args.end_time == np.inf:
-        raise ValueError(
-            "The flag --continue-after-local-mrca option requires setting an end time"
-        )
 
     s = Simulator(
         tables=tables,

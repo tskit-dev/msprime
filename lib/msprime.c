@@ -5217,7 +5217,12 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             goto out;
         } else if ((fixed_event_time == DBL_MAX && t_wait == DBL_MAX)
                    && !self->stop_at_local_mrca) {
-            ret = MSP_EXIT_MAX_TIME;
+
+            if (max_time >= DBL_MAX) {
+                max_time = self->time;
+            }
+            self->time = max_time;
+            ret = MSP_EXIT_COALESCENCE;
             break;
         }
         random_event_time = self->time + t_wait;
@@ -5469,11 +5474,21 @@ msp_dtwf_generation(msp_t *self)
     label_id_t label = 0;
     tsk_id_t parent_nodes[MSP_MAX_PED_PLOIDY];
 
+    bool coalescence_occurred = false;
+    bool recombination_occurred = false;
+    int n_coal;
+    int n_recomb;
+
     for (i = 0; i < 2; i++) {
         avl_init_tree(&Q[i], cmp_segment_queue, NULL);
     }
 
     for (j = 0; j < self->num_populations; j++) {
+
+        coalescence_occurred = false;
+        recombination_occurred = false;
+        n_coal = 0;
+        n_recomb = 0;
 
         pop = &self->populations[j];
         if (avl_count(&pop->ancestors[label]) == 0) {
@@ -5510,6 +5525,10 @@ msp_dtwf_generation(msp_t *self)
             s->next = parents[p];
             s->node = a;
             parents[p] = s;
+            n_coal++;
+            if (n_coal > 1) {
+                coalescence_occurred = true;
+            }
         }
 
         // Iterate through offspring of parent k, adding to avl_tree
@@ -5527,6 +5546,10 @@ msp_dtwf_generation(msp_t *self)
                     ret = msp_dtwf_recombine(self, x, &u[0], &u[1], parent_nodes);
                     if (ret != 0) {
                         goto out;
+                    }
+                    n_recomb++;
+                    if (n_recomb > 1) {
+                        recombination_occurred = true;
                     }
                     for (i = 0; i < 2; i++) {
                         if (u[i] != NULL && u[i] != x) {
@@ -5569,6 +5592,9 @@ msp_dtwf_generation(msp_t *self)
 out:
     msp_safe_free(parents);
     msp_safe_free(segment_mem);
+    if (coalescence_occurred == false && recombination_occurred == false && ret == 0) {
+        return MSP_DTWF_DID_NOTHING;
+    }
     return ret;
 }
 
@@ -5645,6 +5671,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
     avl_tree_t *nodes;
     /* Only support a single structured coalescent label at the moment */
     label_id_t label = 0;
+    bool migration_occurred;
 
     tsk_bug_assert(self->recomb_mass_index == NULL);
     tsk_bug_assert(self->gc_mass_index == NULL);
@@ -5676,6 +5703,8 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
             goto out;
         }
         self->time++;
+
+        migration_occurred = false;
 
         /* Following SLiM, we perform migrations prior to selecting
          * parents for the current generation */
@@ -5726,6 +5755,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
                 mig_dest_pop = (population_id_t) k;
 
                 for (i = 0; i < n[k]; i++) {
+                    migration_occurred = true;
                     ret = msp_store_simultaneous_migration_events(
                         self, nodes, mig_source_pop, label);
                     if (ret != 0) {
@@ -5742,6 +5772,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
                 nodes = &node_trees[j * self->num_populations + k];
                 mig_source_pop = (population_id_t) j;
                 mig_dest_pop = (population_id_t) k;
+                migration_occurred = true;
                 ret = msp_simultaneous_migration_event(
                     self, nodes, mig_source_pop, mig_dest_pop);
                 if (ret != 0) {
@@ -5764,13 +5795,15 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
                 goto out;
             }
             ret = msp_apply_demographic_events(self, self->next_demographic_event->time);
+            migration_occurred
+                = true; // Demographic events can change population structure
             if (ret != 0) {
                 goto out;
             }
         }
         self->time = cur_time;
         ret = msp_dtwf_generation(self);
-        if (ret != 0) {
+        if (ret != 0 && ret != MSP_DTWF_DID_NOTHING) {
             goto out;
         }
 
@@ -5785,11 +5818,26 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
             }
             self->next_sampling_event++;
         }
+
+        if (ret == MSP_DTWF_DID_NOTHING && migration_occurred == false
+            && self->stop_at_local_mrca == false && msp_get_num_ancestors(self) == 1) {
+            /* No events occurred: we are done */
+            if (max_time >= DBL_MAX) {
+                max_time = self->time;
+            }
+            self->time = max_time;
+            ret = MSP_EXIT_COALESCENCE;
+            break;
+        }
     }
 out:
     msp_safe_free(node_trees);
     msp_safe_free(n);
     msp_safe_free(mig_tmp);
+    if (ret == MSP_DTWF_DID_NOTHING) {
+        // No events occurred: it is still ok
+        return 0;
+    }
     return ret;
 }
 
