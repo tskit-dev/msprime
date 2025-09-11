@@ -15,6 +15,7 @@ jobs:
     name: Python
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         python: [ "3.10", 3.13 ]
         os:  [ macos-latest, ubuntu-24.04, windows-latest ]
@@ -32,14 +33,10 @@ jobs:
         with:
           submodules: true
 
-      - name: Install Conda (needed for GSL)
-        uses: conda-incubator/setup-miniconda@v3.1.1
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5.4.0
         with:
-          activate-environment: anaconda-client-env
-          python-version: ${{ matrix.python }}
-          channels: conda-forge, anaconda
-          channel-priority: strict
-          auto-update-conda: true
+          python-version: "${{ matrix.python }}"
 
       - name: Fix windows symlinks
         # This is horrible, but the "git config core.symlinks true" didn't work.
@@ -48,36 +45,60 @@ jobs:
           rm lwt_interface
           cp -r --dereference git-submodules/tskit/python/lwt_interface ./lwt_interface
 
-      - name: Fix windows .profile
-        if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'windows-latest'
+      - name: Install GSL (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install gsl
+        
+      - name: Install GSL (Windows)
+        if: matrix.os == 'windows-latest'
         run: |
-          cp ~/.bash_profile ~/.profile
+          vcpkg install gsl:x64-windows
+          # Add GSL DLL directory to PATH for runtime
+          $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkgRoot) { $vcpkgRoot = "C:\vcpkg" }
+          $gslBinPath = Join-Path $vcpkgRoot "installed\x64-windows\bin"
+          echo "$gslBinPath" >> $env:GITHUB_PATH
+          Write-Output "Added to PATH: $gslBinPath"
+        shell: powershell
 
-      - name: Install GSL
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: bash -l {0} #We need a login shell to get conda
-        run: conda install gsl
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          version: "0.8.15"
+      - name: Install GSL (Ubuntu)
+        if: matrix.os == 'ubuntu-24.04'
+        run: sudo apt-get update && sudo apt-get install -y libgsl-dev
       
       - name: Install pip deps
-        shell: bash -l {0}
         run: | 
-          uv pip install -r pyproject.toml --extra test
+          pip install uv
+          uv pip install --system -r pyproject.toml --extra test
 
-      - name: Build module
-        env:
-          MSP_CONDA_PREFIX: c:\Miniconda\envs\anaconda-client-env
+      - name: Build module and run tests
+        if: matrix.os != 'windows-latest'
         run: |
-          source ~/.profile
-          conda activate anaconda-client-env
           python setup.py build_ext --inplace
+          pytest -xvs -n0
 
-      - name: Run tests
+      - name: Build wheel and run tests
+        if: matrix.os == 'windows-latest'
+        shell: powershell
         run: |
-          source ~/.profile
-          conda activate anaconda-client-env
+          uv pip install --system build delvewheel
+          python -m build --wheel
+          $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkgRoot) { $vcpkgRoot = 'C:\vcpkg' }
+          $gslBinPath = Join-Path $vcpkgRoot 'installed\x64-windows\bin'
+          # Ensure GSL bin is on PATH for this session
+          $env:PATH = "$gslBinPath;$env:PATH"
+          # Repair wheel(s) to bundle DLLs
+          $whls = Get-ChildItem -Path dist -Filter '*.whl'
+          if ($whls) {
+            foreach ($w in $whls) {
+              delvewheel repair $w.FullName -w dist --add-path $gslBinPath
+            }
+          } else {
+            Write-Error 'No wheel files found in dist/'
+            exit 1
+          }
+          # Remove source package directory to ensure pip installs wheel
+          if (Test-Path msprime) { Remove-Item -Recurse -Force msprime }
+          # Install repaired wheel(s)
+          Get-ChildItem -Path dist -Filter '*.whl' | ForEach-Object { pip install $_.FullName }
           pytest -xvs -n0
