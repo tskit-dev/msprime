@@ -70,35 +70,15 @@ jobs:
           pip install uv
           uv pip install --system -r pyproject.toml --extra test
 
-      - name: Build module and run tests
-        if: matrix.os != 'windows-latest'
+      - name: Build module
         run: |
           python setup.py build_ext --inplace
-          pytest -xvs -n0
 
-      - name: Build wheel and run tests
+      - name: Fix windows gsl dlls
         if: matrix.os == 'windows-latest'
-        shell: powershell
         run: |
-          uv pip install --system build delvewheel
-          python -m build --wheel
-          $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
-          if (-not $vcpkgRoot) { $vcpkgRoot = 'C:\vcpkg' }
-          $gslBinPath = Join-Path $vcpkgRoot 'installed\x64-windows\bin'
-          # Ensure GSL bin is on PATH for this session
-          $env:PATH = "$gslBinPath;$env:PATH"
-          # Repair wheel(s) to bundle DLLs
-          $whls = Get-ChildItem -Path dist -Filter '*.whl'
-          if ($whls) {
-            foreach ($w in $whls) {
-              delvewheel repair $w.FullName -w dist --add-path $gslBinPath
-            }
-          } else {
-            Write-Error 'No wheel files found in dist/'
-            exit 1
-          }
-          # Remove source package directory to ensure pip installs wheel
-          if (Test-Path msprime) { Remove-Item -Recurse -Force msprime }
-          # Install repaired wheel(s)
-          Get-ChildItem -Path dist -Filter '*.whl' | ForEach-Object { pip install $_.FullName }
+          cp /c/vcpkg/installed/x64-windows/bin/gsl*.dll msprime/
+
+      - name: Run tests
+        run: |
           pytest -xvs -n0
