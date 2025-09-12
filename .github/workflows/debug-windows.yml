@@ -1,0 +1,53 @@
+name: Debug Windows
+
+on:
+  pull_request:
+
+jobs:
+  debug-windows:
+    name: Debug Windows Python 3.13
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.12.1
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          submodules: true
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5.4.0
+        with:
+          python-version: "3.13"
+
+      - name: Fix windows symlinks
+        run: |
+          rm lwt_interface
+          cp -r --dereference git-submodules/tskit/python/lwt_interface ./lwt_interface
+
+      - name: Install GSL (Windows)
+        run: |
+          vcpkg install gsl:x64-windows
+          # Add GSL DLL directory to PATH for runtime
+          $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkgRoot) { $vcpkgRoot = "C:\vcpkg" }
+          $gslBinPath = Join-Path $vcpkgRoot "installed\x64-windows\bin"
+          echo "$gslBinPath" >> $env:GITHUB_PATH
+          Write-Output "Added to PATH: $gslBinPath"
+        shell: powershell
+
+      - name: Install pip deps
+        run: | 
+          pip install uv
+          uv pip install --system -r pyproject.toml --extra test
+
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
