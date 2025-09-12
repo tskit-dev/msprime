@@ -72,6 +72,9 @@
 #define MSP_PED_STATE_CLIMBING 1
 #define MSP_PED_STATE_CLIMB_COMPLETE 2
 
+/*flags for dtwf model*/
+#define MSP_DTWF_DID_NOTHING 99
+
 typedef tsk_id_t population_id_t;
 typedef tsk_id_t label_id_t;
 
@@ -256,6 +259,7 @@ typedef struct _msp_t {
     bool store_full_arg;
     uint32_t additional_nodes;
     bool coalescing_segments_only;
+    bool stop_at_local_mrca;
     double sequence_length;
     bool discrete_genome;
     rate_map_t recomb_map;
@@ -497,6 +501,7 @@ int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);
 int msp_set_additional_nodes(msp_t *self, uint32_t additional_nodes);
 int msp_set_coalescing_segments_only(msp_t *self, bool coalescing_segments_only);
+int msp_set_stop_at_local_mrca(msp_t *self, bool stop_at_local_mrca);
 int msp_set_ploidy(msp_t *self, int ploidy);
 int msp_set_recombination_map(msp_t *self, size_t size, double *position, double *rate);
 int msp_set_recombination_rate(msp_t *self, double rate);

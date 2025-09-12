@@ -885,6 +885,7 @@ class Simulator:
         gene_conversion_length=1,
         discrete_genome=True,
         hull_offset=None,
+        stop_at_local_mrca=True,
     ):
         # Must be a square matrix.
         N = len(migration_matrix)
@@ -906,6 +907,7 @@ class Simulator:
         self.migration_matrix = migration_matrix
         self.num_labels = num_labels
         self.num_populations = N
+        self.stop_at_local_mrca = stop_at_local_mrca
         self.max_segments = max_segments
         self.coalescing_segments_only = coalescing_segments_only
         self.additional_nodes = msprime.NodeType(additional_nodes)
@@ -1253,7 +1255,7 @@ class Simulator:
         if self.model == "hudson":
             self.hudson_simulate(end_time)
         elif self.model == "dtwf":
-            self.dtwf_simulate()
+            self.dtwf_simulate(end_time)
         elif self.model == "fixed_pedigree":
             self.pedigree_simulate()
         elif self.model == "single_sweep":
@@ -1365,7 +1367,9 @@ class Simulator:
                         mig_source = j
                         mig_dest = k
             min_time = min(t_re, t_ca, t_gcin, t_gc_left, t_mig)
-            assert min_time != infinity
+            assert (min_time != infinity) or (
+                (min_time == infinity) and self.stop_at_local_mrca is False
+            )
             if self.t + min_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
                 self.t = t
@@ -1379,7 +1383,13 @@ class Simulator:
                 event = "MOD"
             else:
                 self.t += min_time
-                if min_time == t_re:
+                if (min_time == infinity) and self.stop_at_local_mrca is False:
+                    # No more events can occur
+                    event = "END"
+                    if end_time >= infinity:
+                        end_time = self.t
+                    self.t = end_time
+                elif min_time == t_re:
                     event = "RE"
                     self.hudson_recombination_event(0)
                 elif min_time == t_gcin:
@@ -1393,6 +1403,7 @@ class Simulator:
                     self.common_ancestor_event(ca_population, 0)
                     if self.P[ca_population].get_num_ancestors() == 0:
                         non_empty_pops.remove(ca_population)
+
                 else:
                     event = "MIG"
                     self.migration_event(mig_source, mig_dest)
@@ -1400,6 +1411,7 @@ class Simulator:
                         non_empty_pops.remove(mig_source)
                     assert self.P[mig_dest].get_num_ancestors() > 0
                     non_empty_pops.add(mig_dest)
+
             logger.info(
                 "%s time=%f n=%d",
                 event,
@@ -1524,20 +1536,36 @@ class Simulator:
         self.pedigree = Pedigree(self.tables)
         self.dtwf_climb_pedigree()
 
-    def dtwf_simulate(self):
+    def dtwf_simulate(self, end_time):
         """
         Simulates the algorithm until all loci have coalesced.
         """
-        while self.ancestors_remain():
+        while self.ancestors_remain() and self.t < end_time:
             self.t += 1
             self.verify()
-            self.dtwf_generation()
+            events_happened = self.dtwf_generation()
+
+            if (
+                not events_happened
+                and self.stop_at_local_mrca is False
+                and sum(pop.get_num_ancestors() for pop in self.P) == 1
+            ):
+                infinity = sys.float_info.max
+                if end_time >= infinity:
+                    end_time = self.t
+                self.t = end_time
+                break
 
     def dtwf_generation(self):
         """
         Evolves one generation of a Wright Fisher population
+        Returns True if any events occurred, False otherwise.
         """
         # Migration events happen at the rates in the matrix.
+        no_migration = True
+        no_coalescence = True
+        no_recombination = True
+
         for j in range(len(self.P)):
             source_size = self.P[j].get_num_ancestors()
             for k in range(len(self.P)):
@@ -1549,7 +1577,9 @@ class Simulator:
                     mig_source = j
                     mig_dest = k
                     self.migration_event(mig_source, mig_dest)
-
+                    no_migration = False
+        n_coal = 0
+        n_recomb = 0
         for pop_idx, pop in enumerate(self.P):
             # Cluster haploid inds by parent
             parent_inds = pop.get_ind_range(self.t)
@@ -1560,6 +1590,9 @@ class Simulator:
                 if parent not in offspring:
                     offspring[parent] = []
                 offspring[parent].append(anc)
+                n_coal += 1
+                if n_coal > 1:  # one event has to happen anyway
+                    no_coalescence = False
 
             # Draw recombinations in children and sort segments by
             # inheritance direction
@@ -1577,6 +1610,9 @@ class Simulator:
                         if lin is not None:
                             assert lin.head.prev is None
                             heapq.heappush(H[i], (lin.head.left, lin.head))
+                            n_recomb += 1
+                            if n_recomb > 1:
+                                no_recombination = False
 
                 # Merge segments
                 for ploid, h in enumerate(H):
@@ -1605,6 +1641,9 @@ class Simulator:
                                 h, pop_idx, 0, parent_nodes[ploid]
                             )  # label 0 only
             self.verify()
+        if no_migration and no_coalescence and no_recombination:
+            return False
+        return True
 
     def process_pedigree_common_ancestors(self, ind, ploid):
         """
@@ -2256,14 +2295,16 @@ class Simulator:
                 if r_max not in self.S:
                     j = self.S.floor_key(r_max)
                     self.S[r_max] = self.S[j]
+
+                min_overlap = len(X) if self.stop_at_local_mrca else 0
                 # Update the number of extant segments.
-                if self.S[left] == len(X):
+                if self.S[left] == min_overlap:
                     self.S[left] = 0
                     right = self.S.succ_key(left)
                 else:
                     right = left
-                    while right < r_max and self.S[right] != len(X):
-                        self.S[right] -= len(X) - 1
+                    while right < r_max and self.S[right] != min_overlap:
+                        self.S[right] -= min_overlap - 1
                         right = self.S.succ_key(right)
                     alpha = self.alloc_segment(left, right, new_node_id, pop_id)
                 # Update the heaps and make the record.
@@ -2394,6 +2435,7 @@ class Simulator:
         new_lineage = self.alloc_lineage(None, population_index, label=label)
         coalescence = False
         defrag_required = False
+        min_overlap = 2 if self.stop_at_local_mrca else 0
 
         while x is not None or y is not None:
             alpha = None
@@ -2435,12 +2477,12 @@ class Simulator:
                         j = self.S.floor_key(r_max)
                         self.S[r_max] = self.S[j]
                     # Update the number of extant segments.
-                    if self.S[left] == 2:
+                    if self.S[left] == min_overlap:
                         self.S[left] = 0
                         right = self.S.succ_key(left)
                     else:
                         right = left
-                        while right < r_max and self.S[right] != 2:
+                        while right < r_max and self.S[right] != min_overlap:
                             self.S[right] -= 1
                             right = self.S.succ_key(right)
                         alpha = self.alloc_segment(
@@ -2860,6 +2902,7 @@ def run_simulate(args):
         gene_conversion_length=mean_tract_length,
         discrete_genome=args.discrete,
         hull_offset=args.offset,
+        stop_at_local_mrca=not args.continue_after_local_mrca,
     )
     ts = s.simulate(args.end_time)
     ts.dump(args.output_file)
@@ -2946,6 +2989,15 @@ def add_simulator_arguments(parser):
         help="The delta_t value for selective sweeps",
     )
     parser.add_argument("--model", default="hudson")
+    parser.add_argument(
+        "--continue-after-local-mrca",
+        action="store_true",
+        default=False,
+        help=(
+            "If set, continue after local MRCA (i.e., do not stop). "
+            "Default: False (stop at local MRCA)."
+        ),
+    )
     parser.add_argument("--offset", type=float, default=0.0)
     parser.add_argument(
         "--from-ts",
