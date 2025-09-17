@@ -5221,8 +5221,9 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
 
             if (max_time >= DBL_MAX) {
                 max_time = self->time;
+            } else {
+                self->time = max_time;
             }
-            self->time = max_time;
             ret = MSP_EXIT_COALESCENCE;
             break;
         }
@@ -5475,10 +5476,8 @@ msp_dtwf_generation(msp_t *self)
     label_id_t label = 0;
     tsk_id_t parent_nodes[MSP_MAX_PED_PLOIDY];
 
-    bool coalescence_occurred = false;
-    bool recombination_occurred = false;
-    int n_coal;
-    int n_recomb;
+    unsigned long int edgs = self->tables->edges.num_rows;
+    unsigned long int nodes = self->tables->nodes.num_rows;
 
     self->dtwf_no_events_generation = false;
     for (i = 0; i < 2; i++) {
@@ -5486,11 +5485,6 @@ msp_dtwf_generation(msp_t *self)
     }
 
     for (j = 0; j < self->num_populations; j++) {
-
-        coalescence_occurred = false;
-        recombination_occurred = false;
-        n_coal = 0;
-        n_recomb = 0;
 
         pop = &self->populations[j];
         if (avl_count(&pop->ancestors[label]) == 0) {
@@ -5527,10 +5521,6 @@ msp_dtwf_generation(msp_t *self)
             s->next = parents[p];
             s->node = a;
             parents[p] = s;
-            n_coal++;
-            if (n_coal > 1) {
-                coalescence_occurred = true;
-            }
         }
 
         // Iterate through offspring of parent k, adding to avl_tree
@@ -5548,10 +5538,6 @@ msp_dtwf_generation(msp_t *self)
                     ret = msp_dtwf_recombine(self, x, &u[0], &u[1], parent_nodes);
                     if (ret != 0) {
                         goto out;
-                    }
-                    n_recomb++;
-                    if (n_recomb > 1) {
-                        recombination_occurred = true;
                     }
                     for (i = 0; i < 2; i++) {
                         if (u[i] != NULL && u[i] != x) {
@@ -5587,8 +5573,14 @@ msp_dtwf_generation(msp_t *self)
             }
         }
 
-        if ((!coalescence_occurred) && (!recombination_occurred)) {
+        if (self->tables->edges.num_rows == edgs
+            && self->tables->nodes.num_rows == nodes) {
+            // No edges or nodes added this generation
+            // i.e., no coalescence or recombination
             self->dtwf_no_events_generation = true;
+        } else {
+            edgs = self->tables->edges.num_rows;
+            nodes = self->tables->nodes.num_rows;
         }
         free(parents);
         free(segment_mem);
@@ -5827,8 +5819,9 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
             /* No events occurred: we are done */
             if (max_time >= DBL_MAX) {
                 max_time = self->time;
+            } else {
+                self->time = max_time;
             }
-            self->time = max_time;
             ret = MSP_EXIT_COALESCENCE;
             break;
         }

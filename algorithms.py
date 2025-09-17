@@ -19,6 +19,7 @@ import msprime
 
 
 logger = daiquiri.getLogger()
+INFINITY = sys.float_info.max
 
 
 class FenwickTree:
@@ -247,7 +248,7 @@ class Population:
         Returns the random waiting time until a common ancestor event
         occurs within this population.
         """
-        ret = sys.float_info.max
+        ret = INFINITY
         u = random.expovariate(2 * np)
         if self.growth_rate == 0:
             ret = self.start_size * u
@@ -267,7 +268,7 @@ class Population:
     def get_common_ancestor_waiting_time_hudson(self):
         def _get_common_ancestor_waiting_time_hudson(t):
             k = self.get_num_ancestors()
-            ret = sys.float_info.max
+            ret = INFINITY
             if k > 1:
                 np = k * (k - 1) / 2
                 ret = self._get_common_ancestor_waiting_time(np, t)
@@ -278,7 +279,7 @@ class Population:
     def get_common_ancestor_waiting_time_smc_k(self):
         def _get_common_ancestor_waiting_time_smc_k(t):
             np = self.get_num_pairs()
-            ret = sys.float_info.max
+            ret = INFINITY
             if np > 0:
                 ret = self._get_common_ancestor_waiting_time(np, t)
             return ret
@@ -966,7 +967,7 @@ class Simulator:
         self.sweep_trajectory = sweep_trajectory
         self.time_slice = time_slice
 
-        self.modifier_events = [(sys.float_info.max, None, None)]
+        self.modifier_events = [(INFINITY, None, None)]
         for time, pop_id, new_size in population_size_changes:
             self.modifier_events.append(
                 (time, self.change_population_size, (int(pop_id), new_size))
@@ -1317,7 +1318,6 @@ class Simulator:
         """
         Simulates the algorithm until all loci have coalesced.
         """
-        infinity = sys.float_info.max
         non_empty_pops = {pop.id for pop in self.P if pop.get_num_ancestors() > 0}
         potential_destinations = self.get_potential_destinations()
 
@@ -1328,23 +1328,23 @@ class Simulator:
                 break
             # self.print_state()
             re_rate = self.get_total_recombination_rate(label=0)
-            t_re = infinity
+            t_re = INFINITY
             if re_rate > 0:
                 t_re = random.expovariate(re_rate)
 
             # Gene conversion can occur within segments ..
             gc_rate = self.get_total_gc_rate(label=0)
-            t_gcin = infinity
+            t_gcin = INFINITY
             if gc_rate > 0:
                 t_gcin = random.expovariate(gc_rate)
             # ... or to the left of the first segment.
             gc_left_rate = self.get_total_gc_left_rate(label=0)
-            t_gc_left = infinity
+            t_gc_left = INFINITY
             if gc_left_rate > 0:
                 t_gc_left = random.expovariate(gc_left_rate)
 
             # Common ancestor events occur within demes.
-            t_ca = infinity
+            t_ca = INFINITY
             for index in non_empty_pops:
                 pop = self.P[index]
                 assert pop.get_num_ancestors() > 0
@@ -1352,7 +1352,7 @@ class Simulator:
                 if t < t_ca:
                     t_ca = t
                     ca_population = index
-            t_mig = infinity
+            t_mig = INFINITY
             # Migration events happen at the rates in the matrix.
             for j in non_empty_pops:
                 source_size = self.P[j].get_num_ancestors()
@@ -1367,8 +1367,8 @@ class Simulator:
                         mig_source = j
                         mig_dest = k
             min_time = min(t_re, t_ca, t_gcin, t_gc_left, t_mig)
-            assert (min_time != infinity) or (
-                (min_time == infinity) and not self.stop_at_local_mrca
+            assert (min_time != INFINITY) or (
+                (min_time == INFINITY) and not self.stop_at_local_mrca
             )
             if self.t + min_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
@@ -1383,12 +1383,13 @@ class Simulator:
                 event = "MOD"
             else:
                 self.t += min_time
-                if (not self.stop_at_local_mrca) and (min_time == infinity):
-                    # No more events can occur
+                if min_time >= INFINITY:
+                    assert not self.stop_at_local_mrca
                     event = "END"
-                    if end_time >= infinity:
+                    if end_time >= INFINITY:
                         end_time = self.t
-                    self.t = end_time
+                    else:
+                        self.t = end_time
                 elif min_time == t_re:
                     event = "RE"
                     self.hudson_recombination_event(0)
@@ -1403,7 +1404,6 @@ class Simulator:
                     self.common_ancestor_event(ca_population, 0)
                     if self.P[ca_population].get_num_ancestors() == 0:
                         non_empty_pops.remove(ca_population)
-
                 else:
                     event = "MIG"
                     self.migration_event(mig_source, mig_dest)
@@ -1536,6 +1536,13 @@ class Simulator:
         self.pedigree = Pedigree(self.tables)
         self.dtwf_climb_pedigree()
 
+    def dtwf_above_root_simulations_stop(self, events_happened):
+        return (
+            not events_happened
+            and not self.stop_at_local_mrca
+            and sum(pop.get_num_ancestors() for pop in self.P) == 1
+        )
+
     def dtwf_simulate(self, end_time):
         """
         Simulates the algorithm until all loci have coalesced.
@@ -1545,15 +1552,11 @@ class Simulator:
             self.verify()
             events_happened = self.dtwf_generation()
 
-            if (
-                not events_happened
-                and self.stop_at_local_mrca is False
-                and sum(pop.get_num_ancestors() for pop in self.P) == 1
-            ):
-                infinity = sys.float_info.max
-                if end_time >= infinity:
+            if self.dtwf_above_root_simulations_stop(events_happened):
+                if end_time >= INFINITY:
                     end_time = self.t
-                self.t = end_time
+                else:
+                    self.t = end_time
                 break
 
     def dtwf_generation(self):
@@ -1562,9 +1565,9 @@ class Simulator:
         Returns True if any events occurred, False otherwise.
         """
         # Migration events happen at the rates in the matrix.
+        nodes = self.tables.nodes.num_rows
+        edges = self.tables.edges.num_rows
         no_migration = True
-        no_coalescence = True
-        no_recombination = True
 
         for j in range(len(self.P)):
             source_size = self.P[j].get_num_ancestors()
@@ -1578,8 +1581,7 @@ class Simulator:
                     mig_dest = k
                     self.migration_event(mig_source, mig_dest)
                     no_migration = False
-        n_coal = 0
-        n_recomb = 0
+
         for pop_idx, pop in enumerate(self.P):
             # Cluster haploid inds by parent
             parent_inds = pop.get_ind_range(self.t)
@@ -1590,9 +1592,6 @@ class Simulator:
                 if parent not in offspring:
                     offspring[parent] = []
                 offspring[parent].append(anc)
-                n_coal += 1
-                if n_coal > 1:  # one event has to happen anyway
-                    no_coalescence = False
 
             # Draw recombinations in children and sort segments by
             # inheritance direction
@@ -1610,9 +1609,6 @@ class Simulator:
                         if lin is not None:
                             assert lin.head.prev is None
                             heapq.heappush(H[i], (lin.head.left, lin.head))
-                            n_recomb += 1
-                            if n_recomb > 1:
-                                no_recombination = False
 
                 # Merge segments
                 for ploid, h in enumerate(H):
@@ -1641,7 +1637,12 @@ class Simulator:
                                 h, pop_idx, 0, parent_nodes[ploid]
                             )  # label 0 only
             self.verify()
-        if no_migration and no_coalescence and no_recombination:
+        if (
+            self.tables.nodes.num_rows == nodes
+            and self.tables.edges.num_rows == edges
+            and no_migration
+        ):
+            # dtwf generation had no events
             return False
         return True
 
