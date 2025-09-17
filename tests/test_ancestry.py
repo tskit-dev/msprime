@@ -1027,7 +1027,7 @@ class TestSimulateAfterLocalMRCA:
         ],
     )
     def test_no_end_time(self, model):
-        with pytest.warns(msprime.PotentialInfiniteSimulationhWarning):
+        with pytest.warns(msprime.PotentialInfiniteSimulationWarning):
             ts = msprime.sim_ancestry(
                 10,
                 stop_at_local_mrca=False,

@@ -48,7 +48,7 @@ from msprime.ancestry import (
     SweepGenicSelection,
     FixedPedigree,
     TimeUnitsMismatchWarning,
-    PotentialInfiniteSimulationhWarning,
+    PotentialInfiniteSimulationWarning,
     NodeType,
 )
 

@@ -1038,6 +1038,7 @@ msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng)
     self->additional_nodes = 0;
     self->coalescing_segments_only = true;
     self->stop_at_local_mrca = true;
+    self->dtwf_no_events_generation = false;
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
@@ -5584,6 +5585,10 @@ msp_dtwf_generation(msp_t *self)
                 }
             }
         }
+
+        if ((!coalescence_occurred) && (!recombination_occurred)) {
+            self->dtwf_no_events_generation = true;
+        }
         free(parents);
         free(segment_mem);
         segment_mem = NULL;
@@ -5592,9 +5597,6 @@ msp_dtwf_generation(msp_t *self)
 out:
     msp_safe_free(parents);
     msp_safe_free(segment_mem);
-    if (coalescence_occurred == false && recombination_occurred == false && ret == 0) {
-        return MSP_DTWF_DID_NOTHING;
-    }
     return ret;
 }
 
@@ -5795,15 +5797,15 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
                 goto out;
             }
             ret = msp_apply_demographic_events(self, self->next_demographic_event->time);
-            migration_occurred
-                = true; // Demographic events can change population structure
+            // Demographic events can change population structure
+            migration_occurred = true;
             if (ret != 0) {
                 goto out;
             }
         }
         self->time = cur_time;
         ret = msp_dtwf_generation(self);
-        if (ret != 0 && ret != MSP_DTWF_DID_NOTHING) {
+        if (ret < 0) {
             goto out;
         }
 
@@ -5819,8 +5821,8 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
             self->next_sampling_event++;
         }
 
-        if (ret == MSP_DTWF_DID_NOTHING && migration_occurred == false
-            && self->stop_at_local_mrca == false && msp_get_num_ancestors(self) == 1) {
+        if (self->dtwf_no_events_generation && (!migration_occurred)
+            && (!self->stop_at_local_mrca) && msp_get_num_ancestors(self) == 1) {
             /* No events occurred: we are done */
             if (max_time >= DBL_MAX) {
                 max_time = self->time;
@@ -5834,10 +5836,6 @@ out:
     msp_safe_free(node_trees);
     msp_safe_free(n);
     msp_safe_free(mig_tmp);
-    if (ret == MSP_DTWF_DID_NOTHING) {
-        // No events occurred: it is still ok
-        return 0;
-    }
     return ret;
 }
 

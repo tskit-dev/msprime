@@ -72,9 +72,6 @@
 #define MSP_PED_STATE_CLIMBING 1
 #define MSP_PED_STATE_CLIMB_COMPLETE 2
 
-/*flags for dtwf model*/
-#define MSP_DTWF_DID_NOTHING 99
-
 typedef tsk_id_t population_id_t;
 typedef tsk_id_t label_id_t;
 
@@ -260,6 +257,7 @@ typedef struct _msp_t {
     uint32_t additional_nodes;
     bool coalescing_segments_only;
     bool stop_at_local_mrca;
+    bool dtwf_no_events_generation;
     double sequence_length;
     bool discrete_genome;
     rate_map_t recomb_map;

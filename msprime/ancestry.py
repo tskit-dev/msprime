@@ -56,7 +56,7 @@ class TimeUnitsMismatchWarning(UserWarning):
     """
 
 
-class PotentialInfiniteSimulationhWarning(UserWarning):
+class PotentialInfiniteSimulationWarning(UserWarning):
     """
     Warning raised when a simulation is likely to run indefinitely:
         stop_at_local_mrca false and no end_time set.
@@ -1102,7 +1102,7 @@ def _parse_sim_ancestry(
                 "in long (or infinite) run times, especially with a large recombination "
                 "rate. You can set an end_time to avoid this warning."
             )
-            warnings.warn(message, PotentialInfiniteSimulationhWarning, stacklevel=2)
+            warnings.warn(message, PotentialInfiniteSimulationWarning, stacklevel=2)
 
     return Simulator(
         tables=initial_state,

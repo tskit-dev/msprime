@@ -1368,7 +1368,7 @@ class Simulator:
                         mig_dest = k
             min_time = min(t_re, t_ca, t_gcin, t_gc_left, t_mig)
             assert (min_time != infinity) or (
-                (min_time == infinity) and self.stop_at_local_mrca is False
+                (min_time == infinity) and not self.stop_at_local_mrca
             )
             if self.t + min_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
@@ -1383,7 +1383,7 @@ class Simulator:
                 event = "MOD"
             else:
                 self.t += min_time
-                if (min_time == infinity) and self.stop_at_local_mrca is False:
+                if (not self.stop_at_local_mrca) and (min_time == infinity):
                     # No more events can occur
                     event = "END"
                     if end_time >= infinity:
