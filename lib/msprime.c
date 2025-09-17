@@ -5480,6 +5480,7 @@ msp_dtwf_generation(msp_t *self)
     int n_coal;
     int n_recomb;
 
+    self->dtwf_no_events_generation = false;
     for (i = 0; i < 2; i++) {
         avl_init_tree(&Q[i], cmp_segment_queue, NULL);
     }
