@@ -82,7 +82,7 @@ def get_extension():
         "mutgen.c",
         "likelihood.c",
     ]
-    tsk_source_files = ["core.c", "tables.c", "trees.c"]
+    tsk_source_files = ["core.c", "tables.c", "trees.c", "genotypes.c"]
     kas_source_files = ["kastore.c"]
 
     sources = (
