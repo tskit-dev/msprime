@@ -56,6 +56,13 @@ class TimeUnitsMismatchWarning(UserWarning):
     """
 
 
+class PotentialInfiniteSimulationWarning(UserWarning):
+    """
+    Warning raised when a simulation is likely to run indefinitely:
+        stop_at_local_mrca false and no end_time set.
+    """
+
+
 def _model_factory(model: None | str | AncestryModel) -> AncestryModel:
     """
     Returns an AncestryModel corresponding to the specified model
@@ -815,6 +822,7 @@ def _parse_sim_ancestry(
     coalescing_segments_only=None,
     num_labels=None,
     random_seed=None,
+    stop_at_local_mrca=None,
     init_for_debugger=False,
 ):
     """
@@ -1085,6 +1093,17 @@ def _parse_sim_ancestry(
     random_seed = _parse_random_seed(random_seed)
     random_generator = _msprime.RandomGenerator(random_seed)
 
+    if stop_at_local_mrca is None:
+        stop_at_local_mrca = True
+    if not stop_at_local_mrca:
+        if end_time == math.inf or end_time is None:
+            message = (
+                "Warning: stop_at_local_mrca=False with no set end_time may result "
+                "in long (or infinite) run times, especially with a large recombination "
+                "rate. You can set an end_time to avoid this warning."
+            )
+            warnings.warn(message, PotentialInfiniteSimulationWarning, stacklevel=2)
+
     return Simulator(
         tables=initial_state,
         recombination_map=recombination_map,
@@ -1101,6 +1120,7 @@ def _parse_sim_ancestry(
         end_time=end_time,
         num_labels=num_labels,
         random_generator=random_generator,
+        stop_at_local_mrca=stop_at_local_mrca,
     )
 
 
@@ -1128,6 +1148,7 @@ def sim_ancestry(
     num_replicates=None,
     replicate_index=None,
     record_provenance=None,
+    stop_at_local_mrca=None,
 ):
     """
     Simulates an ancestral process described by the specified model, demography and
@@ -1249,6 +1270,9 @@ def sim_ancestry(
         the :ref:`sec_ancestry_models_specifying` section for more details,
         and the :ref:`sec_ancestry_models` section for the available models
         and examples.
+    :param stop_at_local_mrca: If True (the default), the simulation will stop for a
+        tree when local mrca is reached. If False, simulations will continue on the path
+        to the grand mrca.
     :type model: str or msprime.AncestryModel or list
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an
@@ -1287,6 +1311,7 @@ def sim_ancestry(
             coalescing_segments_only=coalescing_segments_only,
             num_labels=num_labels,
             random_seed=random_seed,
+            stop_at_local_mrca=stop_at_local_mrca,
             # num_replicates is excluded as provenance is per replicate
             # replicate index is excluded as it is inserted for each replicate
         )
@@ -1311,6 +1336,7 @@ def sim_ancestry(
         coalescing_segments_only=coalescing_segments_only,
         num_labels=num_labels,
         random_seed=random_seed,
+        stop_at_local_mrca=stop_at_local_mrca,
     )
     return _wrap_replicates(
         sim,
@@ -1396,6 +1422,7 @@ class Simulator(_msprime.Simulator):
         start_time=None,
         end_time=None,
         num_labels=None,
+        stop_at_local_mrca=True,
     ):
         # We always need at least n segments, so no point in making
         # allocation any smaller than this.
@@ -1446,6 +1473,7 @@ class Simulator(_msprime.Simulator):
             gene_conversion_tract_length=gene_conversion_tract_length,
             discrete_genome=discrete_genome,
             ploidy=ploidy,
+            stop_at_local_mrca=stop_at_local_mrca,
         )
         # Highlevel attributes used externally that have no lowlevel equivalent
         self.end_time = np.inf if end_time is None else end_time

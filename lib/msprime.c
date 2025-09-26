@@ -329,6 +329,13 @@ out:
 }
 
 int
+msp_set_stop_at_local_mrca(msp_t *self, bool stop_at_local_mrca)
+{
+    self->stop_at_local_mrca = stop_at_local_mrca;
+    return 0;
+}
+
+int
 msp_set_discrete_genome(msp_t *self, bool is_discrete)
 {
     self->discrete_genome = is_discrete;
@@ -1030,6 +1037,8 @@ msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng)
     self->store_migrations = false;
     self->additional_nodes = 0;
     self->coalescing_segments_only = true;
+    self->stop_at_local_mrca = true;
+    self->dtwf_no_events_generation = false;
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
@@ -3777,6 +3786,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     bool defrag_required = false;
     tsk_id_t v;
     double l, r, l_min, r_max;
+    uint32_t min_overlap;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
@@ -3785,6 +3795,12 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     if (new_lineage == NULL) {
         ret = MSP_ERR_NO_MEMORY;
         goto out;
+    }
+
+    if (self->stop_at_local_mrca) {
+        min_overlap = 2;
+    } else {
+        min_overlap = 0;
     }
 
     x = a;
@@ -3862,7 +3878,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 node = avl_search(&self->overlap_counts, &search);
                 tsk_bug_assert(node != NULL);
                 nm = (node_mapping_t *) node->item;
-                if (nm->value == 2) {
+                if (nm->value == min_overlap) {
                     nm->value = 0;
                     node = node->next;
                     tsk_bug_assert(node != NULL);
@@ -3870,7 +3886,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                     r = nm->position;
                 } else {
                     r = l;
-                    while (nm->value != 2 && r < r_max) {
+                    while (nm->value != min_overlap && r < r_max) {
                         nm->value--;
                         node = node->next;
                         tsk_bug_assert(node != NULL);
@@ -3983,6 +3999,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     bool defrag_required = false;
     uint32_t j, h;
     double l, r, r_max, next_l, l_min;
+    uint32_t min_overlap;
+
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *z, *alpha;
@@ -4072,7 +4090,12 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             node = avl_search(&self->overlap_counts, &search);
             tsk_bug_assert(node != NULL);
             nm = (node_mapping_t *) node->item;
-            if (nm->value == h) {
+            if (self->stop_at_local_mrca) {
+                min_overlap = h;
+            } else {
+                min_overlap = 0;
+            }
+            if (nm->value == min_overlap) {
                 nm->value = 0;
                 node = node->next;
                 tsk_bug_assert(node != NULL);
@@ -4080,8 +4103,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                 r = nm->position;
             } else {
                 r = l;
-                while (nm->value != h && r < r_max) {
-                    nm->value -= h - 1;
+                while (nm->value != min_overlap && r < r_max) {
+                    nm->value -= min_overlap - 1;
                     node = node->next;
                     tsk_bug_assert(node != NULL);
                     nm = (node_mapping_t *) node->item;
@@ -5189,9 +5212,20 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         t_wait = GSL_MIN(mig_t_wait,
             GSL_MIN(gc_t_wait, GSL_MIN(gc_left_t_wait, GSL_MIN(re_t_wait, ca_t_wait))));
 
-        if (fixed_event_time == DBL_MAX && t_wait == DBL_MAX) {
+        if (fixed_event_time == DBL_MAX && t_wait == DBL_MAX
+            && self->stop_at_local_mrca) { // TODO add condition
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
+        } else if ((fixed_event_time == DBL_MAX && t_wait == DBL_MAX)
+                   && !self->stop_at_local_mrca) {
+
+            if (max_time >= DBL_MAX) {
+                max_time = self->time;
+            } else {
+                self->time = max_time;
+            }
+            ret = MSP_EXIT_COALESCENCE;
+            break;
         }
         random_event_time = self->time + t_wait;
 
@@ -5442,6 +5476,10 @@ msp_dtwf_generation(msp_t *self)
     label_id_t label = 0;
     tsk_id_t parent_nodes[MSP_MAX_PED_PLOIDY];
 
+    unsigned long int edgs = self->tables->edges.num_rows;
+    unsigned long int nodes = self->tables->nodes.num_rows;
+
+    self->dtwf_no_events_generation = false;
     for (i = 0; i < 2; i++) {
         avl_init_tree(&Q[i], cmp_segment_queue, NULL);
     }
@@ -5534,6 +5572,16 @@ msp_dtwf_generation(msp_t *self)
                 }
             }
         }
+
+        if (self->tables->edges.num_rows == edgs
+            && self->tables->nodes.num_rows == nodes) {
+            // No edges or nodes added this generation
+            // i.e., no coalescence or recombination
+            self->dtwf_no_events_generation = true;
+        } else {
+            edgs = self->tables->edges.num_rows;
+            nodes = self->tables->nodes.num_rows;
+        }
         free(parents);
         free(segment_mem);
         segment_mem = NULL;
@@ -5618,6 +5666,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
     avl_tree_t *nodes;
     /* Only support a single structured coalescent label at the moment */
     label_id_t label = 0;
+    bool migration_occurred;
 
     tsk_bug_assert(self->recomb_mass_index == NULL);
     tsk_bug_assert(self->gc_mass_index == NULL);
@@ -5649,6 +5698,8 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
             goto out;
         }
         self->time++;
+
+        migration_occurred = false;
 
         /* Following SLiM, we perform migrations prior to selecting
          * parents for the current generation */
@@ -5699,6 +5750,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
                 mig_dest_pop = (population_id_t) k;
 
                 for (i = 0; i < n[k]; i++) {
+                    migration_occurred = true;
                     ret = msp_store_simultaneous_migration_events(
                         self, nodes, mig_source_pop, label);
                     if (ret != 0) {
@@ -5715,6 +5767,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
                 nodes = &node_trees[j * self->num_populations + k];
                 mig_source_pop = (population_id_t) j;
                 mig_dest_pop = (population_id_t) k;
+                migration_occurred = true;
                 ret = msp_simultaneous_migration_event(
                     self, nodes, mig_source_pop, mig_dest_pop);
                 if (ret != 0) {
@@ -5737,13 +5790,15 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
                 goto out;
             }
             ret = msp_apply_demographic_events(self, self->next_demographic_event->time);
+            // Demographic events can change population structure
+            migration_occurred = true;
             if (ret != 0) {
                 goto out;
             }
         }
         self->time = cur_time;
         ret = msp_dtwf_generation(self);
-        if (ret != 0) {
+        if (ret < 0) {
             goto out;
         }
 
@@ -5757,6 +5812,18 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
                 goto out;
             }
             self->next_sampling_event++;
+        }
+
+        if (self->dtwf_no_events_generation && (!migration_occurred)
+            && (!self->stop_at_local_mrca) && msp_get_num_ancestors(self) == 1) {
+            /* No events occurred: we are done */
+            if (max_time >= DBL_MAX) {
+                max_time = self->time;
+            } else {
+                self->time = max_time;
+            }
+            ret = MSP_EXIT_COALESCENCE;
+            break;
         }
     }
 out:
