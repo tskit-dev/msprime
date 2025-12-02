@@ -1049,13 +1049,6 @@ class Simulator:
                     seg = seg.next
                 self.add_lineage(lineage)
 
-    def ancestors_remain(self):
-        """
-        Returns True if the simulation is not finished, i.e., there is some ancestral
-        material that has not fully coalesced.
-        """
-        return sum(pop.get_num_ancestors() for pop in self.P) != 0
-
     def change_population_size(self, pop_id, size):
         self.P[pop_id].set_start_size(size)
 
@@ -1314,6 +1307,12 @@ class Simulator:
             individual_index -= num_ancestors
         raise AssertionError()
 
+    def is_completed(self):
+        for x in self.S.values():
+            if x > 1:
+                return False
+        return True
+
     def hudson_simulate(self, end_time):
         """
         Simulates the algorithm until all loci have coalesced.
@@ -1322,7 +1321,7 @@ class Simulator:
         potential_destinations = self.get_potential_destinations()
 
         # only worried about label 0 below
-        while len(non_empty_pops) > 0:
+        while not self.is_completed():
             self.verify()
             if self.t >= end_time:
                 break
@@ -1367,9 +1366,7 @@ class Simulator:
                         mig_source = j
                         mig_dest = k
             min_time = min(t_re, t_ca, t_gcin, t_gc_left, t_mig)
-            assert (min_time != INFINITY) or (
-                (min_time == INFINITY) and not self.stop_at_local_mrca
-            )
+            assert min_time != INFINITY
             if self.t + min_time > self.modifier_events[0][0]:
                 t, func, args = self.modifier_events.pop(0)
                 self.t = t
@@ -1383,14 +1380,7 @@ class Simulator:
                 event = "MOD"
             else:
                 self.t += min_time
-                if min_time >= INFINITY:
-                    assert not self.stop_at_local_mrca
-                    event = "END"
-                    if end_time >= INFINITY:
-                        end_time = self.t
-                    else:
-                        self.t = end_time
-                elif min_time == t_re:
+                if min_time == t_re:
                     event = "RE"
                     self.hudson_recombination_event(0)
                 elif min_time == t_gcin:
@@ -1453,7 +1443,7 @@ class Simulator:
         # main loop time
         t_inc_orig = self.time_slice
         e_time = 0.0
-        while self.ancestors_remain() and sweep_traj_step < len(times) - 1:
+        while sweep_traj_step < len(times) - 1 and not self.is_completed():
             self.verify()
             event_prob = 1.0
             while event_prob > random.random() and sweep_traj_step < len(times) - 1:
@@ -1536,28 +1526,17 @@ class Simulator:
         self.pedigree = Pedigree(self.tables)
         self.dtwf_climb_pedigree()
 
-    def dtwf_above_root_simulations_stop(self, events_happened):
-        return (
-            not events_happened
-            and not self.stop_at_local_mrca
-            and sum(pop.get_num_ancestors() for pop in self.P) == 1
-        )
-
     def dtwf_simulate(self, end_time):
         """
         Simulates the algorithm until all loci have coalesced.
         """
-        while self.ancestors_remain() and self.t < end_time:
-            self.t += 1
+        while not self.is_completed():
             self.verify()
-            events_happened = self.dtwf_generation()
-
-            if self.dtwf_above_root_simulations_stop(events_happened):
-                if end_time >= INFINITY:
-                    end_time = self.t
-                else:
-                    self.t = end_time
+            if self.t >= end_time:
                 break
+            self.t += 1
+            # print("DTWF", self.t)
+            self.dtwf_generation()
 
     def dtwf_generation(self):
         """
@@ -1565,9 +1544,6 @@ class Simulator:
         Returns True if any events occurred, False otherwise.
         """
         # Migration events happen at the rates in the matrix.
-        nodes = self.tables.nodes.num_rows
-        edges = self.tables.edges.num_rows
-        no_migration = True
 
         for j in range(len(self.P)):
             source_size = self.P[j].get_num_ancestors()
@@ -1580,7 +1556,6 @@ class Simulator:
                     mig_source = j
                     mig_dest = k
                     self.migration_event(mig_source, mig_dest)
-                    no_migration = False
 
         for pop_idx, pop in enumerate(self.P):
             # Cluster haploid inds by parent
@@ -1637,14 +1612,6 @@ class Simulator:
                                 h, pop_idx, 0, parent_nodes[ploid]
                             )  # label 0 only
             self.verify()
-        if (
-            self.tables.nodes.num_rows == nodes
-            and self.tables.edges.num_rows == edges
-            and no_migration
-        ):
-            # dtwf generation had no events
-            return False
-        return True
 
     def process_pedigree_common_ancestors(self, ind, ploid):
         """
@@ -2305,7 +2272,7 @@ class Simulator:
                 else:
                     right = left
                     while right < r_max and self.S[right] != min_overlap:
-                        self.S[right] -= min_overlap - 1
+                        self.S[right] -= len(X) - 1
                         right = self.S.succ_key(right)
                     alpha = self.alloc_segment(left, right, new_node_id, pop_id)
                 # Update the heaps and make the record.
@@ -2775,10 +2742,10 @@ class Simulator:
         Checks that the state of the simulator is consistent.
         """
         self.verify_segments()
-        if self.model not in ["fixed_pedigree", "dtwf"]:
-            # The fixed_pedigree model doesn't maintain a bunch of stuff.
-            # It would probably be simpler if it did.
+        # The fixed_pedigree model doesn't maintain a bunch of stuff.
+        if self.model != "fixed_pedigree":
             self.verify_overlaps()
+        if self.model not in ["fixed_pedigree", "dtwf"]:
             for label in range(self.num_labels):
                 if self.recomb_mass_index is None:
                     assert self.recomb_map.total_mass == 0

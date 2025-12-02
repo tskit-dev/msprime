@@ -56,13 +56,6 @@ class TimeUnitsMismatchWarning(UserWarning):
     """
 
 
-class PotentialInfiniteSimulationWarning(UserWarning):
-    """
-    Warning raised when a simulation is likely to run indefinitely:
-        stop_at_local_mrca false and no end_time set.
-    """
-
-
 def _model_factory(model: None | str | AncestryModel) -> AncestryModel:
     """
     Returns an AncestryModel corresponding to the specified model
@@ -1097,14 +1090,6 @@ def _parse_sim_ancestry(
 
     if stop_at_local_mrca is None:
         stop_at_local_mrca = True
-    if not stop_at_local_mrca:
-        if end_time == math.inf or end_time is None:
-            message = (
-                "Warning: stop_at_local_mrca=False with no set end_time may result "
-                "in long (or infinite) run times, especially with a large recombination "
-                "rate. You can set an end_time to avoid this warning."
-            )
-            warnings.warn(message, PotentialInfiniteSimulationWarning, stacklevel=2)
 
     return Simulator(
         tables=initial_state,
