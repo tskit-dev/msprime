@@ -1129,47 +1129,6 @@ However, if `coalescing_segments_only=False`, then the edges recorded
 would be from `m` to `p` over the entire segment `[a, b)`, and from `n` to `p` over the entire segment `[c,d)`.
 The nodes `m` and `n` coalesce (in `p`) on only the overlapping segment `[c,b)`, and so the node `p` will be a unary node in the flanking regions: above `m` on the segment `[a,c)` and above `n` on the segment `[b,d)`.
 
-(sec_simulation_after_mrca)=
-
-### Simulations after local MRCA
-
-By default, msprime stops simulating local trees when a local most recent common ancestor (MRCA) is found. This is because events that occur
- above the common ancestor are shared across all samples, and we are usually interested in differences between samples.
-```{code-cell}
-import msprime
-
-ts = msprime.sim_ancestry(2, recombination_rate=0.1, sequence_length=10, random_seed=21)
-ts.draw_svg(time_scale='rank')
-```
-Here, for example, we see that simulations in the middle tree stopped at node 6, which is much younger than nodes 7 and 8.
-And if we look closely, we can also see that simulations stopped at node 7 in the rightmost tree at a younger time than
-node 8 in the leftmost tree.
-
-
-However, for some specialised applications, simulations after the local MRCA might be needed. In this case, we set the
-parameter `stop_at_local_mrca` of {func}`.sim_ancestry` to `False`, and we set the `end_time` parameter to stop simulations
-when they reach this end time.
-
-
-```{code-cell}
-import msprime
-
-ts = msprime.sim_ancestry(
-    2, recombination_rate=0.1,
-    sequence_length=10,
-    random_seed=21,
-    stop_at_local_mrca=False,
-    end_time=10)
-
-ts.draw_svg(time_scale='rank')
-```
-It is possible to run the simulations without setting an `end_time`. In that case, simulations will
-stop when no more events (recombination, coalescence, migration, etc.) could happen. However, since in many cases this state is impossible to reach, we recommend setting an `end_time`.
-
-Note that you might want to set an `end_time` that is larger than possible end times for your simulations to avoid stopping
-your simulations before full coalescence. However, a larger `end_time` means that simulations will take longer and consume
-more memory.
-
 
 (sec_additional_nodes_ca)=
 
@@ -1521,6 +1480,44 @@ argument.
 Migrations nodes are also recorded in the ARG using the
 `NodeType.MIGRANT` flag. See the {ref}`sec_api_node_flags`
 section for more details.
+
+(sec_simulation_after_mrca)=
+
+### Simulations after local MRCA
+
+By default, msprime stops simulating local trees when a local most recent
+common ancestor (MRCA) is found. This is because events that occur above the
+common ancestor are shared across all samples, and we are usually interested in
+differences between samples.
+
+However, for some specialised applications, simulations after the local MRCA
+might be needed. In this case, we set the parameter `stop_at_local_mrca` of
+{func}`.sim_ancestry` to `False`.
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    2, recombination_rate=0.1, sequence_length=10, random_seed=75,
+    stop_at_local_mrca=False, record_full_arg=True)
+ts.draw_svg(time_scale='rank')
+```
+
+In this example we've continued the simulation *after* we've found roots for the local
+trees, and we can see, for example, that node 14 is still the ancestor of 11
+in the rightmost tree. This would be not recorded with the default ``stop_at_local_mrca=False``
+because 11 is the root of that tree.
+
+The stopping condition remains the same---we keep simulating until an MRCA has been
+found at *all* local trees. The interpretation of the the final "root" nodes
+is a little subtle
+
+:::{note}
+When using the ``stop_at_local_mrca=False`` option you usually need to specify an
+``end_time`` argument (see {ref}`sec_ancestry_end_time`) or the simulation will
+run indefinitely! It is in general not possible to know what the "right" end
+time for a given simulation is, and you may need to specify a "large" value to be
+sure that all trees have coalesced locally.
+:::
+
 
 ## Manipulating simulation time
 
