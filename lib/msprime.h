@@ -257,7 +257,6 @@ typedef struct _msp_t {
     uint32_t additional_nodes;
     bool coalescing_segments_only;
     bool stop_at_local_mrca;
-    bool dtwf_no_events_generation;
     double sequence_length;
     bool discrete_genome;
     rate_map_t recomb_map;
