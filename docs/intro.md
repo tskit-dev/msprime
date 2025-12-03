@@ -44,6 +44,9 @@ available for learning about {program}`tskit` and {program}`msprime`:
   [2016 PLoS Computational Biology paper](https://doi.org/10.1371/journal.pcbi.1004842).
   For more information on the {ref}`sec_ancestry_models_dtwf` model,
   please see the [2020 PLoS Genetics paper](https://doi.org/10.1371/journal.pgen.1008619).
+  For a formal introduction to recent capabilities, see the
+  [2022 Genetics paper](https://doi.org/10.1093/genetics/iyab229)
+  describing the {program}`msprime` 1.0 release.
 
 ```{important}
 If you use {program}`msprime` in your work, please remember to
