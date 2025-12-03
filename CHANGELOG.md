@@ -7,13 +7,10 @@
 
 - The `FixedPedigree` simulation model now supports internal samples ({issue}`1855`,
   {pr}`2321`, {pr}`2326`, {pr}`2388`, {user}`abureau`, {user}`jeromekelleher`).
-
 - Add support and wheels for Python3.13
 - Support for simulations after local mrca,
-  ({pr}`2396`, {user}`jeromekelleher`, {user}`hossam26644`).
-
+  ({issue}`2157`, {pr}`2396`, {user}`jeromekelleher`, {user}`hossam26644`).
 - Drop Python 3.9 support, require Python >= 3.10 ({pr}`2418`, {user}`benjeffery`)
-
 - Add wheels on Windows ({pr}`2414`, {issue}`2200`,{user}`benjeffery`)
 
 **Breaking changes**:

@@ -817,22 +817,16 @@ test_single_locus_continue_after_local_mrca(void)
     tsk_treeseq_t ts;
     tsk_tree_t tree;
     tsk_id_t root;
-
     gsl_rng *rng = safe_rng_alloc();
 
-    gsl_rng_set(rng, seed);
-
     for (j = 0; j < sizeof(models) / sizeof(int); j++) {
-
+        gsl_rng_set(rng, seed);
         ret = build_sim(&msp, &tables, rng, m, 1, NULL, n);
         ret = msp_set_recombination_rate(&msp, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-
         ret = msp_set_stop_at_local_mrca(&msp, false);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
-
         set_simulation_model(&msp, models[j]);
-
         ret = msp_initialise(&msp);
         CU_ASSERT_EQUAL(ret, 0);
         ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
@@ -845,17 +839,14 @@ test_single_locus_continue_after_local_mrca(void)
         ret = tsk_tree_init(&tree, &ts, 0);
         CU_ASSERT_EQUAL_FATAL(ret, 0);
         CU_ASSERT_EQUAL_FATAL(tsk_treeseq_get_num_trees(&ts), 1);
-
         ret = tsk_tree_first(&tree);
         CU_ASSERT_EQUAL_FATAL(ret, TSK_TREE_OK);
         CU_ASSERT_EQUAL_FATAL(tsk_tree_get_num_roots(&tree), 1);
-
         root = tsk_tree_get_left_root(&tree);
         CU_ASSERT_EQUAL(msp.tables->nodes.time[root], msp_get_time(&msp));
 
         model = msp_get_model(&msp)->type;
         CU_ASSERT_EQUAL(model, models[j]);
-
         ret = msp_free(&msp);
         CU_ASSERT_EQUAL(ret, 0);
         tsk_table_collection_free(&tables);

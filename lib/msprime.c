@@ -5189,7 +5189,6 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
             GSL_MIN(gc_t_wait, GSL_MIN(gc_left_t_wait, GSL_MIN(re_t_wait, ca_t_wait))));
 
         if (fixed_event_time == DBL_MAX && t_wait == DBL_MAX) {
-            msp_print_state(self, stdout);
             ret = MSP_ERR_INFINITE_WAITING_TIME;
             goto out;
         }
@@ -5405,7 +5404,7 @@ msp_run_pedigree(msp_t *self, double max_time, unsigned long max_events)
         pedigree->next_individual++;
         num_events++;
     }
-    if (msp_get_num_ancestors(self) == 0) {
+    if (msp_is_completed(self) && self->stop_at_local_mrca) {
         ret = MSP_EXIT_COALESCENCE;
     } else if (pedigree->next_individual == num_individuals) {
         ret = MSP_EXIT_MODEL_COMPLETE;
@@ -5534,7 +5533,6 @@ msp_dtwf_generation(msp_t *self)
                 }
             }
         }
-
         free(parents);
         free(segment_mem);
         segment_mem = NULL;
@@ -5738,14 +5736,13 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
                 goto out;
             }
             ret = msp_apply_demographic_events(self, self->next_demographic_event->time);
-            // Demographic events can change population structure
             if (ret != 0) {
                 goto out;
             }
         }
         self->time = cur_time;
         ret = msp_dtwf_generation(self);
-        if (ret < 0) {
+        if (ret != 0) {
             goto out;
         }
 
@@ -6084,11 +6081,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
 
-    if (msp_is_completed(self)) {
-        /* If the simulation is completed, run() is a no-op for
-         * all models. */
-        ret = 0;
-    } else if (self->model.type == MSP_MODEL_DTWF) {
+    if (self->model.type == MSP_MODEL_DTWF) {
         ret = msp_run_dtwf(self, max_time, max_events);
     } else if (self->model.type == MSP_MODEL_WF_PED) {
         ret = msp_run_pedigree(self, max_time, max_events);
@@ -6515,36 +6508,27 @@ msp_get_time(msp_t *self)
 int
 msp_is_completed(msp_t *self)
 {
-    /* int model = self->model.type; */
     bool completed;
     avl_node_t *node;
     node_mapping_t *nm;
 
-    /* NOTE! This is a quick first implementation. This could be a performance
-     * bottleneck and maybe we keep track of whether there's any non-1 values
-     * instead
-     */
-    completed = true;
-    for (node = self->overlap_counts.head; node->next != NULL; node = node->next) {
-        nm = (node_mapping_t *) node->item;
-        if (nm->value > 1) {
-            completed = false;
-            break;
+    if (self->stop_at_local_mrca) {
+        /* When we stop at the local MRCA we have a cheap way of testing for completion
+         */
+        completed = msp_get_num_ancestors(self) == 0;
+    } else {
+        /* When we simulate ancestry after local roots, we have to look at the overlap
+         * counts to find when we've coalesced.
+         */
+        completed = true;
+        for (node = self->overlap_counts.head; node->next != NULL; node = node->next) {
+            nm = (node_mapping_t *) node->item;
+            if (nm->value > 1) {
+                completed = false;
+                break;
+            }
         }
     }
-
-    /* } */
-
-    /*     if (model == MSP_MODEL_HUDSON || model == MSP_MODEL_SMC_K || model ==
-     * MSP_MODEL_BETA */
-    /*         || model == MSP_MODEL_DIRAC || model == MSP_MODEL_SMC */
-    /*         || model == MSP_MODEL_SMC_PRIME */
-    /*         || model == MSP_MODEL_DTWF) { */
-    /*         completed = msp_coalescent_is_complete(self); */
-    /*     } else { */
-    /*         completed = msp_get_num_ancestors(self) == 0; */
-    /*     } */
-
     return self->state == MSP_STATE_SIMULATING && completed;
 }
 

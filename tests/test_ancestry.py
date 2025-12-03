@@ -925,53 +925,51 @@ class TestSimulateAfterLocalMRCA:
         for ts in tss:
             self.check_roots(ts)
 
-    def test_fixed_pedigree(self):
-        """
-        To test pedigree model, we make diamond shaped pedigree and make
-        sure that simulations run until the eldest individual.
-        There is a chance that no coalescence happens until the eldest individual,
-        so, we use longer sequence with a high recombination rate and confirm that
-        all trees does not end before the eldest individual.
-
-        The pedigree used has this shape:
-                  O
-                  |
-                  O
-                 / \
-                O   O
-                \\ //
-                  O
-                 / \
-                O   O
-                \\ //
-                  O
-        """
-        eldest_time = 10
+    def test_fixed_pedigree_full_trace(self):
+        # The pedigree used has this shape:
+        #         O
+        #         |
+        #         O
+        #        / \
+        #       O   O
+        #       \\ //
+        #         O
+        #        / \
+        #       O   O
+        #       \\ //
+        #         O
+        eldest_time = 5
         pb = msprime.PedigreeBuilder()
-
         gggpa = pb.add_individual(time=eldest_time)
         ggpa = pb.add_individual(time=4, parents=[gggpa, gggpa])
-
         # first diamound
         gmom = pb.add_individual(time=3, parents=[ggpa, ggpa])
         gdad = pb.add_individual(time=3, parents=[ggpa, ggpa])
         grandpa_id = pb.add_individual(time=2, parents=[gmom, gdad])
-
         # second diamond
         mom_id = pb.add_individual(time=1, parents=[grandpa_id, grandpa_id])
         dad_id = pb.add_individual(time=1, parents=[grandpa_id, grandpa_id])
         pb.add_individual(time=0, parents=[mom_id, dad_id], is_sample=True)
-
         pedigree = pb.finalise(100)
 
         ts = msprime.sim_ancestry(
             initial_state=pedigree,
             stop_at_local_mrca=False,
-            recombination_rate=0.1,
+            coalescing_segments_only=False,
+            additional_nodes=(
+                msprime.NodeType.RECOMBINANT
+                | msprime.NodeType.PASS_THROUGH
+                | msprime.NodeType.COMMON_ANCESTOR
+            ),
+            recombination_rate=0.01,
             model="fixed_pedigree",
         )
-
-        self.check_roots(ts, eldest_time, allow_multiple_roots=True)
+        for tree in ts.trees():
+            for sample in ts.samples():
+                path = [sample] + list(tree.ancestors(sample))
+                time = ts.nodes_time[path]
+                # Each sample should pass through each level of the pedigree.
+                np.testing.assert_array_equal(time, np.arange(eldest_time + 1))
 
     def test_multiple_models(self):
         """
