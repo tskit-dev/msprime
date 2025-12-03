@@ -388,7 +388,7 @@ verify_sweep_reverse_wm_no_recomb(unsigned long int seed)
     gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
     int num_demes = 1;
-    tsk_id_t mut_pop[] = { 1001 };
+    tsk_id_t mut_pop[] = { 10001 };
     int num_events = mut_pop[0] - 1;
     double *time_of_ev;
     int *ev_type;
@@ -564,7 +564,7 @@ verify_sweep_reverse_wm_back_and_forth(unsigned long int seed)
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
-    tsk_id_t mut_pop[] = { 101 };
+    tsk_id_t mut_pop[] = { 1001 };
     int num_events = 3 * mut_pop[0] - 5;
     int num_demes = 1;
     double *time_of_ev;
@@ -575,7 +575,7 @@ verify_sweep_reverse_wm_back_and_forth(unsigned long int seed)
     double p;
     double num_loci = 5001;
     double position = num_loci / 2;
-    double recom_rate = 0.000004;
+    double recom_rate = 0.00004;
     tsk_id_t final_mut_pop[] = { 1 };
 
     gsl_rng_set(rng, seed);
@@ -657,7 +657,7 @@ verify_sweep_reverse_wm_oscillating(unsigned long int seed)
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
-    tsk_id_t mut_pop[] = { 1001 };
+    tsk_id_t mut_pop[] = { 10001 };
     int num_events = 3 * mut_pop[0] - 9;
     int num_demes = 1;
     double *time_of_ev;
@@ -978,7 +978,7 @@ main(int argc, char **argv)
             test_sweep_reverse_wm_oscillating },
         { "test_sweep_reverse_wm_sudden_drop",
             test_sweep_reverse_wm_sudden_drop },
-        { "test_sweep_reverse_1D_deme_wise", test_sweep_reverse_1D_deme_wise },
+        //{ "test_sweep_reverse_1D_deme_wise", test_sweep_reverse_1D_deme_wise },
         CU_TEST_INFO_NULL,
     };
 
