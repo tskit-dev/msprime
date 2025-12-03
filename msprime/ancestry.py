@@ -897,7 +897,9 @@ def _parse_sim_ancestry(
     if initial_state is not None:
         if isinstance(initial_state, tskit.TreeSequence):
             initial_state = initial_state.dump_tables()
-        elif not isinstance(initial_state, tskit.TableCollection):
+        elif not isinstance(
+            initial_state, (tskit.TableCollection, tskit.ImmutableTableCollection)
+        ):
             raise TypeError(
                 "initial_state must either be a TreeSequence or TableCollection instance"
             )
