@@ -1258,8 +1258,13 @@ def sim_ancestry(
         and the :ref:`sec_ancestry_models` section for the available models
         and examples.
     :param stop_at_local_mrca: If True (the default), the simulation will stop for a
-        tree when local mrca is reached. If False, simulations will continue on the path
-        to the grand mrca.
+        tree when local MRCA is reached. If False, simulations will continue across
+        the full sequence until an MRCA has been found on all segments (except
+        for the FixedPedigree model, which will continue simulation until all
+        individuals have been processed). With this option, all trees will have
+        a root at the same time as the oldest local MRCA, with nodes marking
+        distinct segments of ancestry. See :ref:`sec_ancestry_stop_at_local_mrca`
+        for more information.
     :type model: str or msprime.AncestryModel or list
     :return: The :class:`tskit.TreeSequence` object representing the results
         of the simulation if no replication is performed, or an

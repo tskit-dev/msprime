@@ -207,7 +207,7 @@ verify_pedigree(double recombination_rate, unsigned long seed,
 static void
 verify_pedigree_event_by_event(double recombination_rate, unsigned long seed,
     tsk_size_t num_individuals, tsk_id_t *parents, double *time, tsk_flags_t *is_sample,
-    tsk_id_t *population, uint32_t additional_nodes)
+    tsk_id_t *population, uint32_t additional_nodes, bool stop_at_local_mrca)
 {
     int ret, status1, status2;
     int ploidy = 2;
@@ -222,6 +222,9 @@ verify_pedigree_event_by_event(double recombination_rate, unsigned long seed,
     ret = build_pedigree_sim(&msp2, &tables2, rng2, 100, ploidy, num_individuals,
         parents, time, is_sample, population);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    msp_set_stop_at_local_mrca(&msp1, stop_at_local_mrca);
+    msp_set_stop_at_local_mrca(&msp2, stop_at_local_mrca);
 
     ret = msp_initialise(&msp1);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -899,8 +902,9 @@ test_internal_samples(void)
     verify_pedigree(0, 1, 3, parents, time, is_sample, NULL, 0);
     verify_pedigree(0.1, 1, 3, parents, time, is_sample, NULL, 0);
 
-    verify_pedigree_event_by_event(0, 1, 3, parents, time, is_sample, NULL, 0);
-    verify_pedigree_event_by_event(0.1, 1, 3, parents, time, is_sample, NULL, 0);
+    verify_pedigree_event_by_event(0, 1, 3, parents, time, is_sample, NULL, 0, true);
+    verify_pedigree_event_by_event(0.1, 1, 3, parents, time, is_sample, NULL, 0, true);
+    verify_pedigree_event_by_event(0.1, 1, 3, parents, time, is_sample, NULL, 0, false);
 }
 
 static void
@@ -919,8 +923,12 @@ test_no_leaf_samples(void)
     verify_pedigree(0, 1, num_inds, parents, time, is_sample, NULL, 0);
     verify_pedigree(0.1, 1, num_inds, parents, time, is_sample, NULL, 0);
 
-    verify_pedigree_event_by_event(0, 1, num_inds, parents, time, is_sample, NULL, 0);
-    verify_pedigree_event_by_event(0.1, 1, num_inds, parents, time, is_sample, NULL, 0);
+    verify_pedigree_event_by_event(
+        0, 1, num_inds, parents, time, is_sample, NULL, 0, true);
+    verify_pedigree_event_by_event(
+        0, 1, num_inds, parents, time, is_sample, NULL, 0, false);
+    verify_pedigree_event_by_event(
+        0.1, 1, num_inds, parents, time, is_sample, NULL, 0, true);
 }
 
 static void
@@ -966,7 +974,8 @@ test_trio_same_pop(void)
     tsk_id_t population[] = { 2, 2, 2 };
 
     verify_pedigree(0, 1, 3, parents, time, NULL, population, 0);
-    verify_pedigree_event_by_event(0, 1, 3, parents, time, NULL, population, 0);
+    verify_pedigree_event_by_event(0, 1, 3, parents, time, NULL, population, 0, true);
+    verify_pedigree_event_by_event(0, 1, 3, parents, time, NULL, population, 0, false);
 }
 
 static void
@@ -978,7 +987,8 @@ test_trio_child_different_pop(void)
     tsk_id_t population[] = { 2, 2, 1 };
 
     verify_pedigree(0, 1, 3, parents, time, NULL, population, 0);
-    verify_pedigree_event_by_event(0, 1, 3, parents, time, NULL, population, 0);
+    verify_pedigree_event_by_event(0, 1, 3, parents, time, NULL, population, 0, true);
+    verify_pedigree_event_by_event(0, 1, 3, parents, time, NULL, population, 0, false);
 }
 
 int

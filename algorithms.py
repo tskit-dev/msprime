@@ -1541,10 +1541,8 @@ class Simulator:
     def dtwf_generation(self):
         """
         Evolves one generation of a Wright Fisher population
-        Returns True if any events occurred, False otherwise.
         """
         # Migration events happen at the rates in the matrix.
-
         for j in range(len(self.P)):
             source_size = self.P[j].get_num_ancestors()
             for k in range(len(self.P)):
@@ -2263,7 +2261,6 @@ class Simulator:
                 if r_max not in self.S:
                     j = self.S.floor_key(r_max)
                     self.S[r_max] = self.S[j]
-
                 min_overlap = len(X) if self.stop_at_local_mrca else 0
                 # Update the number of extant segments.
                 if self.S[left] == min_overlap:

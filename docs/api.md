@@ -232,12 +232,12 @@ nodes in some situations:
 
 ```{eval-rst}
 .. note::
-    These flags have been deprecated in favour of using 
-    :class:`NodeType<NodeType>`. This is not a breaking change. The 
-    constant associated with each flag remains the same. However, working 
-    with flags should be more intuitive now that we are relying on the 
+    These flags have been deprecated in favour of using
+    :class:`NodeType<NodeType>`. This is not a breaking change. The
+    constant associated with each flag remains the same. However, working
+    with flags should be more intuitive now that we are relying on the
     :class:`python:enum.Flag` functionality.
-```    
+```
 
 ```{data} msprime.NODE_IS_RE_EVENT
 
@@ -261,7 +261,7 @@ adding common ancestor events to the ``additional_nodes`` to be stored.
 
 The node is an ARG migration event identifying the individual that migrated.
 Can be used in combination with the ``record_migrations`` option.
-Present either with the ``record_full_arg`` flag or when adding migration 
+Present either with the ``record_full_arg`` flag or when adding migration
 events to the ``additional_nodes`` to be stored.
 
 ```
@@ -282,9 +282,9 @@ The node was created by a gene conversion event.
 ```{data} msprime.NODE_IS_PASS_THROUGH
 
 The node identifies an ancestral genome/ploid through which the ancestral
-material of only a single lineage passed (so no coalescence or common 
+material of only a single lineage passed (so no coalescence or common
 ancestor event). Can be used in combination with the ``record_migrations`` option.
-Only present when storing pass through events using the 
+Only present when storing pass through events using the
 ``additional_nodes`` option. And only compatible with ``DTWF``
 and ``FixedPedigree`` models.
 
