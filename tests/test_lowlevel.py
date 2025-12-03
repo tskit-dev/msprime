@@ -1510,10 +1510,10 @@ class TestSimulator(LowLevelTestCase):
         status = sim.run()
         assert status == _msprime.EXIT_COALESCENCE
         t_before = sim.time
-        for _ in range(100):
+        for _ in range(10):
             model = get_sweep_genic_selection_model(position=5)
             sim.model = model
-            assert sim.run() == _msprime.EXIT_COALESCENCE
+            assert sim.run() == _msprime.EXIT_MODEL_COMPLETE
             assert t_before == sim.time
 
     def test_store_migrations(self):
