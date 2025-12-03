@@ -2628,7 +2628,7 @@ class TestSimulateInterface:
         # Running simulations with different numbers of labels in the default
         # setting should have no effect.
         tables = [
-            msprime.simulate(10, num_labels=num_labels, random_seed=1).tables
+            msprime.simulate(10, num_labels=num_labels, random_seed=1).dump_tables()
             for num_labels in range(1, 5)
         ]
         for t in tables:
