@@ -151,20 +151,6 @@ out:
     return ret;
 }
 
-static PyObject *
-get_dict_string(PyObject *dict, const char *key_str)
-{
-    PyObject *ret = NULL;
-    PyObject *value;
-    value = get_required_dict_value(dict, key_str);
-    if (value == NULL) {
-        goto out;
-    }
-    ret = value;
-out:
-    return ret;
-}
-
 static int
 parse_rate_map(PyObject *py_rate_map, size_t *ret_size,
         PyArrayObject **ret_position, PyArrayObject **ret_rate)
@@ -1077,34 +1063,33 @@ out:
     return ret;
 }
 
-static int
-Simulator_parse_sweep_genic_selection_reverse_model(Simulator *self, PyObject *py_model)
-{
-    int ret = -1;
-    int err;
-    double position;
-    const char *filename;
-    PyObject *value;
-    value = get_dict_number(py_model, "position");
-    if (value == NULL) {
-        goto out;
-    }
-    position = PyFloat_AsDouble(value);
-    value = get_dict_string(py_model, "filename");
-    if (value == NULL) {
-        goto out;
-    }
-    filename = PyUnicode_AsUTF8(value);
-    err = msp_set_simulation_model_sweep_genic_selection_reverse(self->sim,
-            position, filename);
-    if (err != 0) {
-        handle_input_error("sweep genic selection reverse", err);
-        goto out;
-    }
-    ret = 0;
-out:
-    return ret;
-}
+//static int
+//Simulator_parse_sweep_genic_selection_reverse_model(Simulator *self, PyObject *py_model)
+//{
+//    int ret = -1;
+//    int err;
+//    double position;
+//    const char *filename;
+//    PyObject *value;
+//    value = get_dict_number(py_model, "position");
+//    if (value == NULL) {
+//        goto out;
+//    }
+//    position = PyFloat_AsDouble(value);
+//    value = get_dict_string(py_model, "filename");
+//    if (value == NULL) {
+//        goto out;
+//    }
+//    filename = PyUnicode_AsUTF8(value);
+//    err = msp_set_simulation_model_sweep_genic_selection_reverse(self->sim, double position, size_t num_steps, int num_demes, int tot_pop, double migration_rate, tsk_id_t *mut_pop, tsk_id_t *mut_pop_final, double *t_of_forward_ev, tsk_id_t *ev_type, tsk_id_t *start_deme, tsk_id_t *end_deme);
+//    if (err != 0) {
+//        handle_input_error("sweep genic selection reverse", err);
+//        goto out;
+//    }
+//    ret = 0;
+//out:
+//    return ret;
+//}
 
 static int
 Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
@@ -1296,12 +1281,12 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     if (is_sweep_genic_selection_reverse == -1) {
         goto out;
     }
-    if (is_sweep_genic_selection_reverse) {
-        ret = Simulator_parse_sweep_genic_selection_reverse_model(self, py_model);
-        if (ret != 0) {
-            goto out;
-        }
-    }
+    //if (is_sweep_genic_selection_reverse) {
+    //    ret = Simulator_parse_sweep_genic_selection_reverse_model(self, py_model);
+    //    if (ret != 0) {
+    //        goto out;
+    //    }
+    //}
 
     if (! (is_hudson || is_dtwf || is_smc || is_smc_prime || is_smc_k || is_dirac
                 || is_beta || is_sweep_genic_selection || is_sweep_genic_selection_reverse || is_fixed_pedigree)) {

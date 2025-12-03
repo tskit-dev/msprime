@@ -234,7 +234,16 @@ typedef struct _sweep_t {
 
 typedef struct _sweep_reverse_t {
     double position;
-    const char *filename;
+    size_t num_steps;
+    int num_demes;
+    int tot_pop;
+    double migration_rate;
+    tsk_id_t *mut_pop;
+    tsk_id_t *mut_pop_final;
+    double *t_of_forward_ev;
+    tsk_id_t *ev_type;
+    tsk_id_t *start_deme;
+    tsk_id_t *end_deme;
 } sweep_reverse_t;
 
 typedef struct _simulation_model_t {
@@ -359,7 +368,7 @@ typedef struct {
 /* Arbitrary limit, saves us having to put in complex malloc/free
  * logic in the demographic_events. Can easily be changed if
  * needs be. */
-#define MSP_MAX_EVENT_POPULATIONS 100
+#define MSP_MAX_EVENT_POPULATIONS 500000
 
 typedef struct {
     population_id_t derived[MSP_MAX_EVENT_POPULATIONS];
@@ -498,9 +507,10 @@ int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
 int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
 int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     double start_frequency, double end_frequency, double s, double dt);
-int msp_set_simulation_model_sweep_genic_selection_reverse(
-    msp_t *self, double position, const char *filename);
-
+int msp_set_simulation_model_sweep_genic_selection_reverse(msp_t *self, double position,
+    size_t num_steps, int num_demes, int tot_pop, double migration_rate,
+    tsk_id_t *mut_pop, tsk_id_t *mut_pop_final, double *t_of_forward_ev,
+    tsk_id_t *ev_type, tsk_id_t *start_deme, tsk_id_t *end_deme);
 int msp_set_start_time(msp_t *self, double start_time);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);

@@ -329,8 +329,8 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
     double position = num_loci / 2;
     double s = 10000;
     double recom_rate = 0.0004;
-    double start_frequency = 0.5 / 10000;
-    double end_frequency = 1 - 0.5 / 10000;
+    double start_frequency = 0.5 / 1000;
+    double end_frequency = 1 - 0.5 / 1000;
     double dt = 1.0 / 400000;
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
@@ -371,27 +371,145 @@ sweep_genic_selection_mimic_msms_single_run(unsigned long int seed)
 }
 
 static void
-sweep_genic_selection_reverse_single_run(unsigned long int seed)
+test_sweep_genic_selection_mimic_msms(void)
 {
+    /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
+    for (int i = 0; i < 1; i++) {
+        sweep_genic_selection_mimic_msms_single_run(i + 1);
+    }
+}
 
-    /* Try to mimic the msms parameters used in verification.py
-           "100 300 -t 200 -r 200 500000"
-           " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
-     */
+static void
+verify_sweep_reverse_wm_no_recomb(unsigned long int seed)
+{
     int ret;
-    const char *filename
-        = "/home/aalhadbhatt/Desktop/msprime/notebooks/PyNBmsprime/events.bin";
     uint32_t n = 10;
-    double num_loci = 500001;
-    double position = num_loci / 2;
-    size_t num_demes = 1;
-    double recom_rate = 0.0004;
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
+    int num_demes = 1;
+    tsk_id_t mut_pop[] = { 1001 };
+    int num_events = mut_pop[0] - 1;
+    double *time_of_ev;
+    int *ev_type;
+    int *start_deme;
+    int *end_deme;
+    int r, i;
+    double p;
+
+    tsk_id_t final_mut_pop[] = { 1 };
+
+    gsl_rng_set(rng, seed);
+
+    time_of_ev = (double *) malloc(sizeof(double) * num_events);
+    ev_type = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    end_deme = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    start_deme = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+
+    r = rand() % RAND_MAX;
+    p = (double) r / RAND_MAX;
+    time_of_ev[0] = 1000 - p;
+    ev_type[0] = 0;
+    start_deme[0] = 0;
+    end_deme[0] = 0;
+
+    for (i = 1; i < num_events; i++) {
+        r = rand() % RAND_MAX;
+        p = (double) r / RAND_MAX;
+        time_of_ev[i] = time_of_ev[i - 1] - p;
+        ev_type[i] = 0;
+        start_deme[i] = 0;
+        end_deme[i] = 0;
+    }
+
+    ret = build_sim(&msp, &tables, rng, 1.0, num_demes, NULL, n);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = msp_set_num_labels(&msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    msp_set_discrete_genome(&msp, 0);
+    msp_set_gene_conversion_rate(&msp, 0);
+    msp_set_gene_conversion_tract_length(&msp, 1);
+    msp_set_avl_node_block_size(&msp, 65536);
+    msp_set_node_mapping_block_size(&msp, 65536);
+    msp_set_segment_block_size(&msp, 65536);
+
+    ret = msp_set_simulation_model_sweep_genic_selection_reverse(&msp, 0.5, num_events,
+        num_demes, num_events + 1, 0.0, mut_pop, final_mut_pop, time_of_ev, ev_type,
+        start_deme, end_deme);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
+
+    msp_verify(&msp, 0);
+
+    free(time_of_ev);
+    free(ev_type);
+    free(start_deme);
+    free(end_deme);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
+test_sweep_reverse_wm_no_recomb(void)
+{
+    /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
+    for (int i = 0; i < 300; i++) {
+        verify_sweep_reverse_wm_no_recomb(i + 256329651209);
+    }
+}
+
+static void
+verify_sweep_reverse_wm(unsigned long int seed)
+{
+    int ret;
+    uint32_t n = 10;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    tsk_id_t mut_pop[] = { 10001 };
+    int num_events = mut_pop[0] - 1;
+    int num_demes = 1;
+    double *time_of_ev;
+    int *ev_type;
+    int *start_deme;
+    int *end_deme;
+    int r, i;
+    double p;
+    double num_loci = 5001;
+    double position = num_loci / 2;
+    double recom_rate = 0.00004;
+    tsk_id_t final_mut_pop[] = { 1 };
+
+    time_of_ev = (double *) malloc(sizeof(double) * num_events);
+    ev_type = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    end_deme = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    start_deme = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
 
     // Test over differnt seeds
     gsl_rng_set(rng, seed);
+
+    r = rand() % RAND_MAX;
+    p = (double) r / RAND_MAX;
+    time_of_ev[0] = num_events - p;
+    ev_type[0] = 0;
+    start_deme[0] = 0;
+    end_deme[0] = 0;
+
+    for (i = 1; i < num_events; i++) {
+        r = rand() % RAND_MAX;
+        p = (double) r / RAND_MAX;
+        time_of_ev[i] = time_of_ev[i - 1] - p;
+        ev_type[i] = 0;
+        start_deme[i] = 0;
+        end_deme[i] = 0;
+    }
 
     ret = build_sim(&msp, &tables, rng, num_loci, num_demes, NULL, n);
     CU_ASSERT_EQUAL(ret, 0);
@@ -407,39 +525,431 @@ sweep_genic_selection_reverse_single_run(unsigned long int seed)
     msp_set_node_mapping_block_size(&msp, 65536);
     msp_set_segment_block_size(&msp, 65536);
 
-    ret = msp_set_simulation_model_sweep_genic_selection_reverse(
-        &msp, position, filename);
-    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_simulation_model_sweep_genic_selection_reverse(&msp, position,
+        num_events, num_demes, num_events + 1, 0.0, mut_pop, final_mut_pop, time_of_ev,
+        ev_type, start_deme, end_deme);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_initialise(&msp);
-    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
     CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
 
     msp_verify(&msp, 0);
 
+    free(time_of_ev);
+    free(ev_type);
+    free(start_deme);
+    free(end_deme);
     msp_free(&msp);
-    gsl_rng_free(rng);
-    // free(samples);
     tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
 }
 
 static void
-test_sweep_genic_selection_mimic_msms(void)
+test_sweep_reverse_wm(void)
 {
     /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
     for (int i = 0; i < 300; i++) {
-        sweep_genic_selection_mimic_msms_single_run(i + 1);
+        verify_sweep_reverse_wm(i + 6584367292);
     }
 }
 
 static void
-test_sweep_genic_selection_reverse(void)
+verify_sweep_reverse_wm_back_and_forth(unsigned long int seed)
+{
+    int ret;
+    uint32_t n = 10;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    tsk_id_t mut_pop[] = { 101 };
+    int num_events = 3 * mut_pop[0] - 5;
+    int num_demes = 1;
+    double *time_of_ev;
+    int *ev_type;
+    int *start_deme;
+    int *end_deme;
+    int r, i;
+    double p;
+    double num_loci = 5001;
+    double position = num_loci / 2;
+    double recom_rate = 0.000004;
+    tsk_id_t final_mut_pop[] = { 1 };
+
+    gsl_rng_set(rng, seed);
+
+    time_of_ev = (double *) malloc(sizeof(double) * num_events);
+    ev_type = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    end_deme = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    start_deme = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+
+    r = rand() % RAND_MAX;
+    p = (double) r / RAND_MAX;
+    time_of_ev[0] = num_events - p;
+    ev_type[0] = 0;
+    start_deme[0] = 0;
+    end_deme[0] = 0;
+
+    for (i = 1; i < num_events; i++) {
+        r = rand() % RAND_MAX;
+        p = (double) r / RAND_MAX;
+        time_of_ev[i] = time_of_ev[i - 1] - p;
+        if (i % 3 == 2) {
+            ev_type[i] = 1;
+        } else {
+            ev_type[i] = 0;
+        }
+        start_deme[i] = 0;
+        end_deme[i] = 0;
+    }
+
+    ret = build_sim(&msp, &tables, rng, num_loci, num_demes, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, recom_rate), 0);
+    ret = msp_set_num_labels(&msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    msp_set_discrete_genome(&msp, 0);
+    msp_set_gene_conversion_rate(&msp, 0);
+    msp_set_gene_conversion_tract_length(&msp, 1);
+    msp_set_avl_node_block_size(&msp, 65536);
+    msp_set_node_mapping_block_size(&msp, 65536);
+    msp_set_segment_block_size(&msp, 65536);
+
+    ret = msp_set_simulation_model_sweep_genic_selection_reverse(&msp, position,
+        num_events, num_demes, mut_pop[0], 0.0, mut_pop, final_mut_pop, time_of_ev,
+        ev_type, start_deme, end_deme);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
+
+    msp_verify(&msp, 0);
+
+    free(time_of_ev);
+    free(ev_type);
+    free(start_deme);
+    free(end_deme);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
+test_sweep_reverse_wm_back_and_forth(void)
 {
     /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
-    for (int i = 0; i < 300; i++)
-        sweep_genic_selection_reverse_single_run(i + 1);
+    for (int i = 0; i < 300; i++) {
+        verify_sweep_reverse_wm_back_and_forth(i + 462523296209);
+    }
+}
+
+static void
+verify_sweep_reverse_wm_oscillating(unsigned long int seed)
+{
+    int ret;
+    uint32_t n = 10;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    tsk_id_t mut_pop[] = { 1001 };
+    int num_events = 3 * mut_pop[0] - 9;
+    int num_demes = 1;
+    double *time_of_ev;
+    int *ev_type;
+    int *start_deme;
+    int *end_deme;
+    int r, i;
+    double p;
+    double num_loci = 5001;
+    double position = num_loci / 2;
+    double recom_rate = 0.00004;
+    tsk_id_t final_mut_pop[] = { 1 };
+
+    gsl_rng_set(rng, seed);
+
+    time_of_ev = (double *) malloc(sizeof(double) * num_events);
+    ev_type = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    end_deme = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    start_deme = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+
+    r = rand() % RAND_MAX;
+    p = (double) r / RAND_MAX;
+    time_of_ev[0] = num_events - p;
+    ev_type[0] = 0;
+    start_deme[0] = 0;
+    end_deme[0] = 0;
+
+    for (i = 1; i < num_events; i++) {
+        r = rand() % RAND_MAX;
+        p = (double) r / RAND_MAX;
+        time_of_ev[i] = time_of_ev[i - 1] - p;
+        if ((i < 2 * mut_pop[0] - 6) && (i > mut_pop[0] - 3)) {
+            ev_type[i] = 1;
+        } else {
+            ev_type[i] = 0;
+        }
+        start_deme[i] = 0;
+        end_deme[i] = 0;
+    }
+
+    ret = build_sim(&msp, &tables, rng, num_loci, num_demes, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, recom_rate), 0);
+    ret = msp_set_num_labels(&msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    msp_set_discrete_genome(&msp, 0);
+    msp_set_gene_conversion_rate(&msp, 0);
+    msp_set_gene_conversion_tract_length(&msp, 1);
+    msp_set_avl_node_block_size(&msp, 65536);
+    msp_set_node_mapping_block_size(&msp, 65536);
+    msp_set_segment_block_size(&msp, 65536);
+
+    ret = msp_set_simulation_model_sweep_genic_selection_reverse(&msp, position,
+        num_events, num_demes, mut_pop[0], 0.0, mut_pop, final_mut_pop, time_of_ev,
+        ev_type, start_deme, end_deme);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
+
+    msp_verify(&msp, 0);
+
+    free(time_of_ev);
+    free(ev_type);
+    free(start_deme);
+    free(end_deme);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
+test_sweep_reverse_wm_oscillating(void)
+{
+    /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
+    for (int i = 0; i < 300; i++) {
+        verify_sweep_reverse_wm_oscillating(i + 462941996216);
+    }
+}
+
+static void
+verify_sweep_reverse_wm_sudden_drop(unsigned long int seed)
+{
+    int ret;
+    uint32_t n = 10;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    tsk_id_t mut_pop[] = { 10001 };
+    int num_events = mut_pop[0] - 1;
+    int num_demes = 1;
+    double *time_of_ev;
+    int *ev_type;
+    int *start_deme;
+    int *end_deme;
+    int r, i;
+    double p;
+    double num_loci = 5001;
+    double position = num_loci / 2;
+    double recom_rate = 0.0004;
+    tsk_id_t final_mut_pop[] = { 1 };
+
+    time_of_ev = (double *) malloc(sizeof(double) * num_events);
+    ev_type = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    end_deme = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    start_deme = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+
+    // Test over differnt seeds
+    gsl_rng_set(rng, seed);
+
+    r = rand() % RAND_MAX;
+    p = (double) r / RAND_MAX;
+    time_of_ev[0] = num_events - p / 10000;
+    ev_type[0] = 0;
+    start_deme[0] = 0;
+    end_deme[0] = 0;
+
+    for (i = 1; i < num_events; i++) {
+        r = rand() % RAND_MAX;
+        p = (double) r / RAND_MAX;
+        time_of_ev[i] = time_of_ev[i - 1] - p / 10000;
+        ev_type[i] = 0;
+        start_deme[i] = 0;
+        end_deme[i] = 0;
+    }
+
+    ret = build_sim(&msp, &tables, rng, num_loci, num_demes, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, recom_rate), 0);
+    ret = msp_set_num_labels(&msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    // To mimic the verfication.py call
+    msp_set_discrete_genome(&msp, 0);
+    msp_set_gene_conversion_rate(&msp, 0);
+    msp_set_gene_conversion_tract_length(&msp, 1);
+    msp_set_avl_node_block_size(&msp, 65536);
+    msp_set_node_mapping_block_size(&msp, 65536);
+    msp_set_segment_block_size(&msp, 65536);
+
+    ret = msp_set_simulation_model_sweep_genic_selection_reverse(&msp, position,
+        num_events, num_demes, num_events + 1, 0.0, mut_pop, final_mut_pop, time_of_ev,
+        ev_type, start_deme, end_deme);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
+
+    msp_verify(&msp, 0);
+
+    free(time_of_ev);
+    free(ev_type);
+    free(start_deme);
+    free(end_deme);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
+test_sweep_reverse_wm_sudden_drop(void)
+{
+    /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
+    for (int i = 0; i < 300; i++) {
+        verify_sweep_reverse_wm_sudden_drop(i + 6584367292);
+    }
+}
+
+static void
+verify_sweep_reverse_1D_deme_wise(unsigned long int seed)
+{
+    int ret;
+    uint32_t n = 10;
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+    tsk_id_t *mut_pop;
+    tsk_id_t tot_pop = 100;
+    int num_demes = 10;
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    int num_events = num_demes * tot_pop - 1;
+    double migration_rate = 0.25;
+    size_t deme_index;
+    double *time_of_ev;
+    int *ev_type;
+    int *start_deme;
+    int *end_deme;
+    int r, i;
+    double p;
+    double num_loci = 5001;
+    double position = num_loci / 2;
+    double recom_rate = 0.00004;
+    tsk_id_t *final_mut_pop;
+
+    time_of_ev = (double *) malloc(sizeof(double) * num_events);
+    ev_type = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    end_deme = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    start_deme = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_events);
+    mut_pop = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_demes);
+    final_mut_pop = (tsk_id_t *) malloc(sizeof(tsk_id_t) * num_demes);
+
+    for (i = 0; i < n; i++) {
+        samples[i].time = 0;
+        samples[i].population = i % num_demes;
+    }
+
+    for (i = 0; i < num_demes; i++) {
+        mut_pop[i] = tot_pop;
+        final_mut_pop[i] = 0;
+    }
+    final_mut_pop[0] = 1;
+
+    // Test over differnt seeds
+    gsl_rng_set(rng, seed);
+
+    r = rand() % RAND_MAX;
+    p = (double) r / RAND_MAX;
+    time_of_ev[0] = num_events - p;
+    ev_type[0] = 0;
+    deme_index = num_demes - 1;
+    start_deme[0] = deme_index;
+    end_deme[0] = deme_index;
+
+    for (i = 1; i < num_events; i++) {
+        r = rand() % RAND_MAX;
+        p = (double) r / RAND_MAX;
+        time_of_ev[i] = time_of_ev[i - 1] - p;
+        if (i % tot_pop == (tot_pop - 1)) {
+            ev_type[i] = 2;
+            end_deme[i] = deme_index - 1;
+            start_deme[i] = deme_index;
+            deme_index -= 1;
+        } else {
+            ev_type[i] = 0;
+            start_deme[i] = deme_index;
+            end_deme[i] = deme_index;
+        }
+    }
+
+    ret = build_sim(&msp, &tables, rng, num_loci, num_demes, samples, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(msp_set_recombination_rate(&msp, recom_rate), 0);
+    ret = msp_set_num_labels(&msp, 2);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    // To mimic the verfication.py call
+    msp_set_discrete_genome(&msp, 0);
+    msp_set_gene_conversion_rate(&msp, 0);
+    msp_set_gene_conversion_tract_length(&msp, 1);
+    msp_set_avl_node_block_size(&msp, 65536);
+    msp_set_node_mapping_block_size(&msp, 65536);
+    msp_set_segment_block_size(&msp, 65536);
+
+    ret = msp_set_simulation_model_sweep_genic_selection_reverse(&msp, position,
+        num_events, num_demes, num_events + 1, migration_rate, mut_pop, final_mut_pop,
+        time_of_ev, ev_type, start_deme, end_deme);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MODEL_COMPLETE);
+
+    msp_verify(&msp, 0);
+
+    free(time_of_ev);
+    free(ev_type);
+    free(start_deme);
+    free(end_deme);
+    free(mut_pop);
+    free(final_mut_pop);
+    free(samples);
+    msp_free(&msp);
+    tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
+test_sweep_reverse_1D_deme_wise(void)
+{
+    /* To mimic the nrepeats = 300  parameter in msms cmdline arguments*/
+    for (int i = 0; i < 300; i++) {
+        verify_sweep_reverse_1D_deme_wise(i + 6584367292);
+    }
 }
 
 int
@@ -448,17 +958,27 @@ main(int argc, char **argv)
     CU_TestInfo tests[] = {
         { "test_genic_selection_trajectory", test_genic_selection_trajectory },
         { "test_sweep_genic_selection_bad_parameters",
-            test_sweep_genic_selection_bad_parameters },
+         test_sweep_genic_selection_bad_parameters },
         { "test_sweep_genic_selection_events", test_sweep_genic_selection_events },
         { "test_sweep_genic_selection_single_locus",
-            test_sweep_genic_selection_single_locus },
+         test_sweep_genic_selection_single_locus },
         { "test_sweep_genic_selection_recomb", test_sweep_genic_selection_recomb },
         { "test_sweep_genic_selection_gc", test_sweep_genic_selection_gc },
         { "test_sweep_genic_selection_time_change",
-            test_sweep_genic_selection_time_change },
+         test_sweep_genic_selection_time_change },
         { "test_sweep_genic_selection_mimic_msms",
             test_sweep_genic_selection_mimic_msms },
-        { "test_sweep_genic_selection_reverse", test_sweep_genic_selection_reverse },
+        { "test_sweep_reverse_wm_no_recomb",
+            test_sweep_reverse_wm_no_recomb },
+        { "test_sweep_reverse_wm",
+            test_sweep_reverse_wm },
+        { "test_sweep_reverse_wm_back_and_forth",
+            test_sweep_reverse_wm_back_and_forth },
+        { "test_sweep_reverse_wm_oscillating",
+            test_sweep_reverse_wm_oscillating },
+        { "test_sweep_reverse_wm_sudden_drop",
+            test_sweep_reverse_wm_sudden_drop },
+        { "test_sweep_reverse_1D_deme_wise", test_sweep_reverse_1D_deme_wise },
         CU_TEST_INFO_NULL,
     };
 
