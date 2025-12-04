@@ -28,7 +28,7 @@ available for learning about {program}`tskit` and {program}`msprime`:
 
   - For a formal introduction to tree sequences and how they represent
     ancestral recombination graphs,
-  see the [2024 Genetics paper](https://doi.org/10.1093/genetics/iyae100).
+    see the [2024 Genetics paper](https://doi.org/10.1093/genetics/iyae100).
 
 - Our [Discussions board](https://github.com/tskit-dev/msprime/discussions)
   is a great place to ask questions like "how do I do X" or "what's the best
