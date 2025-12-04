@@ -26,6 +26,10 @@ available for learning about {program}`tskit` and {program}`msprime`:
   examples of how to {ref}`analyse<tutorials:sec_analysing_tree_sequences>`
   simulated {program}`tskit` tree sequences.
 
+  - For a formal introduction to tree sequences and how they represent
+    ancestral recombination graphs,
+    see the [2024 Genetics paper](https://doi.org/10.1093/genetics/iyae100).
+
 - Our [Discussions board](https://github.com/tskit-dev/msprime/discussions)
   is a great place to ask questions like "how do I do X" or "what's the best
   way to do Y". Please make questions as clear as possible, and be respectful,
@@ -44,6 +48,9 @@ available for learning about {program}`tskit` and {program}`msprime`:
   [2016 PLoS Computational Biology paper](https://doi.org/10.1371/journal.pcbi.1004842).
   For more information on the {ref}`sec_ancestry_models_dtwf` model,
   please see the [2020 PLoS Genetics paper](https://doi.org/10.1371/journal.pgen.1008619).
+  For a formal introduction to recent capabilities, see the
+  [2022 Genetics paper](https://doi.org/10.1093/genetics/iyab229)
+  describing the {program}`msprime` 1.0 release.
 
 ```{important}
 If you use {program}`msprime` in your work, please remember to

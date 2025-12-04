@@ -3,30 +3,21 @@ name: Tests
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, test]
+  merge_group:
 
 jobs:
   pre-commit:
     name: Lint
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.12.1
-        with:
-          access_token: ${{ github.token }}
-      - uses: actions/checkout@v4.2.2
-      - uses: actions/setup-python@v5.4.0
-      - name: install clang-format
-        run: |
-          pip install clang-format==6.0.1
-      - uses: pre-commit/action@v3.0.1
+    uses: tskit-dev/.github/.github/workflows/lint.yml@v2
 
   test:
     name: Python
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        python: [ 3.9, 3.13 ]
+        python: [ "3.10", 3.13 ]
         os:  [ macos-latest, ubuntu-24.04, windows-latest ]
     defaults:
       run:
@@ -42,22 +33,10 @@ jobs:
         with:
           submodules: true
 
-      - name: Cache conda and dependencies
-        id: cache
-        uses: actions/cache@v4.2.2
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5.4.0
         with:
-          path: ${{ env.CONDA }}/envs
-          key: ${{ runner.os }}-${{ runner.arch }}-${{ matrix.python}}-conda-v2-${{ hashFiles('requirements/CI-tests-conda/requirements.txt') }}-${{ hashFiles('requirements/CI-tests-pip/requirements.txt') }}
-
-      - name: Install Conda
-        uses: conda-incubator/setup-miniconda@v3.1.1
-        if: steps.cache.outputs.cache-hit != 'true'
-        with:
-          activate-environment: anaconda-client-env
-          python-version: ${{ matrix.python }}
-          channels: conda-forge, anaconda
-          channel-priority: strict
-          auto-update-conda: true
+          python-version: "${{ matrix.python }}"
 
       - name: Fix windows symlinks
         # This is horrible, but the "git config core.symlinks true" didn't work.
@@ -66,33 +45,40 @@ jobs:
           rm lwt_interface
           cp -r --dereference git-submodules/tskit/python/lwt_interface ./lwt_interface
 
-      - name: Fix windows .profile
-        if: steps.cache.outputs.cache-hit != 'true' && matrix.os == 'windows-latest'
+      - name: Install GSL (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install gsl
+        
+      - name: Install GSL (Windows)
+        if: matrix.os == 'windows-latest'
         run: |
-          cp ~/.bash_profile ~/.profile
+          vcpkg install gsl:x64-windows
+          # Add GSL DLL directory to PATH for runtime
+          $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $vcpkgRoot) { $vcpkgRoot = "C:\vcpkg" }
+          $gslBinPath = Join-Path $vcpkgRoot "installed\x64-windows\bin"
+          echo "$gslBinPath" >> $env:GITHUB_PATH
+          Write-Output "Added to PATH: $gslBinPath"
+        shell: powershell
 
-      - name: Install conda deps
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: bash -l {0} #We need a login shell to get conda
-        run: conda install --yes --file=requirements/CI-tests-conda/requirements.txt
-
+      - name: Install GSL (Ubuntu)
+        if: matrix.os == 'ubuntu-24.04'
+        run: sudo apt-get update && sudo apt-get install -y libgsl-dev
+      
       - name: Install pip deps
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: bash -l {0}
         run: | 
-          pip install -r requirements/CI-tests-pip/requirements.txt
-          pip uninstall -y msprime
+          pip install uv
+          uv pip install --system -r pyproject.toml --extra test
 
       - name: Build module
-        env:
-          MSP_CONDA_PREFIX: c:\Miniconda\envs\anaconda-client-env
         run: |
-          source ~/.profile
-          conda activate anaconda-client-env
           python setup.py build_ext --inplace
+
+      - name: Fix windows gsl dlls
+        if: matrix.os == 'windows-latest'
+        run: |
+          cp /c/vcpkg/installed/x64-windows/bin/gsl*.dll msprime/
 
       - name: Run tests
         run: |
-          source ~/.profile
-          conda activate anaconda-client-env
           pytest -xvs -n0

@@ -10,6 +10,10 @@
 
 - Add support and wheels for Python3.13
 
+- Drop Python 3.9 support, require Python >= 3.10 ({pr}`2418`, {user}`benjeffery`)
+
+- Add wheels on Windows ({pr}`2414`, {issue}`2200`,{user}`benjeffery`)
+
 **Breaking changes**:
 
 - The `.asdict()` methods for Demography, Population, and Event classes in the

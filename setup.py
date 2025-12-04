@@ -38,6 +38,22 @@ class PathConfigurator:
         return subprocess.check_output(args, text=True)
 
     def _configure_gsl(self):
+        # Try vcpkg on Windows first
+        if IS_WINDOWS:
+            vcpkg_root = os.getenv("VCPKG_ROOT")
+            if vcpkg_root is None:
+                vcpkg_root = os.getenv("VCPKG_INSTALLATION_ROOT")
+            if vcpkg_root and os.path.exists(vcpkg_root):
+                gsl_include = os.path.join(
+                    vcpkg_root, "installed", "x64-windows", "include"
+                )
+                gsl_lib = os.path.join(vcpkg_root, "installed", "x64-windows", "lib")
+                if os.path.exists(gsl_include) and os.path.exists(gsl_lib):
+                    self.include_dirs.append(gsl_include)
+                    self.library_dirs.append(gsl_lib)
+                    return
+
+        # Fallback to gsl-config on Unix-like systems
         output = self._run_command(["gsl-config", "--cflags"]).split()
         if len(output) > 0:
             token = output[0]
@@ -66,7 +82,7 @@ def get_extension():
         "mutgen.c",
         "likelihood.c",
     ]
-    tsk_source_files = ["core.c", "tables.c", "trees.c"]
+    tsk_source_files = ["core.c", "tables.c", "trees.c", "genotypes.c"]
     kas_source_files = ["kastore.c"]
 
     sources = (

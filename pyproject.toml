@@ -5,13 +5,12 @@ authors = [
 ]
 description = "Simulate genealogical trees and genomic sequence data using population genetic models"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {text = "GNU GPLv3+"}
 classifiers = [
     "Programming Language :: C",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -68,6 +67,92 @@ include-package-data = true
 
 [tool.setuptools_scm]
 write_to = "msprime/_version.py"
+
+[project.optional-dependencies]
+test = [
+    "bintrees==2.2.0",
+    "build==1.3.0",
+    "daiquiri==3.2.5.1; python_version<='3.9'",
+    "daiquiri==3.3.0; python_version>'3.9'",
+    "demes==0.2.3",
+    "kastore==0.3.3",
+    "meson==1.9.0",
+    "newick==1.10.0",
+    "pytest==8.4.1",
+    "pytest-cov==6.2.1",
+    "pytest-xdist==3.8.0",
+    "python_jsonschema_objects==0.5.7",
+    "setuptools==80.9.0",
+    "scipy==1.13.1; python_version<='3.10'",
+    "scipy==1.16.1; python_version>'3.10'",
+    "tskit==0.6.4",
+    "twine==6.2.0"
+]
+
+docs = [
+    "daiquiri==3.3.0",
+    "demes==0.2.3",
+    "demesdraw==0.4.0",
+    "jupyter-book==1.0.4.post1",
+    "networkx==3.5",
+    "matplotlib==3.10.3",
+    "newick==1.10.0",
+    "setuptools==80.9.0",
+    "sphinx-argparse==0.5.2",
+    "sphinx-book-theme",
+    "sphinx-issues==5.0.1",
+    "tskit==0.6.4",
+    "scipy==1.16.1"
+]
+
+dev = [
+    "docutils==0.21.2",
+    "asv==0.6.1",
+    "bintrees",
+    "coverage",
+    "daiquiri",
+    "demes>=0.2.0",
+    "demesdraw",
+    "flake8",
+    "matplotlib>=3.4.0",
+    "meson>=0.61.0",
+    "mock",
+    "mypy",
+    "ninja",
+    "numpy",
+    "pre-commit",
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+    "tskit>=0.5.2",
+    "kastore",
+    "sphinx-book-theme",
+    "scipy",
+    "setuptools_scm",
+    "sphinx>=4.4",
+    "sphinx-argparse",
+    "sphinx-issues",
+    "jupyter-book",
+    "networkx",
+    "newick>=1.3.0",
+    "python_jsonschema_objects"
+]
+
+verification = [
+    "dendropy",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "pyvolve",
+    "scipy==1.2",
+    "scikit-allel",
+    "statsmodels",
+    "seaborn",
+    "tqdm",
+    "argparse",
+    "daiquiri",
+    "pyslim>=1.0"
+]
 
 [tool.pytest.ini_options]
 addopts = "-n 4"
