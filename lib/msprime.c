@@ -329,6 +329,13 @@ out:
 }
 
 int
+msp_set_stop_at_local_mrca(msp_t *self, bool stop_at_local_mrca)
+{
+    self->stop_at_local_mrca = stop_at_local_mrca;
+    return 0;
+}
+
+int
 msp_set_discrete_genome(msp_t *self, bool is_discrete)
 {
     self->discrete_genome = is_discrete;
@@ -1030,6 +1037,7 @@ msp_alloc(msp_t *self, tsk_table_collection_t *tables, gsl_rng *rng)
     self->store_migrations = false;
     self->additional_nodes = 0;
     self->coalescing_segments_only = true;
+    self->stop_at_local_mrca = true;
     self->avl_node_block_size = 1024;
     self->node_mapping_block_size = 1024;
     self->segment_block_size = 1024;
@@ -1096,17 +1104,6 @@ msp_alloc_memory_blocks(msp_t *self)
     ret = 0;
 out:
     return ret;
-}
-
-/*
- * Returns true if the simulation has completed.
- */
-int
-msp_is_completed(msp_t *self)
-{
-    size_t n = msp_get_num_ancestors(self);
-
-    return self->state == MSP_STATE_SIMULATING && n == 0;
 }
 
 int
@@ -3777,6 +3774,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
     bool defrag_required = false;
     tsk_id_t v;
     double l, r, l_min, r_max;
+    uint32_t min_overlap = self->stop_at_local_mrca ? 2 : 0;
     avl_node_t *node;
     node_mapping_t *nm, search;
     segment_t *x, *y, *z, *alpha, *beta;
@@ -3862,7 +3860,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                 node = avl_search(&self->overlap_counts, &search);
                 tsk_bug_assert(node != NULL);
                 nm = (node_mapping_t *) node->item;
-                if (nm->value == 2) {
+                if (nm->value == min_overlap) {
                     nm->value = 0;
                     node = node->next;
                     tsk_bug_assert(node != NULL);
@@ -3870,7 +3868,7 @@ msp_merge_two_ancestors(msp_t *self, population_id_t population_id, label_id_t l
                     r = nm->position;
                 } else {
                     r = l;
-                    while (nm->value != 2 && r < r_max) {
+                    while (nm->value != min_overlap && r < r_max) {
                         nm->value--;
                         node = node->next;
                         tsk_bug_assert(node != NULL);
@@ -3981,7 +3979,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
     int ret = MSP_ERR_GENERIC;
     bool coalescence = false;
     bool defrag_required = false;
-    uint32_t j, h;
+    uint32_t j, h, min_overlap;
     double l, r, r_max, next_l, l_min;
     avl_node_t *node;
     node_mapping_t *nm, search;
@@ -4072,7 +4070,8 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
             node = avl_search(&self->overlap_counts, &search);
             tsk_bug_assert(node != NULL);
             nm = (node_mapping_t *) node->item;
-            if (nm->value == h) {
+            min_overlap = self->stop_at_local_mrca ? h : 0;
+            if (nm->value == min_overlap) {
                 nm->value = 0;
                 node = node->next;
                 tsk_bug_assert(node != NULL);
@@ -4080,7 +4079,7 @@ msp_merge_ancestors(msp_t *self, avl_tree_t *Q, population_id_t population_id,
                 r = nm->position;
             } else {
                 r = l;
-                while (nm->value != h && r < r_max) {
+                while (nm->value != min_overlap && r < r_max) {
                     nm->value -= h - 1;
                     node = node->next;
                     tsk_bug_assert(node != NULL);
@@ -5119,7 +5118,7 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
 
-    while (msp_get_num_ancestors(self) > 0) {
+    while (!msp_is_completed(self)) {
         if (events == max_events) {
             ret = MSP_EXIT_MAX_EVENTS;
             break;
@@ -5405,7 +5404,7 @@ msp_run_pedigree(msp_t *self, double max_time, unsigned long max_events)
         pedigree->next_individual++;
         num_events++;
     }
-    if (msp_get_num_ancestors(self) == 0) {
+    if (msp_is_completed(self) && self->stop_at_local_mrca) {
         ret = MSP_EXIT_COALESCENCE;
     } else if (pedigree->next_individual == num_individuals) {
         ret = MSP_EXIT_MODEL_COMPLETE;
@@ -5638,7 +5637,7 @@ msp_run_dtwf(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
 
-    while (msp_get_num_ancestors(self) > 0) {
+    while (!msp_is_completed(self)) {
         if (events == max_events) {
             ret = MSP_EXIT_MAX_EVENTS;
             break;
@@ -5942,7 +5941,7 @@ msp_run_sweep(msp_t *self)
     }
 
     curr_step = 1;
-    while (msp_get_num_ancestors(self) > 0 && curr_step < num_steps) {
+    while (curr_step < num_steps && !msp_is_completed(self)) {
         events++;
         /* Set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
@@ -6082,11 +6081,7 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
         goto out;
     }
 
-    if (msp_is_completed(self)) {
-        /* If the simulation is completed, run() is a no-op for
-         * all models. */
-        ret = 0;
-    } else if (self->model.type == MSP_MODEL_DTWF) {
+    if (self->model.type == MSP_MODEL_DTWF) {
         ret = msp_run_dtwf(self, max_time, max_events);
     } else if (self->model.type == MSP_MODEL_WF_PED) {
         ret = msp_run_pedigree(self, max_time, max_events);
@@ -6206,7 +6201,7 @@ msp_finalise_tables(msp_t *self)
     tsk_bookmark_t bookmark;
 
     /* We don't want to add unary edges for the pedigree simulation model */
-    if (!msp_is_completed(self) && self->model.type != MSP_MODEL_WF_PED) {
+    if (self->model.type != MSP_MODEL_WF_PED) {
         ret = msp_insert_uncoalesced_edges(self);
         if (ret != 0) {
             goto out;
@@ -6505,6 +6500,36 @@ double
 msp_get_time(msp_t *self)
 {
     return self->time;
+}
+
+/*
+ * Returns true if the simulation has completed.
+ */
+int
+msp_is_completed(msp_t *self)
+{
+    bool completed;
+    avl_node_t *node;
+    node_mapping_t *nm;
+
+    if (self->stop_at_local_mrca) {
+        /* When we stop at the local MRCA we have a cheap way of testing for completion
+         */
+        completed = msp_get_num_ancestors(self) == 0;
+    } else {
+        /* When we simulate ancestry after local roots, we have to look at the overlap
+         * counts to find when we've coalesced.
+         */
+        completed = true;
+        for (node = self->overlap_counts.head; node->next != NULL; node = node->next) {
+            nm = (node_mapping_t *) node->item;
+            if (nm->value > 1) {
+                completed = false;
+                break;
+            }
+        }
+    }
+    return self->state == MSP_STATE_SIMULATING && completed;
 }
 
 /* Demographic events. All times and input parameters are specified in units
@@ -8042,9 +8067,11 @@ msp_beta_common_ancestor_event(msp_t *self, population_id_t pop_id, label_id_t l
          * merged.
          */
         for (j = 0; j < num_parental_copies; j++) {
-            ret = msp_merge_ancestors(self, &Q[j], pop_id, label, TSK_NULL, NULL);
-            if (ret < 0) {
-                goto out;
+            if (avl_count(&Q[j]) > 0) {
+                ret = msp_merge_ancestors(self, &Q[j], pop_id, label, TSK_NULL, NULL);
+                if (ret < 0) {
+                    goto out;
+                }
             }
         }
     }

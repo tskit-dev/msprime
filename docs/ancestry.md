@@ -1129,6 +1129,7 @@ However, if `coalescing_segments_only=False`, then the edges recorded
 would be from `m` to `p` over the entire segment `[a, b)`, and from `n` to `p` over the entire segment `[c,d)`.
 The nodes `m` and `n` coalesce (in `p`) on only the overlapping segment `[c,b)`, and so the node `p` will be a unary node in the flanking regions: above `m` on the segment `[a,c)` and above `n` on the segment `[b,d)`.
 
+
 (sec_additional_nodes_ca)=
 
 ### Common ancestor events
@@ -1480,6 +1481,38 @@ Migrations nodes are also recorded in the ARG using the
 `NodeType.MIGRANT` flag. See the {ref}`sec_api_node_flags`
 section for more details.
 
+(sec_ancestry_stop_at_local_mrca)=
+
+### Simulating ancestral to local MRCAs
+
+By default, msprime stops simulating local trees when a local most recent
+common ancestor (MRCA) is found. This is because events that occur above the
+common ancestor are shared across all samples, and we are usually interested in
+differences between samples. However, it is sometime useful to simulate ancestry
+across the full span of the region until **all** local MRCAs have been reached.
+To do this, we set the parameter `stop_at_local_mrca` of
+{func}`.sim_ancestry` to `False`.
+
+```{code-cell}
+ts = msprime.sim_ancestry(
+    2, recombination_rate=0.1, sequence_length=10, random_seed=75,
+    stop_at_local_mrca=False, record_full_arg=True)
+ts.draw_svg(time_scale='rank')
+```
+
+In this example we've continued the simulation *after* we've found roots for the local
+trees, and we can see, for example, that node 14 is still the ancestor of 11
+in the rightmost tree. This would be not recorded with the default ``stop_at_local_mrca=False``
+because 11 is the root of that tree.
+
+The stopping condition remains the same---we keep simulating until an MRCA has been
+found at *all* local trees. The interpretation of the the final "root" nodes
+across the trees is a little subtle, and follows the same logic as used when
+{ref}`sec_ancestry_end_time`. All of the trees have a root node with time
+equal to the oldest MRCA, and the nodes correspond to different lineages present
+in the simulation.
+
+
 ## Manipulating simulation time
 
 (sec_ancestry_end_time)=
@@ -1493,7 +1526,7 @@ for two diploid samples:
 
 ```{code-cell}
 ts = msprime.sim_ancestry(2, sequence_length=10, recombination_rate=0.1, random_seed=42)
-SVG(ts.draw_svg(y_axis=True, y_ticks=[0, 1, 2, 3, 4, 5]))
+SVG(ts.draw_svg(y_axis=True, y_ticks=[0, 1, 2, 3, 4]))
 ```
 
 Sometimes we would like to stop the simulation early, **before** complete
@@ -2780,6 +2813,39 @@ Because the input pedigree fully describes the simulation many features such as
 combined with other {ref}`ancestry models<sec_ancestry_models>`.
 :::
 
+(sec_ancestry_models_fixed_pedigree_tracing)=
+
+#### Tracing ancestry through a pedigree
+
+The previous example generated trees that are embedded within the pedigree,
+but doesn't tell us directly the exact path that each sample's genetic
+material took through the ancestors. To trace these paths exactly, we can
+use a combination of the ``additional_nodes``,
+``coalescing_segments_only``
+(see {ref}`sec_ancestry_additional_nodes`),
+and ``stop_at_local_mrca`` (see {ref}`sec_ancestry_stop_at_local_mrca`).
+
+```{code-cell}
+ped_ts = msprime.sim_ancestry(
+    initial_state=pedigree,
+    model="fixed_pedigree",
+    random_seed=41,
+    recombination_rate=0.001,
+    coalescing_segments_only=False,
+    additional_nodes=(
+         msprime.NodeType.COMMON_ANCESTOR |
+         msprime.NodeType.PASS_THROUGH),
+    stop_at_local_mrca=True
+)
+node_labels = {node.id: f"{node.individual}({node.id})" for node in ped_ts.nodes()}
+SVG(ped_ts.draw_svg(y_axis=True,  node_labels=node_labels, size=(600,200)))
+```
+
+We can now see that the ancestor of node 15 is 20, which we would have to
+infer in the previous example.
+
+
+
 #### Censoring pedigree information
 
 :::{warning}
@@ -2882,6 +2948,7 @@ no account is taken of the number of lineages present in the pedigree
 when calculating population sizes. Thus, the pedigree must be seen as
 entirely **external** to the population model simulated during recapitation.
 :::
+
 
 (sec_ancestry_models_fixed_pedigree_demography)=
 

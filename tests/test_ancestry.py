@@ -891,6 +891,171 @@ class TestSimulator:
         assert len(s) > 0
 
 
+class TestSimulateAfterLocalMRCA:
+
+    def check_roots(self, ts, end_time=None, allow_multiple_roots=False):
+        if allow_multiple_roots:
+            root_times = [tree.time(tree.roots[0]) for tree in ts.trees()]
+        else:
+            root_times = [tree.time(tree.root) for tree in ts.trees()]
+        assert len(set(root_times)) == 1
+        if end_time is not None:
+            assert root_times[0] == end_time
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "dtwf",
+            "hudson",
+            msprime.BetaCoalescent(alpha=1.5),
+            msprime.DiracCoalescent(psi=0.1, c=2),
+        ],
+    )
+    def test_single_models(self, model):
+        tss = msprime.sim_ancestry(
+            10,
+            population_size=10,
+            stop_at_local_mrca=False,
+            random_seed=1,
+            sequence_length=10,
+            recombination_rate=0.1,
+            model=model,
+            num_replicates=10,
+        )
+        for ts in tss:
+            self.check_roots(ts)
+
+    def test_fixed_pedigree_full_trace(self):
+        # The pedigree used has this shape:
+        #         O
+        #         |
+        #         O
+        #        / \
+        #       O   O
+        #       \\ //
+        #         O
+        #        / \
+        #       O   O
+        #       \\ //
+        #         O
+        eldest_time = 5
+        pb = msprime.PedigreeBuilder()
+        gggpa = pb.add_individual(time=eldest_time)
+        ggpa = pb.add_individual(time=4, parents=[gggpa, gggpa])
+        # first diamound
+        gmom = pb.add_individual(time=3, parents=[ggpa, ggpa])
+        gdad = pb.add_individual(time=3, parents=[ggpa, ggpa])
+        grandpa_id = pb.add_individual(time=2, parents=[gmom, gdad])
+        # second diamond
+        mom_id = pb.add_individual(time=1, parents=[grandpa_id, grandpa_id])
+        dad_id = pb.add_individual(time=1, parents=[grandpa_id, grandpa_id])
+        pb.add_individual(time=0, parents=[mom_id, dad_id], is_sample=True)
+        pedigree = pb.finalise(100)
+
+        ts = msprime.sim_ancestry(
+            initial_state=pedigree,
+            stop_at_local_mrca=False,
+            coalescing_segments_only=False,
+            additional_nodes=(
+                msprime.NodeType.RECOMBINANT
+                | msprime.NodeType.PASS_THROUGH
+                | msprime.NodeType.COMMON_ANCESTOR
+            ),
+            recombination_rate=0.01,
+            model="fixed_pedigree",
+        )
+        for tree in ts.trees():
+            for sample in ts.samples():
+                path = [sample] + list(tree.ancestors(sample))
+                time = ts.nodes_time[path]
+                # Each sample should pass through each level of the pedigree.
+                np.testing.assert_array_equal(time, np.arange(eldest_time + 1))
+
+    def test_multiple_models(self):
+        """
+        To test multiple models, we run simulations with end time < first models
+        duration and test (that would be using the first model). Then we run again
+        until end_time too large to cover the second model.
+        """
+        end_time = 499
+        ts = msprime.sim_ancestry(
+            2,
+            population_size=100,
+            model=[
+                msprime.DiscreteTimeWrightFisher(duration=500),
+                msprime.StandardCoalescent(),
+            ],
+            random_seed=2,
+            recombination_rate=0.1,
+            sequence_length=10,
+            stop_at_local_mrca=False,
+            end_time=end_time,
+        )
+
+        self.check_roots(ts, end_time, allow_multiple_roots=True)
+
+        ts = msprime.sim_ancestry(
+            2,
+            population_size=100,
+            model=[
+                msprime.DiscreteTimeWrightFisher(duration=500),
+                msprime.StandardCoalescent(),
+            ],
+            random_seed=2,
+            recombination_rate=0.1,
+            sequence_length=10,
+            stop_at_local_mrca=False,
+        )
+        self.check_roots(ts)
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "dtwf",
+            "hudson",
+        ],
+    )
+    def test_migration(self, model):
+        demography = msprime.Demography.stepping_stone_model(
+            [100, 100], migration_rate=0.01
+        )
+        ts = msprime.sim_ancestry(
+            {0: 2, 1: 1},
+            demography=demography,
+            stop_at_local_mrca=False,
+            recombination_rate=0.01,
+            sequence_length=10,
+            model=model,
+        )
+        self.check_roots(ts)
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "dtwf",
+            "hudson",
+        ],
+    )
+    def test_additional_nodes(self, model):
+
+        ts = msprime.sim_ancestry(
+            2,
+            population_size=10,
+            random_seed=2,
+            additional_nodes=(
+                msprime.NodeType.RECOMBINANT
+                | msprime.NodeType.PASS_THROUGH
+                | msprime.NodeType.COMMON_ANCESTOR
+            ),
+            coalescing_segments_only=False,
+            stop_at_local_mrca=False,
+            sequence_length=5,
+            model=model,
+        )
+
+        self.check_roots(ts)
+
+
 class TestParseRandomSeed:
     """
     Tests for parsing the random seed values.

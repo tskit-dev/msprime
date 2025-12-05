@@ -112,14 +112,16 @@ class TestAlgorithms:
         assert ts.num_trees > 1
         assert has_discrete_genome(ts)
 
-    def test_dtwf(self):
-        ts = self.run_script("10 --model=dtwf")
+    @pytest.mark.parametrize("options", ["", "--continue-after-local-mrca"])
+    def test_dtwf(self, options):
+        ts = self.run_script(f"10 --model=dtwf {options}")
         assert ts.num_trees > 1
         assert not has_discrete_genome(ts)
         assert ts.sequence_length == 100
 
-    def test_dtwf_migration(self):
-        ts = self.run_script("10 -r 0 --model=dtwf -p 2 -g 0.1")
+    @pytest.mark.parametrize("options", ["", "--continue-after-local-mrca"])
+    def test_dtwf_migration(self, options):
+        ts = self.run_script(f"10 -r 0 --model=dtwf -p 2 -g 0.1 {options}")
         assert ts.num_trees == 1
         assert ts.sequence_length == 100
         assert ts.num_populations == 2
@@ -129,10 +131,11 @@ class TestAlgorithms:
         assert ts.num_trees > 1
         assert has_discrete_genome(ts)
 
-    def test_full_arg(self):
+    @pytest.mark.parametrize("options", ["", "--continue-after-local-mrca"])
+    def test_full_arg(self, options):
         node_value = sum(2**i for i in (17, 18, 19, 21))
         ts = self.run_script(
-            f"30 -L 200 --additional-nodes {node_value} --all-segments"
+            f"30 -L 200 --additional-nodes {node_value} --all-segments {options}"
         )
         assert ts.num_trees > 1
         node_flags = ts.tables.nodes.flags
@@ -156,21 +159,27 @@ class TestAlgorithms:
         assert ts.sequence_length == 100
         verify_unary(ts)
 
-    def test_store_unary_dtwf(self):
+    @pytest.mark.parametrize("options", ["", "--continue-after-local-mrca"])
+    def test_store_unary_dtwf(self, options):
         node_value = 1 << 18 | 1 << 22
-        ts = self.run_script(
-            f"10 --all-segments -d --additional-nodes {node_value} --model=dtwf"
+        cmd = (
+            f"10 --all-segments -d --additional-nodes {node_value} "
+            f"--model=dtwf {options}"
         )
+        ts = self.run_script(cmd)
         assert ts.num_samples == 10
         assert ts.num_trees > 1
         assert ts.sequence_length == 100
         verify_dtwf_unary(ts)
 
-    def test_store_unary_dtwf_re(self):
+    @pytest.mark.parametrize("options", ["", "--continue-after-local-mrca"])
+    def test_store_unary_dtwf_re(self, options):
         node_value = 1 << 17 | 1 << 18 | 1 << 22
-        ts = self.run_script(
-            f"10 --all-segments -d --additional-nodes {node_value} --model=dtwf"
+        cmd = (
+            f"10 --all-segments -d --additional-nodes {node_value} "
+            f"--model=dtwf {options}"
         )
+        ts = self.run_script(cmd)
         assert ts.num_samples == 10
         assert ts.num_trees > 1
         assert ts.sequence_length == 100
@@ -266,6 +275,23 @@ class TestAlgorithms:
         node_flags = ts.tables.nodes.flags
         assert np.sum(node_flags == msprime.NODE_IS_CA_EVENT) > 0
         assert np.sum(node_flags == msprime.NODE_IS_RE_EVENT) > 0
+
+    @pytest.mark.parametrize("model", ["hudson", "smc_k", "dtwf"])
+    def test_continue_after_local_mrca_multi_tree(self, model):
+        r = 0.1
+        ts = self.run_script(f"10 --continue-after-local-mrca -r {r} --model={model}")
+        assert ts.num_trees >= 2
+        # All roots should have the same time
+        root_times = []
+        for tree in ts.trees():
+            root_times.append(tree.time(tree.root))
+        assert len(set(root_times)) == 1
+
+    @pytest.mark.parametrize("model", ["hudson", "smc_k", "dtwf"])
+    def test_continue_after_local_mrca_single_tree(self, model):
+        ts = self.run_script(f"10 --continue-after-local-mrca -r 0 --model={model}")
+        root_times = [tree.time(tree.root) for tree in ts.trees()]
+        assert len(set(root_times)) == 1
 
     def test_gc(self):
         ts = self.run_script("10 -c 0.4 2 -d")
