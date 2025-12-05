@@ -51,14 +51,14 @@ class LargeSimulationBenchmark:
         # Stuff that depends on the recomb_map_chr22 will fail
         if stdpopsim_available:
             species = stdpopsim.get_species("HomSap")
-            contig = species.get_contig("chr22")
-            self.recomb_map_chr22 = contig.recombination_map
+            genetic_map = species.get_genetic_map("HapMapII_GRCh37")
+            self.recomb_map_chr22 = genetic_map.get_chromosome_map("chr22")
 
 
 class Hudson(LargeSimulationBenchmark):
     def _run_large_sample_size(self):
         msprime.sim_ancestry(
-            samples=10**6,
+            samples=0.5 * (10**6),
             sequence_length=1e7,
             population_size=10**4,
             recombination_rate=1e-8,
@@ -73,7 +73,7 @@ class Hudson(LargeSimulationBenchmark):
 
     def _run_long_sequence_length(self):
         msprime.sim_ancestry(
-            samples=100,
+            samples=50,
             sequence_length=1e8,
             population_size=10**4,
             recombination_rate=1e-8,
@@ -88,7 +88,7 @@ class Hudson(LargeSimulationBenchmark):
 
     def _run_long_sequence_length_gene_conversion(self):
         msprime.sim_ancestry(
-            samples=100,
+            samples=50,
             sequence_length=1e8,
             population_size=10**4,
             gene_conversion_rate=1e-8,
@@ -105,7 +105,7 @@ class Hudson(LargeSimulationBenchmark):
 
     def _run_human_chr22(self):
         msprime.sim_ancestry(
-            samples=100,
+            samples=50,
             population_size=10**4,
             recombination_rate=self.recomb_map_chr22,
             random_seed=234,
@@ -129,11 +129,11 @@ class Hudson(LargeSimulationBenchmark):
 
     def _run_human_chr22_simulate_above_root(self):
         msprime.sim_ancestry(
-            samples=100,
+            samples=50,
             population_size=10**4,
             recombination_rate=self.recomb_map_chr22,
             random_seed=234,
-            stop_at_local_mrca=True,
+            stop_at_local_mrca=False,
         )
 
     def time_human_chr22_simulate_above_root(self):
@@ -149,7 +149,7 @@ class Hudson(LargeSimulationBenchmark):
 class DTWF(LargeSimulationBenchmark):
     def _run_large_population_size(self):
         msprime.sim_ancestry(
-            samples=1000,
+            samples=500,
             population_size=10**6,
             sequence_length=1e5,
             recombination_rate=1e-8,
@@ -166,7 +166,7 @@ class DTWF(LargeSimulationBenchmark):
 
     def _run_long_sequence_length(self):
         msprime.sim_ancestry(
-            samples=100,
+            samples=50,
             population_size=10**4,
             sequence_length=1e7,
             recombination_rate=1e-8,
@@ -184,7 +184,7 @@ class DTWF(LargeSimulationBenchmark):
 
     def _run_human_chr22(self):
         msprime.sim_ancestry(
-            samples=100,
+            samples=50,
             population_size=10**4,
             recombination_rate=self.recomb_map_chr22,
             random_seed=234,
@@ -200,7 +200,7 @@ class DTWF(LargeSimulationBenchmark):
 
     def _run_many_replicates(self):
         reps = msprime.sim_ancestry(
-            10,
+            5,
             population_size=100,
             num_replicates=10**5,
             random_seed=1234,
