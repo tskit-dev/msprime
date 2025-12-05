@@ -31,6 +31,7 @@ import numpy
 import tskit
 
 from . import ancestry
+from . import demography
 from msprime import _msprime
 
 __version__ = "undefined"
@@ -188,10 +189,14 @@ class ProvenanceEncoderDecoder(json.JSONEncoder):
             elif "__npgeneric__" in obj:
                 return numpy.array([obj["__npgeneric__"]]).astype(obj["dtype"])[0]
             elif "__class__" in obj:
-                module, cls = obj["__class__"].rsplit(".", 1)
+                module, cls = obj.pop("__class__").rsplit(".", 1)
                 module = importlib.import_module(module)
-                del obj["__class__"]
-                return getattr(module, cls)(**obj)
+                cls = getattr(module, cls)
+                if cls == demography.Demography:
+                    # the Demography class normally generates its own population IDs, but
+                    # allow fixed IDs here to ensure they match e.g. IDs in event objects
+                    return cls(**obj, allow_preset_population_ids=True)
+                return cls(**obj)
             return obj
 
         return json.JSONDecoder(object_hook=hook).decode(s)

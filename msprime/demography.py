@@ -266,8 +266,11 @@ class Demography(collections.abc.Mapping):
     # Until we can use numpy type hints properly, it's not worth adding them
     # here. We still have to add in ignores below for indexed assignment errors.
     migration_matrix: Any | None = None
+    # When instantiating from the dict representation of an existing Demography
+    # we want to allow the pre-specified IDs to be used
+    allow_preset_population_ids: dataclasses.InitVar[bool] = False
 
-    def __post_init__(self):
+    def __post_init__(self, allow_preset_population_ids: bool):
         if self.migration_matrix is None:
             N = self.num_populations
             self.migration_matrix = np.zeros((N, N))
@@ -292,12 +295,12 @@ class Demography(collections.abc.Mapping):
 
         # Assign the IDs and default names, if needed.
         for j, population in enumerate(self.populations):
-            if population.id is not None:
+            if population.id is None:
+                population.id = j
+            elif not allow_preset_population_ids:
                 raise ValueError(
-                    "Population ID should not be set before using to create "
-                    "a Demography"
+                    "Population ID should not be set before using to create a Demography"
                 )
-            population.id = j
             if population.name is None:
                 population.name = f"pop_{j}"
         self._validate_populations()
