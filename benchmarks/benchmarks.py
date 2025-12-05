@@ -58,7 +58,7 @@ class LargeSimulationBenchmark:
 
 class HudsonlargeSampleSize(LargeSimulationBenchmark):
 
-    def _large_sample_size_params(self):
+    def _get_params(self):
         return {
             "samples": 0.5 * (10**6),
             "sequence_length": 1e7,
@@ -67,78 +67,76 @@ class HudsonlargeSampleSize(LargeSimulationBenchmark):
             "random_seed": 42,
         }
 
-    def run(self, params):
-        return msprime.sim_ancestry(**params)
-
-    def _run_large_sample_size(self):
-        self.run(self._large_sample_size_params())
+    def run(self):
+        return msprime.sim_ancestry(**self._get_params())
 
     def time_test(self):
-        self._run_large_sample_size()
+        self.run()
 
     def peakmem_test(self):
-        self._run_large_sample_size()
+        self.run()
 
 
-class HudsonOverRoot(HudsonlargeSampleSize):
-    def run(self, params):
-        return msprime.sim_ancestry(**{"stop_at_local_mrca": False, **params})
+class HudsonlargeSampleSizeOverRoot(HudsonlargeSampleSize):
+    def _get_params(self):
+        return {
+            **super()._get_params(),
+            "stop_at_local_mrca": False,
+        }
 
 
 class HudsonLongSequenceLength(HudsonlargeSampleSize):
-    def run(self, params):
-        return msprime.sim_ancestry(**{**params, "sequence_length": 1e8, "samples": 50})
+    def _get_params(self):
+        return {
+            **super()._get_params(),
+            "sequence_length": 1e8,
+            "samples": 50,
+        }
 
 
 class HudsonLongSequenceLengthGeneConversion(HudsonlargeSampleSize):
-    def run(self, params):
-        return msprime.sim_ancestry(
-            **{
-                **params,
-                "sequence_length": 1e8,
-                "samples": 50,
-                "gene_conversion_rate": 1e-8,
-                "gene_conversion_tract_length": 100 * 1e3,
-                "recombination_rate": None,
-            }
-        )
+    def _get_params(self):
+        return {
+            "sequence_length": 1e8,
+            "samples": 50,
+            "gene_conversion_rate": 1e-8,
+            "gene_conversion_tract_length": 100 * 1e3,
+            "random_seed": 43,
+        }
 
 
 class HudsonHumanChr22(HudsonlargeSampleSize):
 
-    def run(self, params):
-        return msprime.sim_ancestry(
-            **{
-                **params,
-                "sequence_length": None,
-                "samples": 50,
-                "recombination_rate": self.recomb_map_chr22,
-            }
-        )
+    def _get_params(self):
+        return {
+            **super()._get_params(),
+            "sequence_length": None,
+            "samples": 50,
+            "recombination_rate": self.recomb_map_chr22,
+        }
 
 
 class HudsonManyReplicates(HudsonlargeSampleSize):
-    def run(self, params):
+
+    def run(self):
         params = {"samples": 10, "num_replicates": 10**5, "random_seed": 1234}
         for _ in msprime.sim_ancestry(**params):
             pass
 
 
 class HudsonHumanChr22OverRoot(HudsonlargeSampleSize):
-    def run(self, params):
-        return msprime.sim_ancestry(
-            **{
-                **params,
-                "sequence_length": None,
-                "samples": 50,
-                "recombination_rate": self.recomb_map_chr22,
-                "stop_at_local_mrca": False,
-            }
-        )
+    def _get_params(self):
+        return {
+            **super()._get_params(),
+            "sequence_length": None,
+            "samples": 50,
+            "recombination_rate": self.recomb_map_chr22,
+            "stop_at_local_mrca": False,
+        }
 
 
 class DTWFLargePopulationSize(LargeSimulationBenchmark):
-    def _large_population_size_params(self):
+    def _get_params(self):
         return {
             "samples": 500,
             "sequence_length": 1e5,
@@ -149,47 +147,42 @@ class DTWFLargePopulationSize(LargeSimulationBenchmark):
             "end_time": 1000,
         }
 
-    def run(self, params):
-        return msprime.sim_ancestry(**params)
-
-    def _run_large_population_size(self):
-        self.run(self._large_population_size_params())
+    def run(self):
+        return msprime.sim_ancestry(**self._get_params())
 
     def time_test(self):
-        self._run_large_population_size()
+        self.run()
 
     def peakmem_test(self):
-        self._run_large_population_size()
+        self.run()
 
 
 class DTWFLongSequenceLength(DTWFLargePopulationSize):
-    def run(self, params):
-        params = {
-            **params,
+    def _get_params(self):
+        return {
+            **super()._get_params(),
             "sequence_length": 1e7,
             "samples": 50,
             "end_time": 5e4,
             "population_size": 10**4,
         }
-        return msprime.sim_ancestry(**params)
 
 
 class DTWFHumanChr22(DTWFLargePopulationSize):
-    def run(self, params):
-        return msprime.sim_ancestry(
-            **{
-                **params,
-                "sequence_length": None,
-                "samples": 50,
-                "recombination_rate": self.recomb_map_chr22,
-                "end_time": 10000,
-                "population_size": 10**4,
-            }
-        )
+
+    def _get_params(self):
+        return {
+            **super()._get_params(),
+            "sequence_length": None,
+            "samples": 50,
+            "recombination_rate": self.recomb_map_chr22,
+            "end_time": 10000,
+            "population_size": 10**4,
+        }
 
 
 class DTWFManyReplicates(DTWFLargePopulationSize):
-    def run(self, params):
+    def run(self):
         params = {
             "samples": 5,
             "population_size": 100,
@@ -197,8 +190,6 @@ class DTWFManyReplicates(DTWFLargePopulationSize):
             "random_seed": 1234,
             "model": "dtwf",
             "end_time": 100,
-            "sequence_length": None,
-            "recombination_rate": None,
         }
         for _ in msprime.sim_ancestry(**params):
             pass
