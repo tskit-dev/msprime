@@ -24,6 +24,7 @@ Benchmarks for msprime using airspeed velocity. Please see the developer
 documentation for details on how to run these and how to develop your
 own benchmarks.
 """
+
 try:
     import stdpopsim
 
@@ -55,148 +56,140 @@ class LargeSimulationBenchmark:
             self.recomb_map_chr22 = genetic_map.get_chromosome_map("chr22")
 
 
-class Hudson(LargeSimulationBenchmark):
-    def _run_large_sample_size(self):
-        msprime.simulate(
-            sample_size=10**6,
-            length=1e7,
-            Ne=10**4,
-            recombination_rate=1e-8,
-            random_seed=42,
-        )
+class HudsonlargeSampleSize(LargeSimulationBenchmark):
 
-    def time_large_sample_size(self):
-        self._run_large_sample_size()
+    def _get_params(self):
+        return {
+            "samples": 0.5 * (10**6),
+            "sequence_length": 1e7,
+            "population_size": 10**4,
+            "recombination_rate": 1e-8,
+            "random_seed": 42,
+        }
 
-    def peakmem_large_sample_size(self):
-        self._run_large_sample_size()
+    def run(self):
+        return msprime.sim_ancestry(**self._get_params())
 
-    def _run_long_sequence_length(self):
-        msprime.simulate(
-            sample_size=100,
-            length=1e8,
-            Ne=10**4,
-            recombination_rate=1e-8,
-            random_seed=42,
-        )
+    def time_test(self):
+        self.run()
 
-    def time_long_sequence_length(self):
-        self._run_long_sequence_length()
+    def peakmem_test(self):
+        self.run()
 
-    def peakmem_long_sequence_length(self):
-        self._run_long_sequence_length()
 
-    def _run_long_sequence_length_gene_conversion(self):
-        msprime.sim_ancestry(
-            sample_size=100,
-            length=1e8,
-            Ne=10**4,
-            gene_conversion_rate=1e-8,
-            # 100Kb tract length.
-            gene_conversion_tract_length=100 * 1e3,
-            random_seed=43,
-        )
+class HudsonlargeSampleSizeOverRoot(HudsonlargeSampleSize):
+    def _get_params(self):
+        return {
+            **super()._get_params(),
+            "stop_at_local_mrca": False,
+        }
 
-    def time_long_sequence_length_gene_conversion(self):
-        self._run_long_sequence_length()
 
-    def peakmem_long_sequence_length_gene_conversion(self):
-        self._run_long_sequence_length()
+class HudsonLongSequenceLength(HudsonlargeSampleSize):
+    def _get_params(self):
+        return {
+            **super()._get_params(),
+            "sequence_length": 1e8,
+            "samples": 50,
+        }
 
-    def _run_human_chr22(self):
-        msprime.simulate(
-            sample_size=100,
-            Ne=10**4,
-            recombination_map=self.recomb_map_chr22,
-            random_seed=234,
-        )
 
-    def time_human_chr22(self):
-        self._run_human_chr22()
+class HudsonLongSequenceLengthGeneConversion(HudsonlargeSampleSize):
+    def _get_params(self):
+        return {
+            "sequence_length": 1e8,
+            "samples": 50,
+            "gene_conversion_rate": 1e-8,
+            "gene_conversion_tract_length": 100 * 1e3,
+            "random_seed": 43,
+        }
 
-    def peakmem_human_chr22(self):
-        self._run_human_chr22()
 
-    def _run_many_replicates(self):
-        for _ in msprime.simulate(10, num_replicates=10**5, random_seed=1234):
+class HudsonHumanChr22(HudsonlargeSampleSize):
+
+    def _get_params(self):
+        return {
+            **super()._get_params(),
+            "sequence_length": None,
+            "samples": 50,
+            "recombination_rate": self.recomb_map_chr22,
+        }
+
+
+class HudsonManyReplicates(HudsonlargeSampleSize):
+
+    def run(self):
+        params = {"samples": 10, "num_replicates": 10**5, "random_seed": 1234}
+        for _ in msprime.sim_ancestry(**params):
             pass
 
-    def time_many_replicates(self):
-        self._run_many_replicates()
 
-    def peakmem_many_replicates(self):
-        self._run_many_replicates()
+class HudsonHumanChr22OverRoot(HudsonlargeSampleSize):
+    def _get_params(self):
+        return {
+            **super()._get_params(),
+            "sequence_length": None,
+            "samples": 50,
+            "recombination_rate": self.recomb_map_chr22,
+            "stop_at_local_mrca": False,
+        }
 
-    # 2 populations, high migration.
-    # Lots of populations, 1D stepping stone.
+
+class DTWFLargePopulationSize(LargeSimulationBenchmark):
+    def _get_params(self):
+        return {
+            "samples": 500,
+            "sequence_length": 1e5,
+            "population_size": 10**6,
+            "recombination_rate": 1e-8,
+            "random_seed": 42,
+            "model": "dtwf",
+            "end_time": 1000,
+        }
+
+    def run(self):
+        return msprime.sim_ancestry(**self._get_params())
+
+    def time_test(self):
+        self.run()
+
+    def peakmem_test(self):
+        self.run()
 
 
-class DTWF(LargeSimulationBenchmark):
-    def _run_large_population_size(self):
-        msprime.simulate(
-            sample_size=1000,
-            Ne=10**6,
-            length=1e5,
-            recombination_rate=1e-8,
-            random_seed=42,
-            model="dtwf",
-            end_time=1000,
-        )
+class DTWFLongSequenceLength(DTWFLargePopulationSize):
+    def _get_params(self):
+        return {
+            **super()._get_params(),
+            "sequence_length": 1e7,
+            "samples": 50,
+            "end_time": 5e4,
+            "population_size": 10**4,
+        }
 
-    def time_large_population_size(self):
-        self._run_large_population_size()
 
-    def peakmem_large_population_size(self):
-        self._run_large_population_size()
+class DTWFHumanChr22(DTWFLargePopulationSize):
 
-    def _run_long_sequence_length(self):
-        msprime.simulate(
-            sample_size=100,
-            Ne=10**4,
-            length=1e7,
-            recombination_rate=1e-8,
-            random_seed=42,
-            model="dtwf",
-            # Tuning this to give ~30s runtime.
-            end_time=5e4,
-        )
+    def _get_params(self):
+        return {
+            **super()._get_params(),
+            "sequence_length": None,
+            "samples": 50,
+            "recombination_rate": self.recomb_map_chr22,
+            "end_time": 10000,
+            "population_size": 10**4,
+        }
 
-    def time_long_sequence_length(self):
-        self._run_long_sequence_length()
 
-    def peakmem_long_sequence_length(self):
-        self._run_long_sequence_length()
-
-    def _run_human_chr22(self):
-        msprime.simulate(
-            sample_size=100,
-            Ne=10**4,
-            recombination_map=self.recomb_map_chr22,
-            random_seed=234,
-            end_time=10000,
-            model="dtwf",
-        )
-
-    def time_human_chr22(self):
-        self._run_human_chr22()
-
-    def peakmem_human_chr22(self):
-        self._run_human_chr22()
-
-    def _run_many_replicates(self):
-        reps = msprime.simulate(
-            10,
-            Ne=100,
-            num_replicates=10**5,
-            random_seed=1234,
-            model="dtwf",
-            end_time=100,
-        )
-        for _ in reps:
+class DTWFManyReplicates(DTWFLargePopulationSize):
+    def run(self):
+        params = {
+            "samples": 5,
+            "population_size": 100,
+            "num_replicates": 10**5,
+            "random_seed": 1234,
+            "model": "dtwf",
+            "end_time": 100,
+        }
+        for _ in msprime.sim_ancestry(**params):
             pass
-
-    def time_many_replicates(self):
-        self._run_many_replicates()
-
-    def peakmem_many_replicates(self):
-        self._run_many_replicates()
