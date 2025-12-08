@@ -141,7 +141,7 @@ def write_slim_script(outfile, format_dict):
         initializeRecombinationRate({RHO});
     }}
     // create a population
-    1
+    1 early()
     {{
         {POP_STRS};
         sim.tag = 0;
@@ -151,11 +151,11 @@ def write_slim_script(outfile, format_dict):
     {{
         if (sim.tag == 0) {{
             if (sim.treeSeqCoalesced()) {{
-                sim.tag = sim.generation;
+                sim.tag = sim.cycle;
                 catn(sim.tag + ': COALESCED');
             }}
         }}
-        if (sim.generation == sim.tag * 10) {{
+        if (sim.cycle == sim.tag * 10) {{
             sim.simulationFinished();
             catn('Ran a further ' + sim.tag * 10 + ' generations');
             sim.treeSeqOutput('{OUTFILE}');
@@ -185,7 +185,7 @@ def write_sweep_slim_script(outfile, format_dict):
                     sim.simulationFinished();
         }}
 
-        1 {{
+        1 early(){{
             // save this run's identifier, used to save and restore
             defineConstant("simID", getSeed());
             sim.addSubpop("p1", {POPSIZE});
@@ -195,7 +195,7 @@ def write_sweep_slim_script(outfile, format_dict):
         2 late() {{
             // save the state of the simulation
             sim.treeSeqOutput("/tmp/slim_" + simID + ".trees");
-            target = sample(p1.genomes, 1);
+            target = sample(p1.haplosomes, 1);
             target.addNewDrawnMutation(m2, {SWEEPPOS});
         }}
         2:2000 late() {{
@@ -208,15 +208,15 @@ def write_sweep_slim_script(outfile, format_dict):
                 if (fixed)
                 {{
                     if (sim.getValue("flag") == 1){{
-                        sim.rescheduleScriptBlock(s1,
-                        start=sim.generation+{TAU}, end=sim.generation+{TAU});
+                        community.rescheduleScriptBlock(s1,
+                        start=sim.cycle+{TAU}, end=sim.cycle+{TAU});
                     }}
                 }}
                 else
                 {{
                     sim.readFromPopulationFile("/tmp/slim_" + simID + ".trees");
                     setSeed(rdunif(1, 0, asInteger(2^62) - 1));
-                    target = sample(p1.genomes, 1);
+                    target = sample(p1.haplosomes, 1);
                     target.addNewDrawnMutation(m2, {SWEEPPOS});
                 }}
             }}
@@ -946,9 +946,9 @@ def sample_recap_simplify(slim_ts, sample_size, Ne, r, mu):
             demography=demography,
             recombination_rate=r,
             # TODO is this needed now? Shouldn't be, right?
-            start_time=slim_ts.metadata["SLiM"]["generation"],
+            start_time=slim_ts.metadata["SLiM"]["cycle"],
         )
-    logging.debug(f"pyslim: slim generation:{slim_ts.metadata['SLiM']['generation']}")
+    logging.debug(f"pyslim: slim generation:{slim_ts.metadata['SLiM']['cycle']}")
     alive_inds = pyslim.individuals_alive_at(recap, 0)
     keep_indivs = np.random.choice(alive_inds, sample_size, replace=False)
     keep_nodes = []
@@ -3823,7 +3823,9 @@ class HudsonAnalytical(Test):
         seq_length = 500
         # tests both Hudson as well as SMC K
         # by setting hull_offset to seq_length are essentially simulating Hudson
-        models = ["hudson", msprime.SmcKApproxCoalescent(hull_offset=seq_length)]
+        # models = ["hudson", msprime.SmcKApproxCoalescent(hull_offset=seq_length)]
+        # GC for smck is currently not supported
+        models = ["hudson"]
         predicted_prob = np.zeros([gc_length_rate_ratio.size, seq_length], dtype=float)
         empirical_prob_first = np.zeros(
             [2, gc_length_rate_ratio.size, seq_length], dtype=float
@@ -4949,6 +4951,8 @@ class SmcKTest(SmckvsSmcKApproxCoalescent):
             sequence_length=5e7,
         )
 
+    '''
+    Commented as gc is not yet supported in SmcKApproxCoalescent
     def test_gc_tract_length_smc(self):
         """
         Runs the check for the mean length of gene conversion tracts.
@@ -5132,6 +5136,7 @@ class SmcKTest(SmckvsSmcKApproxCoalescent):
         pyplot.tight_layout()
         pyplot.savefig(self.output_dir / "breakpoints_boxplot.png")
         pyplot.close()
+    '''
 
     def test_out_of_africa_migration_model(self):
         s_no = 10

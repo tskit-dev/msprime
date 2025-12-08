@@ -760,6 +760,15 @@ directory.
 Please read the comments at the top of the `verification.py` script for details
 on how to write and run these tests.
 
+The make rule `verification` bundles the three steps in one command: installs the dependencies, 
+compiles customised versions of `ms` (and other tools), and runs all the tests sequentially. 
+
+To invoke this rule run the command:
+```
+$ make verification
+```
+The output should be in the directory: `/verification`
+
 ## Benchmarking
 
 Benchmarks to measure performance are in the `benchmarks` folder and are run using
