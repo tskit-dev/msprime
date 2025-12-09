@@ -11,6 +11,11 @@
   ({issue}`2157`, {pr}`2396`, {user}`jeromekelleher`, {user}`hossam26644`).
 - Add wheels on Windows ({pr}`2414`, {issue}`2200`,{user}`benjeffery`)
 
+ **Performance improvements**
+
+- Significant performance improvements for large sample size simulations with the
+  standard coalescence model (About 2x faster),({issue}`2401`, {pr} `2385`, {user}`jeromekelleher`).
+  
 **Maintenance**
 
 - Add support and wheels for Python3.13
