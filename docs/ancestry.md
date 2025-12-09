@@ -1526,7 +1526,7 @@ for two diploid samples:
 
 ```{code-cell}
 ts = msprime.sim_ancestry(2, sequence_length=10, recombination_rate=0.1, random_seed=42)
-SVG(ts.draw_svg(y_axis=True, y_ticks=[0, 1, 2, 3, 4, 5]))
+SVG(ts.draw_svg(y_axis=True, y_ticks=[0, 1, 2, 3, 4]))
 ```
 
 Sometimes we would like to stop the simulation early, **before** complete
