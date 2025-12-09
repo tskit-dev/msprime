@@ -27,6 +27,10 @@ clang-format:
 tags:
 	ctags -f TAGS msprime/*.c lib/*.[c,h] msprime/*.py tests/*.py algorithms.py
 
+verification:
+	pip install -e ".[verification]"
+	$(MAKE) -C data
+	python verification.py -t 4 -d verification
 
 clean:
 	rm -fR build

@@ -96,3 +96,6 @@ tmp__NOBACKUP__
 
 # vscode stuff
 .vscode
+
+# verfification files
+verification/*
