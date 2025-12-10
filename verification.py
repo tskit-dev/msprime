@@ -58,6 +58,7 @@ import attr
 import daiquiri
 import dendropy
 import matplotlib
+import matplotlib.colors as mcolors
 import numpy as np
 import pandas as pd
 import pyslim
@@ -5502,6 +5503,184 @@ class SmcKTest(SmckvsSmcKApproxCoalescent):
             filename = self.output_dir / f"num_mig_events_t={t}.png"
             pyplot.savefig(filename, dpi=72)
             pyplot.close("all")
+
+
+class SimulateAboveRoot(Test):
+
+    colors = list(mcolors.TABLEAU_COLORS.values())
+
+    def run_above_root_stats(self, **kwargs):
+        kwargs = kwargs.copy()
+        df_list = []
+
+        for stop_at_local_mrca in [True, False]:
+            kwargs["stop_at_local_mrca"] = stop_at_local_mrca
+
+            logging.debug(f"Running: {kwargs}")
+            data = collections.defaultdict(list)
+            replicates = msprime.sim_ancestry(**kwargs)
+            for ts in replicates:
+
+                # we also simplify when the flag is True for consistency
+                ts = ts.simplify()
+
+                t_mrca = np.zeros(ts.num_trees)
+                for tree in ts.trees():
+                    if kwargs.get("model") == "fixed_pedigree":
+                        t_mrca[tree.index] = tree.time(tree.roots[-1])
+                    else:
+                        t_mrca[tree.index] = tree.time(tree.root)
+
+                data["tmrca_mean"].append(np.mean(t_mrca))
+                data["num_trees"].append(ts.num_trees)
+                data["num_nodes"].append(ts.num_nodes)
+                data["num_edges"].append(ts.num_edges)
+                data["stop_at_local_mrca"].append(stop_at_local_mrca)
+            df_list.append(pd.DataFrame(data))
+        return pd.concat(df_list)
+
+    def plot_above_root_stats(self, df):
+        df_above_root = df[~df.stop_at_local_mrca]
+        df_stop_at_local_mrca = df[df.stop_at_local_mrca]
+        for stat in ["tmrca_mean", "num_trees", "num_nodes", "num_edges"]:
+            plot_qq(df_above_root[stat], df_stop_at_local_mrca[stat])
+            f = self.output_dir / f"{stat}.png"
+            pyplot.savefig(f, dpi=72)
+            pyplot.close("all")
+
+    def _run(self, **kwargs):
+        df = self.run_above_root_stats(**kwargs)
+        self.plot_above_root_stats(df)
+
+    def test_above_root_single_locus(self):
+        self._run(samples=10, population_size=1000, num_replicates=300)
+
+    def test_above_root_gc(self):
+        self._run(
+            samples=10,
+            population_size=1000,
+            num_replicates=10_000,
+            sequence_length=100,
+            gene_conversion_rate=0.00001,
+            gene_conversion_tract_length=5,
+        )
+
+    def test_above_root_recomb_hotspots(self):
+        recombination_map = msprime.RateMap(
+            position=[0, 100, 500, 900, 1200, 1500, 2000],
+            rate=[0.00001, 0, 0.0002, 0.00005, 0, 0.001],
+        )
+        self._run(
+            samples=10,
+            population_size=1000,
+            recombination_rate=recombination_map,
+            num_replicates=500,
+            discrete_genome=True,
+        )
+
+    def test_above_root_recombination(self):
+        self._run(
+            samples=10,
+            population_size=1000,
+            num_replicates=500,
+            recombination_rate=0.0001,
+            sequence_length=100,
+        )
+
+    def test_above_root_continuous_migration(self):
+        demography = msprime.Demography()
+        demography.add_population(name="A", initial_size=1000)
+        demography.add_population(name="B", initial_size=1000)
+        demography.set_symmetric_migration_rate(["A", "B"], rate=1e-4)
+
+        self._run(
+            samples={"A": 5, "B": 5},
+            num_replicates=300,
+            recombination_rate=1e-8,
+            sequence_length=10**6,
+            demography=demography,
+        )
+
+    def test_above_root_continoues_genome(self):
+        self._run(
+            samples=10,
+            population_size=1000,
+            num_replicates=500,
+            recombination_rate=1e-8,
+            sequence_length=100,
+            discrete_genome=False,
+            gene_conversion_rate=0.00001,
+            gene_conversion_tract_length=5,
+        )
+
+    def test_above_root_smck(self):
+        self._run(
+            samples=10,
+            sequence_length=100,
+            recombination_rate=0.1,
+            model=msprime.SmcKApproxCoalescent(),
+            num_replicates=300,
+        )
+
+    def test_above_root_dtwf(self):
+        self._run(
+            samples=4,
+            sequence_length=100,
+            population_size=100,
+            model=msprime.DiscreteTimeWrightFisher(),
+            recombination_rate=0.001,
+            num_replicates=500,
+        )
+
+    def test_above_root_smc(self):
+        self._run(
+            samples=10,
+            sequence_length=100,
+            recombination_rate=0.1,
+            model="smc",
+            num_replicates=500,
+        )
+
+    def test_above_root_smc_prime(self):
+        self._run(
+            samples=10,
+            sequence_length=100,
+            recombination_rate=0.1,
+            model="smc_prime",
+            num_replicates=500,
+        )
+
+    def test_above_root_BetaCoalescent(self):
+        self._run(
+            samples=10,
+            sequence_length=100,
+            recombination_rate=0.01,
+            model=msprime.BetaCoalescent(alpha=1.5),
+            num_replicates=500,
+        )
+
+    def test_above_root_DiracCoalescent(self):
+        self._run(
+            samples=10,
+            sequence_length=100,
+            recombination_rate=0.1,
+            model=msprime.DiracCoalescent(psi=0.9, c=10),
+            num_replicates=500,
+        )
+
+    def test_above_root_fixed_pedigree(self):
+        pedigree = pedigrees.sim_pedigree(
+            population_size=10, end_time=1000, direction="forward"
+        )
+        pedigree.sequence_length = 100
+
+        self._run(
+            initial_state=pedigree,
+            recombination_rate=0.01,
+            model="fixed_pedigree",
+            stop_at_local_mrca=False,
+            num_replicates=300,
+        )
 
 
 class MutationStatsTest(Test):
