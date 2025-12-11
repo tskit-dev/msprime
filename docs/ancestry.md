@@ -1511,7 +1511,9 @@ across the trees is a little subtle, and follows the same logic as used when
 {ref}`sec_ancestry_end_time`. All of the trees have a root node with time
 equal to the oldest MRCA, and the nodes correspond to different lineages present
 in the simulation.
-
+:::{note}
+Because using this feature involves doing more simulation, it can take significantly longer (2X or more) than the default.
+:::
 
 ## Manipulating simulation time
 
