@@ -1785,6 +1785,9 @@ class StandardCoalescent(AncestryModel):
 
 class SmcApproxCoalescent(AncestryModel):
     """
+    Legacy implementation of the SMC model. Please use :class:`SmcKApproxCoalescent`
+    instead.
+
     The Sequentially Markov Coalescent (SMC) model defined by
     `McVean and Cardin (2005) <https://dx.doi.org/10.1098%2Frstb.2005.1673>`_.
     In the SMC, only common ancestor events that result in marginal coalescences
@@ -1795,6 +1798,7 @@ class SmcApproxCoalescent(AncestryModel):
         This model is implemented using a naive rejection sampling approach
         and so it may not be any more efficient to simulate than the
         standard Hudson model.
+        We recommend using the ``SmcKApproxCoalescent(hull_offset=0)`` instead
 
     The string ``"smc"`` can be used to refer to this model.
     """
@@ -1804,6 +1808,9 @@ class SmcApproxCoalescent(AncestryModel):
 
 class SmcPrimeApproxCoalescent(AncestryModel):
     """
+    Legacy implementation of the SMC' model. Please use :class:`SmcKApproxCoalescent`
+    instead.
+
     The SMC' model defined by
     `Marjoram and Wall (2006) <https://doi.org/10.1186/1471-2156-7-16>`_
     as a refinement of the :class:`SMC<SmcApproxCoalescent>`. The SMC'
@@ -1814,7 +1821,8 @@ class SmcPrimeApproxCoalescent(AncestryModel):
     .. note::
         This model is implemented using a naive rejection sampling approach
         and so it may not be any more efficient to simulate than the
-        standard Hudson model.
+        standard Hudson model. We recommend using the
+        ``SmcKApproxCoalescent(hull_offset=1)`` instead.
 
     The string ``"smc_prime"`` can be used to refer to this model.
     """
@@ -1830,6 +1838,24 @@ class ParametricAncestryModel(AncestryModel):
 
 @dataclasses.dataclass
 class SmcKApproxCoalescent(ParametricAncestryModel):
+    """
+    A general Sequentially Markov Coalescent (SMC) model. This model accepts a
+    ``hull_offset`` parameter (defaults to 0) that defines the allowed distances
+    between the genomic tracts of ancestral material in a common ancestor event.
+
+    Specifically, if the hull_offset is set to 0, then only overlapping genomic
+    tracts can be joined by a common ancestor event (this is equivalent to the
+    SMC model). If the hull_offset is set to 1, then overlapping or adjacent
+    genomic tracts can be joined by a common ancestor (this is equivalent to the
+    SMC' model). If the hull_offset is set to full the sequence length, then any
+    segments can share a common ancestor, which is equivalent to the standard Hudson
+    coalescent.
+
+    :param float hull_offset: Determines the maximum distance between genomic tracts
+        of ancestral material that can be joined by a common ancestor event.
+        Defaults to 0 (equivalent to the SMC model).
+    """
+
     name = "smc_k"
 
     hull_offset: float

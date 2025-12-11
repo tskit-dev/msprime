@@ -122,6 +122,10 @@ for discussion and examples of individual features.
 ```
 
 ```{eval-rst}
+.. autoclass:: msprime.SmcKApproxCoalescent
+```
+
+```{eval-rst}
 .. autoclass:: msprime.SmcApproxCoalescent
 ```
 
