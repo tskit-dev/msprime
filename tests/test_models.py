@@ -60,7 +60,7 @@ class TestIntrospectionInterface:
         assert repr(model) == repr_s
         assert str(model) == repr_s
 
-        model = msprime.SmcKApproxCoalescent()
+        model = msprime.SmcKApproxCoalescent(hull_offset=0.0)
         repr_s = "SmcKApproxCoalescent(duration=None, hull_offset=0.0)"
         assert repr(model) == repr_s
         assert str(model) == repr_s
@@ -115,8 +115,8 @@ class TestModelFactory:
     def test_named_model_variants(self):
         simulation_models = [
             ("hudson", msprime.StandardCoalescent),
-            ("smc", msprime.SmcApproxCoalescent),
-            ("smc_prime", msprime.SmcPrimeApproxCoalescent),
+            ("smc", msprime.SmcKApproxCoalescent),
+            ("smc_prime", msprime.SmcKApproxCoalescent),
             ("dtwf", msprime.DiscreteTimeWrightFisher),
             ("fixed_pedigree", msprime.FixedPedigree),
         ]
@@ -127,6 +127,11 @@ class TestModelFactory:
             assert isinstance(model, model_class)
             model = ancestry._model_factory(model=name)
             assert isinstance(model, model_class)
+
+            if name == "smc":
+                assert model.hull_offset == 0.0
+            elif name == "smc_prime":
+                assert model.hull_offset == 1.0
 
     def test_named_parametric_models_fail(self):
         parametric_models = ["beta", "dirac"]
@@ -144,7 +149,7 @@ class TestModelFactory:
             msprime.StandardCoalescent(),
             msprime.SmcApproxCoalescent(),
             msprime.SmcPrimeApproxCoalescent(),
-            msprime.SmcKApproxCoalescent(),
+            msprime.SmcKApproxCoalescent(hull_offset=1),
             msprime.DiscreteTimeWrightFisher(),
             msprime.FixedPedigree(),
             msprime.SweepGenicSelection(
@@ -332,9 +337,6 @@ class TestClassesKeywordArgs:
             msprime.SweepGenicSelection(1)
 
     def test_smck_coalescent(self):
-        model = msprime.SmcKApproxCoalescent()
-        assert model.duration is None
-        assert model.hull_offset == 0.0
 
         model = msprime.SmcKApproxCoalescent(hull_offset=1.1)
         assert model.duration is None
@@ -371,7 +373,10 @@ class TestRejectedCommonAncestorEventCounts:
         assert sim2.num_rejected_common_ancestor_events == 0
 
     def test_smc_variants(self):
-        for model in ["smc", "smc_prime"]:
+        for model in [
+            msprime.SmcApproxCoalescent(),
+            msprime.SmcPrimeApproxCoalescent(),
+        ]:
             threshold = 20
             sim = ancestry._parse_simulate(
                 sample_size=10, recombination_rate=5, model=model, random_seed=432
