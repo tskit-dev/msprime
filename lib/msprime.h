@@ -43,8 +43,9 @@
 #define MSP_MODEL_DIRAC 4
 #define MSP_MODEL_DTWF 5
 #define MSP_MODEL_SWEEP 6
-#define MSP_MODEL_WF_PED 7
-#define MSP_MODEL_SMC_K 8
+#define MSP_MODEL_SWEEP_REVERSE 7
+#define MSP_MODEL_WF_PED 8
+#define MSP_MODEL_SMC_K 9
 
 /* Exit codes from msp_run to distinguish different reasons for exiting
  * before coalescence. */
@@ -231,6 +232,20 @@ typedef struct _sweep_t {
     void (*print_state)(struct _sweep_t *self, FILE *out);
 } sweep_t;
 
+typedef struct _sweep_reverse_t {
+    double position;
+    size_t num_steps;
+    int num_demes;
+    int tot_pop;
+    double migration_rate;
+    tsk_id_t *mut_pop;
+    tsk_id_t *mut_pop_final;
+    double *t_of_forward_ev;
+    tsk_id_t *ev_type;
+    tsk_id_t *start_deme;
+    tsk_id_t *end_deme;
+} sweep_reverse_t;
+
 typedef struct _simulation_model_t {
     int type;
     union {
@@ -238,6 +253,7 @@ typedef struct _simulation_model_t {
         beta_coalescent_t beta_coalescent;
         dirac_coalescent_t dirac_coalescent;
         sweep_t sweep;
+        sweep_reverse_t sweep_reverse;
     } params;
     /* If the model allocates memory this function should be non-null. */
     void (*free)(struct _simulation_model_t *model);
@@ -353,7 +369,7 @@ typedef struct {
 /* Arbitrary limit, saves us having to put in complex malloc/free
  * logic in the demographic_events. Can easily be changed if
  * needs be. */
-#define MSP_MAX_EVENT_POPULATIONS 100
+#define MSP_MAX_EVENT_POPULATIONS 500000
 
 typedef struct {
     population_id_t derived[MSP_MAX_EVENT_POPULATIONS];
@@ -492,7 +508,10 @@ int msp_set_simulation_model_dirac(msp_t *self, double psi, double c);
 int msp_set_simulation_model_beta(msp_t *self, double alpha, double truncation_point);
 int msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     double start_frequency, double end_frequency, double s, double dt);
-
+int msp_set_simulation_model_sweep_genic_selection_reverse(msp_t *self, double position,
+    size_t num_steps, int num_demes, int tot_pop, double migration_rate,
+    tsk_id_t *mut_pop, tsk_id_t *mut_pop_final, double *t_of_forward_ev,
+    tsk_id_t *ev_type, tsk_id_t *start_deme, tsk_id_t *end_deme);
 int msp_set_start_time(msp_t *self, double start_time);
 int msp_set_store_migrations(msp_t *self, bool store_migrations);
 int msp_set_store_full_arg(msp_t *self, bool store_full_arg);

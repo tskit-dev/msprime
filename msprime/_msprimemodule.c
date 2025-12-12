@@ -1063,6 +1063,34 @@ out:
     return ret;
 }
 
+//static int
+//Simulator_parse_sweep_genic_selection_reverse_model(Simulator *self, PyObject *py_model)
+//{
+//    int ret = -1;
+//    int err;
+//    double position;
+//    const char *filename;
+//    PyObject *value;
+//    value = get_dict_number(py_model, "position");
+//    if (value == NULL) {
+//        goto out;
+//    }
+//    position = PyFloat_AsDouble(value);
+//    value = get_dict_string(py_model, "filename");
+//    if (value == NULL) {
+//        goto out;
+//    }
+//    filename = PyUnicode_AsUTF8(value);
+//    err = msp_set_simulation_model_sweep_genic_selection_reverse(self->sim, double position, size_t num_steps, int num_demes, int tot_pop, double migration_rate, tsk_id_t *mut_pop, tsk_id_t *mut_pop_final, double *t_of_forward_ev, tsk_id_t *ev_type, tsk_id_t *start_deme, tsk_id_t *end_deme);
+//    if (err != 0) {
+//        handle_input_error("sweep genic selection reverse", err);
+//        goto out;
+//    }
+//    ret = 0;
+//out:
+//    return ret;
+//}
+
 static int
 Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
 {
@@ -1078,9 +1106,10 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     PyObject *dirac_s = NULL;
     PyObject *beta_s = NULL;
     PyObject *sweep_genic_selection_s = NULL;
+    PyObject *sweep_genic_selection_reverse_s = NULL;
     PyObject *value;
     int is_hudson, is_dtwf, is_smc, is_smc_prime, is_smc_k, is_dirac, is_beta,
-        is_sweep_genic_selection, is_fixed_pedigree;
+        is_sweep_genic_selection, is_sweep_genic_selection_reverse, is_fixed_pedigree;
     double psi, c, alpha, truncation_point, hull_offset;
 
     hudson_s = Py_BuildValue("s", "hudson");
@@ -1117,6 +1146,11 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
     }
     sweep_genic_selection_s = Py_BuildValue("s", "sweep_genic_selection");
     if (sweep_genic_selection_s == NULL) {
+        goto out;
+    }
+
+    sweep_genic_selection_reverse_s = Py_BuildValue("s", "sweep_genic_selection_reverse");
+    if (sweep_genic_selection_reverse_s == NULL) {
         goto out;
     }
 
@@ -1242,8 +1276,20 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         }
     }
 
+    is_sweep_genic_selection_reverse = PyObject_RichCompareBool(py_name,
+            sweep_genic_selection_reverse_s, Py_EQ);
+    if (is_sweep_genic_selection_reverse == -1) {
+        goto out;
+    }
+    //if (is_sweep_genic_selection_reverse) {
+    //    ret = Simulator_parse_sweep_genic_selection_reverse_model(self, py_model);
+    //    if (ret != 0) {
+    //        goto out;
+    //    }
+    //}
+
     if (! (is_hudson || is_dtwf || is_smc || is_smc_prime || is_smc_k || is_dirac
-                || is_beta || is_sweep_genic_selection || is_fixed_pedigree)) {
+                || is_beta || is_sweep_genic_selection || is_sweep_genic_selection_reverse || is_fixed_pedigree)) {
         PyErr_SetString(PyExc_ValueError, "Unknown simulation model");
         goto out;
     }
@@ -1262,6 +1308,7 @@ out:
     Py_XDECREF(beta_s);
     Py_XDECREF(dirac_s);
     Py_XDECREF(sweep_genic_selection_s);
+    Py_XDECREF(sweep_genic_selection_reverse_s);
     return ret;
 }
 
@@ -2027,6 +2074,16 @@ Simulator_get_model(Simulator *self, void *closure)
         Py_DECREF(value);
         value = NULL;
         /* TODO fill in the parameters for the different types of trajectories. */
+    } else if (model->type == MSP_MODEL_SWEEP_REVERSE) {
+        value = Py_BuildValue("d", model->params.sweep.position);
+        if (value == NULL) {
+            goto out;
+        }
+        if (PyDict_SetItemString(d, "locus", value) != 0) {
+            goto out;
+        }
+        Py_DECREF(value);
+        value = NULL;
     } else if (model->type == MSP_MODEL_SMC_K) {
         value = Py_BuildValue("d", model->params.smc_k_coalescent.hull_offset);
         if (value == NULL) {

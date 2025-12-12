@@ -4224,6 +4224,26 @@ msp_migration_event(msp_t *self, population_id_t source_pop, population_id_t des
     return ret;
 }
 
+/* Migration event in an arbitrary label
+ */
+static int MSP_WARN_UNUSED
+msp_migration_event_in_background(
+    msp_t *self, population_id_t source_pop, population_id_t dest_pop, label_id_t label)
+{
+    int ret = 0;
+    uint32_t j;
+    avl_node_t *node;
+    avl_tree_t *source = &self->populations[source_pop].ancestors[label];
+    size_t index = ((size_t) source_pop) * self->num_populations + (size_t) dest_pop;
+
+    self->num_migration_events[index]++;
+    j = (uint32_t) gsl_rng_uniform_int(self->rng, avl_count(source));
+    node = avl_at(source, j);
+    tsk_bug_assert(node != NULL);
+    ret = msp_move_individual(self, node, source, dest_pop, label);
+    return ret;
+}
+
 static int MSP_WARN_UNUSED
 msp_reset_memory_state(msp_t *self)
 {
@@ -5448,7 +5468,7 @@ msp_dtwf_generation(msp_t *self)
     for (j = 0; j < self->num_populations; j++) {
 
         pop = &self->populations[j];
-        if (avl_count(&pop->ancestors[label]) == 0) {
+        if (avl_count(&pop->ancestors[label]) == 0) { // Change this to loop over both
             continue;
         }
         /* For the DTWF, N for each population is the reference population size
@@ -5456,22 +5476,26 @@ msp_dtwf_generation(msp_t *self)
          * the nearest integer. Thus, the population's size is always relative
          * to the reference model population size (which is also true for the
          * coalescent models. */
-        N = (uint32_t) round(get_population_size(pop, self->time));
+        N = (uint32_t) round(
+            get_population_size(pop, self->time)); // Ancestral bg pop size
         if (N == 0) {
             ret = MSP_ERR_DTWF_ZERO_POPULATION_SIZE;
             goto out;
         }
 
         // Allocate memory for linked list of offspring per parent
-        parents = calloc(N, sizeof(segment_list_t *));
-        segment_mem = malloc(msp_get_num_ancestors(self) * sizeof(segment_list_t));
+        parents = calloc(N, sizeof(segment_list_t *)); // Memory for gametes probably
+        segment_mem = malloc(
+            msp_get_num_ancestors(self)
+            * sizeof(segment_list_t)); // This should be the same as N for all demes
         if (parents == NULL || segment_mem == NULL) {
             ret = MSP_ERR_NO_MEMORY;
             goto out;
         }
         // Iterate through ancestors and draw parents
         segment_mem_offset = 0;
-        for (a = pop->ancestors[label].head; a != NULL; a = a->next) {
+        for (a = pop->ancestors[label].head; a != NULL;
+             a = a->next) { // Iterate through label
             s = segment_mem + segment_mem_offset;
             segment_mem_offset++;
             p = (uint32_t) gsl_rng_uniform_int(self->rng, N);
@@ -5486,7 +5510,8 @@ msp_dtwf_generation(msp_t *self)
 
         // Iterate through offspring of parent k, adding to avl_tree
         for (k = 0; k < N; k++) {
-            for (i = 0; i < 2; i++) {
+            for (i = 0; i < 2;
+                 i++) { // Is this because of diploid ness? Might need to remove it
                 parent_nodes[i] = TSK_NULL;
             }
             for (s = parents[k]; s != NULL; s = s->next) {
@@ -5496,7 +5521,8 @@ msp_dtwf_generation(msp_t *self)
                 // Recombine ancestor
                 // TODO Should this be the recombination rate going foward from x.left?
                 if (rate_map_get_total_mass(&self->recomb_map) > 0) {
-                    ret = msp_dtwf_recombine(self, x, &u[0], &u[1], parent_nodes);
+                    ret = msp_dtwf_recombine(self, x, &u[0], &u[1],
+                        parent_nodes); // Insert probability of being in sample here
                     if (ret != 0) {
                         goto out;
                     }
@@ -5802,6 +5828,44 @@ out:
     return ret;
 }
 
+/* Set up the intial populations for a sweep by moving individuals from
+ * label 0 to label 1 with the specified probability for multiple demes.
+ Should be merged with ms_sweep_initialise at some point.
+ */
+static int
+msp_sweep_reverse_initialise(msp_t *self, double *switch_proba)
+{
+    int ret = 0;
+    uint32_t j;
+    avl_node_t *node, *next;
+    avl_tree_t *pop;
+
+    /* We only support two labels for now */
+    if (self->num_labels != 2) {
+        ret = MSP_ERR_UNSUPPORTED_OPERATION;
+        goto out;
+    }
+
+    /* Move ancestors to new labels. */
+    for (j = 0; j < self->num_populations; j++) {
+        tsk_bug_assert(avl_count(&self->populations[j].ancestors[1]) == 0);
+        pop = &self->populations[j].ancestors[0];
+        node = pop->head;
+        while (node != NULL) {
+            next = node->next;
+            if (gsl_rng_uniform(self->rng) < switch_proba[j]) {
+                ret = msp_move_individual(self, node, pop, (population_id_t) j, 1);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+            node = next;
+        }
+    }
+out:
+    return ret;
+}
+
 /* Finalise the sweep by moving all lineages back to label 0.
  */
 static int
@@ -5878,6 +5942,154 @@ msp_sweep_recombination_event(
         }
     }
 out:
+    return ret;
+}
+
+/* Recombination event during a sweep within a specified background with multiple demes.
+Should be merged with msp_sweep_recombination_event at some point.
+ */
+static int
+msp_sweep_reverse_recombination_event(msp_t *self, label_id_t label, double sweep_locus,
+    double *mutant_population_frequency)
+{
+    int ret = 0;
+    lineage_t *left_lin, *right_lin;
+    double r;
+
+    ret = msp_recombination_event(self, label, &left_lin, &right_lin);
+    if (ret != 0) {
+        goto out;
+    }
+
+    tsk_bug_assert(left_lin != NULL);
+    tsk_bug_assert(right_lin != NULL);
+
+    /* NOTE: we can look at rhs->left when we compare to the sweep site. */
+    r = gsl_rng_uniform(self->rng);
+    if (label == 0) {
+        if (sweep_locus < right_lin->head->left) {
+            if (r < mutant_population_frequency[right_lin->population]) {
+                ret = msp_change_label(self, right_lin, 1);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        } else {
+            if (r < mutant_population_frequency[left_lin->population]) {
+                ret = msp_change_label(self, left_lin, 1);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        }
+    }
+    if (label == 1) {
+        if (sweep_locus < right_lin->head->left) {
+            if (r < 1.0 - mutant_population_frequency[right_lin->population]) {
+                ret = msp_change_label(self, right_lin, 0);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        } else {
+            if (r < 1.0 - mutant_population_frequency[left_lin->population]) {
+                ret = msp_change_label(self, left_lin, 0);
+                if (ret != 0) {
+                    goto out;
+                }
+            }
+        }
+    }
+out:
+    return ret;
+}
+
+static int
+sweep_forward_event(msp_t *self, double t_of_next_forward_ev, int *ev_type,
+    size_t *curr_step, int *start_deme, int *end_deme, double **ancestral_bg_num_ind,
+    int **mut_pop, double **allele_frequency_mut, int tot_pop, int num_demes)
+{
+    int ret = 0;
+    int curr_ev_type = 0, start_deme_index = 0;
+    double p_forward_ev, tmp_rand;
+
+    self->time = t_of_next_forward_ev;
+    curr_ev_type = ev_type[*curr_step];
+    start_deme_index = start_deme[*curr_step];
+
+    if (start_deme_index == end_deme[*curr_step]) {
+        if (curr_ev_type == 0) { // mutant replaced with wildtype, mutant coalascence
+            p_forward_ev = (float) ancestral_bg_num_ind[start_deme_index][1]
+                           * (ancestral_bg_num_ind[start_deme_index][1] - 1.0)
+                           / (((*mut_pop)[start_deme_index])
+                               * ((*mut_pop)[start_deme_index] - 1.0));
+            tmp_rand = gsl_rng_uniform(self->rng);
+            if (tmp_rand <= p_forward_ev) {
+                ret = self->common_ancestor_event(self, start_deme_index, 1);
+            }
+            ((*mut_pop)[start_deme_index])--;
+            (*allele_frequency_mut)[start_deme_index]
+                = 1.0 * (*mut_pop)[start_deme_index] / tot_pop;
+            (*curr_step)++;
+
+        } else if (curr_ev_type == 1) { // wildtype replaced with mutant, wt coalescence
+            p_forward_ev = (float) ancestral_bg_num_ind[start_deme_index][0]
+                           * (ancestral_bg_num_ind[start_deme_index][0] - 1.0)
+                           / ((tot_pop - (*mut_pop)[start_deme_index])
+                               * ((tot_pop - (*mut_pop)[start_deme_index]) - 1.0));
+            tmp_rand = gsl_rng_uniform(self->rng);
+            if (tmp_rand <= p_forward_ev) {
+                ret = self->common_ancestor_event(self, start_deme_index, 0);
+            }
+            ((*mut_pop)[start_deme_index])++;
+            (*allele_frequency_mut)[start_deme_index]
+                = 1.0 * *mut_pop[start_deme_index] / tot_pop;
+            (*curr_step)++;
+        }
+
+    } else if (num_demes > 1) {
+
+        if (curr_ev_type == 2) { // wildtype replaced by mutant, mutant migration
+                                 // + coalascence
+            p_forward_ev = 1.0 * ancestral_bg_num_ind[start_deme_index][1]
+                           / (*mut_pop)[start_deme_index];
+            tmp_rand = gsl_rng_uniform(self->rng);
+            if (tmp_rand <= p_forward_ev) {
+                ret = msp_migration_event_in_background(
+                    self, start_deme_index, end_deme[*curr_step], 1);
+                p_forward_ev = 1.0 * ancestral_bg_num_ind[end_deme[*curr_step]][1]
+                               / (*mut_pop)[end_deme[*curr_step]];
+                tmp_rand = gsl_rng_uniform(self->rng);
+                if (tmp_rand <= p_forward_ev) {
+                    ret = self->common_ancestor_event(self, end_deme[*curr_step], 1);
+                }
+            }
+            ((*mut_pop)[start_deme[*curr_step]])--;
+            (*allele_frequency_mut)[start_deme[*curr_step]]
+                = 1.0 * (*mut_pop)[start_deme[*curr_step]] / tot_pop;
+            (*curr_step)++;
+
+        } else if (curr_ev_type == 3) { // mutant replaced by wildtype, wildtype
+                                        // migration + coalascence
+            p_forward_ev = 1.0 * ancestral_bg_num_ind[start_deme_index][0]
+                           / (tot_pop - (*mut_pop)[start_deme_index]);
+            tmp_rand = gsl_rng_uniform(self->rng);
+            if (tmp_rand <= p_forward_ev) {
+                ret = msp_migration_event_in_background(
+                    self, start_deme_index, end_deme[*curr_step], 0);
+                p_forward_ev = 1.0 * ancestral_bg_num_ind[end_deme[*curr_step]][0]
+                               / (tot_pop - (*mut_pop)[end_deme[*curr_step]]);
+                tmp_rand = gsl_rng_uniform(self->rng);
+                if (tmp_rand <= p_forward_ev) {
+                    ret = self->common_ancestor_event(self, end_deme[*curr_step], 0);
+                }
+            }
+            ((*mut_pop)[start_deme[*curr_step]])++;
+            (*allele_frequency_mut)[start_deme[*curr_step]]
+                = 1.0 * *mut_pop[start_deme[*curr_step]] / tot_pop;
+            (*curr_step)++;
+        }
+    }
     return ret;
 }
 
@@ -6063,6 +6275,337 @@ out:
     return ret;
 }
 
+/* Runs a backward in time sweep after reading the forward trajectory from a file
+ */
+static int
+msp_run_sweep_reverse(msp_t *self)
+{
+    int ret = 0;
+    simulation_model_t *model = &self->model;
+    size_t curr_step = 0;
+    size_t num_steps = model->params.sweep_reverse.num_steps;
+    double *allele_frequency_mut = NULL;
+    double *t_of_forward_ev = model->params.sweep_reverse.t_of_forward_ev;
+    int *ev_type = model->params.sweep_reverse.ev_type;
+    tsk_id_t *start_deme = model->params.sweep_reverse.start_deme;
+    tsk_id_t *end_deme = model->params.sweep_reverse.end_deme;
+    double sweep_locus = model->params.sweep_reverse.position;
+    size_t j = 0;
+    int i = 0;
+    double recomb_mass = 0.0;
+    label_id_t label;
+    double rec_rates[] = { 0.0, 0.0 };
+    double **ancestral_bg_num_ind = NULL;
+    double *p_coal_wild = NULL, *p_coal_mut = NULL, *p_mig_wild_right = NULL,
+           *p_mig_mut_right = NULL, *p_mig_wild_left = NULL, *p_mig_mut_left = NULL;
+    double p_rec_wild = 0.0, p_rec_mut = 0.0;
+    double tmp_rand = 0.0, p_any_ev = 0.0, p_cum_ev = 0.0, p_coal_after_mig = 0.0,
+           t_of_next_forward_ev = 0.0;
+    double t_start = 0.0, t_end = 0.0, t_of_next_ev = 0.0, t_current = 0.0;
+    int num_demes = model->params.sweep_reverse.num_demes;
+    double migration_rate = model->params.sweep_reverse.migration_rate;
+    int tot_pop = model->params.sweep_reverse.tot_pop;
+    tsk_id_t *mut_pop = model->params.sweep_reverse.mut_pop;
+    // tsk_id_t *final_mut_pop = model->params.sweep_reverse.mut_pop_final;
+    bool no_event_yet = true;
+
+    if (rate_map_get_total_mass(&self->gc_map) != 0.0) { // arrow?+
+        /* Could be, we just haven't implemented it */
+        ret = MSP_ERR_SWEEPS_GC_NOT_SUPPORTED;
+        goto out;
+    }
+
+    tsk_bug_assert(num_demes > 0);
+    tsk_bug_assert(tot_pop > 0);
+
+    allele_frequency_mut = (double *) malloc(sizeof(double) * (size_t) num_demes);
+    p_coal_wild = (double *) malloc(sizeof(double) * (size_t) num_demes);
+    p_coal_mut = (double *) malloc(sizeof(double) * (size_t) num_demes);
+    if (num_demes > 1) {
+        p_mig_wild_right = (double *) malloc(sizeof(double) * (size_t)(num_demes - 1));
+        p_mig_mut_right = (double *) malloc(sizeof(double) * (size_t)(num_demes - 1));
+        p_mig_wild_left = (double *) malloc(sizeof(double) * (size_t)(num_demes - 1));
+        p_mig_mut_left = (double *) malloc(sizeof(double) * (size_t)(num_demes - 1));
+    }
+
+    ancestral_bg_num_ind = (double **) malloc(sizeof(double *) * (size_t) num_demes);
+    for (i = 0; i < num_demes; i++) {
+        ancestral_bg_num_ind[i] = (double *) malloc(sizeof(double) * 2);
+    }
+
+    curr_step = 0;
+
+    for (i = 0; i < num_demes; i++) {
+        allele_frequency_mut[i] = (double) mut_pop[i] / tot_pop;
+    }
+
+    ret = msp_sweep_reverse_initialise(self, allele_frequency_mut);
+    if (ret != 0) {
+        goto out;
+    }
+
+    /* Sets the initial time of the sweep. Adds a small increment after the final event.
+     * Also makes the times of the forward step consistent with msprime
+     */
+    t_start = self->time;
+    t_current = t_start;
+    t_of_next_ev = 0.0;
+    t_end = t_of_forward_ev[0];
+    for (j = 0; j < num_steps; j++) { /*move this step to file io*/
+        t_of_forward_ev[j] = t_start + t_end - t_of_forward_ev[j]
+                             + 1e-5; /*Add a small jitter to avoid time travel*/
+    }
+
+    while (msp_get_num_ancestors(self) > 0 && curr_step < num_steps
+           && self->time < (t_start + t_end)) {
+        /* Set num ancestral individuals & rec_rates */
+        for (j = 0; j < self->num_labels; j++) {
+            label = (label_id_t) j;
+            recomb_mass = self->recomb_mass_index == NULL
+                              ? 0
+                              : fenwick_get_total(&self->recomb_mass_index[label]);
+            for (i = 0; i < num_demes; i++) {
+                ancestral_bg_num_ind[i][j]
+                    = (double) avl_count(&self->populations[i].ancestors[label]);
+                /* We can get small negative rates by numerical jitter which causes
+                 * problems in later calculations and leads to assertion trips.
+                 * See https://github.com/tskit-dev/msprime/issues/1966
+                 */
+                if (j == 1) {
+                    tsk_bug_assert(ancestral_bg_num_ind[i][j] <= mut_pop[i]);
+                } else {
+                    tsk_bug_assert(ancestral_bg_num_ind[i][j] <= (tot_pop - mut_pop[i]));
+                }
+            }
+
+            rec_rates[j] = TSK_MAX(0, (recomb_mass));
+        }
+
+        /* Set coal and mig rates*/
+
+        for (i = 0; i < num_demes; i++) {
+            if (ancestral_bg_num_ind[i][0] > 1) {
+                tsk_bug_assert(mut_pop[i] != tot_pop);
+                p_coal_wild[i]
+                    = ((ancestral_bg_num_ind[i][0] * (ancestral_bg_num_ind[i][0] - 1.0))
+                          * 0.5)
+                      / (tot_pop - mut_pop[i]);
+            } else {
+                p_coal_wild[i] = 0;
+            }
+            if (ancestral_bg_num_ind[i][1] > 1) {
+                tsk_bug_assert(mut_pop[i] != 0);
+                p_coal_mut[i]
+                    = ((ancestral_bg_num_ind[i][1] * (ancestral_bg_num_ind[i][1] - 1.0))
+                          * 0.5)
+                      / mut_pop[i];
+            } else {
+                p_coal_mut[i] = 0;
+            }
+
+            if (num_demes > 1) {
+                if (i > 0) {
+                    p_mig_wild_left[i - 1] = migration_rate * ancestral_bg_num_ind[i][0]
+                                             * (1.0 - mut_pop[i - 1] / tot_pop);
+                    p_mig_mut_left[i - 1] = migration_rate * ancestral_bg_num_ind[i][1]
+                                            * mut_pop[i - 1] / tot_pop;
+                }
+                if (i < num_demes - 1) {
+                    p_mig_wild_right[i] = migration_rate * ancestral_bg_num_ind[i][0]
+                                          * (1.0 - mut_pop[i + 1] / tot_pop);
+                    p_mig_mut_right[i] = migration_rate * ancestral_bg_num_ind[i][1]
+                                         * mut_pop[i + 1] / tot_pop;
+                }
+            }
+        }
+
+        p_rec_wild = rec_rates[0];
+        p_rec_mut = rec_rates[1];
+        p_any_ev = 0;
+
+        /* Find rate of any event */
+        for (i = 0; i < num_demes; i++) {
+            p_any_ev += p_coal_wild[i];
+            p_any_ev += p_coal_mut[i];
+        }
+
+        if (num_demes > 1) {
+            for (i = 0; i < (num_demes - 1); i++) {
+                p_any_ev += p_mig_wild_left[i];
+                p_any_ev += p_mig_mut_left[i];
+                p_any_ev += p_mig_wild_right[i];
+                p_any_ev += p_mig_mut_right[i];
+            }
+        }
+
+        p_any_ev += p_rec_wild;
+        p_any_ev += p_rec_mut;
+
+        t_current = self->time;
+        t_of_next_ev = gsl_ran_exponential(self->rng, 1 / p_any_ev);
+        tsk_bug_assert(t_of_next_ev > 0);
+
+        t_of_next_forward_ev = t_of_forward_ev[curr_step];
+
+        if (t_current + t_of_next_ev >= t_of_next_forward_ev) {
+
+            ret = sweep_forward_event(self, t_of_next_forward_ev, ev_type, &curr_step,
+                start_deme, end_deme, ancestral_bg_num_ind, &mut_pop,
+                &allele_frequency_mut, tot_pop, num_demes);
+
+        } else {
+            self->time += t_of_next_ev;
+            p_cum_ev = 0.0;
+            no_event_yet = true;
+            tmp_rand = gsl_rng_uniform(self->rng);
+
+            for (i = 0; i < num_demes; i++) {
+                p_cum_ev += p_coal_wild[i];
+                if (tmp_rand < p_cum_ev / p_any_ev) {
+                    ret = self->common_ancestor_event(self, i, 0);
+                    no_event_yet = false;
+                    break;
+                } else {
+                    p_cum_ev += p_coal_mut[i];
+                    if (tmp_rand < p_cum_ev / p_any_ev) {
+                        ret = self->common_ancestor_event(self, i, 1);
+                        no_event_yet = false;
+                        break;
+                    }
+                }
+            }
+
+            if (num_demes > 1) {
+                if (no_event_yet) {
+                    for (i = 0; i < (num_demes - 1); i++) {
+                        p_cum_ev += p_mig_wild_left[i];
+                        if (tmp_rand < p_cum_ev / p_any_ev) {
+                            ret = msp_migration_event_in_background(self, i + 1, i, 0);
+                            p_coal_after_mig = 1.0 * ancestral_bg_num_ind[i][0]
+                                               / (tot_pop - mut_pop[i]);
+                            tmp_rand = gsl_rng_uniform(self->rng);
+                            if (tmp_rand <= p_coal_after_mig) {
+                                ret = self->common_ancestor_event(self, i, 0);
+                            }
+                            no_event_yet = false;
+                            break;
+                        } else {
+                            p_cum_ev += p_mig_mut_left[i];
+                            if (tmp_rand < p_cum_ev / p_any_ev) {
+                                ret = msp_migration_event_in_background(
+                                    self, i + 1, i, 1);
+                                p_coal_after_mig
+                                    = 1.0 * ancestral_bg_num_ind[i][1] / mut_pop[i];
+                                tmp_rand = gsl_rng_uniform(self->rng);
+                                if (tmp_rand <= p_coal_after_mig) {
+                                    ret = self->common_ancestor_event(self, i, 1);
+                                }
+                                no_event_yet = false;
+                                break;
+                            } else {
+                                p_cum_ev += p_mig_wild_right[i];
+                                if (tmp_rand < p_cum_ev / p_any_ev) {
+                                    ret = msp_migration_event_in_background(
+                                        self, i, i + 1, 0);
+                                    p_coal_after_mig = 1.0
+                                                       * ancestral_bg_num_ind[i + 1][0]
+                                                       / (tot_pop - mut_pop[i + 1]);
+                                    tmp_rand = gsl_rng_uniform(self->rng);
+                                    if (tmp_rand <= p_coal_after_mig) {
+                                        ret = self->common_ancestor_event(
+                                            self, i + 1, 0);
+                                    }
+                                    no_event_yet = false;
+                                    break;
+                                } else {
+                                    p_cum_ev += p_mig_mut_right[i];
+                                    if (tmp_rand < p_cum_ev / p_any_ev) {
+                                        ret = msp_migration_event_in_background(
+                                            self, i, i + 1, 1);
+                                        p_coal_after_mig
+                                            = 1.0 * ancestral_bg_num_ind[i + 1][1]
+                                              / mut_pop[i + 1];
+                                        tmp_rand = gsl_rng_uniform(self->rng);
+                                        if (tmp_rand <= p_coal_after_mig) {
+                                            ret = self->common_ancestor_event(
+                                                self, i + 1, 1);
+                                        }
+                                        no_event_yet = false;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (no_event_yet) {
+                p_cum_ev += p_rec_wild;
+                if (tmp_rand < p_cum_ev / p_any_ev) {
+                    ret = msp_sweep_reverse_recombination_event(
+                        self, 0, sweep_locus, allele_frequency_mut);
+                    no_event_yet = false;
+                }
+            }
+            if (no_event_yet) {
+                p_cum_ev += p_rec_mut;
+                if (tmp_rand < p_cum_ev / p_any_ev) {
+                    ret = msp_sweep_reverse_recombination_event(
+                        self, 1, sweep_locus, allele_frequency_mut);
+                    no_event_yet = false;
+                }
+            }
+        }
+
+        if (ret != 0) {
+            goto out;
+        }
+    }
+
+    /* TODO we should probably support fixed events here using
+     * msp_apply_fixed_events() like we do in the coalescent models.
+     * The point below about computing population sizes should be easily
+     * worked around using msp_compute_population_size(). */
+
+    /* Check if any demographic events should have happened during the
+     * event and raise an error if so. This is to keep computing population
+     * sizes simple */
+    if (self->next_demographic_event != NULL
+        && self->next_demographic_event->time <= self->time) {
+        ret = MSP_ERR_EVENTS_DURING_SWEEP;
+        goto out;
+    }
+    /* Rule out sampling events for now, but there's no reason we can't
+     * support them. */
+    if (self->next_sampling_event < self->num_sampling_events
+        && self->sampling_events[self->next_sampling_event].time <= self->time) {
+        ret = MSP_ERR_EVENTS_DURING_SWEEP;
+        goto out;
+    }
+    ret = msp_sweep_finalise(self);
+    if (ret != 0) {
+        goto out;
+    }
+    ret = MSP_EXIT_MODEL_COMPLETE;
+
+out:
+    msp_safe_free(p_coal_mut);
+    msp_safe_free(p_coal_wild);
+    if (num_demes > 1) {
+        msp_safe_free(p_mig_wild_left);
+        msp_safe_free(p_mig_mut_left);
+        msp_safe_free(p_mig_wild_right);
+        msp_safe_free(p_mig_mut_right);
+    }
+    for (i = 0; i < num_demes; i++) {
+        msp_safe_free(ancestral_bg_num_ind[i]);
+    }
+    msp_safe_free(ancestral_bg_num_ind);
+    msp_safe_free(allele_frequency_mut);
+    return ret;
+}
+
 /* Runs the simulation backwards in time until either the sample has coalesced,
  * or specified maximum simulation time has been reached or the specified maximum
  * number of events has been reached.
@@ -6088,6 +6631,8 @@ msp_run(msp_t *self, double max_time, unsigned long max_events)
     } else if (self->model.type == MSP_MODEL_SWEEP) {
         /* FIXME making sweep atomic for now as it's non-rentrant */
         ret = msp_run_sweep(self);
+    } else if (self->model.type == MSP_MODEL_SWEEP_REVERSE) {
+        ret = msp_run_sweep_reverse(self);
     } else {
         ret = msp_run_coalescent(self, max_time, max_events);
     }
@@ -6339,6 +6884,9 @@ msp_get_model_name(msp_t *self)
             break;
         case MSP_MODEL_SWEEP:
             ret = "single-sweep";
+            break;
+        case MSP_MODEL_SWEEP_REVERSE:
+            ret = "single-sweep, reverse only";
             break;
         default:
             ret = "BUG: bad model in simulator!";
@@ -8147,7 +8695,7 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         alpha = 2 * pop_size * trajectory.s;
         x = 1.0
             - genic_selection_stochastic_forwards(
-                  trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
+                trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
         /* need our recored traj to stay in bounds */
         t += trajectory.dt;
         sim_time += trajectory.dt * pop_size * simulator->ploidy;
@@ -8198,7 +8746,8 @@ msp_set_simulation_model(msp_t *self, int model)
     if (model != MSP_MODEL_HUDSON && model != MSP_MODEL_SMC
         && model != MSP_MODEL_SMC_PRIME && model != MSP_MODEL_SMC_K
         && model != MSP_MODEL_DIRAC && model != MSP_MODEL_BETA && model != MSP_MODEL_DTWF
-        && model != MSP_MODEL_WF_PED && model != MSP_MODEL_SWEEP) {
+        && model != MSP_MODEL_WF_PED && model != MSP_MODEL_SWEEP
+        && model != MSP_MODEL_SWEEP_REVERSE) {
         ret = MSP_ERR_BAD_MODEL;
         goto out;
     }
@@ -8478,6 +9027,49 @@ msp_set_simulation_model_sweep_genic_selection(msp_t *self, double position,
     trajectory->end_frequency = end_frequency;
     trajectory->s = s;
     trajectory->dt = dt;
+out:
+    return ret;
+}
+
+int
+msp_set_simulation_model_sweep_genic_selection_reverse(msp_t *self, double position,
+    size_t num_steps, int num_demes, int tot_pop, double migration_rate,
+    tsk_id_t *mut_pop, tsk_id_t *mut_pop_final, double *t_of_forward_ev,
+    tsk_id_t *ev_type, tsk_id_t *start_deme, tsk_id_t *end_deme)
+{
+    int ret = 0;
+    simulation_model_t *model = &self->model;
+    double L = self->sequence_length;
+
+    /* Check the inputs to make sure they make sense */
+    if (position < 0 || position >= L) {
+        ret = MSP_ERR_BAD_SWEEP_POSITION;
+        goto out;
+    }
+
+    if (num_demes == 1) {
+        tsk_bug_assert(migration_rate == 0);
+    } else {
+        tsk_bug_assert(migration_rate > 0);
+    }
+
+    ret = msp_set_simulation_model(self, MSP_MODEL_SWEEP_REVERSE);
+    if (ret != 0) {
+        goto out;
+    }
+
+    model->params.sweep_reverse.position = position;
+    model->params.sweep_reverse.num_steps = num_steps;
+    model->params.sweep_reverse.num_demes = num_demes;
+    model->params.sweep_reverse.tot_pop = tot_pop;
+    model->params.sweep_reverse.migration_rate = migration_rate;
+    model->params.sweep_reverse.mut_pop = mut_pop;
+    model->params.sweep_reverse.mut_pop_final = mut_pop_final;
+    model->params.sweep_reverse.t_of_forward_ev = t_of_forward_ev;
+    model->params.sweep_reverse.ev_type = ev_type;
+    model->params.sweep_reverse.start_deme = start_deme;
+    model->params.sweep_reverse.end_deme = end_deme;
+
 out:
     return ret;
 }
