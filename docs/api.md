@@ -21,8 +21,7 @@ for discussion and examples of individual features.
   sim_ancestry
   SampleSet
   StandardCoalescent
-  SmcApproxCoalescent
-  SmcPrimeApproxCoalescent
+  SmcKApproxCoalescent
   DiscreteTimeWrightFisher
   FixedPedigree
   BetaCoalescent

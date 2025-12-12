@@ -2521,7 +2521,7 @@ class TestMigrationRecordsSmcPrime(MigrationRecordsMixin):
 
 
 class TestMigrationRecordsSmcK(MigrationRecordsMixin):
-    model = msprime.SmcKApproxCoalescent()
+    model = msprime.SmcKApproxCoalescent(1)
 
 
 class TestMigrationRecordsDtwf(MigrationRecordsMixin):
@@ -2576,7 +2576,11 @@ class TestFullArgMigration:
         self.verify_two_pops_full_arg(ts)
 
     def test_full_arg_migration_smc(self):
-        for model in ["smc", "smc_prime", msprime.SmcKApproxCoalescent()]:
+        for model in [
+            msprime.SmcApproxCoalescent(),
+            msprime.SmcPrimeApproxCoalescent(),
+            msprime.SmcKApproxCoalescent(1),
+        ]:
             population_configurations = [
                 msprime.PopulationConfiguration(10),
                 msprime.PopulationConfiguration(10),

@@ -60,7 +60,7 @@ class TestIntrospectionInterface:
         assert repr(model) == repr_s
         assert str(model) == repr_s
 
-        model = msprime.SmcKApproxCoalescent()
+        model = msprime.SmcKApproxCoalescent(0.0)
         repr_s = "SmcKApproxCoalescent(duration=None, hull_offset=0.0)"
         assert repr(model) == repr_s
         assert str(model) == repr_s
@@ -144,7 +144,7 @@ class TestModelFactory:
             msprime.StandardCoalescent(),
             msprime.SmcApproxCoalescent(),
             msprime.SmcPrimeApproxCoalescent(),
-            msprime.SmcKApproxCoalescent(),
+            msprime.SmcKApproxCoalescent(1),
             msprime.DiscreteTimeWrightFisher(),
             msprime.FixedPedigree(),
             msprime.SweepGenicSelection(
@@ -332,11 +332,11 @@ class TestClassesKeywordArgs:
             msprime.SweepGenicSelection(1)
 
     def test_smck_coalescent(self):
-        model = msprime.SmcKApproxCoalescent()
-        assert model.duration is None
-        assert model.hull_offset == 0.0
 
-        model = msprime.SmcKApproxCoalescent(hull_offset=1.1)
+        with pytest.raises(TypeError, match="hull_offset"):
+            model = msprime.SmcKApproxCoalescent()
+
+        model = msprime.SmcKApproxCoalescent(1.1)
         assert model.duration is None
         assert model.hull_offset == 1.1
 
@@ -471,7 +471,7 @@ class TestParametricModels:
 
     def test_smck_coalescent_parameters(self):
         for hull_offset in [0.01, 10.0, 0.99]:
-            model = msprime.SmcKApproxCoalescent(hull_offset=hull_offset)
+            model = msprime.SmcKApproxCoalescent(hull_offset)
             assert model.hull_offset == hull_offset
             d = model._as_lowlevel()
             assert d == {"name": "smc_k", "hull_offset": hull_offset, "duration": None}

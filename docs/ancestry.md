@@ -2259,7 +2259,7 @@ In this example, we use the {class}`SMC(k) <.SmcKApproxCoalescent>` model to run
 simulations:
 ```{code-cell}
 ts = msprime.sim_ancestry(4, population_size=10,
-                         model=msprime.SmcKApproxCoalescent(hull_offset=1),
+                         model=msprime.SmcKApproxCoalescent(1),
                          random_seed=1)
 SVG(ts.draw_svg(y_axis=True, time_scale="log_time"))
 ```

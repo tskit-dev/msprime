@@ -1798,7 +1798,7 @@ class SmcApproxCoalescent(AncestryModel):
         This model is implemented using a naive rejection sampling approach
         and so it may not be any more efficient to simulate than the
         standard Hudson model.
-        We recommend using the ``SmcKApproxCoalescent(hull_offset=0)`` instead
+        We recommend using the ``SmcKApproxCoalescent(0)`` instead
 
     The string ``"smc"`` can be used to refer to this model.
     """
@@ -1822,7 +1822,8 @@ class SmcPrimeApproxCoalescent(AncestryModel):
         This model is implemented using a naive rejection sampling approach
         and so it may not be any more efficient to simulate than the
         standard Hudson model. We recommend using the
-        ``SmcKApproxCoalescent(hull_offset=1)`` instead.
+        ``SmcKApproxCoalescent(1)`` for discrete genomes instead, or
+        ``SmcKApproxCoalescent(1e-14)`` for continous genomes.
 
     The string ``"smc_prime"`` can be used to refer to this model.
     """
@@ -1845,15 +1846,15 @@ class SmcKApproxCoalescent(ParametricAncestryModel):
 
     Specifically, if the hull_offset is set to 0, then only overlapping genomic
     tracts can be joined by a common ancestor event (this is equivalent to the
-    SMC model). If the hull_offset is set to 1, then overlapping or adjacent
-    genomic tracts can be joined by a common ancestor (this is equivalent to the
-    SMC' model). If the hull_offset is set to full the sequence length, then any
-    segments can share a common ancestor, which is equivalent to the standard Hudson
-    coalescent.
+    SMC model). If the hull_offset is set to 1 (for discrete genomes), then
+    overlapping or adjacent genomic tracts can be joined by a common ancestor
+    (this is equivalent to the SMC' model). If the hull_offset is set to full
+    the sequence length, then any segments can share a common ancestor, which
+    is equivalent to the standard Hudson coalescent.
 
     :param float hull_offset: Determines the maximum distance between genomic tracts
         of ancestral material that can be joined by a common ancestor event.
-        Defaults to 0 (equivalent to the SMC model).
+
     """
 
     name = "smc_k"
@@ -1861,7 +1862,7 @@ class SmcKApproxCoalescent(ParametricAncestryModel):
     hull_offset: float
 
     # We have to define an __init__ to enforce keyword-only behaviour
-    def __init__(self, *, duration=None, hull_offset=0.0):
+    def __init__(self, hull_offset, *, duration=None):
         self.duration = duration
         self.hull_offset = hull_offset
 
