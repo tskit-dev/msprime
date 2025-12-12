@@ -67,8 +67,8 @@ def _model_factory(model: None | str | AncestryModel) -> AncestryModel:
     """
     model_map = {
         "hudson": StandardCoalescent(),
-        "smc": SmcApproxCoalescent(),
-        "smc_prime": SmcPrimeApproxCoalescent(),
+        "smc": SmcKApproxCoalescent(hull_offset=0.0),
+        "smc_prime": SmcKApproxCoalescent(hull_offset=1.0),
         "dtwf": DiscreteTimeWrightFisher(),
         "fixed_pedigree": FixedPedigree(),
     }
@@ -1799,8 +1799,6 @@ class SmcApproxCoalescent(AncestryModel):
         and so it may not be any more efficient to simulate than the
         standard Hudson model.
         We recommend using the ``SmcKApproxCoalescent(hull_offset=0)`` instead
-
-    The string ``"smc"`` can be used to refer to this model.
     """
 
     name = "smc"
@@ -1824,7 +1822,6 @@ class SmcPrimeApproxCoalescent(AncestryModel):
         standard Hudson model. We recommend using the
         ``SmcKApproxCoalescent(hull_offset=1)`` instead.
 
-    The string ``"smc_prime"`` can be used to refer to this model.
     """
 
     name = "smc_prime"
@@ -1851,9 +1848,14 @@ class SmcKApproxCoalescent(ParametricAncestryModel):
     segments can share a common ancestor, which is equivalent to the standard Hudson
     coalescent.
 
+    The string ``"smc"`` can be used to refer to this model with a `` hull_offset=0``.
+
+    The string ``"smc_prime"`` can be used to refer to this model with a
+    `` hull_offset=1``.
+
     :param float hull_offset: Determines the maximum distance between genomic tracts
         of ancestral material that can be joined by a common ancestor event.
-        Defaults to 0 (equivalent to the SMC model).
+
     """
 
     name = "smc_k"
@@ -1861,7 +1863,7 @@ class SmcKApproxCoalescent(ParametricAncestryModel):
     hull_offset: float
 
     # We have to define an __init__ to enforce keyword-only behaviour
-    def __init__(self, *, duration=None, hull_offset=0.0):
+    def __init__(self, hull_offset, *, duration=None):
         self.duration = duration
         self.hull_offset = hull_offset
 
