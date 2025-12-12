@@ -3052,7 +3052,7 @@ class TestSMCK:
     def test_discrete(self, seed):
         tss = msprime.sim_ancestry(
             samples=10,
-            model=msprime.SmcKApproxCoalescent(),
+            model=msprime.SmcKApproxCoalescent(1),
             recombination_rate=0.005,
             sequence_length=1000,
             random_seed=seed,
@@ -3064,7 +3064,7 @@ class TestSMCK:
     def test_continuous(self):
         tss = msprime.sim_ancestry(
             samples=10,
-            model=msprime.SmcKApproxCoalescent(),
+            model=msprime.SmcKApproxCoalescent(1),
             recombination_rate=0.005,
             sequence_length=1000,
             num_replicates=10,
@@ -3086,7 +3086,7 @@ class TestSMCK:
         ts = msprime.sim_ancestry(
             initial_state=tables,
             population_size=10_000,
-            model=msprime.SmcKApproxCoalescent(),
+            model=msprime.SmcKApproxCoalescent(1),
             recombination_rate=1e-6,
         )
         for tree in ts.trees():
@@ -3098,7 +3098,7 @@ class TestSMCK:
             population_size=10_000,
             model=[
                 msprime.StandardCoalescent(duration=10),
-                msprime.SmcKApproxCoalescent(duration=10),
+                msprime.SmcKApproxCoalescent(1, duration=10),
                 msprime.StandardCoalescent(),
             ],
             random_seed=10,
@@ -3114,7 +3114,7 @@ class TestSMCK:
             population_size=10_000,
             model=[
                 msprime.StandardCoalescent(duration=100),
-                msprime.SmcKApproxCoalescent(),
+                msprime.SmcKApproxCoalescent(1),
             ],
             random_seed=10,
             recombination_rate=1e-4,
@@ -3129,7 +3129,7 @@ class TestSMCK:
         tss = msprime.sim_ancestry(
             samples=10,
             population_size=10_000,
-            model=msprime.SmcKApproxCoalescent(hull_offset=hull_offset),
+            model=msprime.SmcKApproxCoalescent(hull_offset),
             random_seed=10,
             recombination_rate=1e-5,
             sequence_length=100,
@@ -3149,7 +3149,7 @@ class TestSMCK:
         ts = msprime.sim_ancestry(
             samples={0: 2, 1: 2},
             demography=demography,
-            model=msprime.SmcKApproxCoalescent(),
+            model=msprime.SmcKApproxCoalescent(1),
             random_seed=74024,
             recombination_rate=1e-5,
             sequence_length=100,
@@ -3166,7 +3166,7 @@ class TestSMCK:
         ):
             msprime.sim_ancestry(
                 samples=10,
-                model=msprime.SmcKApproxCoalescent(),
+                model=msprime.SmcKApproxCoalescent(1),
                 sequence_length=100,
                 gene_conversion_rate=1.0,
                 gene_conversion_tract_length=5,

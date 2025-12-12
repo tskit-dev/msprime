@@ -4535,7 +4535,7 @@ class SmckvsSmcKApproxCoalescent(Test):
     """
 
     models = {
-        "SmcKApprox": msprime.SmcKApproxCoalescent(),
+        "SmcKApprox": msprime.SmcKApproxCoalescent(hull_offset=0.0),
         "smc": msprime.SmcApproxCoalescent(),
     }
 
@@ -4955,9 +4955,9 @@ class SmcKTest(SmckvsSmcKApproxCoalescent):
         Runs the check for the mean length of gene conversion tracts.
         """
         models = {
-            "Hudson": msprime.SmcApproxCoalescent(),
-            "SMC": msprime.SmcKApproxCoalescent(),
-            "SMCK": msprime.StandardCoalescent(),
+            "SMC": msprime.SmcApproxCoalescent(),
+            "SMCK": msprime.SmcKApproxCoalescent(hull_offset=0.0),
+            "Hudson": msprime.StandardCoalescent(),
         }
         num_replicates = 10
         n = 10
@@ -5053,7 +5053,7 @@ class SmcKTest(SmckvsSmcKApproxCoalescent):
 
         models_to_run = [
             (msprime.SmcApproxCoalescent(), "msprime (hudson)"),
-            (msprime.SmcKApproxCoalescent(), "smc"),
+            (msprime.SmcApproxCoalescent(), "smc"),
             (msprime.SmcPrimeApproxCoalescent(), "smc_prime"),
             (msprime.SmcKApproxCoalescent(hull_offset=0.0), "smc_k(0)"),
             (msprime.SmcKApproxCoalescent(hull_offset=1.0), "smc_k(1)"),
@@ -5618,7 +5618,7 @@ class SimulateAboveRoot(Test):
             samples=10,
             sequence_length=100,
             recombination_rate=0.1,
-            model=msprime.SmcKApproxCoalescent(),
+            model=msprime.SmcKApproxCoalescent(hull_offset=0.0),
             num_replicates=300,
         )
 
