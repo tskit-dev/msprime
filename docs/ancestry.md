@@ -94,7 +94,7 @@ this.
 : Coalescent with recombination ("hudson")
 
 {class}`.SmcKApproxCoalescent`
-: General Sequentially Markov Coalescent 
+: General Sequentially Markov Coalescent
 
 {class}`.DiscreteTimeWrightFisher`
 : Generation-by-generation Wright-Fisher
@@ -2230,7 +2230,7 @@ in units of 4N generations.
 
 ### SMC approximations
 
-The **SMC** and **SMC′** 
+The **SMC** and **SMC′**
 are approximations of the continuous time
 {ref}`Hudson coalescent<sec_ancestry_models_hudson>` model. These were originally
 motivated largely by the need to simulate coalescent processes more efficiently
@@ -2240,19 +2240,19 @@ mean that such approximations are now unnecessary for many simulations.
 
 The **SMC** and **SMC'** are, however, very important for inference, as the approximations
 have made many analytical advances possible. Moreover, using these approximations,
-we are able to simulate regimes which we couldn't simulate otherwise: for example, 
+we are able to simulate regimes which we couldn't simulate otherwise: for example,
 **Drosophila** and **Drosophila-like** simulations with very high scaled recombination rates.
 
 
-The {class}`SMC(k) <.SmcKApproxCoalescent>` model is a general simulations model that can simulate various **SMC** approximations 
-(e.g., **SMC** and **SMC′**). It accepts a ```hull_offset``` parameter, which defines the extent of 
-**SMC** approximations in the simulation. The ```hull_offset``` represents the maximum allowed 
-distance between two genomic segments that can share a common ancestor. Setting the 
-```hull_offset``` to **0** means only overlapping genomic segments can share a common ancestor, 
-corresponding to the backward-in-time definition of the **SMC** model. Similarly, setting 
-the ```hull_offset``` to **1** allows adjacent genomic segments, as well as overlapping ones, to 
-share a common ancestor, which defines the **SMC′** model. Simulating under the Hudson 
-coalescent model is equivalent to setting the ```hull_offset``` to the sequence length. The 
+The {class}`SMC(k) <.SmcKApproxCoalescent>` model is a general simulations model that can simulate various **SMC** approximations
+(e.g., **SMC** and **SMC′**). It accepts a ```hull_offset``` parameter, which defines the extent of
+**SMC** approximations in the simulation. The ```hull_offset``` represents the maximum allowed
+distance between two genomic segments that can share a common ancestor. Setting the
+```hull_offset``` to **0** means only overlapping genomic segments can share a common ancestor,
+corresponding to the backward-in-time definition of the **SMC** model. Similarly, setting
+the ```hull_offset``` to **1** allows adjacent genomic segments, as well as overlapping ones, to
+share a common ancestor, which defines the **SMC′** model. Simulating under the Hudson
+coalescent model is equivalent to setting the ```hull_offset``` to the sequence length. The
 hull_offset can take any value between **0** and the sequence length.
 
 In this example, we use the {class}`SMC(k) <.SmcKApproxCoalescent>` model to run **SMC'**
@@ -2265,7 +2265,7 @@ SVG(ts.draw_svg(y_axis=True, time_scale="log_time"))
 ```
 :::{Note}
 Since the **SMC** models are approximations of the {ref}`Hudson coalescent<sec_ancestry_models_hudson>`,
-and since the {ref}`Hudson coalescent<sec_ancestry_models_hudson>` model is well optimised for 
+and since the {ref}`Hudson coalescent<sec_ancestry_models_hudson>` model is well optimised for
 regimes with moderate scaled recombination rates (including full human chromosome simulations),
 we recommend using the {ref}`Hudson coalescent<sec_ancestry_models_hudson>` whenever possible.
 :::
@@ -2843,37 +2843,38 @@ combined with other {ref}`ancestry models<sec_ancestry_models>`.
 #### Tracing ancestry through a pedigree
 
 The previous simulation generated trees that are embedded within the pedigree,
-but it doesn't tell us directly the exact path that each sample's genetic
+but it doesn't tell us directly the path that each sample's genetic
 material took through its ancestors.
 
 To trace these paths exactly, we can
 use a combination of ``additional_nodes``,
 ``coalescing_segments_only``
 (see {ref}`sec_ancestry_additional_nodes`),
-and stop_at_local_mrca (see {ref}`sec_ancestry_stop_at_local_mrca`). In this
-example, we show how to trace the exact path that each sample's genetic material
-took through its ancestors.
+and stop_at_local_mrca (see {ref}`sec_ancestry_stop_at_local_mrca`).
+For this example, we create another contrived pedigree with a single
+proband, and 3 generations of diploid ancestors:
 
 ```{code-cell}
-
-import io
-import tskit
 ped_txt = """\
 # id parent0 parent1 time is_sample
-0   2   3   0.0 1
-1   2   2   0.0 1
-2   4   5   1.0 0
-3   5   5   1.0 0
-4   .   .   2.0 0
-5   6   .   2.0 0
+0   1   2   0.0 1
+1   3   4   1.0 0
+2   3   4   1.0 0
+3   5   6   2.0 0
+4   5   6   2.0 0
+5   .   .   3.0 0
 6   .   .   3.0 0
 """
 pedigree = msprime.parse_pedigree(io.StringIO(ped_txt), sequence_length=100)
-
+draw_pedigree(pedigree.tree_sequence())
+```
+We can then run a simuation through this pedigree. For simplicity here,
+we don't have any recombination:
+```{code-cell}
 ped_ts = msprime.sim_ancestry(
     initial_state=pedigree,
     model="fixed_pedigree",
-    random_seed=3,
+    random_seed=998,
     coalescing_segments_only=False,
     additional_nodes=(
          msprime.NodeType.PASS_THROUGH),
@@ -2882,13 +2883,10 @@ ped_ts = msprime.sim_ancestry(
 node_labels = {node.id: f"{node.individual}({node.id})" for node in ped_ts.nodes()}
 SVG(ped_ts.draw_svg(y_axis=True,  node_labels=node_labels, size=(600,200)))
 ```
-Here, we simulated a simple pedigree of two diploid individuals across three generations.
-
-In this figure, we can see that the ancestor of node 5 is node 6. We can also see that part of the genetic
-material of node 0 was inherited from node 5 through node 3. Both observations would 
-have had to be inferred otherwise.
-
-
+Now we can see that the two genomes of individual 0 (nodes 0 and 1)
+reach their common ancestor node 9 of individual 4. Because we
+have set ``stop_at_local_mrca=False``, we can now also see how
+this ancestral material goes further back in the pedigree.
 
 #### Censoring pedigree information
 
