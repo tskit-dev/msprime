@@ -2842,32 +2842,51 @@ combined with other {ref}`ancestry models<sec_ancestry_models>`.
 
 #### Tracing ancestry through a pedigree
 
-The previous example generated trees that are embedded within the pedigree,
-but doesn't tell us directly the exact path that each sample's genetic
-material took through the ancestors. To trace these paths exactly, we can
-use a combination of the ``additional_nodes``,
+The previous simulation generated trees that are embedded within the pedigree,
+but it doesn't tell us directly the exact path that each sample's genetic
+material took through its ancestors.
+
+To trace these paths exactly, we can
+use a combination of ``additional_nodes``,
 ``coalescing_segments_only``
 (see {ref}`sec_ancestry_additional_nodes`),
-and ``stop_at_local_mrca`` (see {ref}`sec_ancestry_stop_at_local_mrca`).
+and stop_at_local_mrca (see {ref}`sec_ancestry_stop_at_local_mrca`). In this
+example, we show how to trace the exact path that each sample's genetic material
+took through its ancestors.
 
 ```{code-cell}
+
+import io
+import tskit
+ped_txt = """\
+# id parent0 parent1 time is_sample
+0   2   3   0.0 1
+1   2   2   0.0 1
+2   4   5   1.0 0
+3   5   5   1.0 0
+4   .   .   2.0 0
+5   6   .   2.0 0
+6   .   .   3.0 0
+"""
+pedigree = msprime.parse_pedigree(io.StringIO(ped_txt), sequence_length=100)
+
 ped_ts = msprime.sim_ancestry(
     initial_state=pedigree,
     model="fixed_pedigree",
-    random_seed=41,
-    recombination_rate=0.001,
+    random_seed=3,
     coalescing_segments_only=False,
     additional_nodes=(
-         msprime.NodeType.COMMON_ANCESTOR |
          msprime.NodeType.PASS_THROUGH),
-    stop_at_local_mrca=True
+    stop_at_local_mrca=False
 )
 node_labels = {node.id: f"{node.individual}({node.id})" for node in ped_ts.nodes()}
 SVG(ped_ts.draw_svg(y_axis=True,  node_labels=node_labels, size=(600,200)))
 ```
+Here, we simulated a simple pedigree of two diploid individuals across three generations.
 
-We can now see that the ancestor of node 15 is 20, which we would have to
-infer in the previous example.
+In this figure, we can see that the ancestor of node 5 is node 6. We can also see that part of the genetic
+material of node 0 was inherited from node 5 through node 3. Both observations would 
+have had to be inferred otherwise.
 
 
 
