@@ -2230,39 +2230,18 @@ in units of 4N generations.
 
 ### SMC approximations
 
-The **SMC** and **SMC′**
-are approximations of the continuous time
-{ref}`Hudson coalescent<sec_ancestry_models_hudson>` model. These were originally
-motivated largely by the need to simulate coalescent processes more efficiently
-than was possible using the software available at the time; however,
-[improved algorithms](https://doi.org/10.1371/journal.pcbi.1004842)
-mean that such approximations are now unnecessary for many simulations.
+The **SMC** and **SMC′** are widely used approximations to the standard coalescent.
+These are implemented in msprime using using the general
+{class}`.SMCK` simulation model. The SMC(k) has a single required parameter ``k``
+which sets the maximum allowed
+distance between two genomic segments that can share a common ancestor.
+Thus, when k=0, only overlapping genomic segments can share a common ancestor,
+corresponding to the backward-in-time definition of the **SMC** model.
 
-The **SMC** and **SMC'** are, however, very important for inference, as the approximations
-have made many analytical advances possible. Moreover, using these approximations,
-we are able to simulate regimes which we couldn't simulate otherwise: for example,
-**Drosophila** and **Drosophila-like** simulations with very high scaled recombination rates.
+:::{todo}
+Give a useful documentation example here which illustrates the overlap.
+:::
 
-
-The {class}`SMC(k) <.SMCK>` model is a general simulations model that can simulate various **SMC** approximations
-(e.g., **SMC** and **SMC′**). It accepts a ```hull_offset``` parameter, which defines the extent of
-**SMC** approximations in the simulation. The ```hull_offset``` represents the maximum allowed
-distance between two genomic segments that can share a common ancestor. Setting the
-```hull_offset``` to **0** means only overlapping genomic segments can share a common ancestor,
-corresponding to the backward-in-time definition of the **SMC** model. Similarly, setting
-the ```hull_offset``` to **1** allows adjacent genomic segments, as well as overlapping ones, to
-share a common ancestor, which defines the **SMC′** model. Simulating under the Hudson
-coalescent model is equivalent to setting the ```hull_offset``` to the sequence length. The
-hull_offset can take any value between **0** and the sequence length.
-
-In this example, we use the {class}`SMC(k) <.SMCK>` model to run **SMC'**
-simulations:
-```{code-cell}
-ts = msprime.sim_ancestry(4, population_size=10,
-                         model=msprime.SMCK(1),
-                         random_seed=1)
-SVG(ts.draw_svg(y_axis=True, time_scale="log_time"))
-```
 :::{Note}
 Since the **SMC** models are approximations of the {ref}`Hudson coalescent<sec_ancestry_models_hudson>`,
 and since the {ref}`Hudson coalescent<sec_ancestry_models_hudson>` model is well optimised for

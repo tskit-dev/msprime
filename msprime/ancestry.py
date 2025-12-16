@@ -1785,8 +1785,9 @@ class StandardCoalescent(AncestryModel):
 
 class SmcApproxCoalescent(AncestryModel):
     """
-    Legacy implementation of the SMC model. Please use :class:`SMCK`
-    instead.
+    Legacy implementation of the SMC model. Please see the
+    :ref:`sec_ancestry_models_smc` section for information on the more
+    efficient :class:`SMCK` method.
 
     The Sequentially Markov Coalescent (SMC) model defined by
     `McVean and Cardin (2005) <https://dx.doi.org/10.1098%2Frstb.2005.1673>`_.
@@ -1798,7 +1799,6 @@ class SmcApproxCoalescent(AncestryModel):
         This model is implemented using a naive rejection sampling approach
         and so it may not be any more efficient to simulate than the
         standard Hudson model.
-        We recommend using the ``SMCK(0)`` instead
 
     The string ``"smc"`` can be used to refer to this model.
     """
@@ -1808,8 +1808,9 @@ class SmcApproxCoalescent(AncestryModel):
 
 class SmcPrimeApproxCoalescent(AncestryModel):
     """
-    Legacy implementation of the SMC' model. Please use :class:`SMCK`
-    instead.
+    Legacy implementation of the SMC' model. Please see the
+    :ref:`sec_ancestry_models_smc` section for information on the more
+    efficient :class:`SMCK` method.
 
     The SMC' model defined by
     `Marjoram and Wall (2006) <https://doi.org/10.1186/1471-2156-7-16>`_
@@ -1821,9 +1822,7 @@ class SmcPrimeApproxCoalescent(AncestryModel):
     .. note::
         This model is implemented using a naive rejection sampling approach
         and so it may not be any more efficient to simulate than the
-        standard Hudson model. We recommend using the
-        ``SMCK(1)`` for discrete genomes instead, or
-        ``SMCK(1e-14)`` for continous genomes.
+        standard Hudson model.
 
     The string ``"smc_prime"`` can be used to refer to this model.
     """
@@ -1843,20 +1842,14 @@ class SMCK(ParametricAncestryModel):
     A general Sequentially Markov Coalescent (SMC) model. This model accepts a
     parameter ``k`` that defines the allowed distances
     between the genomic tracts of ancestral material in a common ancestor event.
-
-    Specifically, if k is 0, then only overlapping genomic
+    If k is 0, then only overlapping genomic
     tracts can be joined by a common ancestor event (this is equivalent to the
     SMC model).
 
-    For discrete genomes, setting k=1 allows overlapping or adjacent genomic
-    tracts to be joined by a common ancestor
-    (this is equivalent to the SMC' model). If the hull_offset is set to full
-    the sequence length, then any segments can share a common ancestor, which
-    is equivalent to the standard Hudson coalescent.
+    Please see the :ref:`sec_ancestry_models_smc` section for more information.
 
     :param float k: Determines the maximum distance between genomic tracts
         of ancestral material that can be joined by a common ancestor event.
-
     """
 
     name = "smc_k"
