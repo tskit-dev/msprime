@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2015-2021 University of Oxford
+# Copyright (C) 2015-2025 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -834,11 +834,11 @@ def _parse_sim_ancestry(
     models = _parse_model_arg(model)
     is_dtwf = isinstance(models[0], DiscreteTimeWrightFisher)
     is_pedigree = any(isinstance(model, FixedPedigree) for model in models)
-    is_smck = any(isinstance(model, SmcKApproxCoalescent) for model in models)
+    is_smck = any(isinstance(model, SMCK) for model in models)
 
     if is_smck and gene_conversion_rate is not None:
         raise ValueError(
-            "Gene conversion is not supported for the SmcKApproxCoalescent model. "
+            "Gene conversion is not supported for the SMCK model. "
             "Please refer to issue #2399 on GitHub for details."
         )
 
@@ -1785,7 +1785,7 @@ class StandardCoalescent(AncestryModel):
 
 class SmcApproxCoalescent(AncestryModel):
     """
-    Legacy implementation of the SMC model. Please use :class:`SmcKApproxCoalescent`
+    Legacy implementation of the SMC model. Please use :class:`SMCK`
     instead.
 
     The Sequentially Markov Coalescent (SMC) model defined by
@@ -1798,7 +1798,7 @@ class SmcApproxCoalescent(AncestryModel):
         This model is implemented using a naive rejection sampling approach
         and so it may not be any more efficient to simulate than the
         standard Hudson model.
-        We recommend using the ``SmcKApproxCoalescent(0)`` instead
+        We recommend using the ``SMCK(0)`` instead
 
     The string ``"smc"`` can be used to refer to this model.
     """
@@ -1808,7 +1808,7 @@ class SmcApproxCoalescent(AncestryModel):
 
 class SmcPrimeApproxCoalescent(AncestryModel):
     """
-    Legacy implementation of the SMC' model. Please use :class:`SmcKApproxCoalescent`
+    Legacy implementation of the SMC' model. Please use :class:`SMCK`
     instead.
 
     The SMC' model defined by
@@ -1822,8 +1822,8 @@ class SmcPrimeApproxCoalescent(AncestryModel):
         This model is implemented using a naive rejection sampling approach
         and so it may not be any more efficient to simulate than the
         standard Hudson model. We recommend using the
-        ``SmcKApproxCoalescent(1)`` for discrete genomes instead, or
-        ``SmcKApproxCoalescent(1e-14)`` for continous genomes.
+        ``SMCK(1)`` for discrete genomes instead, or
+        ``SMCK(1e-14)`` for continous genomes.
 
     The string ``"smc_prime"`` can be used to refer to this model.
     """
@@ -1838,33 +1838,33 @@ class ParametricAncestryModel(AncestryModel):
 
 
 @dataclasses.dataclass
-class SmcKApproxCoalescent(ParametricAncestryModel):
+class SMCK(ParametricAncestryModel):
     """
     A general Sequentially Markov Coalescent (SMC) model. This model accepts a
-    ``hull_offset`` parameter (defaults to 0) that defines the allowed distances
+    parameter ``k`` that defines the allowed distances
     between the genomic tracts of ancestral material in a common ancestor event.
 
-    Specifically, if the hull_offset is set to 0, then only overlapping genomic
+    Specifically, if k is 0, then only overlapping genomic
     tracts can be joined by a common ancestor event (this is equivalent to the
-    SMC model). If the hull_offset is set to 1 (for discrete genomes), then
-    overlapping or adjacent genomic tracts can be joined by a common ancestor
+    SMC model).
+
+    For discrete genomes, setting k=1 allows overlapping or adjacent genomic
+    tracts to be joined by a common ancestor
     (this is equivalent to the SMC' model). If the hull_offset is set to full
     the sequence length, then any segments can share a common ancestor, which
     is equivalent to the standard Hudson coalescent.
 
-    :param float hull_offset: Determines the maximum distance between genomic tracts
+    :param float k: Determines the maximum distance between genomic tracts
         of ancestral material that can be joined by a common ancestor event.
 
     """
 
     name = "smc_k"
+    k: float
 
-    hull_offset: float
-
-    # We have to define an __init__ to enforce keyword-only behaviour
-    def __init__(self, hull_offset, *, duration=None):
+    def __init__(self, k, *, duration=None):
+        self.k = k
         self.duration = duration
-        self.hull_offset = hull_offset
 
 
 class DiscreteTimeWrightFisher(AncestryModel):

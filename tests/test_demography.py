@@ -2521,7 +2521,7 @@ class TestMigrationRecordsSmcPrime(MigrationRecordsMixin):
 
 
 class TestMigrationRecordsSmcK(MigrationRecordsMixin):
-    model = msprime.SmcKApproxCoalescent(1)
+    model = msprime.SMCK(1)
 
 
 class TestMigrationRecordsDtwf(MigrationRecordsMixin):
@@ -2579,7 +2579,7 @@ class TestFullArgMigration:
         for model in [
             msprime.SmcApproxCoalescent(),
             msprime.SmcPrimeApproxCoalescent(),
-            msprime.SmcKApproxCoalescent(1),
+            msprime.SMCK(1),
         ]:
             population_configurations = [
                 msprime.PopulationConfiguration(10),

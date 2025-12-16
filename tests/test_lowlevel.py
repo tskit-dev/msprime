@@ -834,9 +834,7 @@ class TestSimulationState(LowLevelTestCase):
         self.verify_simulation(3, 10, 1.0, model=get_simulation_model("smc"))
         self.verify_simulation(4, 10, 2.0, model=get_simulation_model("smc_prime"))
         self.verify_simulation(4, 10, 2.0, model=get_simulation_model("smc_prime"))
-        self.verify_simulation(
-            3, 10, 1.0, model=get_simulation_model("smc_k", hull_offset=0.0)
-        )
+        self.verify_simulation(3, 10, 1.0, model=get_simulation_model("smc_k", k=0.0))
 
     def test_event_by_event(self):
         n = 10
@@ -1328,17 +1326,17 @@ class TestSimulator(LowLevelTestCase):
     def test_smck_simulation_model(self):
         # set model to hudson for initialisation
         for bad_type in [None, str, "sdf"]:
-            model = get_simulation_model("smc_k", hull_offset=bad_type)
+            model = get_simulation_model("smc_k", k=bad_type)
             sim = make_sim(model=get_simulation_model())
             with pytest.raises(TypeError):
                 sim.model = model
-        for bad_hull_offset in [-1, -1e-6]:
+        for bad_k in [-1, -1e-6]:
             sim = make_sim(model=get_simulation_model())
-            model = get_simulation_model("smc_k", hull_offset=bad_hull_offset)
+            model = get_simulation_model("smc_k", k=bad_k)
             with pytest.raises(ValueError):
                 sim.model = model
-        for hull_offset in [0.0, 1.1e-4, 2.5]:
-            model = get_simulation_model("smc_k", hull_offset=hull_offset)
+        for k in [0.0, 1.1e-4, 2.5]:
+            model = get_simulation_model("smc_k", k=k)
             sim = make_sim(model=get_simulation_model())
             sim.model = model
             assert sim.model == model

@@ -93,7 +93,7 @@ this.
 {class}`.StandardCoalescent`
 : Coalescent with recombination ("hudson")
 
-{class}`.SmcKApproxCoalescent`
+{class}`.SMCK`
 : General Sequentially Markov Coalescent
 
 {class}`.DiscreteTimeWrightFisher`
@@ -2244,7 +2244,7 @@ we are able to simulate regimes which we couldn't simulate otherwise: for exampl
 **Drosophila** and **Drosophila-like** simulations with very high scaled recombination rates.
 
 
-The {class}`SMC(k) <.SmcKApproxCoalescent>` model is a general simulations model that can simulate various **SMC** approximations
+The {class}`SMC(k) <.SMCK>` model is a general simulations model that can simulate various **SMC** approximations
 (e.g., **SMC** and **SMC′**). It accepts a ```hull_offset``` parameter, which defines the extent of
 **SMC** approximations in the simulation. The ```hull_offset``` represents the maximum allowed
 distance between two genomic segments that can share a common ancestor. Setting the
@@ -2255,11 +2255,11 @@ share a common ancestor, which defines the **SMC′** model. Simulating under th
 coalescent model is equivalent to setting the ```hull_offset``` to the sequence length. The
 hull_offset can take any value between **0** and the sequence length.
 
-In this example, we use the {class}`SMC(k) <.SmcKApproxCoalescent>` model to run **SMC'**
+In this example, we use the {class}`SMC(k) <.SMCK>` model to run **SMC'**
 simulations:
 ```{code-cell}
 ts = msprime.sim_ancestry(4, population_size=10,
-                         model=msprime.SmcKApproxCoalescent(1),
+                         model=msprime.SMCK(1),
                          random_seed=1)
 SVG(ts.draw_svg(y_axis=True, time_scale="log_time"))
 ```

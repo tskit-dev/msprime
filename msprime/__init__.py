@@ -2,7 +2,7 @@
 # flake8: NOQA
 # noreorder
 #
-# Copyright (C) 2015-2021 University of Oxford
+# Copyright (C) 2015-2025 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -43,7 +43,7 @@ from msprime.ancestry import (
     sim_ancestry,
     SmcApproxCoalescent,
     SmcPrimeApproxCoalescent,
-    SmcKApproxCoalescent,
+    SMCK,
     StandardCoalescent,
     SweepGenicSelection,
     FixedPedigree,
@@ -157,7 +157,7 @@ __all__ = [
     "SimulationModelChange",
     "SmcApproxCoalescent",
     "SmcPrimeApproxCoalescent",
-    "SmcKApproxCoalescent",
+    "SMCK",
     "StandardCoalescent",
     "SweepGenicSelection",
     "FixedPedigree",
