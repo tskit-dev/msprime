@@ -60,8 +60,8 @@ class TestIntrospectionInterface:
         assert repr(model) == repr_s
         assert str(model) == repr_s
 
-        model = msprime.SmcKApproxCoalescent(0.0)
-        repr_s = "SmcKApproxCoalescent(duration=None, hull_offset=0.0)"
+        model = msprime.SMCK(0.0)
+        repr_s = "SMCK(duration=None, k=0.0)"
         assert repr(model) == repr_s
         assert str(model) == repr_s
 
@@ -144,7 +144,7 @@ class TestModelFactory:
             msprime.StandardCoalescent(),
             msprime.SmcApproxCoalescent(),
             msprime.SmcPrimeApproxCoalescent(),
-            msprime.SmcKApproxCoalescent(1),
+            msprime.SMCK(1),
             msprime.DiscreteTimeWrightFisher(),
             msprime.FixedPedigree(),
             msprime.SweepGenicSelection(
@@ -333,12 +333,16 @@ class TestClassesKeywordArgs:
 
     def test_smck_coalescent(self):
 
-        with pytest.raises(TypeError, match="hull_offset"):
-            model = msprime.SmcKApproxCoalescent()
+        with pytest.raises(TypeError, match="k"):
+            model = msprime.SMCK()
 
-        model = msprime.SmcKApproxCoalescent(1.1)
+        model = msprime.SMCK(1.1)
         assert model.duration is None
-        assert model.hull_offset == 1.1
+        assert model.k == 1.1
+
+        model = msprime.SMCK(1.1, duration=100)
+        assert model.k == 1.1
+        assert model.duration == 100
 
 
 class TestRejectedCommonAncestorEventCounts:
@@ -470,11 +474,11 @@ class TestParametricModels:
                 assert d == {"name": "dirac", "psi": psi, "c": c, "duration": None}
 
     def test_smck_coalescent_parameters(self):
-        for hull_offset in [0.01, 10.0, 0.99]:
-            model = msprime.SmcKApproxCoalescent(hull_offset)
-            assert model.hull_offset == hull_offset
+        for k in [0.01, 10.0, 0.99]:
+            model = msprime.SMCK(k)
+            assert model.k == k
             d = model._as_lowlevel()
-            assert d == {"name": "smc_k", "hull_offset": hull_offset, "duration": None}
+            assert d == {"name": "smc_k", "k": k, "duration": None}
 
 
 class TestMultipleMergerModels:

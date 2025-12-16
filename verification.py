@@ -3823,8 +3823,8 @@ class HudsonAnalytical(Test):
         gc_rate = 0.25 / (gc_length_rate_ratio * gc_length)
         seq_length = 500
         # tests both Hudson as well as SMC K
-        # by setting hull_offset to seq_length are essentially simulating Hudson
-        models = ["hudson", msprime.SmcKApproxCoalescent(hull_offset=seq_length)]
+        # by setting k to seq_length are essentially simulating Hudson
+        models = ["hudson", msprime.SMCK(k=seq_length)]
         predicted_prob = np.zeros([gc_length_rate_ratio.size, seq_length], dtype=float)
         empirical_prob_first = np.zeros(
             [2, gc_length_rate_ratio.size, seq_length], dtype=float
@@ -4529,17 +4529,17 @@ class SmcTest(Test):
         pyplot.close("all")
 
 
-class SmckvsSmcKApproxCoalescent(Test):
+class SmckvsSMCK(Test):
     """
     Tests for the SMC(k) approximation coalescent against the SMC(k) model.
     """
 
     models = {
-        "SmcKApprox": msprime.SmcKApproxCoalescent(hull_offset=0.0),
+        "SmcKApprox": msprime.SMCK(k=0.0),
         "smc": msprime.SmcApproxCoalescent(),
     }
 
-    def run_Smck_SmcKApproxCoalescent_stats(self, initial_condition=False, **kwargs):
+    def run_Smck_SMCK_stats(self, initial_condition=False, **kwargs):
         df_list = []
 
         for model, model_cls in self.models.items():
@@ -4640,12 +4640,12 @@ class SmckvsSmcKApproxCoalescent(Test):
         pyplot.close()
 
     def _run(self, **kwargs):
-        df = self.run_Smck_SmcKApproxCoalescent_stats(**kwargs)
+        df = self.run_Smck_SMCK_stats(**kwargs)
         self.plot_SmcKApprox_smcK_stats(df)
         self.plot_tree_intervals(df)
 
         # test with initial conditions
-        df = self.run_Smck_SmcKApproxCoalescent_stats(initial_condition=True, **kwargs)
+        df = self.run_Smck_SMCK_stats(initial_condition=True, **kwargs)
         self.output_dir = self.output_dir.parent / (
             self.output_dir.name + "_with_initial_conditions"
         )
@@ -4655,7 +4655,7 @@ class SmckvsSmcKApproxCoalescent(Test):
         self.plot_tree_intervals(df)
 
 
-class SmcKTest(SmckvsSmcKApproxCoalescent):
+class SmcKTest(SmckvsSMCK):
     """
     Tests for the SMC(0) model against rejection sampling.
     """
@@ -4679,9 +4679,9 @@ class SmcKTest(SmckvsSmcKApproxCoalescent):
 
         for j in range(len(num_loci)):
             for dest, model in [
-                (smck_zero_mean, msprime.SmcKApproxCoalescent(hull_offset=0.0)),
-                (smck_one_mean, msprime.SmcKApproxCoalescent(hull_offset=1.0)),
-                (smck_inf_mean, msprime.SmcKApproxCoalescent(hull_offset=num_loci[j])),
+                (smck_zero_mean, msprime.SMCK(k=0.0)),
+                (smck_one_mean, msprime.SMCK(k=1.0)),
+                (smck_inf_mean, msprime.SMCK(k=num_loci[j])),
                 (msp_mean, "hudson"),
                 (msp_smc_mean, "smc"),
                 (msp_smc_prime_mean, "smc_prime"),
@@ -4741,7 +4741,7 @@ class SmcKTest(SmckvsSmcKApproxCoalescent):
         var_smc_k_inf = np.zeros_like(rho)
 
         for j in range(len(L)):
-            for mean_array, var_array, hull_offset in zip(
+            for mean_array, var_array, k in zip(
                 [mean_smc_k_zero, mean_smc_k_one, mean_smc_k_inf],
                 [var_smc_k_zero, var_smc_k_one, var_smc_k_inf],
                 [0.0, 1.0, L[j]],
@@ -4751,7 +4751,7 @@ class SmcKTest(SmckvsSmcKApproxCoalescent):
                     recombination_rate=r,
                     Ne=Ne,
                     length=L[j],
-                    model=msprime.SmcKApproxCoalescent(hull_offset=hull_offset),
+                    model=msprime.SMCK(k=k),
                 )
                 for k in range(num_replicates):
                     smc_k_sim.run()
@@ -4956,7 +4956,7 @@ class SmcKTest(SmckvsSmcKApproxCoalescent):
         """
         models = {
             "SMC": msprime.SmcApproxCoalescent(),
-            "SMCK": msprime.SmcKApproxCoalescent(hull_offset=0.0),
+            "SMCK": msprime.SMCK(k=0.0),
             "Hudson": msprime.StandardCoalescent(),
         }
         num_replicates = 10
@@ -5055,9 +5055,9 @@ class SmcKTest(SmckvsSmcKApproxCoalescent):
             (msprime.SmcApproxCoalescent(), "msprime (hudson)"),
             (msprime.SmcApproxCoalescent(), "smc"),
             (msprime.SmcPrimeApproxCoalescent(), "smc_prime"),
-            (msprime.SmcKApproxCoalescent(hull_offset=0.0), "smc_k(0)"),
-            (msprime.SmcKApproxCoalescent(hull_offset=1.0), "smc_k(1)"),
-            (msprime.SmcKApproxCoalescent(hull_offset=L), "smc_k(inf)"),
+            (msprime.SMCK(k=0.0), "smc_k(0)"),
+            (msprime.SMCK(k=1.0), "smc_k(1)"),
+            (msprime.SMCK(k=L), "smc_k(inf)"),
         ]
 
         for gc_tract_length in gc_tract_lengths:
@@ -5618,7 +5618,7 @@ class SimulateAboveRoot(Test):
             samples=10,
             sequence_length=100,
             recombination_rate=0.1,
-            model=msprime.SmcKApproxCoalescent(hull_offset=0.0),
+            model=msprime.SMCK(k=0.0),
             num_replicates=300,
         )
 

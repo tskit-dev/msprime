@@ -1,6 +1,6 @@
 // clang-format off
 /*
-** Copyright (C) 2014-2020 University of Oxford
+** Copyright (C) 2014-2025 University of Oxford
 **
 ** This file is part of msprime.
 **
@@ -1172,13 +1172,13 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         goto out;
     }
     if (is_smc_k) {
-        value = get_dict_number(py_model, "hull_offset");
+        value = get_dict_number(py_model, "k");
         if (value == NULL) {
             goto out;
         }
         hull_offset = PyFloat_AsDouble(value);
         if (hull_offset < 0.0) {
-            PyErr_SetString(PyExc_ValueError, "Must have hull_offset >= 0.0");
+            PyErr_SetString(PyExc_ValueError, "Must have k >= 0.0");
             goto out;
         }
         err = msp_set_simulation_model_smc_k(self->sim, hull_offset);
@@ -2032,7 +2032,7 @@ Simulator_get_model(Simulator *self, void *closure)
         if (value == NULL) {
             goto out;
         }
-        if (PyDict_SetItemString(d, "hull_offset", value) != 0) {
+        if (PyDict_SetItemString(d, "k", value) != 0) {
             goto out;
         }
         Py_DECREF(value);

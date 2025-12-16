@@ -21,7 +21,7 @@ for discussion and examples of individual features.
   sim_ancestry
   SampleSet
   StandardCoalescent
-  SmcKApproxCoalescent
+  SMCK
   DiscreteTimeWrightFisher
   FixedPedigree
   BetaCoalescent
@@ -121,7 +121,7 @@ for discussion and examples of individual features.
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.SmcKApproxCoalescent
+.. autoclass:: msprime.SMCK
 ```
 
 ```{eval-rst}
