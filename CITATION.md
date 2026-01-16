@@ -32,6 +32,12 @@ If you use the Discrete Time Wright Fisher model, please cite the
 > *Accounting for long-range correlations in genome-wide simulations of large cohorts*,
 > PLOS Genetics 16(5): e1008619. https://doi.org/10.1371/journal.pgen.1008619
 
+If you use the FixedPedigree model, please cite the 
+[2023 Science paper](https://doi.org/10.1126/science.add5300):
+
+> Luke Anderson-Trocmé et al. (2023),  *On the genes, genealogies, and geographies of Quebec*,
+> Science 380.6647 (2023): 849-855. https://doi.org/10.1126/science.add5300
+
 Bibtex records:
 
 ```bibtex
@@ -78,5 +84,18 @@ Bibtex records:
   pages={e1008619},
   year={2020},
   publisher={Public Library of Science}
+}
+
+@article{anderson2023genes,
+  title={On the genes, genealogies, and geographies of Quebec},
+  author={Anderson-Trocm{\'e}, Luke and Nelson, Dominic and Zabad, Shadi and Diaz-Papkovich, Alex and Kryukov, Ivan
+     and Baya, Nikolas and Touvier, Mathilde and Jeffery, Ben and Dina, Christian
+     and V{\'e}zina, H{\'e}l{\`e}ne and others},
+  journal={Science},
+  volume={380},
+  number={6647},
+  pages={849--855},
+  year={2023},
+  publisher={American Association for the Advancement of Science}
 }
 ```
