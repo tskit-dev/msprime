@@ -1210,8 +1210,8 @@ class DebugOutputBase:
 
     def test_one_population(self):
         demography = msprime.Demography.isolated_model([10])
-        demography.add_population_parameters_change(0.1, initial_size=2),
-        demography.add_population_parameters_change(0.1, growth_rate=10),
+        demography.add_population_parameters_change(0.1, initial_size=2)
+        demography.add_population_parameters_change(0.1, growth_rate=10)
         self.verify(demography)
 
     def test_funky_metadata(self):
