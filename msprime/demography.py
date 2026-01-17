@@ -4219,7 +4219,7 @@ class DemographyDebugger:
                 double_step_validation=False,
             )
             m2 = mean_time(steps, P2)
-            keep_steps = np.in1d(steps, last_steps)
+            keep_steps = np.isin(steps, last_steps)
             p_diff = max(np.abs(P1 - P2[keep_steps]))
             m_diff = np.abs(m1 - m2) / m2
             last_P = P2[-1]
