@@ -375,7 +375,7 @@ print("Total missing span      = ", np.sum(rate_map.span[rate_map.missing]))
 print("Total non-missing span  = ", np.sum(rate_map.span[rate_map.non_missing]))
 ```
 
-### Mapping interace
+### Mapping interface
 
 The {ref}`sec_rate_maps_basics_mapping` takes the opposite
 approach to missing data to the {ref}`sec_rate_maps_basics_array`: missing

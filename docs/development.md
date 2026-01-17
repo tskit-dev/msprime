@@ -39,7 +39,7 @@ please open an [issue](<http://github.com/tskit-dev/msprime/issues>) or
   code. To run the checks without committing use `pre-commit run`. To bypass
   the checks (to save or get feedback on work-in-progress) use `git commit
   --no-verify`
-- If you have modifed the C code then
+- If you have modified the C code then
   `clang-format -i lib/tests/* lib/!(avl).{c,h}` will format the code to
   satisfy CI checks.
 - When ready open a pull request on GitHub. Please make sure that the tests pass before
@@ -97,9 +97,9 @@ documented in the following sections.
 Two different continuous integration providers are used, which run different
 combinations of tests on different platforms:
 
-1. [Github actions](<https://help.github.com/en/actions>) run a variety of code style and
+1. [GitHub Actions](<https://help.github.com/en/actions>) run a variety of code style and
    quality checks using [pre-commit](<https://pre-commit.com/>) along
-   with Python tests on Linux, OSX and Windows. The docs are also built and a preview
+   with Python tests on Linux, macOS and Windows. The docs are also built and a preview
    generated if changes are detected.
 2. [CircleCI](<https://circleci.com/>) Runs all Python tests using the apt-get
    infrastructure for system requirements. Additionally, the low-level tests

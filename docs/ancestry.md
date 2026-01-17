@@ -673,7 +673,7 @@ SVG(ts.draw_svg())
 assert 1 < ts.num_trees < 5
 ```
 
-Alternatively, we can simulate a continous genome by setting
+Alternatively, we can simulate a continuous genome by setting
 `discrete_genome=False`:
 
 ```{code-cell}
@@ -965,7 +965,7 @@ and represent the output as efficiently as possible. As a result, we don't
 store individual recombination events, but rather their effects on the output
 tree sequence. We also do not explicitly store common ancestor events that
 do not result in marginal coalescences. For some purposes, however,
-we want record information on other events of interest, not just the mimimal
+we want record information on other events of interest, not just the minimal
 representation of its outcome.
 
 The `additional_nodes` and
@@ -1079,7 +1079,7 @@ in the tree sequence according to their {class}`.NodeType`. Node 5 is both
 recombinant nodes (yellow). All other nodes are only associated with a
 `PASS_THROUGH` event (blue). Note that we do not observe any `COMMON_ANCESTOR`
 events. This means that all yellow nodes are also associated with a
-coalesence event (see {ref}`common ancestor events <sec_additional_nodes_ca>`).
+coalescence event (see {ref}`common ancestor events <sec_additional_nodes_ca>`).
 Note that in order to verify whether a node is `RECOMBINANT` **and** `PASS_THROUGH`,
 we use the bitwise **OR** to define its associated `NodeType` constant.
 
@@ -1193,7 +1193,7 @@ The `record_migrations` parameter allows us to record these events in the
 simulated tree sequence outputted by {func}`.sim_ancestry`. Briefly, a migration record
 encodes the node associated with the migration, the time of the event, the source and
 destination populations (backwards in time), and the left and right coordinates of the
-migrating segement. For more details on migration records, see the
+migrating segment. For more details on migration records, see the
 {ref}`migration table definition.<tskit:sec_migration_table_definition>`
 
 Here, we provide a simple example of the effect of setting `record_migrations=True`
@@ -2147,7 +2147,7 @@ ts = msprime.sim_ancestry(
 ```
 
 :::{warning}
-It is very imporant to remember to set a ``duration`` value in the first
+It is very important to remember to set a ``duration`` value in the first
 model here! Otherwise, the entire simulation will run under the DTWF model.
 :::
 
@@ -2847,7 +2847,7 @@ ped_txt = """\
 pedigree = msprime.parse_pedigree(io.StringIO(ped_txt), sequence_length=100)
 draw_pedigree(pedigree.tree_sequence())
 ```
-We can then run a simuation through this pedigree. For simplicity here,
+We can then run a simulation through this pedigree. For simplicity here,
 we don't have any recombination:
 ```{code-cell}
 ped_ts = msprime.sim_ancestry(

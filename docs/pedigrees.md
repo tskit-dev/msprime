@@ -234,7 +234,7 @@ For example, nodes 0 and 1 correspond to the two genomes of
 individual 0 (``child``), and these are both at time 0.
 
 The individual table also includes the original string ``file_id`` as
-metadata to faciliate joining with existing data sources. We can
+metadata to facilitate joining with existing data sources. We can
 access these IDs as follows:
 
 ```{code-cell}

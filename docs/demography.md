@@ -889,7 +889,7 @@ We can see that there is a strong burst of coalescence 25 generations ago.
 
 :::{important}
 Note that there is no possibility of recombination, migration or any other
-events occuring during the bottleneck: it is strictly *instantaneous*
+events occurring during the bottleneck: it is strictly *instantaneous*
 and can only result in coalescences within the trees.
 :::
 
