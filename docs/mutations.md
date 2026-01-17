@@ -616,7 +616,7 @@ for i, s in enumerate(model.alleles):
 If the top of a branch of length {math}`t` has allele {math}`i`,
 the bottom of the branch has allele {math}`j` with probability `Pt[i,j]`. Note that
 these values are sometimes called the "transition probabilities" for a branch, and
-therefore you may see the matrix {math}`P(t)` also being refered to as a
+therefore you may see the matrix {math}`P(t)` also being referred to as a
 "transition matrix"; this should not be confused with the probabilities of a single
 mutation resulting in each allele type, as specified via the `transition_matrix`
 parameter and stored under that name as an attribute of the underlying

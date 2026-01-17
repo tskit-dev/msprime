@@ -10,7 +10,7 @@ jupyter-book build -nW --keep-going .
 RETVAL=$?
 if [ $RETVAL -ne 0 ]; then
     if [ -e $REPORTDIR ]; then
-      echo "Error occured; showing saved reports"
+      echo "Error occurred; showing saved reports"
       cat $REPORTDIR/*
     fi
 else

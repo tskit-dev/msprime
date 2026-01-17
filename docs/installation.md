@@ -14,7 +14,7 @@ There are three options for installing `msprime`:
 ## Via Conda
 
 Convenient [conda](<https://conda.io/docs/>) packages are available for Python
-{{ min_python_version }} and greater on Linux, OSX and Windows.
+{{ min_python_version }} and greater on Linux, macOS and Windows.
 These pre-built binary packages are built using
 [conda-forge](<https://conda-forge.org/>).
 
@@ -45,7 +45,7 @@ for full details.
 
 In this example we create a
 [conda environment](<https://conda.io/docs/user-guide/tasks/manage-environments.html>)
-and install `msprime` into it on an OSX machine.
+and install `msprime` into it on an macOS machine.
 We assume that `conda` has been installed  and bash shell is being used (Windows users will need to modify the
 commands slightly).
 
