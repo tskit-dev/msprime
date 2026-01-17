@@ -27,8 +27,6 @@ import random
 import signal
 import sys
 import warnings
-from typing import Dict
-from typing import List
 
 import demes
 import tskit
@@ -1075,7 +1073,7 @@ def parse_sample_size(s: str) -> int:
     return int_val
 
 
-def parse_sample_spec(sample_spec: List[str]) -> Dict[str, int]:
+def parse_sample_spec(sample_spec: list[str]) -> dict[str, int]:
     """
     Parse a list of <population_name>:<sample_size> values into a dictionary.
     """

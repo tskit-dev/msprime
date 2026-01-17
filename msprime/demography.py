@@ -36,9 +36,9 @@ import re
 import sys
 import textwrap
 import warnings
+from collections.abc import MutableMapping
 from typing import Any
 from typing import ClassVar
-from typing import MutableMapping
 
 import demes
 import numpy as np
