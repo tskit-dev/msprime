@@ -14,17 +14,17 @@ repos:
       exclude: argtable3
       verbose: true
   - repo: https://github.com/asottile/reorder_python_imports
-    rev: v3.15.0
+    rev: v3.16.0
     hooks:
       - id: reorder-python-imports
         args: [--unclassifiable-application-module=_msprime]
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.20.0
+    rev: v3.21.2
     hooks:
       - id: pyupgrade
         args: [--py310-plus]
   - repo: https://github.com/psf/black
-    rev: 25.1.0
+    rev: 25.12.0
     hooks:
       - id: black
         language_version: python3
@@ -33,4 +33,4 @@ repos:
     hooks:
       - id: flake8
         args: [--config=.flake8]
-        additional_dependencies: ["flake8-bugbear==23.9.16", "flake8-builtins==2.0.1"]
+        additional_dependencies: ["flake8-bugbear==25.11.29", "flake8-builtins==3.1.0"]
