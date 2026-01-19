@@ -45,7 +45,7 @@ for full details.
 
 In this example we create a
 [conda environment](<https://conda.io/docs/user-guide/tasks/manage-environments.html>)
-and install `msprime` into it on an macOS machine.
+and install `msprime` into it on a macOS machine.
 We assume that `conda` has been installed  and bash shell is being used (Windows users will need to modify the
 commands slightly).
 
