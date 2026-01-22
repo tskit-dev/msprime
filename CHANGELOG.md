@@ -7,32 +7,19 @@
 
 - The `FixedPedigree` simulation model now supports internal samples ({issue}`1855`,
   {pr}`2321`, {pr}`2326`, {pr}`2388`, {user}`abureau`, {user}`jeromekelleher`).
-- Support for simulations after local mrca,
-  ({issue}`2157`, {pr}`2396`, {user}`jeromekelleher`, {user}`hossam26644`).
-- Add wheels on Windows ({pr}`2414`, {issue}`2200`,{user}`benjeffery`)
 
- **Performance improvements**
+- Add support and wheels for Python3.14
 
-- Significant performance improvements for large sample size simulations with the
-  standard coalescence model (About 2x faster),({issue}`2401`, {pr} `2385`, {user}`jeromekelleher`).
-  
-**Maintenance**
-
-- Add support and wheels for Python3.13
 - Drop Python 3.9 support, require Python >= 3.10 ({pr}`2418`, {user}`benjeffery`)
+
+- Add wheels on Windows ({pr}`2414`, {issue}`2200`,{user}`benjeffery`)
 
 **Breaking changes**:
 
-- Require tskit >= 1.0 ({issue}`2434`).
 - The `.asdict()` methods for Demography, Population, and Event classes in the
   demography submodule now return a `__class__` key. This is also stored in their
   provenance entries, to help recreate demography objects from provenance.
   ({pr}`{2368}, {user}`hyanwong`)
-
-**Bugfixes**
-
-- Fix problem with initial_state and tskit 1.0 ({issue}`2434`, {pr}`2432`,
-  {user}`jeromekelleher'.
 
 ## [1.3.4] - 2025-05-01
 
