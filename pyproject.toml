@@ -132,7 +132,7 @@ dev = [
     "sphinx>=4.4",
     "sphinx-argparse",
     "sphinx-issues",
-    "jupyter-book",
+    "jupyter-book<2",
     "networkx",
     "newick>=1.3.0",
     "python_jsonschema_objects"
