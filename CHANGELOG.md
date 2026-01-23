@@ -1,10 +1,13 @@
 # Changelog
 
 
-## [1.4.0] - 2025-XX-XX
+## [1.4.0b1] - 2025-01-23
 
 **New features**
 
+- Adds a new `SMC(k)` model that allows efficient simulation of very high
+  recombination rates for small samples ({user}`GertjanBisschop`, {user}`hossam26644`,
+  {user}`jeromekelleher`).
 - The `FixedPedigree` simulation model now supports internal samples ({issue}`1855`,
   {pr}`2321`, {pr}`2326`, {pr}`2388`, {user}`abureau`, {user}`jeromekelleher`).
 - Support for simulations after local mrca,
@@ -15,7 +18,7 @@
 
 - Significant performance improvements for large sample size simulations with the
   standard coalescence model (About 2x faster),({issue}`2401`, {pr} `2385`, {user}`jeromekelleher`).
-  
+
 **Maintenance**
 
 - Add support and wheels for Python3.13
