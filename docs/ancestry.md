@@ -2233,21 +2233,62 @@ in units of 4N generations.
 The **SMC** and **SMC′** are widely used approximations to the standard coalescent.
 These are implemented in msprime using using the general
 {class}`.SMCK` simulation model. The SMC(k) has a single required parameter ``k``
-which sets the maximum allowed
-distance between two genomic segments that can share a common ancestor.
-Thus, when k=0, only overlapping genomic segments can share a common ancestor,
-corresponding to the backward-in-time definition of the **SMC** model.
+which is best thought of as a "distance" from the SMC.
+Small values of ``k`` mean that the model is closer to the SMC
+and large values mean that the model is closer to the standard
+{ref}`Hudson coalescent<sec_ancestry_models_hudson>`.
+The ``k`` parameter is measured in units of **physical distance**, and
+it's therefore important to note that the effects of ``k``
+(and in particular, how close an approximation to the standard coalescent
+you get) depend on the other parameters to your simulation.
 
-:::{todo}
-Give a useful documentation example here which illustrates the overlap.
+In general, smaller values of ``k`` are expected to correspond to
+faster simulation times.
+
+:::{Important}
+The **SMCK** is most suited to simulations with small sample
+sizes and a very high scaled recombination rate (e.g., of Drosophila).
+In this case, the SMC approximation can be substantially faster
+than the standard coalescent. In most other cases, however,
+the standard {ref}`Hudson model<sec_ancestry_models_hudson>`
+will be faster.
 :::
 
-:::{Note}
-Since the **SMC** models are approximations of the {ref}`Hudson coalescent<sec_ancestry_models_hudson>`,
-and since the {ref}`Hudson coalescent<sec_ancestry_models_hudson>` model is well optimised for
-regimes with moderate scaled recombination rates (including full human chromosome simulations),
-we recommend using the {ref}`Hudson coalescent<sec_ancestry_models_hudson>` whenever possible.
-:::
+In the
+[backwards-time formulation](https://doi.org/10.1093/genetics/iyaf103)
+the SMC approximation only allows
+{ref}`common ancestor events<sec_additional_nodes_ca>`
+to occur between lineages with **overlapping** ancestral material.
+This implementation of the SMC keeps
+track of the potential pairs of lineages satisfying
+this condition by reasoning about the corresponding intervals,
+and computes waiting times between events accordingly.
+The ``k`` parameter generalises this by adding
+an "overhang" of length ``k`` to the hull
+of each lineage (the half-closed interval encapsulating
+its ancestral material).
+We then
+reason about how these extended hulls intersect, to yield
+the general model.
+Thus, ``k`` is measured in units of physical distance and is independent
+of recombination rate etc, and ``k=0`` is always equivalent to
+the SMC.
+
+When working with {ref}`discrete genome<sec_ancestry_discrete_genome>`
+of length ``L``, the interpretation of ``k`` is straightforward.
+Here, ``k=1`` is the SMC' (as an overhang of 1 basepair means that
+abutting lineages can have a common ancestor)
+and larger values of ``k``  correspond to closer approximations to the
+standard coalescent. The ``SMC(L)`` model is identical to the standard
+coalescent in a simulation with with sequence length ``L``.
+
+When working with a {ref}`continuous genome <sec_ancestry_discrete_genome>`,
+the definition of the SMC' is more subtle
+as we need ``k`` to be some very small value to ensure that
+abutting lineages can have a common ancestor, but larger distances
+are disallowed. In practise, it would be simpler to use a
+discrete genome model if strict conformity with the SMC' is required.
+
 
 (sec_ancestry_models_dtwf)=
 

@@ -1840,16 +1840,15 @@ class ParametricAncestryModel(AncestryModel):
 class SMCK(ParametricAncestryModel):
     """
     A general Sequentially Markov Coalescent (SMC) model. This model accepts a
-    parameter ``k`` that defines the allowed distances
-    between the genomic tracts of ancestral material in a common ancestor event.
-    If k is 0, then only overlapping genomic
-    tracts can be joined by a common ancestor event (this is equivalent to the
-    SMC model).
+    parameter ``k`` that (roughly speaking) defines the distance from
+    the SMC model. Thus ``k=0`` is equivalent to the SMC (more approximate),
+    and ``k=L`` is equivalent to the standard coalescent for a simulation
+    with sequence length ``L`` (less approximate). Smaller values of ``k``
+    usually correspond to shorter running times.
 
     Please see the :ref:`sec_ancestry_models_smc` section for more information.
 
-    :param float k: Determines the maximum distance between genomic tracts
-        of ancestral material that can be joined by a common ancestor event.
+    :param float k: The distance parameter defining the approximation.
     """
 
     name = "smc_k"
