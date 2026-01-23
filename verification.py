@@ -3822,9 +3822,8 @@ class HudsonAnalytical(Test):
         gc_length = np.array([100, 50, 20])
         gc_rate = 0.25 / (gc_length_rate_ratio * gc_length)
         seq_length = 500
-        # tests both Hudson as well as SMC K
-        # by setting k to seq_length are essentially simulating Hudson
-        models = ["hudson", msprime.SMCK(k=seq_length)]
+        # NOTE GC is not supported in SMCK. issue #2399
+        models = ["hudson"]
         predicted_prob = np.zeros([gc_length_rate_ratio.size, seq_length], dtype=float)
         empirical_prob_first = np.zeros(
             [2, gc_length_rate_ratio.size, seq_length], dtype=float
