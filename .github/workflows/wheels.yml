@@ -16,7 +16,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-13, macos-14, macos-15]
+        os: [macos-15-intel, macos-14, macos-15, macos-26]
         python: ["3.10", 3.11, 3.12, 3.13, 3.14]
     steps:
       - name: Checkout
@@ -32,7 +32,7 @@ jobs:
           brew install gsl
           pip install --upgrade pip build
       - name: Build Wheel (arm64)
-        if: matrix.os == 'macos-14' || matrix.os == 'macos-15'
+        if: matrix.os != 'macos-15-intel'
         run: |
           export PLAT="arm64"
           export _PYTHON_HOST_PLATFORM="macosx-11.0-arm64"
@@ -44,7 +44,7 @@ jobs:
           export LDFLAGS+=" -arch arm64"
           python -m build --wheel
       - name: Build Wheel (x86_64)
-        if: matrix.os == 'macos-13'
+        if: matrix.os == 'macos-15-intel'
         run: |
           export PLAT="x86_64"
           export _PYTHON_HOST_PLATFORM="macosx-11.0-x86_64"
@@ -154,7 +154,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-13, macos-14, macos-15]
+        os: [macos-15-intel, macos-14, macos-15, macos-26]
         python: ["3.10", 3.11, 3.12, 3.13, 3.14]
     steps:
       - name: Download wheels
