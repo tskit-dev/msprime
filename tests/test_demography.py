@@ -4312,9 +4312,11 @@ class TestDemographyObject:
         with pytest.raises(ValueError, match="must be distinct"):
             msprime.Demography([pop] * 2)
 
-    def test_population_ids_set_on_init(self):
-        pop = msprime.Population(10, id=0)
-        with pytest.raises(ValueError, match="ID should not be set"):
+    def test_population_ids_bad_on_init(self):
+        pop = msprime.Population(10, id=1)
+        with pytest.raises(
+            ValueError, match="ID should be unset or set to its index.*got 1"
+        ):
             msprime.Demography([pop])
 
     def test_add_population_error(self):
