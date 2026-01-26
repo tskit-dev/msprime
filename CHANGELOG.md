@@ -23,6 +23,7 @@
 
 - Add support and wheels for Python3.13
 - Drop Python 3.9 support, require Python >= 3.10 ({pr}`2418`, {user}`benjeffery`)
+- Update bundled tskit C API to 1.3.0.
 
 **Breaking changes**:
 
