@@ -2239,8 +2239,8 @@ and large values mean that the model is closer to the standard
 {ref}`Hudson coalescent<sec_ancestry_models_hudson>`.
 The ``k`` parameter is measured in units of **physical distance**, and
 it's therefore important to note that the effects of ``k``
-(and in particular, how close an approximation to the standard coalescent
-you get) depend on the other parameters to your simulation.
+(and in particular, how closely the standard coalescent is approximated)
+depend on the other parameters in your simulation.
 
 In general, smaller values of ``k`` are expected to correspond to
 faster simulation times.
@@ -2267,9 +2267,8 @@ The ``k`` parameter generalises this by adding
 an "overhang" of length ``k`` to the hull
 of each lineage (the half-closed interval encapsulating
 its ancestral material).
-We then
-reason about how these extended hulls intersect, to yield
-the general model.
+We then allow coalescence only for lineages that overlap in these extended
+hulls, to yield the general model.
 Thus, ``k`` is measured in units of physical distance and is independent
 of recombination rate etc, and ``k=0`` is always equivalent to
 the SMC.
@@ -2279,8 +2278,10 @@ of length ``L``, the interpretation of ``k`` is straightforward.
 Here, ``k=1`` is the SMC' (as an overhang of 1 basepair means that
 abutting lineages can have a common ancestor)
 and larger values of ``k``  correspond to closer approximations to the
-standard coalescent. The ``SMC(L)`` model is identical to the standard
-coalescent in a simulation with with sequence length ``L``.
+standard coalescent.
+The ``SMC(L)`` model is identical to the standard coalescent
+in a simulation with sequence length ``L`` (but will likely
+take substantially longer to run).
 
 When working with a {ref}`continuous genome <sec_ancestry_discrete_genome>`,
 the definition of the SMC' is more subtle
