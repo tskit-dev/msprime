@@ -244,6 +244,39 @@ class TestParseProvenance:
         assert command == "sim_mutations"
         assert prov["tree_sequence"] == ts1
 
+    def test_demography(self):
+        demography = msprime.Demography.island_model([1, 1], 1 / 3)
+        ts = msprime.sim_ancestry(
+            demography=demography,
+            samples=[
+                msprime.SampleSet(1, population=0),
+                msprime.SampleSet(1, population=1),
+            ],
+            random_seed=3,
+        )
+        command, prov = msprime.provenance.parse_provenance(ts.provenance(-1), ts)
+        assert command == "sim_ancestry"
+        assert prov["demography"] == demography
+
+    def test_bad_demography(self):
+        demography = msprime.Demography.island_model([1, 1], 1 / 3)
+        ts = msprime.sim_ancestry(
+            demography=demography,
+            samples=[
+                msprime.SampleSet(1, population=0),
+                msprime.SampleSet(1, population=1),
+            ],
+            random_seed=3,
+        )
+        prov = ts.provenance(-1)
+        record = json.loads(prov.record)
+        # Corrupt the provenance record
+        assert len(record["parameters"]["demography"]["migration_matrix"]) == 2
+        record["parameters"]["demography"]["migration_matrix"] = [1, 0, 0]
+        prov.record = json.dumps(record)
+        with pytest.raises(ValueError, match="Migration matrix must be square"):
+            msprime.provenance.parse_provenance(prov, ts)
+
 
 class TestRoundTrip:
     """

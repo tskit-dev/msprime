@@ -292,10 +292,10 @@ class Demography(collections.abc.Mapping):
 
         # Assign the IDs and default names, if needed.
         for j, population in enumerate(self.populations):
-            if population.id is not None:
+            if population.id is not None and population.id != j:
                 raise ValueError(
-                    "Population ID should not be set before using to create "
-                    "a Demography"
+                    "Population ID should be unset or set to its index within"
+                    f" the Demography (expected None or {j}, got {population.id})"
                 )
             population.id = j
             if population.name is None:
