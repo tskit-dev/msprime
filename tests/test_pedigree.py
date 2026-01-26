@@ -712,7 +712,6 @@ class TestSimulateThroughPedigree:
         # The pedigree in tables2 starts at 1 generation ago
         tables2.nodes.time += 5
         joined = join_pedigrees([tables1, tables2])
-        joined.dump("joined_ped.ts")
         ts = self.verify(joined.tables, recombination_rate)
         for tree in ts.trees():
             assert tree.num_roots >= 2
