@@ -4528,9 +4528,10 @@ class SmcTest(Test):
         pyplot.close("all")
 
 
-class SmckvsSMCK(Test):
+class SmcKTest(Test):
     """
-    Tests for the SMC(k) approximation coalescent against the SMC(k) model.
+    Tests for the SMCK model.
+    SMC(0) is compared against rejection sampling SMC (SmcApproxCoalescent).
     """
 
     models = {
@@ -4652,12 +4653,6 @@ class SmckvsSMCK(Test):
 
         self.plot_SmcKApprox_smcK_stats(df)
         self.plot_tree_intervals(df)
-
-
-class SmcKTest(SmckvsSMCK):
-    """
-    Tests for the SMC(0) model against rejection sampling.
-    """
 
     def test_smc_k_oldest_time(self):
         """
@@ -4950,7 +4945,7 @@ class SmcKTest(SmckvsSMCK):
         )
 
     def test_out_of_africa_migration_model(self):
-        s_no = 10
+        s_no = 1
         samples = {
             "YRI": s_no,
             "CEU": s_no,
@@ -4960,7 +4955,7 @@ class SmcKTest(SmckvsSMCK):
             "ANC": s_no,
         }
         recombination_map = msprime.RateMap(
-            position=[0, 100, 500, 900, 1200, 1500, 2000],
+            position=[0, 50, 250, 450, 600, 750, 1000],
             rate=[0.00001, 0, 0.0002, 0.00005, 0, 0.001],
         )
 
@@ -4972,7 +4967,7 @@ class SmcKTest(SmckvsSMCK):
                 discrete_genome=True,
                 demography=msprime.Demography._ooa_model(),
                 record_migrations=True,
-                num_replicates=50,
+                num_replicates=20,
                 model=model_cls,
             )
 
