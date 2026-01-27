@@ -1,7 +1,9 @@
 # Changelog
 
 
-## [1.4.0b2] - 2025-01-26
+## [1.4.0b2] - 2026-01-26
+
+Major feature release along with significant performance improvements.
 
 **New features**
 
@@ -13,16 +15,18 @@
 - Support for simulations after local mrca,
   ({issue}`2157`, {pr}`2396`, {user}`jeromekelleher`, {user}`hossam26644`).
 - Add wheels on Windows ({pr}`2414`, {issue}`2200`,{user}`benjeffery`)
-- Demography objects can now be created from provenance entries ({pr}`{2369}`, {user}`hyanwong`)
+- Demography objects can now be created from provenance entries ({pr}`2369`,
+  {user}`hyanwong`)
 
  **Performance improvements**
 
 - Significant performance improvements for large sample size simulations with the
-  standard coalescence model (About 2x faster),({issue}`2401`, {pr} `2385`, {user}`jeromekelleher`).
+  standard coalescent model (About 2x faster),({issue}`2401`,
+  {pr}`2385`, {user}`jeromekelleher`).
 
 **Maintenance**
 
-- Add support and wheels for Python3.13
+- Add support and wheels for Python 3.13 and Python 3.14
 - Drop Python 3.9 support, require Python >= 3.10 ({pr}`2418`, {user}`benjeffery`)
 - Update bundled tskit C API to 1.3.0.
 
@@ -32,12 +36,12 @@
 - The `.asdict()` methods for Demography, Population, and Event classes in the
   demography submodule now return a `__class__` key. This is also stored in their
   provenance entries, to help recreate demography objects from provenance.
-  ({pr}`{2368}, {user}`hyanwong`)
+  ({pr}`2368`, {user}`hyanwong`)
 
 **Bugfixes**
 
 - Fix problem with initial_state and tskit 1.0 ({issue}`2434`, {pr}`2432`,
-  {user}`jeromekelleher'.
+  {user}`jeromekelleher`).
 
 ## [1.3.4] - 2025-05-01
 
