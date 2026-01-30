@@ -9,45 +9,14 @@ on:
 jobs:
   pre-commit:
     name: Lint
-    uses: tskit-dev/.github/.github/workflows/lint.yml@v2
+    uses: tskit-dev/.github/.github/workflows/lint.yml@v4
 
   packaging:
-    name: Packaging
-    runs-on: ubuntu-latest
-    steps:
-      - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.13.0
-        with:
-          access_token: ${{ github.token }}
-
-      - name: Checkout
-        uses: actions/checkout@v6.0.2
-        with:
-          submodules: true
-
-      - name: Install GSL
-        run: sudo apt-get update && sudo apt-get install -y libgsl-dev
-
-      - name: Set up Python 3.14
-        uses: actions/setup-python@v6.1.0
-        with:
-          python-version: 3.14
-
-      - name: Install build deps
-        run: |
-          pip install uv
-          uv pip install --system build twine validate-pyproject[all]
-
-      - name: Check package
-        run: |
-          validate-pyproject pyproject.toml
-          python -m build
-          python -m twine check --strict dist/*
-
-      - name: Install and run CLI
-        run: |
-          python -m pip install dist/*.whl
-          msp --help
+    name: Python packaging
+    uses: tskit-dev/.github/.github/workflows/python-packaging.yml@v4
+    with:
+     additional-apt-packages: libgsl-dev
+     cli-test-cmd: msp --help
 
   test:
     name: Python
