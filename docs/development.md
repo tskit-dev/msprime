@@ -795,26 +795,6 @@ Note the following tips:
 
 - There is a script: `benchmarks/check_asv.sh` that can be used to benchmark recent commits.
 
-## Containerization
-
-To run msprime in a container, see the
-{ref}`installation instructions <sec_installation_container>`.
-
-You can use `docker` to locally build an image, but it requires root access:
-
-```{code-block} bash
-
-$ sudo docker build -t tskit/msprime .
-
-```
-
-[podman](<https://podman.io/>) can build and run images without root privilege.
-
-```{code-block} bash
-
-$ podman build -t tskit/msprime .
-
-```
 ## Troubleshooting
 
 - If `make` is giving you strange errors, or if tests are failing for
