@@ -30,7 +30,7 @@ jobs:
       - name: Install deps
         run: |
           brew install gsl
-          pip install --upgrade pip build
+          python -m pip install --upgrade pip build
       - name: Build Wheel (arm64)
         if: matrix.os != 'macos-15-intel'
         run: |
@@ -57,7 +57,7 @@ jobs:
           python -m build --wheel
       - name: Delocate to bundle dynamic libs
         run: |
-          pip install delocate
+          python -m pip install delocate
           delocate-wheel -v dist/*.whl
       - name: Upload Wheels
         uses: actions/upload-artifact@v6.0.0
@@ -88,7 +88,7 @@ jobs:
         shell: cmd
       - name: Install deps
         run: |
-          pip install --upgrade pip build delvewheel
+          python -m pip install --upgrade pip build delvewheel
       - name: Fix windows symlinks
         run: |
           if (Test-Path "lwt_interface") { Remove-Item -Recurse -Force "lwt_interface" }
@@ -130,7 +130,7 @@ jobs:
       - name: Build sdist
         shell: bash
         run: |
-          pip install --upgrade pip build
+          python -m pip install --upgrade pip build
           python -m build --sdist
       - name: Upload sdist
         uses: actions/upload-artifact@v6.0.0
@@ -160,7 +160,7 @@ jobs:
       - name: Download wheels
         uses: actions/download-artifact@v7.0.0
         with:
-          name: osx-wheel-${{ matrix.os }}-${{ matrix.python }} 
+          name: osx-wheel-${{ matrix.os }}-${{ matrix.python }}
       - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@v6.1.0
         with:
@@ -169,8 +169,8 @@ jobs:
         run: |
           python -VV
           # Install the local wheel
-          pip install numpy newick>=1.3.0 tskit>=0.5.2 demes>=0.2
-          pip install msprime --no-index --only-binary msprime -f .
+          python -m pip install numpy newick>=1.3.0 tskit>=0.5.2 demes>=0.2
+          python -m pip install msprime --no-index --only-binary msprime -f .
           python -c "import msprime"
           msp simulate 10 tmp.trees
           tskit info tmp.trees
@@ -195,9 +195,9 @@ jobs:
         run: |
           python -VV
           # Install the local wheel
-          pip install numpy newick demes
-          pip install --no-dependencies msprime --no-index --only-binary msprime -f .
-          pip install tskit
+          python -m pip install numpy newick demes
+          python -m pip install --no-dependencies msprime --no-index --only-binary msprime -f .
+          python -m pip install tskit
           python -c "import msprime"
           msp simulate 10 tmp.trees
           tskit info tmp.trees
@@ -222,8 +222,8 @@ jobs:
       - name: Install wheel and test
         run: |
           python -VV
-          pip install numpy newick>=1.3.0 tskit>=0.5.2 demes>=0.2
-          pip install msprime --no-index --only-binary msprime -f .
+          python -m pip install numpy newick>=1.3.0 tskit>=0.5.2 demes>=0.2
+          python -m pip install msprime --no-index --only-binary msprime -f .
           python -c "import msprime"
           msp simulate 10 tmp.trees
           tskit info tmp.trees
