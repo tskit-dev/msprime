@@ -1,7 +1,7 @@
 # Changelog
 
 
-## [1.4.0b2] - 2026-01-26
+## [1.4.0] - 2026-02-06
 
 Major feature release along with significant performance improvements.
 
