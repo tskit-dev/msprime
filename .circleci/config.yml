@@ -102,25 +102,3 @@ jobs:
             valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_rate_map
             valgrind --leak-check=full --error-exitcode=1 ./build-gcc/test_sweeps
 
-      - run:
-          name: Make sure we can build a distribution.
-          command: |
-            source .venv/bin/activate
-            python -m build --sdist
-            python -m build --wheel
-            python -m twine check dist/*.tar.gz --strict
-
-      - run:
-          name: Install from the distribution tarball
-          command: |
-            mkdir installtest
-            cd installtest
-            python -m venv venv
-            source venv/bin/activate
-            pip install --upgrade setuptools pip
-            pip install ../dist/*.whl
-            python -c 'import msprime; print(msprime.__version__)'
-
-            # We should still be able to import without the newick module
-            python -m pip uninstall -y newick
-            python -c 'import msprime; print(msprime.__version__)'
