@@ -9,14 +9,16 @@ on:
 jobs:
   pre-commit:
     name: Lint
-    uses: tskit-dev/.github/.github/workflows/lint.yml@v4
+    uses: tskit-dev/.github/.github/workflows/lint.yml@v5
+    with:
+      clang-format-version: 21.1.8
 
   packaging:
     name: Python packaging
     uses: tskit-dev/.github/.github/workflows/python-packaging.yml@v4
     with:
-     additional-apt-packages: libgsl-dev
-     cli-test-cmd: msp --help
+      additional-apt-packages: libgsl-dev
+      cli-test-cmd: msp --help
 
   test:
     name: Python
