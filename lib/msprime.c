@@ -1359,7 +1359,7 @@ msp_insert_hull(msp_t *self, lineage_t *lineage)
     } else {
         c = avl_search_closest(hulls_right, &query, &query_node);
         /* query < node->item ==> c = -1 */
-        num_ending_before_left = (uint64_t) avl_index(query_node) + (uint64_t)(c != -1);
+        num_ending_before_left = (uint64_t) avl_index(query_node) + (uint64_t) (c != -1);
     }
 
     /* set number of pairs coalescing with hull */
@@ -1853,7 +1853,7 @@ msp_verify_overlaps(msp_t *self)
     for (label = 0; label < self->num_labels; label++) {
         for (j = 0; j < self->num_populations; j++) {
             for (node = (&self->populations[j].ancestors[label])->head; node != NULL;
-                 node = node->next) {
+                node = node->next) {
                 lin = (lineage_t *) node->item;
                 for (u = lin->head; u != NULL; u = u->next) {
                     overlap_counter_increment_interval(&counter, u->left, u->right);
@@ -1878,8 +1878,8 @@ msp_verify_non_empty_populations(msp_t *self)
     avl_node_t *avl_node;
 
     for (avl_node = self->non_empty_populations.head; avl_node != NULL;
-         avl_node = avl_node->next) {
-        j = (tsk_id_t)(intptr_t) avl_node->item;
+        avl_node = avl_node->next) {
+        j = (tsk_id_t) (intptr_t) avl_node->item;
         tsk_bug_assert(msp_get_num_population_ancestors(self, j) > 0);
     }
 
@@ -2051,7 +2051,7 @@ msp_verify_initial_state(msp_t *self)
     segment_t *head, *seg, *prev;
 
     for (overlap = self->initial_overlaps; overlap->left < self->sequence_length;
-         overlap++) {
+        overlap++) {
         tsk_bug_assert(overlap->left > last_overlap_left);
         last_overlap_left = overlap->left;
     }
@@ -2179,7 +2179,7 @@ msp_print_initial_overlaps(msp_t *self, FILE *out)
     fprintf(out, "Initial overlaps\n");
 
     for (overlap = self->initial_overlaps; overlap->left < self->sequence_length;
-         overlap++) {
+        overlap++) {
         fprintf(out, "\t%f -> %d\n", overlap->left, (int) overlap->count);
     }
     tsk_bug_assert(overlap->left == self->sequence_length);
@@ -2231,7 +2231,7 @@ msp_print_smck_state(msp_t *self, FILE *out)
                 (int) fenwick_get_size(&pop->coal_mass_index[k]),
                 fenwick_get_numerical_drift(&pop->coal_mass_index[k]));
             for (j = 1; j <= (uint32_t) fenwick_get_size(&pop->coal_mass_index[k]);
-                 j++) {
+                j++) {
                 hull = msp_get_hull(self, j, (label_id_t) k);
                 v = fenwick_get_value(&pop->coal_mass_index[k], j);
                 if (v != 0) {
@@ -2343,7 +2343,7 @@ msp_print_state(msp_t *self, FILE *out)
     }
     fprintf(out, "non_empty_populations = [");
     for (a = self->non_empty_populations.head; a != NULL; a = a->next) {
-        j = (uint32_t)(intptr_t) a->item;
+        j = (uint32_t) (intptr_t) a->item;
         fprintf(out, "%d,", j);
     }
     fprintf(out, "]\n");
@@ -2378,7 +2378,7 @@ msp_print_state(msp_t *self, FILE *out)
                 (int) fenwick_get_size(&self->recomb_mass_index[k]),
                 fenwick_get_numerical_drift(&self->recomb_mass_index[k]));
             for (j = 1; j <= (uint32_t) fenwick_get_size(&self->recomb_mass_index[k]);
-                 j++) {
+                j++) {
                 u = msp_get_segment(self, j, (label_id_t) k);
                 v = fenwick_get_value(&self->recomb_mass_index[k], j);
                 if (v != 0) {
@@ -4364,7 +4364,7 @@ msp_allocate_root_segments(msp_t *self, tsk_tree_t *tree, double left, double ri
     label_id_t label = 0; /* For now only support label 0 */
 
     for (root = tsk_tree_get_left_root(tree); root != TSK_NULL;
-         root = tree->right_sib[root]) {
+        root = tree->right_sib[root]) {
         population = node_population[root];
         /* tskit will make sure that population references are good, but
          * we can still have NULL refs. */
@@ -4837,7 +4837,7 @@ msp_compute_population_indexes(msp_t *self)
     /* Set up the non_empty_populations */
     /* First clear out any existing structures */
     for (avl_node = self->non_empty_populations.head; avl_node != NULL;
-         avl_node = avl_node->next) {
+        avl_node = avl_node->next) {
         avl_unlink_node(&self->non_empty_populations, avl_node);
         msp_free_avl_node(self, avl_node);
     }
@@ -5147,8 +5147,8 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         ca_t_wait = DBL_MAX;
         ca_pop_id = 0;
         for (avl_node = self->non_empty_populations.head; avl_node != NULL;
-             avl_node = avl_node->next) {
-            pop_id = (tsk_id_t)(intptr_t) avl_node->item;
+            avl_node = avl_node->next) {
+            pop_id = (tsk_id_t) (intptr_t) avl_node->item;
             t_temp = self->get_common_ancestor_waiting_time(self, pop_id, label);
             if (t_temp < ca_t_wait) {
                 ca_t_wait = t_temp;
@@ -5161,8 +5161,8 @@ msp_run_coalescent(msp_t *self, double max_time, unsigned long max_events)
         mig_source_pop = 0;
         mig_dest_pop = 0;
         for (avl_node = self->non_empty_populations.head; avl_node != NULL;
-             avl_node = avl_node->next) {
-            pop_id_j = (tsk_id_t)(intptr_t) avl_node->item;
+            avl_node = avl_node->next) {
+            pop_id_j = (tsk_id_t) (intptr_t) avl_node->item;
             pop = &self->populations[pop_id_j];
             n = avl_count(&pop->ancestors[label]);
             tsk_bug_assert(n > 0);
@@ -6130,7 +6130,7 @@ msp_insert_uncoalesced_edges(msp_t *self)
     for (pop = 0; pop < (population_id_t) self->num_populations; pop++) {
         for (label = 0; label < (label_id_t) self->num_labels; label++) {
             for (a = self->populations[pop].ancestors[label].head; a != NULL;
-                 a = a->next) {
+                a = a->next) {
                 /* If there are any nodes in the segment chain with the current time,
                  * then we don't make any unary edges for them. This is because (a)
                  * we'd end up edges with the same parent and child time (if we didn't
@@ -7299,7 +7299,7 @@ msp_instantaneous_bottleneck(msp_t *self, demographic_event_t *event)
     for (u = 0; u < (tsk_id_t) n; u++) {
         lineages[u] = u;
     }
-    for (u = 0; u < (tsk_id_t)(2 * n); u++) {
+    for (u = 0; u < (tsk_id_t) (2 * n); u++) {
         pi[u] = TSK_NULL;
     }
     j = 0;
@@ -8147,7 +8147,7 @@ genic_selection_generate_trajectory(sweep_t *self, msp_t *simulator,
         alpha = 2 * pop_size * trajectory.s;
         x = 1.0
             - genic_selection_stochastic_forwards(
-                  trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
+                trajectory.dt, 1.0 - x, alpha, gsl_rng_uniform(rng));
         /* need our recored traj to stay in bounds */
         t += trajectory.dt;
         sim_time += trajectory.dt * pop_size * simulator->ploidy;

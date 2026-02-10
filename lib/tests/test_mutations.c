@@ -816,7 +816,7 @@ test_jukes_cantor_has_silent_mutations(void)
             if ((mut.derived_state_length == site.ancestral_state_length)
                 && (memcmp(mut.derived_state, site.ancestral_state,
                         mut.derived_state_length)
-                       == 0)) {
+                    == 0)) {
                 num_silent++;
             }
         } else {
@@ -825,7 +825,7 @@ test_jukes_cantor_has_silent_mutations(void)
             if ((mut.derived_state_length == pmut.derived_state_length)
                 && (memcmp(
                         mut.derived_state, pmut.derived_state, mut.derived_state_length)
-                       == 0)) {
+                    == 0)) {
                 num_silent++;
             }
         }

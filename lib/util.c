@@ -676,7 +676,7 @@ fast_search_alloc(fast_search_t *self, const double *elements, size_t n_elements
      * of the array. The rest of the lookup element indexes point to (max_element *
      * query_multiplier) non-zero element values.
      */
-    self->num_lookups = 2 + (size_t)(max_element * self->query_multiplier);
+    self->num_lookups = 2 + (size_t) (max_element * self->query_multiplier);
 
     self->query_cutoff = ((double) self->num_lookups - 1) / self->query_multiplier;
 
