@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-15-intel, macos-14, macos-15, macos-26]
-        python: ["3.10", 3.11, 3.12, 3.13, 3.14]
+        python: [3.11, 3.12, 3.13, 3.14]
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
@@ -70,7 +70,7 @@ jobs:
     runs-on: windows-latest
     strategy:
       matrix:
-        python: ["3.10", 3.11, 3.12, 3.13, 3.14]
+        python: [3.11, 3.12, 3.13, 3.14]
         arch: [x64]
     steps:
       - name: Checkout
@@ -123,10 +123,10 @@ jobs:
         uses: actions/checkout@v6.0.2
         with:
             submodules: true
-      - name: Set up Python 3.10
+      - name: Set up Python 3.11
         uses: actions/setup-python@v6.1.0
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - name: Build sdist
         shell: bash
         run: |
@@ -155,7 +155,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-15-intel, macos-14, macos-15, macos-26]
-        python: ["3.10", 3.11, 3.12, 3.13, 3.14]
+        python: [3.11, 3.12, 3.13, 3.14]
     steps:
       - name: Download wheels
         uses: actions/download-artifact@v7.0.0
@@ -181,7 +181,7 @@ jobs:
     needs: ['manylinux']
     strategy:
       matrix:
-        python: ["3.10", 3.11, 3.12, 3.13, 3.14]
+        python: [3.11, 3.12, 3.13, 3.14]
     steps:
       - name: Download wheels
         uses: actions/download-artifact@v7.0.0
@@ -209,7 +209,7 @@ jobs:
     needs: ['Windows']
     strategy:
       matrix:
-        python: ["3.10", 3.11, 3.12, 3.13, 3.14]
+        python: [3.11, 3.12, 3.13, 3.14]
     steps:
       - name: Download wheels
         uses: actions/download-artifact@v7.0.0

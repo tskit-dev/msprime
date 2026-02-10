@@ -4,6 +4,10 @@
 
 In development
 
+**Maintenance**
+
+- Drop Python 3.10 support, require Python >= 3.11
+
 ## [1.4.0] - 2026-02-06
 
 Major feature release along with significant performance improvements.
