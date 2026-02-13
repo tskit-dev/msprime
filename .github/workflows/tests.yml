@@ -139,12 +139,15 @@ jobs:
           files: lib/build-cov/meson-logs/coverage.xml
           fail_ci_if_error: true
 
-      - name: Run tests with valgrind
+      - name: Compile and test with clang
         working-directory: lib
-        run: meson setup build-valgrind -Db_coverage=true
+        run: |
+          CC=clang meson setup build-clang
+          meson test -C build-clang
 
       - name: Run tests with valgrind
         working-directory: lib
         run: |
+          meson setup build-valgrind
           meson test -C build-valgrind -t-1 \
           --wrapper='valgrind --leak-check=full --error-exitcode=1'
