@@ -95,6 +95,49 @@ jobs:
           flags: python
           fail_ci_if_error: true
 
+  test-c-python:
+    name: C-Python interface
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Cancel Previous Runs
+        uses: styfle/cancel-workflow-action@0.13.0
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+        with:
+          submodules: true
+
+      - name: Install dev tools
+        run: sudo apt-get update && sudo apt-get install -y libgsl-dev gcovr
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: 3.11
+          version: "0.8.15"
+
+      - name: Install Python dependencies
+        run: uv sync --locked --group test
+
+      - name: Build module
+        run: CFLAGS=--coverage uv run python setup.py build_ext --inplace
+
+      - name: Run low-level tests
+        run: uv run pytest -vs -n0 tests/test_lowlevel.py
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5.4.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: c-python
+          fail_ci_if_error: true
+
   test-c:
     name: C tests
     runs-on: ubuntu-24.04
