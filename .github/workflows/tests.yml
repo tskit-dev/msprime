@@ -179,7 +179,6 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: C
-          files: lib/build-cov/meson-logs/coverage.xml
           fail_ci_if_error: true
 
       - name: Compile and test with clang
