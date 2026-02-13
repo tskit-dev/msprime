@@ -42,11 +42,6 @@ jobs:
         with:
           submodules: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v6.1.0
-        with:
-          python-version: "${{ matrix.python }}"
-
       - name: Fix windows symlinks
         # This is horrible, but the "git config core.symlinks true" didn't work.
         if: matrix.os == 'windows-latest'
@@ -74,20 +69,21 @@ jobs:
         if: matrix.os == 'ubuntu-24.04'
         run: sudo apt-get update && sudo apt-get install -y libgsl-dev
 
-      - name: Install pip deps
-        run: |
-          pip install uv
-          uv pip install --system -r pyproject.toml --extra test
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+          version: "0.8.15"
+
+      - name: Install Python dependencies
+        run: uv sync --locked --group test
 
       - name: Build module
-        run: |
-          python setup.py build_ext --inplace
+        run: uv run python setup.py build_ext --inplace
 
       - name: Fix windows gsl dlls
         if: matrix.os == 'windows-latest'
-        run: |
-          cp /c/vcpkg/installed/x64-windows/bin/gsl*.dll msprime/
+        run: cp /c/vcpkg/installed/x64-windows/bin/gsl*.dll msprime/
 
       - name: Run tests
-        run: |
-          pytest -xvs -n0
+        run: uv run pytest -xv --cov=msprime --cov-report=xml --cov-branch -n2
