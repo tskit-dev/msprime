@@ -96,7 +96,7 @@ jobs:
           fail_ci_if_error: true
 
   test-c-python:
-    name: C-Python interface
+    name: Python-C interface
     runs-on: ubuntu-24.04
     defaults:
       run:
