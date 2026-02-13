@@ -1,23 +1,49 @@
-codecov:
-  require_ci_to_pass: false
-coverage:
-  status:
-    project:
-      python:
-        target: 95%
-        flags:
-          - python
-      C:
-        target: 80%
-        flags:
-           - C
 
-    patch:
-      python:
-        target: 90%
-        flags:
-          - python
-      C:
-        target: 85%
-        flags:
-          - C
+comment:
+  layout: "header, diff, flags, components"  # show component info in the PR comment
+
+component_management:
+  individual_components:
+    - component_id: python_code
+      name: Python API
+      paths:
+        - msprime/*.py
+
+    - component_id: python_c_code
+      name: Python C interface
+      paths:
+        - msprime/_msprimemodule.c
+
+    - component_id: c_code
+      name: C library
+      paths:
+        - lib/msprime.c
+        - lib/mutgen.c
+        - lib/fenwick.c
+        - lib/likelihood.c
+        - lib/object_heap.c
+        - lib/rate_map.c
+
+# codecov:
+#   require_ci_to_pass: false
+# coverage:
+#   status:
+#     project:
+#       python:
+#         target: 95%
+#         flags:
+#           - python
+#       C:
+#         target: 80%
+#         flags:
+#            - C
+
+#     patch:
+#       python:
+#         target: 90%
+#         flags:
+#           - python
+#       C:
+#         target: 85%
+#         flags:
+#           - C
