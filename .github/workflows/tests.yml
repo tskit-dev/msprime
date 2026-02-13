@@ -87,3 +87,10 @@ jobs:
 
       - name: Run tests
         run: uv run pytest -xv --cov=msprime --cov-report=xml --cov-branch -n2
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5.4.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: python
+          fail_ci_if_error: true
