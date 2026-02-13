@@ -5894,7 +5894,6 @@ msp_run_sweep(msp_t *self)
     double sweep_dt;
     size_t j = 0;
     double recomb_mass;
-    unsigned long events = 0;
     label_id_t label;
     double rec_rates[] = { 0.0, 0.0 };
     double sweep_pop_sizes[] = { 0.0, 0.0 };
@@ -5942,7 +5941,6 @@ msp_run_sweep(msp_t *self)
 
     curr_step = 1;
     while (curr_step < num_steps && !msp_is_completed(self)) {
-        events++;
         /* Set pop sizes & rec_rates */
         for (j = 0; j < self->num_labels; j++) {
             label = (label_id_t) j;
