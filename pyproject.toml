@@ -33,7 +33,7 @@ keywords = [
     "tskit"
 ]
 dependencies = [
-    "numpy>=1.23.5",
+    "numpy>=2",
     "newick>=1.3.0",
     "tskit>=1.0.0",
     "demes>=0.2"
@@ -67,52 +67,52 @@ include-package-data = true
 [tool.setuptools_scm]
 write_to = "msprime/_version.py"
 
-[project.optional-dependencies]
+[dependency-groups]
 test = [
-    "bintrees==2.2.0",
-    "build==1.3.0",
-    "daiquiri==3.3.0",
-    "demes==0.2.3",
-    "kastore==0.3.3",
-    "meson==1.9.0",
-    "newick==1.10.0",
-    "pytest==8.4.1",
-    "pytest-cov==6.2.1",
-    "pytest-xdist==3.8.0",
-    "python_jsonschema_objects==0.5.7",
-    "setuptools==80.9.0",
-    "scipy==1.16.1",
-    "tskit==1.0.0",
-    "twine==6.2.0"
+    "bintrees",
+    "build",
+    "daiquiri",
+    "demes",
+    "kastore",
+    "meson",
+    "newick",
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+    "python_jsonschema_objects",
+    "setuptools",
+    "scipy",
+    "tskit",
+    "twine"
 ]
 
 docs = [
-    "daiquiri==3.3.0",
-    "demes==0.2.3",
-    "demesdraw==0.4.0",
-    "jupyter-book==1.0.4.post1",
-    "networkx==3.5",
-    "matplotlib==3.10.3",
-    "newick==1.10.0",
-    "setuptools==80.9.0",
-    "sphinx-argparse==0.5.2",
+    "daiquiri",
+    "demes",
+    "demesdraw",
+    "jupyter-book",
+    "networkx",
+    "matplotlib",
+    "newick",
+    "setuptools",
+    "sphinx-argparse",
     "sphinx-book-theme",
-    "sphinx-issues==5.0.1",
-    "tskit==1.0.0",
-    "scipy==1.16.1"
+    "sphinx-issues",
+    "tskit",
+    "scipy"
 ]
 
 dev = [
-    "docutils==0.21.2",
-    "asv==0.6.1",
+    "docutils",
+    "asv",
     "bintrees",
     "coverage",
     "daiquiri",
-    "demes>=0.2.0",
+    "demes",
     "demesdraw",
     "flake8",
-    "matplotlib>=3.4.0",
-    "meson>=0.61.0",
+    "matplotlib",
+    "meson",
     "mock",
     "mypy",
     "ninja",
@@ -121,17 +121,17 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-xdist",
-    "tskit>=1.0.0",
+    "tskit",
     "kastore",
     "sphinx-book-theme",
     "scipy",
     "setuptools_scm",
-    "sphinx>=4.4",
+    "sphinx",
     "sphinx-argparse",
     "sphinx-issues",
     "jupyter-book<2",
     "networkx",
-    "newick>=1.3.0",
+    "newick",
     "python_jsonschema_objects"
 ]
 
