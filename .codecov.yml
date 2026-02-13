@@ -1,3 +1,8 @@
+ignore:
+  - "lib/tests/"
+  - "lib/dev-tools/"
+  - "lib/avl.c"
+  - "lib/subprojects/**/*"
 
 comment:
   layout: "header, diff, flags, components"  # show component info in the PR comment
@@ -17,12 +22,7 @@ component_management:
     - component_id: c_code
       name: C library
       paths:
-        - lib/msprime.c
-        - lib/mutgen.c
-        - lib/fenwick.c
-        - lib/likelihood.c
-        - lib/object_heap.c
-        - lib/rate_map.c
+        - lib
 
 # codecov:
 #   require_ci_to_pass: false
