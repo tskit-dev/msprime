@@ -20,6 +20,13 @@ jobs:
       additional-apt-packages: libgsl-dev
       cli-test-cmd: msp --help
 
+  test-c:
+    name: C tests
+    uses: tskit-dev/.github/.github/workflows/c-tests.yml@main
+    with:
+      additional-apt-packages: libgsl-dev
+      library-directory: lib
+
   test-python:
     name: Python
     runs-on: ${{ matrix.os }}
@@ -137,65 +144,3 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: c-python
           fail_ci_if_error: true
-
-  test-c:
-    name: C tests
-    runs-on: ubuntu-24.04
-
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.13.0
-        with:
-          access_token: ${{ github.token }}
-
-      - name: Checkout
-        uses: actions/checkout@v6.0.2
-        with:
-          submodules: true
-
-      - name: Install dev tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgsl-dev libcunit1-dev libconfig-dev \
-            ninja-build valgrind clang meson gcovr
-
-      - name: Configure code
-        working-directory: lib
-        run: meson setup build-cov -Db_coverage=true
-
-      - name: Compile
-        working-directory: lib
-        run: ninja -C build-cov
-
-      - name: Run tests
-        working-directory: lib
-        run: ninja -C build-cov test
-
-      - name: Build coverage report
-        working-directory: lib
-        run: ninja -C build-cov coverage-xml
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5.4.0
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          flags: C
-          directory: lib
-          gcov_args: --preserve-paths
-          fail_ci_if_error: true
-
-      - name: Compile and test with clang
-        working-directory: lib
-        run: |
-          CC=clang meson setup build-clang
-          meson test -C build-clang
-
-      - name: Run tests with valgrind
-        working-directory: lib
-        run: |
-          meson setup build-valgrind
-          meson test -C build-valgrind -t-1 \
-          --wrapper='valgrind --leak-check=full --error-exitcode=1'
