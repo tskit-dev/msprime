@@ -1550,10 +1550,8 @@ msp_print_segment_chain(msp_t *MSP_UNUSED(self), segment_t *head, FILE *out)
     fprintf(out, "\n");
 }
 
-/* TODO remove the left_at_zero option, it's for old GC version that didn't work. */
 static void
-msp_verify_segment_index(
-    msp_t *self, fenwick_t *mass_index_array, rate_map_t *rate_map, bool left_at_zero)
+msp_verify_segment_index(msp_t *self, fenwick_t *mass_index_array, rate_map_t *rate_map)
 {
 
     double left, right, left_bound;
@@ -1577,11 +1575,7 @@ msp_verify_segment_index(
                     if (u->prev != NULL) {
                         s = rate_map_mass_between(rate_map, u->prev->right, u->right);
                     } else {
-                        if (left_at_zero) {
-                            left_bound = self->discrete_genome ? 1 : 0;
-                        } else {
-                            left_bound = self->discrete_genome ? u->left + 1 : u->left;
-                        }
+                        left_bound = self->discrete_genome ? u->left + 1 : u->left;
                         tsk_bug_assert(left_bound <= u->right);
                         s = rate_map_mass_between(rate_map, left_bound, u->right);
                     }
@@ -1592,11 +1586,7 @@ msp_verify_segment_index(
                     right = u->right;
                     u = u->next;
                 }
-                if (left_at_zero) {
-                    left_bound = self->discrete_genome ? 1 : 0;
-                } else {
-                    left_bound = self->discrete_genome ? left + 1 : left;
-                }
+                left_bound = self->discrete_genome ? left + 1 : left;
                 s = rate_map_mass_between(rate_map, left_bound, right);
                 alt_total_mass += s;
                 node = node->next;
@@ -1696,11 +1686,10 @@ msp_verify_segments(msp_t *self, bool verify_breakpoints)
     tsk_bug_assert(total_avl_nodes - avl_count(&self->non_empty_populations)
                    == object_heap_get_num_allocated(&self->node_mapping_heap));
     if (self->recomb_mass_index != NULL) {
-        msp_verify_segment_index(
-            self, self->recomb_mass_index, &self->recomb_map, false);
+        msp_verify_segment_index(self, self->recomb_mass_index, &self->recomb_map);
     }
     if (self->gc_mass_index != NULL) {
-        msp_verify_segment_index(self, self->gc_mass_index, &self->gc_map, false);
+        msp_verify_segment_index(self, self->gc_mass_index, &self->gc_map);
     }
     /* Check that the mass indexes are set appropriately */
     if (self->model.type == MSP_MODEL_DTWF || self->model.type == MSP_MODEL_WF_PED) {
