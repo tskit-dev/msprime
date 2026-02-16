@@ -1082,6 +1082,14 @@ class TestSimulator(LowLevelTestCase):
         sim.run(max_events=1)
         assert sim.time > 0
 
+    def test_finalise_tables(self):
+        sim = make_sim(2)
+        status = sim.run()
+        assert status == _msprime.EXIT_COALESCENCE
+        sim.finalise_tables()
+        tables = tskit.TableCollection.fromdict(sim.tables.asdict())
+        assert len(tables.nodes) > 0
+
     def test_set_bad_model(self):
         sim = make_sim(10)
         with pytest.raises(ValueError):
@@ -1127,7 +1135,7 @@ class TestSimulator(LowLevelTestCase):
             sim.verify("asdg")
 
     def test_fenwick_drift(self):
-        sim = make_sim(10)
+        sim = get_example_simulator()
         assert sim.fenwick_drift(0) == 0
         with pytest.raises(TypeError):
             sim.fenwick_drift("sdf")
@@ -2798,6 +2806,10 @@ class TestSLiMMutationModel:
             model = _msprime.SLiMMutationModel(0, next_id=next_id)
             assert model.type == 0
             assert model.next_id == next_id
+
+    def test_generation(self):
+        model = _msprime.SLiMMutationModel(0)
+        assert model.slim_generation == 1
 
 
 class TestInfiniteAllelesMutationModel:

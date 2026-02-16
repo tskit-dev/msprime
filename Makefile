@@ -4,8 +4,9 @@ SHELL := /bin/bash
 SRC=msprime/_msprimemodule.c
 
 # The default target builds the C module in the simplest way.
+# NOTE: delete the "uv run" from the start if you're not using uv
 cmodule: ${SRC}
-	python setup.py build_ext --inplace
+	uv run python setup.py build_ext --inplace
 
 # allchecks turns on as many checks as make sense when building
 # Python-C extensions.
@@ -13,12 +14,12 @@ allchecks: ${SRC}
 	CFLAGS="-std=c99 -Wall -Wextra -Werror -Wno-unused-parameter" && \
 	CFLAGS+=" -Wno-missing-field-initializers -Wno-cast-function-type" && \
 	CFLAGS+=" --coverage" && \
-	export CFLAGS && python3 setup.py build_ext --inplace
+	export CFLAGS && uv run python3 setup.py build_ext --inplace
 
 # Turn on coverage builds
 coverage: ${SRC}
 	rm -fR build
-	CFLAGS="-coverage" python3 setup.py build_ext --inplace
+	CFLAGS="-coverage" uv run python3 setup.py build_ext --inplace
 
 # Format the C code ready for a PR
 clang-format:
