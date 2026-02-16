@@ -9,23 +9,29 @@ on:
 jobs:
   pre-commit:
     name: Lint
-    uses: tskit-dev/.github/.github/workflows/lint.yml@v5
+    uses: tskit-dev/.github/.github/workflows/lint.yml@v8
     with:
       clang-format-version: 21.1.8
 
   packaging:
     name: Python packaging
-    uses: tskit-dev/.github/.github/workflows/python-packaging.yml@v4
+    uses: tskit-dev/.github/.github/workflows/python-packaging.yml@v8
     with:
       additional-apt-packages: libgsl-dev
       cli-test-cmd: msp --help
 
   test-c:
     name: C tests
-    uses: tskit-dev/.github/.github/workflows/c-tests.yml@main
+    uses: tskit-dev/.github/.github/workflows/c-tests.yml@v8
     with:
       additional-apt-packages: libgsl-dev
       library-directory: lib
+
+  test-python-c:
+    name: Python-C tests
+    uses: tskit-dev/.github/.github/workflows/python-c-tests.yml@v8
+    with:
+      additional-apt-packages: libgsl-dev
 
   test-python:
     name: Python
@@ -100,47 +106,4 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: python
-          fail_ci_if_error: true
-
-  test-c-python:
-    name: Python-C interface
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        shell: bash
-
-    steps:
-      - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.13.0
-        with:
-          access_token: ${{ github.token }}
-
-      - name: Checkout
-        uses: actions/checkout@v6.0.2
-        with:
-          submodules: true
-
-      - name: Install dev tools
-        run: sudo apt-get update && sudo apt-get install -y libgsl-dev gcovr
-
-      - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v6
-        with:
-          python-version: 3.11
-          version: "0.8.15"
-
-      - name: Install Python dependencies
-        run: uv sync --locked --group test
-
-      - name: Build module
-        run: CFLAGS=--coverage uv run python setup.py build_ext --inplace
-
-      - name: Run low-level tests
-        run: uv run pytest -vs -n0 tests/test_lowlevel.py
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5.4.0
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          flags: c-python
           fail_ci_if_error: true
