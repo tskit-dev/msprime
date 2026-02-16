@@ -172,6 +172,10 @@ jobs:
 
       - name: Run tests
         working-directory: lib
+        run: ninja -C build-cov test
+
+      - name: Build coverage report
+        working-directory: lib
         run: ninja -C build-cov coverage-xml
 
       - name: Upload coverage to Codecov
@@ -179,6 +183,8 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: C
+          directory: lib
+          gcov_args: --preserve-paths
           fail_ci_if_error: true
 
       - name: Compile and test with clang

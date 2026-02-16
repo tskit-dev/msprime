@@ -23,27 +23,3 @@ component_management:
       name: C library
       paths:
         - lib
-
-# codecov:
-#   require_ci_to_pass: false
-# coverage:
-#   status:
-#     project:
-#       python:
-#         target: 95%
-#         flags:
-#           - python
-#       C:
-#         target: 80%
-#         flags:
-#            - C
-
-#     patch:
-#       python:
-#         target: 90%
-#         flags:
-#           - python
-#       C:
-#         target: 85%
-#         flags:
-#           - C
