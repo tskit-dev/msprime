@@ -26,12 +26,14 @@ jobs:
     with:
       additional-apt-packages: libgsl-dev
       library-directory: lib
+    secrets: inherit
 
   test-python-c:
     name: Python-C tests
     uses: tskit-dev/.github/.github/workflows/python-c-tests.yml@v8
     with:
       additional-apt-packages: libgsl-dev
+    secrets: inherit
 
   test-python:
     name: Python
