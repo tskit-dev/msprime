@@ -19,6 +19,7 @@
 """
 A collection of utilities to edit and construct tree sequences.
 """
+
 import json
 import random
 import struct

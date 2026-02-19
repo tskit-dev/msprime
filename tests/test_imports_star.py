@@ -20,6 +20,7 @@
 """
 Check that importing * from msprime works as expected.
 """
+
 from msprime import *
 
 

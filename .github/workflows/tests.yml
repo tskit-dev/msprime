@@ -7,11 +7,6 @@ on:
   merge_group:
 
 jobs:
-  pre-commit:
-    name: Lint
-    uses: tskit-dev/.github/.github/workflows/lint.yml@v8
-    with:
-      clang-format-version: 21.1.8
 
   packaging:
     name: Python packaging
@@ -91,17 +86,17 @@ jobs:
           version: "0.8.15"
 
       - name: Install Python dependencies
-        run: uv sync --locked --group test
+        run: uv sync --locked --group test --no-default-groups
 
       - name: Build module
-        run: uv run python setup.py build_ext --inplace
+        run: uv run --no-default-groups python setup.py build_ext --inplace
 
       - name: Fix windows gsl dlls
         if: matrix.os == 'windows-latest'
         run: cp /c/vcpkg/installed/x64-windows/bin/gsl*.dll msprime/
 
       - name: Run tests
-        run: uv run pytest -xv --cov=msprime --cov-report=xml --cov-branch -n2
+        run: uv run --no-default-groups pytest --cov=msprime --cov-report=xml --cov-branch -n2
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5.4.0

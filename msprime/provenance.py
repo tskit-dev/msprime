@@ -20,6 +20,7 @@
 Common provenance methods used to determine the state and versions
 of various dependencies and the OS.
 """
+
 import base64
 import importlib
 import json
@@ -30,8 +31,9 @@ import types
 import numpy
 import tskit
 
-from . import ancestry
 from msprime import _msprime
+
+from . import ancestry
 
 __version__ = "undefined"
 try:
@@ -43,7 +45,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-class CURRENT_TREE_SEQUENCE:
+class CURRENT_TREE_SEQUENCE:  # noqa N801
     pass
 
 
@@ -206,8 +208,7 @@ def parse_provenance(provenance, current_ts):
     ret = ProvenanceEncoderDecoder.decode(provenance.record)
     if ret["software"]["name"] != "msprime":
         raise ValueError(
-            f"Only msprime provenances can be parsed,"
-            f' found {ret["software"]["name"]}'
+            f"Only msprime provenances can be parsed, found {ret['software']['name']}"
         )
     parameters = ret["parameters"]
     command = parameters.pop("command")

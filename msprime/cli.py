@@ -19,6 +19,7 @@
 """
 Command line interfaces to the msprime library.
 """
+
 import argparse
 import hashlib
 import logging
@@ -32,9 +33,8 @@ import demes
 import tskit
 
 import msprime
-from . import ancestry
-from . import mutations
 
+from . import ancestry, mutations
 
 logger = logging.getLogger(__name__)
 
@@ -477,8 +477,7 @@ def create_simulation_runner(parser, arg_list):
             )
         if args.migration_matrix is not None:
             parser.error(
-                "Cannot specify a migration matrix without "
-                "first providing a -I option"
+                "Cannot specify a migration matrix without first providing a -I option"
             )
     if args.migration_matrix is not None:
         migration_matrix = convert_migration_matrix(
@@ -672,9 +671,7 @@ class IndexedAction(argparse._AppendAction):
     index = 0
 
     def __call__(self, parser, namespace, values, option_string=None):
-        super().__call__(
-            parser, namespace, (IndexedAction.index, values), option_string
-        )
+        super().__call__(parser, namespace, (IndexedAction.index, values), option_string)
         IndexedAction.index += 1
 
 
@@ -807,8 +804,7 @@ def get_mspms_parser(error_handler=None):
         default=[],
         metavar=("t", "x"),
         help=(
-            "Set the symmetric island model migration rate to "
-            "x / (npop - 1) at time t"
+            "Set the symmetric island model migration rate to x / (npop - 1) at time t"
         ),
     )
     group.add_argument(
@@ -918,9 +914,7 @@ def get_mspms_parser(error_handler=None):
         type=float,
         default=[],
         metavar=("t", "population_id", "x"),
-        help=(
-            "Set the population size for a specific population to " "x * N0 at time t"
-        ),
+        help=("Set the population size for a specific population to x * N0 at time t"),
     )
     group.add_argument(
         "--population-split",
@@ -1088,8 +1082,7 @@ def parse_sample_spec(sample_spec: list[str]) -> dict[str, int]:
         name = tokens[0]
         if name in samples:
             raise ValueError(
-                f"Population '{name}' referred to more than once in sample "
-                "specification"
+                f"Population '{name}' referred to more than once in sample specification"
             )
         samples[name] = parse_sample_size(tokens[1])
     return samples

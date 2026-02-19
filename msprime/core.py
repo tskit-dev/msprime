@@ -19,6 +19,7 @@
 """
 Core functions and classes used throughout msprime.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -69,7 +70,7 @@ def clear_seed_rng():
 
 
 def get_random_seed() -> int:
-    global _seed_rng_map  # noqa: F824
+    global _seed_rng_map
     pid = os.getpid()
     if pid not in _seed_rng_map:
         # If we don't provide a seed to Random(), Python will seed either
@@ -87,7 +88,7 @@ def set_seed_rng_seed(seed: int):
 
     DO NOT USE THIS FUNCTION!!!
     """
-    global _seed_rng_map  # noqa: F824
+    global _seed_rng_map
     pid = os.getpid()
     _seed_rng_map[pid] = random.Random(seed)
 

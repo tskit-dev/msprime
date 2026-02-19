@@ -19,6 +19,7 @@
 """
 Test cases for the high level interface to utils.
 """
+
 import multiprocessing
 
 import numpy as np

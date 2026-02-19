@@ -19,6 +19,7 @@
 """
 Module responsible for generating mutations on a given tree sequence.
 """
+
 import inspect
 import math
 import numbers
@@ -27,10 +28,9 @@ import sys
 import numpy as np
 import tskit
 
-from . import core
-from . import intervals
-from . import provenance
 from msprime import _msprime
+
+from . import core, intervals, provenance
 
 _ACGT_ALLELES = ["A", "C", "G", "T"]
 _AMINO_ACIDS = [
@@ -624,9 +624,7 @@ class HKY(MatrixMutationModel):
     ):
         alleles = _ACGT_ALLELES
         if equilibrium_frequencies is None:
-            equilibrium_frequencies = np.array(
-                [0.25, 0.25, 0.25, 0.25], dtype="float64"
-            )
+            equilibrium_frequencies = np.array([0.25, 0.25, 0.25, 0.25], dtype="float64")
         else:
             equilibrium_frequencies = np.array(equilibrium_frequencies, dtype="float64")
         if root_distribution is None:
@@ -1398,9 +1396,7 @@ class InfiniteSites(MatrixMutationModel):
         if alphabet not in models:
             raise ValueError("Bad alphabet")
         model = models[alphabet]
-        super().__init__(
-            model.alleles, model.root_distribution, model.transition_matrix
-        )
+        super().__init__(model.alleles, model.root_distribution, model.transition_matrix)
 
 
 def _simple_mutate(

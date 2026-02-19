@@ -19,6 +19,7 @@
 """
 Module responsible for defining and running ancestry simulations.
 """
+
 from __future__ import annotations
 
 import collections.abc
@@ -31,18 +32,15 @@ import math
 import sys
 import tempfile
 import warnings
-from typing import Any
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 import tskit
 
-from . import core
-from . import demography as demog
-from . import intervals
-from . import mutations
-from . import provenance
 from msprime import _msprime
+
+from . import core, intervals, mutations, provenance
+from . import demography as demog
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -140,9 +138,7 @@ def _filter_events(demographic_events):
 
 
 def _check_population_configurations(population_configurations):
-    err = (
-        "Population configurations must be a list of PopulationConfiguration instances"
-    )
+    err = "Population configurations must be a list of PopulationConfiguration instances"
     for config in population_configurations:
         if not isinstance(config, demog.PopulationConfiguration):
             raise TypeError(err)
@@ -217,8 +213,7 @@ def _build_initial_tables(*, sequence_length, samples, ploidy, demography):
             raise ValueError(f"Negative population ID in sample at index {index}")
         if population >= demography.num_populations:
             raise ValueError(
-                f"Invalid population reference '{population}' in sample "
-                f"at index {index}"
+                f"Invalid population reference '{population}' in sample at index {index}"
             )
 
     # This is for the simulate() code path so we don't add metadata schemas
@@ -329,14 +324,13 @@ def _parse_simulate(
             raise TypeError("RateMap instance required.")
         if length is not None or recombination_rate is not None:
             raise ValueError(
-                "Cannot specify length/recombination_rate along with "
-                "a recombination map"
+                "Cannot specify length/recombination_rate along with a recombination map"
             )
 
     if from_ts is not None:
         if recombination_map.sequence_length != from_ts.sequence_length:
             raise ValueError(
-                "Recombination map and from_ts must have identical " "sequence_length"
+                "Recombination map and from_ts must have identical sequence_length"
             )
 
     if num_labels is not None and num_labels < 1:
@@ -959,14 +953,10 @@ def _parse_sim_ancestry(
             # value to keep the low-level code happy.
             gene_conversion_tract_length = 1
         else:
-            raise ValueError(
-                "Must specify tract length when simulating gene conversion"
-            )
+            raise ValueError("Must specify tract length when simulating gene conversion")
     else:
         if gene_conversion_rate is None:
-            raise ValueError(
-                "Must specify gene conversion rate along with tract length"
-            )
+            raise ValueError("Must specify gene conversion rate along with tract length")
         gene_conversion_tract_length = float(gene_conversion_tract_length)
 
     # Default to diploid
@@ -992,9 +982,7 @@ def _parse_sim_ancestry(
         if ploidy != 2:
             raise ValueError("Fixed pedigree simulations must have ploidy=2")
         if gene_conversion_map.total_mass != 0:
-            raise ValueError(
-                "Gene conversion not supported in FixedPedigree simulation"
-            )
+            raise ValueError("Gene conversion not supported in FixedPedigree simulation")
         if record_migrations:
             raise ValueError(
                 "Migration recording not supported in FixedPedigree simulation"
@@ -1061,9 +1049,7 @@ def _parse_sim_ancestry(
                 "recombination_rate or gene_conversion_rate parameters."
             )
         if len(initial_state.populations) == 0:
-            raise ValueError(
-                "initial_state tables must define at least one population."
-            )
+            raise ValueError("initial_state tables must define at least one population.")
         # Make sure the names match-up in the input demography.
         demography_check = demog.Demography.from_tree_sequence(
             initial_state.tree_sequence()

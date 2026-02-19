@@ -19,6 +19,7 @@
 """
 Tests for the parsing of species trees in newick and StarBEAST format.
 """
+
 import collections
 
 import numpy as np

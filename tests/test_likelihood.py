@@ -19,6 +19,7 @@
 """
 Test cases for likelihood functions in msprime.
 """
+
 import collections
 import math
 import unittest
@@ -542,9 +543,7 @@ class TestSimulatedExamples(unittest.TestCase):
 
     # TODO Add mutation rate as parameter here.
     def verify(self, ts, recombination_rate, Ne):
-        l1 = msprime.log_arg_likelihood(
-            ts, recombination_rate=recombination_rate, Ne=Ne
-        )
+        l1 = msprime.log_arg_likelihood(ts, recombination_rate=recombination_rate, Ne=Ne)
         l2 = log_arg_likelihood(ts, recombination_rate, Ne)
         self.assertAlmostEqual(l1, l2)
 

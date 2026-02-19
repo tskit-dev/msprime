@@ -1,0 +1,61 @@
+# Configuration file for `prek`, a git hook framework written in Rust.
+# See https://prek.j178.dev for more information.
+#:schema https://www.schemastore.org/prek.json
+
+[[repos]]
+repo = "builtin"
+hooks = [
+    # { id = "trailing-whitespace" },
+    # { id = "end-of-file-fixer" },
+    { id = "check-added-large-files" },
+    { id = "check-merge-conflict" },
+    { id = "mixed-line-ending" },
+    { id = "check-case-conflict" },
+    { id = "check-yaml" },
+    { id = "check-toml" },
+]
+
+[[repos]]
+repo = "https://github.com/pre-commit/pre-commit-hooks"
+rev = "v6.0.0"
+hooks = [
+  { id = "debug-statements" },
+]
+
+[[repos]]
+repo = "https://github.com/astral-sh/uv-pre-commit"
+rev = "0.10.3"
+hooks = [
+  { id = "uv-lock" }
+]
+
+[[repos]]
+repo = "https://github.com/benjeffery/pre-commit-clang-format"
+rev = "1.0"
+hooks = [
+  {
+    id = "clang-format",
+    exclude = "avl|subprojects|dev-tools",
+    verbose = true
+  }
+]
+
+[[repos]]
+repo = "https://github.com/asottile/blacken-docs"
+rev = "1.20.0"
+hooks = [
+  {
+    id = "blacken-docs",
+    args = ["--skip-errors"],
+    additional_dependencies = ["black==22.3.0"],
+    language_version = "python3"
+  }
+]
+
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.15.0" # Ruff version.
+hooks = [
+  { id = "ruff-check", args = ["--fix"], types_or = ["python", "pyi"] },
+  { id = "ruff-format", types_or = ["python", "pyi"] },
+]

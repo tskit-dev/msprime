@@ -19,6 +19,7 @@
 """
 Module responsible for defining and debugging demographic models.
 """
+
 from __future__ import annotations
 
 import collections
@@ -37,17 +38,13 @@ import sys
 import textwrap
 import warnings
 from collections.abc import MutableMapping
-from typing import Any
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import demes
 import numpy as np
 import tskit
 
-from . import ancestry
-from . import core
-from . import species_trees
-
+from . import ancestry, core, species_trees
 
 logger = logging.getLogger(__name__)
 
@@ -900,9 +897,7 @@ class Demography(collections.abc.Mapping):
             effect = textwrap.wrap(event._effect(), 38)
             row = [[f"{event.time:.4g}"], type_text, description, effect]
             data.append(row)
-        return core.text_table(
-            title, col_titles, alignments, data, internal_hlines=True
-        )
+        return core.text_table(title, col_titles, alignments, data, internal_hlines=True)
 
     def _events_html(self, events, title=None):
         if title is None:
@@ -1194,8 +1189,7 @@ class Demography(collections.abc.Mapping):
                 )
         else:
             warnings.warn(
-                "No metadata schema present in population table, not recording "
-                "metadata",
+                "No metadata schema present in population table, not recording metadata",
                 IncompletePopulationMetadataWarning,
                 stacklevel=2,
             )
@@ -1243,9 +1237,7 @@ class Demography(collections.abc.Mapping):
         assert self.num_populations == other.num_populations
         for p1, p2 in zip(self.populations, other.populations):
             assert p1 == p2, f"{p1} ≠ {p2}"
-        assert np.array_equal(
-            self.migration_matrix, other.migration_matrix
-        )  # type: ignore
+        assert np.array_equal(self.migration_matrix, other.migration_matrix)  # type: ignore
         assert self.num_events == other.num_events
         for e1, e2 in zip(self.events, other.events):
             assert e1 == e2, f"{e1} ≠ {e2}"
@@ -1611,6 +1603,7 @@ class Demography(collections.abc.Mapping):
             time_units=time_units,
         )
 
+    @staticmethod
     def _from_old_style_map_populations(
         population_configurations: list[PopulationConfiguration],
         migration_matrix: list[list[float]],
@@ -1714,9 +1707,7 @@ class Demography(collections.abc.Mapping):
                 derived = last_epoch_pops - epoch_pops
                 old_derived_ids = []
                 if len(ancestral) == 1:
-                    logger.debug(
-                        f"Adding split ancestral={ancestral} derived={derived}"
-                    )
+                    logger.debug(f"Adding split ancestral={ancestral} derived={derived}")
                     ancestral = ancestral.pop()
                     demography.add_population_split(
                         time=epoch.start_time,
@@ -2749,9 +2740,7 @@ class Demography(collections.abc.Mapping):
                             anc_deme["epochs"][-1]["end_time"] = time
                 else:
                     # Source deme receives pulses from the ancestors.
-                    pulses.update(
-                        (lm.source, lm.dest, lm.proportion) for lm in lm_group
-                    )
+                    pulses.update((lm.source, lm.dest, lm.proportion) for lm in lm_group)
 
             # The order of pulses matters when multiple pulses occur at the
             # same time, so we must be careful to add the pulses in the same
@@ -3438,9 +3427,7 @@ class SimpleBottleneck(StateChangeEvent):
             "proportion": self.proportion,
         }
 
-    _type_str: ClassVar[str] = dataclasses.field(
-        default="Simple Bottleneck", repr=False
-    )
+    _type_str: ClassVar[str] = dataclasses.field(default="Simple Bottleneck", repr=False)
 
     def _parameters(self):
         return f"population={self.population}, proportion={self.proportion}"

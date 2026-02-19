@@ -19,6 +19,7 @@
 """
 Pedigree utilities.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -243,8 +244,7 @@ def write_pedigree(ts, out):
             else:
                 parents.append(parent)
         print(
-            f"{ind.id}\t{parents[0]}\t{parents[1]}\t{time}\t{is_sample}\t"
-            f"{population}",
+            f"{ind.id}\t{parents[0]}\t{parents[1]}\t{time}\t{is_sample}\t{population}",
             file=out,
         )
 

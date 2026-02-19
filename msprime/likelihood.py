@@ -19,6 +19,7 @@
 """
 Module responsible for computing likelihoods.
 """
+
 import math
 
 import numpy as np

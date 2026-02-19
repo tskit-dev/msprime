@@ -19,6 +19,7 @@
 """
 Test cases for the command line interfaces to msprime
 """
+
 import io
 import itertools
 import os
@@ -799,9 +800,7 @@ class TestMspmsCreateSimulationRunner:
                 assert event.rate == result[1]
                 assert (event.source, event.dest) == result[2]
 
-        check(
-            "2 1 -T -I 2 2 0 -ema 2.2 2 x 1 2 x", [(2.2, 1, (0, 1)), (2.2, 2, (1, 0))]
-        )
+        check("2 1 -T -I 2 2 0 -ema 2.2 2 x 1 2 x", [(2.2, 1, (0, 1)), (2.2, 2, (1, 0))])
         check(
             "2 1 -T -I 3 2 0 0 -ema 2.2 3 x 1 2 3 x 4 5 6 x",
             [
@@ -841,9 +840,7 @@ class TestMspmsCreateSimulationRunner:
                         k += 1
 
         check(3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2", [(2.2, 0, 1)])
-        check(
-            3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2 -ej 2.3 1 3", [(2.2, 0, 1), (2.3, 0, 2)]
-        )
+        check(3, "2 1 -T -I 3 2 0 0 -ej 2.2 1 2 -ej 2.3 1 3", [(2.2, 0, 1), (2.3, 0, 2)])
         check(
             4, "2 1 -T -I 4 2 0 0 0 -ej 2.2 1 2 -ej 2.3 1 3", [(2.2, 0, 1), (2.3, 0, 2)]
         )
@@ -1480,7 +1477,7 @@ class TestSampleParsing:
         with pytest.raises(ValueError, match="'A' referred to more than once"):
             cli.parse_sample_spec(["A:1", "A:1"])
 
-    @pytest.mark.parametrize("param", ["", ":::", "A_2", ":" "A:", ":1"])
+    @pytest.mark.parametrize("param", ["", ":::", "A_2", ":A:", ":1"])
     def test_parse_sample_spec_malformed_token(self, param):
         with pytest.raises(ValueError, match="must be in the form"):
             cli.parse_sample_spec([param])

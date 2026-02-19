@@ -8,8 +8,7 @@ import pytest
 import tskit
 
 import msprime
-from msprime import _msprime
-from msprime import pedigrees
+from msprime import _msprime, pedigrees
 
 
 # Note: these functions are left over from older code when we didn't
@@ -157,9 +156,7 @@ class TestSimPedigreeBackward:
     def verify(self, tables):
         tables.sequence_length = 10
         # Check that we can simulate with it.
-        msprime.sim_ancestry(
-            initial_state=tables, model="fixed_pedigree", random_seed=2
-        )
+        msprime.sim_ancestry(initial_state=tables, model="fixed_pedigree", random_seed=2)
 
     def sim_pedigree(self, population_size=10, end_time=10, num_samples=10):
         return pedigrees.sim_pedigree(
@@ -239,9 +236,7 @@ class TestSimPedigreeForward:
     def verify(self, tables):
         tables.sequence_length = 10
         # Check that we can simulate with it.
-        msprime.sim_ancestry(
-            initial_state=tables, model="fixed_pedigree", random_seed=2
-        )
+        msprime.sim_ancestry(initial_state=tables, model="fixed_pedigree", random_seed=2)
 
     def test_zero_generations(self):
         tables = pedigrees.sim_pedigree(population_size=10, end_time=0, random_seed=1)
@@ -334,17 +329,13 @@ class TestPedigreeSimulation:
         assert all([np.array_equal(row.parents, [-1, -1]) for row in tb])
 
     def test_one_trio(self):
-        tb = self.simple_sim(
-            num_founders=2, num_children_prob=[0, 1], num_generations=2
-        )
+        tb = self.simple_sim(num_founders=2, num_children_prob=[0, 1], num_generations=2)
         assert len(tb) == 3
         assert np.array_equal(tb[2].parents, [0, 1])
         assert all([np.array_equal(tb[idx].parents, [-1, -1]) for idx in range(2)])
 
     def test_grandparents(self):
-        tb = self.simple_sim(
-            num_founders=4, num_children_prob=[0, 1], num_generations=3
-        )
+        tb = self.simple_sim(num_founders=4, num_children_prob=[0, 1], num_generations=3)
         assert len(tb) == 7
         assert all([np.array_equal(tb[idx].parents, [-1, -1]) for idx in range(4)])
         assert set(tb[4].parents).union(tb[5].parents) == set(range(4))
@@ -524,9 +515,7 @@ class TestSimulateThroughPedigree:
                         ancestors[individual.id].add(parent_id)
                         for u in ts.individual(parent_id).parents:
                             stack.append(u)
-        founder_ids = {
-            ind.id for ind in ts.individuals() if len(ancestors[ind.id]) == 0
-        }
+        founder_ids = {ind.id for ind in ts.individuals() if len(ancestors[ind.id]) == 0}
 
         for tree in ts.trees():
             for root in tree.roots:
@@ -596,9 +585,7 @@ class TestSimulateThroughPedigree:
     @pytest.mark.parametrize("num_founders", [2, 3, 5])
     @pytest.mark.parametrize("recombination_rate", [0, 0.01])
     @pytest.mark.parametrize("stop_at_local_mrca", [True, False])
-    def test_no_leaf_samples(
-        self, num_founders, recombination_rate, stop_at_local_mrca
-    ):
+    def test_no_leaf_samples(self, num_founders, recombination_rate, stop_at_local_mrca):
         tables = simulate_pedigree(
             num_founders=num_founders,
             num_children_prob=[0, 0, 1],
@@ -675,9 +662,7 @@ class TestSimulateThroughPedigree:
 
     @pytest.mark.parametrize("recombination_rate", [0, 0.01])
     @pytest.mark.parametrize("stop_at_local_mrca", [True, False])
-    def test_two_pedigrees_different_times(
-        self, recombination_rate, stop_at_local_mrca
-    ):
+    def test_two_pedigrees_different_times(self, recombination_rate, stop_at_local_mrca):
         tables1 = simulate_pedigree(
             num_founders=5,
             num_generations=5,
@@ -1141,9 +1126,7 @@ class TestSimulateThroughPedigreeMultiplePops:
         ts = msprime.sim_ancestry(
             initial_state=pedigree, model="fixed_pedigree", random_seed=1
         )
-        ts = msprime.sim_ancestry(
-            initial_state=ts, demography=demography, random_seed=2
-        )
+        ts = msprime.sim_ancestry(initial_state=ts, demography=demography, random_seed=2)
         for j in range(4):
             assert ts.node(j).population == 1
         assert ts.node(4).population == 0
@@ -1164,9 +1147,7 @@ class TestSimulateThroughPedigreeMultiplePops:
             initial_state=pedigree, model="fixed_pedigree", random_seed=1
         )
         # Should be able to coalesce due to the added population split
-        ts = msprime.sim_ancestry(
-            initial_state=ts, demography=demography, random_seed=2
-        )
+        ts = msprime.sim_ancestry(initial_state=ts, demography=demography, random_seed=2)
         assert ts.node(6).time > 2
         assert ts.node(6).population == 2
 
@@ -1184,9 +1165,7 @@ class TestSimulateThroughPedigreeMultiplePops:
             initial_state=pedigree, model="fixed_pedigree", random_seed=1
         )
         # Should be able to coalesce due to symmetric migration
-        ts = msprime.sim_ancestry(
-            initial_state=ts, demography=demography, random_seed=2
-        )
+        ts = msprime.sim_ancestry(initial_state=ts, demography=demography, random_seed=2)
         assert ts.node(6).time > 2
 
 

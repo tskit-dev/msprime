@@ -19,6 +19,7 @@
 """
 Tests for the legacy recombination map functionality.
 """
+
 import io
 import os
 import random

@@ -80,7 +80,6 @@ from msprime.demography import _matrix_exponential
 matplotlib.use("Agg")
 import statsmodels.api as sm  # noqa: E402
 
-
 _mspms_executable = [sys.executable, "mspms_dev.py"]
 _slim_executable = ["./data/slim"]
 _ms_executable = ["./data/ms"]
@@ -533,9 +532,7 @@ class MsDemography(MsTest):
         self._run("1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -em 2.0 3 1 1")
 
     def test_admixture_2_pop3(self):
-        self._run(
-            "1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -G 5.0 " "-em 2.0 3 1 1"
-        )
+        self._run("1000 1000 -t 2.0 -I 2 500 500 2 -es 0.01 1 0.75 -G 5.0 -em 2.0 3 1 1")
 
     def test_admixture_2_pop4(self):
         cmd = (
@@ -769,9 +766,7 @@ class DiscoalTest(Test):
                 )
             # migration rate case
             if (tokens[i] == "-m") or (tokens[i] == "-p"):
-                raise ValueError(
-                    "sweeps with multiple populations remain unimplemented"
-                )
+                raise ValueError("sweeps with multiple populations remain unimplemented")
             # split or admixture case
             if (tokens[i] == "-ea") or (tokens[i] == "-ed"):
                 raise ValueError("sweeps with splits or admixture not supported")
@@ -824,9 +819,7 @@ class DiscoalTest(Test):
             discrete_genome=False,
             num_replicates=nreps,
         )
-        mutate = functools.partial(
-            msprime.sim_mutations, discrete_genome=False, rate=mu
-        )
+        mutate = functools.partial(msprime.sim_mutations, discrete_genome=False, rate=mu)
         return map(mutate, replicates)
 
 
@@ -1447,8 +1440,7 @@ class MsmsSweeps(Test):
     def test_selective_msms_vs_discoal(self):
         self._cmp_msms_vs_discoal(
             # "100 300 -t 20 -r 20 50000"
-            "100 300 -t 20 -r 20 5000"
-            " -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
+            "100 300 -t 20 -r 20 5000 -SF 0 0.9 -Sp 0.5 -SaA 5000 -SAA 10000 -N 10000"
         )
 
     def test_selective_msms_vs_msp_use_discoal_paper_param(self):
@@ -1472,8 +1464,7 @@ class MsmsSweeps(Test):
     def test_selective_msms_vs_discoal_random_param(self):
         self._cmp_msms_vs_discoal(
             # "100 300 -t 40 -r 40 50000"
-            "100 300 -t 40 -r 40 5000"
-            " -SF 0 0.99995 -Sp 0.5 -SaA 1000 -SAA 2000 -N 10000"
+            "100 300 -t 40 -r 40 5000 -SF 0 0.99995 -Sp 0.5 -SaA 1000 -SAA 2000 -N 10000"
         )
 
     def test_selective_discoal_vs_msp_use_discoal_paper_param(self):
@@ -1486,8 +1477,7 @@ class MsmsSweeps(Test):
     def test_selective_discoal_vs_msp_random_param(self):
         self._cmp_discoal_vs_msp_via_msms_cmd(
             # "100 300 -t 40 -r 40 50000"
-            "100 300 -t 40 -r 40 5000"
-            " -SF 0 0.99995 -Sp 0.5 -SaA 1000 -SAA 2000 -N 10000"
+            "100 300 -t 40 -r 40 5000 -SF 0 0.99995 -Sp 0.5 -SaA 1000 -SAA 2000 -N 10000"
         )
 
 
@@ -1983,9 +1973,7 @@ class DtwfVsCoalescent(Test):
         hudson_breakpoints = all_breakpoints_in_replicates(df_hudson["intervals"])
         dtwf_breakpoints = all_breakpoints_in_replicates(df_dtwf["intervals"])
         if len(hudson_breakpoints) > 0 or len(dtwf_breakpoints) > 0:
-            plot_breakpoints_hist(
-                hudson_breakpoints, dtwf_breakpoints, "hudson", "dtwf"
-            )
+            plot_breakpoints_hist(hudson_breakpoints, dtwf_breakpoints, "hudson", "dtwf")
             pyplot.savefig(self.output_dir / "breakpoints.png", dpi=72)
             pyplot.close("all")
 
@@ -3868,9 +3856,7 @@ class HudsonAnalytical(Test):
                 empirical_prob_mid[j, k, :] = same_root_count_mid / R
             # Predicted prob
             # From Wiuf, Hein, 2000, eqn (15), pg. 457
-            rG = (
-                2 / gc_length_rate_ratio[k] * (1.0 - np.exp(-np.arange(seq_length) / l))
-            )
+            rG = 2 / gc_length_rate_ratio[k] * (1.0 - np.exp(-np.arange(seq_length) / l))
             predicted_prob[k, :] = (18.0 + rG) / (18.0 + 13.0 * rG + rG * rG)
 
         x = np.arange(500) + 1
@@ -4543,7 +4529,6 @@ class SmcKTest(Test):
         df_list = []
 
         for model, model_cls in self.models.items():
-
             if initial_condition:
                 kwargs["model"] = [msprime.StandardCoalescent(duration=50), model_cls]
             else:
@@ -5316,7 +5301,6 @@ class SmcKTest(Test):
 
 
 class SimulateAboveRoot(Test):
-
     colors = list(mcolors.TABLEAU_COLORS.values())
 
     def run_above_root_stats(self, **kwargs):
@@ -5330,7 +5314,6 @@ class SimulateAboveRoot(Test):
             data = collections.defaultdict(list)
             replicates = msprime.sim_ancestry(**kwargs)
             for ts in replicates:
-
                 # we also simplify when the flag is True for consistency
                 ts = ts.simplify()
 
@@ -6623,14 +6606,10 @@ class OlderMsprimeTest(Test):
         self._run(1000, sample_size=10**4)
 
     def test_msprime_n1e3_long_genome(self):
-        self._run(
-            1000, sample_size=10**2, Ne=10**4, recombination_rate=1e-8, length=1e6
-        )
+        self._run(1000, sample_size=10**2, Ne=10**4, recombination_rate=1e-8, length=1e6)
 
     def test_msprime_n1e2_long_genome(self):
-        self._run(
-            2000, sample_size=10**2, Ne=10**4, recombination_rate=1e-8, length=1e6
-        )
+        self._run(2000, sample_size=10**2, Ne=10**4, recombination_rate=1e-8, length=1e6)
 
     def test_msprime_n10_long_genome(self):
         self._run(1000, sample_size=10, Ne=10**4, recombination_rate=1e-8, length=1e6)
@@ -6943,9 +6922,7 @@ class TestRunner:
             progress.update()
 
     def __run_parallel(self, tests, basedir, num_threads, progress):
-        with concurrent.futures.ProcessPoolExecutor(
-            max_workers=num_threads
-        ) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=num_threads) as executor:
             futures = [executor.submit(test.run, basedir) for test in tests]
             exception = None
             for future in concurrent.futures.as_completed(futures):

@@ -8,6 +8,6 @@ on:
   merge_group:
 jobs:
   Docs:
-    uses: tskit-dev/.github/.github/workflows/docs.yml@v7
+    uses: tskit-dev/.github/.github/workflows/docs.yml@v10
     with:
       additional-apt-packages: libgsl-dev

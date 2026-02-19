@@ -32,6 +32,7 @@ class Something:
 
 Fixtures can be parameterised etc. see https://docs.pytest.org/en/stable/fixture.html
 """
+
 import pytest
 
 

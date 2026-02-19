@@ -57,7 +57,6 @@ class LargeSimulationBenchmark:
 
 
 class HudsonlargeSampleSize(LargeSimulationBenchmark):
-
     def _get_params(self):
         return {
             "samples": 0.5 * (10**6),
@@ -106,7 +105,6 @@ class HudsonLongSequenceLengthGeneConversion(HudsonlargeSampleSize):
 
 
 class HudsonHumanChr22(HudsonlargeSampleSize):
-
     def _get_params(self):
         return {
             **super()._get_params(),
@@ -117,7 +115,6 @@ class HudsonHumanChr22(HudsonlargeSampleSize):
 
 
 class HudsonManyReplicates(HudsonlargeSampleSize):
-
     def run(self):
         params = {"samples": 10, "num_replicates": 10**5, "random_seed": 1234}
         for _ in msprime.sim_ancestry(**params):
@@ -169,7 +166,6 @@ class DTWFLongSequenceLength(DTWFLargePopulationSize):
 
 
 class DTWFHumanChr22(DTWFLargePopulationSize):
-
     def _get_params(self):
         return {
             **super()._get_params(),

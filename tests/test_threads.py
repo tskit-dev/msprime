@@ -19,6 +19,7 @@
 """
 Test cases for threading enabled aspects of the API.
 """
+
 import platform
 import threading
 

@@ -6,7 +6,6 @@ import sys
 
 import msprime
 
-
 if __name__ == "__main__":
     assert msprime.__version__ == "0.7.4"
 

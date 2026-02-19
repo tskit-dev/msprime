@@ -4,9 +4,7 @@ import subprocess
 from warnings import warn
 
 import numpy
-from setuptools import Extension
-from setuptools import setup
-
+from setuptools import Extension, setup
 
 CONDA_PREFIX = os.getenv("MSP_CONDA_PREFIX", None)
 IS_WINDOWS = platform.system() == "Windows"

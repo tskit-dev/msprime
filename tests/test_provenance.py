@@ -19,6 +19,7 @@
 """
 Tests for the provenance information attached to tree sequences.
 """
+
 import json
 import logging
 
@@ -40,9 +41,7 @@ class TestProvenance:
         ts = msprime.simulate(5, random_seed=1)
         prov = json.loads(ts.provenance(0).record)
         libs = prov["environment"]["libraries"]
-        assert libs["gsl"] == {
-            "version": ".".join(map(str, _msprime.get_gsl_version()))
-        }
+        assert libs["gsl"] == {"version": ".".join(map(str, _msprime.get_gsl_version()))}
         assert libs["tskit"] == {"version": tskit.__version__}
 
 

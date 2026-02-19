@@ -19,6 +19,7 @@
 """
 Test cases for the low level C interface to msprime.
 """
+
 import collections
 import functools
 import inspect
@@ -707,7 +708,7 @@ class TestSimulationState(LowLevelTestCase):
                 pop_sizes[pop_id] += 1
                 assert left == 0
                 assert right == m
-                assert not (node in nodes)
+                assert node not in nodes
                 nodes.add(node)
                 a += 1
             for n1, n2 in zip(num_sampless, pop_sizes):
@@ -1526,9 +1527,7 @@ class TestSimulator(LowLevelTestCase):
         def f(num_samples=10, **kwargs):
             samples = [(j % 2, 0) for j in range(num_samples)]
             migration_matrix = [[0, 1], [1, 0]]
-            population_configuration = [
-                get_population_configuration() for j in range(2)
-            ]
+            population_configuration = [get_population_configuration() for j in range(2)]
             return make_sim(
                 samples,
                 num_populations=2,
@@ -2151,9 +2150,7 @@ class TestSimulator(LowLevelTestCase):
                     get_population_configuration(),
                     get_population_configuration(),
                 ],
-                demographic_events=[
-                    get_activate_population_event(0, population=pop_id)
-                ],
+                demographic_events=[get_activate_population_event(0, population=pop_id)],
                 migration_matrix=[[0, 0], [0, 0]],
             )
 
@@ -2357,9 +2354,7 @@ class TestSimulator(LowLevelTestCase):
                 get_population_configuration(),
             ],
             demographic_events=[
-                get_symmetric_migration_rate_change_event(
-                    t, populations=[0, 1], rate=1
-                ),
+                get_symmetric_migration_rate_change_event(t, populations=[0, 1], rate=1),
             ],
             migration_matrix=[[0, 0, 0], [0, 0, 0], [0, 0, 0]],
         )
@@ -2791,9 +2786,9 @@ class TestSLiMMutationModel:
     def test_uninitialised(self):
         model = _msprime.SLiMMutationModel.__new__(_msprime.SLiMMutationModel)
         with pytest.raises(SystemError):
-            model.type
+            _ = model.type
         with pytest.raises(SystemError):
-            model.next_id
+            _ = model.next_id
 
     def test_type(self):
         for mutation_type in [0, 10, 2**31 - 1]:
@@ -2832,9 +2827,9 @@ class TestInfiniteAllelesMutationModel:
             _msprime.InfiniteAllelesMutationModel
         )
         with pytest.raises(SystemError):
-            model.start_allele
+            _ = model.start_allele
         with pytest.raises(SystemError):
-            model.next_allele
+            _ = model.next_allele
 
     def test_start_allele(self):
         for start_allele in [0, 10, 2**64 - 1]:

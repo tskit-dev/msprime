@@ -19,6 +19,7 @@
 """
 Test cases for the simulate-from functionality.
 """
+
 import itertools
 
 import numpy as np
@@ -775,9 +776,7 @@ class TestErrors:
 
     def get_example_base(self, num_populations=1, length=1):
         N = num_populations
-        population_configurations = [
-            msprime.PopulationConfiguration() for _ in range(N)
-        ]
+        population_configurations = [msprime.PopulationConfiguration() for _ in range(N)]
         migration_matrix = np.ones((N, N))
         np.fill_diagonal(migration_matrix, 0)
         ts = msprime.simulate(
@@ -836,9 +835,7 @@ class TestErrors:
         nodes = tables.nodes
         nodes.set_columns(flags=nodes.flags, time=nodes.time)
         with pytest.raises(_msprime.InputError):
-            msprime.simulate(
-                from_ts=tables.tree_sequence(), start_time=nodes.time.max()
-            )
+            msprime.simulate(from_ts=tables.tree_sequence(), start_time=nodes.time.max())
         nodes.set_columns(
             flags=nodes.flags,
             population=np.zeros_like(nodes.population),
@@ -958,9 +955,7 @@ class TestSimAncestryInterface:
         tables.populations.add_row()
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
-        d = msprime.Demography.from_tree_sequence(
-            tables.tree_sequence(), initial_size=1
-        )
+        d = msprime.Demography.from_tree_sequence(tables.tree_sequence(), initial_size=1)
         d.add_population(name="x", initial_size=1)
         with pytest.warns(
             msprime.IncompletePopulationMetadataWarning,
@@ -989,9 +984,7 @@ class TestSimAncestryInterface:
         tables.populations.add_row(metadata={"name": "X", "description": "Y"})
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
-        d = msprime.Demography.from_tree_sequence(
-            tables.tree_sequence(), initial_size=1
-        )
+        d = msprime.Demography.from_tree_sequence(tables.tree_sequence(), initial_size=1)
         d.add_population(name="Z", description="ZZ", initial_size=1)
         ts = msprime.sim_ancestry(initial_state=tables, demography=d, random_seed=1)
         assert ts.num_populations == 2
@@ -1018,9 +1011,7 @@ class TestSimAncestryInterface:
         tables.populations.add_row(metadata={"description": "X"})
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
-        d = msprime.Demography.from_tree_sequence(
-            tables.tree_sequence(), initial_size=1
-        )
+        d = msprime.Demography.from_tree_sequence(tables.tree_sequence(), initial_size=1)
         d.add_population(name="Z", description="ZZ", initial_size=1)
         with pytest.warns(
             msprime.IncompletePopulationMetadataWarning,
@@ -1048,9 +1039,7 @@ class TestSimAncestryInterface:
         tables.populations.add_row(metadata={"name": "X"})
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
-        d = msprime.Demography.from_tree_sequence(
-            tables.tree_sequence(), initial_size=1
-        )
+        d = msprime.Demography.from_tree_sequence(tables.tree_sequence(), initial_size=1)
         d.add_population(name="Z", description="ZZ", initial_size=1)
         with pytest.warns(
             msprime.IncompletePopulationMetadataWarning,
@@ -1068,9 +1057,7 @@ class TestSimAncestryInterface:
         tables.populations.add_row(metadata={"name": "X"})
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
-        d = msprime.Demography.from_tree_sequence(
-            tables.tree_sequence(), initial_size=1
-        )
+        d = msprime.Demography.from_tree_sequence(tables.tree_sequence(), initial_size=1)
         d.add_population(name="Z", description="ZZ", initial_size=1)
         ts = msprime.sim_ancestry(initial_state=tables, demography=d, random_seed=1)
         assert ts.population(0).metadata == {"name": "X"}
@@ -1095,9 +1082,7 @@ class TestSimAncestryInterface:
         tables.populations.add_row(metadata={"name": "Y", "description": "pop y"})
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
-        d = msprime.Demography.from_tree_sequence(
-            tables.tree_sequence(), initial_size=1
-        )
+        d = msprime.Demography.from_tree_sequence(tables.tree_sequence(), initial_size=1)
         d.add_population(
             name="Z",
             description="ZZ",
@@ -1136,9 +1121,7 @@ class TestSimAncestryInterface:
         )
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, population=0)
-        d = msprime.Demography.from_tree_sequence(
-            tables.tree_sequence(), initial_size=1
-        )
+        d = msprime.Demography.from_tree_sequence(tables.tree_sequence(), initial_size=1)
         d.add_population(
             name="Z",
             description="ZZ",
@@ -1164,9 +1147,7 @@ class TestSimAncestryInterface:
 
     def test_population_size_set(self):
         ts1 = msprime.sim_ancestry(2, end_time=0, random_seed=1)
-        ts2 = msprime.sim_ancestry(
-            initial_state=ts1, population_size=100, random_seed=2
-        )
+        ts2 = msprime.sim_ancestry(initial_state=ts1, population_size=100, random_seed=2)
         ts3 = msprime.sim_ancestry(2, population_size=100, random_seed=2)
         assert ts2.equals(ts3, ignore_provenance=True)
 
@@ -1258,9 +1239,7 @@ class TestBugExamples:
         ts = t.tree_sequence()
 
         with pytest.warns(msprime.IncompletePopulationMetadataWarning):
-            ts = msprime.sim_ancestry(
-                initial_state=ts, population_size=1, random_seed=5
-            )
+            ts = msprime.sim_ancestry(initial_state=ts, population_size=1, random_seed=5)
         assert ts.num_trees == 2
         for tree in ts.trees():
             assert tree.num_roots == 1

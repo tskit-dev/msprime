@@ -19,6 +19,7 @@
 """
 Test cases for demes support.
 """
+
 # import copy
 import math
 import textwrap
@@ -846,9 +847,7 @@ class TestToDemes:
     @pytest.mark.parametrize("num_pops", [2, 5, 10])
     def test_symmetric_migration_time_limited(self, num_pops):
         demog = msprime.Demography.isolated_model([1000] * num_pops)
-        demog.add_symmetric_migration_rate_change(
-            100, populations=list(demog), rate=0.1
-        )
+        demog.add_symmetric_migration_rate_change(100, populations=list(demog), rate=0.1)
         demog.add_symmetric_migration_rate_change(200, populations=list(demog), rate=0)
         graph = demog.to_demes()
         assert len(graph.demes) == num_pops
@@ -1015,9 +1014,7 @@ class TestToDemes:
     def test_bad_population_size_change(self):
         demog = msprime.Demography.isolated_model([1000] * 2)
         demog.add_mass_migration(100, source="pop_0", dest="pop_1", proportion=1)
-        demog.add_population_parameters_change(
-            200, initial_size=500, population="pop_0"
-        )
+        demog.add_population_parameters_change(200, initial_size=500, population="pop_0")
         with pytest.raises(ValueError, match="outside pop_0's existence interval"):
             demog.to_demes()
 

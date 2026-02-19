@@ -19,6 +19,7 @@
 """
 Test cases for demographic events in msprime.
 """
+
 import importlib
 import io
 import itertools
@@ -39,7 +40,6 @@ import msprime
 import msprime.demography as demog_mod
 from msprime import _msprime
 
-
 IS_WINDOWS = platform.system() == "Windows"
 
 
@@ -51,9 +51,7 @@ def all_events_example_demography(*, integer_ids=False):
     demography.add_census(0.55)
     if integer_ids:
         demography.add_migration_rate_change(0.2, source=0, dest=1, rate=1)
-        demography.add_symmetric_migration_rate_change(
-            0.3, populations=[0, 1], rate=0.5
-        )
+        demography.add_symmetric_migration_rate_change(0.3, populations=[0, 1], rate=0.5)
         demography.add_mass_migration(0.4, source=1, dest=0, proportion=0.5)
         demography.add_population_split(0.4, derived=[3, 4], ancestral=5)
         demography.add_admixture(
@@ -96,9 +94,7 @@ class TestNePopulationSizeEquivalence:
         np.testing.assert_array_equal(t1.nodes.population, t2.nodes.population)
         np.testing.assert_array_equal(t1.nodes.individual, t2.nodes.individual)
         np.testing.assert_array_equal(t1.nodes.metadata, t2.nodes.metadata)
-        np.testing.assert_array_equal(
-            t1.nodes.metadata_offset, t2.nodes.metadata_offset
-        )
+        np.testing.assert_array_equal(t1.nodes.metadata_offset, t2.nodes.metadata_offset)
         assert len(t1.edges) == len(t2.edges)
         np.testing.assert_array_almost_equal(t1.edges.left, t2.edges.left)
         np.testing.assert_array_almost_equal(t1.edges.right, t2.edges.right)
@@ -178,9 +174,7 @@ class TestNePopulationSizeEquivalence:
         recombination_rate = 0.5
 
         for Ne in [0.5, 1, 1.5]:
-            samples = [
-                msprime.Sample(population=j, time=0) for j in range(num_pops)
-            ] * 4
+            samples = [msprime.Sample(population=j, time=0) for j in range(num_pops)] * 4
             ts1 = msprime.simulate(
                 samples=samples,
                 Ne=Ne,
@@ -224,9 +218,7 @@ class TestNePopulationSizeEquivalence:
         np.fill_diagonal(migration_matrix, 0)
 
         for Ne in [0.5, 1, 1.5]:
-            samples = [
-                msprime.Sample(population=j, time=0) for j in range(num_pops)
-            ] * 5
+            samples = [msprime.Sample(population=j, time=0) for j in range(num_pops)] * 5
             ts1 = msprime.simulate(
                 samples=samples,
                 Ne=Ne,
@@ -1067,9 +1059,7 @@ class TestDemographicEventMessages:
         assert event._parameters() == "population=1, initial_size=2.0"
         assert event._effect() == "initial_size → 2 for population 1"
 
-        event = msprime.PopulationParametersChange(
-            1.0, population="XX", growth_rate=2.0
-        )
+        event = msprime.PopulationParametersChange(1.0, population="XX", growth_rate=2.0)
         assert event._parameters() == "population=XX, growth_rate=2.0"
         assert event._effect() == "growth_rate → 2 for population XX"
 
@@ -1077,9 +1067,7 @@ class TestDemographicEventMessages:
             1.0, population=0, initial_size=3, growth_rate=2.0
         )
         assert event._parameters() == "population=0, initial_size=3, growth_rate=2.0"
-        assert (
-            event._effect() == "initial_size → 3 and growth_rate → 2 for population 0"
-        )
+        assert event._effect() == "initial_size → 3 and growth_rate → 2 for population 0"
 
         for pop in [None, -1]:
             event = msprime.PopulationParametersChange(
@@ -1091,9 +1079,7 @@ class TestDemographicEventMessages:
     def test_migration_rate_change(self):
         event = msprime.MigrationRateChange(time=1, rate=2)
         assert event._parameters() == "source=-1, dest=-1, rate=2"
-        assert (
-            event._effect() == "Backwards-time migration rate for all populations → 2"
-        )
+        assert event._effect() == "Backwards-time migration rate for all populations → 2"
 
         event = msprime.MigrationRateChange(source=0, dest=1, time=1, rate=6)
         assert event._parameters() == "source=0, dest=1, rate=6"
@@ -1832,9 +1818,7 @@ class TestDemographyTrajectories(unittest.TestCase):
     def test_ooa(self):
         # let us know if these values change
         ddb = msprime.Demography._ooa_model().debug()
-        T = np.concatenate(
-            [np.linspace(0, 1000, 2001), np.linspace(1000, 1e4, 401)[1:]]
-        )
+        T = np.concatenate([np.linspace(0, 1000, 2001), np.linspace(1000, 1e4, 401)[1:]])
         R, _ = ddb.coalescence_rate_trajectory(T, {"CEU": 2})
         assert np.allclose(0.5 / R[-10:], 7300, rtol=1e-3)
         assert np.allclose(0.5 / R[2021], 2985.125, rtol=1e-3)
@@ -2378,9 +2362,7 @@ class MigrationRecordsMixin:
         tables.nodes.add_row(flags=tskit.NODE_IS_SAMPLE, time=0, population=1)
         for _ in range(3):
             tables.populations.add_row()
-        population_configurations = [
-            msprime.PopulationConfiguration() for _ in range(3)
-        ]
+        population_configurations = [msprime.PopulationConfiguration() for _ in range(3)]
         t = 5
         demographic_events = [
             msprime.MassMigration(time=t, source=0, dest=2),
@@ -3435,9 +3417,7 @@ class TestCensusEvent:
             msprime.simulate(
                 sample_size=3,
                 random_seed=3,
-                demographic_events=[
-                    demog_mod.CensusEvent(time=ts.tables.nodes.time[3])
-                ],
+                demographic_events=[demog_mod.CensusEvent(time=ts.tables.nodes.time[3])],
             )
 
     def test_migration_time_equals_census_time(self):
@@ -4036,9 +4016,7 @@ class TestIslandModel(TestPreCannedModels):
         model1 = msprime.Demography.island_model(
             initial_size, growth_rate=growth_rate, migration_rate=0
         )
-        model2 = msprime.Demography.isolated_model(
-            initial_size, growth_rate=growth_rate
-        )
+        model2 = msprime.Demography.isolated_model(initial_size, growth_rate=growth_rate)
         assert model1 == model2
 
 
@@ -4057,9 +4035,7 @@ class TestSteppingStoneModel(TestPreCannedModels):
         model1 = msprime.Demography.stepping_stone_model(
             initial_size, growth_rate=growth_rate, migration_rate=0
         )
-        model2 = msprime.Demography.isolated_model(
-            initial_size, growth_rate=growth_rate
-        )
+        model2 = msprime.Demography.isolated_model(initial_size, growth_rate=growth_rate)
         assert model1 == model2
 
     def test_one_pop(self):
@@ -4462,9 +4438,7 @@ class TestDemographyObject:
         demography1 = msprime.Demography.isolated_model([10] * N)
         demography1.set_symmetric_migration_rate(range(N), 0.1)
         demography2 = msprime.Demography.island_model([10] * N, 0.1)
-        assert np.array_equal(
-            demography1.migration_matrix, demography2.migration_matrix
-        )
+        assert np.array_equal(demography1.migration_matrix, demography2.migration_matrix)
 
     def test_events_out_of_order(self):
         demography = msprime.Demography.isolated_model([10] * 2)
@@ -4841,8 +4815,7 @@ class TestDemographyFromOldStyle:
 
     def test_demographic_events(self):
         events = [
-            msprime.PopulationParametersChange(time=j, initial_size=2)
-            for j in range(10)
+            msprime.PopulationParametersChange(time=j, initial_size=2) for j in range(10)
         ]
         demog = msprime.Demography.from_old_style(demographic_events=events)
         assert demog.num_populations == 1
@@ -4864,9 +4837,7 @@ class TestDemographyFromOldStyle:
         assert pop_config.growth_rate == pop.growth_rate
 
     def test_values(self):
-        pop_config = msprime.PopulationConfiguration(
-            initial_size=1234, growth_rate=5678
-        )
+        pop_config = msprime.PopulationConfiguration(initial_size=1234, growth_rate=5678)
         demog = msprime.Demography.from_old_style([pop_config], Ne=1234)
         pop = demog.populations[0]
         assert pop_config.initial_size == pop.initial_size
@@ -4882,15 +4853,11 @@ class TestPopulationNamesInEvents:
     def test_mass_migration(self):
         demography = msprime.Demography.isolated_model([1000, 1000])
         demography.add_mass_migration(1, source=0, dest=1, proportion=1)
-        ts1 = msprime.sim_ancestry(
-            {0: 1, 1: 1}, demography=demography, random_seed=1234
-        )
+        ts1 = msprime.sim_ancestry({0: 1, 1: 1}, demography=demography, random_seed=1234)
 
         demography = msprime.Demography.isolated_model([1000, 1000])
         demography.add_mass_migration(1, source="pop_0", dest="pop_1", proportion=1)
-        ts2 = msprime.sim_ancestry(
-            {0: 1, 1: 1}, demography=demography, random_seed=1234
-        )
+        ts2 = msprime.sim_ancestry({0: 1, 1: 1}, demography=demography, random_seed=1234)
         assert ts1.equals(ts2, ignore_provenance=True)
 
     def test_admixture(self):
@@ -4910,31 +4877,21 @@ class TestPopulationNamesInEvents:
     def test_population_split(self):
         demography = msprime.Demography.isolated_model([1000, 1000, 1000])
         demography.add_population_split(1, derived=[0, 1], ancestral=2)
-        ts1 = msprime.sim_ancestry(
-            {0: 1, 1: 1}, demography=demography, random_seed=1234
-        )
+        ts1 = msprime.sim_ancestry({0: 1, 1: 1}, demography=demography, random_seed=1234)
 
         demography = msprime.Demography.isolated_model([1000, 1000, 1000])
-        demography.add_population_split(
-            1, derived=["pop_0", "pop_1"], ancestral="pop_2"
-        )
-        ts2 = msprime.sim_ancestry(
-            {0: 1, 1: 1}, demography=demography, random_seed=1234
-        )
+        demography.add_population_split(1, derived=["pop_0", "pop_1"], ancestral="pop_2")
+        ts2 = msprime.sim_ancestry({0: 1, 1: 1}, demography=demography, random_seed=1234)
         assert ts1.equals(ts2, ignore_provenance=True)
 
     def test_migration_rate_change(self):
         demography = msprime.Demography.isolated_model([1000, 1000])
         demography.add_migration_rate_change(1, source=0, dest=1, rate=1)
-        ts1 = msprime.sim_ancestry(
-            {0: 1, 1: 1}, demography=demography, random_seed=1234
-        )
+        ts1 = msprime.sim_ancestry({0: 1, 1: 1}, demography=demography, random_seed=1234)
 
         demography = msprime.Demography.isolated_model([1000, 1000])
         demography.add_migration_rate_change(1, source="pop_0", dest="pop_1", rate=1)
-        ts2 = msprime.sim_ancestry(
-            {0: 1, 1: 1}, demography=demography, random_seed=1234
-        )
+        ts2 = msprime.sim_ancestry({0: 1, 1: 1}, demography=demography, random_seed=1234)
         assert ts1.equals(ts2, ignore_provenance=True)
 
     def test_population_parameters_change(self):
@@ -5137,9 +5094,7 @@ class TestPopulationSplit:
         demography.add_population_split(10, derived=["A", "B"], ancestral="AB")
         demography.add_mass_migration(10, source="AB", dest="A", proportion=1)
         with pytest.raises(_msprime.LibraryError, match="inactive population"):
-            msprime.sim_ancestry(
-                {"A": 1, "B": 1}, demography=demography, random_seed=32
-            )
+            msprime.sim_ancestry({"A": 1, "B": 1}, demography=demography, random_seed=32)
 
     def test_sample_derived(self):
         demography = msprime.Demography()
@@ -6500,7 +6455,6 @@ class TestLineageMovementEvents:
 
 
 class TestStdpopsimModels:
-
     def stdpopsim_ooa_model(self):
         """
         This is a copy of the code used in stdpopsim (copied 2025-07-25) to
@@ -6547,9 +6501,7 @@ class TestStdpopsimModels:
         ]
         demographic_events = [
             # CEU and CHB merge into B with rate changes at T_EU_AS
-            msprime.MassMigration(
-                time=T_EU_AS, source=2, destination=1, proportion=1.0
-            ),
+            msprime.MassMigration(time=T_EU_AS, source=2, destination=1, proportion=1.0),
             msprime.MigrationRateChange(time=T_EU_AS, rate=0),
             msprime.MigrationRateChange(time=T_EU_AS, rate=m_AF_B, matrix_index=(0, 1)),
             msprime.MigrationRateChange(time=T_EU_AS, rate=m_AF_B, matrix_index=(1, 0)),
@@ -6652,9 +6604,7 @@ class TestStdpopsimModels:
                 time=T_arch_adm_end, rate=m_OOA_nean, matrix_index=(3, 2)
             ),
             # CEU and CHB merge into B with rate changes at T_EU_AS
-            msprime.MassMigration(
-                time=T_EU_AS, source=2, destination=1, proportion=1.0
-            ),
+            msprime.MassMigration(time=T_EU_AS, source=2, destination=1, proportion=1.0),
             msprime.MigrationRateChange(time=T_EU_AS, rate=0),
             msprime.MigrationRateChange(time=T_EU_AS, rate=m_AF_B, matrix_index=(0, 1)),
             msprime.MigrationRateChange(time=T_EU_AS, rate=m_AF_B, matrix_index=(1, 0)),

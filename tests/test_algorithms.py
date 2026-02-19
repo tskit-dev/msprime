@@ -13,7 +13,6 @@ import msprime
 import tests.test_cli as test_cli
 from tests.test_pedigree import simulate_pedigree
 
-
 IS_WINDOWS = platform.system() == "Windows"
 
 
@@ -235,9 +234,7 @@ class TestAlgorithms:
 
     def test_store_common_ancestor(self):
         node_value = 1 << 18
-        ts = self.run_script(
-            f"10 -r 0.5 --additional-nodes {node_value} --all-segments"
-        )
+        ts = self.run_script(f"10 -r 0.5 --additional-nodes {node_value} --all-segments")
         assert ts.num_samples == 10
         assert ts.num_trees > 1
         assert ts.sequence_length == 100
@@ -409,9 +406,7 @@ class TestAlgorithms:
                         for u in ts.individual(parent_id).parents:
                             stack.append(u)
         # founder nodes have correct time
-        founder_ids = {
-            ind.id for ind in ts.individuals() if len(ancestors[ind.id]) == 0
-        }
+        founder_ids = {ind.id for ind in ts.individuals() if len(ancestors[ind.id]) == 0}
         for founder in founder_ids:
             for node_id in ts.individual(founder).nodes:
                 node = ts.node(node_id)

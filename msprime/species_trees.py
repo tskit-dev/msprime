@@ -19,6 +19,7 @@
 """
 Module responsible for parsing species trees.
 """
+
 import collections
 import re
 
