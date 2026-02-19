@@ -367,7 +367,7 @@ class TestMatrixMutationModel:
         sys.platform.startswith("win"), reason="Windows BLAS issue #2349"
     )
     @pytest.mark.parametrize(
-        "p, m, lo, hi",
+        ("p", "m", "lo", "hi"),
         [
             (0.9, 0.9, 2, 50),
             (0.5, 0.25, 50, 500),
@@ -428,7 +428,7 @@ class TestMatrixMutationModel:
                 assert np.abs(exp - a_ratio) < 1e-6
 
     @pytest.mark.parametrize(
-        "m, u, v, p, s, lo, hi",
+        ("m", "u", "v", "p", "s", "lo", "hi"),
         [
             (1.0, 0.62, 0.015, 0, 0.88, 1, 10.0),
             (0.43, 0.68, 0.037, 1.0, 0.5, 3.0, 10),
@@ -444,7 +444,7 @@ class TestMatrixMutationModel:
 
 class TestMicrosatModels:
     @pytest.mark.parametrize(
-        "m, u, v, p, s",
+        ("m", "u", "v", "p", "s"),
         [
             (1.0, 0.62, 0.015, 0, 0.88),
             (0.43, 0.68, 0.037, 0, 0.88),
@@ -468,7 +468,7 @@ class TestMicrosatModels:
             assert ((d[0] / d[j]) - exp) < 1e-6
 
     @pytest.mark.parametrize(
-        "m, u, v, p, s, lo, hi",
+        ("m", "u", "v", "p", "s", "lo", "hi"),
         [
             (1.0, 0.62, 0.015, 0, 0.88, 1, np.inf),
             (0.43, 0.68, 0.037, 0, 0.88, np.inf, 10),

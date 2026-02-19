@@ -372,7 +372,7 @@ class TestAlgorithms:
             assert ts.sequence_length == 100
 
     @pytest.mark.parametrize(
-        ["num_founders", "num_generations", "r"],
+        ("num_founders", "num_generations", "r"),
         [
             (4, 5, 0),
             (4, 5, 0.1),

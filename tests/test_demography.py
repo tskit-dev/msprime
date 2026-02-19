@@ -1731,7 +1731,7 @@ class TestDemographyTrajectories(unittest.TestCase):
         )
         ddb = model.debug()
         steps = np.linspace(0, 400, 2)
-        with pytest.warns(UserWarning):
+        with pytest.warns(UserWarning, match="Doubling the number of steps"):
             ddb.coalescence_rate_trajectory(steps=steps, lineages={"A": 2})
         # Test coalescence rates without double step validation
         steps = np.linspace(0, 400, 401)
