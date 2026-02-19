@@ -19,6 +19,7 @@
 """
 Test cases for mutation generation.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -226,8 +227,7 @@ class TestMatrixMutationModel:
                 msprime.MatrixMutationModel(
                     alleles=alleles,
                     root_distribution=[1] + [0] * (len(alleles) - 1),
-                    transition_matrix=[[1 / len(alleles)] * len(alleles)]
-                    * len(alleles),
+                    transition_matrix=[[1 / len(alleles)] * len(alleles)] * len(alleles),
                 )
 
     def test_bad_root_distribution(self):
@@ -354,15 +354,11 @@ class TestMatrixMutationModel:
         for i in range(model.transition_matrix.shape[0]):
             for j in range(i):
                 if i != j:
-                    assert (
-                        model.transition_matrix[i, j] == model.transition_matrix[j, i]
-                    )
+                    assert model.transition_matrix[i, j] == model.transition_matrix[j, i]
                 if np.abs(i - j) > 1:
                     assert model.transition_matrix[i, j] == 0.0
                 elif np.abs(i - j) == 1:
-                    assert (
-                        model.transition_matrix[i, j] == model.transition_matrix[0, 1]
-                    )
+                    assert model.transition_matrix[i, j] == model.transition_matrix[0, 1]
 
         self.validate_model(model)
         self.validate_stationary(model)
@@ -534,9 +530,7 @@ class TestMutateRateMap:
         pos = [0, 3, 7, 10]
         rate = [1.0, 0.0, 1.0]
         mut_map = msprime.RateMap(position=pos, rate=rate)
-        ts = msprime.sim_mutations(
-            ts, rate=mut_map, random_seed=1, discrete_genome=True
-        )
+        ts = msprime.sim_mutations(ts, rate=mut_map, random_seed=1, discrete_genome=True)
         site_pos = ts.tables.sites.position
         assert np.all(site_pos == [0, 1, 2, 7, 8, 9])
 
@@ -547,9 +541,7 @@ class TestMutateRateMap:
         pos = [0, 3, 7, 10]
         rate = [1.0, 0.0, 1.0]
         mut_map = msprime.RateMap(position=pos, rate=rate)
-        ts = msprime.sim_mutations(
-            ts, rate=mut_map, random_seed=1, discrete_genome=True
-        )
+        ts = msprime.sim_mutations(ts, rate=mut_map, random_seed=1, discrete_genome=True)
         site_pos = ts.tables.sites.position
         assert np.all(site_pos == [0, 1, 2, 7, 8, 9])
 
@@ -560,9 +552,7 @@ class TestMutateRateMap:
         pos = [0, 2.9, 4.3, 4.9, 9.5, 10]
         rate = [1.0, 0.0, 10.0, 0.0, 10.0]
         mut_map = msprime.RateMap(position=pos, rate=rate)
-        ts = msprime.sim_mutations(
-            ts, rate=mut_map, random_seed=2, discrete_genome=True
-        )
+        ts = msprime.sim_mutations(ts, rate=mut_map, random_seed=2, discrete_genome=True)
         site_pos = ts.tables.sites.position
         assert np.all(site_pos == [0, 1, 2])
 
@@ -596,9 +586,7 @@ class TestMutateRateMap:
         pos = [0, 0.5, 1.0, 4.5, 5.0, 9.5, 10]
         rate = [0, 10, 0, 10, 0, 10]
         mut_map = msprime.RateMap(position=pos, rate=rate)
-        ts = msprime.sim_mutations(
-            ts, rate=mut_map, random_seed=2, discrete_genome=True
-        )
+        ts = msprime.sim_mutations(ts, rate=mut_map, random_seed=2, discrete_genome=True)
         assert ts.num_mutations == 0
 
 
@@ -895,9 +883,7 @@ class TestFiniteSites(MutateMixin):
             keep=keep,
             discrete_genome=discrete_genome,
         )
-        self.verify_mutations(
-            lib_ts, discrete_genome, check_probs=not keep, model=model
-        )
+        self.verify_mutations(lib_ts, discrete_genome, check_probs=not keep, model=model)
         py_ts = py_sim_mutations(
             ts,
             rate=rate,
@@ -1626,9 +1612,7 @@ class TestSLiMMutationModel:
         )
         assert mts1.num_mutations == model.next_id
 
-        model = PythonSLiMMutationModel(
-            mutation_type=mutation_type, next_id=mutation_id
-        )
+        model = PythonSLiMMutationModel(mutation_type=mutation_type, next_id=mutation_id)
         mts2 = py_sim_mutations(
             ts, rate=rate, random_seed=random_seed, model=model, discrete_genome=True
         )
@@ -2338,9 +2322,7 @@ class TestModelClasses:
         m = msprime.SLiMMutationModel(type=1, next_id=2, slim_generation=9)
         assert m.next_id == 2
         assert m.slim_generation == 9
-        assert (
-            str(m) == "Mutation model for SLiM mutations of type m1\n" "  next ID: 2\n"
-        )
+        assert str(m) == "Mutation model for SLiM mutations of type m1\n  next ID: 2\n"
 
     def test_infinite_alleles(self):
         m = msprime.InfiniteAlleles(start_allele=1)

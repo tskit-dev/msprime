@@ -19,6 +19,7 @@
 """
 A simple Wright-Fisher simulator.
 """
+
 import random
 
 import numpy as np

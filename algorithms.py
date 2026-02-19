@@ -17,7 +17,6 @@ import tskit
 
 import msprime
 
-
 logger = daiquiri.getLogger()
 INFINITY = sys.float_info.max
 
@@ -1030,9 +1029,7 @@ class Simulator:
                         if tail.right == left:
                             tail.right = right
                         else:
-                            seg = self.alloc_segment(
-                                left, right, root, population, tail
-                            )
+                            seg = self.alloc_segment(left, right, root, population, tail)
                             seg.lineage = root_lineages[root]
                             tail.next = seg
                             root_segments_tail[root] = seg
@@ -1131,9 +1128,7 @@ class Simulator:
 
     def store_node(self, population, flags=0):
         self.flush_edges()
-        return self.tables.nodes.add_row(
-            time=self.t, flags=flags, population=population
-        )
+        return self.tables.nodes.add_row(time=self.t, flags=flags, population=population)
 
     def flush_edges(self):
         """
@@ -2301,9 +2296,7 @@ class Simulator:
                     ):
                         defrag_required |= z.right == alpha.left
                     else:
-                        defrag_required |= (
-                            z.right == alpha.left and z.node == alpha.node
-                        )
+                        defrag_required |= z.right == alpha.left and z.node == alpha.node
                 new_lineage.tail = alpha
 
         return self.insert_merged_lineage(
@@ -2487,9 +2480,7 @@ class Simulator:
                     ):
                         defrag_required |= z.right == alpha.left
                     else:
-                        defrag_required |= (
-                            z.right == alpha.left and z.node == alpha.node
-                        )
+                        defrag_required |= z.right == alpha.left and z.node == alpha.node
                 new_lineage.tail = alpha
 
         return self.insert_merged_lineage(
@@ -2507,9 +2498,7 @@ class Simulator:
         else:
             if not pass_through:
                 if self.additional_nodes.value & msprime.NODE_IS_CA_EVENT > 0:
-                    u = self.store_additional_nodes_edges(
-                        msprime.NODE_IS_CA_EVENT, u, z
-                    )
+                    u = self.store_additional_nodes_edges(msprime.NODE_IS_CA_EVENT, u, z)
             else:
                 if self.additional_nodes.value & msprime.NODE_IS_PASS_THROUGH > 0:
                     assert u != -1
@@ -2901,9 +2890,7 @@ def add_simulator_arguments(parser):
     parser.add_argument("--num-populations", "-p", type=int, default=1)
     parser.add_argument("--migration-rate", "-g", type=float, default=1)
     parser.add_argument("--sample-configuration", type=int, nargs="+", default=None)
-    parser.add_argument(
-        "--population-growth-rates", type=float, nargs="+", default=None
-    )
+    parser.add_argument("--population-growth-rates", type=float, nargs="+", default=None)
     parser.add_argument("--population-sizes", type=float, nargs="+", default=None)
     parser.add_argument(
         "--population-size-change", type=float, nargs=3, action="append", default=[]
@@ -2922,9 +2909,7 @@ def add_simulator_arguments(parser):
         action="append",
         default=[],
     )
-    parser.add_argument(
-        "--bottleneck", type=float, nargs=3, action="append", default=[]
-    )
+    parser.add_argument("--bottleneck", type=float, nargs=3, action="append", default=[])
     parser.add_argument(
         "--census-time", type=float, nargs=1, action="append", default=[]
     )

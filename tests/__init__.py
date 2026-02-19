@@ -19,6 +19,7 @@
 """
 Common code for the msprime test cases.
 """
+
 import unittest
 
 import numpy as np

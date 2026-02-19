@@ -20,13 +20,12 @@
 Test cases for simulation models to see if they have the correct
 basic properties.
 """
+
 import numpy as np
 import pytest
 
 import msprime
-from msprime import _msprime
-from msprime import ancestry
-
+from msprime import _msprime, ancestry
 
 nonparametric_model_classes = [
     msprime.StandardCoalescent,

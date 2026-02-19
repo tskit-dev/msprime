@@ -110,7 +110,7 @@ ts = msprime.sim_ancestry(
     recombination_rate=1e-8,
     sequence_length=1e6,
     discrete_genome=False,
-    model='Hudson',
+    model="Hudson",
 )
 mutated_ts = msprime.sim_mutations(
     ts,
@@ -175,14 +175,14 @@ N = 1000  # effective population size
 
 model_list = [
     msprime.StandardCoalescent(duration=80),  # From generation 0 to 80
-    msprime.SweepGenicSelection(              # From generation 80 to
+    msprime.SweepGenicSelection(  # From generation 80 to
         position=500000,  # selpos            # selection start time (random)
         start_frequency=1 / (2 * N),
         end_frequency=0.9,
         s=0.2,  # s for AA
-        dt=1.0 / (40 * N)
+        dt=1.0 / (40 * N),
     ),
-    msprime.StandardCoalescent()  # From selection start time to coalescence
+    msprime.StandardCoalescent(),  # From selection start time to coalescence
 ]
 
 ts = msprime.sim_ancestry(

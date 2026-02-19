@@ -19,6 +19,7 @@
 """
 Test cases for basic ancestry simulation operations.
 """
+
 import collections
 import datetime
 import json
@@ -32,8 +33,7 @@ import pytest
 import tskit
 
 import msprime
-from msprime import _msprime
-from msprime import ancestry
+from msprime import _msprime, ancestry
 
 
 def tree_sequences_equal(ts1, ts2):
@@ -120,8 +120,7 @@ class TestFullArg:
         )
         if not multiple_mergers:
             assert (
-                ca_nodes.shape[0] + coal_nodes.shape[0]
-                == sim.num_common_ancestor_events
+                ca_nodes.shape[0] + coal_nodes.shape[0] == sim.num_common_ancestor_events
             )
         else:
             assert ca_nodes.shape[0] > 0
@@ -857,8 +856,7 @@ class TestSimulator:
         assert len(caplog.records) == 3
         assert caplog.messages[0].startswith("model[0] {'name': 'hudson'}")
         assert (
-            caplog.messages[1] == "Running model {'name': 'hudson'}"
-            " until max time: inf"
+            caplog.messages[1] == "Running model {'name': 'hudson'} until max time: inf"
         )
         assert caplog.messages[-1].startswith("Completed at time")
 
@@ -892,7 +890,6 @@ class TestSimulator:
 
 
 class TestSimulateAfterLocalMRCA:
-
     def check_roots(self, ts, end_time=None, allow_multiple_roots=False):
         if allow_multiple_roots:
             root_times = [tree.time(tree.roots[0]) for tree in ts.trees()]
@@ -1770,8 +1767,7 @@ class TestSimAncestrySamples:
                     node = tables.nodes[node_id]
                     assert node.individual == ind_id
                     assert (
-                        node.time
-                        == demography.populations[pop_id].default_sampling_time
+                        node.time == demography.populations[pop_id].default_sampling_time
                     )
                     assert node.population == pop_id
                     assert node.flags == tskit.NODE_IS_SAMPLE
@@ -2225,9 +2221,7 @@ class TestParseSimulate:
                 random_seed=2,
                 model=None,
                 demographic_events=[
-                    msprime.SimulationModelChange(
-                        1, msprime.DiscreteTimeWrightFisher()
-                    ),
+                    msprime.SimulationModelChange(1, msprime.DiscreteTimeWrightFisher()),
                     msprime.SimulationModelChange(0.5, None),
                 ],
             )
@@ -2862,7 +2856,7 @@ class TestReprRoundTrip:
         for obj in obj_list:
             obj_copy = eval(repr(obj), globals(), msprime.__dict__)
             assert obj_copy == obj
-            assert not (obj_copy is obj)
+            assert obj_copy is not obj
 
     def test_population(self):
         examples = [
@@ -2954,10 +2948,10 @@ class TestUnknownGenomeRegions:
         tree = ts.first()
         assert tree.interval == (0, 1)
         assert tree.num_roots == ts.num_samples
-        tree.next()  # noqa: B305
+        tree.next()
         assert tree.interval == (1, 9)
         assert tree.num_roots == 1
-        tree.next()  # noqa: B305
+        tree.next()
         assert tree.interval == (9, 10)
         assert tree.num_roots == ts.num_samples
 
@@ -2968,7 +2962,7 @@ class TestUnknownGenomeRegions:
         tree = ts.first()
         assert tree.interval == (0, 1)
         assert tree.num_roots == ts.num_samples
-        tree.next()  # noqa: B305
+        tree.next()
         assert tree.interval == (1, 10)
         assert tree.num_roots == 1
 
@@ -2979,7 +2973,7 @@ class TestUnknownGenomeRegions:
         tree = ts.first()
         assert tree.interval == (0, 9)
         assert tree.num_roots == 1
-        tree.next()  # noqa: B305
+        tree.next()
         assert tree.interval == (9, 10)
         assert tree.num_roots == ts.num_samples
 
@@ -3042,9 +3036,7 @@ class TestTimeUnits:
         tables = msprime.sim_ancestry(2, end_time=0, random_seed=1).dump_tables()
         tables.time_units = tskit.TIME_UNITS_UNCALIBRATED
         with pytest.raises(ValueError, match="time_units"):
-            msprime.sim_ancestry(
-                initial_state=tables, population_size=10, random_seed=1
-            )
+            msprime.sim_ancestry(initial_state=tables, population_size=10, random_seed=1)
 
 
 class TestSMCK:

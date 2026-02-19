@@ -19,6 +19,7 @@
 """
 Test cases for deprecating legacy functionality
 """
+
 import pytest
 import tskit
 

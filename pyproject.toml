@@ -70,12 +70,8 @@ write_to = "msprime/_version.py"
 [dependency-groups]
 test = [
     "bintrees",
-    "build",
     "daiquiri",
-    "demes",
     "kastore",
-    "meson",
-    "newick",
     "pytest",
     "pytest-cov",
     "pytest-xdist",
@@ -102,37 +98,15 @@ docs = [
     "scipy"
 ]
 
+lint = [
+    "clang-format==21.1.8",
+    "prek",
+]
+
 dev = [
-    "docutils",
-    "asv",
-    "bintrees",
-    "coverage",
-    "daiquiri",
-    "demes",
-    "demesdraw",
-    "flake8",
-    "matplotlib",
-    "meson",
-    "mock",
-    "mypy",
-    "ninja",
-    "numpy",
-    "pre-commit",
-    "pytest",
-    "pytest-cov",
-    "pytest-xdist",
-    "tskit",
-    "kastore",
-    "sphinx-book-theme",
-    "scipy",
-    "setuptools_scm",
-    "sphinx",
-    "sphinx-argparse",
-    "sphinx-issues",
-    "jupyter-book<2",
-    "networkx",
-    "newick",
-    "python_jsonschema_objects"
+    {include-group = "docs"},
+    {include-group = "lint"},
+    {include-group = "test"},
 ]
 
 verification = [
@@ -156,4 +130,45 @@ addopts = "-n 4"
 testpaths = ["tests"]
 filterwarnings = [
     "ignore:.*usage of `cmp`.*:DeprecationWarning:demes"
+]
+
+[tool.ruff]
+# Assume Python 3.11
+target-version = "py311"
+
+line-length = 89
+indent-width = 4
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "W", "I", "N", "UP", "A", "PT"]
+
+ignore = [
+    "A001", "A002", "RUF",
+    "B905", #Don't add strict=False to zips (B905)
+    "E741", # using 'l' as a variable name
+    "N806", "N802", "N803", # Various nags about uppercase vars
+    "N818", # Exceptions not called "Error"
+    "UP032", # Don't upgrade to f strings
+    "UP031", # Allow old-skool format specifiers
+    "B904", # raise from-issues
+    "PT009", # pytest.raises(ValueError) too broad
+    "PT011", # pytest.raises(ValueError) too broad
+    "PT012", # pytest.raises() block should contain a single simple statement
+    "PT006", # Wrong type passed to first argument of `pytest.mark.parametrize`
+    "PT007", # Wrong type pytest.mark.parametrize` expected `list` of `tuple
+    "B018", # Found useless expression. Either assign it
+    "PT018", # Assertion should be broken down into multiple parts 
+    "PT030", # `pytest.warns(UserWarning)` is too broad, set the 
+    "B028", # No stacklevel for warnings
+]
+
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["_msprime", "msprime"]
+known-third-party = [
+  "tskit",
+  "numpy",
+  "pytest",
 ]
