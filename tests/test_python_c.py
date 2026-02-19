@@ -934,7 +934,8 @@ class TestSimulationState(LowLevelTestCase):
                     migration_matrix[:] = rate
                     np.fill_diagonal(migration_matrix, 0)
                 else:
-                    assert source >= 0 and dest >= 0
+                    assert source >= 0
+                    assert dest >= 0
                     migration_matrix[source, dest] = rate
             elif event_type == "mass_migration":
                 source = event["source"]

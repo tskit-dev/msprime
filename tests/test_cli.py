@@ -1346,7 +1346,7 @@ class TestMspSimulateOutput:
     def test_compress_warns(self, tmp_path):
         cmd = "simulate"
         tree_sequence_file = str(tmp_path / "out.ts")
-        with pytest.warns(UserWarning):
+        with pytest.warns(UserWarning, match="--compress option is no longer supported"):
             capture_output(cli.msp_main, [cmd, "10", tree_sequence_file, "--compress"])
         tree_sequence = tskit.load(tree_sequence_file)
         assert tree_sequence.get_sample_size() == 10
@@ -1450,7 +1450,7 @@ class TestMspAncestryOutput:
 
 class TestSampleParsing:
     @pytest.mark.parametrize(
-        ["param", "result"], [("1", 1), ("1000", 1000), ("1_000", 1000), ("1e3", 1000)]
+        ("param", "result"), [("1", 1), ("1000", 1000), ("1_000", 1000), ("1e3", 1000)]
     )
     def test_parse_sample_size(self, param, result):
         value = cli.parse_sample_size(param)
@@ -1462,7 +1462,7 @@ class TestSampleParsing:
             cli.parse_sample_size(param)
 
     @pytest.mark.parametrize(
-        ["param", "result"],
+        ("param", "result"),
         [
             (["A:1"], {"A": 1}),
             (["A:2", "B:1"], {"A": 2, "B": 1}),
@@ -1484,7 +1484,7 @@ class TestSampleParsing:
 
 
 @pytest.mark.parametrize(
-    ["verbosity", "log_level"],
+    ("verbosity", "log_level"),
     [("", "WARN"), ("-v", "INFO"), ("-vv", "DEBUG"), ("-vvv", "DEBUG")],
 )
 def test_setup_logging(verbosity, log_level):

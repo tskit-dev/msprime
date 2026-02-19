@@ -154,11 +154,7 @@ ignore = [
     "PT009", # pytest.raises(ValueError) too broad
     "PT011", # pytest.raises(ValueError) too broad
     "PT012", # pytest.raises() block should contain a single simple statement
-    "PT006", # Wrong type passed to first argument of `pytest.mark.parametrize`
-    "PT007", # Wrong type pytest.mark.parametrize` expected `list` of `tuple
     "B018", # Found useless expression. Either assign it
-    "PT018", # Assertion should be broken down into multiple parts 
-    "PT030", # `pytest.warns(UserWarning)` is too broad, set the 
     "B028", # No stacklevel for warnings
 ]
 
