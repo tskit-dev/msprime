@@ -36,40 +36,40 @@
 #include "object_heap.h"
 #include "rate_map.h"
 
-#define MSP_MODEL_HUDSON 0
-#define MSP_MODEL_SMC 1
+#define MSP_MODEL_HUDSON    0
+#define MSP_MODEL_SMC       1
 #define MSP_MODEL_SMC_PRIME 2
-#define MSP_MODEL_BETA 3
-#define MSP_MODEL_DIRAC 4
-#define MSP_MODEL_DTWF 5
-#define MSP_MODEL_SWEEP 6
-#define MSP_MODEL_WF_PED 7
-#define MSP_MODEL_SMC_K 8
+#define MSP_MODEL_BETA      3
+#define MSP_MODEL_DIRAC     4
+#define MSP_MODEL_DTWF      5
+#define MSP_MODEL_SWEEP     6
+#define MSP_MODEL_WF_PED    7
+#define MSP_MODEL_SMC_K     8
 
 /* Exit codes from msp_run to distinguish different reasons for exiting
  * before coalescence. */
-#define MSP_EXIT_COALESCENCE 0
-#define MSP_EXIT_MAX_EVENTS 1
-#define MSP_EXIT_MAX_TIME 2
+#define MSP_EXIT_COALESCENCE    0
+#define MSP_EXIT_MAX_EVENTS     1
+#define MSP_EXIT_MAX_TIME       2
 #define MSP_EXIT_MODEL_COMPLETE 3
 
-#define MSP_NODE_IS_RE_EVENT (1u << 17)
-#define MSP_NODE_IS_CA_EVENT (1u << 18)
-#define MSP_NODE_IS_MIG_EVENT (1u << 19)
-#define MSP_NODE_IS_CEN_EVENT (1u << 20)
-#define MSP_NODE_IS_GC_EVENT (1u << 21)
+#define MSP_NODE_IS_RE_EVENT     (1u << 17)
+#define MSP_NODE_IS_CA_EVENT     (1u << 18)
+#define MSP_NODE_IS_MIG_EVENT    (1u << 19)
+#define MSP_NODE_IS_CEN_EVENT    (1u << 20)
+#define MSP_NODE_IS_GC_EVENT     (1u << 21)
 #define MSP_NODE_IS_PASS_THROUGH (1u << 22)
 
 /* Flags for verify */
 #define MSP_VERIFY_BREAKPOINTS (1 << 1)
 
 /* Flags for mutgen */
-#define MSP_KEEP_SITES (1 << 0)
+#define MSP_KEEP_SITES     (1 << 0)
 #define MSP_DISCRETE_SITES (1 << 1)
 
 /* Pedigree states */
-#define MSP_PED_STATE_UNCLIMBED 0
-#define MSP_PED_STATE_CLIMBING 1
+#define MSP_PED_STATE_UNCLIMBED      0
+#define MSP_PED_STATE_CLIMBING       1
 #define MSP_PED_STATE_CLIMB_COMPLETE 2
 
 typedef tsk_id_t population_id_t;
@@ -136,8 +136,8 @@ typedef struct hull_t_t {
     avl_node_t right_avl_node;
 } hull_t;
 
-#define MSP_POP_STATE_INACTIVE 0
-#define MSP_POP_STATE_ACTIVE 1
+#define MSP_POP_STATE_INACTIVE          0
+#define MSP_POP_STATE_ACTIVE            1
 #define MSP_POP_STATE_PREVIOUSLY_ACTIVE 2
 
 typedef struct {

@@ -3394,7 +3394,7 @@ test_bottleneck_simulation(void)
     tsk_table_collection_free(&tables);
 }
 
-#define SIMPLE_BOTTLENECK 0
+#define SIMPLE_BOTTLENECK        0
 #define INSTANTANEOUS_BOTTLENECK 1
 
 typedef struct {

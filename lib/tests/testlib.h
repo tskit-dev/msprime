@@ -40,7 +40,7 @@
 #define MSP_TEST_EXACT_FLOAT_COMPARISONS
 #endif
 
-#define ALPHABET_BINARY 0
+#define ALPHABET_BINARY     0
 #define ALPHABET_NUCLEOTIDE 1
 
 /* Global variables used for test in state in the test suite */

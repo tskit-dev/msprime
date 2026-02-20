@@ -14,7 +14,7 @@ files = { glob = [
     "lib/tests/*.[c,h]",
 ]}
 
-exclude = { glob = ["lib/avl.*"]}
+exclude = { glob = ["lib/avl.*", "lib/subprojects/**"]}
 
 [[repos]]
 repo = "builtin"

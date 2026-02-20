@@ -31,10 +31,10 @@
 #include "msprime.h"
 
 /* State machine for the simulator object. */
-#define MSP_STATE_NEW 0
+#define MSP_STATE_NEW         0
 #define MSP_STATE_INITIALISED 1
-#define MSP_STATE_SIMULATING 2
-#define MSP_STATE_DEBUGGING 3
+#define MSP_STATE_SIMULATING  2
+#define MSP_STATE_DEBUGGING   3
 
 /* Draw a random variable from a truncated Beta(a, b) distribution,
  * by rejecting draws above the truncation point x.
