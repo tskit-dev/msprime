@@ -68,9 +68,3 @@ test_sweeps = executable('test_sweeps',
     sources: ['tests/test_sweeps.c'], 
     link_with: [msprime_lib, test_lib], dependencies: [cunit_dep, tskit_dep])
 test('sweeps', test_sweeps)
-
-# The development CLI. Don't use extra C args because argtable code won't pass
-executable('dev-cli', 
-    sources: ['dev-tools/dev-cli.c', 'dev-tools/argtable3.c'], 
-    link_with: [msprime_lib], dependencies: [config_dep, tskit_dep],
-    c_args:['-Dlint'])
