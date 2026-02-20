@@ -1,4 +1,4 @@
-# The prek configuration defining linting requirements. This 
+# The prek configuration defining linting requirements. This
 # setup is optimised for long-term stability and determinism,
 # and therefore only uses either "builtin" rules or "local"
 # rules implementing lint workflows.  We do not use any remote
@@ -61,7 +61,7 @@ hooks = [
     name = "clang-format",
     language = "system",
     entry = "clang-format -i",
-    types = ["c", "header"],
+    types = ["c"],
     verbose = true,
   },
 ]

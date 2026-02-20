@@ -1,4 +1,3 @@
-// clang-format off
 /*
 ** Copyright (C) 2014-2025 University of Oxford
 **
@@ -22,19 +21,20 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 
 #include <Python.h>
-#include <structmember.h>
-#include <numpy/arrayobject.h>
 #include <float.h>
+#include <numpy/arrayobject.h>
+#include <structmember.h>
 
-#include <gsl/gsl_version.h>
-#include <gsl/gsl_math.h>
 #include <gsl/gsl_errno.h>
+#include <gsl/gsl_math.h>
 #include <gsl/gsl_randist.h>
+#include <gsl/gsl_version.h>
 
-#include "msprime.h"
 #include "likelihood.h"
+#include "msprime.h"
 
-/* We keep a reference to the gsl_error_handler so it can be restored if needed */
+/* We keep a reference to the gsl_error_handler so it can be restored if needed
+ */
 static gsl_error_handler_t *old_gsl_error_handler;
 
 static PyObject *MsprimeInputError;
@@ -45,7 +45,7 @@ static PyObject *MsprimeLibraryError;
 typedef struct {
     PyObject_HEAD
     unsigned long seed;
-    gsl_rng* rng;
+    gsl_rng *rng;
 } RandomGenerator;
 
 /* TODO we should refactor some of the code for dealing with the
@@ -107,7 +107,8 @@ double_PyArray_converter(PyObject *in, PyObject **converted)
     *converted = array;
     ret = 1;
 out:
-    return ret;;
+    return ret;
+    ;
 }
 
 /*
@@ -152,8 +153,8 @@ out:
 }
 
 static int
-parse_rate_map(PyObject *py_rate_map, size_t *ret_size,
-        PyArrayObject **ret_position, PyArrayObject **ret_rate)
+parse_rate_map(PyObject *py_rate_map, size_t *ret_size, PyArrayObject **ret_position,
+    PyArrayObject **ret_rate)
 {
     int ret = -1;
     PyObject *position = NULL;
@@ -171,12 +172,12 @@ parse_rate_map(PyObject *py_rate_map, size_t *ret_size,
         goto out;
     }
     position_array = (PyArrayObject *) PyArray_FROMANY(
-            position, NPY_FLOAT64, 1, 1, NPY_ARRAY_IN_ARRAY);
+        position, NPY_FLOAT64, 1, 1, NPY_ARRAY_IN_ARRAY);
     if (position_array == NULL) {
         goto out;
     }
-    rate_array = (PyArrayObject *) PyArray_FROMANY(
-            rate, NPY_FLOAT64, 1, 1, NPY_ARRAY_IN_ARRAY);
+    rate_array
+        = (PyArrayObject *) PyArray_FROMANY(rate, NPY_FLOAT64, 1, 1, NPY_ARRAY_IN_ARRAY);
     if (rate_array == NULL) {
         goto out;
     }
@@ -186,8 +187,8 @@ parse_rate_map(PyObject *py_rate_map, size_t *ret_size,
     size = dims[0];
     dims = PyArray_DIMS(position_array);
     if (dims[0] != size + 1) {
-        PyErr_SetString(PyExc_ValueError,
-                "The position array must be one larger than rates");
+        PyErr_SetString(
+            PyExc_ValueError, "The position array must be one larger than rates");
         goto out;
     }
     *ret_size = size;
@@ -219,13 +220,13 @@ RandomGenerator_check_state(RandomGenerator *self)
 }
 
 static void
-RandomGenerator_dealloc(RandomGenerator* self)
+RandomGenerator_dealloc(RandomGenerator *self)
 {
     if (self->rng != NULL) {
         gsl_rng_free(self->rng);
         self->rng = NULL;
     }
-    Py_TYPE(self)->tp_free((PyObject*)self);
+    Py_TYPE(self)->tp_free((PyObject *) self);
 }
 
 static int
@@ -238,9 +239,9 @@ RandomGenerator_parse_seed(RandomGenerator *self, PyObject *py_seed)
     if (PyErr_Occurred()) {
         goto out;
     }
-    if (seed == 0 || seed >= (1ULL<<32)) {
-        PyErr_Format(PyExc_ValueError,
-            "seeds must be greater than 0 and less than 2^32");
+    if (seed == 0 || seed >= (1ULL << 32)) {
+        PyErr_Format(
+            PyExc_ValueError, "seeds must be greater than 0 and less than 2^32");
         goto out;
     }
     self->seed = seed;
@@ -254,7 +255,7 @@ static int
 RandomGenerator_init(RandomGenerator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
-    static char *kwlist[] = {"seed", NULL};
+    static char *kwlist[] = { "seed", NULL };
     PyObject *py_seed = NULL;
 
     self->rng = NULL;
@@ -406,32 +407,30 @@ out:
 }
 
 static PyMethodDef RandomGenerator_methods[] = {
-    {"flat", (PyCFunction) RandomGenerator_flat,
-        METH_VARARGS, "Interface for gsl_ran_flat"},
-    {"poisson", (PyCFunction) RandomGenerator_poisson,
-        METH_VARARGS, "Interface for gsl_ran_poisson"},
-    {"uniform_int", (PyCFunction) RandomGenerator_uniform_int,
-        METH_VARARGS, "Interface for gsl_rng_uniform_int"},
-    {NULL}  /* Sentinel */
+    { "flat", (PyCFunction) RandomGenerator_flat, METH_VARARGS,
+        "Interface for gsl_ran_flat" },
+    { "poisson", (PyCFunction) RandomGenerator_poisson, METH_VARARGS,
+        "Interface for gsl_ran_poisson" },
+    { "uniform_int", (PyCFunction) RandomGenerator_uniform_int, METH_VARARGS,
+        "Interface for gsl_rng_uniform_int" },
+    { NULL } /* Sentinel */
 };
 
 static PyGetSetDef RandomGenerator_getsetters[] = {
-    {"seed", (getter) RandomGenerator_get_seed,
-        (setter) RandomGenerator_set_seed,
-            "The initial seed for this random generator" },
-    {NULL}  /* Sentinel */
+    { "seed", (getter) RandomGenerator_get_seed, (setter) RandomGenerator_set_seed,
+        "The initial seed for this random generator" },
+    { NULL } /* Sentinel */
 };
 
 static PyTypeObject RandomGeneratorType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "_msprime.RandomGenerator",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_msprime.RandomGenerator",
     .tp_basicsize = sizeof(RandomGenerator),
-    .tp_dealloc = (destructor)RandomGenerator_dealloc,
+    .tp_dealloc = (destructor) RandomGenerator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "RandomGenerator objects",
     .tp_methods = RandomGenerator_methods,
     .tp_getset = RandomGenerator_getsetters,
-    .tp_init = (initproc)RandomGenerator_init,
+    .tp_init = (initproc) RandomGenerator_init,
     .tp_new = PyType_GenericNew,
 };
 
@@ -441,8 +440,7 @@ static PyTypeObject RandomGeneratorType = {
  */
 
 static PyTypeObject BaseMutationModelType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "_msprime.BaseMutationModel",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_msprime.BaseMutationModel",
     .tp_basicsize = sizeof(BaseMutationModel),
     .tp_flags = Py_TPFLAGS_DEFAULT,
     .tp_doc = "BaseMutationModel objects",
@@ -466,14 +464,14 @@ MatrixMutationModel_check_state(MatrixMutationModel *self)
 }
 
 static void
-MatrixMutationModel_dealloc(MatrixMutationModel* self)
+MatrixMutationModel_dealloc(MatrixMutationModel *self)
 {
     if (self->mutation_model != NULL) {
         mutation_model_free(self->mutation_model);
         PyMem_Free(self->mutation_model);
         self->mutation_model = NULL;
     }
-    Py_TYPE(self)->tp_free((PyObject*)self);
+    Py_TYPE(self)->tp_free((PyObject *) self);
 }
 
 static int
@@ -481,7 +479,8 @@ MatrixMutationModel_init(MatrixMutationModel *self, PyObject *args, PyObject *kw
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"alleles", "root_distribution", "transition_matrix", NULL};
+    static char *kwlist[]
+        = { "alleles", "root_distribution", "transition_matrix", NULL };
     Py_ssize_t j, num_alleles;
     PyObject *py_alleles = NULL;
     PyArrayObject *root_distribution_array = NULL;
@@ -494,21 +493,20 @@ MatrixMutationModel_init(MatrixMutationModel *self, PyObject *args, PyObject *kw
     Py_ssize_t len;
 
     self->mutation_model = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O&O", kwlist,
-            &PyList_Type, &py_alleles,
-            double_PyArray_converter, &root_distribution_array,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O&O", kwlist, &PyList_Type,
+            &py_alleles, double_PyArray_converter, &root_distribution_array,
             &py_transition_matrix)) {
         goto out;
     }
     num_alleles = PyList_Size(py_alleles);
     shape = PyArray_DIMS(root_distribution_array);
     if (num_alleles != shape[0]) {
-        PyErr_SetString(PyExc_ValueError,
-            "root distribution must have num_alleles elements");
+        PyErr_SetString(
+            PyExc_ValueError, "root distribution must have num_alleles elements");
         goto out;
     }
     transition_matrix_array = (PyArrayObject *) PyArray_FROMANY(
-            py_transition_matrix, NPY_FLOAT64, 2, 2, NPY_ARRAY_IN_ARRAY);
+        py_transition_matrix, NPY_FLOAT64, 2, 2, NPY_ARRAY_IN_ARRAY);
     if (transition_matrix_array == NULL) {
         goto out;
     }
@@ -549,10 +547,9 @@ MatrixMutationModel_init(MatrixMutationModel *self, PyObject *args, PyObject *kw
         }
         allele_length[j] = (size_t) len;
     }
-    err = matrix_mutation_model_alloc(self->mutation_model,
-            num_alleles, alleles, allele_length,
-            PyArray_DATA(root_distribution_array),
-            PyArray_DATA(transition_matrix_array));
+    err = matrix_mutation_model_alloc(self->mutation_model, num_alleles, alleles,
+        allele_length, PyArray_DATA(root_distribution_array),
+        PyArray_DATA(transition_matrix_array));
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -618,8 +615,7 @@ MatrixMutationModel_get_root_distribution(MatrixMutationModel *self, void *closu
     if (array == NULL) {
         goto out;
     }
-    memcpy(PyArray_DATA(array), params->root_distribution,
-            size * sizeof(double));
+    memcpy(PyArray_DATA(array), params->root_distribution, size * sizeof(double));
     ret = (PyObject *) array;
 out:
     return ret;
@@ -645,31 +641,30 @@ MatrixMutationModel_get_transition_matrix(MatrixMutationModel *self, void *closu
     if (array == NULL) {
         goto out;
     }
-    memcpy(PyArray_DATA(array), params->transition_matrix,
-            size * size * sizeof(double));
+    memcpy(PyArray_DATA(array), params->transition_matrix, size * size * sizeof(double));
     ret = (PyObject *) array;
 out:
     return ret;
 }
 
 static PyGetSetDef MatrixMutationModel_getsetters[] = {
-    {"alleles", (getter) MatrixMutationModel_get_alleles, NULL,
-        "A copy of the alleles list"},
-    {"root_distribution", (getter) MatrixMutationModel_get_root_distribution, NULL,
-        "A copy of the root_distribution array"},
-    {"transition_matrix", (getter) MatrixMutationModel_get_transition_matrix, NULL,
-        "A copy of the transition_matrix array"},
-    {NULL}  /* Sentinel */
+    { "alleles", (getter) MatrixMutationModel_get_alleles, NULL,
+        "A copy of the alleles list" },
+    { "root_distribution", (getter) MatrixMutationModel_get_root_distribution, NULL,
+        "A copy of the root_distribution array" },
+    { "transition_matrix", (getter) MatrixMutationModel_get_transition_matrix, NULL,
+        "A copy of the transition_matrix array" },
+    { NULL } /* Sentinel */
 };
 
 static PyTypeObject MatrixMutationModelType = {
     .tp_name = "_msprime.MatrixMutationModel",
     .tp_basicsize = sizeof(MatrixMutationModel),
-    .tp_dealloc = (destructor)MatrixMutationModel_dealloc,
+    .tp_dealloc = (destructor) MatrixMutationModel_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_doc = "MatrixMutationModel objects",
     .tp_getset = MatrixMutationModel_getsetters,
-    .tp_init = (initproc)MatrixMutationModel_init,
+    .tp_init = (initproc) MatrixMutationModel_init,
     .tp_new = PyType_GenericNew,
 };
 
@@ -690,14 +685,14 @@ SLiMMutationModel_check_state(SLiMMutationModel *self)
 }
 
 static void
-SLiMMutationModel_dealloc(SLiMMutationModel* self)
+SLiMMutationModel_dealloc(SLiMMutationModel *self)
 {
     if (self->mutation_model != NULL) {
         mutation_model_free(self->mutation_model);
         PyMem_Free(self->mutation_model);
         self->mutation_model = NULL;
     }
-    Py_TYPE(self)->tp_free((PyObject*)self);
+    Py_TYPE(self)->tp_free((PyObject *) self);
 }
 
 static int
@@ -705,15 +700,15 @@ SLiMMutationModel_init(SLiMMutationModel *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"type", "next_id", "slim_generation", "block_size", NULL};
+    static char *kwlist[] = { "type", "next_id", "slim_generation", "block_size", NULL };
     long type;
     long long next_id = 0;
     long slim_generation = 1;
     Py_ssize_t block_size = 0;
 
     self->mutation_model = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "l|Lln", kwlist,
-            &type, &next_id, &slim_generation, &block_size)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "l|Lln", kwlist, &type, &next_id,
+            &slim_generation, &block_size)) {
         goto out;
     }
 
@@ -725,8 +720,8 @@ SLiMMutationModel_init(SLiMMutationModel *self, PyObject *args, PyObject *kwds)
         PyErr_NoMemory();
         goto out;
     }
-    err = slim_mutation_model_alloc(self->mutation_model,
-        (int32_t) type, (int64_t) next_id, (int32_t) slim_generation, (size_t) block_size);
+    err = slim_mutation_model_alloc(self->mutation_model, (int32_t) type,
+        (int64_t) next_id, (int32_t) slim_generation, (size_t) block_size);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -782,23 +777,22 @@ out:
 }
 
 static PyGetSetDef SLiMMutationModel_getsetters[] = {
-    {"type", (getter) SLiMMutationModel_get_type, NULL,
-        "Return the mutation type"},
-    {"next_id", (getter) SLiMMutationModel_get_next_id, NULL,
-        "Return the next mutation id"},
-    {"slim_generation", (getter) SLiMMutationModel_get_slim_generation, NULL,
-        "Return the SLiM generation"},
-    {NULL}  /* Sentinel */
+    { "type", (getter) SLiMMutationModel_get_type, NULL, "Return the mutation type" },
+    { "next_id", (getter) SLiMMutationModel_get_next_id, NULL,
+        "Return the next mutation id" },
+    { "slim_generation", (getter) SLiMMutationModel_get_slim_generation, NULL,
+        "Return the SLiM generation" },
+    { NULL } /* Sentinel */
 };
 
 static PyTypeObject SLiMMutationModelType = {
     .tp_name = "_msprime.SLiMMutationModel",
     .tp_basicsize = sizeof(SLiMMutationModel),
-    .tp_dealloc = (destructor)SLiMMutationModel_dealloc,
+    .tp_dealloc = (destructor) SLiMMutationModel_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_doc = "SLiMMutationModel objects",
     .tp_getset = SLiMMutationModel_getsetters,
-    .tp_init = (initproc)SLiMMutationModel_init,
+    .tp_init = (initproc) SLiMMutationModel_init,
     .tp_new = PyType_GenericNew,
 };
 
@@ -812,30 +806,31 @@ InfiniteAllelesMutationModel_check_state(InfiniteAllelesMutationModel *self)
 {
     int ret = 0;
     if (self->mutation_model == NULL) {
-        PyErr_SetString(PyExc_SystemError, "InfiniteAllelesMutationModel not initialised");
+        PyErr_SetString(
+            PyExc_SystemError, "InfiniteAllelesMutationModel not initialised");
         ret = -1;
     }
     return ret;
 }
 
 static void
-InfiniteAllelesMutationModel_dealloc(InfiniteAllelesMutationModel* self)
+InfiniteAllelesMutationModel_dealloc(InfiniteAllelesMutationModel *self)
 {
     if (self->mutation_model != NULL) {
         mutation_model_free(self->mutation_model);
         PyMem_Free(self->mutation_model);
         self->mutation_model = NULL;
     }
-    Py_TYPE(self)->tp_free((PyObject*)self);
+    Py_TYPE(self)->tp_free((PyObject *) self);
 }
 
 static int
-InfiniteAllelesMutationModel_init(InfiniteAllelesMutationModel *self,
-        PyObject *args, PyObject *kwds)
+InfiniteAllelesMutationModel_init(
+    InfiniteAllelesMutationModel *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int err;
-    static char *kwlist[] = {"start_allele", NULL};
+    static char *kwlist[] = { "start_allele", NULL };
     unsigned long long start_allele = 0;
 
     self->mutation_model = NULL;
@@ -851,8 +846,8 @@ InfiniteAllelesMutationModel_init(InfiniteAllelesMutationModel *self,
         PyErr_NoMemory();
         goto out;
     }
-    err = infinite_alleles_mutation_model_alloc(self->mutation_model,
-        (uint64_t) start_allele, 0);
+    err = infinite_alleles_mutation_model_alloc(
+        self->mutation_model, (uint64_t) start_allele, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -863,8 +858,8 @@ out:
 }
 
 static PyObject *
-InfiniteAllelesMutationModel_get_start_allele(InfiniteAllelesMutationModel *self,
-        void *closure)
+InfiniteAllelesMutationModel_get_start_allele(
+    InfiniteAllelesMutationModel *self, void *closure)
 {
     PyObject *ret = NULL;
     infinite_alleles_t *params;
@@ -879,8 +874,8 @@ out:
 }
 
 static PyObject *
-InfiniteAllelesMutationModel_get_next_allele(InfiniteAllelesMutationModel *self,
-        void *closure)
+InfiniteAllelesMutationModel_get_next_allele(
+    InfiniteAllelesMutationModel *self, void *closure)
 {
     PyObject *ret = NULL;
     infinite_alleles_t *params;
@@ -895,21 +890,21 @@ out:
 }
 
 static PyGetSetDef InfiniteAllelesMutationModel_getsetters[] = {
-    {"start_allele", (getter) InfiniteAllelesMutationModel_get_start_allele, NULL,
-        "Returns the initial allele"},
-    {"next_allele", (getter) InfiniteAllelesMutationModel_get_next_allele, NULL,
-        "Return the next allele"},
-    {NULL}  /* Sentinel */
+    { "start_allele", (getter) InfiniteAllelesMutationModel_get_start_allele, NULL,
+        "Returns the initial allele" },
+    { "next_allele", (getter) InfiniteAllelesMutationModel_get_next_allele, NULL,
+        "Return the next allele" },
+    { NULL } /* Sentinel */
 };
 
 static PyTypeObject InfiniteAllelesMutationModelType = {
     .tp_name = "_msprime.InfiniteAllelesMutationModel",
     .tp_basicsize = sizeof(InfiniteAllelesMutationModel),
-    .tp_dealloc = (destructor)InfiniteAllelesMutationModel_dealloc,
+    .tp_dealloc = (destructor) InfiniteAllelesMutationModel_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_doc = "InfiniteAllelesMutationModel objects",
     .tp_getset = InfiniteAllelesMutationModel_getsetters,
-    .tp_init = (initproc)InfiniteAllelesMutationModel_init,
+    .tp_init = (initproc) InfiniteAllelesMutationModel_init,
     .tp_new = PyType_GenericNew,
 };
 
@@ -959,8 +954,8 @@ Simulator_parse_population_configuration(Simulator *self, PyObject *py_pop_confi
             goto out;
         }
         initially_active = (int) PyLong_AsLong(value);
-        err = msp_set_population_configuration(self->sim, j,
-                initial_size, growth_rate, (bool) initially_active);
+        err = msp_set_population_configuration(
+            self->sim, j, initial_size, growth_rate, (bool) initially_active);
         if (err != 0) {
             handle_input_error("population configuration", err);
             goto out;
@@ -979,16 +974,16 @@ Simulator_parse_migration_matrix(Simulator *self, PyObject *py_migration_matrix)
     npy_intp *shape;
     PyArrayObject *migration_matrix_array = NULL;
     size_t num_populations = msp_get_num_populations(self->sim);
-    const char *err_msg =
-        "migration matrix must be a N x N square matrix encoded "
-        "as a list-of-lists or numpy array, where N is the number of populations "
-        "defined in the population_configurations. The diagonal "
-        "elements of this matrix must be zero. For example, a "
-        "valid matrix for a 3 population system is "
-        "[[0, 1, 1], [1, 0, 1], [1, 1, 0]]";
+    const char *err_msg
+        = "migration matrix must be a N x N square matrix encoded "
+          "as a list-of-lists or numpy array, where N is the number of populations "
+          "defined in the population_configurations. The diagonal "
+          "elements of this matrix must be zero. For example, a "
+          "valid matrix for a 3 population system is "
+          "[[0, 1, 1], [1, 0, 1], [1, 1, 0]]";
 
     migration_matrix_array = (PyArrayObject *) PyArray_FROMANY(
-            py_migration_matrix, NPY_FLOAT64, 2, 2, NPY_ARRAY_IN_ARRAY);
+        py_migration_matrix, NPY_FLOAT64, 2, 2, NPY_ARRAY_IN_ARRAY);
     if (migration_matrix_array == NULL) {
         goto out;
     }
@@ -1001,9 +996,8 @@ Simulator_parse_migration_matrix(Simulator *self, PyObject *py_migration_matrix)
         PyErr_SetString(PyExc_ValueError, err_msg);
         goto out;
     }
-    err = msp_set_migration_matrix(self->sim,
-            num_populations * num_populations,
-            PyArray_DATA(migration_matrix_array));
+    err = msp_set_migration_matrix(self->sim, num_populations * num_populations,
+        PyArray_DATA(migration_matrix_array));
     if (err != 0) {
         handle_input_error("migration matrix", err);
         goto out;
@@ -1052,8 +1046,8 @@ Simulator_parse_sweep_genic_selection_model(Simulator *self, PyObject *py_model)
     }
     dt = PyFloat_AsDouble(value);
 
-    err = msp_set_simulation_model_sweep_genic_selection(self->sim,
-            position, start_frequency, end_frequency, s, dt);
+    err = msp_set_simulation_model_sweep_genic_selection(
+        self->sim, position, start_frequency, end_frequency, s, dt);
     if (err != 0) {
         handle_input_error("sweep genic selection", err);
         goto out;
@@ -1226,12 +1220,11 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         }
         truncation_point = PyFloat_AsDouble(value);
         /* TODO range checking on alpha and truncation_point */
-        err = msp_set_simulation_model_beta(self->sim,
-                alpha, truncation_point);
+        err = msp_set_simulation_model_beta(self->sim, alpha, truncation_point);
     }
 
-    is_sweep_genic_selection = PyObject_RichCompareBool(py_name,
-            sweep_genic_selection_s, Py_EQ);
+    is_sweep_genic_selection
+        = PyObject_RichCompareBool(py_name, sweep_genic_selection_s, Py_EQ);
     if (is_sweep_genic_selection == -1) {
         goto out;
     }
@@ -1242,8 +1235,8 @@ Simulator_parse_simulation_model(Simulator *self, PyObject *py_model)
         }
     }
 
-    if (! (is_hudson || is_dtwf || is_smc || is_smc_prime || is_smc_k || is_dirac
-                || is_beta || is_sweep_genic_selection || is_fixed_pedigree)) {
+    if (!(is_hudson || is_dtwf || is_smc || is_smc_prime || is_smc_k || is_dirac
+            || is_beta || is_sweep_genic_selection || is_fixed_pedigree)) {
         PyErr_SetString(PyExc_ValueError, "Unknown simulation model");
         goto out;
     }
@@ -1266,7 +1259,8 @@ out:
 }
 
 static int
-Simulator_parse_activate_population_event(Simulator *self, double time, PyObject *py_event)
+Simulator_parse_activate_population_event(
+    Simulator *self, double time, PyObject *py_event)
 {
     int ret = -1;
     int err, population_id;
@@ -1301,14 +1295,15 @@ Simulator_parse_population_split(Simulator *self, double time, PyObject *py_even
     if (value == NULL) {
         goto out;
     }
-    derived_array = (PyArrayObject *) PyArray_FROMANY(
-            value, NPY_INT32, 1, 1, NPY_ARRAY_IN_ARRAY);
+    derived_array
+        = (PyArrayObject *) PyArray_FROMANY(value, NPY_INT32, 1, 1, NPY_ARRAY_IN_ARRAY);
     if (derived_array == NULL) {
         goto out;
     }
     dims = PyArray_DIMS(derived_array);
     if (dims[0] == 0) {
-        PyErr_SetString(PyExc_ValueError, "Must provide at least one derived population");
+        PyErr_SetString(
+            PyExc_ValueError, "Must provide at least one derived population");
         goto out;
     }
 
@@ -1318,8 +1313,8 @@ Simulator_parse_population_split(Simulator *self, double time, PyObject *py_even
     }
     ancestral = (int) PyLong_AsLong(value);
 
-    err = msp_add_population_split(self->sim, time, (size_t) dims[0],
-            PyArray_DATA(derived_array), ancestral);
+    err = msp_add_population_split(
+        self->sim, time, (size_t) dims[0], PyArray_DATA(derived_array), ancestral);
     if (err != 0) {
         handle_input_error("population split", err);
         goto out;
@@ -1344,15 +1339,15 @@ Simulator_parse_admixture(Simulator *self, double time, PyObject *py_event)
     if (value == NULL) {
         goto out;
     }
-    ancestral_array = (PyArrayObject *) PyArray_FROMANY(
-            value, NPY_INT32, 1, 1, NPY_ARRAY_IN_ARRAY);
+    ancestral_array
+        = (PyArrayObject *) PyArray_FROMANY(value, NPY_INT32, 1, 1, NPY_ARRAY_IN_ARRAY);
     if (ancestral_array == NULL) {
         goto out;
     }
     dims = PyArray_DIMS(ancestral_array);
     if (dims[0] == 0) {
-        PyErr_SetString(PyExc_ValueError,
-                "Must provide at least one ancestral population");
+        PyErr_SetString(
+            PyExc_ValueError, "Must provide at least one ancestral population");
         goto out;
     }
     N = dims[0];
@@ -1362,14 +1357,13 @@ Simulator_parse_admixture(Simulator *self, double time, PyObject *py_event)
         goto out;
     }
     proportions_array = (PyArrayObject *) PyArray_FROMANY(
-            value, NPY_FLOAT64, 1, 1, NPY_ARRAY_IN_ARRAY);
+        value, NPY_FLOAT64, 1, 1, NPY_ARRAY_IN_ARRAY);
     if (proportions_array == NULL) {
         goto out;
     }
     dims = PyArray_DIMS(proportions_array);
     if (dims[0] != N) {
-        PyErr_SetString(PyExc_ValueError,
-                "proportions must be same size as ancestral");
+        PyErr_SetString(PyExc_ValueError, "proportions must be same size as ancestral");
         goto out;
     }
 
@@ -1379,10 +1373,8 @@ Simulator_parse_admixture(Simulator *self, double time, PyObject *py_event)
     }
     derived = (int) PyLong_AsLong(value);
 
-    err = msp_add_admixture(self->sim, time, derived,
-            (size_t) dims[0],
-            PyArray_DATA(ancestral_array),
-            PyArray_DATA(proportions_array));
+    err = msp_add_admixture(self->sim, time, derived, (size_t) dims[0],
+        PyArray_DATA(ancestral_array), PyArray_DATA(proportions_array));
     if (err != 0) {
         handle_input_error("population split", err);
         goto out;
@@ -1395,8 +1387,8 @@ out:
 }
 
 static int
-Simulator_parse_symmetric_migration_rate_change(Simulator *self,
-        double time, PyObject *py_event)
+Simulator_parse_symmetric_migration_rate_change(
+    Simulator *self, double time, PyObject *py_event)
 {
     int ret = -1;
     PyObject *value;
@@ -1411,8 +1403,8 @@ Simulator_parse_symmetric_migration_rate_change(Simulator *self,
     if (value == NULL) {
         goto out;
     }
-    populations_array = (PyArrayObject *) PyArray_FROMANY(
-            value, NPY_INT32, 1, 1, NPY_ARRAY_IN_ARRAY);
+    populations_array
+        = (PyArrayObject *) PyArray_FROMANY(value, NPY_INT32, 1, 1, NPY_ARRAY_IN_ARRAY);
     if (populations_array == NULL) {
         goto out;
     }
@@ -1438,8 +1430,8 @@ Simulator_parse_symmetric_migration_rate_change(Simulator *self,
     for (j = 0; j < N; j++) {
         for (k = 0; k < N; k++) {
             if (j != k) {
-                err = msp_add_migration_rate_change(self->sim, time,
-                        populations[j], populations[k], rate);
+                err = msp_add_migration_rate_change(
+                    self->sim, time, populations[j], populations[k], rate);
                 if (err != 0) {
                     handle_input_error("symmetric migration rate change", err);
                     goto out;
@@ -1466,10 +1458,8 @@ Simulator_parse_recombination_map(Simulator *self, PyObject *py_recomb_map)
     if (err != 0) {
         goto out;
     }
-    err = msp_set_recombination_map(self->sim,
-            (size_t) size,
-            PyArray_DATA(position_array),
-            PyArray_DATA(rate_array));
+    err = msp_set_recombination_map(self->sim, (size_t) size,
+        PyArray_DATA(position_array), PyArray_DATA(rate_array));
     if (err != 0) {
         handle_input_error("recombination map", err);
         goto out;
@@ -1486,8 +1476,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
 {
     int ret = -1;
     Py_ssize_t j;
-    double time, initial_size, growth_rate, migration_rate, proportion,
-           strength;
+    double time, initial_size, growth_rate, migration_rate, proportion, strength;
     int err, population_id, source, destination;
     int is_population_parameter_change, is_migration_rate_change, is_mass_migration,
         is_population_split, is_admixture, is_symmetric_migration_rate_change,
@@ -1509,8 +1498,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
 
     /* Create the Python strings for comparison with the types and
      * dictionary lookups */
-    population_parameter_change_s = Py_BuildValue("s",
-            "population_parameters_change");
+    population_parameter_change_s = Py_BuildValue("s", "population_parameters_change");
     if (population_parameter_change_s == NULL) {
         goto out;
     }
@@ -1518,8 +1506,8 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
     if (migration_rate_change_s == NULL) {
         goto out;
     }
-    symmetric_migration_rate_change_s = Py_BuildValue("s",
-            "symmetric_migration_rate_change");
+    symmetric_migration_rate_change_s
+        = Py_BuildValue("s", "symmetric_migration_rate_change");
     if (symmetric_migration_rate_change_s == NULL) {
         goto out;
     }
@@ -1583,33 +1571,31 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
          * handling in Python 3. By pushing the comparison up into Python
          * we don't need to worry about encodings, etc, etc.
          */
-        is_population_parameter_change = PyObject_RichCompareBool(type,
-                population_parameter_change_s, Py_EQ);
+        is_population_parameter_change
+            = PyObject_RichCompareBool(type, population_parameter_change_s, Py_EQ);
         if (is_population_parameter_change == -1) {
             goto out;
         }
-        is_migration_rate_change = PyObject_RichCompareBool(type,
-                migration_rate_change_s, Py_EQ);
+        is_migration_rate_change
+            = PyObject_RichCompareBool(type, migration_rate_change_s, Py_EQ);
         if (is_migration_rate_change == -1) {
             goto out;
         }
-        is_symmetric_migration_rate_change = PyObject_RichCompareBool(type,
-                symmetric_migration_rate_change_s, Py_EQ);
+        is_symmetric_migration_rate_change
+            = PyObject_RichCompareBool(type, symmetric_migration_rate_change_s, Py_EQ);
         if (is_symmetric_migration_rate_change == -1) {
             goto out;
         }
-        is_mass_migration = PyObject_RichCompareBool(type, mass_migration_s,
-                Py_EQ);
+        is_mass_migration = PyObject_RichCompareBool(type, mass_migration_s, Py_EQ);
         if (is_mass_migration == -1) {
             goto out;
         }
-        is_activate_population_event = PyObject_RichCompareBool(type,
-                activate_population_event_s, Py_EQ);
+        is_activate_population_event
+            = PyObject_RichCompareBool(type, activate_population_event_s, Py_EQ);
         if (is_activate_population_event == -1) {
             goto out;
         }
-        is_population_split = PyObject_RichCompareBool(type, population_split_s,
-                Py_EQ);
+        is_population_split = PyObject_RichCompareBool(type, population_split_s, Py_EQ);
         if (is_population_split == -1) {
             goto out;
         }
@@ -1617,18 +1603,17 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
         if (is_admixture == -1) {
             goto out;
         }
-        is_simple_bottleneck = PyObject_RichCompareBool(
-                type, simple_bottleneck_s, Py_EQ);
+        is_simple_bottleneck
+            = PyObject_RichCompareBool(type, simple_bottleneck_s, Py_EQ);
         if (is_simple_bottleneck == -1) {
             goto out;
         }
-        is_instantaneous_bottleneck = PyObject_RichCompareBool(
-                type, instantaneous_bottleneck_s, Py_EQ);
+        is_instantaneous_bottleneck
+            = PyObject_RichCompareBool(type, instantaneous_bottleneck_s, Py_EQ);
         if (is_instantaneous_bottleneck == -1) {
             goto out;
         }
-        is_census_event = PyObject_RichCompareBool(
-                type, census_event_s, Py_EQ);
+        is_census_event = PyObject_RichCompareBool(type, census_event_s, Py_EQ);
         if (is_census_event == -1) {
             goto out;
         }
@@ -1656,8 +1641,8 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
                 goto out;
             }
             population_id = (int) PyLong_AsLong(value);
-            err = msp_add_population_parameters_change(self->sim, time,
-                    population_id, initial_size, growth_rate);
+            err = msp_add_population_parameters_change(
+                self->sim, time, population_id, initial_size, growth_rate);
         } else if (is_migration_rate_change) {
             value = get_dict_number(item, "migration_rate");
             if (value == NULL) {
@@ -1674,8 +1659,8 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
                 goto out;
             }
             destination = (int) PyLong_AsLong(value);
-            err = msp_add_migration_rate_change(self->sim, time, source, destination,
-                    migration_rate);
+            err = msp_add_migration_rate_change(
+                self->sim, time, source, destination, migration_rate);
         } else if (is_mass_migration) {
             value = get_dict_number(item, "proportion");
             if (value == NULL) {
@@ -1692,8 +1677,8 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
                 goto out;
             }
             destination = (int) PyLong_AsLong(value);
-            err = msp_add_mass_migration(self->sim, time, source, destination,
-                    proportion);
+            err = msp_add_mass_migration(
+                self->sim, time, source, destination, proportion);
         } else if (is_activate_population_event) {
             if (Simulator_parse_activate_population_event(self, time, item) != 0) {
                 goto out;
@@ -1721,8 +1706,7 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
                 goto out;
             }
             population_id = (int) PyLong_AsLong(value);
-            err = msp_add_simple_bottleneck(self->sim, time, population_id,
-                    proportion);
+            err = msp_add_simple_bottleneck(self->sim, time, population_id, proportion);
         } else if (is_instantaneous_bottleneck) {
             value = get_dict_number(item, "strength");
             if (value == NULL) {
@@ -1734,8 +1718,8 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
                 goto out;
             }
             population_id = (int) PyLong_AsLong(value);
-            err = msp_add_instantaneous_bottleneck(self->sim, time, population_id,
-                    strength);
+            err = msp_add_instantaneous_bottleneck(
+                self->sim, time, population_id, strength);
         } else if (is_census_event) {
             err = msp_add_census_event(self->sim, time);
         } else {
@@ -1743,9 +1727,8 @@ Simulator_parse_demographic_events(Simulator *self, PyObject *py_events)
             goto out;
         }
         if (err != 0) {
-            PyErr_Format(MsprimeInputError,
-                    "Input error in demographic_events[%d]: %s", j,
-                    msp_strerror(err));
+            PyErr_Format(MsprimeInputError, "Input error in demographic_events[%d]: %s",
+                j, msp_strerror(err));
             goto out;
         }
     }
@@ -1767,7 +1750,7 @@ out:
 }
 
 static void
-Simulator_dealloc(Simulator* self)
+Simulator_dealloc(Simulator *self)
 {
     if (self->sim != NULL) {
         msp_free(self->sim);
@@ -1776,7 +1759,7 @@ Simulator_dealloc(Simulator* self)
     }
     Py_XDECREF(self->random_generator);
     Py_XDECREF(self->tables);
-    Py_TYPE(self)->tp_free((PyObject*)self);
+    Py_TYPE(self)->tp_free((PyObject *) self);
 }
 
 static int
@@ -1784,14 +1767,12 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
 {
     int ret = -1;
     int sim_ret;
-    static char *kwlist[] = {
-        "tables", "random_generator", "recombination_map",
-        "population_configuration", "migration_matrix",
-        "demographic_events", "model", "avl_node_block_size", "segment_block_size",
-        "node_mapping_block_size", "store_migrations", "start_time",
-        "additional_nodes", "coalescing_segments_only",
+    static char *kwlist[] = { "tables", "random_generator", "recombination_map",
+        "population_configuration", "migration_matrix", "demographic_events", "model",
+        "avl_node_block_size", "segment_block_size", "node_mapping_block_size",
+        "store_migrations", "start_time", "additional_nodes", "coalescing_segments_only",
         "num_labels", "gene_conversion_rate", "gene_conversion_tract_length",
-        "discrete_genome", "ploidy", "stop_at_local_mrca", NULL};
+        "discrete_genome", "ploidy", "stop_at_local_mrca", NULL };
     PyObject *migration_matrix = NULL;
     PyObject *population_configuration = NULL;
     PyObject *demographic_events = NULL;
@@ -1815,24 +1796,19 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
     int ploidy = 2;
     int stop_at_local_mrca = true;
 
-
     self->sim = NULL;
     self->random_generator = NULL;
-    if (!PyArg_ParseTupleAndKeywords(args, kwds,
-            "O!O!|O!O!OO!O!nnnidkinddiii", kwlist,
-            &LightweightTableCollectionType, &tables,
-            &RandomGeneratorType, &random_generator,
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!|O!O!OO!O!nnnidkinddiii", kwlist,
+            &LightweightTableCollectionType, &tables, &RandomGeneratorType,
+            &random_generator,
             /* optional */
-            &PyDict_Type, &recombination_map,
-            &PyList_Type, &population_configuration,
-            &migration_matrix,
-            &PyList_Type, &demographic_events,
-            &PyDict_Type, &py_model,
-            &avl_node_block_size, &segment_block_size,
-            &node_mapping_block_size, &store_migrations, &start_time,
-            &additional_nodes, &coalescing_segments_only, &num_labels,
-            &gene_conversion_rate, &gene_conversion_tract_length,
-            &discrete_genome, &ploidy, &stop_at_local_mrca)) {
+            &PyDict_Type, &recombination_map, &PyList_Type, &population_configuration,
+            &migration_matrix, &PyList_Type, &demographic_events, &PyDict_Type,
+            &py_model, &avl_node_block_size, &segment_block_size,
+            &node_mapping_block_size, &store_migrations, &start_time, &additional_nodes,
+            &coalescing_segments_only, &num_labels, &gene_conversion_rate,
+            &gene_conversion_tract_length, &discrete_genome, &ploidy,
+            &stop_at_local_mrca)) {
         goto out;
     }
     self->random_generator = random_generator;
@@ -1877,20 +1853,18 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         handle_input_error("store migrations", sim_ret);
         goto out;
     }
-    sim_ret = msp_set_avl_node_block_size(self->sim,
-            (size_t) avl_node_block_size);
+    sim_ret = msp_set_avl_node_block_size(self->sim, (size_t) avl_node_block_size);
     if (sim_ret != 0) {
         handle_input_error("avl_node_block_size", sim_ret);
         goto out;
     }
-    sim_ret = msp_set_segment_block_size(self->sim,
-            (size_t) segment_block_size);
+    sim_ret = msp_set_segment_block_size(self->sim, (size_t) segment_block_size);
     if (sim_ret != 0) {
         handle_input_error("segment_block_size", sim_ret);
         goto out;
     }
-    sim_ret = msp_set_node_mapping_block_size(self->sim,
-            (size_t) node_mapping_block_size);
+    sim_ret
+        = msp_set_node_mapping_block_size(self->sim, (size_t) node_mapping_block_size);
     if (sim_ret != 0) {
         handle_input_error("node_mapping_block_size", sim_ret);
         goto out;
@@ -1902,8 +1876,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             handle_input_error("set_gene_conversion_rate", sim_ret);
             goto out;
         }
-        sim_ret = msp_set_gene_conversion_tract_length(self->sim,
-                gene_conversion_tract_length);
+        sim_ret = msp_set_gene_conversion_tract_length(
+            self->sim, gene_conversion_tract_length);
         if (sim_ret != 0) {
             handle_input_error("set_gene_conversion_tract_length", sim_ret);
             goto out;
@@ -1914,7 +1888,6 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     }
-
 
     sim_ret = msp_set_ploidy(self->sim, ploidy);
     if (sim_ret != 0) {
@@ -1928,7 +1901,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
         goto out;
     }
     if (population_configuration != NULL) {
-        if (Simulator_parse_population_configuration(self, population_configuration) != 0) {
+        if (Simulator_parse_population_configuration(self, population_configuration)
+            != 0) {
             goto out;
         }
         if (migration_matrix == NULL) {
@@ -1941,9 +1915,8 @@ Simulator_init(Simulator *self, PyObject *args, PyObject *kwds)
             goto out;
         }
     } else if (migration_matrix != NULL) {
-        PyErr_SetString(PyExc_ValueError,
-            "Cannot supply migration_matrix without "
-            "population_configuration.");
+        PyErr_SetString(PyExc_ValueError, "Cannot supply migration_matrix without "
+                                          "population_configuration.");
         goto out;
     }
     if (demographic_events != NULL) {
@@ -2111,7 +2084,7 @@ Simulator_get_additional_nodes(Simulator *self, void *closure)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("k",  self->sim->additional_nodes);
+    ret = Py_BuildValue("k", self->sim->additional_nodes);
 out:
     return ret;
 }
@@ -2177,7 +2150,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_segment_block_size(Simulator  *self, void *closure)
+Simulator_get_segment_block_size(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -2189,7 +2162,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_avl_node_block_size(Simulator  *self, void *closure)
+Simulator_get_avl_node_block_size(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -2201,7 +2174,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_node_mapping_block_size(Simulator  *self, void *closure)
+Simulator_get_node_mapping_block_size(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -2213,7 +2186,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_time(Simulator  *self, void *closure)
+Simulator_get_time(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -2237,98 +2210,95 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_common_ancestor_events(Simulator  *self, void *closure)
+Simulator_get_num_common_ancestor_events(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n",
-        (Py_ssize_t) msp_get_num_common_ancestor_events(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_common_ancestor_events(self->sim));
 out:
     return ret;
 }
 
 static PyObject *
-Simulator_get_num_rejected_common_ancestor_events(Simulator  *self, void *closure)
+Simulator_get_num_rejected_common_ancestor_events(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n",
-        (Py_ssize_t) msp_get_num_rejected_common_ancestor_events(self->sim));
+    ret = Py_BuildValue(
+        "n", (Py_ssize_t) msp_get_num_rejected_common_ancestor_events(self->sim));
 out:
     return ret;
 }
 
 static PyObject *
-Simulator_get_num_recombination_events(Simulator  *self, void *closure)
+Simulator_get_num_recombination_events(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n",
-        (Py_ssize_t) msp_get_num_recombination_events(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_recombination_events(self->sim));
 out:
     return ret;
 }
 
 static PyObject *
-Simulator_get_num_gene_conversion_events(Simulator  *self, void *closure)
+Simulator_get_num_gene_conversion_events(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n",
-        (Py_ssize_t) msp_get_num_gene_conversion_events(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_gene_conversion_events(self->sim));
 out:
     return ret;
 }
 
 static PyObject *
-Simulator_get_num_internal_gene_conversion_events(Simulator  *self, void *closure)
+Simulator_get_num_internal_gene_conversion_events(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n",
-        (Py_ssize_t) msp_get_num_internal_gene_conversion_events(self->sim));
+    ret = Py_BuildValue(
+        "n", (Py_ssize_t) msp_get_num_internal_gene_conversion_events(self->sim));
 out:
     return ret;
 }
 
 static PyObject *
-Simulator_get_num_noneffective_gene_conversion_events(Simulator  *self, void *closure)
+Simulator_get_num_noneffective_gene_conversion_events(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n",
-        (Py_ssize_t) msp_get_num_noneffective_gene_conversion_events(self->sim));
+    ret = Py_BuildValue(
+        "n", (Py_ssize_t) msp_get_num_noneffective_gene_conversion_events(self->sim));
 out:
     return ret;
 }
 
 static PyObject *
-Simulator_get_sum_internal_gc_tract_lengths(Simulator  *self, void *closure)
+Simulator_get_sum_internal_gc_tract_lengths(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n",
-        (Py_ssize_t) msp_get_sum_internal_gc_tract_lengths(self->sim));
+    ret = Py_BuildValue(
+        "n", (Py_ssize_t) msp_get_sum_internal_gc_tract_lengths(self->sim));
 out:
     return ret;
 }
 
 static PyObject *
-Simulator_get_num_migration_events(Simulator  *self, void *closure)
+Simulator_get_num_migration_events(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     PyObject *arr = NULL;
@@ -2357,7 +2327,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_multiple_recombination_events(Simulator  *self, void *closure)
+Simulator_get_num_multiple_recombination_events(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -2369,7 +2339,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_avl_node_blocks(Simulator  *self, void *closure)
+Simulator_get_num_avl_node_blocks(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -2381,7 +2351,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_node_mapping_blocks(Simulator  *self, void *closure)
+Simulator_get_num_node_mapping_blocks(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -2393,7 +2363,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_segment_blocks(Simulator  *self, void *closure)
+Simulator_get_num_segment_blocks(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -2405,7 +2375,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_fenwick_rebuilds(Simulator  *self, void *closure)
+Simulator_get_num_fenwick_rebuilds(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -2417,7 +2387,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_breakpoints(Simulator  *self, void *closure)
+Simulator_get_num_breakpoints(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -2429,7 +2399,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_edges(Simulator  *self, void *closure)
+Simulator_get_num_edges(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -2441,7 +2411,7 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_nodes(Simulator  *self, void *closure)
+Simulator_get_num_nodes(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
@@ -2453,14 +2423,13 @@ out:
 }
 
 static PyObject *
-Simulator_get_num_migrations(Simulator  *self, void *closure)
+Simulator_get_num_migrations(Simulator *self, void *closure)
 {
     PyObject *ret = NULL;
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    ret = Py_BuildValue("n",
-            (Py_ssize_t) msp_get_num_migrations(self->sim));
+    ret = Py_BuildValue("n", (Py_ssize_t) msp_get_num_migrations(self->sim));
 out:
     return ret;
 }
@@ -2489,8 +2458,7 @@ Simulator_individual_to_python(Simulator *self, segment_t *ind)
     u = ind;
     j = 0;
     while (u != NULL) {
-        t = Py_BuildValue("(d,d,I,I)", u->left, u->right, u->value,
-                lin->population);
+        t = Py_BuildValue("(d,d,I,I)", u->left, u->right, u->value, lin->population);
         if (t == NULL) {
             Py_DECREF(l);
             goto out;
@@ -2597,12 +2565,10 @@ Simulator_get_recombination_map(Simulator *self, void *closure)
         goto out;
     }
     memcpy(PyArray_DATA(position), rate_map.position,
-            (rate_map.size + 1) * (sizeof(*rate_map.position)));
-    memcpy(PyArray_DATA(rate), rate_map.rate,
-            (rate_map.size) * (sizeof(*rate_map.rate)));
-    ret = Py_BuildValue("{s:O,s:O}",
-        "position", position,
-        "rate", rate);
+        (rate_map.size + 1) * (sizeof(*rate_map.position)));
+    memcpy(
+        PyArray_DATA(rate), rate_map.rate, (rate_map.size) * (sizeof(*rate_map.rate)));
+    ret = Py_BuildValue("{s:O,s:O}", "position", position, "rate", rate);
 out:
     Py_XDECREF(position);
     Py_XDECREF(rate);
@@ -2626,7 +2592,7 @@ Simulator_get_migration_matrix(Simulator *self, void *closure)
     if (arr == NULL) {
         goto out;
     }
-    err = msp_get_migration_matrix(self->sim, PyArray_DATA((PyArrayObject *)arr));
+    err = msp_get_migration_matrix(self->sim, PyArray_DATA((PyArrayObject *) arr));
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -2658,12 +2624,10 @@ Simulator_get_population_configuration(Simulator *self, void *closure)
         goto out;
     }
     for (j = 0; j < num_populations; j++) {
-        msp_get_population_configuration(self->sim, j,
-            &initial_size, &growth_rate, &state);
-        d = Py_BuildValue("{s:d,s:d,s:i}",
-               "initial_size", initial_size,
-               "growth_rate", growth_rate,
-               "state", state);
+        msp_get_population_configuration(
+            self->sim, j, &initial_size, &growth_rate, &state);
+        d = Py_BuildValue("{s:d,s:d,s:i}", "initial_size", initial_size, "growth_rate",
+            growth_rate, "state", state);
         if (d == NULL) {
             goto out;
         }
@@ -2692,7 +2656,7 @@ static PyObject *
 Simulator_run(Simulator *self, PyObject *args, PyObject *kwds)
 {
     PyObject *ret = NULL;
-    static char *kwlist[] = {"end_time", "max_events", NULL};
+    static char *kwlist[] = { "end_time", "max_events", NULL };
     int status;
     unsigned long max_events = UINT32_MAX;
     double end_time = DBL_MAX;
@@ -2700,8 +2664,8 @@ Simulator_run(Simulator *self, PyObject *args, PyObject *kwds)
     if (Simulator_check_sim(self) != 0) {
         goto out;
     }
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|dk", kwlist,
-                &end_time, &max_events)) {
+    if (!PyArg_ParseTupleAndKeywords(
+            args, kwds, "|dk", kwlist, &end_time, &max_events)) {
         goto out;
     }
     if (end_time < 0) {
@@ -2868,7 +2832,8 @@ Simulator_print_state(Simulator *self, PyObject *args)
 {
     PyObject *ret = NULL;
     PyObject *fileobj;
-    FILE *file = NULL;;
+    FILE *file = NULL;
+    ;
 
     if (Simulator_check_sim(self) != 0) {
         goto out;
@@ -2912,170 +2877,129 @@ out:
 }
 
 static PyMethodDef Simulator_methods[] = {
-    {"run", (PyCFunction) Simulator_run, METH_VARARGS|METH_KEYWORDS,
-            "Simulates until at most the specified time. Returns True "
-            "if sample has coalesced and False otherwise." },
-    {"reset", (PyCFunction) Simulator_reset, METH_NOARGS,
-            "Resets the simulation so it's ready for another replicate."},
-    {"finalise_tables", (PyCFunction) Simulator_finalise_tables, METH_NOARGS,
-            "Finalises the tables so they're ready for export."},
-    {"debug_demography", (PyCFunction) Simulator_debug_demography, METH_NOARGS,
-            "Runs the state of the simulator forward for one demographic event."},
-    {"compute_population_size",
-            (PyCFunction) Simulator_compute_population_size, METH_VARARGS,
-            "Computes the size of a population at a given time. Debug method."},
-    {"fenwick_drift",
-            (PyCFunction) Simulator_fenwick_drift, METH_VARARGS,
-            "Return the numerical drift in the specified label's recombination tree. "
-            "Debug method."},
-    {"print_state",
-            (PyCFunction) Simulator_print_state, METH_VARARGS,
-            "Prints out the state of the low-level simulator. Debug method."},
-    {"verify",
-            (PyCFunction) Simulator_verify, METH_VARARGS,
-            "Runs low-level integrity checks on the simulator's internal state."
-            "This is a *debugging method only* and can result in assertions"
-            "failing."},
-    {NULL}  /* Sentinel */
+    { "run", (PyCFunction) Simulator_run, METH_VARARGS | METH_KEYWORDS,
+        "Simulates until at most the specified time. Returns True "
+        "if sample has coalesced and False otherwise." },
+    { "reset", (PyCFunction) Simulator_reset, METH_NOARGS,
+        "Resets the simulation so it's ready for another replicate." },
+    { "finalise_tables", (PyCFunction) Simulator_finalise_tables, METH_NOARGS,
+        "Finalises the tables so they're ready for export." },
+    { "debug_demography", (PyCFunction) Simulator_debug_demography, METH_NOARGS,
+        "Runs the state of the simulator forward for one demographic event." },
+    { "compute_population_size", (PyCFunction) Simulator_compute_population_size,
+        METH_VARARGS,
+        "Computes the size of a population at a given time. Debug method." },
+    { "fenwick_drift", (PyCFunction) Simulator_fenwick_drift, METH_VARARGS,
+        "Return the numerical drift in the specified label's recombination tree. "
+        "Debug method." },
+    { "print_state", (PyCFunction) Simulator_print_state, METH_VARARGS,
+        "Prints out the state of the low-level simulator. Debug method." },
+    { "verify", (PyCFunction) Simulator_verify, METH_VARARGS,
+        "Runs low-level integrity checks on the simulator's internal state."
+        "This is a *debugging method only* and can result in assertions"
+        "failing." },
+    { NULL } /* Sentinel */
 };
 
 static PyMemberDef Simulator_members[] = {
-    {NULL}  /* Sentinel */
+    { NULL } /* Sentinel */
 };
 
-
 static PyGetSetDef Simulator_getsetters[] = {
-    {"ancestors", (getter) Simulator_get_ancestors, NULL,
-            "The ancestors" },
-    {"avl_node_block_size",
-            (getter) Simulator_get_avl_node_block_size, NULL,
-            "The avl_node block size" },
-    {"breakpoints",
-            (getter) Simulator_get_breakpoints, NULL,
-            "The recombination breakpoints in physical coordinates" },
-    {"recombination_map",
-            (getter) Simulator_get_recombination_map, NULL,
-            "The recombination map" },
-    {"model",
-            (getter) Simulator_get_model, (setter) Simulator_set_model, NULL,
-            "The simulation model." },
-    {"migration_matrix",
-            (getter) Simulator_get_migration_matrix, NULL,
-            "The migration matrix." },
-    {"node_mapping_block_size",
-            (getter) Simulator_get_node_mapping_block_size, NULL,
-            "The node_mapping block size" },
-    {"num_ancestors",
-            (getter) Simulator_get_num_ancestors, NULL,
-            "The number of ancestors" },
-    {"num_avl_node_blocks",
-            (getter) Simulator_get_num_avl_node_blocks, NULL,
-            "The number of avl_node memory blocks"},
-    {"num_breakpoints",
-            (getter) Simulator_get_num_breakpoints, NULL,
-            "The number of recombination breakpoints" },
-    {"num_common_ancestor_events",
-            (getter) Simulator_get_num_common_ancestor_events, NULL,
-            "The number of common_ancestor_events" },
-    {"num_edges",
-            (getter) Simulator_get_num_edges, NULL,
-            "The number of coalescence records" },
-    {"num_gene_conversion_events",
-            (getter) Simulator_get_num_gene_conversion_events, NULL,
-            "The number of gene_conversion_events" },
-    {"num_internal_gene_conversion_events",
-            (getter) Simulator_get_num_internal_gene_conversion_events, NULL,
-            "The number of internal_gene_conversion_events" },
-    {"num_noneffective_gene_conversion_events",
-            (getter) Simulator_get_num_noneffective_gene_conversion_events, NULL,
-            "The number of noneffective_gene_conversion_events" },
-    {"sum_internal_gc_tract_lengths",
-            (getter) Simulator_get_sum_internal_gc_tract_lengths, NULL,
-            "The sum of all internal_gc_tract_lengths" },
-    {"num_labels",
-            (getter) Simulator_get_num_labels, NULL,
-            "The number of labels." },
-    {"num_migration_events",
-            (getter) Simulator_get_num_migration_events, NULL,
-            "The number of migration events" },
-    {"num_migrations",
-            (getter) Simulator_get_num_migrations, NULL,
-            "The number of migration records" },
-    {"num_multiple_recombination_events",
-            (getter) Simulator_get_num_multiple_recombination_events, NULL,
-            "The number of recombination_events that occur at an "
-            "existing breakpoint" },
-    {"num_node_mapping_blocks",
-            (getter) Simulator_get_num_node_mapping_blocks, NULL,
-            "The number of node_mapping memory blocks"},
-    {"num_nodes",
-            (getter) Simulator_get_num_nodes, NULL,
-            "The number of coalescence records" },
-    {"num_populations",
-            (getter) Simulator_get_num_populations, NULL,
-            "The number of populations." },
-    {"num_recombination_events",
-            (getter) Simulator_get_num_recombination_events, NULL,
-            "The number of recombination_events" },
-    {"num_rejected_common_ancestor_events",
-            (getter) Simulator_get_num_rejected_common_ancestor_events, NULL,
-            "The number of rejected common_ancestor_events" },
-    {"num_segment_blocks",
-            (getter) Simulator_get_num_segment_blocks, NULL,
-            "The number of segment memory blocks"},
-    {"num_fenwick_rebuilds",
-            (getter) Simulator_get_num_fenwick_rebuilds, NULL,
-            "The number of times fenwick_rebuild was called."},
-    {"population_configuration",
-            (getter) Simulator_get_population_configuration, NULL,
-            "The population configurations"},
-    {"random_generator",
-            (getter) Simulator_get_random_generator, NULL,
-            "The random generator"},
-    {"segment_block_size",
-            (getter) Simulator_get_segment_block_size, NULL,
-            "The segment block size." },
-    {"sequence_length",
-            (getter) Simulator_get_sequence_length, NULL,
-            "The sequence length for this simulator."},
-    {"start_time",
-            (getter) Simulator_get_start_time, NULL,
-            "The start time for this simulator."},
-    {"gene_conversion_tract_length",
-            (getter) Simulator_get_gene_conversion_tract_length, NULL,
-            "The gene conversion tract length for this simulator."},
-    {"record_migrations",
-            (getter) Simulator_get_record_migrations, NULL,
-            "True if the simulator should store migration records." },
-    {"additional_nodes",
-            (getter) Simulator_get_additional_nodes, NULL,
-            "The numeric value of the stored NodeType." },
-    {"discrete_genome",
-            (getter) Simulator_get_discrete_genome, NULL,
-            "True if the simulator has a discrete genome." },
-    {"ploidy",
-            (getter) Simulator_get_ploidy, NULL,
-            "Returns the simulation ploidy." },
-    {"tables",
-            (getter) Simulator_get_tables, NULL,
-            "The tables"},
-    {"time", (getter) Simulator_get_time, NULL,
-            "The current simulation time" },
-    {NULL}  /* Sentinel */
+    { "ancestors", (getter) Simulator_get_ancestors, NULL, "The ancestors" },
+    { "avl_node_block_size", (getter) Simulator_get_avl_node_block_size, NULL,
+        "The avl_node block size" },
+    { "breakpoints", (getter) Simulator_get_breakpoints, NULL,
+        "The recombination breakpoints in physical coordinates" },
+    { "recombination_map", (getter) Simulator_get_recombination_map, NULL,
+        "The recombination map" },
+    { "model", (getter) Simulator_get_model, (setter) Simulator_set_model, NULL,
+        "The simulation model." },
+    { "migration_matrix", (getter) Simulator_get_migration_matrix, NULL,
+        "The migration matrix." },
+    { "node_mapping_block_size", (getter) Simulator_get_node_mapping_block_size, NULL,
+        "The node_mapping block size" },
+    { "num_ancestors", (getter) Simulator_get_num_ancestors, NULL,
+        "The number of ancestors" },
+    { "num_avl_node_blocks", (getter) Simulator_get_num_avl_node_blocks, NULL,
+        "The number of avl_node memory blocks" },
+    { "num_breakpoints", (getter) Simulator_get_num_breakpoints, NULL,
+        "The number of recombination breakpoints" },
+    { "num_common_ancestor_events", (getter) Simulator_get_num_common_ancestor_events,
+        NULL, "The number of common_ancestor_events" },
+    { "num_edges", (getter) Simulator_get_num_edges, NULL,
+        "The number of coalescence records" },
+    { "num_gene_conversion_events", (getter) Simulator_get_num_gene_conversion_events,
+        NULL, "The number of gene_conversion_events" },
+    { "num_internal_gene_conversion_events",
+        (getter) Simulator_get_num_internal_gene_conversion_events, NULL,
+        "The number of internal_gene_conversion_events" },
+    { "num_noneffective_gene_conversion_events",
+        (getter) Simulator_get_num_noneffective_gene_conversion_events, NULL,
+        "The number of noneffective_gene_conversion_events" },
+    { "sum_internal_gc_tract_lengths",
+        (getter) Simulator_get_sum_internal_gc_tract_lengths, NULL,
+        "The sum of all internal_gc_tract_lengths" },
+    { "num_labels", (getter) Simulator_get_num_labels, NULL, "The number of labels." },
+    { "num_migration_events", (getter) Simulator_get_num_migration_events, NULL,
+        "The number of migration events" },
+    { "num_migrations", (getter) Simulator_get_num_migrations, NULL,
+        "The number of migration records" },
+    { "num_multiple_recombination_events",
+        (getter) Simulator_get_num_multiple_recombination_events, NULL,
+        "The number of recombination_events that occur at an "
+        "existing breakpoint" },
+    { "num_node_mapping_blocks", (getter) Simulator_get_num_node_mapping_blocks, NULL,
+        "The number of node_mapping memory blocks" },
+    { "num_nodes", (getter) Simulator_get_num_nodes, NULL,
+        "The number of coalescence records" },
+    { "num_populations", (getter) Simulator_get_num_populations, NULL,
+        "The number of populations." },
+    { "num_recombination_events", (getter) Simulator_get_num_recombination_events, NULL,
+        "The number of recombination_events" },
+    { "num_rejected_common_ancestor_events",
+        (getter) Simulator_get_num_rejected_common_ancestor_events, NULL,
+        "The number of rejected common_ancestor_events" },
+    { "num_segment_blocks", (getter) Simulator_get_num_segment_blocks, NULL,
+        "The number of segment memory blocks" },
+    { "num_fenwick_rebuilds", (getter) Simulator_get_num_fenwick_rebuilds, NULL,
+        "The number of times fenwick_rebuild was called." },
+    { "population_configuration", (getter) Simulator_get_population_configuration, NULL,
+        "The population configurations" },
+    { "random_generator", (getter) Simulator_get_random_generator, NULL,
+        "The random generator" },
+    { "segment_block_size", (getter) Simulator_get_segment_block_size, NULL,
+        "The segment block size." },
+    { "sequence_length", (getter) Simulator_get_sequence_length, NULL,
+        "The sequence length for this simulator." },
+    { "start_time", (getter) Simulator_get_start_time, NULL,
+        "The start time for this simulator." },
+    { "gene_conversion_tract_length",
+        (getter) Simulator_get_gene_conversion_tract_length, NULL,
+        "The gene conversion tract length for this simulator." },
+    { "record_migrations", (getter) Simulator_get_record_migrations, NULL,
+        "True if the simulator should store migration records." },
+    { "additional_nodes", (getter) Simulator_get_additional_nodes, NULL,
+        "The numeric value of the stored NodeType." },
+    { "discrete_genome", (getter) Simulator_get_discrete_genome, NULL,
+        "True if the simulator has a discrete genome." },
+    { "ploidy", (getter) Simulator_get_ploidy, NULL, "Returns the simulation ploidy." },
+    { "tables", (getter) Simulator_get_tables, NULL, "The tables" },
+    { "time", (getter) Simulator_get_time, NULL, "The current simulation time" },
+    { NULL } /* Sentinel */
 };
 
 static PyTypeObject SimulatorType = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name = "_msprime.Simulator",
+    PyVarObject_HEAD_INIT(NULL, 0).tp_name = "_msprime.Simulator",
     .tp_doc = "Simulator objects",
     .tp_basicsize = sizeof(Simulator),
     .tp_itemsize = 0,
-    .tp_dealloc = (destructor)Simulator_dealloc,
+    .tp_dealloc = (destructor) Simulator_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .tp_methods = Simulator_methods,
     .tp_members = Simulator_members,
     .tp_getset = Simulator_getsetters,
-    .tp_init = (initproc)Simulator_init,
+    .tp_init = (initproc) Simulator_init,
     .tp_new = PyType_GenericNew,
 };
 
@@ -3106,8 +3030,7 @@ parse_mutation_model(PyObject *py_model)
         model = slim_mutation_model->mutation_model;
     } else if (PyObject_TypeCheck(py_model, &InfiniteAllelesMutationModelType)) {
         infinite_alleles_model = (InfiniteAllelesMutationModel *) py_model;
-        if (InfiniteAllelesMutationModel_check_state(
-                    infinite_alleles_model) != 0) {
+        if (InfiniteAllelesMutationModel_check_state(infinite_alleles_model) != 0) {
             goto out;
         }
         model = infinite_alleles_model->mutation_model;
@@ -3138,34 +3061,27 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
     size_t size;
     mutation_model_t *model = NULL;
     int discrete_genome = false;
-    static char *kwlist[] = {
-        "tables", "random_generator", "rate_map", "model",
-        "discrete_genome", "keep",
-        "start_time", "end_time", NULL};
+    static char *kwlist[] = { "tables", "random_generator", "rate_map", "model",
+        "discrete_genome", "keep", "start_time", "end_time", NULL };
     mutgen_t mutgen;
     int err;
 
     memset(&mutgen, 0, sizeof(mutgen));
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!O!O|iidd", kwlist,
-            &LightweightTableCollectionType, &tables,
-            &RandomGeneratorType, &random_generator,
-            &PyDict_Type, &rate_map,
-            &py_model, &discrete_genome, &keep,
-            &start_time, &end_time)) {
+            &LightweightTableCollectionType, &tables, &RandomGeneratorType,
+            &random_generator, &PyDict_Type, &rate_map, &py_model, &discrete_genome,
+            &keep, &start_time, &end_time)) {
         goto out;
     }
     if (LightweightTableCollection_check_state(tables) != 0
-            || RandomGenerator_check_state(random_generator) != 0) {
+        || RandomGenerator_check_state(random_generator) != 0) {
         goto out;
     }
     model = parse_mutation_model(py_model);
     if (model == NULL) {
         goto out;
     }
-    err = mutgen_alloc(&mutgen,
-            random_generator->rng,
-            tables->tables,
-            model, 0);
+    err = mutgen_alloc(&mutgen, random_generator->rng, tables->tables, model, 0);
     if (err != 0) {
         handle_library_error(err);
         goto out;
@@ -3173,10 +3089,8 @@ msprime_sim_mutations(PyObject *self, PyObject *args, PyObject *kwds)
     if (parse_rate_map(rate_map, &size, &position_array, &rate_array) != 0) {
         goto out;
     }
-    err = mutgen_set_rate_map(&mutgen,
-            size,
-            PyArray_DATA(position_array),
-            PyArray_DATA(rate_array));
+    err = mutgen_set_rate_map(
+        &mutgen, size, PyArray_DATA(position_array), PyArray_DATA(rate_array));
     if (err != 0) {
         handle_input_error("mutation rate map", err);
         goto out;
@@ -3212,7 +3126,7 @@ msprime_log_likelihood_arg(PyObject *self, PyObject *args, PyObject *kwds)
     int err;
     LightweightTableCollection *tables = NULL;
     double recombination_rate, Ne, ret_likelihood;
-    static char *kwlist[] = {"tables", "Ne", "recombination_rate", NULL};
+    static char *kwlist[] = { "tables", "Ne", "recombination_rate", NULL };
     tsk_treeseq_t ts;
 
     memset(&ts, 0, sizeof(ts));
@@ -3254,8 +3168,7 @@ msprime_get_gsl_version(PyObject *self)
 static PyObject *
 msprime_get_tskit_c_version(PyObject *self)
 {
-    return Py_BuildValue("iii", TSK_VERSION_MAJOR, TSK_VERSION_MINOR,
-            TSK_VERSION_PATCH);
+    return Py_BuildValue("iii", TSK_VERSION_MAJOR, TSK_VERSION_MINOR, TSK_VERSION_PATCH);
 }
 
 static PyObject *
@@ -3275,31 +3188,24 @@ msprime_unset_gsl_error_handler(PyObject *self)
 }
 
 static PyMethodDef msprime_methods[] = {
-    {"sim_mutations", (PyCFunction) msprime_sim_mutations,
-            METH_VARARGS|METH_KEYWORDS,
-            "Simulate mutations on a set of tables." },
-    {"log_likelihood_arg", (PyCFunction) msprime_log_likelihood_arg,
-            METH_VARARGS|METH_KEYWORDS,
-            "Computes the log-likelihood of an ARG." },
-    {"get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
-            "Returns the version of GSL we are linking against." },
-    {"get_tskit_c_version", (PyCFunction) msprime_get_tskit_c_version, METH_NOARGS,
-            "Returns the tskit C library version we are compiled against." },
-    {"restore_gsl_error_handler", (PyCFunction) msprime_restore_gsl_error_handler,
-            METH_NOARGS, "Restores the GSL error handler to its value before module import." },
-    {"unset_gsl_error_handler", (PyCFunction) msprime_unset_gsl_error_handler,
-            METH_NOARGS, "Unsets the GSL error handler (and stores the current value)." },
-    {NULL}        /* Sentinel */
+    { "sim_mutations", (PyCFunction) msprime_sim_mutations, METH_VARARGS | METH_KEYWORDS,
+        "Simulate mutations on a set of tables." },
+    { "log_likelihood_arg", (PyCFunction) msprime_log_likelihood_arg,
+        METH_VARARGS | METH_KEYWORDS, "Computes the log-likelihood of an ARG." },
+    { "get_gsl_version", (PyCFunction) msprime_get_gsl_version, METH_NOARGS,
+        "Returns the version of GSL we are linking against." },
+    { "get_tskit_c_version", (PyCFunction) msprime_get_tskit_c_version, METH_NOARGS,
+        "Returns the tskit C library version we are compiled against." },
+    { "restore_gsl_error_handler", (PyCFunction) msprime_restore_gsl_error_handler,
+        METH_NOARGS,
+        "Restores the GSL error handler to its value before module import." },
+    { "unset_gsl_error_handler", (PyCFunction) msprime_unset_gsl_error_handler,
+        METH_NOARGS, "Unsets the GSL error handler (and stores the current value)." },
+    { NULL } /* Sentinel */
 };
 
-static struct PyModuleDef msprimemodule = {
-    PyModuleDef_HEAD_INIT,
-    "_msprime",
-    "Low level interface for msprime",
-    -1,
-    msprime_methods,
-    NULL, NULL, NULL, NULL
-};
+static struct PyModuleDef msprimemodule = { PyModuleDef_HEAD_INIT, "_msprime",
+    "Low level interface for msprime", -1, msprime_methods, NULL, NULL, NULL, NULL };
 
 PyObject *
 PyInit__msprime(void)
@@ -3331,8 +3237,7 @@ PyInit__msprime(void)
         return NULL;
     }
     Py_INCREF(&BaseMutationModelType);
-    PyModule_AddObject(module, "BaseMutationModel",
-            (PyObject *) &BaseMutationModelType);
+    PyModule_AddObject(module, "BaseMutationModel", (PyObject *) &BaseMutationModelType);
 
     /* MatrixMutationModel type */
     MatrixMutationModelType.tp_base = &BaseMutationModelType;
@@ -3340,8 +3245,8 @@ PyInit__msprime(void)
         return NULL;
     }
     Py_INCREF(&MatrixMutationModelType);
-    PyModule_AddObject(module, "MatrixMutationModel",
-            (PyObject *) &MatrixMutationModelType);
+    PyModule_AddObject(
+        module, "MatrixMutationModel", (PyObject *) &MatrixMutationModelType);
 
     /* SLiMMutationModel type */
     SLiMMutationModelType.tp_base = &BaseMutationModelType;
@@ -3349,8 +3254,7 @@ PyInit__msprime(void)
         return NULL;
     }
     Py_INCREF(&SLiMMutationModelType);
-    PyModule_AddObject(module, "SLiMMutationModel",
-            (PyObject *) &SLiMMutationModelType);
+    PyModule_AddObject(module, "SLiMMutationModel", (PyObject *) &SLiMMutationModelType);
 
     /* InfiniteAllelesMutationModel type */
     InfiniteAllelesMutationModelType.tp_base = &BaseMutationModelType;
@@ -3359,13 +3263,14 @@ PyInit__msprime(void)
     }
     Py_INCREF(&InfiniteAllelesMutationModelType);
     PyModule_AddObject(module, "InfiniteAllelesMutationModel",
-            (PyObject *) &InfiniteAllelesMutationModelType);
+        (PyObject *) &InfiniteAllelesMutationModelType);
 
     /* Errors and constants */
     MsprimeInputError = PyErr_NewException("msprime._msprime.InputError", NULL, NULL);
     Py_INCREF(MsprimeInputError);
     PyModule_AddObject(module, "InputError", MsprimeInputError);
-    MsprimeLibraryError = PyErr_NewException("msprime._msprime.LibraryError", NULL, NULL);
+    MsprimeLibraryError
+        = PyErr_NewException("msprime._msprime.LibraryError", NULL, NULL);
     Py_INCREF(MsprimeLibraryError);
     PyModule_AddObject(module, "LibraryError", MsprimeLibraryError);
 
@@ -3389,4 +3294,3 @@ PyInit__msprime(void)
 
     return module;
 }
-// clang-format on
