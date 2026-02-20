@@ -98,9 +98,11 @@ docs = [
     "scipy"
 ]
 
+# Fully pin lint requirements for determinism. 
 lint = [
     "clang-format==21.1.8",
-    "prek",
+    "ruff==0.15.1",
+    "prek==0.3.3",
 ]
 
 dev = [
@@ -154,15 +156,15 @@ ignore = [
     "PT009", # pytest.raises(ValueError) too broad
     "PT011", # pytest.raises(ValueError) too broad
     "PT012", # pytest.raises() block should contain a single simple statement
-    "B018", # Found useless expression. Either assign it
     "B028", # No stacklevel for warnings
+    "B018", # Found useless expression. Either assign it
 ]
 
 fixable = ["ALL"]
 unfixable = []
 
 [tool.ruff.lint.isort]
-known-first-party = ["_msprime", "msprime"]
+known-first-party = ["_msprime", "msprime", "lwt_interface"]
 known-third-party = [
   "tskit",
   "numpy",
