@@ -1,6 +1,20 @@
-# Configuration file for `prek`, a git hook framework written in Rust.
-# See https://prek.j178.dev for more information.
-#:schema https://www.schemastore.org/prek.json
+# The prek configuration defining linting requirements. This 
+# setup is optimised for long-term stability and determinism,
+# and therefore only uses either "builtin" rules or "local"
+# rules implementing lint workflows.  We do not use any remote
+# workflow repos.
+
+files = { glob = [
+    "msprime/**",
+    "benchmarks/**",
+    "tests/**",
+    "*.toml",
+    "docs/**",
+    "lib/*.[c,h]",
+    "lib/tests/*.[c,h]",
+]}
+
+exclude = { glob = ["lib/avl.*"]}
 
 [[repos]]
 repo = "builtin"
@@ -16,46 +30,38 @@ hooks = [
 ]
 
 [[repos]]
-repo = "https://github.com/pre-commit/pre-commit-hooks"
-rev = "v6.0.0"
+repo = "local"
 hooks = [
-  { id = "debug-statements" },
+  {
+    id = "ruff-check",
+    name = "ruff check",
+    language = "system",
+    entry = "ruff check --fix --force-exclude",
+    types = ["python"],
+  },
 ]
 
 [[repos]]
-repo = "https://github.com/astral-sh/uv-pre-commit"
-rev = "0.10.3"
+repo = "local"
 hooks = [
-  { id = "uv-lock" }
+  {
+    id = "ruff-format",
+    name = "ruff format",
+    language = "system",
+    entry = "ruff format --force-exclude",
+    types = ["python"],
+  },
 ]
 
 [[repos]]
-repo = "https://github.com/benjeffery/pre-commit-clang-format"
-rev = "1.0"
+repo = "local"
 hooks = [
   {
     id = "clang-format",
-    exclude = "avl|subprojects|dev-tools",
-    verbose = true
-  }
-]
-
-[[repos]]
-repo = "https://github.com/asottile/blacken-docs"
-rev = "1.20.0"
-hooks = [
-  {
-    id = "blacken-docs",
-    args = ["--skip-errors"],
-    additional_dependencies = ["black==22.3.0"],
-    language_version = "python3"
-  }
-]
-
-[[repos]]
-repo = "https://github.com/astral-sh/ruff-pre-commit"
-rev = "v0.15.0" # Ruff version.
-hooks = [
-  { id = "ruff-check", args = ["--fix"], types_or = ["python", "pyi"] },
-  { id = "ruff-format", types_or = ["python", "pyi"] },
+    name = "clang-format",
+    language = "system",
+    entry = "clang-format -i",
+    types = ["c", "header"],
+    verbose = true,
+  },
 ]
