@@ -4,6 +4,9 @@ ignore:
   - "lib/avl.c"
   - "lib/subprojects/**/*"
 
+codecov:
+  require_ci_to_pass: false
+
 comment:
   layout: "header, diff, flags, components"  # show component info in the PR comment
 
