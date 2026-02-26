@@ -66,6 +66,7 @@ include-package-data = true
 
 [tool.setuptools_scm]
 write_to = "msprime/_version.py"
+local_scheme = "no-local-version"
 
 [dependency-groups]
 test = [
@@ -105,6 +106,10 @@ lint = [
     "prek==0.3.3",
 ]
 
+wheels = [
+  "cibuildwheel",
+]
+
 dev = [
     {include-group = "docs"},
     {include-group = "lint"},
@@ -135,7 +140,6 @@ filterwarnings = [
 ]
 
 [tool.ruff]
-# Assume Python 3.11
 target-version = "py311"
 
 line-length = 89
@@ -170,3 +174,29 @@ known-third-party = [
   "numpy",
   "pytest",
 ]
+
+[tool.cibuildwheel]
+build = ["cp311-*", "cp312-*", "cp313-*", "cp314-*"]
+build-frontend = "build"
+build-verbosity = 3
+test-command = [
+  "python -c \"import msprime._msprime\"",
+  "msp --help",
+]
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+before-all = ["yum -y install gsl-devel"]
+skip = ["*musllinux*"]
+
+[tool.cibuildwheel.macos]
+archs = ["x86_64", "arm64"]
+before-all = ["brew install gsl"]
+# This is because of how GSL is built by homebrew. 
+environment = { MACOSX_DEPLOYMENT_TARGET = "14.0" }
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
+before-all = ["vcpkg install gsl:x64-windows"]
+before-build = "pip install delvewheel"
+repair-wheel-command = "delvewheel repair --add-path C:\\vcpkg\\installed\\x64-windows\\bin -w {dest_dir} {wheel}"
