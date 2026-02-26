@@ -110,10 +110,16 @@ wheels = [
   "cibuildwheel",
 ]
 
+packaging = [
+    "twine",
+    "validate-pyproject[all]",
+]
+
 dev = [
     {include-group = "docs"},
     {include-group = "lint"},
     {include-group = "test"},
+    {include-group = "packaging"},
 ]
 
 verification = [
