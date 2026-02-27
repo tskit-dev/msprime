@@ -42,7 +42,7 @@ sphinx:
         navigation_with_keys: false
         pygments_dark_style: monokai
         logo:
-          text: "Version __MSPRIME_VERSION__"
+          text: "Version __PKG_VERSION__"
       myst_enable_extensions:
       - colon_fence
       - deflist
