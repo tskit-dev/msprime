@@ -54,7 +54,7 @@ sphinx:
         tskit: ["https://tskit.dev/tskit/docs/stable", null]
         tutorials: ["https://tskit.dev/tutorials/", null]
         stdpopsim: ["https://popsim-consortium.github.io/stdpopsim-docs/stable", null]
-        pyslim: ["https://tskit.dev/pyslim/docs/latest/", null]
+        pyslim: ["https://tskit.dev/pyslim/docs/stable/", null]
         numpy: ["https://numpy.org/doc/stable/", null]
         demes: ["https://popsim-consortium.github.io/demes-docs/main/", null]
         demes-spec: ["https://popsim-consortium.github.io/demes-spec-docs/main/", null]
