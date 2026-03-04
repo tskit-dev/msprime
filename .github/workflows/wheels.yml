@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-wheels:
-    uses: tskit-dev/.github/.github/workflows/build-wheels.yml@v12
+    uses: tskit-dev/.github/.github/workflows/build-wheels.yml@v14
     # with:
     #   os-list: '["windows-2025"]' #, "ubuntu-24.04"]'
 
