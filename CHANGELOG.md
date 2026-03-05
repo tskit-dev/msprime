@@ -1,8 +1,6 @@
 # Changelog
 
-## [1.4.1] - 2026-XX-XX
-
-In development
+## [1.4.1] - 2026-03-05
 
 **Maintenance**
 
