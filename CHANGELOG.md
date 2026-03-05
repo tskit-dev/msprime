@@ -20,7 +20,7 @@ Major feature release along with significant performance improvements.
 - Support for simulations after local mrca,
   ({issue}`2157`, {pr}`2396`, {user}`jeromekelleher`, {user}`hossam26644`).
 - Add wheels on Windows ({pr}`2414`, {issue}`2200`,{user}`benjeffery`)
-- Demography objects can now be created from provenance entries ({pr}`2369`,
+- Demography objects can now be created from provenance entries ({pr}`2370`,
   {user}`hyanwong`)
 
  **Performance improvements**
