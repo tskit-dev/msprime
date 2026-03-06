@@ -8,8 +8,10 @@ on:
 
 jobs:
   build-wheels:
-    uses: tskit-dev/.github/.github/workflows/build-wheels.yml@v14
+    uses: tskit-dev/.github/.github/workflows/build-wheels.yml@v15
+    # To override os-list:
     # with:
+    #   python-version: "3.12"
     #   os-list: '["windows-2025"]' #, "ubuntu-24.04"]'
 
   publish:
