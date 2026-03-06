@@ -69,9 +69,8 @@ mom_id = pb.add_individual(time=1)
 dad_id = pb.add_individual(time=1)
 pb.add_individual(time=0, parents=[mom_id, dad_id], is_sample=True)
 pedigree = pb.finalise()
-# TODO replace with display(pedigree) when its implemented in tskit
-# https://github.com/tskit-dev/tskit/issues/2093
-print(pedigree)
+display(pedigree.individuals)
+display(pedigree.nodes)
 ```
 
 The pedigree returned by the {meth}`~.PedigreeBuilder.finalise` method
@@ -80,6 +79,7 @@ contains the pedigree information defined by the calls to
 the parents, and because they are founders, we don't provide any information
 about their parents. Each call to {meth}`~.PedigreeBuilder.add_individual`
 returns the integer ID of newly added individual.
+
 ### Requirements
 
 This section lists the detailed requirements of the low-level encoding
@@ -100,7 +100,6 @@ API or the {ref}`sec_pedigrees_file_format`.
   and ``population`` values. (These are referred to as the individual's
   time and population, as a shorthand.)
 - An individual's time must be less than all its parent's times.
-
 
 (sec_pedigrees_metadata)=
 
@@ -146,7 +145,6 @@ See the
  {ref}`sec_pedigrees_file_format_basic_example` and subsequent sections
 for examples.
 :::
-
 
 (sec_pedigrees_file_format_definition)=
 
@@ -276,7 +274,6 @@ display(pedigree.nodes)
 Here we have two trios, where the child in the second trio is from the
 same generation as the parents in the second. We use the ``is_sample``
 column to specify that ``child2`` is a sample as well as ``child1``.
-
 
 ### Demography information
 
