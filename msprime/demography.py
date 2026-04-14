@@ -1112,8 +1112,10 @@ class Demography(collections.abc.Mapping):
         return copy_demog
 
     def sort_events(self):
-        # Sort demographic events by time. Sorting is stable so the relative
-        # order of events at the same time will be preserved.
+        """
+        Sort demographic events by time. Sorting is stable so the relative
+        order of events at the same time will be preserved.
+        """
         self.events.sort(key=lambda de: de.time)
 
     def insert_populations(self, tables):
