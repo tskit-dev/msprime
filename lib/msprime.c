@@ -7690,7 +7690,7 @@ msp_smc_k_common_ancestor_event(
 
     /* find second hull */
     search = &x_hull->left_avl_node;
-    for (search = search->prev; remaining_mass >= 0; search = search->prev) {
+    for (search = search->prev; remaining_mass > 0; search = search->prev) {
         tsk_bug_assert(search != NULL);
         y_hull = (hull_t *) search->item;
         if (y_hull->left == x_hull->left || y_hull->right > x_hull->left) {
