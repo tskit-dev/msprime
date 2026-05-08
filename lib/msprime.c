@@ -7688,6 +7688,18 @@ msp_smc_k_common_ancestor_event(
     x_hull = msp_get_hull(self, hull_id, label);
     remaining_mass = fenwick_get_cumulative_sum(coal_mass_index, hull_id) - random_mass;
 
+    /* When gsl_ran_flat draws random_mass == 0 (probability ~1/2^32 per
+     * call) — or when the zero-skip path in fenwick_find lands the result
+     * on a leading run of zero-valued slots — remaining_mass starts at
+     * exactly x_hull->count. The walk loop below decrements once per
+     * matching predecessor and exits on remaining_mass < 0; with
+     * remaining_mass == count it would over-iterate by one and run off
+     * the head of the AVL tree. Clamp here so the loop terminates after
+     * `count` matches. */
+    if (remaining_mass >= (double) x_hull->count) {
+        remaining_mass = (double) x_hull->count - 0.5;
+    }
+
     /* find second hull */
     search = &x_hull->left_avl_node;
     for (search = search->prev; remaining_mass >= 0; search = search->prev) {

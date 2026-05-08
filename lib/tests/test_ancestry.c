@@ -4656,6 +4656,62 @@ test_smc_k_gc(void)
     }
 }
 
+/* Regression test: with this seed and parameters the SMCk common-ancestor
+ * walk used to abort via tsk_bug_assert at lib/msprime.c when gsl_ran_flat
+ * drew random_mass == 0 and the resulting remaining_mass equalled
+ * x_hull->count exactly, causing the walk to over-iterate by one and run
+ * off the head of the AVL tree. The fix clamps remaining_mass below count. */
+static void
+test_smc_k_bug_repro(void)
+{
+    int ret;
+    uint32_t n = 100; /* 50 diploid individuals = 100 sample nodes */
+    sample_t *samples = malloc(n * sizeof(sample_t));
+    msp_t msp;
+    gsl_rng *rng = safe_rng_alloc();
+    tsk_table_collection_t tables;
+
+    CU_ASSERT_FATAL(samples != NULL);
+    memset(samples, 0, n * sizeof(sample_t));
+    /* All samples in pop 0 at time 0 (already zeroed). */
+
+    gsl_rng_set(rng, 3940783591UL);
+
+    /* sequence_length = 2e7, num_populations = 1 */
+    ret = build_sim(&msp, &tables, rng, 2e7, 1, samples, n);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_set_recombination_rate(&msp, 1e-8);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* pop 0: initial_size=3600, growth_rate=-0.03 */
+    ret = msp_set_population_configuration(&msp, 0, 3600.0, -0.03, true);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* At t=30, change pop 0 to initial_size=10000, growth=0 */
+    ret = msp_add_population_parameters_change(&msp, 30.0, 0, 10000.0, 0.0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* SMC_K with hull_offset=1 (k=1) */
+    ret = msp_set_simulation_model_smc_k(&msp, 1.0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    CU_ASSERT_TRUE(msp_is_completed(&msp));
+
+    msp_verify(&msp, 0);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+    gsl_rng_free(rng);
+    free(samples);
+    tsk_table_collection_free(&tables);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -4771,6 +4827,7 @@ main(int argc, char **argv)
         { "test_mixed_model_smc_k_large", test_mixed_model_smc_k_large },
         { "test_fenwick_rebuild_smc_k", test_fenwick_rebuild_smc_k },
         { "test_smc_k_gc", test_smc_k_gc },
+        { "test_smc_k_bug_repro", test_smc_k_bug_repro },
         CU_TEST_INFO_NULL,
     };
 
