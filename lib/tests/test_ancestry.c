@@ -4656,50 +4656,97 @@ test_smc_k_gc(void)
     }
 }
 
-/* Regression test: with this seed and parameters the SMCk common-ancestor
- * walk used to abort via tsk_bug_assert at lib/msprime.c when gsl_ran_flat
- * drew random_mass == 0 and the resulting remaining_mass equalled
- * x_hull->count exactly, causing the walk to over-iterate by one and run
- * off the head of the AVL tree. The fix clamps remaining_mass below count. */
+/* A static GSL rng_type whose draws are scripted from a fixed array.
+ * gsl_rng_uniform calls get_double directly, so providing only that
+ * callback is enough to control every uniform draw the simulator makes
+ * (gsl_ran_flat, gsl_ran_exponential, gsl_rng_uniform_int all funnel
+ * through gsl_rng_uniform). */
+typedef struct {
+    size_t call_count;
+    const double *u_values;
+    size_t n_u_values;
+} scripted_rng_state_t;
+
 static void
-test_smc_k_bug_repro(void)
+scripted_rng_set(void *state, unsigned long int seed)
+{
+    scripted_rng_state_t *s = (scripted_rng_state_t *) state;
+    (void) seed;
+    s->call_count = 0;
+}
+
+static unsigned long int
+scripted_rng_get(void *state)
+{
+    /* Not normally called when get_double is set, but provide a sane
+     * fallback in case some code path uses it. */
+    scripted_rng_state_t *s = (scripted_rng_state_t *) state;
+    if (s->call_count >= s->n_u_values) {
+        return 1UL;
+    }
+    return (unsigned long int) (s->u_values[s->call_count++] * 4294967296.0);
+}
+
+static double
+scripted_rng_get_double(void *state)
+{
+    scripted_rng_state_t *s = (scripted_rng_state_t *) state;
+    if (s->call_count >= s->n_u_values) {
+        /* Past the end of the script, return a benign default. */
+        return 0.5;
+    }
+    return s->u_values[s->call_count++];
+}
+
+static const gsl_rng_type scripted_rng_type = {
+    "scripted",   /* name */
+    0xffffffffUL, /* max */
+    0UL,          /* min */
+    sizeof(scripted_rng_state_t),
+    scripted_rng_set,
+    scripted_rng_get,
+    scripted_rng_get_double,
+};
+
+/* Regression test for the SMCk common-ancestor walk: when gsl_ran_flat
+ * draws random_mass == 0, remaining_mass starts at exactly x_hull->count.
+ * Pre-fix the >= 0 walk predicate over-iterated by one and ran off the
+ * head of the AVL tree, tripping tsk_bug_assert. Uses a scripted RNG to
+ * hit the trigger condition deterministically on the first CA event of
+ * a 2-sample SMCk simulation. */
+static void
+test_smc_k_zero_random_mass(void)
 {
     int ret;
-    uint32_t n = 100; /* 50 diploid individuals = 100 sample nodes */
-    sample_t *samples = malloc(n * sizeof(sample_t));
+    uint32_t n = 2;
+    sample_t samples[2] = { { 0, 0.0 }, { 0, 0.0 } };
     msp_t msp;
-    gsl_rng *rng = safe_rng_alloc();
     tsk_table_collection_t tables;
 
-    CU_ASSERT_FATAL(samples != NULL);
-    memset(samples, 0, n * sizeof(sample_t));
-    /* All samples in pop 0 at time 0 (already zeroed). */
+    /* Script:
+     *   [0] = 0.5  -> gsl_ran_exponential for the CA wait time (any
+     *                 positive value < 1 yields a finite wait).
+     *   [1] = 0.0  -> gsl_ran_flat(rng, 0, num_pairs) inside
+     *                 msp_smc_k_common_ancestor_event returns 0,
+     *                 making remaining_mass == x_hull->count exactly.
+     * Subsequent draws fall through to the 0.5 default. */
+    static const double script[] = { 0.5, 0.0 };
+    scripted_rng_state_t rng_state
+        = { .call_count = 0, .u_values = script, .n_u_values = 2 };
+    gsl_rng rng = { .type = &scripted_rng_type, .state = &rng_state };
 
-    gsl_rng_set(rng, 3940783591UL);
-
-    /* sequence_length = 2e7, num_populations = 1 */
-    ret = build_sim(&msp, &tables, rng, 2e7, 1, samples, n);
+    ret = build_sim(&msp, &tables, &rng, 100.0, 1, samples, n);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = msp_set_recombination_rate(&msp, 1e-8);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    /* pop 0: initial_size=3600, growth_rate=-0.03 */
-    ret = msp_set_population_configuration(&msp, 0, 3600.0, -0.03, true);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    /* At t=30, change pop 0 to initial_size=10000, growth=0 */
-    ret = msp_add_population_parameters_change(&msp, 30.0, 0, 10000.0, 0.0);
-    CU_ASSERT_EQUAL_FATAL(ret, 0);
-
-    /* SMC_K with hull_offset=1 (k=1) */
     ret = msp_set_simulation_model_smc_k(&msp, 1.0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
-    ret = msp_run(&msp, DBL_MAX, ULONG_MAX);
+    /* One event is enough to coalesce the only pair. Pre-fix this aborts
+     * via tsk_bug_assert; post-fix it returns 0. */
+    ret = msp_run(&msp, DBL_MAX, 1);
     CU_ASSERT_EQUAL(ret, 0);
     CU_ASSERT_TRUE(msp_is_completed(&msp));
 
@@ -4707,8 +4754,67 @@ test_smc_k_bug_repro(void)
 
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
-    gsl_rng_free(rng);
-    free(samples);
+    tsk_table_collection_free(&tables);
+}
+
+/* Sibling test for the SMCk clamp in a non-trivial state. The base
+ * test_smc_k_zero_random_mass triggers the clamp on the very first CA
+ * event of a fresh 2-sample simulation. This test exercises the same
+ * clamp on the SECOND CA event, after one prior coalescence has freed
+ * and reused hull slots, decremented insertion orders for sibling
+ * same-left hulls, and rearranged the hulls_left / hulls_right AVL
+ * trees. Pre-fix the second event aborts via tsk_bug_assert; post-fix
+ * both events succeed.
+ *
+ * (We tried to engineer the second event to land on a hull with
+ * count > 1 via the fenwick zero-skip path, but `fenwick_find` always
+ * stops at the FIRST non-zero slot — and in an all-overlapping setup
+ * any non-zero "predecessor" slot blocks the path to a higher-count
+ * hull. So the second event also exercises count == 1, just from a
+ * post-event state rather than the initial state.) */
+static void
+test_smc_k_zero_random_mass_chained(void)
+{
+    int ret;
+    uint32_t n = 4;
+    sample_t samples[4] = { { 0, 0.0 }, { 0, 0.0 }, { 0, 0.0 }, { 0, 0.0 } };
+    msp_t msp;
+    tsk_table_collection_t tables;
+
+    /* Script:
+     *   [0] = 0.5    -> event 1 gsl_ran_exponential, finite wait.
+     *   [1] = 0.0833 -> event 1 gsl_ran_flat: random_mass = 0.0833 * 6 ≈ 0.5.
+     *                   Selects a hull whose count is non-zero; walk back
+     *                   coalesces with one of its matching predecessors.
+     *   [2] = 0.5    -> event 2 gsl_ran_exponential, finite wait.
+     *   [3] = 0.0    -> event 2 gsl_ran_flat: random_mass = 0. The clamp
+     *                   at lib/msprime.c:7691-7700 fires. */
+    static const double script[] = { 0.5, 0.0833, 0.5, 0.0 };
+    scripted_rng_state_t rng_state
+        = { .call_count = 0, .u_values = script, .n_u_values = 4 };
+    gsl_rng rng = { .type = &scripted_rng_type, .state = &rng_state };
+
+    ret = build_sim(&msp, &tables, &rng, 100.0, 1, samples, n);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* hull_offset = 0 keeps hull right == lineage tail->right. */
+    ret = msp_set_simulation_model_smc_k(&msp, 0.0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    /* Two CA events, hitting the max_events cap. Pre-fix the second
+     * event aborts via tsk_bug_assert; post-fix msp_run returns
+     * MSP_EXIT_MAX_EVENTS and we've coalesced 2 pairs (4 -> 2 ancestors). */
+    ret = msp_run(&msp, DBL_MAX, 2);
+    CU_ASSERT_EQUAL(ret, MSP_EXIT_MAX_EVENTS);
+    CU_ASSERT_EQUAL(msp_get_num_ancestors(&msp), 2);
+
+    msp_verify(&msp, 0);
+
+    ret = msp_free(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
     tsk_table_collection_free(&tables);
 }
 
@@ -4827,7 +4933,8 @@ main(int argc, char **argv)
         { "test_mixed_model_smc_k_large", test_mixed_model_smc_k_large },
         { "test_fenwick_rebuild_smc_k", test_fenwick_rebuild_smc_k },
         { "test_smc_k_gc", test_smc_k_gc },
-        { "test_smc_k_bug_repro", test_smc_k_bug_repro },
+        { "test_smc_k_zero_random_mass", test_smc_k_zero_random_mass },
+        { "test_smc_k_zero_random_mass_chained", test_smc_k_zero_random_mass_chained },
         CU_TEST_INFO_NULL,
     };
 
