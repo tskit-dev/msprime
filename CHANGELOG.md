@@ -4,6 +4,12 @@
 
 In development
 
+**Bug fixes**
+
+- Fix edge case in SMC(k) model where a random value of exactly zero triggered an assert.
+  ({issue}`2523` {pr}`2525`, {user}`currocam`, {user}`jeromekelleher`).
+
+
 ## [1.4.1] - 2026-03-05
 
 **Maintenance**
