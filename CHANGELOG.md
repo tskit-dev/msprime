@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.4.3] - 2026-XX-XX
+
+In development.
+
 ## [1.4.2] - 2026-05-20
 
 Bugfix release.
