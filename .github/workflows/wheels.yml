@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-wheels:
-    uses: tskit-dev/.github/.github/workflows/build-wheels.yml@v15
+    uses: tskit-dev/.github/.github/workflows/build-wheels.yml@v17
     # To override os-list:
     # with:
     #   python-version: "3.12"

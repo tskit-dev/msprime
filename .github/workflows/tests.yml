@@ -10,14 +10,14 @@ jobs:
 
   packaging:
     name: Python packaging
-    uses: tskit-dev/.github/.github/workflows/python-packaging.yml@v15
+    uses: tskit-dev/.github/.github/workflows/python-packaging.yml@v17
     with:
       additional-apt-packages: libgsl-dev
       cli-test-cmd: msp --help
 
   test-c:
     name: C tests
-    uses: tskit-dev/.github/.github/workflows/c-tests.yml@v15
+    uses: tskit-dev/.github/.github/workflows/c-tests.yml@v17
     with:
       additional-apt-packages: libgsl-dev
       library-directory: lib
@@ -25,7 +25,7 @@ jobs:
 
   test-python-c:
     name: Python-C tests
-    uses: tskit-dev/.github/.github/workflows/python-c-tests.yml@v15
+    uses: tskit-dev/.github/.github/workflows/python-c-tests.yml@v17
     with:
       additional-apt-packages: libgsl-dev
     secrets: inherit
@@ -102,7 +102,7 @@ jobs:
             --cov-report=xml --cov-branch -n2
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5.5.2
+        uses: codecov/codecov-action@v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
