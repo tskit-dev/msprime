@@ -6,6 +6,10 @@ on:
     tags:
       - '*'
   merge_group:
+
+permissions:
+  contents: read
+
 jobs:
   Docs:
     uses: tskit-dev/.github/.github/workflows/docs.yml@v17
