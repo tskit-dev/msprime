@@ -104,6 +104,7 @@ lint = [
     "clang-format==21.1.8",
     "ruff==0.15.1",
     "prek==0.3.3",
+    "zizmor==1.26.1",
 ]
 
 wheels = [

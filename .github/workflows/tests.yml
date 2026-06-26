@@ -6,6 +6,9 @@ on:
     branches: [main, test]
   merge_group:
 
+permissions:
+  contents: read
+
 jobs:
 
   packaging:
@@ -21,14 +24,18 @@ jobs:
     with:
       additional-apt-packages: libgsl-dev
       library-directory: lib
-    secrets: inherit
+    # Trusted first-party tskit-dev reusable workflow; needs secrets (e.g.
+    # CODECOV_TOKEN) passed through.
+    secrets: inherit  # zizmor: ignore[secrets-inherit]
 
   test-python-c:
     name: Python-C tests
     uses: tskit-dev/.github/.github/workflows/python-c-tests.yml@v17
     with:
       additional-apt-packages: libgsl-dev
-    secrets: inherit
+    # Trusted first-party tskit-dev reusable workflow; needs secrets (e.g.
+    # CODECOV_TOKEN) passed through.
+    secrets: inherit  # zizmor: ignore[secrets-inherit]
 
   test-python:
     name: Python
@@ -44,14 +51,15 @@ jobs:
 
     steps:
       - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.13.0
+        uses: styfle/cancel-workflow-action@d07a454dad7609a92316b57b23c9ccfd4f59af66  # 0.13.1
         with:
           access_token: ${{ github.token }}
 
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           submodules: true
+          persist-credentials: false
 
       - name: Fix windows symlinks
         # This is horrible, but the "git config core.symlinks true" didn't work.
@@ -81,7 +89,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libgsl-dev
 
       - name: Install uv and set the python version
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
         with:
           python-version: ${{ matrix.python }}
           version: "0.10.0"
@@ -102,7 +110,7 @@ jobs:
             --cov-report=xml --cov-branch -n2
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7.0.0
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false

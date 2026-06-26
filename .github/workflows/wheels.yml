@@ -6,6 +6,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+
 jobs:
   build-wheels:
     uses: tskit-dev/.github/.github/workflows/build-wheels.yml@v17
@@ -22,7 +25,7 @@ jobs:
       id-token: write
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           pattern: build-*
           path: dist
@@ -33,11 +36,11 @@ jobs:
 
       - name: Publish distribution to Test PyPI
         if: github.event_name == 'push' && github.ref_name == 'test-publish'
-        uses: pypa/gh-action-pypi-publish@v1.13.0
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
         with:
           repository-url: https://test.pypi.org/legacy/
           verbose: true
 
       - name: Publish distribution to Production PyPI
         if: github.event_name == 'release'
-        uses: pypa/gh-action-pypi-publish@v1.13.0
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0

@@ -12,6 +12,7 @@ files = { glob = [
     "docs/**",
     "lib/*.[c,h]",
     "lib/tests/*.[c,h]",
+    ".github/workflows/**",
 ]}
 
 exclude = { glob = ["lib/avl.*", "lib/subprojects/**"]}
@@ -63,5 +64,18 @@ hooks = [
     entry = "uv run --only-group=lint clang-format -i",
     types = ["c"],
     verbose = true,
+  },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+  {
+    id = "zizmor",
+    name = "zizmor",
+    language = "system",
+    entry = "uv run --only-group=lint zizmor",
+    files = "^\\.github/workflows/.*\\.ya?ml$",
+    pass_filenames = true,
   },
 ]

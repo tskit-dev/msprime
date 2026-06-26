@@ -1,0 +1,9 @@
+# zizmor configuration for tskit-dev repos.
+# Third-party actions must be hash-pinned; first-party tskit-dev reusable
+# workflows are trusted and may stay pinned to a version tag (e.g. @v17).
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        tskit-dev/*: ref-pin
+        "*": hash-pin
