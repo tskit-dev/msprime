@@ -13,14 +13,14 @@ jobs:
 
   packaging:
     name: Python packaging
-    uses: tskit-dev/.github/.github/workflows/python-packaging.yml@main
+    uses: tskit-dev/.github/.github/workflows/python-packaging.yml@v18
     with:
       additional-apt-packages: libgsl-dev
       cli-test-cmd: msp --help
 
   test-c:
     name: C tests
-    uses: tskit-dev/.github/.github/workflows/c-tests.yml@main
+    uses: tskit-dev/.github/.github/workflows/c-tests.yml@v18
     with:
       additional-apt-packages: libgsl-dev
       library-directory: lib
@@ -30,7 +30,7 @@ jobs:
 
   test-python-c:
     name: Python-C tests
-    uses: tskit-dev/.github/.github/workflows/python-c-tests.yml@main
+    uses: tskit-dev/.github/.github/workflows/python-c-tests.yml@v18
     with:
       additional-apt-packages: libgsl-dev
     # Trusted first-party tskit-dev reusable workflow; needs secrets (e.g.
