@@ -9,4 +9,4 @@ permissions:
 
 jobs:
   Lint:
-    uses: tskit-dev/.github/.github/workflows/lint.yml@main
+    uses: tskit-dev/.github/.github/workflows/lint.yml@v19
