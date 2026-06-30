@@ -87,7 +87,7 @@ docs = [
     "daiquiri",
     "demes",
     "demesdraw",
-    "jupyter-book",
+    "jupyter-book<2",
     "networkx",
     "matplotlib",
     "newick",
