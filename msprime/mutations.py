@@ -24,6 +24,7 @@ import inspect
 import math
 import numbers
 import sys
+import warnings
 
 import numpy as np
 import tskit
@@ -116,32 +117,34 @@ class SLiMMutationModel(_msprime.SLiMMutationModel, MutationModel):
     allele is a comma-separated string of all mutations that have occurred up
     to the root.
 
-    Mutations produced by SLiM carry both a ``time`` attribute, in units of "time ago"
-    as usual for tskit, as well as a metadata attributed called "origin_generation",
-    in units of time since the start of the simulation. Adding these two together -
-    time since the start of the simulation plus time until the end - is equal to the
-    total number of generations of the simulation. The origin_generation is not
-    currently used by SLiM, but for consistency, the origin_generation attribute for
-    mutations produced by this model is set equal to ``slim_generation`` minus
-    ``floor(mut.time)``, where ``mut.time`` is the (tskit) time ago of the mutation.
+    Prior to SLiM v6.0, SLiM mutations were required to have metadata associated
+    with them. That is no longer the case (this metadata is in top-level metadata),
+    and so this is no longer provided by this mutation model. The parameters
+    ``type`` and ``slim_generation`` were used for this, and are deprecated.
+    See ``pyslim.add_mutation_metadata``.
 
-    :param int type: The nonnegative integer defining the "type" of SLiM mutation
-        that will be recorded in metadata.
     :param int next_id: The nonnegative integer to start assigning alleles from.
         (default: 0)
-    :param int slim_generation: The "SLiM generation" time used in determining the
-        "origin_generation" metadata attribute of mutations. This can usually
-        be left at its default, which is 1.
     :param int block_size: The block size for allocating derived states.
         You do not need to change this unless you get an "out of memory" error
         due to a very large number of stacked mutations.
+    :param int type: This argument will raise a warning, and be ignored,
+        if used.
+    :param int slim_generation: This argument will raise a warning, and be ignored,
+        if used.
     """
 
+    def __init__(self, next_id=0, *, block_size=0, type=None, slim_generation=None):
+        if type is not None or slim_generation is not None:
+            warnings.warn(
+                "type and slim_generation are deprecated, and will be ignored.",
+                UserWarning,
+                stacklevel=2,
+            )
+        super().__init__(next_id, block_size)
+
     def __str__(self):
-        return (
-            f"Mutation model for SLiM mutations of type m{self.type}\n"
-            f"  next ID: {self.next_id}\n"
-        )
+        return f"Mutation model for SLiM mutations. Next ID: {self.next_id}\n"
 
 
 # NOTE: we use a hacky workaround here for documenting the next_allele instance
