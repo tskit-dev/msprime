@@ -2771,41 +2771,22 @@ class TestSLiMMutationModel:
     """
 
     def test_constructor_errors(self):
-        with pytest.raises(TypeError):
-            _msprime.SLiMMutationModel()
-
         for bad_type in ["sdr", 0.222, None]:
             with pytest.raises(TypeError):
-                _msprime.SLiMMutationModel(type=bad_type, next_id=234)
-                _msprime.SLiMMutationModel(type=0, next_id=bad_type)
-                _msprime.SLiMMutationModel(type=0, next_id=0, block_size=bad_type)
+                _msprime.SLiMMutationModel(next_id=bad_type)
 
         with pytest.raises(_msprime.LibraryError):
-            _msprime.SLiMMutationModel(type=-1, next_id=0)
-            _msprime.SLiMMutationModel(type=1, next_id=-1)
+            _msprime.SLiMMutationModel(next_id=-1)
 
     def test_uninitialised(self):
         model = _msprime.SLiMMutationModel.__new__(_msprime.SLiMMutationModel)
         with pytest.raises(SystemError):
-            _ = model.type
-        with pytest.raises(SystemError):
             _ = model.next_id
-
-    def test_type(self):
-        for mutation_type in [0, 10, 2**31 - 1]:
-            model = _msprime.SLiMMutationModel(type=mutation_type)
-            assert model.type == mutation_type
-            assert model.next_id == 0
 
     def test_next_id(self):
         for next_id in [0, 10, 2**63 - 1]:
-            model = _msprime.SLiMMutationModel(0, next_id=next_id)
-            assert model.type == 0
+            model = _msprime.SLiMMutationModel(next_id=next_id)
             assert model.next_id == next_id
-
-    def test_generation(self):
-        model = _msprime.SLiMMutationModel(0)
-        assert model.slim_generation == 1
 
 
 class TestInfiniteAllelesMutationModel:
@@ -2998,7 +2979,7 @@ class TestSimMutations:
         rng = _msprime.RandomGenerator(1)
         imap = uniform_rate_map(1)
         tables = _msprime.LightweightTableCollection(1.0)
-        model = _msprime.SLiMMutationModel(1234, 5678)
+        model = _msprime.SLiMMutationModel(5678)
         _msprime.sim_mutations(tables, rng, imap, model)
         assert model.next_id == 5678
 

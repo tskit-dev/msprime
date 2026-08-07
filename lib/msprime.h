@@ -440,9 +440,7 @@ typedef struct {
 } mutation_matrix_t;
 
 typedef struct {
-    int32_t mutation_type_id; // following SLiM's MutationMetadataRec
     int64_t next_mutation_id; // following SLiM's slim_mutationid_t
-    int32_t slim_generation;
     tsk_blkalloc_t allocator;
 } slim_mutator_t;
 
@@ -582,8 +580,8 @@ int matrix_mutation_model_factory(mutation_model_t *self, int model);
 int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
     char **alleles, size_t *allele_length, double *root_distribution,
     double *transition_matrix);
-int slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
-    int64_t next_mutation_id, int32_t slim_generation, size_t block_size);
+int slim_mutation_model_alloc(
+    mutation_model_t *self, int64_t next_mutation_id, size_t block_size);
 int infinite_alleles_mutation_model_alloc(
     mutation_model_t *self, uint64_t start_allele, tsk_flags_t options);
 int mutation_model_free(mutation_model_t *self);
