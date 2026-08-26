@@ -24,7 +24,6 @@ import inspect
 import math
 import numbers
 import sys
-import warnings
 
 import numpy as np
 import tskit
@@ -113,33 +112,44 @@ class SLiMMutationModel(_msprime.SLiMMutationModel, MutationModel):
 
     To agree with mutations produced by SLiM, the ancestral state of each new
     site is set to the empty string, and each derived state is produced by
-    appending the "next allele" to the previous state. The result is that each
+    appending the "next allele" to the previous state.  The result is that each
     allele is a comma-separated string of all mutations that have occurred up
-    to the root.
+    to the root. Alleles are numeric IDs, starting with ``next_id``.
 
-    Prior to SLiM v6.0, SLiM mutations were required to have metadata associated
-    with them. That is no longer the case (this metadata is in top-level metadata),
-    and so this is no longer provided by this mutation model. The parameters
-    ``type`` and ``slim_generation`` were used for this, and are deprecated.
-    See ``pyslim.add_mutation_metadata``.
+    The same list of numeric IDs is stored in metadata (in binary, as int64s):
+    it is actually these IDs that SLiM uses when reading in a tree sequence,
+    not the text-based version in the derived state.
+
+    This model works as following: for each mutation, if the next ID is ``n``,
+    then it sets the derived state to be the string ``",n"`` appended to its
+    inherited state (which is the derived state of the parent mutation, if any,
+    or the ancestral state otherwise). Also, it sets the metadata to be the
+    64-bit integer n appended to the bytes of the inherited metadata
+    (which similarly comes from the parent mutation, if any, or the site).
+    So, if this mutation model is applied to a tree sequence with existing
+    incompatible mutations (especially if the existing sites have nonempty metadata)
+    the result may be surprising.
+
+    Prior to SLiM v6.0, a different metadata scheme was used; that information
+    has been moved to top-level metadata, and can be added with
+    ``pyslim.add_mutation_metadata``.
 
     :param int next_id: The nonnegative integer to start assigning alleles from.
         (default: 0)
     :param int block_size: The block size for allocating derived states.
         You do not need to change this unless you get an "out of memory" error
         due to a very large number of stacked mutations.
-    :param int type: This argument will raise a warning, and be ignored,
-        if used.
-    :param int slim_generation: This argument will raise a warning, and be ignored,
-        if used.
+    :param int type: This argument is deprecated, and will raise an error, if used.
+    :param int slim_generation: This argument is deprecated, and will raise
+        an error, if used.
     """
 
     def __init__(self, next_id=0, *, block_size=0, type=None, slim_generation=None):
         if type is not None or slim_generation is not None:
-            warnings.warn(
-                "type and slim_generation are deprecated, and will be ignored.",
-                UserWarning,
-                stacklevel=2,
+            raise ValueError(
+                "type and slim_generation are no longer accepted: add these with "
+                "pyslim.add_mutation_metadata. If you need to produce mutations "
+                "for SLiM versions before 6.0, use msprime version 1.4.2 or before."
             )
         super().__init__(next_id, block_size)
 

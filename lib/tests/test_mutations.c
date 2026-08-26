@@ -37,6 +37,9 @@ insert_single_tree(tsk_table_collection_t *tables, int alphabet)
         "0  1   6   4,5\n";
     */
     int ret;
+    const char *mut_metadata = "lmnop";
+    const char *site_metadata = "abc";
+
     tables->sequence_length = 1.0;
     ret = tsk_node_table_add_row(
         &tables->nodes, TSK_NODE_IS_SAMPLE, 0.0, 0, TSK_NULL, NULL, 0);
@@ -73,18 +76,18 @@ insert_single_tree(tsk_table_collection_t *tables, int alphabet)
     ret = tsk_population_table_add_row(&tables->populations, NULL, 0);
     CU_ASSERT_FATAL(ret == 0);
 
-    /* Add a site and a mutation */
+    /* Add a site and a mutation with metadata, above node 4 */
     if (alphabet == ALPHABET_BINARY) {
-        ret = tsk_site_table_add_row(&tables->sites, 0.1, "0", 1, NULL, 0);
+        ret = tsk_site_table_add_row(&tables->sites, 0.1, "0", 1, site_metadata, 3);
         CU_ASSERT_FATAL(ret >= 0);
         ret = tsk_mutation_table_add_row(
-            &tables->mutations, 0, 0, -1, 0.0, "1", 1, NULL, 0);
+            &tables->mutations, 0, 4, -1, 2.5, "1", 1, mut_metadata, 5);
         CU_ASSERT_FATAL(ret >= 0);
     } else if (alphabet == ALPHABET_NUCLEOTIDE) {
-        ret = tsk_site_table_add_row(&tables->sites, 0.1, "A", 1, NULL, 0);
+        ret = tsk_site_table_add_row(&tables->sites, 0.1, "A", 1, site_metadata, 3);
         CU_ASSERT_FATAL(ret >= 0);
         ret = tsk_mutation_table_add_row(
-            &tables->mutations, 0, 0, -1, 0.0, "C", 1, NULL, 0);
+            &tables->mutations, 0, 4, -1, 2.5, "C", 1, mut_metadata, 5);
         CU_ASSERT_FATAL(ret >= 0);
     }
 
@@ -864,13 +867,102 @@ parse_text_int64(char *ds, tsk_size_t n)
 static void
 verify_slim_mutation_ids(int64_t *mut_ids, size_t mut_ids_length, int64_t min_mut_id)
 {
-    int j;
+    int j = 0;
     CU_ASSERT_FATAL(mut_ids_length > 0);
     qsort(mut_ids, mut_ids_length, sizeof(*mut_ids), &cmp_int64);
-    CU_ASSERT_EQUAL_FATAL(mut_ids[0], min_mut_id);
+    // skip any -1s we might have put in
+    while (mut_ids[j] < 0) {
+        j++;
+    }
+    CU_ASSERT_EQUAL_FATAL(mut_ids[j], min_mut_id);
+    j++;
     if (mut_ids_length > 1) {
-        for (j = 1; j < mut_ids_length; j++) {
+        while (j < mut_ids_length) {
             CU_ASSERT_EQUAL_FATAL(mut_ids[j] - mut_ids[j - 1], 1);
+            j++;
+        }
+    }
+}
+
+static void
+verify_slim_derived_states(tsk_site_table_t *sites, tsk_mutation_table_t *mutations,
+    int64_t *all_mut_ids, size_t all_mut_ids_length, int skip_mut)
+{
+    int j, k, s;
+    size_t len, parent_len;
+    char *ds;
+    int64_t mut_id;
+    bool parse_ids = (all_mut_ids_length > 0);
+    char *parent_allele;
+    CU_ASSERT_FATAL(mutations->num_rows <= all_mut_ids_length || !parse_ids);
+    for (j = 0; j < mutations->num_rows; j++) {
+        ds = mutations->derived_state + mutations->derived_state_offset[j];
+        len = (mutations->derived_state_offset[j + 1]
+               - mutations->derived_state_offset[j]);
+        if (j == skip_mut) {
+            parent_len = 0;
+            all_mut_ids[j] = -1;
+        } else {
+            k = mutations->parent[j];
+            if (k == TSK_NULL) {
+                s = mutations->site[j];
+                parent_len = (sites->ancestral_state_offset[s + 1]
+                              - sites->ancestral_state_offset[s]);
+                parent_allele
+                    = sites->ancestral_state + sites->ancestral_state_offset[s];
+            } else {
+                parent_len = (mutations->derived_state_offset[k + 1]
+                              - mutations->derived_state_offset[k]);
+                parent_allele
+                    = mutations->derived_state + mutations->derived_state_offset[k];
+            }
+            CU_ASSERT_FATAL(len > parent_len);
+            if (parent_len > 0) {
+                CU_ASSERT_EQUAL_FATAL(memcmp(ds, parent_allele, parent_len), 0);
+                CU_ASSERT_EQUAL_FATAL((ds + parent_len)[0], 44); // 44 is ',' in ascii
+                parent_len++;
+            }
+            if (parse_ids) {
+                mut_id = parse_text_int64(ds + parent_len, len - parent_len);
+                all_mut_ids[j] = mut_id;
+            }
+        }
+    }
+}
+
+static void
+verify_slim_metadata(tsk_site_table_t *sites, tsk_mutation_table_t *mutations,
+    int64_t *all_mut_ids, size_t all_mut_ids_length, int skip_mut)
+{
+    int j, k, s;
+    size_t len, parent_len;
+    int64_t mut_id;
+    char *md, *pmd;
+    bool parse_ids = (all_mut_ids_length > 0);
+    CU_ASSERT_FATAL(mutations->num_rows <= all_mut_ids_length || !parse_ids);
+    for (j = 0; j < mutations->num_rows; j++) {
+        md = mutations->metadata + mutations->metadata_offset[j];
+        len = (mutations->metadata_offset[j + 1] - mutations->metadata_offset[j]);
+        if (j == skip_mut) {
+            parent_len = 0;
+            all_mut_ids[j] = -1;
+        } else {
+            k = mutations->parent[j];
+            if (k == TSK_NULL) {
+                s = mutations->site[j];
+                pmd = sites->metadata + sites->metadata_offset[s];
+                parent_len = (sites->metadata_offset[s + 1] - sites->metadata_offset[s]);
+            } else {
+                pmd = mutations->metadata + mutations->metadata_offset[k];
+                parent_len = (mutations->metadata_offset[k + 1]
+                              - mutations->metadata_offset[k]);
+            }
+            CU_ASSERT_FATAL(len > parent_len);
+            if (parent_len > 0) {
+                CU_ASSERT_EQUAL_FATAL(memcmp(md, pmd, parent_len), 0);
+            }
+            mut_id = (int64_t) md[parent_len];
+            all_mut_ids[j] = mut_id;
         }
     }
 }
@@ -879,14 +971,12 @@ static void
 test_mutgen_slim_mutations(void)
 {
     int ret = 0;
-    int j, k;
+    int j;
     mutgen_t mutgen;
     gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
     tsk_table_collection_t tables;
     mutation_model_t mut_model;
-    size_t len, parent_len;
-    char *ds;
-    int64_t mut_id, *all_mut_ids;
+    int64_t *all_mut_ids;
     int64_t next_mutation_id = 23;
 
     CU_ASSERT_FATAL(rng != NULL);
@@ -903,7 +993,7 @@ test_mutgen_slim_mutations(void)
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
-    CU_ASSERT_TRUE(tables.mutations.num_rows > 0);
+    CU_ASSERT_FATAL(tables.mutations.num_rows > 0);
 
     // should have empty ancestral states
     for (j = 0; j < tables.sites.num_rows; j++) {
@@ -911,30 +1001,16 @@ test_mutgen_slim_mutations(void)
     }
     // check that derived states append unique integers,
     // counting up from next_mutation_id
+    // in both derived state (text) and metadata (binary)
     all_mut_ids = malloc(tables.mutations.num_rows * sizeof(int64_t));
     CU_ASSERT_FATAL(all_mut_ids != NULL);
-    for (j = 0; j < tables.mutations.num_rows; j++) {
-        ds = tables.mutations.derived_state + tables.mutations.derived_state_offset[j];
-        len = (tables.mutations.derived_state_offset[j + 1]
-               - tables.mutations.derived_state_offset[j]);
-        k = tables.mutations.parent[j];
-        if (k == TSK_NULL) {
-            parent_len = 0;
-        } else {
-            parent_len = (tables.mutations.derived_state_offset[k + 1]
-                          - tables.mutations.derived_state_offset[k]);
-            CU_ASSERT_EQUAL_FATAL(memcmp(ds,
-                                      tables.mutations.derived_state
-                                          + tables.mutations.derived_state_offset[k],
-                                      parent_len),
-                0);
-            CU_ASSERT_EQUAL_FATAL((ds + parent_len)[0], 44); // 44 is ',' in ascii
-            parent_len++;
-        }
-        CU_ASSERT_FATAL(len > parent_len);
-        mut_id = parse_text_int64(ds + parent_len, len - parent_len);
-        all_mut_ids[j] = mut_id;
-    }
+    // derived state
+    verify_slim_derived_states(
+        &tables.sites, &tables.mutations, all_mut_ids, tables.mutations.num_rows, -1);
+    verify_slim_mutation_ids(all_mut_ids, tables.mutations.num_rows, next_mutation_id);
+    // metadata
+    verify_slim_metadata(
+        &tables.sites, &tables.mutations, all_mut_ids, tables.mutations.num_rows, -1);
     verify_slim_mutation_ids(all_mut_ids, tables.mutations.num_rows, next_mutation_id);
 
     mutgen_print_state(&mutgen, _devnull);
@@ -943,6 +1019,74 @@ test_mutgen_slim_mutations(void)
     free(all_mut_ids);
     mutation_model_free(&mut_model);
     tsk_table_collection_free(&tables);
+    gsl_rng_free(rng);
+}
+
+static void
+test_mutgen_slim_mutations_keeps(void)
+{
+    int ret = 0;
+    int j;
+    mutgen_t mutgen;
+    gsl_rng *rng = gsl_rng_alloc(gsl_rng_default);
+    tsk_table_collection_t tables, orig_tables;
+    mutation_model_t mut_model;
+    int64_t *all_mut_ids;
+    int64_t next_mutation_id = 23;
+
+    CU_ASSERT_FATAL(rng != NULL);
+    ret = slim_mutation_model_alloc(&mut_model, next_mutation_id, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+
+    ret = tsk_table_collection_init(&tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    insert_single_tree(&tables, ALPHABET_NUCLEOTIDE);
+    // this should have a site and a mutation and only one position
+    // so we know future mutations will hit it
+    CU_ASSERT_EQUAL_FATAL(tables.sites.num_rows, 1);
+    // change the position of that site to 0.0
+    tables.sites.position[0] = 0.0;
+    CU_ASSERT_FATAL(tables.mutations.num_rows > 0);
+    CU_ASSERT_EQUAL_FATAL(tables.sequence_length, 1.0);
+
+    ret = tsk_table_collection_copy(&tables, &orig_tables, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_EQUAL_FATAL(tables.sequence_length, 1.0);
+
+    ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_set_rate(&mutgen, 1);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    ret = mutgen_generate(&mutgen, MSP_DISCRETE_SITES | MSP_KEEP_SITES);
+    CU_ASSERT_EQUAL_FATAL(ret, 0);
+    CU_ASSERT_FATAL(tables.mutations.num_rows > orig_tables.mutations.num_rows);
+    CU_ASSERT_EQUAL_FATAL(tables.sites.num_rows, 1);
+
+    // check site metadata has been preserved
+    ret = tsk_site_table_equals(&tables.sites, &orig_tables.sites, 0);
+    CU_ASSERT_FATAL(ret);
+
+    // check for derived states and metadata that each mutation
+    // is something appended onto its parent's
+    all_mut_ids = malloc(tables.mutations.num_rows * sizeof(int64_t));
+    CU_ASSERT_FATAL(all_mut_ids != NULL);
+    for (j = 0; j < tables.mutations.num_rows; j++) {
+        // find the mutation that's kept; it doesn't follow the rules
+        if (tables.mutations.time[j] == orig_tables.mutations.time[0])
+            break;
+    }
+    verify_slim_derived_states(
+        &tables.sites, &tables.mutations, all_mut_ids, tables.mutations.num_rows, j);
+    verify_slim_mutation_ids(all_mut_ids, tables.mutations.num_rows, next_mutation_id);
+    verify_slim_metadata(
+        &tables.sites, &tables.mutations, all_mut_ids, tables.mutations.num_rows, j);
+    verify_slim_mutation_ids(all_mut_ids, tables.mutations.num_rows, next_mutation_id);
+
+    free(all_mut_ids);
+    mutgen_free(&mutgen);
+    mutation_model_free(&mut_model);
+    tsk_table_collection_free(&tables);
+    tsk_table_collection_free(&orig_tables);
     gsl_rng_free(rng);
 }
 
@@ -1259,6 +1403,7 @@ main(int argc, char **argv)
         { "test_jukes_cantor_has_silent_mutations",
             test_jukes_cantor_has_silent_mutations },
         { "test_mutgen_slim_mutations", test_mutgen_slim_mutations },
+        { "test_mutgen_slim_mutations_keeps", test_mutgen_slim_mutations_keeps },
         { "test_mutgen_slim_mutation_large_values",
             test_mutgen_slim_mutation_large_values },
         { "test_mutgen_infinite_alleles", test_mutgen_infinite_alleles },

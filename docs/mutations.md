@@ -857,6 +857,8 @@ A special class of infinite alleles model is provided for use with [SLiM](<https
 to agree with the underlying mutation model in SLiM.
 As with the InfiniteAlleles model, it assigns each new mutation a unique integer,
 by keeping track of the `next_id` and incrementing it each time a new mutation appears.
+For more information,
+see {ref}`the pyslim documentation<pyslim:sec_tutorial_adding_neutral_mutations>`.
 
 This differs from the {class}`.InfiniteAlleles` because mutations
 in SLiM can "stack": new mutations can add to the existing state, rather than
@@ -864,21 +866,15 @@ replacing the previous state. So, derived states are comma-separated lists of
 mutation IDs, and the ancestral state is always the empty string. For instance,
 if a new mutation with ID 5 occurs at a site, and then later another mutation
 appears with ID 64, the sequence of alleles moving along this line of descent
-would be `""`, then `"5"`, and finally `"5,64"`. Furthermore, the mutation
-model adds SLiM metadata to each mutation, which records, among other things,
-the SLiM mutation type of each mutation, and the selection coefficient (which
-is always 0.0, since adding mutations in this way only makes sense if they are
-neutral). For this reason, the model has one required parameter: the `type`
-of the mutation, a nonnegative integer. If, for instance, you specify
-`type=1`, then the mutations in SLiM will be of type `m1`. For more
-information, and for how to modify the metadata (e.g., changing the selection
-coefficients), see
-{ref}`the pyslim documentation<pyslim:sec_tutorial_adding_neutral_mutations>`.
-For instance,
+would be `""`, then `"5"`, and finally `"5,64"`. The same list of integers is
+recorded in metadata. This redundancy between derived state and metadata is useful
+because the model behaves as an infinite-alleles model out-of-the-box; but if
+ancestral and derived states are modified (for instance, to be VCF-compliant)
+then there is no loss of information.
 
 ```{code-cell} python
 
-model = msprime.SLiMMutationModel(type=1)
+model = msprime.SLiMMutationModel()
 mts = msprime.sim_mutations(
     ts, rate=1, random_seed=1, model=model)
 t = mts.first()
@@ -888,14 +884,16 @@ SVG(t.draw_svg(mutation_labels=ml, node_labels={}, size=(400, 300)))
 ```
 
 These resulting alleles show how derived states are built.
+(We're looking at derived states for convenience, but could equivalently
+look at metadata; see {ref}`sec_mutations_mutation_slim_mutations_metadata`.)
 
 The behaviour of this mutation model when used to add mutations to a previously mutated
 tree sequence can be subtle. Let's look at a simple example.
-Here, we first lay down mutations of type 1, starting from ID 0:
+Here, we first lay down mutations starting from ID 0 (the default):
 
 ```{code-cell} python
 
-model_1 = msprime.SLiMMutationModel(type=1)
+model_1 = msprime.SLiMMutationModel()
 mts_1 = msprime.sim_mutations(ts, rate=0.5, random_seed=2, model=model_1)
 t = mts_1.first()
 ml = {m.id: m.derived_state for m in mts_1.mutations()}
@@ -903,15 +901,17 @@ SVG(t.draw_svg(mutation_labels=ml, node_labels={}, size=(400, 300)))
 
 ```
 
-Next, we lay down mutations of type 2.
-These we assign starting from ID 100,
+Now suppose we wanted to add more mutations.
+(This is essentially what happens when we use msprime to add mutations
+to a tree sequence produced by SLiM.)
+The new mutations we assign starting from ID 100,
 to make it easy to see which are which:
 in general just need to make sure that we start at an ID greater than any
 previously assigned.
 
 ```{code-cell} python
 
-model_2 = msprime.SLiMMutationModel(type=2, next_id=100)
+model_2 = msprime.SLiMMutationModel(next_id=100)
 mts = msprime.sim_mutations(
     mts_1, rate=0.5, random_seed=3, model=model_2, keep=True)
 t = mts.first()
@@ -931,4 +931,67 @@ This was already present in the tree sequence, so its derived state is not modif
 `0,3`. We can rationalise this, post-hoc, by saying that the type 1 mutation `3`
 has "erased" the type 2 mutations `100` and `102`.
 If you want a different arrangement,
-you can go back and edit the derived states (and metadata) as you like.
+you will need to edit the derived states and metadata directly.
+
+(sec_mutations_mutation_slim_mutations_metadata)=
+
+#### Metadata
+
+The most common use of this model is to add mutations to a tree sequence produced
+by SLiM, or by {func}`pyslim.annotate`; if so, the metadata will already be decoded.
+(In general, we recommend using {func}`pyslim.annotate` after
+{func}`.sim_ancestry` but before {func}`.sim_mutations` if you're using msprime
+to create a tree sequence for SLiM.)
+
+For completeness, here is a self-contained example
+that shows how to decode the metadata directly.
+If we look at the metadata in the example we've produced so far, we simply see binary
+(the metadata is not decoded):
+
+```{code-cell} python
+mut = mts.mutation(10)
+mut.metadata
+```
+
+To see the actual values, we need a {class}`tskit.MetadataSchema`,
+which we can add as follows:
+
+```{code-cell} python
+metadata_schema = tskit.MetadataSchema(
+    {
+        "codec": "struct",
+        "type": "object",
+        "properties": {
+            "derived_states": {
+                "items": {
+                    "binaryFormat": "q",
+                    "type": "number",
+                },
+                "noLengthEncodingExhaustBuffer": True,
+                "type": "array",
+            }
+        },
+        "required": ["derived_states"],
+        "additionalProperties": False,
+    }
+)
+
+tables = mts.dump_tables()
+tables.mutations.metadata_schema = metadata_schema
+mts = tables.tree_sequence()
+```
+
+Now, the metadata will be properly decoded, into lists of integer IDs:
+
+```{code-cell} python
+mut = mts.mutation(10)
+mut.metadata
+```
+
+#### Previous versions
+
+Previous versions of msprime (1.4.2 and prior) produced mutations compatible with
+SLiM versions 5.2 and prior, which had different information in metadata.
+If you need to produce older versions, use msprime version 1.4.2.
+For more information, see
+{ref}`the pyslim documentation<pyslim:sec_previous_versions>`.

@@ -2771,9 +2771,9 @@ class TestSLiMMutationModel:
     """
 
     def test_constructor_errors(self):
-        for bad_type in ["sdr", 0.222, None]:
+        for bad_id in ["sdr", 0.222, None]:
             with pytest.raises(TypeError):
-                _msprime.SLiMMutationModel(next_id=bad_type)
+                _msprime.SLiMMutationModel(next_id=bad_id)
 
         with pytest.raises(_msprime.LibraryError):
             _msprime.SLiMMutationModel(next_id=-1)

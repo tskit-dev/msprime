@@ -257,9 +257,9 @@ mutation_matrix_free(mutation_model_t *self)
 /***********************
  * SLiM mutation model */
 
-/* Previously we set metadata, but as of SLiM v6.0 that metadata goes elsewhere
- * (in top-level metadata), so it is not our job to add it in here. It can be
- * added after the fact with the method pyslim.add_mutation_metadata( ).
+/* To be fully SLiM-compatible, there also needs to be some information in
+ * top-level metadata.  But, it is not our job to add it in here, and that
+ * should be added after the fact with the method pyslim.add_mutation_metadata().
  * */
 
 static void
@@ -296,8 +296,7 @@ slim_mutator_choose_root_state(
 static int
 slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
     const char *parent_allele, tsk_size_t parent_allele_length,
-    const char *MSP_UNUSED(parent_metadata),
-    tsk_size_t MSP_UNUSED(parent_metadata_length), mutation_t *mutation)
+    const char *parent_metadata, tsk_size_t parent_metadata_length, mutation_t *mutation)
 {
     int ret = 0;
     slim_mutator_t *params = &self->params.slim_mutator;
@@ -311,6 +310,7 @@ slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
      * trying to alloc the exact number of bytes needed. */
     const size_t alloc_size = parent_allele_length + max_digits + 2;
     const char *sep = parent_allele_length == 0 ? "" : ",";
+    const tsk_size_t metadata_length = parent_metadata_length + sizeof(int64_t);
 
     /* Append to derived_state */
     buff = tsk_blkalloc_get(&params->allocator, alloc_size);
@@ -327,13 +327,26 @@ slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
         goto out;
     }
     tsk_bug_assert(len < (int) alloc_size);
+    mutation->derived_state = buff;
+    mutation->derived_state_length = (tsk_size_t) len;
+
+    /* Append to metadata */
+    buff = tsk_blkalloc_get(&params->allocator, metadata_length);
+    if (buff == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    memcpy(buff, parent_metadata, parent_metadata_length);
+    memcpy(buff + parent_metadata_length, &params->next_mutation_id, sizeof(int64_t));
+    mutation->metadata = buff;
+    mutation->metadata_length = metadata_length;
+
+    /* finally, increment next_mutation_id to be ready for the next one */
     if (params->next_mutation_id == INT64_MAX) {
         ret = MSP_ERR_MUTATION_ID_OVERFLOW;
         goto out;
     }
     params->next_mutation_id++;
-    mutation->derived_state = buff;
-    mutation->derived_state_length = (tsk_size_t) len;
 
 out:
     return ret;
