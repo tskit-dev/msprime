@@ -1551,7 +1551,57 @@ class SlimMetadata:
     nucleotide: int
 
 
-class TestSLiMMutationModel:
+class SLiMModelMixin:
+    """
+    Common tests for both SLiM mutation models
+    """
+
+    def test_binary_n_4_low_rate(self):
+        ts = msprime.sim_ancestry(4, sequence_length=10, random_seed=5)
+        mts = self.run_mutate(ts, rate=0.1, random_seed=23)
+        assert mts.num_mutations > 1
+        self.validate_slim_mutations(mts)
+
+    def test_binary_n_4_high_rate(self):
+        ts = msprime.sim_ancestry(4, sequence_length=2, random_seed=5)
+        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
+        assert mts.num_mutations > 10
+        self.validate_slim_mutations(mts)
+
+    def test_binary_n_8_low_rate(self):
+        ts = msprime.sim_ancestry(8, sequence_length=10, random_seed=50)
+        mts = self.run_mutate(ts, rate=0.1, random_seed=342)
+        assert mts.num_mutations > 1
+        self.validate_slim_mutations(mts)
+
+    def test_binary_n_8_high_rate(self):
+        ts = msprime.sim_ancestry(8, sequence_length=10, random_seed=5)
+        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
+        assert mts.num_mutations > 10
+        self.validate_slim_mutations(mts)
+
+    def test_binary_incomplete_trees(self):
+        ts = msprime.sim_ancestry(8, sequence_length=5, random_seed=50, end_time=0.1)
+        assert ts.first().num_roots > 1
+        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
+        assert mts.num_mutations > 10
+        self.validate_slim_mutations(mts)
+
+    def test_binary_many_trees(self):
+        ts = msprime.sim_ancestry(
+            8,
+            sequence_length=5,
+            recombination_rate=5,
+            random_seed=50,
+            discrete_genome=False,
+        )
+        assert ts.num_trees > 20
+        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
+        assert mts.num_mutations > 10
+        self.validate_slim_mutations(mts)
+
+
+class TestSLiMMutationModel(SLiMModelMixin):
     """
     Tests for the SLiM mutation generator.
     """
@@ -1619,18 +1669,10 @@ class TestSLiMMutationModel:
 
         t1 = mts1.dump_tables()
         t2 = mts2.dump_tables()
-        assert t1.sites == t2.sites
         # Drop the mutation metadata - we're validating that elsewhere and
         # it's not worth complicating the Python generator with it.
-        t1.mutations.set_columns(
-            site=t1.mutations.site,
-            node=t1.mutations.node,
-            parent=t1.mutations.parent,
-            time=t1.mutations.time,
-            derived_state=t1.mutations.derived_state,
-            derived_state_offset=t1.mutations.derived_state_offset,
-        )
-        assert t1.mutations == t2.mutations
+        t1.sites.assert_equals(t2.sites)
+        t1.mutations.assert_equals(t2.mutations, ignore_metadata=True)
         return mts1
 
     def test_slim_mutation_type(self):
@@ -1651,49 +1693,194 @@ class TestSLiMMutationModel:
             assert mts.num_mutations > 10
             self.validate_slim_mutations(mts, slim_generation=slim_generation)
 
-    def test_binary_n_4_low_rate(self):
-        ts = msprime.sim_ancestry(4, sequence_length=10, random_seed=5)
-        mts = self.run_mutate(ts, rate=0.1, random_seed=23)
-        assert mts.num_mutations > 1
-        self.validate_slim_mutations(mts)
 
-    def test_binary_n_4_high_rate(self):
-        ts = msprime.sim_ancestry(4, sequence_length=2, random_seed=5)
-        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
-        assert mts.num_mutations > 10
-        self.validate_slim_mutations(mts)
+class TestSLiMv6MutationModel(SLiMModelMixin):
+    """
+    Tests for the SLiMv6 mutation generator.
+    """
 
-    def test_binary_n_8_low_rate(self):
-        ts = msprime.sim_ancestry(8, sequence_length=10, random_seed=50)
-        mts = self.run_mutate(ts, rate=0.1, random_seed=342)
-        assert mts.num_mutations > 1
-        self.validate_slim_mutations(mts)
+    metadata_schema = tskit.MetadataSchema(
+        {
+            "codec": "struct",
+            "type": "object",
+            "properties": {
+                "derived_states": {
+                    "items": {
+                        "binaryFormat": "q",
+                        "type": "number",
+                    },
+                    "noLengthEncodingExhaustBuffer": True,
+                    "type": "array",
+                }
+            },
+            "required": ["derived_states"],
+            "additionalProperties": False,
+        }
+    )
 
-    def test_binary_n_8_high_rate(self):
+    def validate_slim_mutations(self, ts):
+        # slim alleles should be lists of integers
+        # and ancestral states the empty string
+        # while metadata should be lists of integers
+        t = ts.dump_tables()
+        t.mutations.metadata_schema = self.metadata_schema
+        ts = t.tree_sequence()
+        for site in ts.sites():
+            assert site.ancestral_state == ""
+            alleles = {}
+            for mutation in site.mutations:
+                a = list(map(int, mutation.derived_state.split(",")))
+                md = mutation.metadata["derived_states"]
+                assert len(a) == len(md)
+                for x, y in zip(a, md):
+                    assert x == y
+                alleles[mutation.id] = a
+                if mutation.parent == tskit.NULL:
+                    assert len(a) == 1
+                else:
+                    parent_allele = alleles[mutation.parent]
+                    assert a[:-1] == parent_allele
+
+    def run_mutate(
+        self,
+        ts,
+        rate=1,
+        random_seed=42,
+        mutation_id=0,
+        keep=True,
+    ):
+        model = msprime.SLiMv6MutationModel(next_id=mutation_id)
+        mts1 = msprime.sim_mutations(
+            ts,
+            rate=rate,
+            random_seed=random_seed,
+            model=model,
+            discrete_genome=True,
+            keep=keep,
+        )
+        if ts.num_mutations == 0 or not keep:
+            assert mts1.num_mutations == model.next_id
+
+        model = PythonSLiMv6MutationModel(next_id=mutation_id)
+        mts2 = py_sim_mutations(
+            ts,
+            rate=rate,
+            random_seed=random_seed,
+            model=model,
+            discrete_genome=True,
+            keep=keep,
+        )
+
+        t1 = mts1.dump_tables()
+        t2 = mts2.dump_tables()
+        # Drop the mutation metadata - we're validating that elsewhere and
+        # it's not worth complicating the Python generator with it.
+        t1.sites.assert_equals(t2.sites)
+        t1.mutations.assert_equals(t2.mutations, ignore_metadata=True)
+        return mts1
+
+    metadata_schema_with_extra = tskit.MetadataSchema(
+        {
+            "codec": "struct",
+            "type": "object",
+            "properties": {
+                "tag": {
+                    "index": 0,
+                    "type": "string",
+                    "binaryFormat": "24s",
+                    "nullTerminated": True,
+                },
+                "derived_states": {
+                    "index": 1,
+                    "items": {
+                        "binaryFormat": "q",
+                        "type": "number",
+                    },
+                    "noLengthEncodingExhaustBuffer": True,
+                    "type": "array",
+                },
+            },
+            "required": ["tag", "derived_states"],
+            "additionalProperties": False,
+        }
+    )
+
+    def test_keep(self):
         ts = msprime.sim_ancestry(8, sequence_length=10, random_seed=5)
         mts = self.run_mutate(ts, rate=2.0, random_seed=23)
-        assert mts.num_mutations > 10
-        self.validate_slim_mutations(mts)
-
-    def test_binary_incomplete_trees(self):
-        ts = msprime.sim_ancestry(8, sequence_length=5, random_seed=50, end_time=0.1)
-        assert ts.first().num_roots > 1
-        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
-        assert mts.num_mutations > 10
-        self.validate_slim_mutations(mts)
-
-    def test_binary_many_trees(self):
-        ts = msprime.sim_ancestry(
-            8,
-            sequence_length=5,
-            recombination_rate=5,
-            random_seed=50,
-            discrete_genome=False,
+        mt = mts.dump_tables()
+        # there can be weird interactions with site metadata, so add some
+        mt.sites.clear()
+        mt.sites.metadata_schema = self.metadata_schema_with_extra
+        for s in mts.sites():
+            md = {
+                "tag": f"lmnop{s.id}",
+                "derived_states": [],
+            }
+            mt.sites.append(s.replace(metadata=md))
+        mt.mutations.clear()
+        mt.mutations.metadata_schema = self.metadata_schema_with_extra
+        for m in mts.mutations():
+            md = {
+                "tag": f"lmnop{m.site}",
+                "derived_states": [int(x) for x in m.derived_state.split(",")],
+            }
+            mt.mutations.append(m.replace(metadata=md))
+        mts = mt.tree_sequence()
+        num_muts = {s.position: len(s.mutations) for s in mts.sites()}
+        mut_id_start = mts.num_mutations + 1
+        model = msprime.SLiMv6MutationModel(next_id=mut_id_start)
+        mmts = msprime.sim_mutations(
+            mts,
+            rate=2.0,
+            random_seed=1234,
+            model=model,
+            discrete_genome=True,
+            keep=True,
         )
-        assert ts.num_trees > 20
-        mts = self.run_mutate(ts, rate=2.0, random_seed=23)
-        assert mts.num_mutations > 10
-        self.validate_slim_mutations(mts)
+        # check we've stacked on top of some previous ones
+        more_hits = False
+        for s in mmts.sites():
+            if s.position in num_muts:
+                if len(s.mutations) > num_muts[s.position]:
+                    more_hits = True
+                    break
+        assert more_hits
+        for mut in mmts.mutations():
+            site = mmts.site(mut.site)
+            mp = mut.parent
+            # mutations we put down the first time won't have inherited the state
+            # from mutations we put down the second time, so traverse up until
+            # we find the correct one we should have inherited from
+            mut_id = mut.metadata["derived_states"][-1]
+            if mut_id < mut_id_start:
+                while (
+                    mp >= 0
+                    and mmts.mutation(mp).metadata["derived_states"][-1] >= mut_id_start
+                ):
+                    mp = mmts.mutation(mp).parent
+            if mp == -1:
+                parent_allele = site.ancestral_state
+                parent_metadata = site.metadata
+            else:
+                parent_allele = mmts.mutation(mp).derived_state
+                parent_metadata = mmts.mutation(mp).metadata
+            n = len(parent_allele)
+            assert n < len(mut.derived_state)
+            assert parent_allele == mut.derived_state[:n]
+            if n > 0:
+                assert mut.derived_state[n] == ","
+                n += 1
+            assert mut_id == int(mut.derived_state[n:])
+            assert parent_metadata["tag"] == mut.metadata["tag"]
+            n = len(parent_metadata["derived_states"])
+            assert n + 1 == len(mut.metadata["derived_states"])
+            if n > 0:
+                assert (
+                    parent_metadata["derived_states"]
+                    == mut.metadata["derived_states"][:n]
+                )
+            assert mut.metadata["derived_states"][-1] == mut_id
 
 
 class TestInfiniteAllelesMutationModel:
@@ -1984,8 +2171,7 @@ class PythonMutationModel:
 
 
 @dataclasses.dataclass
-class PythonSLiMMutationModel(PythonMutationModel):
-    mutation_type: int = 0
+class PythonSLiMv6MutationModel(PythonMutationModel):
     next_id: int = 0
 
     def root_allele(self, rng):
@@ -1998,6 +2184,11 @@ class PythonSLiMMutationModel(PythonMutationModel):
         out += str(self.next_id)
         self.next_id += 1
         return out
+
+
+@dataclasses.dataclass
+class PythonSLiMMutationModel(PythonSLiMv6MutationModel):
+    mutation_type: int = 0
 
 
 @dataclasses.dataclass
@@ -2302,6 +2493,7 @@ class TestMutationModelFactory:
     def test_returns_mutation_model_instances_without_copying(self):
         models = [
             msprime.SLiMMutationModel(0, 0),
+            msprime.SLiMv6MutationModel(0),
             msprime.InfiniteAlleles(),
             msprime.BinaryMutationModel(),
             msprime.JC69(),
@@ -2323,6 +2515,11 @@ class TestModelClasses:
         assert m.next_id == 2
         assert m.slim_generation == 9
         assert str(m) == "Mutation model for SLiM mutations of type m1\n  next ID: 2\n"
+
+    def test_slim_v6(self):
+        m = msprime.SLiMv6MutationModel(next_id=2)
+        assert m.next_id == 2
+        assert str(m) == "Mutation model for SLiM mutations, v6+. Next ID: 2\n"
 
     def test_infinite_alleles(self):
         m = msprime.InfiniteAlleles(start_allele=1)

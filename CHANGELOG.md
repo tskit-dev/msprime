@@ -4,6 +4,15 @@
 
 In development.
 
+**New features**:
+
+- A new mutation model, ``SLiMv6MutationModel``, is introduced to match changes in
+  SLiM 6.0: this mutation behaves as ``SLiMMutationModel``, but without the ``type``
+  and ``slim_generation`` arguments, and stores different information in metadata
+  (the list of mutation IDs, in binary). ``SLiMMutationModel`` will remain for
+  backwards compatibility, but code for use with SLiM versions 6.0 and above should
+  use ``SLiMv6MutationModel`` ({issue}`2534`, {pr}`2539`, {user}`petrelharp`)
+
 ## [1.4.2] - 2026-05-20
 
 Bugfix release.

@@ -108,7 +108,9 @@ class MatrixMutationModel(_msprime.MatrixMutationModel, MutationModel):
 
 class SLiMMutationModel(_msprime.SLiMMutationModel, MutationModel):
     """
-    An infinite-alleles model of mutation producing "SLiM-style" mutations.
+    An infinite-alleles model of mutation producing "SLiM-style" mutations
+    for versions of SLiM before 6.0. For SLiM version 6.0 and beyond,
+    use {class}`.SLiMv6MutationModel`.
 
     To agree with mutations produced by SLiM, the ancestral state of each new
     site is set to the empty string, and each derived state is produced by
@@ -142,6 +144,48 @@ class SLiMMutationModel(_msprime.SLiMMutationModel, MutationModel):
             f"Mutation model for SLiM mutations of type m{self.type}\n"
             f"  next ID: {self.next_id}\n"
         )
+
+
+class SLiMv6MutationModel(_msprime.SLiMv6MutationModel, MutationModel):
+    """
+    An infinite-alleles model of mutation producing "SLiM-style" mutations
+    for versions of SLiM 6.0 and beyond. For older versions of SLiM,
+    use {class}`.SLiMMutationModel`.
+
+    To agree with mutations produced by SLiM, the ancestral state of each new
+    site is set to the empty string, and each derived state is produced by
+    appending the "next allele" to the previous state.  The result is that each
+    allele is a comma-separated string of all mutations that have occurred up
+    to the root. Alleles are numeric IDs, starting with ``next_id``.
+
+    The same list of numeric IDs is stored in metadata, in binary, as int64s.
+    It is actually these IDs in metadata that SLiM uses when reading in a tree
+    sequence, not the text-based version in the derived state.
+
+    This model works as following: for each mutation, if the next ID is ``n``,
+    then it sets the derived state to be the string ``"n"`` appended to its
+    inherited state (which is the derived state of the parent mutation, if any,
+    or the ancestral state otherwise), with an intervening ``","`` if the inherited
+    state is nonempty. Also, it sets the metadata to be the 64-bit integer n
+    appended to the bytes of the inherited metadata (which similarly comes from
+    the parent mutation, if any, or the site).  So, if this mutation model is
+    applied to a tree sequence with existing mutations of a different sort (especially
+    if the existing sites have nonempty metadata) the result may be surprising:
+    see {ref}`sec_mutations_mutation_slim_mutations_stacking`.
+
+    To update your code to use this model instead of {class}`.SLiMMutationModel`,
+    remove the ``type`` and ``slim_generation`` arguments, and follow
+    up {func}`.sim_mutations` with a call to ``pyslim.add_mutation_metadata``.
+
+    :param int next_id: The nonnegative integer to start assigning alleles from.
+        (default: 0)
+    :param int block_size: The block size for allocating derived states.
+        You do not need to change this unless you get an "out of memory" error
+        due to a very large number of stacked mutations.
+    """
+
+    def __str__(self):
+        return f"Mutation model for SLiM mutations, v6+. Next ID: {self.next_id}\n"
 
 
 # NOTE: we use a hacky workaround here for documenting the next_allele instance
@@ -1512,7 +1556,8 @@ MODEL_MAP = {
     "jc69": JC69,
     "blosum62": BLOSUM62,
     "pam": PAM,
-    # "slim": SLiMMutationModel(), Needs type argument so can't be string init'd
+    # "slim": SLiMMutationModel(), or SLiMv6MutationModel(), not clear
+    # and maybe needs the next_id argument
     # "hky": HKY(), Needs kappa argument
     # "f84": F84(), Needs kappa argument
     # "gtr": GTR(), Needs relative_rates argument

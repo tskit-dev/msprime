@@ -255,7 +255,94 @@ mutation_matrix_free(mutation_model_t *self)
 }
 
 /***********************
- * SLiM mutation model */
+ * SLiM mutation models */
+
+/* Code shared between the SLiMMutationModel and SLiMv6MutationModel */
+
+static int
+slim_both_mutator_choose_root_state(
+    mutation_model_t *MSP_UNUSED(self), gsl_rng *MSP_UNUSED(rng), site_t *site)
+{
+    site->ancestral_state = NULL;
+    site->ancestral_state_length = 0;
+    return 0;
+}
+
+static int
+slim_both_mutator_transition(mutation_model_t *self, const char *parent_allele,
+    tsk_size_t parent_allele_length, const char *parent_metadata,
+    tsk_size_t parent_metadata_length, mutation_t *mutation,
+    const tsk_size_t new_metadata_length, char **metadata_buffer)
+{
+    /* This function performs shared work for both SLiM models:
+     * - copying the inherited state into the derived state,
+     *   and appending the SLiM ID to that derived state
+     * - copying over the previous metadata
+     *   but NOT appending the new metadata (since that differs between models);
+     *   the *metadata_buffer argument here exists so that the model-specific
+     *   function knows where to put the new bit of metadata
+     * - it is that client code's responsibility to make sure that no
+     *   more than parent_metadata_length + new_metadata_length
+     *   gets copied into *metadata_buffer
+     * - it is also the client code's responsibility to increment
+     *   params->next_mutation_id, since that is needed for the new metadata
+     */
+    int ret = 0;
+    slim_mutator_t *params = &self->params.slim_mutator;
+    char *buff = NULL;
+    int len;
+    /* The maximum number of digits for a signed 64 bit integer (including
+     * the leading "-") */
+    const size_t max_digits = 20;
+    /* We allow for a possible comma to separate the previous element
+     * in the list, as well as a NULL byte added by snprintf. We don't bother
+     * trying to alloc the exact number of bytes needed. */
+    const size_t alloc_size = parent_allele_length + max_digits + 2;
+    const char *sep = parent_allele_length == 0 ? "" : ",";
+    const tsk_size_t metadata_length = parent_metadata_length + new_metadata_length;
+
+    /* Append to derived_state */
+    buff = tsk_blkalloc_get(&params->allocator, alloc_size);
+    if (buff == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    len = snprintf(buff, alloc_size, "%.*s%s%" PRId64, (int) parent_allele_length,
+        parent_allele, sep, params->next_mutation_id);
+    if (len < 0) {
+        /* Technically this can happen. Returning TSK_ERR_IO should result
+         * in Python code checking errno. */
+        ret = TSK_ERR_IO;
+        goto out;
+    }
+    tsk_bug_assert(len < (int) alloc_size);
+    mutation->derived_state = buff;
+    mutation->derived_state_length = (tsk_size_t) len;
+
+    /* Append to metadata */
+    buff = tsk_blkalloc_get(&params->allocator, metadata_length);
+    if (buff == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    memcpy(buff, parent_metadata, parent_metadata_length);
+    // tell client code where to put the new metadata
+    *metadata_buffer = buff;
+    mutation->metadata_length = (tsk_size_t) (metadata_length);
+out:
+    return ret;
+}
+
+static int
+slim_both_mutator_free(mutation_model_t *self)
+{
+    slim_mutator_t params = self->params.slim_mutator;
+    tsk_blkalloc_free(&params.allocator);
+    return 0;
+}
+
+/*******************************
+ * (Older) SLiM mutation model */
 
 /* Typedefs from MutationMetadataRec in slim_sim.h:
  * line 125 in v3.4, git hash b2c2b634199f35e53c4e7e513bd26c91c6d99fd9
@@ -338,78 +425,96 @@ out:
 }
 
 static int
-slim_mutator_choose_root_state(
-    mutation_model_t *MSP_UNUSED(self), gsl_rng *MSP_UNUSED(rng), site_t *site)
-{
-    site->ancestral_state = NULL;
-    site->ancestral_state_length = 0;
-    return 0;
-}
-
-static int
 slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
     const char *parent_allele, tsk_size_t parent_allele_length,
     const char *parent_metadata, tsk_size_t parent_metadata_length, mutation_t *mutation)
 {
     int ret = 0;
+    char *buff;
     slim_mutator_t *params = &self->params.slim_mutator;
-    char *buff = NULL;
-    int len;
-    /* The maximum number of digits for a signed 64 bit integer (including
-     * the leading "-") */
-    const size_t max_digits = 20;
-    /* We allow for a possible comma to separate the previous element
-     * in the list, as well as a NULL byte added by snprintf. We don't bother
-     * trying to alloc the exact number of bytes needed. */
-    const size_t alloc_size = parent_allele_length + max_digits + 2;
-    const char *sep = parent_allele_length == 0 ? "" : ",";
+    const tsk_size_t new_metadata_length = SLIM_MUTATION_METADATA_SIZE;
 
-    /* Append to derived_state */
-    buff = tsk_blkalloc_get(&params->allocator, alloc_size);
-    if (buff == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
+    ret = slim_both_mutator_transition(self, parent_allele, parent_allele_length,
+        parent_metadata, parent_metadata_length, mutation, new_metadata_length, &buff);
+    if (ret < 0) {
         goto out;
     }
-    len = snprintf(buff, alloc_size, "%.*s%s%" PRId64, (int) parent_allele_length,
-        parent_allele, sep, params->next_mutation_id);
-    if (len < 0) {
-        /* Technically this can happen. Returning TSK_ERR_IO should result
-         * in Python code checking errno. */
-        ret = TSK_ERR_IO;
-        goto out;
-    }
-    tsk_bug_assert(len < (int) alloc_size);
+
+    // copy the final bit of metadata in (this is different than the v6 model)
+    copy_slim_mutation_metadata(params, buff + parent_metadata_length, mutation->time);
+    mutation->metadata = buff;
+
+    // finally, set up for the next one
     if (params->next_mutation_id == INT64_MAX) {
         ret = MSP_ERR_MUTATION_ID_OVERFLOW;
         goto out;
     }
     params->next_mutation_id++;
-    mutation->derived_state = buff;
-    mutation->derived_state_length = (tsk_size_t) len;
 
-    /* Append to metadata */
-    buff = tsk_blkalloc_get(
-        &params->allocator, parent_metadata_length + SLIM_MUTATION_METADATA_SIZE);
-    if (buff == NULL) {
-        ret = MSP_ERR_NO_MEMORY;
+out:
+    return ret;
+}
+
+/*************************
+ * SLiMv6 mutation model */
+
+/* To be fully SLiM-compatible, there also needs to be some information in
+ * top-level metadata.  But, it is not our job to add it in here, and that
+ * should be added after the fact with the method pyslim.add_mutation_metadata().
+ * */
+
+static void
+slim_v6_mutator_print_state(mutation_model_t *self, FILE *out)
+{
+    slim_mutator_t params = self->params.slim_mutator;
+    fprintf(out, "SLiMv6 mutation model :: next mutation ID = %d\n",
+        (int) params.next_mutation_id);
+}
+
+static int MSP_WARN_UNUSED
+slim_v6_mutator_check_validity(slim_mutator_t *self)
+{
+    int ret = 0;
+
+    if (self->next_mutation_id < 0) {
+        ret = MSP_ERR_BAD_SLIM_PARAMETERS;
         goto out;
     }
-    memcpy(buff, parent_metadata, parent_metadata_length);
-    copy_slim_mutation_metadata(params, buff + parent_metadata_length, mutation->time);
 
-    mutation->metadata = buff;
-    mutation->metadata_length
-        = (tsk_size_t) (parent_metadata_length + SLIM_MUTATION_METADATA_SIZE);
 out:
     return ret;
 }
 
 static int
-slim_mutator_free(mutation_model_t *self)
+slim_v6_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
+    const char *parent_allele, tsk_size_t parent_allele_length,
+    const char *parent_metadata, tsk_size_t parent_metadata_length, mutation_t *mutation)
 {
-    slim_mutator_t params = self->params.slim_mutator;
-    tsk_blkalloc_free(&params.allocator);
-    return 0;
+    int ret = 0;
+    char *buff;
+    slim_mutator_t *params = &self->params.slim_mutator;
+    const tsk_size_t new_metadata_length = sizeof(int64_t);
+
+    ret = slim_both_mutator_transition(self, parent_allele, parent_allele_length,
+        parent_metadata, parent_metadata_length, mutation, new_metadata_length, &buff);
+    if (ret < 0) {
+        goto out;
+    }
+
+    // copy the final bit of metadata in (this is different than the non-v6 model)
+    memcpy(
+        buff + parent_metadata_length, &params->next_mutation_id, new_metadata_length);
+    mutation->metadata = buff;
+
+    // finally, set up for the next one
+    if (params->next_mutation_id == INT64_MAX) {
+        ret = MSP_ERR_MUTATION_ID_OVERFLOW;
+        goto out;
+    }
+    params->next_mutation_id++;
+
+out:
+    return ret;
 }
 
 /***********************
@@ -558,10 +663,10 @@ slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
 
     memset(self, 0, sizeof(*self));
 
-    self->choose_root_state = &slim_mutator_choose_root_state;
+    self->choose_root_state = &slim_both_mutator_choose_root_state;
     self->transition = &slim_mutator_transition;
     self->print_state = &slim_mutator_print_state;
-    self->free = &slim_mutator_free;
+    self->free = &slim_both_mutator_free;
     if (block_size == 0) {
         /* 8K is a good default, but we need to have the
          * block_size argument here because the size of the allocations
@@ -581,6 +686,43 @@ slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
     params->slim_generation = slim_generation;
 
     ret = slim_mutator_check_validity(params);
+    if (ret != 0) {
+        goto out;
+    }
+out:
+    return ret;
+}
+
+int MSP_WARN_UNUSED
+slim_v6_mutation_model_alloc(
+    mutation_model_t *self, int64_t next_mutation_id, size_t block_size)
+{
+    int ret = 0;
+    slim_mutator_t *params = &self->params.slim_mutator;
+
+    memset(self, 0, sizeof(*self));
+
+    self->choose_root_state = &slim_both_mutator_choose_root_state;
+    self->transition = &slim_v6_mutator_transition;
+    self->print_state = &slim_v6_mutator_print_state;
+    self->free = &slim_both_mutator_free;
+    if (block_size == 0) {
+        /* 8K is a good default, but we need to have the
+         * block_size argument here because the size of the allocations
+         * we need to make are in principle unbounded since SLiM
+         * copies the entire parent state for every mutation as it
+         * goes down along the tree.
+         */
+        block_size = 8192;
+    }
+    ret = tsk_blkalloc_init(&params->allocator, block_size);
+    if (ret != 0) {
+        ret = msp_set_tsk_error(ret);
+        goto out;
+    }
+    params->next_mutation_id = next_mutation_id;
+
+    ret = slim_v6_mutator_check_validity(params);
     if (ret != 0) {
         goto out;
     }
