@@ -257,15 +257,63 @@ mutation_matrix_free(mutation_model_t *self)
 /***********************
  * SLiM mutation model */
 
-/* Previously we set metadata, but as of SLiM v6.0 that metadata goes elsewhere
- * (in top-level metadata), so it is not our job to add it in here. It can be
- * added after the fact with the method pyslim.add_mutation_metadata( ).
+/* Typedefs from MutationMetadataRec in slim_sim.h:
+ * line 125 in v3.4, git hash b2c2b634199f35e53c4e7e513bd26c91c6d99fd9
+ *  int32_t mutation_type_id_; // 4 bytes (int32_t): the id of the mutation type the
+ *                             // mutation belongs to
+ *  float selection_coeff_;    // 4 bytes (float): the selection coefficient
+ *  int32_t subpop_index_; // 4 bytes (int32_t): the id of the subpopulation in which the
+ *                         // mutation arose
+ *  int32_t origin_generation_; // 4 bytes (int32_t): the generation in which the
+ *                              // mutation arose
+ *  int8_t nucleotide_; // 1 byte (int8_t): the nucleotide for the mutation (0='A',
+ *                      // 1='C', 2='G', 3='T'), or -1
+ *
+ * Note that these are defined there as a __packed__ struct, like
+ * typedef struct __attribute__((__packed__))  but this is not available
+ * in Windows compilers, so we're just copying the info in directly */
+
+/* Note on setting origin_generation: in SLiM it is always true that
+ * (slim generation) - (model_type == "WF" and stage == "early")
+ *           = (tskit time) + (slim time)
+ * where 'stage' is the stage the tree sequence was written out during.
+ * Here, the user can adjust slim_generation, which stands in for
+ * everything on the left. Now, slim_time has to be an integer, so
+ * we modify this to
+ *   slim_generation = floor(tskit time) + slim_time
  * */
+
+#define SLIM_MUTATION_METADATA_SIZE 17 // = 4 + 4 + 4 + 4 + 1
+
+static void
+copy_slim_mutation_metadata(slim_mutator_t *params, char *dest, double time)
+{
+    int32_t mutation_type_id = params->mutation_type_id;
+    float selection_coeff = 0;
+    int32_t subpop_index = TSK_NULL;
+    int32_t origin_generation = params->slim_generation - (int32_t) time;
+    int8_t nucleotide = -1;
+
+    memcpy(dest, &mutation_type_id, sizeof(mutation_type_id));
+    dest += sizeof(mutation_type_id);
+    memcpy(dest, &selection_coeff, sizeof(selection_coeff));
+    dest += sizeof(selection_coeff);
+    memcpy(dest, &subpop_index, sizeof(subpop_index));
+    dest += sizeof(subpop_index);
+    memcpy(dest, &origin_generation, sizeof(origin_generation));
+    dest += sizeof(origin_generation);
+    memcpy(dest, &nucleotide, sizeof(nucleotide));
+    dest += sizeof(nucleotide);
+}
 
 static void
 slim_mutator_print_state(mutation_model_t *self, FILE *out)
 {
     slim_mutator_t params = self->params.slim_mutator;
+    fprintf(out, "SLiM mutation model :: mutation type ID = %d\n",
+        (int) params.mutation_type_id);
+    fprintf(out, "                        slim generation = %d\n",
+        (int) params.slim_generation);
     fprintf(out, "                       next mutation ID = %d\n",
         (int) params.next_mutation_id);
 }
@@ -276,6 +324,11 @@ slim_mutator_check_validity(slim_mutator_t *self)
     int ret = 0;
 
     if (self->next_mutation_id < 0) {
+        ret = MSP_ERR_BAD_SLIM_PARAMETERS;
+        goto out;
+    }
+
+    if (self->mutation_type_id < 0) {
         ret = MSP_ERR_BAD_SLIM_PARAMETERS;
         goto out;
     }
@@ -296,8 +349,7 @@ slim_mutator_choose_root_state(
 static int
 slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
     const char *parent_allele, tsk_size_t parent_allele_length,
-    const char *MSP_UNUSED(parent_metadata),
-    tsk_size_t MSP_UNUSED(parent_metadata_length), mutation_t *mutation)
+    const char *parent_metadata, tsk_size_t parent_metadata_length, mutation_t *mutation)
 {
     int ret = 0;
     slim_mutator_t *params = &self->params.slim_mutator;
@@ -335,6 +387,19 @@ slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
     mutation->derived_state = buff;
     mutation->derived_state_length = (tsk_size_t) len;
 
+    /* Append to metadata */
+    buff = tsk_blkalloc_get(
+        &params->allocator, parent_metadata_length + SLIM_MUTATION_METADATA_SIZE);
+    if (buff == NULL) {
+        ret = MSP_ERR_NO_MEMORY;
+        goto out;
+    }
+    memcpy(buff, parent_metadata, parent_metadata_length);
+    copy_slim_mutation_metadata(params, buff + parent_metadata_length, mutation->time);
+
+    mutation->metadata = buff;
+    mutation->metadata_length
+        = (tsk_size_t) (parent_metadata_length + SLIM_MUTATION_METADATA_SIZE);
 out:
     return ret;
 }
@@ -485,8 +550,8 @@ out:
 }
 
 int MSP_WARN_UNUSED
-slim_mutation_model_alloc(
-    mutation_model_t *self, int64_t next_mutation_id, size_t block_size)
+slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
+    int64_t next_mutation_id, int32_t slim_generation, size_t block_size)
 {
     int ret = 0;
     slim_mutator_t *params = &self->params.slim_mutator;
@@ -511,7 +576,9 @@ slim_mutation_model_alloc(
         ret = msp_set_tsk_error(ret);
         goto out;
     }
+    params->mutation_type_id = mutation_type_id;
     params->next_mutation_id = next_mutation_id;
+    params->slim_generation = slim_generation;
 
     ret = slim_mutator_check_validity(params);
     if (ret != 0) {
