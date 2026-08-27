@@ -105,8 +105,11 @@ for more information.
 {class}`.InfiniteAlleles` (Integers)
 : A generic infinite-alleles mutation model
 
+{class}`.SLiMv6MutationModel` (Integers)
+: An infinite-alleles model producing SLiM-style mutations for SLiM v6+
+
 {class}`.SLiMMutationModel` (Integers)
-: An infinite-alleles model producing SLiM-style mutations
+: An infinite-alleles model producing SLiM-style mutations for older versions of SLiM
 
 {class}`.MatrixMutationModel` (General finite state model)
 : Superclass of mutation models with a finite set of states
@@ -485,7 +488,8 @@ Here are the available models; they are documented in more detail below.
 - {class}`.TPM`: Two-phase mutation model for microsatellite repeat copy number. DiRienzo et al. ('94)
 - {class}`.EL2`: Two-phase mutation model, equal rate, linear bias model for microsatellite repeat copy number. Garza et al. ('95)
 - {class}`.InfiniteAlleles`: A generic infinite-alleles mutation model
-- {class}`.SLiMMutationModel`: An infinite-alleles model of mutation producing SLiM-style mutations
+- {class}`.SLiMv6MutationModel`: An infinite-alleles model of mutation producing SLiM-style mutations for SLiM v6+
+- {class}`.SLiMMutationModel`: An infinite-alleles model of mutation producing SLiM-style mutations for older versions of SLiM
 
 (sec_mutations_matrix_mutations_models)=
 
@@ -855,30 +859,34 @@ to set the starting allele appropriately, and to make sure the results make sens
 
 A special class of infinite alleles model is provided for use with [SLiM](<https://messerlab.org/slim/>),
 to agree with the underlying mutation model in SLiM.
-As with the InfiniteAlleles model, it assigns each new mutation a unique integer,
-by keeping track of the `next_id` and incrementing it each time a new mutation appears.
+As with the {class}`.InfiniteAlleles` model, it assigns each new mutation
+a unique integer, by keeping track of the `next_id` and incrementing it each
+time a new mutation appears. For more information,
+see {ref}`the pyslim documentation<pyslim:sec_tutorial_adding_neutral_mutations>`.
 
-This differs from the {class}`.InfiniteAlleles` because mutations
+This differs from the {class}`.InfiniteAlleles` model because mutations
 in SLiM can "stack": new mutations can add to the existing state, rather than
 replacing the previous state. So, derived states are comma-separated lists of
 mutation IDs, and the ancestral state is always the empty string. For instance,
 if a new mutation with ID 5 occurs at a site, and then later another mutation
 appears with ID 64, the sequence of alleles moving along this line of descent
-would be `""`, then `"5"`, and finally `"5,64"`. Furthermore, the mutation
-model adds SLiM metadata to each mutation, which records, among other things,
-the SLiM mutation type of each mutation, and the selection coefficient (which
-is always 0.0, since adding mutations in this way only makes sense if they are
-neutral). For this reason, the model has one required parameter: the `type`
-of the mutation, a nonnegative integer. If, for instance, you specify
-`type=1`, then the mutations in SLiM will be of type `m1`. For more
-information, and for how to modify the metadata (e.g., changing the selection
-coefficients), see
-{ref}`the pyslim documentation<pyslim:sec_tutorial_adding_neutral_mutations>`.
-For instance,
+would be `""`, then `"5"`, and finally `"5,64"`. The same list of integers is
+recorded in metadata, as binary integers rather than ASCII text.
+This redundancy between derived state and metadata is useful
+because the model behaves as an infinite-alleles model out-of-the-box; but if
+ancestral and derived states are modified (for instance, to be VCF-compliant)
+then there is no loss of information.
+
+There are in fact two mutation models for SLiM:
+{class}`.SLiMv6MutationModel` and {class}`.SLiMMutationModel`,
+because the format that SLiM uses to store mutations changed with version 6.0.
+Both store the same thing in derived state; the difference is in metadata.
+So, you probably want to use {class}`.SLiMv6MutationModel`;
+see {ref}`sec_mutations_mutation_slim_mutations_versions` for more on the differences.
 
 ```{code-cell} python
 
-model = msprime.SLiMMutationModel(type=1)
+model = msprime.SLiMv6MutationModel()
 mts = msprime.sim_mutations(
     ts, rate=1, random_seed=1, model=model)
 t = mts.first()
@@ -888,14 +896,16 @@ SVG(t.draw_svg(mutation_labels=ml, node_labels={}, size=(400, 300)))
 ```
 
 These resulting alleles show how derived states are built.
+(We're looking at derived states for convenience, but could equivalently
+look at metadata; see {ref}`sec_mutations_mutation_slim_mutations_metadata`.)
 
 The behaviour of this mutation model when used to add mutations to a previously mutated
 tree sequence can be subtle. Let's look at a simple example.
-Here, we first lay down mutations of type 1, starting from ID 0:
+Here, we first lay down mutations starting from ID 0 (the default):
 
 ```{code-cell} python
 
-model_1 = msprime.SLiMMutationModel(type=1)
+model_1 = msprime.SLiMv6MutationModel()
 mts_1 = msprime.sim_mutations(ts, rate=0.5, random_seed=2, model=model_1)
 t = mts_1.first()
 ml = {m.id: m.derived_state for m in mts_1.mutations()}
@@ -903,15 +913,16 @@ SVG(t.draw_svg(mutation_labels=ml, node_labels={}, size=(400, 300)))
 
 ```
 
-Next, we lay down mutations of type 2.
-These we assign starting from ID 100,
-to make it easy to see which are which:
-in general just need to make sure that we start at an ID greater than any
+Now suppose we wanted to add more mutations.
+(This is essentially what happens when we use msprime to add mutations
+to a tree sequence produced by SLiM.)
+We assign the new mutations starting from ID 100 to make it easy to see which are which:
+in general we just need to make sure that we start at an ID greater than any
 previously assigned.
 
 ```{code-cell} python
 
-model_2 = msprime.SLiMMutationModel(type=2, next_id=100)
+model_2 = msprime.SLiMv6MutationModel(next_id=100)
 mts = msprime.sim_mutations(
     mts_1, rate=0.5, random_seed=3, model=model_2, keep=True)
 t = mts.first()
@@ -928,7 +939,110 @@ with IDs `100` and `102`, between these two mutations.
 These were added to mutation `0`, obtaining alleles `0,100` and `0,100,102`.
 But then, moving down the branch, we come upon the mutation with ID `3`.
 This was already present in the tree sequence, so its derived state is not modified:
-`0,3`. We can rationalise this, post-hoc, by saying that the type 1 mutation `3`
-has "erased" the type 2 mutations `100` and `102`.
-If you want a different arrangement,
-you can go back and edit the derived states (and metadata) as you like.
+`0,3`. We can rationalise this, post-hoc, by saying that the mutation with ID `3`
+from the earlier batch of mutations has "erased" the mutations with IDs `100` and `102`
+from the later batch. If you want a different arrangement,
+you will need to edit the derived states and metadata directly.
+
+(sec_mutations_mutation_slim_mutations_metadata)=
+
+#### Metadata
+
+The most common use of this model is to add mutations to a tree sequence produced
+by SLiM, or by {func}`pyslim.annotate`; if so, the metadata will already be decoded.
+(In general, we recommend using {func}`pyslim.annotate` after
+{func}`.sim_ancestry` but before {func}`.sim_mutations` if you're using msprime
+to create a tree sequence for SLiM.)
+
+For completeness, here is a self-contained example
+that shows how to decode the metadata directly
+(but we emphasize that you probably *don't* need this in your code;
+it's provided for pedagogical reasons only!).
+If we look at the metadata in the example we've produced so far, we simply see binary
+(the metadata is not decoded because a metadata schema is not present):
+
+```{code-cell} python
+mut = mts.mutation(10)
+mut.metadata
+```
+
+To see the actual values, we need a {class}`tskit.MetadataSchema`,
+which we can add as follows:
+
+```{code-cell} python
+metadata_schema = tskit.MetadataSchema(
+    {
+        "codec": "struct",
+        "type": "object",
+        "properties": {
+            "derived_states": {
+                "items": {
+                    "binaryFormat": "q",
+                    "type": "number",
+                },
+                "noLengthEncodingExhaustBuffer": True,
+                "type": "array",
+            }
+        },
+        "required": ["derived_states"],
+        "additionalProperties": False,
+    }
+)
+
+tables = mts.dump_tables()
+tables.mutations.metadata_schema = metadata_schema
+mts = tables.tree_sequence()
+```
+
+(This is a simplified version of the schema used by SLiM 6,
+so it matches the metadata produced by the {class}`.SLiMv6MutationModel`.)
+Now, the metadata will be properly decoded, into lists of integer IDs:
+
+```{code-cell} python
+mut = mts.mutation(10)
+mut.metadata
+```
+
+(sec_mutations_mutation_slim_mutations_stacking)=
+
+#### More on "mutation stacking"
+
+Both SLiM models simply create the derived state by appending to the inherited state,
+and so if you use {func}`.sim_mutations` with ``keep=True`` to add SLiM mutations
+to a tree sequence that already has non-SLiM mutations, you may end up with
+mutations with odd derived states. For instance, if a SLiM mutations occurs
+at the same site as, and inheriting from, a previous mutation
+with derived state ``"A"``, the SLiM mutation might have derived state ``"A,345"``.
+For a mutation without a parent, this inherited state is the ancestral state
+of the site. If the site was not already present in the tree sequence, this model
+will create a new site with the empty string as the ancestral state,
+but if the site is already present and has a nonempty ancestral state,
+then this ancestral state will appear at the beginning of any derived states
+produced by these models at that site.
+
+The same thing is true of metadata: metadata is simply appended (in binary)
+to the "inherited" metadata, which is from the parent mutation (if any) or from
+the site (otherwise). So, if in your tree sequence your sites have nonempty metadata,
+then any SLiM mutations that occur on those sites will have site metadata
+prepended to their metadata (and so the metadata schema above will not work).
+However, these SLiM mutation models are designed specifically to work with SLiM-format
+tree sequences, which don't have any site metadata;
+if you're trying to use them in another situation then you probably
+don't have the right tool for the job.
+
+(sec_mutations_mutation_slim_mutations_versions)=
+
+#### Previous versions
+
+The technical difference between 
+{class}`.SLiMv6MutationModel` and {class}`.SLiMMutationModel` is as follows.
+{class}`.SLiMv6MutationModel` stores the SLiM IDs in binary metadata
+as well as in the derived state,
+so that the actual metadata about mutations can be looked up from where
+SLiM expects it in top-level metadata.
+The older version, {class}`.SLiMMutationModel`,
+stores the metadata about SLiM mutations directly in each tskit mutation's metadata
+(and since individual SLiM mutations can appear in more than one tskit mutation,
+this leads to some redundancy; thus the change
+to how mutation metadata is handled in SLiMv6). For more information, see
+{ref}`the pyslim documentation<pyslim:sec_previous_versions>`.

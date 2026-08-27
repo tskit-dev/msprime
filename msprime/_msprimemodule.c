@@ -68,6 +68,11 @@ typedef struct {
 typedef struct {
     PyObject_HEAD
     mutation_model_t *mutation_model;
+} SLiMv6MutationModel;
+
+typedef struct {
+    PyObject_HEAD
+    mutation_model_t *mutation_model;
 } InfiniteAllelesMutationModel;
 
 typedef struct {
@@ -793,6 +798,98 @@ static PyTypeObject SLiMMutationModelType = {
     .tp_doc = "SLiMMutationModel objects",
     .tp_getset = SLiMMutationModel_getsetters,
     .tp_init = (initproc) SLiMMutationModel_init,
+    .tp_new = PyType_GenericNew,
+};
+
+/*===================================================================
+ * SLiM mutation model, v6
+ *===================================================================
+ */
+
+static int
+SLiMv6MutationModel_check_state(SLiMv6MutationModel *self)
+{
+    int ret = 0;
+    if (self->mutation_model == NULL) {
+        PyErr_SetString(PyExc_SystemError, "SLiMv6MutationModel not initialised");
+        ret = -1;
+    }
+    return ret;
+}
+
+static void
+SLiMv6MutationModel_dealloc(SLiMv6MutationModel *self)
+{
+    if (self->mutation_model != NULL) {
+        mutation_model_free(self->mutation_model);
+        PyMem_Free(self->mutation_model);
+        self->mutation_model = NULL;
+    }
+    Py_TYPE(self)->tp_free((PyObject *) self);
+}
+
+static int
+SLiMv6MutationModel_init(SLiMv6MutationModel *self, PyObject *args, PyObject *kwds)
+{
+    int ret = -1;
+    int err;
+    static char *kwlist[] = { "next_id", "block_size", NULL };
+    long long next_id = 0;
+    Py_ssize_t block_size = 0;
+
+    self->mutation_model = NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|Ln", kwlist, &next_id, &block_size)) {
+        goto out;
+    }
+
+    /* Note: it's important we zero out mutation_model here because
+     * we can error before we can mutation_model_alloc, leaving the
+     * object in an uninitialised state */
+    self->mutation_model = PyMem_Calloc(1, sizeof(*self->mutation_model));
+    if (self->mutation_model == NULL) {
+        PyErr_NoMemory();
+        goto out;
+    }
+    err = slim_v6_mutation_model_alloc(
+        self->mutation_model, (int64_t) next_id, (size_t) block_size);
+    if (err != 0) {
+        handle_library_error(err);
+        goto out;
+    }
+    ret = 0;
+out:
+    return ret;
+}
+
+static PyObject *
+SLiMv6MutationModel_get_next_id(SLiMv6MutationModel *self, void *closure)
+{
+    slim_mutator_t *params;
+    PyObject *ret = NULL;
+
+    if (SLiMv6MutationModel_check_state(self) != 0) {
+        goto out;
+    }
+    params = &self->mutation_model->params.slim_mutator;
+    ret = Py_BuildValue("L", params->next_mutation_id);
+out:
+    return ret;
+}
+
+static PyGetSetDef SLiMv6MutationModel_getsetters[] = {
+    { "next_id", (getter) SLiMv6MutationModel_get_next_id, NULL,
+        "Return the next mutation id" },
+    { NULL } /* Sentinel */
+};
+
+static PyTypeObject SLiMv6MutationModelType = {
+    .tp_name = "_msprime.SLiMv6MutationModel",
+    .tp_basicsize = sizeof(SLiMv6MutationModel),
+    .tp_dealloc = (destructor) SLiMv6MutationModel_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_doc = "SLiMv6MutationModel objects",
+    .tp_getset = SLiMv6MutationModel_getsetters,
+    .tp_init = (initproc) SLiMv6MutationModel_init,
     .tp_new = PyType_GenericNew,
 };
 
@@ -3014,6 +3111,7 @@ parse_mutation_model(PyObject *py_model)
     mutation_model_t *model = NULL;
     MatrixMutationModel *matrix_mutation_model = NULL;
     SLiMMutationModel *slim_mutation_model = NULL;
+    SLiMv6MutationModel *slim_v6_mutation_model = NULL;
     InfiniteAllelesMutationModel *infinite_alleles_model = NULL;
 
     if (PyObject_TypeCheck(py_model, &MatrixMutationModelType)) {
@@ -3028,6 +3126,12 @@ parse_mutation_model(PyObject *py_model)
             goto out;
         }
         model = slim_mutation_model->mutation_model;
+    } else if (PyObject_TypeCheck(py_model, &SLiMv6MutationModelType)) {
+        slim_v6_mutation_model = (SLiMv6MutationModel *) py_model;
+        if (SLiMv6MutationModel_check_state(slim_v6_mutation_model) != 0) {
+            goto out;
+        }
+        model = slim_v6_mutation_model->mutation_model;
     } else if (PyObject_TypeCheck(py_model, &InfiniteAllelesMutationModelType)) {
         infinite_alleles_model = (InfiniteAllelesMutationModel *) py_model;
         if (InfiniteAllelesMutationModel_check_state(infinite_alleles_model) != 0) {
@@ -3037,7 +3141,7 @@ parse_mutation_model(PyObject *py_model)
     } else {
         PyErr_SetString(PyExc_TypeError,
             "model must be an instance of MatrixMutationModel, "
-            "SLiMMutationModel or InfiniteAllelesMutationModel.");
+            "SLiMMutationModel, SLiMv6MutationModel or InfiniteAllelesMutationModel.");
         goto out;
     }
 out:
@@ -3255,6 +3359,15 @@ PyInit__msprime(void)
     }
     Py_INCREF(&SLiMMutationModelType);
     PyModule_AddObject(module, "SLiMMutationModel", (PyObject *) &SLiMMutationModelType);
+
+    /* SLiMv6MutationModel type */
+    SLiMv6MutationModelType.tp_base = &BaseMutationModelType;
+    if (PyType_Ready(&SLiMv6MutationModelType) < 0) {
+        return NULL;
+    }
+    Py_INCREF(&SLiMv6MutationModelType);
+    PyModule_AddObject(
+        module, "SLiMv6MutationModel", (PyObject *) &SLiMv6MutationModelType);
 
     /* InfiniteAllelesMutationModel type */
     InfiniteAllelesMutationModelType.tp_base = &BaseMutationModelType;

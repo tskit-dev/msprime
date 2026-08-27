@@ -48,6 +48,7 @@ for discussion and examples of individual features.
   TPM
   EL2
   InfiniteAlleles
+  SLiMv6MutationModel
   SLiMMutationModel
 ```
 
@@ -215,6 +216,10 @@ for discussion and examples of individual features.
 
 ```{eval-rst}
 .. autoclass:: msprime.InfiniteAlleles()
+```
+
+```{eval-rst}
+.. autoclass:: msprime.SLiMv6MutationModel()
 ```
 
 ```{eval-rst}

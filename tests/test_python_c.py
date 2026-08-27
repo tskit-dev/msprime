@@ -2808,6 +2808,30 @@ class TestSLiMMutationModel:
         assert model.slim_generation == 1
 
 
+class TestSLiMv6MutationModel:
+    """
+    Tests for the slim v6 mutation model class.
+    """
+
+    def test_constructor_errors(self):
+        for bad_id in ["sdr", 0.222, None]:
+            with pytest.raises(TypeError):
+                _msprime.SLiMv6MutationModel(next_id=bad_id)
+
+        with pytest.raises(_msprime.LibraryError):
+            _msprime.SLiMv6MutationModel(next_id=-1)
+
+    def test_uninitialised(self):
+        model = _msprime.SLiMv6MutationModel.__new__(_msprime.SLiMv6MutationModel)
+        with pytest.raises(SystemError):
+            _ = model.next_id
+
+    def test_next_id(self):
+        for next_id in [0, 10, 2**63 - 1]:
+            model = _msprime.SLiMv6MutationModel(next_id=next_id)
+            assert model.next_id == next_id
+
+
 class TestInfiniteAllelesMutationModel:
     """
     Tests for the infinite alleles mutation model class.
@@ -2984,6 +3008,7 @@ class TestSimMutations:
                 _msprime.sim_mutations(tables, rng, rate_map=imap, model=bad_type)
         model_classes = [
             _msprime.SLiMMutationModel,
+            _msprime.SLiMv6MutationModel,
             _msprime.InfiniteAllelesMutationModel,
             _msprime.MatrixMutationModel,
         ]
@@ -2999,6 +3024,14 @@ class TestSimMutations:
         imap = uniform_rate_map(1)
         tables = _msprime.LightweightTableCollection(1.0)
         model = _msprime.SLiMMutationModel(1234, 5678)
+        _msprime.sim_mutations(tables, rng, imap, model)
+        assert model.next_id == 5678
+
+    def test_slim_v6_model(self):
+        rng = _msprime.RandomGenerator(1)
+        imap = uniform_rate_map(1)
+        tables = _msprime.LightweightTableCollection(1.0)
+        model = _msprime.SLiMv6MutationModel(5678)
         _msprime.sim_mutations(tables, rng, imap, model)
         assert model.next_id == 5678
 
