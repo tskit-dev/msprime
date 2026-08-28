@@ -3347,20 +3347,22 @@ class TestCensusEvent:
     Tests of the census demographic event.
     """
 
-    def verify(self, ts, census_time):
+    def verify(self, ts, census_time, unary=True):
         """
         Verifies that a census event has been added correctly.
         """
-        census_ids = np.where(ts.tables.nodes.flags == msprime.NODE_IS_CEN_EVENT)[0]
-        for u in census_ids:
-            assert ts.tables.nodes.time[u] == census_time
+        census_ids = np.where(ts.tables.nodes.time == census_time)[0]
+        assert np.all(
+            (ts.tables.nodes.flags[census_ids] & msprime.NODE_IS_CEN_EVENT) > 0
+        )
         assert len(census_ids) > 1
         # Check that all samples have a census ancestor on each tree.
         for tree in ts.trees():
             leaves = []
             census_nodes = [u for u in census_ids if u in list(tree.nodes())]
             for node in census_nodes:
-                assert len(tree.children(node)) == 1
+                if unary:
+                    assert len(tree.children(node)) == 1
                 le = list(tree.leaves(node))
                 leaves += le
             leaves.sort()
@@ -3413,12 +3415,17 @@ class TestCensusEvent:
             sample_size=3,
             random_seed=3,
         )
-        with pytest.raises(_msprime.LibraryError):
-            msprime.simulate(
-                sample_size=3,
-                random_seed=3,
-                demographic_events=[demog_mod.CensusEvent(time=ts.tables.nodes.time[3])],
-            )
+        n = ts.node(3).asdict()
+        census_time = n["time"]
+        ts = msprime.simulate(
+            sample_size=3,
+            random_seed=3,
+            demographic_events=[demog_mod.CensusEvent(time=census_time)],
+        )
+        self.verify(ts, census_time, unary=False)
+        nn = ts.node(3).asdict()
+        nn["flags"] &= ~(msprime.NODE_IS_CEN_EVENT)
+        assert n == nn
 
     def test_migration_time_equals_census_time(self):
         census_time = 100
@@ -3486,6 +3493,21 @@ class TestCensusEvent:
             samples=5, demography=demography, random_seed=1, model="dtwf"
         )
         self.verify(ts, 1.1)
+
+    def test_census_at_end_time(self):
+        demography = msprime.Demography.isolated_model([100])
+        end_time = 50
+        demography.add_census(time=end_time)
+        ts = msprime.sim_ancestry(
+            samples=5,
+            demography=demography,
+            random_seed=1,
+            model="hudson",
+            end_time=end_time,
+            recombination_rate=1e-7,
+            sequence_length=1e6,
+        )
+        self.verify(ts, end_time)
 
 
 class TestPossibleLineagesOldStyle:
