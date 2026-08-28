@@ -7421,6 +7421,7 @@ msp_census_event(msp_t *self, demographic_event_t *event)
     lineage_t *lin;
     tsk_id_t i, j;
     tsk_id_t u;
+    tsk_node_table_t *nodes = &self->tables->nodes;
 
     for (i = 0; i < (int) self->num_populations; i++) {
         for (j = 0; j < (int) self->num_labels; j++) {
@@ -7431,23 +7432,39 @@ msp_census_event(msp_t *self, demographic_event_t *event)
 
             while (node != NULL) {
                 lin = (lineage_t *) node->item;
-                seg = lin->head;
-                while (seg != NULL) {
-                    // Add an edge to the edge table.
-                    ret = tsk_node_table_add_row(&self->tables->nodes,
-                        MSP_NODE_IS_CEN_EVENT, event->time, i, TSK_NULL, NULL, 0);
+
+                // Find whether this lineage already has a node at this time:
+                // if so it should only have one!  (However, this is not
+                // sufficient for applying this to DTWF at integer times.)
+                u = TSK_NULL;
+                for (seg = lin->head; seg != NULL; seg = seg->next) {
+                    if (nodes->time[seg->value] == event->time) {
+                        u = seg->value;
+                        break;
+                    }
+                }
+                if (u == TSK_NULL) {
+                    /* Add a node for this ancestor */
+                    ret = tsk_node_table_add_row(
+                        nodes, MSP_NODE_IS_CEN_EVENT, event->time, i, TSK_NULL, NULL, 0);
                     if (ret < 0) {
                         goto out;
                     }
                     u = (tsk_id_t) ret;
-                    // Add an edge joining the segment to the new node.
-                    ret = msp_store_edge(self, seg->left, seg->right, u, seg->value);
-                    if (ret != 0) {
-                        goto out;
+                } else {
+                    nodes->flags[u] |= MSP_NODE_IS_CEN_EVENT;
+                }
+
+                for (seg = lin->head; seg != NULL; seg = seg->next) {
+                    if (u != seg->value) {
+                        // Add an edge joining the segment to the new node.
+                        ret = msp_store_edge(self, seg->left, seg->right, u, seg->value);
+                        if (ret != 0) {
+                            goto out;
+                        }
+                        // Modify segment node id.
+                        seg->value = u;
                     }
-                    // Modify segment node id.
-                    seg->value = u;
-                    seg = seg->next;
                 }
                 node = node->next;
             }

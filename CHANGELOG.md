@@ -4,6 +4,15 @@
 
 In development.
 
+**Bug fixes**
+
+- Previously, census events added a new census node to every distinct ancestral
+  segment, even when several of these segments were within the same lineage.
+  With this change, census events now assign a new census node to each
+  distinct lineage. This will in general reduce the number of census nodes,
+  and result in census nodes with more than one distinct segment (which
+  previously did not happen). ({pr}`2541`, {user}`petrelharp`)
+
 ## [1.4.3] - 2026-08-31
 
 Feature release, to prepare for the upcoming SLiM v6 release.

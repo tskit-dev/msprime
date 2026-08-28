@@ -2921,16 +2921,19 @@ test_census_event(void)
     uint32_t n = 10;
     msp_t msp;
     gsl_rng *rng = safe_rng_alloc();
-    tsk_table_collection_t tables;
+    tsk_table_collection_t tables1, tables2;
     int num_census_nodes = 0;
     int i;
+    double census_time;
 
-    ret = build_sim(&msp, &tables, rng, 2, 1, NULL, n);
+    gsl_rng_set(rng, 123);
+    ret = build_sim(&msp, &tables1, rng, 2, 1, NULL, n);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_set_recombination_rate(&msp, 1);
 
     /* Add a census event in at 0.5 generations. */
-    ret = msp_add_census_event(&msp, 0.5);
+    census_time = 0.5;
+    ret = msp_add_census_event(&msp, census_time);
     CU_ASSERT_EQUAL(ret, 0);
     ret = msp_initialise(&msp);
     CU_ASSERT_EQUAL(ret, 0);
@@ -2941,8 +2944,42 @@ test_census_event(void)
     msp_print_state(&msp, _devnull);
 
     /* Check there is more than 1 node at the census time. */
-    for (i = 0; i < tables.nodes.num_rows; i++) {
-        if (tables.nodes.time[i] == 0.5) {
+    for (i = 0; i < tables1.nodes.num_rows; i++) {
+        if (tables1.nodes.time[i] == census_time) {
+            num_census_nodes++;
+        }
+    }
+    CU_ASSERT_TRUE(num_census_nodes > 1);
+
+    ret = msp_free(&msp);
+
+    /* Add a census event at a time where there's already a node */
+    for (i = n; i < tables1.nodes.num_rows; i++) {
+        if (tables1.nodes.time[i] != census_time) {
+            census_time = tables1.nodes.time[i];
+            break;
+        }
+    }
+    CU_ASSERT_TRUE(census_time != 0.5);
+
+    gsl_rng_set(rng, 123);
+    ret = build_sim(&msp, &tables2, rng, 2, 1, NULL, n);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_set_recombination_rate(&msp, 1);
+
+    ret = msp_add_census_event(&msp, census_time);
+    CU_ASSERT_EQUAL(ret, 0);
+    ret = msp_initialise(&msp);
+    CU_ASSERT_EQUAL(ret, 0);
+
+    ret = msp_run(&msp, DBL_MAX, UINT32_MAX);
+    CU_ASSERT_EQUAL(ret, 0);
+    msp_verify(&msp, 0);
+    msp_print_state(&msp, _devnull);
+
+    /* Check there is more than 1 node at the census time. */
+    for (i = 0; i < tables2.nodes.num_rows; i++) {
+        if (tables2.nodes.time[i] == census_time) {
             num_census_nodes++;
         }
     }
@@ -2950,8 +2987,9 @@ test_census_event(void)
 
     ret = msp_free(&msp);
     CU_ASSERT_EQUAL(ret, 0);
+    tsk_table_collection_free(&tables1);
+    tsk_table_collection_free(&tables2);
     gsl_rng_free(rng);
-    tsk_table_collection_free(&tables);
 }
 
 static void
