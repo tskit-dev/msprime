@@ -1,8 +1,8 @@
 # Changelog
 
-## [1.4.3] - 2026-XX-XX
+## [1.4.3] - 2026-08-31
 
-In development.
+Feature release, to prepare for the upcoming SLiM v6 release.
 
 **New features**:
 
