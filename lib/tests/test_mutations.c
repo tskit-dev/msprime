@@ -914,7 +914,7 @@ verify_slim_metadata(char *metadata, size_t metadata_length, int32_t slim_time)
 }
 
 static void
-test_mutgen_slim_mutations(void)
+test_mutgen_slim_v5_mutations(void)
 {
     int ret = 0;
     int j, k;
@@ -930,7 +930,7 @@ test_mutgen_slim_mutations(void)
     int32_t slim_generation = 17;
 
     CU_ASSERT_FATAL(rng != NULL);
-    ret = slim_mutation_model_alloc(
+    ret = slim_v5_mutation_model_alloc(
         &mut_model, mutation_type_id, next_mutation_id, slim_generation, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
 
@@ -1011,7 +1011,7 @@ test_mutgen_slim_mutations(void)
 }
 
 static void
-test_mutgen_slim_mutation_large_values(void)
+test_mutgen_slim_v5_mutation_large_values(void)
 {
     int ret = 0;
     mutgen_t mutgen;
@@ -1028,7 +1028,7 @@ test_mutgen_slim_mutation_large_values(void)
     insert_single_tree(&tables, -1);
 
     /* Trying to generate mutations that overflow raises an error */
-    ret = slim_mutation_model_alloc(&mut_model, 0, INT64_MAX, 1, 0);
+    ret = slim_v5_mutation_model_alloc(&mut_model, 0, INT64_MAX, 1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1043,7 +1043,7 @@ test_mutgen_slim_mutation_large_values(void)
     tsk_site_table_clear(&tables.sites);
     /* Try out with a large value that doesn't hit the ceiling */
     next_mutation_id = INT64_MAX - 100;
-    ret = slim_mutation_model_alloc(&mut_model, 0, next_mutation_id, 1, 0);
+    ret = slim_v5_mutation_model_alloc(&mut_model, 0, next_mutation_id, 1, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     ret = mutgen_alloc(&mutgen, rng, &tables, &mut_model, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
@@ -1533,7 +1533,7 @@ test_matrix_mutation_model_properties(void)
 }
 
 static void
-test_slim_mutation_model_errors(void)
+test_slim_v5_mutation_model_errors(void)
 {
     int ret;
     mutation_model_t model;
@@ -1542,21 +1542,21 @@ test_slim_mutation_model_errors(void)
     int32_t slim_generation = 1;
 
     next_mutation_id--;
-    ret = slim_mutation_model_alloc(
+    ret = slim_v5_mutation_model_alloc(
         &model, mutation_type_id, next_mutation_id, slim_generation, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SLIM_PARAMETERS);
     mutation_model_free(&model);
 
     mutation_type_id--;
     next_mutation_id++;
-    ret = slim_mutation_model_alloc(
+    ret = slim_v5_mutation_model_alloc(
         &model, mutation_type_id, next_mutation_id, slim_generation, 0);
     CU_ASSERT_EQUAL_FATAL(ret, MSP_ERR_BAD_SLIM_PARAMETERS);
     mutation_model_free(&model);
 }
 
 static void
-test_slim_mutation_model_properties(void)
+test_slim_v5_mutation_model_properties(void)
 {
     int ret;
     mutation_model_t model;
@@ -1564,7 +1564,7 @@ test_slim_mutation_model_properties(void)
     int64_t next_mutation_id = 2;
     int32_t slim_generation = 3;
 
-    ret = slim_mutation_model_alloc(
+    ret = slim_v5_mutation_model_alloc(
         &model, mutation_type_id, next_mutation_id, slim_generation, 0);
     CU_ASSERT_EQUAL_FATAL(ret, 0);
     CU_ASSERT_EQUAL_FATAL(model.params.slim_mutator.slim_generation, 3);
@@ -1623,9 +1623,9 @@ main(int argc, char **argv)
             test_single_tree_mutgen_many_mutations },
         { "test_jukes_cantor_has_silent_mutations",
             test_jukes_cantor_has_silent_mutations },
-        { "test_mutgen_slim_mutations", test_mutgen_slim_mutations },
-        { "test_mutgen_slim_mutation_large_values",
-            test_mutgen_slim_mutation_large_values },
+        { "test_mutgen_slim_v5_mutations", test_mutgen_slim_v5_mutations },
+        { "test_mutgen_slim_v5_mutation_large_values",
+            test_mutgen_slim_v5_mutation_large_values },
         { "test_mutgen_slim_v6_mutations", test_mutgen_slim_v6_mutations },
         { "test_mutgen_slim_v6_mutations_keeps", test_mutgen_slim_v6_mutations_keeps },
         { "test_mutgen_slim_v6_mutation_large_values",
@@ -1636,8 +1636,9 @@ main(int argc, char **argv)
         { "test_matrix_mutation_model_errors", test_matrix_mutation_model_errors },
         { "test_matrix_mutation_model_properties",
             test_matrix_mutation_model_properties },
-        { "test_slim_mutation_model_errors", test_slim_mutation_model_errors },
-        { "test_slim_mutation_model_properties", test_slim_mutation_model_properties },
+        { "test_slim_v5_mutation_model_errors", test_slim_v5_mutation_model_errors },
+        { "test_slim_v5_mutation_model_properties",
+            test_slim_v5_mutation_model_properties },
         { "test_slim_v6_mutation_model_errors", test_slim_v6_mutation_model_errors },
         { "test_slim_v6_mutation_model_properties",
             test_slim_v6_mutation_model_properties },

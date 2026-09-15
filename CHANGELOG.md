@@ -4,6 +4,15 @@
 
 In development.
 
+**Maintenance**:
+
+- The ``SLiMMutationModel`` is renamed ``SLiMv5MutationModel``. The class
+  ``SLiMMutationModel`` retains its previous behavior, but emits a FutureWarning.
+  This change is made because mutations made by the older SLiM mutation model
+  can be read as SLiM v6 mutations (but with meaningless values), producing a confusing
+  situation for downstream users. New code should use either ``SLiMv5MutationModel``
+  or ``SLiMv6MutationModel``, as appropriate. ({pr}`2546`, {user}`petrelharp`)
+
 ## [1.4.4] - 2026-09-01
 
 Bugfix release.

@@ -584,7 +584,7 @@ int matrix_mutation_model_factory(mutation_model_t *self, int model);
 int matrix_mutation_model_alloc(mutation_model_t *self, size_t num_alleles,
     char **alleles, size_t *allele_length, double *root_distribution,
     double *transition_matrix);
-int slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
+int slim_v5_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
     int64_t next_mutation_id, int32_t slim_generation, size_t block_size);
 int slim_v6_mutation_model_alloc(
     mutation_model_t *self, int64_t next_mutation_id, size_t block_size);

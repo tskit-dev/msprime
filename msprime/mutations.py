@@ -24,6 +24,7 @@ import inspect
 import math
 import numbers
 import sys
+import warnings
 
 import numpy as np
 import tskit
@@ -106,7 +107,7 @@ class MatrixMutationModel(_msprime.MatrixMutationModel, MutationModel):
         return s
 
 
-class SLiMMutationModel(_msprime.SLiMMutationModel, MutationModel):
+class SLiMv5MutationModel(_msprime.SLiMv5MutationModel, MutationModel):
     """
     An infinite-alleles model of mutation producing "SLiM-style" mutations
     for versions of SLiM before 6.0. For SLiM version 6.0 and beyond,
@@ -144,6 +145,26 @@ class SLiMMutationModel(_msprime.SLiMMutationModel, MutationModel):
             f"Mutation model for SLiM mutations of type m{self.type}\n"
             f"  next ID: {self.next_id}\n"
         )
+
+
+class SLiMMutationModel(SLiMv5MutationModel):
+    """
+    An infinite-alleles model of mutation producing "SLiM-style" mutations
+    for versions of SLiM before 6.0. For SLiM version 6.0 and beyond,
+    use {class}`.SLiMv6MutationModel`.
+
+    This is a deprecated alias for {class}`.SLiMv5MutationModel`. Newer
+    code should use {class}`.SLiMv5MutationModel` or {class}`.SLiMv6MutationModel`
+    as appropriate.
+    """
+
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "SLiMMutationModel will be removed in future versions. Use "
+            "SLiMv5MutationModel or SLiMv6MutationModel instead.",
+            category=FutureWarning,
+        )
+        super().__init__(*args, **kwargs)
 
 
 class SLiMv6MutationModel(_msprime.SLiMv6MutationModel, MutationModel):
