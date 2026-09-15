@@ -105,11 +105,11 @@ for more information.
 {class}`.InfiniteAlleles` (Integers)
 : A generic infinite-alleles mutation model
 
+{class}`.SLiMv5MutationModel` (Integers)
+: An infinite-alleles model producing SLiM-style mutations for SLiM versions before 6.0
+
 {class}`.SLiMv6MutationModel` (Integers)
 : An infinite-alleles model producing SLiM-style mutations for SLiM v6+
-
-{class}`.SLiMMutationModel` (Integers)
-: An infinite-alleles model producing SLiM-style mutations for older versions of SLiM
 
 {class}`.MatrixMutationModel` (General finite state model)
 : Superclass of mutation models with a finite set of states
@@ -488,8 +488,8 @@ Here are the available models; they are documented in more detail below.
 - {class}`.TPM`: Two-phase mutation model for microsatellite repeat copy number. DiRienzo et al. ('94)
 - {class}`.EL2`: Two-phase mutation model, equal rate, linear bias model for microsatellite repeat copy number. Garza et al. ('95)
 - {class}`.InfiniteAlleles`: A generic infinite-alleles mutation model
+- {class}`.SLiMv5MutationModel`: An infinite-alleles model of mutation producing SLiM-style mutations for older versions of SLiM
 - {class}`.SLiMv6MutationModel`: An infinite-alleles model of mutation producing SLiM-style mutations for SLiM v6+
-- {class}`.SLiMMutationModel`: An infinite-alleles model of mutation producing SLiM-style mutations for older versions of SLiM
 
 (sec_mutations_matrix_mutations_models)=
 
@@ -878,7 +878,7 @@ ancestral and derived states are modified (for instance, to be VCF-compliant)
 then there is no loss of information.
 
 There are in fact two mutation models for SLiM:
-{class}`.SLiMv6MutationModel` and {class}`.SLiMMutationModel`,
+{class}`.SLiMv5MutationModel` and {class}`.SLiMv6MutationModel`,
 because the format that SLiM uses to store mutations changed with version 6.0.
 Both store the same thing in derived state; the difference is in metadata.
 So, you probably want to use {class}`.SLiMv6MutationModel`;
@@ -1035,14 +1035,16 @@ don't have the right tool for the job.
 #### Previous versions
 
 The technical difference between 
-{class}`.SLiMv6MutationModel` and {class}`.SLiMMutationModel` is as follows.
+{class}`.SLiMv6MutationModel` and {class}`.SLiMv5MutationModel` is as follows.
 {class}`.SLiMv6MutationModel` stores the SLiM IDs in binary metadata
 as well as in the derived state,
 so that the actual metadata about mutations can be looked up from where
 SLiM expects it in top-level metadata.
-The older version, {class}`.SLiMMutationModel`,
+The older version, {class}`.SLiMv5MutationModel`,
 stores the metadata about SLiM mutations directly in each tskit mutation's metadata
 (and since individual SLiM mutations can appear in more than one tskit mutation,
 this leads to some redundancy; thus the change
 to how mutation metadata is handled in SLiMv6). For more information, see
 {ref}`the pyslim documentation<pyslim:sec_previous_versions>`.
+Formerly, {class}`.SLiMv5MutationModel` was named `SLiMMutationModel`;
+the older name still works for backwards compatibility, but produces a warning.

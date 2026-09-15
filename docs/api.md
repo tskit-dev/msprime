@@ -48,8 +48,8 @@ for discussion and examples of individual features.
   TPM
   EL2
   InfiniteAlleles
+  SLiMv5MutationModel
   SLiMv6MutationModel
-  SLiMMutationModel
 ```
 
 ### Demography
@@ -219,11 +219,11 @@ for discussion and examples of individual features.
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.SLiMv6MutationModel()
+.. autoclass:: msprime.SLiMv5MutationModel()
 ```
 
 ```{eval-rst}
-.. autoclass:: msprime.SLiMMutationModel()
+.. autoclass:: msprime.SLiMv6MutationModel()
 ```
 
 (sec_api_node_flags)=

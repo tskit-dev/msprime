@@ -342,7 +342,7 @@ slim_both_mutator_free(mutation_model_t *self)
 }
 
 /*******************************
- * (Older) SLiM mutation model */
+ * (Older) SLiMv5 mutation model */
 
 /* Typedefs from MutationMetadataRec in slim_sim.h:
  * line 125 in v3.4, git hash b2c2b634199f35e53c4e7e513bd26c91c6d99fd9
@@ -373,7 +373,7 @@ slim_both_mutator_free(mutation_model_t *self)
 #define SLIM_MUTATION_METADATA_SIZE 17 // = 4 + 4 + 4 + 4 + 1
 
 static void
-copy_slim_mutation_metadata(slim_mutator_t *params, char *dest, double time)
+copy_slim_v5_mutation_metadata(slim_mutator_t *params, char *dest, double time)
 {
     int32_t mutation_type_id = params->mutation_type_id;
     float selection_coeff = 0;
@@ -394,7 +394,7 @@ copy_slim_mutation_metadata(slim_mutator_t *params, char *dest, double time)
 }
 
 static void
-slim_mutator_print_state(mutation_model_t *self, FILE *out)
+slim_v5_mutator_print_state(mutation_model_t *self, FILE *out)
 {
     slim_mutator_t params = self->params.slim_mutator;
     fprintf(out, "SLiM mutation model :: mutation type ID = %d\n",
@@ -406,7 +406,7 @@ slim_mutator_print_state(mutation_model_t *self, FILE *out)
 }
 
 static int MSP_WARN_UNUSED
-slim_mutator_check_validity(slim_mutator_t *self)
+slim_v5_mutator_check_validity(slim_mutator_t *self)
 {
     int ret = 0;
 
@@ -425,7 +425,7 @@ out:
 }
 
 static int
-slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
+slim_v5_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
     const char *parent_allele, tsk_size_t parent_allele_length,
     const char *parent_metadata, tsk_size_t parent_metadata_length, mutation_t *mutation)
 {
@@ -441,7 +441,8 @@ slim_mutator_transition(mutation_model_t *self, gsl_rng *MSP_UNUSED(rng),
     }
 
     // copy the final bit of metadata in (this is different than the v6 model)
-    copy_slim_mutation_metadata(params, buff + parent_metadata_length, mutation->time);
+    copy_slim_v5_mutation_metadata(
+        params, buff + parent_metadata_length, mutation->time);
     mutation->metadata = buff;
 
     // finally, set up for the next one
@@ -655,7 +656,7 @@ out:
 }
 
 int MSP_WARN_UNUSED
-slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
+slim_v5_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
     int64_t next_mutation_id, int32_t slim_generation, size_t block_size)
 {
     int ret = 0;
@@ -664,8 +665,8 @@ slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
     memset(self, 0, sizeof(*self));
 
     self->choose_root_state = &slim_both_mutator_choose_root_state;
-    self->transition = &slim_mutator_transition;
-    self->print_state = &slim_mutator_print_state;
+    self->transition = &slim_v5_mutator_transition;
+    self->print_state = &slim_v5_mutator_print_state;
     self->free = &slim_both_mutator_free;
     if (block_size == 0) {
         /* 8K is a good default, but we need to have the
@@ -685,7 +686,7 @@ slim_mutation_model_alloc(mutation_model_t *self, int32_t mutation_type_id,
     params->next_mutation_id = next_mutation_id;
     params->slim_generation = slim_generation;
 
-    ret = slim_mutator_check_validity(params);
+    ret = slim_v5_mutator_check_validity(params);
     if (ret != 0) {
         goto out;
     }

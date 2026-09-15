@@ -81,6 +81,7 @@ from msprime.mutations import (
     NUCLEOTIDES,
     PAM,
     SLiMMutationModel,
+    SLiMv5MutationModel,
     SLiMv6MutationModel,
     sim_mutations,
 )
@@ -152,6 +153,7 @@ __all__ = [
     "RateMap",
     "RecombinationMap",
     "SLiMMutationModel",
+    "SLiMv5MutationModel",
     "SLiMv6MutationModel",
     "Sample",
     "SampleSet",

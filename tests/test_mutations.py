@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2018-2021 University of Oxford
+# Copyright (C) 2018-2026 University of Oxford
 #
 # This file is part of msprime.
 #
@@ -1601,9 +1601,9 @@ class SLiMModelMixin:
         self.validate_slim_mutations(mts)
 
 
-class TestSLiMMutationModel(SLiMModelMixin):
+class TestSLiMv5MutationModel(SLiMModelMixin):
     """
-    Tests for the SLiM mutation generator.
+    Tests for the SLiMv5 mutation generator.
     """
 
     def parse_slim_metadata(self, metadata):
@@ -1654,7 +1654,7 @@ class TestSLiMMutationModel(SLiMModelMixin):
         mutation_id=0,
         slim_generation=1,
     ):
-        model = msprime.SLiMMutationModel(
+        model = msprime.SLiMv5MutationModel(
             type=mutation_type, next_id=mutation_id, slim_generation=slim_generation
         )
         mts1 = msprime.sim_mutations(
@@ -1662,7 +1662,9 @@ class TestSLiMMutationModel(SLiMModelMixin):
         )
         assert mts1.num_mutations == model.next_id
 
-        model = PythonSLiMMutationModel(mutation_type=mutation_type, next_id=mutation_id)
+        model = PythonSLiMv5MutationModel(
+            mutation_type=mutation_type, next_id=mutation_id
+        )
         mts2 = py_sim_mutations(
             ts, rate=rate, random_seed=random_seed, model=model, discrete_genome=True
         )
@@ -1692,6 +1694,28 @@ class TestSLiMMutationModel(SLiMModelMixin):
             )
             assert mts.num_mutations > 10
             self.validate_slim_mutations(mts, slim_generation=slim_generation)
+
+    def test_deprecated_alias(self):
+        ts = msprime.sim_ancestry(4, sequence_length=2, random_seed=5)
+        mts = self.run_mutate(ts, rate=5.0, random_seed=23, mutation_type=3)
+        mutation_type = 3
+        mutation_id = 123
+        slim_generation = 456
+        with pytest.warns(FutureWarning, match="SLiMv5"):
+            model = msprime.SLiMMutationModel(
+                type=mutation_type, next_id=mutation_id, slim_generation=slim_generation
+            )
+        assert model.type == mutation_type
+        assert model.next_id == mutation_id
+        assert model.slim_generation == slim_generation
+        mts = msprime.sim_mutations(
+            ts, rate=5.0, random_seed=135, model=model, discrete_genome=True
+        )
+        assert mts.num_mutations + mutation_id == model.next_id
+        assert mts.num_mutations > 10
+        self.validate_slim_mutations(
+            mts, mutation_type=mutation_type, slim_generation=slim_generation
+        )
 
 
 class TestSLiMv6MutationModel(SLiMModelMixin):
@@ -2187,7 +2211,7 @@ class PythonSLiMv6MutationModel(PythonMutationModel):
 
 
 @dataclasses.dataclass
-class PythonSLiMMutationModel(PythonSLiMv6MutationModel):
+class PythonSLiMv5MutationModel(PythonSLiMv6MutationModel):
     mutation_type: int = 0
 
 
