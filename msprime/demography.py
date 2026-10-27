@@ -4357,16 +4357,17 @@ class DemographyDebugger:
         # recall that steps_b[0] = 0.0
         r = np.zeros(num_steps)
         p_t = np.zeros(num_steps)
-        for j in range(num_steps - 1):
-            time = steps_b[j]
-            dt = steps_b[j + 1] - steps_b[j]
+        for j, time in enumerate(steps_b):
             N, M = self._pop_size_and_migration_at_t(time)
             C = np.zeros([num_pops**2, num_pops**2])
             for idx in range(num_pops):
                 C[IA[idx, idx], IA[idx, idx]] = 1 / (2 * max(min_pop_size, N[idx]))
             dM = np.diag([sum(s) for s in M])
+            # Preserve the existing event handling when the augmented grid
+            # ends with two copies of time zero.
+            final_duplicate = j == num_steps - 1 and j > 0 and time == steps_b[j - 1]
             for mmt, mmo in zip(mass_migration_times, mass_migration_objects):
-                if mmt == time:
+                if mmt == time and not final_duplicate:
                     a = mmo.source
                     b = mmo.dest
                     p = mmo.proportion
@@ -4386,14 +4387,10 @@ class DemographyDebugger:
                 r[j] = np.sum(np.matmul(P, C)) / np.sum(P)
             else:
                 r[j] = np.nan
-            G = (np.kron(M - dM, Identity) + np.kron(Identity, M - dM)) - C
-            P = np.matmul(P, _matrix_exponential(dt * G))
-        p_notcoal = np.sum(P)
-        p_t[num_steps - 1] = p_notcoal
-        if p_notcoal > 0:
-            r[num_steps - 1] = np.sum(np.matmul(P, C)) / p_notcoal
-        else:
-            r[num_steps - 1] = np.nan
+            if j + 1 < num_steps:
+                dt = steps_b[j + 1] - time
+                G = (np.kron(M - dM, Identity) + np.kron(Identity, M - dM)) - C
+                P = np.matmul(P, _matrix_exponential(dt * G))
         return r[keep_steps], p_t[keep_steps]
 
     def _pop_size_and_migration_at_t(self, t):
