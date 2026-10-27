@@ -1846,9 +1846,7 @@ class TestTerminalCoalescenceRate:
         )
         np.testing.assert_allclose(rates, extended_rates[:-1])
         np.testing.assert_allclose(survival, extended_survival[:-1])
-        assert rates[-1] == pytest.approx(
-            1 / (2 * max(1, new_size)), rel=1e-12, abs=0
-        )
+        assert rates[-1] == pytest.approx(1 / (2 * max(1, new_size)), rel=1e-12, abs=0)
         assert survival[-1] == pytest.approx(np.exp(-100 / (2 * max(1, old_size))))
 
     @pytest.mark.parametrize("validation", [False, True])
