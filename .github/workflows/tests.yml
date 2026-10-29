@@ -90,7 +90,7 @@ jobs:
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
         with:
           python-version: ${{ matrix.python }}
-          version: "0.10.0"
+          version: "0.13.6"
 
       - name: Install Python dependencies
         run: uv sync --locked --group test --no-default-groups
