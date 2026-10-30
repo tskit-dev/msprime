@@ -1347,7 +1347,9 @@ class TestMspSimulateOutput:
         cmd = "simulate"
         tree_sequence_file = str(tmp_path / "out.ts")
         with pytest.warns(UserWarning, match="--compress option is no longer supported"):
-            capture_output(cli.msp_main, [cmd, "10", tree_sequence_file, "--compress"])
+            self.capture_output(
+                cli.msp_main, [cmd, "10", tree_sequence_file, "--compress"]
+            )
         tree_sequence = tskit.load(tree_sequence_file)
         assert tree_sequence.get_sample_size() == 10
 
