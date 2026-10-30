@@ -832,10 +832,12 @@ class TestSimulator:
         for bad_chunk in [-(2**32), -1, 0]:
             with pytest.raises(ValueError):
                 sim.run(event_chunk=bad_chunk)
-        sim.reset()
-        sim.run(event_chunk=2**32 + 1)
-        sim.reset()
-        sim.run(event_chunk=2**64 + 1)
+        # Large chunks are capped, so they must not overflow the C argument
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            for big_chunk in [2**32 - 1, 2**32 + 1, 2**64 + 1]:
+                sim.reset()
+                sim.run(event_chunk=big_chunk)
 
     def test_debug_func(self):
         sim = ancestry._parse_simulate(10)
