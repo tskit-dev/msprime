@@ -1,10 +1,8 @@
 # Changelog
 
-## [1.4.5] - 2026-XX-XX
+## [1.4.5] - 2026-10-30
 
-In development.
-
-**Maintenance**:
+Maintenance release.
 
 - The ``SLiMMutationModel`` is renamed ``SLiMv5MutationModel``. The class
   ``SLiMMutationModel`` retains its previous behavior, but emits a FutureWarning.
