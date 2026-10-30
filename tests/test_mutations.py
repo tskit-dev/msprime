@@ -2516,7 +2516,7 @@ class TestMutationModelFactory:
 
     def test_returns_mutation_model_instances_without_copying(self):
         models = [
-            msprime.SLiMMutationModel(0, 0),
+            msprime.SLiMv5MutationModel(0, 0),
             msprime.SLiMv6MutationModel(0),
             msprime.InfiniteAlleles(),
             msprime.BinaryMutationModel(),
@@ -2535,7 +2535,7 @@ class TestMutationModelFactory:
 
 class TestModelClasses:
     def test_slim(self):
-        m = msprime.SLiMMutationModel(type=1, next_id=2, slim_generation=9)
+        m = msprime.SLiMv5MutationModel(type=1, next_id=2, slim_generation=9)
         assert m.next_id == 2
         assert m.slim_generation == 9
         assert str(m) == "Mutation model for SLiM mutations of type m1\n  next ID: 2\n"
