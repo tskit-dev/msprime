@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: [ 3.11, 3.14 ]
+        python: [ 3.12, 3.15 ]
         os:  [ macos-latest, ubuntu-24.04, windows-latest ]
     defaults:
       run:

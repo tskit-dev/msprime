@@ -12,6 +12,8 @@ In development.
   can be read as SLiM v6 mutations (but with meaningless values), producing a confusing
   situation for downstream users. New code should use either ``SLiMv5MutationModel``
   or ``SLiMv6MutationModel``, as appropriate. ({pr}`2546`, {user}`petrelharp`)
+- Add support and wheels for Python 3.15
+- Drop Python 3.11 support, require Python >= 3.12
 
 ## [1.4.4] - 2026-09-01
 
