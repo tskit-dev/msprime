@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.4.6] - 2027-XX-XX
+
+In development.
+
 ## [1.4.5] - 2026-10-30
 
 Maintenance release.
