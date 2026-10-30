@@ -116,6 +116,15 @@ def positive_int(value):
     return int_value
 
 
+def open_file_or_io(file_args, default_io):
+    def _open_file_or_io(arg):
+        if arg == "-":
+            return default_io
+        return open(arg, file_args)
+
+    return _open_file_or_io
+
+
 def add_sample_size_argument(parser):
     parser.add_argument(
         "sample_size", type=positive_int, help="The number of genomes in the sample"
@@ -136,8 +145,8 @@ def add_output_argument(parser):
     parser.add_argument(
         "-o",
         "--output",
-        type=argparse.FileType("wb"),
-        default=sys.stdout,
+        type=open_file_or_io("wb", sys.stdout),
+        default="-",
         help=(
             "Where to write the output tree sequence file. If omitted or '-', "
             "write to standard output"
@@ -1144,8 +1153,8 @@ def add_mutate_subcommand(subparsers):
     parser.add_argument(
         "input",
         nargs="?",
-        type=argparse.FileType("rb"),
-        default=sys.stdin,
+        type=open_file_or_io("rb", sys.stdin),
+        default="-",
         help=("The input tree sequence. If omitted or '-' read from standard input"),
     )
     add_output_argument(parser)
