@@ -1540,6 +1540,10 @@ class Simulator(_msprime.Simulator):
             event_chunk = 10**4
         if event_chunk <= 0:
             raise ValueError("Must have at least 1 event per chunk")
+        # The low-level max_events is a C unsigned long, which is 32 bits on
+        # some platforms. Larger chunks make no practical difference, so cap
+        # the value rather than letting it overflow.
+        event_chunk = min(event_chunk, 2**32 - 1)
         logger.info("Running model %s until max time: %f", self.model, end_time)
         ret = ExitReason.MAX_EVENTS
         while ret == ExitReason.MAX_EVENTS:
