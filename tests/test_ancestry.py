@@ -1168,7 +1168,12 @@ class TestParseSimAncestry:
         # If we have an initial_state this defines sequence_length
         initial_state = tskit.TableCollection(1234)
         initial_state.populations.add_row()
-        with pytest.warns(msprime.IncompletePopulationMetadataWarning):
+        with pytest.warns(
+            (
+                msprime.IncompletePopulationMetadataWarning,
+                msprime.TimeUnitsMismatchWarning,
+            )
+        ):
             sim = ancestry._parse_sim_ancestry(
                 initial_state=initial_state, population_size=1
             )

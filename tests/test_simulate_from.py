@@ -194,7 +194,12 @@ class TestBasicFunctionality:
     def test_from_wf_nonoverlapping(self):
         m = 100
         from_ts = get_wf_base(6, 4, num_loci=m)
-        with pytest.warns(msprime.IncompletePopulationMetadataWarning):
+        with pytest.warns(
+            (
+                msprime.IncompletePopulationMetadataWarning,
+                msprime.TimeUnitsMismatchWarning,
+            )
+        ):
             final_ts = msprime.sim_ancestry(
                 initial_state=from_ts,
                 random_seed=2,
@@ -207,7 +212,12 @@ class TestBasicFunctionality:
     def test_from_wf_overlapping(self):
         m = 100
         from_ts = get_wf_base(6, 14, survival=0.25, num_loci=m)
-        with pytest.warns(msprime.IncompletePopulationMetadataWarning):
+        with pytest.warns(
+            (
+                msprime.IncompletePopulationMetadataWarning,
+                msprime.TimeUnitsMismatchWarning,
+            )
+        ):
             final_ts = msprime.sim_ancestry(
                 initial_state=from_ts,
                 random_seed=2,
@@ -1089,11 +1099,14 @@ class TestSimAncestryInterface:
             extra_metadata={"z": "zzz", "x": 123},
             initial_size=1,
         )
-        with pytest.warns(
-            msprime.IncompletePopulationMetadataWarning,
-            match="schema does not allow",
-        ):
-            ts = msprime.sim_ancestry(initial_state=tables, demography=d, random_seed=1)
+        with pytest.warns(msprime.TimeUnitsMismatchWarning):
+            with pytest.warns(
+                msprime.IncompletePopulationMetadataWarning,
+                match="schema does not allow",
+            ):
+                ts = msprime.sim_ancestry(
+                    initial_state=tables, demography=d, random_seed=1
+                )
         assert ts.num_populations == 3
         assert ts.population(0).metadata == {"name": "X"}
         assert ts.population(1).metadata == {"name": "Y", "description": "pop y"}
@@ -1183,7 +1196,12 @@ class TestSlimOutput:
 
     def finish_simulation(self, from_ts, recombination_rate=0, seed=1):
         demography = msprime.Demography.from_tree_sequence(from_ts, initial_size=1)
-        with pytest.warns(msprime.IncompletePopulationMetadataWarning):
+        with pytest.warns(
+            (
+                msprime.IncompletePopulationMetadataWarning,
+                msprime.TimeUnitsMismatchWarning,
+            )
+        ):
             return msprime.sim_ancestry(
                 initial_state=from_ts,
                 start_time=1,
@@ -1238,7 +1256,12 @@ class TestBugExamples:
         t.edges.add_row(left=0, right=1, parent=2, child=0)
         ts = t.tree_sequence()
 
-        with pytest.warns(msprime.IncompletePopulationMetadataWarning):
+        with pytest.warns(
+            (
+                msprime.IncompletePopulationMetadataWarning,
+                msprime.TimeUnitsMismatchWarning,
+            )
+        ):
             ts = msprime.sim_ancestry(initial_state=ts, population_size=1, random_seed=5)
         assert ts.num_trees == 2
         for tree in ts.trees():
