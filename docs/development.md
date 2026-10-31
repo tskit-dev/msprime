@@ -220,7 +220,7 @@ directory, run
 ```{code-block} bash
 
 $ cd lib
-$ meson build
+$ meson setup build
 
 ```
 
