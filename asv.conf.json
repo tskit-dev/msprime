@@ -13,6 +13,10 @@
     // on the local branch as well as the upstream using asv publish
     "branches": ["HEAD", "upstream/main"],
 
+    "build_command": [
+        "python -m pip wheel --no-deps --no-build-isolation -w {build_cache_dir} {build_dir}"
+    ],
+
     // We include stdpopsim in the requirements matrix here because we use 
     // in the benchmarking scripts to get recombination maps.
     "matrix": {
