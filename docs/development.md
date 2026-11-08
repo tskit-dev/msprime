@@ -506,9 +506,10 @@ on how to write and run these tests.
 
 Benchmarks to measure performance are in the `benchmarks` folder and are run using
 [airspeed velocity](https://asv.readthedocs.io/en/stable/index.html).
-A system that runs the benchmarks on each push to the main branch.
+A system runs the benchmarks on each push to the main branch.
 These benchmarks can also be run locally to compare your branch with the main branch.
-Your changes must be in a commit to be measured. To run the benchmarks:
+Your changes must be in a commit to be measured. Install asv using `uv tool install asv`,
+and then run the benchmarks:
 
 ```
 asv run HEAD...main~1
