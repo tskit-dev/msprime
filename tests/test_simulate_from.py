@@ -959,6 +959,34 @@ class TestSimAncestryInterface:
         assert ts.population(2).metadata["name"] == "C"
         assert ts.tables.nodes[-1].population == 2
 
+    @pytest.mark.parametrize("state", ["dump", "view", "unindexed"])
+    def test_extra_populations_keep_input_tables(self, state):
+        initial = msprime.sim_ancestry(2, end_time=0, random_seed=1)
+        demography = msprime.Demography.from_tree_sequence(initial, initial_size=100)
+        demography.add_population(name="ancestral", initial_size=100)
+        demography.add_population_split(time=1, derived=["pop_0"], ancestral="ancestral")
+        tables = initial.tables if state == "view" else initial.dump_tables()
+        if state == "unindexed":
+            tables.drop_index()
+        expected = msprime.sim_ancestry(
+            initial_state=initial, demography=demography, random_seed=2
+        )
+        actual = msprime.sim_ancestry(
+            initial_state=tables, demography=demography, random_seed=2
+        )
+        assert tables == initial.tables
+        if state == "unindexed":
+            assert not tables.has_index()
+        assert actual.num_populations == 2
+        assert actual.node(actual.first().root).population == 1
+        assert actual.equals(expected, ignore_provenance=True)
+        command, parameters = msprime.provenance.parse_provenance(
+            actual.provenance(-1), initial
+        )
+        assert command == "sim_ancestry"
+        assert parameters["initial_state"] is initial
+        assert msprime.sim_ancestry(**parameters).equals(actual, ignore_provenance=True)
+
     def test_extra_pops_no_metadata(self):
         tables = tskit.TableCollection(1)
         tables.time_units = "generations"

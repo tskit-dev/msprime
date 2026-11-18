@@ -788,6 +788,12 @@ def _parse_samples(samples, demography):
     return _parse_sample_sets(sample_sets, demography)
 
 
+def _tree_sequence_from_tables(tables):
+    if isinstance(tables, tskit.ImmutableTableCollection):
+        return tables.tree_sequence()
+    return tskit.TreeSequence.load_tables(tables, build_indexes=not tables.has_index())
+
+
 def _parse_sim_ancestry(
     samples=None,
     *,
@@ -891,7 +897,7 @@ def _parse_sim_ancestry(
 
     if initial_state is not None:
         if isinstance(initial_state, tskit.TreeSequence):
-            initial_state = initial_state.dump_tables()
+            initial_state = initial_state.tables
         elif not isinstance(
             initial_state, (tskit.TableCollection, tskit.ImmutableTableCollection)
         ):
@@ -994,7 +1000,7 @@ def _parse_sim_ancestry(
                 "Cannot use FixedPedigree simulation in conjunction with other models"
             )
         demography = demog.Demography.from_tree_sequence(
-            initial_state.tree_sequence(), initial_size=1
+            _tree_sequence_from_tables(initial_state), initial_size=1
         )
 
     # Check the demography. If no demography is specified, we default to a
@@ -1052,7 +1058,7 @@ def _parse_sim_ancestry(
             raise ValueError("initial_state tables must define at least one population.")
         # Make sure the names match-up in the input demography.
         demography_check = demog.Demography.from_tree_sequence(
-            initial_state.tree_sequence()
+            _tree_sequence_from_tables(initial_state)
         )
         if demography.num_populations < demography_check.num_populations:
             raise ValueError(
@@ -1067,6 +1073,8 @@ def _parse_sim_ancestry(
                     "Population names in the input demography and the initial "
                     f"state population table must be equal: {pop1.name} ≠ {pop2.name}"
                 )
+        if demography.num_populations > len(initial_state.populations):
+            initial_state = initial_state.copy()
         demography.insert_extra_populations(initial_state)
 
     # It's useful to call _parse_sim_ancestry outside the context of the main
