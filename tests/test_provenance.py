@@ -361,6 +361,24 @@ class TestMutateRoundTrip(TestRoundTrip):
         )
         self.verify(ts)
 
+    @pytest.mark.parametrize(
+        "make_model",
+        [
+            lambda: msprime.SLiMv5MutationModel(type=2, next_id=100, slim_generation=50),
+            lambda: msprime.SLiMv6MutationModel(next_id=100),
+        ],
+    )
+    def test_reused_slim_model(self, make_model):
+        ts = msprime.sim_ancestry(3, sequence_length=20, random_seed=30)
+        model = make_model()
+        for seed in [41, 42]:
+            next_id = model.next_id
+            ts = msprime.sim_mutations(ts, rate=0.5, model=model, random_seed=seed)
+            assert model.next_id > next_id
+            record = json.loads(ts.provenance(-1).record)
+            assert record["parameters"]["model"]["next_id"] == next_id
+        self.verify(ts)
+
 
 class TestRetainsProvenance:
     def test_simulate_retains_provenance(self):

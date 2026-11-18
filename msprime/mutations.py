@@ -140,6 +140,13 @@ class SLiMv5MutationModel(_msprime.SLiMv5MutationModel, MutationModel):
         due to a very large number of stacked mutations.
     """
 
+    def asdict(self):
+        return {
+            "type": self.type,
+            "next_id": self.next_id,
+            "slim_generation": self.slim_generation,
+        }
+
     def __str__(self):
         return (
             f"Mutation model for SLiM mutations of type m{self.type}\n"
@@ -204,6 +211,9 @@ class SLiMv6MutationModel(_msprime.SLiMv6MutationModel, MutationModel):
         You do not need to change this unless you get an "out of memory" error
         due to a very large number of stacked mutations.
     """
+
+    def asdict(self):
+        return {"next_id": self.next_id}
 
     def __str__(self):
         return f"Mutation model for SLiM mutations, v6+. Next ID: {self.next_id}\n"
@@ -1748,6 +1758,10 @@ def sim_mutations(
     keep = core._parse_flag(keep, default=True)
 
     model = mutation_model_factory(model)
+    # The SLiM models advance their mutation IDs during simulation.
+    encoded_provenance = None
+    if provenance_dict is not None:
+        encoded_provenance = provenance.json_encode_provenance(provenance_dict)
     rng = _msprime.RandomGenerator(seed)
     lwt = _msprime.LightweightTableCollection()
     lwt.fromdict(tables.asdict())
@@ -1763,6 +1777,6 @@ def sim_mutations(
     )
 
     tables = tskit.TableCollection.fromdict(lwt.asdict())
-    if provenance_dict is not None:
-        tables.provenances.add_row(provenance.json_encode_provenance(provenance_dict))
+    if encoded_provenance is not None:
+        tables.provenances.add_row(encoded_provenance)
     return tables.tree_sequence()
