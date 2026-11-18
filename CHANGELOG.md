@@ -5,7 +5,7 @@
 In development.
 
 - Record the starting mutation IDs and SLiM v5 metadata parameters when
-  creating provenance for a SLiM mutation overlay (PRNUM).
+  creating provenance for a SLiM mutation overlay (2554).
 
 ## [1.4.5] - 2026-10-30
 
