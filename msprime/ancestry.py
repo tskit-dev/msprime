@@ -29,6 +29,7 @@ import enum
 import json
 import logging
 import math
+import numbers
 import sys
 import tempfile
 import warnings
@@ -1268,9 +1269,15 @@ def sim_ancestry(
     random_seed = _parse_random_seed(random_seed)
     provenance_dict = None
     if record_provenance:
+        provenance_samples = samples
+        if isinstance(samples, collections.abc.Mapping):
+            provenance_samples = {
+                int(pop) if isinstance(pop, numbers.Integral) else pop: count
+                for pop, count in samples.items()
+            }
         parameters = dict(
             command="sim_ancestry",
-            samples=samples,
+            samples=provenance_samples,
             demography=demography,
             sequence_length=sequence_length,
             discrete_genome=discrete_genome,

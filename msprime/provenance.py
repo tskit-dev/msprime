@@ -212,6 +212,13 @@ def parse_provenance(provenance, current_ts):
         )
     parameters = ret["parameters"]
     command = parameters.pop("command")
+    if command == "sim_ancestry" and isinstance(parameters.get("samples"), dict):
+        # JSON object keys are strings, and decimal strings cannot be population
+        # names because those must be Python identifiers.
+        parameters["samples"] = {
+            int(pop) if pop.isdecimal() else pop: count
+            for pop, count in parameters["samples"].items()
+        }
     updated_parameters = {}
     for key, value in parameters.items():
         if value == CURRENT_TREE_SEQUENCE:
