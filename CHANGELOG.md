@@ -4,6 +4,9 @@
 
 In development.
 
+- Accept read-only initial tables in ancestry simulations with provenance and
+  avoid modifying the caller's tables when adding ancestral populations (2555).
+
 ## [1.4.5] - 2026-10-30
 
 Maintenance release.
