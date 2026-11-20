@@ -4,6 +4,9 @@
 
 In development.
 
+- Preserve integer population IDs in ancestry provenance so that simulations
+  using a sample mapping can be replayed (2556).
+
 ## [1.4.5] - 2026-10-30
 
 Maintenance release.

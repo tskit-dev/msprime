@@ -303,6 +303,18 @@ class TestRoundTrip:
             self.verify(recreated, recurse=False)
 
 
+class TestSimAncestryRoundTrip(TestRoundTrip):
+    @pytest.mark.parametrize("population_id", [0, np.int32(0)])
+    def test_samples_by_population_id(self, population_id):
+        demography = msprime.Demography.island_model([100, 200], 0.01)
+        ts = msprime.sim_ancestry(
+            {population_id: 2, "pop_1": 3}, demography=demography, random_seed=9
+        )
+        assert len(ts.samples(population=0)) == 4
+        assert len(ts.samples(population=1)) == 6
+        self.verify(ts)
+
+
 class TestSimulateRoundTrip(TestRoundTrip):
     def test_sample_size(self):
         ts = msprime.simulate(10)
